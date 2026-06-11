@@ -9,14 +9,14 @@
  * renders a faithful legacy customer card with wallet balance + recent
  * forwarder/shop/yuan activity from the migrated `tb_*` tables.
  *
- * The rebuilt-schema view (profiles + corporate + rates + credit-line) is
- * preserved for the Pacred-only customer profile sections that *do* live
- * in the rebuilt schema (refunds / freight / kpi cohort etc) — but until
- * we wire those into the legacy customer record this fallback IS the
- * working customer detail page for the ~8,898 migrated PCS customers.
- *
- * Wave 8 backlog: status mutate (block/unblock) + rate-custom editor +
- * full order history pagination.
+ * 2026-06-12 — LAYOUT re-ordered 1:1 to the legacy PCS `users/profile` page
+ * (ปอน). Section order now mirrors the legacy: profile header card (avatar +
+ * code + VIP/SVIP + sale/CS + rate-gear) → profile detail (identity + account
+ * meta + main address + note) → 8 stat cards → address table → ฝากสั่ง /
+ * ฝากนำเข้า / ฝากโอน / ประวัติการจ่ายเงิน tables → a "เครื่องมือผู้ดูแล · Pacred"
+ * divider that groups the Pacred-only tools (margin · rate · ค่าเทียบ/เครดิต ·
+ * tags/activity · corporate · danger-zone). NO function was removed — every
+ * interactive component is reused unchanged, only its placement moved.
  *
  * Verified prod schema 2026-05-21 via REST: tb_users(userid, username,
  *   userlastname, usercompany, useremail, usertel, useractive,
@@ -26,10 +26,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { Settings } from "lucide-react";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
+// Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
+// single-char tb_* status codes the order tables show.
+import { legacyOrderStatusThai, legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
@@ -102,6 +106,16 @@ type PRow = {
   payyuan: number | null;
   paythb: number | null;
 };
+// Wallet-history rows (legacy ประวัติการจ่ายเงิน table) — column set mirrors the
+// proven customer reader app/[locale]/(protected)/wallet/page.tsx (2026-06-12).
+type WHRow = {
+  id: number;
+  date: string | null;
+  status: string | null;
+  amount: number | string | null;
+  type: string | null;
+  reforder: string | null;
+};
 type WRow = {
   wallettotal: number | null;
 };
@@ -137,6 +151,45 @@ const STATUS_ACTIVE_CFG: Record<string, { label: string; cls: string }> = {
   "1": { label: "ใช้งานอยู่", cls: "bg-green-100 text-green-700 border-green-200" },
   "0": { label: "ระงับ", cls: "bg-red-100 text-red-700 border-red-200" },
 };
+
+// Wallet-history type / status labels — reuse the canonical admin taxonomy
+// from /admin/wallet transactions-view.tsx (2026-06-12) so the in-profile
+// payment-history table matches the dedicated wallet list 1:1.
+const WHS_TYPE_LABEL: Record<string, string> = {
+  "1": "ชำระเงิน",
+  "2": "เติม (manual)",
+  "3": "ถอนเงิน",
+  "4": "ชำระจากกระเป๋า",
+  "5": "คืนเงิน",
+  "6": "ชำระเงิน",
+  "7": "รอตรวจการเติม",
+  "8": "ชำระฝากสั่งซื้อ",
+};
+const WHS_STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ",
+  "2": "สำเร็จ",
+  "3": "ปฏิเสธ",
+};
+// Yuan-payment paystatus (legacy tb_payment.paystatus · 1/2/3) Thai labels.
+const PAYSTATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ",
+  "2": "สำเร็จ",
+  "3": "ไม่สำเร็จ",
+};
+
+type PillTone = "green" | "red" | "amber" | "blue" | "gray";
+function paystatusTone(code: string | null): PillTone {
+  return code === "2" ? "green" : code === "3" ? "red" : code === "1" ? "amber" : "gray";
+}
+function whsStatusTone(code: string | null): PillTone {
+  return code === "2" ? "green" : code === "3" ? "red" : code === "1" ? "amber" : "gray";
+}
+function orderStatusTone(code: string | null): PillTone {
+  return code === "5" ? "green" : code === "6" ? "red" : code === "2" ? "amber" : "blue";
+}
+function forwarderStatusTone(code: string | null): PillTone {
+  return code === "7" ? "green" : code === "5" ? "amber" : "blue";
+}
 
 export async function renderLegacyCustomerView(id: string) {
   const admin = createAdminClient();
@@ -183,8 +236,8 @@ export async function renderLegacyCustomerView(id: string) {
   // Wave 20 P0-1 (audit P0-1 · 2026-05-25 ค่ำ): the four extra reads (corp,
   // addresses, mainAddr, wallet) are the load-bearing detail-page reads —
   // all destructure `error` per AGENTS §0c. Activity reads (forwarder /
-  // shop / yuan) are best-effort recents — a transient error there falls
-  // through to an empty list rather than blowing up the page.
+  // shop / yuan / wallet-hs) are best-effort recents — a transient error
+  // there falls through to an empty list rather than blowing up the page.
   const [
     walletRes,
     corpRes,
@@ -193,6 +246,7 @@ export async function renderLegacyCustomerView(id: string) {
     forwarderRes,
     shopRes,
     yuanRes,
+    walletHsRowsRes,
     fwdCountRes,
     ordCountRes,
     payCountRes,
@@ -234,6 +288,15 @@ export async function renderLegacyCustomerView(id: string) {
       .select("id,paydate,paystatus,payyuan,paythb")
       .eq("userid", u.userID)
       .order("paydate", { ascending: false })
+      .limit(10),
+    // ประวัติการจ่ายเงิน (wallet-hs) recent 10 — legacy profile section 8.
+    // Best-effort: column set mirrors the customer wallet reader; degrades
+    // to an empty list on error (not in the load-bearing throw set).
+    admin
+      .from("tb_wallet_hs")
+      .select("id,date,status,amount,type,reforder")
+      .eq("userid", u.userID)
+      .order("id", { ascending: false })
       .limit(10),
     // Exact activity counts for the super-only hard-delete safety gate
     // (HardDeletePanel) — head:true counts are cheap. The recents above cap at
@@ -291,6 +354,23 @@ export async function renderLegacyCustomerView(id: string) {
   const fws = (forwarderRows ?? []) as unknown as FRow[];
   const hos = (shopRows ?? []) as unknown as HRow[];
   const pys = (yuanRows ?? []) as unknown as PRow[];
+  const whs = (walletHsRowsRes.data ?? []) as unknown as WHRow[];
+
+  // Main shipping address (legacy "ที่อยู่จัดส่ง (หลัก)" summary in the profile
+  // detail). Falls back to "—" when none flagged.
+  const mainAddr = addresses.find((a) => a.addressid === mainAddrId) ?? null;
+  const mainAddrText = mainAddr
+    ? [
+        `${mainAddr.addressname ?? ""} ${mainAddr.addresslastname ?? ""}`.trim(),
+        mainAddr.addressno,
+        mainAddr.addresssubdistrict ? `ต.${mainAddr.addresssubdistrict}` : null,
+        mainAddr.addressdistrict ? `อ.${mainAddr.addressdistrict}` : null,
+        mainAddr.addressprovince ? `จ.${mainAddr.addressprovince}` : null,
+        mainAddr.addresszipcode,
+      ]
+        .filter((s) => s && String(s).trim() !== "")
+        .join(" ")
+    : "—";
 
   // Per-customer rate matrix (live tb_rate_custom_kg/cbm) — drives the
   // in-profile rate editor + the SVIP badge. Reader logs+degrades on error.
@@ -344,10 +424,33 @@ export async function renderLegacyCustomerView(id: string) {
   const payCount = payCountRes.count ?? 0;
   const walletHsCount = walletHsCountRes.count ?? 0;
 
+  const fmtBaht = (n: number) =>
+    `฿${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <div className="flex items-start gap-4">
+      {/* ── SECTION 1 · Profile header card (legacy users/profile top card) ── */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
+            ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* legacy rate-settings gear (top-right of the profile card) →
+                anchors to the Pacred rate editor below */}
+            <a
+              href="#rate-settings"
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-alt"
+            >
+              <Settings className="w-3.5 h-3.5" /> ตั้งค่าเรทขนส่ง
+            </a>
+            <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
+              ← รายการลูกค้า
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col items-center text-center gap-2">
           {/* Wave 13: legacy avatar — resolved signed URL or initial-letter
               fallback when no portrait was uploaded. */}
           {userImageUrl ? (
@@ -355,112 +458,298 @@ export async function renderLegacyCustomerView(id: string) {
             <img
               src={userImageUrl}
               alt={fullName}
-              className="w-14 h-14 rounded-full object-cover border border-border shrink-0"
+              className="w-24 h-24 rounded-full object-cover border border-border"
             />
           ) : (
-            <div className="w-14 h-14 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-lg border border-border shrink-0">
+            <div className="w-24 h-24 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-3xl border border-border">
               {(u.userName ?? u.userID).trim().charAt(0).toUpperCase() || "?"}
             </div>
           )}
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">
-              ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
-            </p>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
-              <h1 className="text-2xl font-bold font-mono">{u.userID}</h1>
-              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
-                {statusCfg.label}
+          <h2 className="text-lg font-semibold">{fullName}</h2>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-2xl font-bold font-mono">{u.userID}</span>
+            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
+              {statusCfg.label}
+            </span>
+            {rateMatrix.isSvip ? (
+              <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
+                SVIP · เรทเฉพาะตัว
               </span>
-              {u.adminIDSale ? (
-                <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-mono">
-                  ดูแลโดย {u.adminIDSale}
-                </span>
-              ) : null}
-              {rateMatrix.isSvip ? (
-                <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
-                  SVIP · เรทเฉพาะตัว
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted mt-1">
-              `tb_*` schema · ค่าเทียบ + เครดิต + เรท แก้ได้ในหน้านี้
-            </p>
+            ) : null}
           </div>
         </div>
-        <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
-          ← รายการลูกค้า
-        </Link>
+
+        {/* Sale + CS rep editors (legacy "Sale : admin_xxx แก้ไข" badge) */}
+        <div className="mt-4 grid sm:grid-cols-2 gap-3">
+          <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
+          <CsRepEditor userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
+        </div>
       </div>
 
-      {/* 8 stat cards (faithful to legacy profile.php tiles · counts from
-          tb_header_order / tb_forwarder / tb_payment / tb_wallet(_hs) /
-          tb_cash_back_hs). Unverifiable counts render "—" not a wrong number. */}
+      {/* ── SECTION 2 · Profile detail (legacy 2-col: left=account meta + main
+          address, right=identity). Note editor directly below (legacy โน้ต). ── */}
+      <div className="grid lg:grid-cols-2 gap-5 items-start">
+        {/* Left: account meta + main shipping address */}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
+          <h2 className="text-sm font-semibold">ข้อมูลบัญชี</h2>
+          <KV
+            label="วันที่สมัคร"
+            value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
+          />
+          <KV
+            label="ล่าสุดล็อกอิน"
+            value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
+          />
+          <div className="pt-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted">ที่อยู่จัดส่ง (หลัก)</span>
+              <a href="#address-manager" className="text-xs text-primary-600 hover:underline">
+                จัดการที่อยู่ ↓
+              </a>
+            </div>
+            <p className="mt-1 text-foreground">{mainAddrText}</p>
+          </div>
+        </div>
+
+        {/* Right: identity editor (faithful editUser — email/phone/sex/birthday/
+            line/fb + senior-only rep/coID) */}
+        <IdentityEditor
+          userid={u.userID}
+          isSenior={isSeniorAdmin}
+          admins={salesAdmins}
+          initial={{
+            userName:     u.userName ?? "",
+            userLastName: u.userLastName ?? "",
+            userEmail:    u.userEmail ?? "",
+            userTel:      u.userTel ?? "",
+            userSex:      u.userSex ?? "",
+            userBirthday: u.userBirthday ?? "",
+            userLineID:   u.userLineID ?? "",
+            userFacebook: u.userFacebook ?? "",
+            adminIDSale:  u.adminIDSale ?? "",
+            coID:         u.coID ?? "",
+          }}
+        />
+      </div>
+
+      {/* Inline note editor (tb_users.userNote) — legacy โน้ต in profile card */}
+      <NoteEditor userid={u.userID} initialNote={u.userNote} />
+
+      {/* ── SECTION 3 · 8 stat cards (faithful to legacy profile.php tiles ·
+          counts from tb_header_order / tb_forwarder / tb_payment / tb_wallet(_hs)
+          / tb_cash_back_hs). Unverifiable counts render "—" not a wrong number. ── */}
       <StatCards userid={u.userID} walletBalance={walletBalance} counts={statCounts} />
 
-      {/* Per-customer Margin Profile (2026-06-05 ภูม · CEO CRM-activation):
-          surfaces the margin history of THIS customer so the sales rep can
-          see at a glance whether they've been historically over-charged
-          (avg margin > ฿15k cap) and should be quoted at a lower margin
-          going forward. Pairs with /admin/accounting/margin-monitor (the
-          portfolio view). Empty state → "ยังไม่เคยมีตู้ส่งสำเร็จ". */}
-      <CustomerMarginPanel summary={marginSummary} />
-
-      {/* Profile card */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
-        <KV label="ชื่อ" value={fullName} />
-        <KV label="โทรศัพท์" value={u.userTel ?? "-"} />
-        <KV label="อีเมล" value={u.userEmail ?? "-"} />
-        <KV
-          label="สมัครเมื่อ"
-          value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
-        />
-        <KV
-          label="ล่าสุดล็อกอิน"
-          value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
-        />
-        {/* editSale — write tb_users.adminIDSale (canonical reassign). The
-            per-customer + bulk transfer-rep pages were repointed 2026-06-02 to
-            also write this live column (was profiles.sales_admin_id death). */}
-        <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
-        {/* editCs (FEATURE 1) — write tb_users.adminIDCS (migration 0141).
-            Mirrors the sales reassign; resolveCsRep (pcs-chrome.ts) renders
-            the chosen CS in the customer sidebar "ผู้ดูแล" card. */}
-        <CsRepEditor userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
+      {/* ── SECTION 4 · Shipping addresses table (legacy ที่อยู่จัดส่งในไทย) —
+          full CRUD + set-main, main flag from tb_address_main. ── */}
+      <div id="address-manager" className="scroll-mt-20">
+        <AddressManager userid={u.userID} addresses={addresses} mainAddressId={mainAddrId} />
       </div>
 
-      {/* Identity editor (P0-17 · adm-08 WF#4) — faithful port of the legacy
-          editUser modal. Writes tb_users core fields (name/email/tel/sex/
-          birthday/lineid/facebook + senior-only rep/coID). This is the
-          "แก้ไขข้อมูลลูกค้า" entry point the owner directive requires (§0d). */}
-      <IdentityEditor
-        userid={u.userID}
-        isSenior={isSeniorAdmin}
-        admins={salesAdmins}
-        initial={{
-          userName:     u.userName ?? "",
-          userLastName: u.userLastName ?? "",
-          userEmail:    u.userEmail ?? "",
-          userTel:      u.userTel ?? "",
-          userSex:      u.userSex ?? "",
-          userBirthday: u.userBirthday ?? "",
-          userLineID:   u.userLineID ?? "",
-          userFacebook: u.userFacebook ?? "",
-          adminIDSale:  u.adminIDSale ?? "",
-          coID:         u.coID ?? "",
-        }}
-      />
+      {/* ── SECTION 5 · ออเดอร์ฝากสั่งซื้อ (legacy shop table) ── */}
+      <Section title={`ออเดอร์ฝากสั่งซื้อ (${hos.length})`} viewAllHref={`/admin/service-orders?q=${u.userID}`}>
+        {hos.length === 0 ? (
+          <Empty>ยังไม่มีรายการฝากสั่งซื้อ</Empty>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>วันที่สร้าง</Th>
+                <Th>เลขที่ออเดอร์</Th>
+                <Th>ข้อมูลสินค้า</Th>
+                <Th right>ราคารวม (บาท)</Th>
+                <Th>สถานะ</Th>
+                <Th>ตัวเลือก</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {hos.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <Td>{r.hdate ? String(r.hdate).slice(0, 10) : "-"}</Td>
+                  <Td mono>{r.hno ?? "-"}</Td>
+                  <Td>
+                    <span className="block max-w-[260px] truncate" title={r.htitle ?? ""}>
+                      {r.htitle ?? "-"}
+                    </span>
+                  </Td>
+                  <Td right>{fmtBaht(Number(r.htotalpriceuser ?? 0))}</Td>
+                  <Td>
+                    <StatusPill label={legacyOrderStatusThai(r.hstatus) || "-"} tone={orderStatusTone(r.hstatus)} />
+                  </Td>
+                  <Td>
+                    <Link
+                      href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
+                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
+                    >
+                      ดูรายละเอียด
+                    </Link>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Section>
 
-      {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the
-          legacy customer-profile #rate-settings modal. Writes the LIVE
-          tb_rate_custom_kg/cbm + history (tb_customrate_hs + tb_hs_rate_custom_*).
-          This is the in-profile "ปรับเรทขายต่อลูกค้า" the owner pointed at;
-          it feeds the SVIP tier of the forwarder price waterfall. */}
-      <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
+      {/* ── SECTION 6 · ออเดอร์ฝากนำเข้า (legacy forwarder table) ── */}
+      <Section title={`ออเดอร์ฝากนำเข้า (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}>
+        {fws.length === 0 ? (
+          <Empty>ยังไม่มีรายการฝากนำเข้า</Empty>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>วันที่สร้าง</Th>
+                <Th>เลขที่รายการ</Th>
+                <Th>เบอร์ตู้</Th>
+                <Th right>ยอดรวม (บาท)</Th>
+                <Th>สถานะ</Th>
+                <Th>ตัวเลือก</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {fws.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <Td>{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</Td>
+                  <Td mono>{r.fidorco ?? "-"}</Td>
+                  <Td mono>{r.fcabinetnumber ?? "-"}</Td>
+                  <Td right>{fmtBaht(Number(r.ftotalprice ?? 0))}</Td>
+                  <Td>
+                    <StatusPill label={legacyForwarderStatusThai(r.fstatus) || "-"} tone={forwarderStatusTone(r.fstatus)} />
+                  </Td>
+                  <Td>
+                    <Link
+                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
+                    >
+                      ดูรายละเอียด
+                    </Link>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Section>
 
-      {/* Pricing segments (money · 2026-06-05) — faithful port of legacy
-          users/comparison (ค่าเทียบ/CPS) + users/credit (เครดิต). The price +
-          credit engines already read these tb_users columns; this is the
-          missing set/edit/remove admin CRUD (§0d reachable on the profile). */}
+      {/* ── SECTION 7 · ออเดอร์ฝากโอน/ชำระ (legacy yuan-payment table) ── */}
+      <Section title={`ออเดอร์ฝากโอน/ชำระ (${pys.length})`} viewAllHref={`/admin/yuan-payments?q=${u.userID}`}>
+        {pys.length === 0 ? (
+          <Empty>ยังไม่มีรายการฝากโอน/ชำระ</Empty>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>วันที่สร้าง</Th>
+                <Th right>ยอดหยวน</Th>
+                <Th right>ยอดรวม (บาท)</Th>
+                <Th>สถานะ</Th>
+                <Th>ตัวเลือก</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {pys.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <Td>{r.paydate ? String(r.paydate).slice(0, 10) : "-"}</Td>
+                  <Td right>
+                    ¥{Number(r.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Td>
+                  <Td right>{fmtBaht(Number(r.paythb ?? 0))}</Td>
+                  <Td>
+                    <StatusPill
+                      label={PAYSTATUS_LABEL[r.paystatus ?? ""] ?? (r.paystatus ? `status ${r.paystatus}` : "-")}
+                      tone={paystatusTone(r.paystatus)}
+                    />
+                  </Td>
+                  <Td>
+                    <Link
+                      href={`/admin/yuan-payments/${r.id}`}
+                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
+                    >
+                      ดูรายละเอียด
+                    </Link>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Section>
+
+      {/* ── SECTION 8 · ประวัติการจ่ายเงิน (legacy wallet-hs table) ── */}
+      <Section title={`ประวัติการจ่ายเงิน (${whs.length}${walletHsCount > whs.length ? ` จาก ${walletHsCount}` : ""})`} viewAllHref={`/admin/wallet?view=tx&q=${u.userID}`}>
+        {whs.length === 0 ? (
+          <Empty>ยังไม่มีประวัติการจ่ายเงิน</Empty>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>วันที่ทำรายการ</Th>
+                <Th>เลขที่ดำเนินการ</Th>
+                <Th>ประเภทรายการ</Th>
+                <Th>รายการอ้างอิง</Th>
+                <Th>สถานะ</Th>
+                <Th right>จำนวนเงิน (บาท)</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {whs.map((r) => {
+                const amt = Number(r.amount ?? 0);
+                const isNeg = amt < 0;
+                return (
+                  <tr key={r.id} className="border-t border-border">
+                    <Td>{r.date ? new Date(r.date).toLocaleString("th-TH") : "-"}</Td>
+                    <Td>
+                      <Link href={`/admin/wallet/${r.id}`} className="font-mono text-primary-600 hover:underline">
+                        {r.id}
+                      </Link>
+                    </Td>
+                    <Td>{WHS_TYPE_LABEL[r.type ?? ""] ?? (r.type ? `type ${r.type}` : "-")}</Td>
+                    <Td mono>{r.reforder ?? "-"}</Td>
+                    <Td>
+                      <StatusPill
+                        label={WHS_STATUS_LABEL[r.status ?? ""] ?? (r.status ? `status ${r.status}` : "-")}
+                        tone={whsStatusTone(r.status)}
+                      />
+                    </Td>
+                    <Td right>
+                      <span className={isNeg ? "text-red-600" : "text-emerald-600"}>
+                        {isNeg ? "−" : ""}฿
+                        {Math.abs(amt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        )}
+      </Section>
+
+      {/* ════════ เครื่องมือผู้ดูแล · Pacred (เพิ่มเติมจาก legacy) ════════ */}
+      <div className="flex items-center gap-3 pt-4">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-semibold text-muted uppercase tracking-wider">
+          เครื่องมือผู้ดูแล · Pacred
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* Per-customer Margin Profile (2026-06-05 ภูม · CEO CRM-activation) —
+          surfaces this customer's margin history (avg margin vs ฿15k cap).
+          Pairs with /admin/accounting/margin-monitor. */}
+      <CustomerMarginPanel summary={marginSummary} />
+
+      {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the legacy
+          #rate-settings modal (writes LIVE tb_rate_custom_kg/cbm + history).
+          The header ⚙️ gear anchors here. */}
+      <div id="rate-settings" className="scroll-mt-20">
+        <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
+      </div>
+
+      {/* Pricing segments (money · 2026-06-05) — legacy users/comparison (ค่าเทียบ/
+          CPS) + users/credit (เครดิต). The price + credit engines already read
+          these tb_users columns; this is the set/edit/remove admin CRUD. */}
       <div className="grid lg:grid-cols-2 gap-5">
         <ComparisonEditor userid={u.userID} enabled={comparisonEnabled} value={comparisonValue} />
         <CreditLineEditor
@@ -471,9 +760,6 @@ export async function renderLegacyCustomerView(id: string) {
           outstanding={creditOutstanding}
         />
       </div>
-
-      {/* Inline note editor (tb_users.userNote) — เดฟ 2026-05-30 */}
-      <NoteEditor userid={u.userID} initialNote={u.userNote} />
 
       {/* CRM depth (2026-06-08) — tags + activity timeline. Tags double as the
           AXELRA-vs-PCS lead-source marker; the timeline merges call-log +
@@ -489,15 +775,9 @@ export async function renderLegacyCustomerView(id: string) {
         </div>
       </div>
 
-      {/* Juristic company info (tb_corporate) — editable in-place (UPDATE-
-          only, file upload deferred). Only render for นิติบุคคล customers. */}
-      {isJuristic ? (
-        <CorporateEditor userid={u.userID} corp={corp} />
-      ) : null}
-
-      {/* Shipping addresses (tb_address) — full CRUD + set-main, main flag
-          from tb_address_main. เดฟ 2026-05-30. */}
-      <AddressManager userid={u.userID} addresses={addresses} mainAddressId={mainAddrId} />
+      {/* Juristic company info (tb_corporate) — editable in-place (UPDATE-only,
+          file upload deferred). Only render for นิติบุคคล customers. */}
+      {isJuristic ? <CorporateEditor userid={u.userID} corp={corp} /> : null}
 
       {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).
           Only for truly-empty (test/orphan) accounts; the panel shows the
@@ -521,139 +801,6 @@ export async function renderLegacyCustomerView(id: string) {
         {" · "}
         <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>).
       </div>
-
-      {/* Recent forwarders */}
-      <Section title={`ฝากนำเข้าล่าสุด (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}>
-        {fws.length === 0 ? (
-          <Empty>ยังไม่มีรายการฝากนำเข้า</Empty>
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>วันที่</Th>
-                <Th>เลขที่</Th>
-                <Th>เบอร์ตู้</Th>
-                <Th>สถานะ</Th>
-                <Th right>ราคารวม</Th>
-                <Th></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {fws.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</Td>
-                  <Td mono>{r.fidorco ?? "-"}</Td>
-                  <Td mono>{r.fcabinetnumber ?? "-"}</Td>
-                  <Td>{r.fstatus ?? "-"}</Td>
-                  <Td right>
-                    ฿
-                    {Number(r.ftotalprice ?? 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      ดู
-                    </Link>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Section>
-
-      {/* Recent shop orders */}
-      <Section title={`ฝากสั่งล่าสุด (${hos.length})`} viewAllHref={`/admin/service-orders?q=${u.userID}`}>
-        {hos.length === 0 ? (
-          <Empty>ยังไม่มีรายการฝากสั่ง</Empty>
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>วันที่</Th>
-                <Th>เลขที่</Th>
-                <Th>สินค้า</Th>
-                <Th>สถานะ</Th>
-                <Th right>THB</Th>
-                <Th></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {hos.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.hdate ? String(r.hdate).slice(0, 10) : "-"}</Td>
-                  <Td mono>{r.hno ?? "-"}</Td>
-                  <Td>
-                    <span className="block max-w-[260px] truncate" title={r.htitle ?? ""}>
-                      {r.htitle ?? "-"}
-                    </span>
-                  </Td>
-                  <Td>{r.hstatus ?? "-"}</Td>
-                  <Td right>
-                    ฿
-                    {Number(r.htotalpriceuser ?? 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      ดู
-                    </Link>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Section>
-
-      {/* Recent yuan payments */}
-      <Section title={`ฝากโอนหยวนล่าสุด (${pys.length})`} viewAllHref={`/admin/yuan-payments?q=${u.userID}`}>
-        {pys.length === 0 ? (
-          <Empty>ยังไม่มีรายการฝากโอน</Empty>
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>วันที่</Th>
-                <Th>สถานะ</Th>
-                <Th right>หยวน</Th>
-                <Th right>THB</Th>
-                <Th></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {pys.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.paydate ? String(r.paydate).slice(0, 10) : "-"}</Td>
-                  <Td>{r.paystatus ?? "-"}</Td>
-                  <Td right>
-                    ¥{Number(r.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </Td>
-                  <Td right>
-                    ฿{Number(r.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/admin/yuan-payments/${r.id}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      ดู
-                    </Link>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Section>
     </main>
   );
 }
@@ -717,4 +864,19 @@ function Td({ children, mono, right }: { children?: React.ReactNode; mono?: bool
 }
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="p-8 text-center text-sm text-muted">{children}</p>;
+}
+
+const PILL_TONE: Record<PillTone, string> = {
+  green: "bg-green-100 text-green-700 border-green-200",
+  red: "bg-red-100 text-red-700 border-red-200",
+  amber: "bg-amber-100 text-amber-700 border-amber-200",
+  blue: "bg-blue-50 text-blue-700 border-blue-200",
+  gray: "bg-gray-100 text-gray-600 border-gray-200",
+};
+function StatusPill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
+  return (
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${PILL_TONE[tone]}`}>
+      {label}
+    </span>
+  );
 }
