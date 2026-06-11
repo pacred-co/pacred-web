@@ -14,6 +14,7 @@ import {
   deriveTransportTypeFromMomoRaw,
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
+  momoRawDisplay,
 } from "./momo-raw-helpers";
 
 let pass = 0;
@@ -139,6 +140,40 @@ check("warehouseDates no status_date → both null", (() => { const w = extractW
   check("ภูม example: kodang = 2026-06-09 17:14:36", w.kodang === "2026-06-09 17:14:36");
   check("ภูม example: exported→prepare_export = 2026-06-09 17:27:47", w.exported === "2026-06-09 17:27:47");
 }
+
+// ── momoRawDisplay (ภูม flag 2026-06-11) — readable view-model ──────
+// The ภูม screenshot row (status 7, ship, fda, qty 2).
+{
+  const d = momoRawDisplay({
+    _id: "6a17f8e1f5bfa90738ba7a9e",
+    user_code: "10601", user_group: "PR", status: 7, tracking: "1779955936",
+    images: ["https://api.momocargo.com/images/x.jpg"],
+    wooden_create: false, wooden_info: null, ship_by: "ship", quantity: 2,
+    extra_cost: 0, kg: 100, cbm: 0.310856, width: 91, length: 61, height: 28,
+    type: "fda", container_no: "PR20260527-SEA02", sack_no: "", sack_size: null,
+    CG_NO: "CG79961479667-CG79961479668",
+    created_date: "2026-05-28 16:12:17", updated_date: "2026-05-28 21:39:35",
+    status_date: { waiting: "2026-05-28 16:12:17", kodang: "2026-05-28 17:44:42", mergebox: "" },
+  });
+  check("display: memberCode = PR10601", d.memberCode === "PR10601");
+  check("display: statusCode = 7", d.statusCode === 7);
+  check("display: shipByLabel = เรือ", d.shipByLabel === "เรือ");
+  check("display: productType = fda", d.productType === "fda");
+  check("display: cgNo passthrough", d.cgNo === "CG79961479667-CG79961479668");
+  check("display: weight 100 / cbm 0.310856 / qty 2", d.weight === 100 && d.cbm === 0.310856 && d.qty === 2);
+  check("display: woodenCreate false", d.woodenCreate === false);
+  check("display: images 1 url", d.images.length === 1);
+  check("display: phases ordered 6 (waiting→exported)", d.phases.length === 6 && d.phases[0].key === "waiting" && d.phases[5].key === "exported");
+  check("display: kodang phase has its timestamp", d.phases.find((p) => p.key === "kodang")?.at === "2026-05-28 17:44:42");
+  check("display: unreached phase (exported) → null", d.phases.find((p) => p.key === "exported")?.at === null);
+}
+// defensive: null / non-object raw never throws
+{
+  const d = momoRawDisplay(null);
+  check("display: null raw → safe defaults (qty 1, no throw)", d.qty === 1 && d.memberCode === "" && d.phases.length === 6);
+}
+check("display: car → รถ", momoRawDisplay({ ship_by: "car" }).shipByLabel === "รถ");
+check("display: unknown ship_by passes through", momoRawDisplay({ ship_by: "boat" }).shipByLabel === "boat");
 
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);
