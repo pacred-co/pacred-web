@@ -41,6 +41,7 @@ import { logAdminAction, type AdminActionResult } from "@/actions/admin/common";
 // unit-testable under tsx (this module's `server-only` import throws there).
 import {
   deriveTransportTypeFromMomoRaw,
+  deriveTransportTypeFromCabinet,
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
@@ -352,8 +353,21 @@ export async function commitMomoRowCore(
   const cabinetForDisplay = srcRow.container_batch_no ?? srcRow.momo_container_no ?? "";
   const containerNo = srcRow.momo_container_no ?? "";
   const metrics     = extractMetricsFromMomoRaw(srcRow.raw);
+  // ── Transport type (รถ EK "1" / เรือ SEA "2") — พี่ป๊อป flag 2026-06-11 ──
+  // Priority:
+  //   1. d.fTransportType        — explicit admin override (review form) wins.
+  //   2. the REAL cabinet GZS/GZE — the PHYSICAL truth. We PROVED per-parcel
+  //      ship_by lies: parcel 0004065 was tagged ship_by=รถ but physically
+  //      shipped in the SEA cabinet GZS260528-1. container_batch_no (= the
+  //      container_closed cid, GZS…/GZE…) is the cabinet the goods actually
+  //      rode, so derive the mode from it.
+  //   3. deriveTransportTypeFromMomoRaw(raw) = ship_by — last-resort fallback
+  //      ONLY when the parcel isn't in a closed container yet (no cabinet).
+  // This also corrects the fdatetothai ETA below (sea +14 vs truck +7).
   const fTransportType =
-    d.fTransportType ?? deriveTransportTypeFromMomoRaw(srcRow.raw);
+    d.fTransportType
+    ?? deriveTransportTypeFromCabinet(srcRow.container_batch_no)
+    ?? deriveTransportTypeFromMomoRaw(srcRow.raw);
 
   // Legacy "feel automatic" atomicity:
   //   - fstatus: 2 if no manifest/container yet · 3 if container assigned

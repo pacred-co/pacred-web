@@ -403,6 +403,48 @@ export function deriveModeFromCid(cid: string): "เรือ" | "รถ" | null
   return null;
 }
 
+/**
+ * Legacy `tb_forwarder.ftransporttype` code from the REAL cabinet (cid):
+ * GZS… → "2" (ทางเรือ/SEA) · GZE… → "1" (ทางรถ/EK truck) · null when unknown.
+ *
+ * พี่ป๊อป flag 2026-06-11 — root-cause fix for "โหมดมั่ว": per-parcel `ship_by`
+ * is unreliable (PROVEN: parcel 0004065 tagged ship_by=รถ physically shipped in
+ * the SEA container GZS260528-1). The cabinet code is the physical truth, so the
+ * commit prefers THIS over deriveTransportTypeFromMomoRaw(raw) (= ship_by) when
+ * the real cabinet is known. Same GZS/GZE rule as deriveModeFromCid, but returns
+ * the legacy "1"/"2" code the INSERT needs (not the Thai label).
+ */
+export function deriveTransportTypeFromCabinet(cabinet: string | null | undefined): "1" | "2" | null {
+  const c = (cabinet ?? "").trim().toUpperCase();
+  if (c.startsWith("GZS")) return "2";
+  if (c.startsWith("GZE")) return "1";
+  return null;
+}
+
+/**
+ * Build a `tracking → real-cabinet (cid)` map from Container Closed records.
+ * Each container raw lists the trackings inside it under
+ * `track_details[].reTrack`; we map each to the container's `cid` (GZS…/GZE…).
+ * The Import Track spread uses this to show which REAL container a tracking
+ * landed in (พี่ป๊อป #4) — independent of the unreliable per-parcel ship_by.
+ */
+export function buildTrackingCabinetMap(containerRaws: unknown[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const raw of containerRaws) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const cid = typeof r.cid === "string" ? r.cid.trim() : "";
+    if (!cid) continue;
+    const td = Array.isArray(r.track_details) ? r.track_details : [];
+    for (const t of td) {
+      if (!t || typeof t !== "object") continue;
+      const re = (t as Record<string, unknown>).reTrack;
+      if (typeof re === "string" && re.trim()) map[re.trim()] = cid;
+    }
+  }
+  return map;
+}
+
 /** Package metrics extracted from a MOMO raw blob. */
 export type MomoMetrics = {
   weight: number;
