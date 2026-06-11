@@ -276,7 +276,7 @@ export function collectMomoRawColumns(raws: unknown[]): string[] {
 export const MOMO_FIELD_TH: Record<string, string> = {
   // identity / customer
   member_code:   "ลูกค้า (User)",
-  status:        "สถานะ MOMO (เลข)",
+  status:        "สถานะ",
   tracking:      "เลขพัสดุจีน",
   CG_NO:         "CG_NO (เลขพัสดุย่อย)",
   // packaging / metrics
@@ -387,6 +387,20 @@ export function formatMomoSpreadValue(key: string, value: string): string {
   if (value === "true")  return "ใช่";
   if (value === "false") return "ไม่";
   return value;
+}
+
+/**
+ * Authoritative freight mode from the REAL cabinet code (container_closed.cid).
+ * GZS… = ทางเรือ (sea) · GZE… = ทางรถ (truck/EK). null when the prefix is
+ * unknown or cid empty. This is the trustworthy mode signal — per-parcel
+ * `ship_by` can be MOMO-miskeyed (พี่ป๊อป flag), so the spread cross-checks
+ * a container row's ship_by against this and flags a mismatch.
+ */
+export function deriveModeFromCid(cid: string): "เรือ" | "รถ" | null {
+  const c = (cid ?? "").trim().toUpperCase();
+  if (c.startsWith("GZS")) return "เรือ";
+  if (c.startsWith("GZE")) return "รถ";
+  return null;
 }
 
 /** Package metrics extracted from a MOMO raw blob. */
