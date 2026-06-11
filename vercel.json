@@ -65,6 +65,10 @@
     {
       "path": "/api/cron/container-bulletin",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/reap-incomplete-signups",
+      "schedule": "30 2 * * *"
     }
   ]
 }
