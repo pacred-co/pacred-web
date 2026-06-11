@@ -28,7 +28,11 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
-import { FREIGHT_MARGIN_CAP_PER_CONTAINER } from "@/lib/freight/rate-model";
+import {
+  FREIGHT_MARGIN_CAP_PER_CONTAINER,
+  FREIGHT_MARKUP_TIERS_PCT,
+  FREIGHT_DEFAULT_MARKUP_PCT,
+} from "@/lib/freight/rate-model";
 import { getBusinessConfig } from "@/lib/business-config";
 import {
   computeQuoteTotals,
@@ -399,6 +403,16 @@ export async function convertLeadToQuote(
           "freight.margin_cap_thb",
           FREIGHT_MARGIN_CAP_PER_CONTAINER,
         );
+        // Lane-C fix: thread the admin-editable markup config (live read, not a
+        // dead write). Defaults to the code consts → identical legacy behaviour.
+        const markupTiersPct = await getBusinessConfig<readonly number[]>(
+          "freight.markup_tiers_pct",
+          FREIGHT_MARKUP_TIERS_PCT,
+        );
+        const defaultMarkupPct = await getBusinessConfig<number>(
+          "freight.default_markup_pct",
+          FREIGHT_DEFAULT_MARKUP_PCT,
+        );
         const quote = composeFreightQuote({
           mode:     transportMode,
           incoterm,
@@ -406,6 +420,8 @@ export async function convertLeadToQuote(
           cbm:      lead.cbm ?? undefined,
           kgm:      lead.weight_kg ?? undefined,
           marginCapPerContainerThb,
+          markupTiersPct,
+          defaultMarkupPct,
         });
         if (quote.lines.length > 0) {
           const rows = quote.lines.map((l, i) => ({

@@ -192,8 +192,23 @@ export const INCOTERM_LABEL: Record<Incoterm, string> = {
 };
 
 /** Freight markup tiers (เงื่อนไข จ๊อบการทำงาน A23: "เฟรท 30-25-20-15-10%").
- *  Which tier applies = a sales/volume judgment → the human picks at confirm. */
+ *  Which tier applies = a sales/volume judgment → the human picks at confirm.
+ *
+ *  ⚠️ These are the CODE DEFAULTS. They are seeded into business_config (mig 0145
+ *  keys `freight.markup_tiers_pct` / `freight.default_markup_pct`) and are
+ *  admin-editable at /admin/settings/business-config. The rate engine reads the
+ *  configured values through these consts as the fallback default — so an admin
+ *  edit is actually respected (no longer a dead write) while an unseeded/missing
+ *  config row falls back to identical legacy behaviour. The config is threaded in
+ *  from the SERVER caller (getBusinessConfig is server-only) → see
+ *  rate-engine.composeFreightQuote's `markupTiersPct`/`defaultMarkupPct` spec
+ *  fields, which default to these consts. */
 export const FREIGHT_MARKUP_TIERS_PCT = [30, 25, 20, 15, 10] as const;
+
+/** Default freight markup % (the reference tier) — mirrors business_config
+ *  `freight.default_markup_pct` (mig 0145, seeded = 25). Used as the fallback
+ *  default when the server caller doesn't thread a configured value. */
+export const FREIGHT_DEFAULT_MARKUP_PCT = 25 as const;
 
 /** FX reference (the cost sheets quote USD at this rate, refreshed monthly).
  *  The guide shows it so the pricer confirms the current month's rate before

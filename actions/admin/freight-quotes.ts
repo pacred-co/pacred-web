@@ -40,7 +40,12 @@ import {
 } from "@/lib/validators/freight-quote";
 import { composeFreightQuote } from "@/lib/freight/rate-engine";
 import { lookupChinaFreightCostThb } from "@/lib/freight/rate-lookup";
-import { incursChinaFreightCost, FREIGHT_MARGIN_CAP_PER_CONTAINER } from "@/lib/freight/rate-model";
+import {
+  incursChinaFreightCost,
+  FREIGHT_MARGIN_CAP_PER_CONTAINER,
+  FREIGHT_MARKUP_TIERS_PCT,
+  FREIGHT_DEFAULT_MARKUP_PCT,
+} from "@/lib/freight/rate-model";
 import { getBusinessConfig } from "@/lib/business-config";
 
 const ROLES_CREATE  = ["super", "ops", "sales_admin", "accounting"] as const;
@@ -320,6 +325,17 @@ export async function adminComposeQuoteFromRateCard(
       "freight.margin_cap_thb",
       FREIGHT_MARGIN_CAP_PER_CONTAINER,
     );
+    // Lane-C fix: thread the admin-editable markup config so it's a LIVE read
+    // (was a dead write — the engine ignored these keys). Defaults to the code
+    // consts → identical legacy behaviour until an admin changes the value.
+    const markupTiersPct = await getBusinessConfig<readonly number[]>(
+      "freight.markup_tiers_pct",
+      FREIGHT_MARKUP_TIERS_PCT,
+    );
+    const defaultMarkupPct = await getBusinessConfig<number>(
+      "freight.default_markup_pct",
+      FREIGHT_DEFAULT_MARKUP_PCT,
+    );
 
     // Price from the real rate cards (pure, no IO) + the looked-up China cost.
     const quote = composeFreightQuote({
@@ -332,6 +348,8 @@ export async function adminComposeQuoteFromRateCard(
       containers:    d.containers,
       chinaFreightCostThb: chinaFreightCostThb ?? undefined,
       marginCapPerContainerThb,
+      markupTiersPct,
+      defaultMarkupPct,
     });
     if (quote.lines.length === 0) {
       return { ok: false, error: "rate_card_produced_no_lines" };
