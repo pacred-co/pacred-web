@@ -10,7 +10,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { SITE_URL } from "@/components/seo/site";
-import { REVIEWS } from "@/lib/reviews/catalog";
+import { REVIEWS, reviewSlug } from "@/lib/reviews/catalog";
 
 // Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
 // static prerender would throw DYNAMIC_SERVER_USAGE in production.
@@ -50,7 +50,7 @@ export default async function ReviewsListingPage({
     itemListElement: REVIEWS.map((r, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/our-work/${r.id}`,
+      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/our-work/${reviewSlug(r, typedLocale)}`,
       name: t(r.titleKey),
     })),
   };

@@ -16,7 +16,14 @@
  * review funnels into the real booking surface.
  */
 import { type SiteLocale } from "@/components/seo/site";
-import type { Review, TagKey, TitleKey } from "./catalog";
+import {
+  reviewProductLabel,
+  reviewHsCode,
+  reviewRoute,
+  type Review,
+  type TagKey,
+  type TitleKey,
+} from "./catalog";
 
 type Mode = "sea" | "road" | "air";
 type Term = "DDP" | "CIF";
@@ -610,9 +617,17 @@ const EN_SERVICE: Record<TitleKey, ServiceBlock> = {
 
 export function getReviewContent(review: Review, locale: SiteLocale): ReviewContent {
   const isTh = locale !== "en";
+  const loc: "th" | "en" = isTh ? "th" : "en";
   const mode = modeOf(review.tagKeys);
   const terms = termsOf(review.tagKeys);
   const code = codeOf(review.id);
+
+  // product / HS-code / route dimension (2026-06-11 · ปอน) — keeps each of the
+  // 32 near-identical landing pages unique + keyword-rich (avoids dup-content).
+  const productLabel = reviewProductLabel(review, loc);
+  const hs = reviewHsCode(review);
+  const route = reviewRoute(review, loc);
+  const isClearance = review.type === "clearance";
 
   const SERVICE = isTh ? TH_SERVICE : EN_SERVICE;
   const MODE = isTh ? TH_MODE : EN_MODE;
@@ -621,18 +636,40 @@ export function getReviewContent(review: Review, locale: SiteLocale): ReviewCont
 
   const termSuffix = terms.length ? ` ${terms.join(" / ")}` : "";
   const h1 = isTh
-    ? `ผลงาน Pacred — ${block.titleNoun} ${modeLabel}${termSuffix}`
-    : `Pacred case — ${block.titleNoun} ${modeLabel}${termSuffix}`;
+    ? `ผลงาน Pacred — ${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix}`
+    : `Pacred case — ${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix}`;
   const metaTitle = isTh
-    ? `${block.titleNoun} ${modeLabel}${termSuffix} — รีวิว ${code} | Pacred`
-    : `${block.titleNoun} ${modeLabel}${termSuffix} — review ${code} | Pacred`;
-  const metaDescription = block.intro(modeLabel);
+    ? `${productLabel} — ${block.titleNoun} ${modeLabel}${termSuffix} · ${code} | Pacred`
+    : `${productLabel} — ${block.titleNoun} ${modeLabel}${termSuffix} · ${code} | Pacred`;
+  const metaDescription = isTh
+    ? `${block.intro(modeLabel)} สินค้า: ${productLabel} (HS ${hs}) · เส้นทาง ${route}`
+    : `${block.intro(modeLabel)} Goods: ${productLabel} (HS ${hs}) · route ${route}.`;
 
   const modeKw = MODE[mode].kw;
   const termKw = isTh ? terms.map((t) => TH_TERM[t].kw) : [];
+  const productKw = isTh
+    ? [productLabel, `นำเข้า${productLabel}จากจีน`, `${productLabel} HS ${hs}`, `พิกัดศุลกากร ${hs}`, `HS Code ${hs}`]
+    : [productLabel, `import ${productLabel} from China`, `${productLabel} HS ${hs}`, `HS code ${hs}`];
   const keywords = Array.from(
-    new Set([...block.keywords, modeKw, ...termKw, "Pacred Shipping"]),
+    new Set([...block.keywords, ...productKw, modeKw, ...termKw, "Pacred Shipping"]),
   );
+
+  // HS-code section — appended after the service sections.
+  const hsSection = isTh
+    ? {
+        heading: `สินค้าและพิกัดศุลกากร (HS Code ${hs})`,
+        paragraphs: [
+          `เคสนี้เป็นการ${isClearance ? "เคลียร์พิธีการศุลกากร" : "นำเข้า"}${productLabel} เส้นทาง ${route} — จัดอยู่ในพิกัดศุลกากร (HS Code) ${hs} ทีม Pacred ประเมินพิกัดและอัตราอากรขาเข้าให้ถูกต้องก่อนยื่นใบขนสินค้า ลดความเสี่ยงสำแดงพิกัดผิดและการโดนเปิดตรวจหน้าด่าน`,
+          `หมายเหตุ: HS ${hs} เป็นพิกัดอ้างอิงระดับ 4 หลักของกลุ่ม${productLabel} — พิกัดเต็มและอัตราอากรจริงขึ้นกับรายละเอียดและวัสดุของสินค้า Pacred ตรวจสอบและยืนยันพิกัดให้ฟรีก่อนนำเข้า`,
+        ],
+      }
+    : {
+        heading: `Product & customs tariff (HS Code ${hs})`,
+        paragraphs: [
+          `This case ${isClearance ? "cleared customs for" : "imported"} ${productLabel} on the ${route} route — classified under HS Code ${hs}. Pacred assesses the tariff and import-duty rate correctly before filing the declaration, cutting the risk of misclassification and border inspection.`,
+          `Note: HS ${hs} is the 4-digit reference heading for ${productLabel}; the full code and actual duty depend on the product's exact spec and material — Pacred verifies it free before import.`,
+        ],
+      };
 
   return {
     code,
@@ -644,7 +681,7 @@ export function getReviewContent(review: Review, locale: SiteLocale): ReviewCont
     metaDescription,
     keywords,
     intro: block.intro(modeLabel),
-    sections: block.sections(mode, terms),
+    sections: [...block.sections(mode, terms), hsSection],
     faq: block.faq(mode, terms),
     cta: block.cta,
   };
