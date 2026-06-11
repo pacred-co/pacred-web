@@ -268,6 +268,14 @@ export function AdminForwarderNewForm({
   // ─── transport type ─────────────────────────────────────────────
   const [transportType, setTransportType] = useState<TransportType>("1");
 
+  // ─── GAP 10 — tax-document choice (was silently defaulted) ───────
+  // receipt = ไม่รับเอกสาร (no VAT doc) · tax_invoice = ใบกำกับภาษี ·
+  // customs = ใบขนสินค้า. Persists to tb_forwarder.tax_doc_pref → the detail
+  // page badge + the issuance flow read it. Billing snapshot (for VAT docs)
+  // is completed later on the detail/edit page; the quick-add captures the
+  // CHOICE so back-office isn't left guessing.
+  const [taxDocPref, setTaxDocPref] = useState<string>("receipt");
+
   // ─── feedback ───────────────────────────────────────────────────
   const [error, setError]     = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -519,6 +527,7 @@ export function AdminForwarderNewForm({
     setAddresses([]);
     setAddressId(null);
     setTransportType("1");
+    setTaxDocPref("receipt");
     setWarehouseName("");
     setWarehouseAutoFilled(false);
     setError(null);
@@ -561,6 +570,7 @@ export function AdminForwarderNewForm({
           addressId:      shipBy === "PCS" ? null : addressId,
           transportType:  transportType,
           warehouseName:  warehouseName,
+          taxDocPref:     taxDocPref,
         },
         coverFile ?? undefined,
       );
@@ -1012,6 +1022,26 @@ export function AdminForwarderNewForm({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* GAP 10 — เอกสารภาษี (was silently defaulted to ไม่รับเอกสาร) */}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted mb-1">
+            เอกสารภาษี (ลูกค้าต้องการ)
+          </label>
+          <select
+            value={taxDocPref}
+            onChange={(e) => setTaxDocPref(e.target.value)}
+            disabled={pending}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+          >
+            <option value="receipt">ไม่รับเอกสาร (ใบเสร็จ · ไม่มี VAT)</option>
+            <option value="tax_invoice">ใบกำกับภาษี (VAT 7% · มูลค่าสินค้า)</option>
+            <option value="customs">ใบขนสินค้า (VAT 7% · ค่าบริการ)</option>
+          </select>
+          <p className="mt-1 text-[11px] text-muted">
+            เลือกตามที่ลูกค้าต้องการ — รายละเอียดผู้เสียภาษี (เลขผู้เสียภาษี/ที่อยู่) กรอกเพิ่มได้ในหน้ารายละเอียด
+          </p>
         </div>
       </section>
 

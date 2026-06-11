@@ -50,6 +50,9 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { ADDRESSES } from "@/components/seo/site";
+// GAP 10 (2026-06-12) — capture the tax-document choice at admin quick-add
+// (the modal silently defaulted to no-doc). Display/selection only.
+import { modeFromPref, prefFromMode } from "@/lib/tax/tax-doc-mode";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -409,6 +412,9 @@ const createForwarderSchema = z.object({
   addressId:       z.number().int().positive().nullable().optional(),
   transportType:   z.enum(TRANSPORT_TYPES),
   warehouseName:   z.enum(WAREHOUSE_CODES).optional().default(""),
+  // GAP 10 — customer's tax-document choice (receipt | tax_invoice | customs).
+  // Optional; unset → 'receipt' (no doc), the prior silent default.
+  taxDocPref:      z.string().trim().max(20).optional(),
 });
 export type AdminCreateForwarderInput = z.infer<typeof createForwarderSchema>;
 
@@ -522,6 +528,9 @@ export async function adminCreateForwarder(
           userid:                customer.userID,
           fshipby:               d.shipBy,
           ftransporttype:        d.transportType,
+          // GAP 10 — persist the doc choice (receipt|tax_invoice|customs); the
+          // detail page's <TaxDocBadge> reads this. Unset → 'receipt' (no doc).
+          tax_doc_pref:          prefFromMode(modeFromPref(d.taxDocPref ?? null)),
           adminidcreator:        legacyAdminId,
           faddressname:          addr.addressname,
           faddresslastname:      addr.addresslastname,
