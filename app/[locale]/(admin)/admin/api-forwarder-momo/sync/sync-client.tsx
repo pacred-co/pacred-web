@@ -25,7 +25,14 @@ import {
 } from "@/lib/integrations/momo-isolated/types";
 // ภูม flag 2026-06-11 — surface the MOMO raw fields as readable columns + detail
 // (so staff cross-check every value before commit, not squint at raw JSON).
-import { momoRawDisplay, type MomoRawDisplay } from "@/lib/admin/momo-raw-helpers";
+// พี่ป๊อป flag 2026-06-11 — + a "คลี่ทุก field" raw-spread view (flatten every
+// field MOMO sends into its own column) to audit MOMO's inconsistent keying.
+import {
+  momoRawDisplay,
+  flattenMomoRawMap,
+  collectMomoRawColumns,
+  type MomoRawDisplay,
+} from "@/lib/admin/momo-raw-helpers";
 
 type DbRow = {
   momo_tracking_no?: string | null;
@@ -94,6 +101,8 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
   const [busy, setBusy]    = useState<string | null>(null);
   const [result, setResult] = useState<SyncResponse | null>(null);
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
+  // พี่ป๊อป flag — preview view mode: curated summary vs "คลี่ทุก field" raw spread.
+  const [rawSpread, setRawSpread] = useState(false);
 
   // Phase D debug — tracking lookup state
   const [debugTracking, setDebugTracking] = useState("");
@@ -320,27 +329,63 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
           {/* Preview tables */}
           {result.preview && (
             <div className="space-y-3">
-              <PreviewTable
-                title="Import Track preview"
-                rows={result.preview.importTrack}
-                kind="import"
-                openMap={rawOpen}
-                setOpenMap={setRawOpen}
-              />
-              <PreviewTable
-                title="Container Closed preview"
-                rows={result.preview.containerClosed}
-                kind="container"
-                openMap={rawOpen}
-                setOpenMap={setRawOpen}
-              />
-              <PreviewTable
-                title="Sack Info preview"
-                rows={result.preview.sackInfo}
-                kind="sack"
-                openMap={rawOpen}
-                setOpenMap={setRawOpen}
-              />
+              {/* พี่ป๊อป flag — view toggle: curated summary vs raw-spread audit grid */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-muted">มุมมอง:</span>
+                <div className="inline-flex overflow-hidden rounded-lg border border-border text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRawSpread(false)}
+                    className={`px-3 py-1 ${!rawSpread ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    สรุป (ใช้งาน)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRawSpread(true)}
+                    className={`px-3 py-1 ${rawSpread ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    ดิบทั้งหมด — คลี่ทุก field
+                  </button>
+                </div>
+                {rawSpread && (
+                  <span className="text-[10px] text-muted">
+                    ทุก field ที่ MOMO ส่งมา (ยกเว้น <code>_id</code>) คลี่เป็นคอลัมน์ — ไว้ตรวจว่า MOMO คีย์อะไรมาบ้าง แล้วคัดว่าจะใช้ field ไหน
+                  </span>
+                )}
+              </div>
+
+              {rawSpread ? (
+                <>
+                  <RawSpreadTable title="Import Track" rows={result.preview.importTrack} />
+                  <RawSpreadTable title="Container Closed" rows={result.preview.containerClosed} />
+                  <RawSpreadTable title="Sack Info" rows={result.preview.sackInfo} />
+                </>
+              ) : (
+                <>
+                  <PreviewTable
+                    title="Import Track preview"
+                    rows={result.preview.importTrack}
+                    kind="import"
+                    openMap={rawOpen}
+                    setOpenMap={setRawOpen}
+                  />
+                  <PreviewTable
+                    title="Container Closed preview"
+                    rows={result.preview.containerClosed}
+                    kind="container"
+                    openMap={rawOpen}
+                    setOpenMap={setRawOpen}
+                  />
+                  <PreviewTable
+                    title="Sack Info preview"
+                    rows={result.preview.sackInfo}
+                    kind="sack"
+                    openMap={rawOpen}
+                    setOpenMap={setRawOpen}
+                  />
+                </>
+              )}
             </div>
           )}
         </section>
@@ -565,6 +610,62 @@ function PreviewTable({
                 </Fragment>
               );
             })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * RawSpreadTable (พี่ป๊อป flag 2026-06-11) — the "คลี่ทุก field" audit grid.
+ * Flattens every field MOMO sent (except `_id`) into one column each, one row
+ * per record. The column set is the UNION across all rows (first-seen order),
+ * so a field MOMO keyed on only some rows still gets a column — blank ("·")
+ * where it's missing. This is the tool to eyeball MOMO's inconsistent keying
+ * and decide which fields to trust before committing.
+ */
+function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdminRecord[] }) {
+  if (!rows || rows.length === 0) return null;
+  const raws = rows.map((r) => r.raw);
+  const cols = collectMomoRawColumns(raws);
+  const maps = raws.map((raw) => flattenMomoRawMap(raw));
+  return (
+    <div>
+      <h4 className="text-xs font-bold mb-1">
+        {title} · ดิบทั้งหมด ({rows.length} แถว · {cols.length} field)
+      </h4>
+      <p className="text-[10px] text-muted mb-1">
+        ⇆ เลื่อนซ้าย-ขวา · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · array/ออบเจกต์ย่อยแสดงเป็น JSON (ชี้เมาส์เพื่อดูเต็ม)
+      </p>
+      <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
+        <table className="text-[11px] border-collapse">
+          <thead className="bg-surface-alt">
+            <tr className="whitespace-nowrap">
+              <th className="sticky left-0 z-10 bg-surface-alt border-b border-r px-2 py-1 text-left">#</th>
+              {cols.map((c) => (
+                <th key={c} className="border-b px-2 py-1 text-left font-mono font-semibold">{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {maps.map((m, i) => (
+              <tr key={i} className="border-b align-top whitespace-nowrap">
+                <td className="sticky left-0 z-10 bg-white border-r px-2 py-1 text-muted">{i + 1}</td>
+                {cols.map((c) => {
+                  const v = m[c] ?? "";
+                  return (
+                    <td key={c} className="px-2 py-1 font-mono">
+                      {v === "" ? (
+                        <span className="text-slate-300">·</span>
+                      ) : (
+                        <div className="max-w-[280px] truncate" title={v}>{v}</div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -15,6 +15,8 @@ import {
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
   momoRawDisplay,
+  flattenMomoRaw,
+  collectMomoRawColumns,
 } from "./momo-raw-helpers";
 
 let pass = 0;
@@ -204,6 +206,42 @@ check("display: unknown ship_by passes through", momoRawDisplay({ ship_by: "boat
 }
 // import_track row stays parcel-shaped (not a container)
 check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936", kg: 100, quantity: 2 }).isContainer === false);
+
+// ── flattenMomoRaw / collectMomoRawColumns · "คลี่ทุก field" (พี่ป๊อป 2026-06-11) ──
+{
+  const flat = flattenMomoRaw({
+    _id: "abc123", tracking: "1779", kg: 100, closed: true, missing: null,
+    images: ["a.jpg", "b.jpg"], empties: [],
+    status_date: { kodang: "2026-06-05 09:18:27", exported: "" },
+    track_details: [{ reTrack: "T1", kg: 5 }],
+  });
+  const m = Object.fromEntries(flat);
+  check("flatten: drops top-level _id", !("_id" in m));
+  check("flatten: scalar tracking", m.tracking === "1779");
+  check("flatten: number → string", m.kg === "100");
+  check("flatten: boolean → 'true'", m.closed === "true");
+  check("flatten: null → empty string", m.missing === "");
+  check("flatten: primitive array joined", m.images === "a.jpg, b.jpg");
+  check("flatten: empty array → []", m.empties === "[]");
+  check("flatten: nested dot-key", m["status_date.kodang"] === "2026-06-05 09:18:27");
+  check("flatten: nested empty string kept", m["status_date.exported"] === "");
+  check("flatten: array-of-objects → JSON", m.track_details === JSON.stringify([{ reTrack: "T1", kg: 5 }]));
+  check("flatten: key order follows raw (tracking before kg)",
+    flat.findIndex(([k]) => k === "tracking") < flat.findIndex(([k]) => k === "kg"));
+  check("flatten: non-object → []", flattenMomoRaw(null).length === 0);
+  check("flatten: nested _id dropped",
+    !flattenMomoRaw({ a: { _id: "x", v: 1 } }).some(([k]) => k.endsWith("_id")));
+
+  // union of columns across rows with DIFFERENT keys (MOMO keys inconsistently)
+  const cols = collectMomoRawColumns([
+    { tracking: "1", kg: 5 },
+    { tracking: "2", cbm: 0.1 },          // no kg, adds cbm
+    { fid: "PR-1", total_kg: 9 },         // container shape — all new keys
+  ]);
+  check("collectColumns: union preserves first-seen order",
+    JSON.stringify(cols) === JSON.stringify(["tracking", "kg", "cbm", "fid", "total_kg"]));
+  check("collectColumns: no duplicate keys", new Set(cols).size === cols.length);
+}
 
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);

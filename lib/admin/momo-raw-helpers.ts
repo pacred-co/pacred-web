@@ -189,6 +189,79 @@ export function momoRawDisplay(raw: unknown): MomoRawDisplay {
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// flattenMomoRaw / collectMomoRawColumns — the "คลี่ทุก field" audit view
+// (พี่ป๊อป flag 2026-06-11). MOMO staff key inconsistently, so before we
+// decide which fields to trust, we spread EVERY field MOMO sends into one
+// long row. These helpers flatten a raw blob into dot-keyed string cells
+// (the MOMO internal `_id` is the only field dropped — พี่ป๊อป: "ยกเว้น _id")
+// and compute the union of columns across many rows so a field that appears
+// in only some rows still gets its own column (blank where MOMO didn't key it).
+// Pure + unit-tested → the client raw-spread table imports them directly.
+// ────────────────────────────────────────────────────────────
+
+/** Render an array cell: primitives joined, arrays-of-objects as compact JSON. */
+function formatRawArray(arr: unknown[]): string {
+  if (arr.length === 0) return "[]";
+  const allPrimitive = arr.every((x) => x === null || typeof x !== "object");
+  if (allPrimitive) return arr.map((x) => (x == null ? "" : String(x))).join(", ");
+  try { return JSON.stringify(arr); } catch { return "[?]"; }
+}
+
+/**
+ * Flatten a MOMO raw blob into ordered `[dotKey, stringValue]` pairs.
+ *
+ * - Nested objects → dot keys (`status_date.kodang`, `container_details.BL_NO`).
+ * - Arrays → one cell (primitives joined; objects → compact JSON) — never
+ *   exploded into per-index columns (that would blow the column count up).
+ * - `_id` is dropped at every level (พี่ป๊อป: keep everything except `_id`).
+ * - null/undefined → "" ; boolean → "true"/"false" ; empty object → "{}".
+ * - A non-object raw yields []. Key order follows the raw's own key order
+ *   (so the spread mirrors how MOMO laid the record out).
+ */
+export function flattenMomoRaw(raw: unknown): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  const walk = (val: unknown, prefix: string): void => {
+    if (val === null || val === undefined) { out.push([prefix, ""]); return; }
+    if (Array.isArray(val)) { out.push([prefix, formatRawArray(val)]); return; }
+    if (typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      const keys = Object.keys(obj).filter((k) => k !== "_id");
+      if (keys.length === 0) { out.push([prefix, "{}"]); return; }
+      for (const k of keys) walk(obj[k], prefix ? `${prefix}.${k}` : k);
+      return;
+    }
+    if (typeof val === "boolean") { out.push([prefix, val ? "true" : "false"]); return; }
+    out.push([prefix, String(val)]);
+  };
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    for (const k of Object.keys(obj).filter((k) => k !== "_id")) walk(obj[k], k);
+  }
+  return out;
+}
+
+/** flattenMomoRaw as a `{ dotKey: value }` map (for per-row column lookup). */
+export function flattenMomoRawMap(raw: unknown): Record<string, string> {
+  return Object.fromEntries(flattenMomoRaw(raw));
+}
+
+/**
+ * Ordered union of every flattened column across many MOMO raws — first-seen
+ * order preserved. A column that appears in only some rows is still included
+ * (so the audit grid shows where MOMO's keying is inconsistent / missing).
+ */
+export function collectMomoRawColumns(raws: unknown[]): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const raw of raws) {
+    for (const [k] of flattenMomoRaw(raw)) {
+      if (!seen.has(k)) { seen.add(k); order.push(k); }
+    }
+  }
+  return order;
+}
+
 /** Package metrics extracted from a MOMO raw blob. */
 export type MomoMetrics = {
   weight: number;
