@@ -32,6 +32,9 @@ import {
   shopAutoDeclaredThb,
   importAutoDeclaredThb,
 } from "@/lib/forwarder/cargo-cost-autofill";
+// GAP 8 (2026-06-12) — wire the previously-DEAD computeMarginVat (the NON-VAT
+// 7%-on-margin staff figure · legacy function.php) into the GAP 9 profit panel.
+import { computeMarginVat } from "@/lib/tax/tax-doc-mode";
 
 type FwdCostItem = {
   id: number;
@@ -210,6 +213,15 @@ export async function ForwarderCostSection({
           ใบกำกับภาษี (ขาย · ต้นทุน · สำแดง). <b>ไม่กระทบราคาขายลูกค้า · ไม่เปลี่ยนสถานะ · ไม่แจ้งเตือนลูกค้า.</b>
         </p>
 
+        {/* GAP 9 (2026-06-12) — รายรับ/รายจ่าย/กำไร at a glance. ขาย = the
+            forwarder NET grand-total (pre-WHT) · ต้นทุน = fcosttotalprice (was a
+            DEAD-READ — never rendered before) · กำไร = ขาย − ต้นทุน. Display-only
+            internal figure (VAT-on-margin = กำไร × 7%, the legacy staff number).
+            Shown to cost-capable roles only. */}
+        {canEdit && (
+          <ForwarderProfitPanel sellNet={sellNet} costTotal={fCostTotal} />
+        )}
+
         {/* D-G2 · อากรขาเข้า + ราคารวม VAT (the xlsx SELL-block, per shipment) */}
         {canEdit && (
           <ForwarderImportDutyEditor
@@ -327,6 +339,57 @@ function CostLineCard({
         </div>
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * GAP 9 (2026-06-12) — รายรับ/รายจ่าย/กำไร summary for the forwarder order.
+ * SELLING = the NET grand-total (pre-WHT) · COST = fcosttotalprice (the header
+ * cost total — previously a dead-read) · PROFIT = SELLING − COST · VAT-on-margin
+ * = PROFIT × 7% (the legacy NON-VAT staff figure · function.php — NEVER a
+ * customer charge). DISPLAY-ONLY · no mutation. Renders a neutral note when
+ * cost hasn't been captured yet (so profit isn't shown as if it were the full
+ * selling price).
+ */
+function ForwarderProfitPanel({ sellNet, costTotal }: { sellNet: number; costTotal: number }) {
+  const fmt = (n: number) =>
+    n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasCost = Number.isFinite(costTotal) && costTotal > 0;
+  const profit = hasCost ? sellNet - costTotal : 0;
+  const marginVat = computeMarginVat(profit); // GAP 8 — canonical 7%-on-margin helper
+  return (
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-2.5">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-800">
+        <span aria-hidden>📊</span> รายรับ · รายจ่าย · กำไร (ภายใน)
+      </div>
+      <dl className="mt-1.5 space-y-0.5 text-[11px]">
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-muted">ยอดขายสุทธิ (รายรับ ฿)</dt>
+          <dd className="tabular-nums font-medium">{fmt(sellNet)}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-muted">ต้นทุนรวม (รายจ่าย ฿)</dt>
+          <dd className="tabular-nums">{hasCost ? fmt(costTotal) : "— ยังไม่บันทึก"}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2 border-t border-indigo-200 pt-0.5 font-bold">
+          <dt className="text-indigo-900">กำไรสุทธิ (฿)</dt>
+          <dd className={`tabular-nums ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+            {hasCost ? fmt(profit) : "—"}
+          </dd>
+        </div>
+        {hasCost && (
+          <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted">
+            <dt>VAT ณ กำไร 7% (ตัวเลขภายใน)</dt>
+            <dd className="tabular-nums">{fmt(marginVat)}</dd>
+          </div>
+        )}
+      </dl>
+      {!hasCost && (
+        <p className="mt-1 text-[10px] text-amber-700">
+          ⚠ ยังไม่ได้บันทึกต้นทุน — บันทึกต้นทุนต่อรายการด้านล่างเพื่อให้คำนวณกำไรได้
+        </p>
+      )}
     </div>
   );
 }

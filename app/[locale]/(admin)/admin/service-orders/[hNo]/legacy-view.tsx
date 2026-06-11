@@ -47,6 +47,10 @@ import { OrderNoteForm, OrderDangerZone } from "./order-actions";
 // 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
 // (the `pricing` role) — isolated from the selling-price/quote flow.
 import { ShopOrderCostSection } from "./shop-cost-section";
+// 2026-06-12 (GAP 2 · cargo-acct workflow audit) — surface the customer's
+// tax-document choice + juristic-WHT signal on the shop detail header (the
+// forwarder detail already has it; the shop side was the gap). Display-only.
+import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -116,11 +120,12 @@ type HRow = {
   haddresstel: string | null; haddressnote: string | null;
   userid: string; paymethod: string | null; crate: string | null;
   adminidip: string | null; adminidcreate: string | null;
+  tax_doc_pref: string | null;
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
   userTel: string | null; userEmail: string | null; userImage: string | null;
-  adminIDSale: string | null;
+  adminIDSale: string | null; userCompany: string | null;
 };
 type ORow = {
   id: number; cprovider: string | null; cnameshop: string | null; ctitle: string | null;
@@ -138,7 +143,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_header_order")
     .select(
-      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,adminidip,adminidcreate",
+      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,adminidip,adminidcreate,tax_doc_pref",
     )
     .eq("hno", hno)
     .maybeSingle();
@@ -161,7 +166,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
-    .select("userID,userName,userLastName,userTel,userEmail,userImage,adminIDSale")
+    .select("userID,userName,userLastName,userTel,userEmail,userImage,adminIDSale,userCompany")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userErr) {
@@ -255,6 +260,14 @@ export async function renderLegacyServiceOrderView(hno: string) {
             {u?.adminIDSale && (
               <span className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px]">เซล: {u.adminIDSale}</span>
             )}
+            {/* 2026-06-12 (GAP 2) — the customer's tax-document choice + juristic
+                WHT signal, so back-office sees "ทำเอกสารมั้ย · VAT/ไม่ VAT" at a
+                glance (mirrors the forwarder detail header). Display-only. */}
+            <TaxDocBadge pref={r.tax_doc_pref} />
+            <JuristicWhtChip
+              isJuristic={u?.userCompany === "1" || corporateName != null}
+              totalThb={Number(r.htotalpriceuser ?? netThb)}
+            />
           </div>
           {r.hdate && (
             <p className="text-xs text-muted">วันที่เปิดออเดอร์: {new Date(r.hdate).toLocaleString("th-TH")}</p>
