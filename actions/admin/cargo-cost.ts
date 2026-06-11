@@ -48,12 +48,30 @@ const optText = z.preprocess(
 // ────────────────────────────────────────────────────────────
 // Import-forwarder line (tb_forwarder_item · COST in THB)
 // ────────────────────────────────────────────────────────────
+// Declared customs-FX fields (mig 0179): the declared value on the ใบขน is
+// declared_amount_ccy × declared_fx_rate. When both are present the server
+// recomputes declared_value_thb from them (don't trust a client-computed THB);
+// otherwise declaredValueThb is taken as sent (back-compat / direct THB edit).
+const declaredCcyText = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? "USD" : v),
+  z.string().trim().toUpperCase().max(8),
+);
+function resolveDeclaredThb(amountCcy: number | null, fxRate: number | null, fallbackThb: number | null): number | null {
+  if (amountCcy != null && fxRate != null && fxRate > 0) {
+    return Math.round(amountCcy * fxRate * 100) / 100;
+  }
+  return fallbackThb;
+}
+
 const forwarderItemCostSchema = z.object({
-  itemId:           z.coerce.number().int().positive(),
-  costUnitThb:      optNum,   // cost per unit (THB)
-  costRateCny:      optNum,   // cost-side yuan rate snapshot
-  declaredValueThb: optNum,   // มูลค่าสำแดง (ใบขน) — THB
-  hsCode:           optText,
+  itemId:            z.coerce.number().int().positive(),
+  costUnitThb:       optNum,   // cost per unit (THB)
+  costRateCny:       optNum,   // cost-side yuan rate snapshot
+  declaredValueThb:  optNum,   // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
+  declaredCurrency:  declaredCcyText,  // มูลค่าสำแดง สกุล (USD default · CNY · …)
+  declaredFxRate:    optNum,   // เรทศุลกากร (THB ต่อ 1 หน่วยสกุล)
+  declaredAmountCcy: optNum,   // มูลค่าสำแดง ในสกุล declared_currency (engineer-down)
+  hsCode:            optText,
 });
 
 export async function setForwarderItemCost(
@@ -70,10 +88,13 @@ export async function setForwarderItemCost(
     const { error } = await admin
       .from("tb_forwarder_item")
       .update({
-        cost_unit_thb:      d.costUnitThb,
-        cost_rate_cny:      d.costRateCny,
-        declared_value_thb: d.declaredValueThb,
-        hs_code:            d.hsCode,
+        cost_unit_thb:       d.costUnitThb,
+        cost_rate_cny:       d.costRateCny,
+        declared_value_thb:  resolveDeclaredThb(d.declaredAmountCcy, d.declaredFxRate, d.declaredValueThb),
+        declared_currency:   d.declaredCurrency,
+        declared_fx_rate:    d.declaredFxRate,
+        declared_amount_ccy: d.declaredAmountCcy,
+        hs_code:             d.hsCode,
       })
       .eq("id", d.itemId);
     if (error) {
@@ -85,7 +106,9 @@ export async function setForwarderItemCost(
 
     await logAdminAction(adminId, "tb_forwarder_item.set_cost", "tb_forwarder_item", String(d.itemId), {
       cost_unit_thb: d.costUnitThb, cost_rate_cny: d.costRateCny,
-      declared_value_thb: d.declaredValueThb, hs_code: d.hsCode,
+      declared_value_thb: resolveDeclaredThb(d.declaredAmountCcy, d.declaredFxRate, d.declaredValueThb),
+      declared_currency: d.declaredCurrency, declared_fx_rate: d.declaredFxRate, declared_amount_ccy: d.declaredAmountCcy,
+      hs_code: d.hsCode,
     });
 
     // GAP 4+7 — auto-enroll the taxdoc job + mark pricing started (best-effort,
@@ -161,11 +184,14 @@ export async function setForwarderImportDuty(
 // `cprice` (SELLING); this captures what we paid the supplier (COST).
 // ────────────────────────────────────────────────────────────
 const shopOrderItemCostSchema = z.object({
-  orderId:          z.coerce.number().int().positive(),
-  costUnitCny:      optNum,   // cost per unit (CNY ¥)
-  costRateCny:      optNum,   // cost-side yuan rate snapshot
-  declaredValueThb: optNum,   // มูลค่าสำแดง (ใบขน) — THB
-  hsCode:           optText,
+  orderId:           z.coerce.number().int().positive(),
+  costUnitCny:       optNum,   // cost per unit (CNY ¥)
+  costRateCny:       optNum,   // cost-side yuan rate snapshot
+  declaredValueThb:  optNum,   // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
+  declaredCurrency:  declaredCcyText,
+  declaredFxRate:    optNum,
+  declaredAmountCcy: optNum,
+  hsCode:            optText,
 });
 
 export async function setShopOrderItemCost(
@@ -182,10 +208,13 @@ export async function setShopOrderItemCost(
     const { error } = await admin
       .from("tb_order")
       .update({
-        cost_unit_cny:      d.costUnitCny,
-        cost_rate_cny:      d.costRateCny,
-        declared_value_thb: d.declaredValueThb,
-        hs_code:            d.hsCode,
+        cost_unit_cny:       d.costUnitCny,
+        cost_rate_cny:       d.costRateCny,
+        declared_value_thb:  resolveDeclaredThb(d.declaredAmountCcy, d.declaredFxRate, d.declaredValueThb),
+        declared_currency:   d.declaredCurrency,
+        declared_fx_rate:    d.declaredFxRate,
+        declared_amount_ccy: d.declaredAmountCcy,
+        hs_code:             d.hsCode,
       })
       .eq("id", d.orderId);
     if (error) {
@@ -197,7 +226,9 @@ export async function setShopOrderItemCost(
 
     await logAdminAction(adminId, "tb_order.set_cost", "tb_order", String(d.orderId), {
       cost_unit_cny: d.costUnitCny, cost_rate_cny: d.costRateCny,
-      declared_value_thb: d.declaredValueThb, hs_code: d.hsCode,
+      declared_value_thb: resolveDeclaredThb(d.declaredAmountCcy, d.declaredFxRate, d.declaredValueThb),
+      declared_currency: d.declaredCurrency, declared_fx_rate: d.declaredFxRate, declared_amount_ccy: d.declaredAmountCcy,
+      hs_code: d.hsCode,
     });
 
     // GAP 4+7 — auto-enroll the taxdoc job + mark pricing started (best-effort).

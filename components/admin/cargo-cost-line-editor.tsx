@@ -79,7 +79,24 @@ type CostLineInit = {
   autoCostUnit?: number | null;
   autoCostRate?: number | null;
   autoDeclared?: number | null;
+  /**
+   * Declared customs-FX (mig 0179) — the ใบขน declared value is
+   * declared_amount_ccy × declared_fx_rate. Stored values prefill; `fxRates` is
+   * the monthly central setting (business_config customs.fx_rates) used for the
+   * per-currency default rate. The declared amount defaults from the real cost
+   * (autoDeclared THB ÷ rate) and is editable DOWN (engineer-down).
+   */
+  declaredCurrency?: string | null;
+  declaredFxRate?: number | string | null;
+  declaredAmountCcy?: number | string | null;
+  fxRates?: Record<string, number>;
 };
+
+/** Coerce to a finite non-negative number (0 on junk). */
+function n0(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 type EditorMode =
   | { kind: "forwarder"; itemId: number; costUnitThb: number | string | null }
@@ -128,27 +145,57 @@ function CostEditorBody({
   // equals the auto seed (the moment staff edits, it becomes their override).
   const autoCostUnitStr = init.autoCostUnit != null ? autoFmt(init.autoCostUnit, 2) : "";
   const autoCostRateStr = init.autoCostRate != null ? autoFmt(init.autoCostRate, 4) : "";
-  const autoDeclaredStr = init.autoDeclared != null ? autoFmt(init.autoDeclared, 2) : "";
   const seed = (stored: number | string | null | undefined, autoStr: string) =>
     isEmptyStored(stored) ? autoStr : String(stored);
 
   // Draft state — strings so "" clears the column (the action maps "" → null).
   const [costUnit, setCostUnit] = useState<string>(seed(costUnitInit, autoCostUnitStr));
   const [costRate, setCostRate] = useState<string>(seed(init.costRateCny, autoCostRateStr));
-  const [declared, setDeclared] = useState<string>(seed(init.declaredValueThb, autoDeclaredStr));
   const [hsCode, setHsCode] = useState<string>(init.hsCode ?? "");
+
+  // ── Declared customs-FX (mig 0179) — declared THB = amount(ccy) × customs rate.
+  const fxRates = init.fxRates ?? {};
+  const currencyOptions = (() => {
+    const keys = Object.keys(fxRates).filter((k) => k !== "pending" && n0(fxRates[k]) > 0);
+    return keys.length ? keys : ["USD", "CNY"];
+  })();
+  const autoDeclaredThb = init.autoDeclared ?? 0;
+  const rateForCcy = (ccy: string) => n0(fxRates[ccy]);
+  const initCcy = (init.declaredCurrency ?? "").trim().toUpperCase() || currencyOptions[0] || "USD";
+  const initRate = !isEmptyStored(init.declaredFxRate)
+    ? String(init.declaredFxRate)
+    : (rateForCcy(initCcy) > 0 ? autoFmt(rateForCcy(initCcy), 4) : "");
+  const initAmt = !isEmptyStored(init.declaredAmountCcy)
+    ? String(init.declaredAmountCcy)
+    : (autoDeclaredThb > 0 && n0(initRate) > 0 ? autoFmt(autoDeclaredThb / n0(initRate), 4) : "");
+  const [declCcy, setDeclCcy] = useState<string>(initCcy);
+  const [declRate, setDeclRate] = useState<string>(initRate);
+  const [declAmt, setDeclAmt] = useState<string>(initAmt);
+  // The authoritative declared THB the line stores = amount × rate.
+  const declaredThbComputed = Math.round(n0(declAmt) * n0(declRate) * 100) / 100;
+
+  // Switching currency re-defaults the rate (to the month's setting) + the
+  // amount (the real cost re-expressed at the new rate · engineer-down anew).
+  function onDeclCcyChange(next: string) {
+    setDeclCcy(next);
+    const r = rateForCcy(next);
+    setDeclRate(r > 0 ? autoFmt(r, 4) : "");
+    setDeclAmt(autoDeclaredThb > 0 && r > 0 ? autoFmt(autoDeclaredThb / r, 4) : "");
+  }
 
   // A field is "on auto" when the stored column is empty, an auto seed exists,
   // and the draft still equals that seed (staff hasn't overridden it).
   const costUnitOnAuto = isEmptyStored(costUnitInit) && autoCostUnitStr !== "" && costUnit === autoCostUnitStr;
   const costRateOnAuto = isEmptyStored(init.costRateCny) && autoCostRateStr !== "" && costRate === autoCostRateStr;
-  const declaredOnAuto = isEmptyStored(init.declaredValueThb) && autoDeclaredStr !== "" && declared === autoDeclaredStr;
+  const declaredOnAuto = isEmptyStored(init.declaredAmountCcy) && initAmt !== "" && declAmt === initAmt;
   const anyOnAuto = costUnitOnAuto || costRateOnAuto || declaredOnAuto;
 
   function resetDraft() {
     setCostUnit(seed(costUnitInit, autoCostUnitStr));
     setCostRate(seed(init.costRateCny, autoCostRateStr));
-    setDeclared(seed(init.declaredValueThb, autoDeclaredStr));
+    setDeclCcy(initCcy);
+    setDeclRate(initRate);
+    setDeclAmt(initAmt);
     setHsCode(init.hsCode ?? "");
   }
 
@@ -167,7 +214,10 @@ function CostEditorBody({
           itemId: String(mode.itemId),
           costUnitThb: costUnit,
           costRateCny: costRate,
-          declaredValueThb: declared,
+          declaredValueThb: String(declaredThbComputed || ""),
+          declaredCurrency: declCcy,
+          declaredFxRate: declRate,
+          declaredAmountCcy: declAmt,
           hsCode: hsCode,
         });
       } else {
@@ -175,7 +225,10 @@ function CostEditorBody({
           orderId: String(mode.orderId),
           costUnitCny: costUnit,
           costRateCny: costRate,
-          declaredValueThb: declared,
+          declaredValueThb: String(declaredThbComputed || ""),
+          declaredCurrency: declCcy,
+          declaredFxRate: declRate,
+          declaredAmountCcy: declAmt,
           hsCode: hsCode,
         });
       }
@@ -230,7 +283,11 @@ function CostEditorBody({
           />
           <SummaryRow
             label="มูลค่าสำแดง ใบขน (฿)"
-            value={fmtNum(seed(init.declaredValueThb, autoDeclaredStr) || null)}
+            value={
+              declaredThbComputed > 0
+                ? `${fmtNum(declaredThbComputed)}  (${fmtNum(n0(declAmt) || null, 2)} ${declCcy} × ${fmtNum(n0(declRate) || null, 4)})`
+                : "—"
+            }
             auto={declaredOnAuto}
           />
           <SummaryRow label="HS Code" value={init.hsCode?.trim() || "—"} mono />
@@ -274,21 +331,51 @@ function CostEditorBody({
               className={inputCls}
             />
           </label>
-          <label className="space-y-0.5">
-            <span className="flex items-center gap-1 text-[10px] text-muted">
-              มูลค่าสำแดง ใบขน (฿){declaredOnAuto && <AutoChip />}
+          {/* มูลค่าสำแดง ใบขน — declared in a chosen currency × the customs monthly
+              FX rate (mig 0179). Amount defaults from the real cost, edit DOWN. */}
+          <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-950/10 p-2">
+            <span className="flex items-center gap-1 text-[10px] font-medium text-blue-800">
+              มูลค่าสำแดง ใบขน{declaredOnAuto && <AutoChip />}
             </span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              value={declared}
-              onChange={(e) => setDeclared(e.target.value)}
-              placeholder="0.00"
-              className={inputCls}
-            />
-          </label>
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <label className="space-y-0.5">
+                <span className="block text-[9px] text-muted">สกุล</span>
+                <select
+                  value={declCcy}
+                  onChange={(e) => onDeclCcyChange(e.target.value)}
+                  className={inputCls + " text-left"}
+                >
+                  {currencyOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-0.5">
+                <span className="block text-[9px] text-muted">เรทศุลกากร</span>
+                <input
+                  type="number" min={0} step="0.0001" inputMode="decimal"
+                  value={declRate}
+                  onChange={(e) => setDeclRate(e.target.value)}
+                  placeholder="0.0000"
+                  className={inputCls}
+                />
+              </label>
+              <label className="space-y-0.5">
+                <span className="block text-[9px] text-muted">มูลค่า ({declCcy})</span>
+                <input
+                  type="number" min={0} step="0.01" inputMode="decimal"
+                  value={declAmt}
+                  onChange={(e) => setDeclAmt(e.target.value)}
+                  placeholder="0.00"
+                  className={inputCls}
+                />
+              </label>
+            </div>
+            <p className="mt-1 text-[10px] text-blue-900 text-right">
+              = มูลค่าสำแดง <b>฿{fmtNum(declaredThbComputed || null)}</b>
+              <span className="text-blue-700/70"> ({declCcy} × เรทกรมศุล · แก้ลงได้)</span>
+            </p>
+          </div>
           <label className="space-y-0.5">
             <span className="block text-[10px] text-muted">HS Code</span>
             <input
@@ -383,6 +470,10 @@ export function ForwarderItemCostEditor({
   autoCostUnit = null,
   autoCostRate = null,
   autoDeclared = null,
+  declaredCurrency = null,
+  declaredFxRate = null,
+  declaredAmountCcy = null,
+  fxRates,
 }: {
   itemId: number;
   costUnitThb: number | string | null;
@@ -394,11 +485,16 @@ export function ForwarderItemCostEditor({
   autoCostUnit?: number | null;
   autoCostRate?: number | null;
   autoDeclared?: number | null;
+  /** Declared customs-FX (mig 0179). */
+  declaredCurrency?: string | null;
+  declaredFxRate?: number | string | null;
+  declaredAmountCcy?: number | string | null;
+  fxRates?: Record<string, number>;
 }) {
   return (
     <CostEditorBody
       mode={{ kind: "forwarder", itemId, costUnitThb }}
-      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared }}
+      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared, declaredCurrency, declaredFxRate, declaredAmountCcy, fxRates }}
       label={label}
     />
   );
@@ -415,6 +511,10 @@ export function ShopOrderItemCostEditor({
   autoCostUnit = null,
   autoCostRate = null,
   autoDeclared = null,
+  declaredCurrency = null,
+  declaredFxRate = null,
+  declaredAmountCcy = null,
+  fxRates,
 }: {
   orderId: number;
   costUnitCny: number | string | null;
@@ -426,11 +526,16 @@ export function ShopOrderItemCostEditor({
   autoCostUnit?: number | null;
   autoCostRate?: number | null;
   autoDeclared?: number | null;
+  /** Declared customs-FX (mig 0179). */
+  declaredCurrency?: string | null;
+  declaredFxRate?: number | string | null;
+  declaredAmountCcy?: number | string | null;
+  fxRates?: Record<string, number>;
 }) {
   return (
     <CostEditorBody
       mode={{ kind: "shop", orderId, costUnitCny }}
-      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared }}
+      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared, declaredCurrency, declaredFxRate, declaredAmountCcy, fxRates }}
       label={label}
     />
   );

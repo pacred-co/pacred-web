@@ -25,6 +25,7 @@ import {
   CargoCostLineSummary,
 } from "@/components/admin/cargo-cost-line-editor";
 import { autoOrNull, shopAutoDeclaredThb } from "@/lib/forwarder/cargo-cost-autofill";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
 
 type ShopCostItem = {
   id: number;
@@ -36,6 +37,9 @@ type ShopCostItem = {
   cost_unit_cny: number | string | null;
   cost_rate_cny: number | string | null;
   declared_value_thb: number | string | null;
+  declared_currency: string | null;
+  declared_fx_rate: number | string | null;
+  declared_amount_ccy: number | string | null;
   hs_code: string | null;
 };
 
@@ -48,7 +52,8 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
     .from("tb_order")
     .select(
       "id, ctitle, cnameshop, cimages, camount, cprice, " +
-        "cost_unit_cny, cost_rate_cny, declared_value_thb, hs_code",
+        "cost_unit_cny, cost_rate_cny, declared_value_thb, hs_code, " +
+        "declared_currency, declared_fx_rate, declared_amount_ccy",
     )
     .eq("hno", hno)
     .order("id", { ascending: true })
@@ -84,6 +89,8 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
   const realCostUnit = totalQty > 0 ? realCostAll / totalQty : 0;          // ต้นทุน/หน่วย ¥ (เฉลี่ยจากของจริง)
   // The seed rate used downstream (declared = realCostUnit × jobRate × qty).
   const costRate = jobRate;
+  // Customs FX rates (มูลค่าสำแดง ใบขน · mig 0179) — the per-currency monthly rate map.
+  const fxRates = fxRateMap(await getCustomsFxRates());
 
   // Resolve thumbnails in parallel.
   const thumbs: Record<number, string | null> = {};
@@ -159,6 +166,10 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
                 autoDeclared={autoOrNull(
                   shopAutoDeclaredThb(realCostUnit, costRate, it.camount),
                 )}
+                declaredCurrency={it.declared_currency}
+                declaredFxRate={it.declared_fx_rate}
+                declaredAmountCcy={it.declared_amount_ccy}
+                fxRates={fxRates}
               />
             ) : (
               <CargoCostLineSummary

@@ -35,6 +35,13 @@ import {
 // GAP 8 (2026-06-12) — wire the previously-DEAD computeMarginVat (the NON-VAT
 // 7%-on-margin staff figure · legacy function.php) into the GAP 9 profit panel.
 import { computeMarginVat } from "@/lib/tax/tax-doc-mode";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+
+type DeclaredFxCols = {
+  declared_currency: string | null;
+  declared_fx_rate: number | string | null;
+  declared_amount_ccy: number | string | null;
+};
 
 type FwdCostItem = {
   id: number;
@@ -45,7 +52,7 @@ type FwdCostItem = {
   cost_rate_cny: number | string | null;
   declared_value_thb: number | string | null;
   hs_code: string | null;
-};
+} & DeclaredFxCols;
 
 type ShopCostItem = {
   id: number;
@@ -58,7 +65,7 @@ type ShopCostItem = {
   cost_rate_cny: number | string | null;
   declared_value_thb: number | string | null;
   hs_code: string | null;
-};
+} & DeclaredFxCols;
 
 export async function ForwarderCostSection({
   fId,
@@ -87,7 +94,8 @@ export async function ForwarderCostSection({
       .from("tb_order")
       .select(
         "id, ctitle, cnameshop, cimages, camount, cprice, " +
-          "cost_unit_cny, cost_rate_cny, declared_value_thb, hs_code",
+          "cost_unit_cny, cost_rate_cny, declared_value_thb, hs_code, " +
+          "declared_currency, declared_fx_rate, declared_amount_ccy",
       )
       .eq("hno", reforder!.trim())
       .order("id", { ascending: true })
@@ -104,7 +112,8 @@ export async function ForwarderCostSection({
       .from("tb_forwarder_item")
       .select(
         "id, productname, producttracking, productqty, " +
-          "cost_unit_thb, cost_rate_cny, declared_value_thb, hs_code",
+          "cost_unit_thb, cost_rate_cny, declared_value_thb, hs_code, " +
+          "declared_currency, declared_fx_rate, declared_amount_ccy",
       )
       .eq("fid", fId)
       .order("id", { ascending: true })
@@ -132,6 +141,8 @@ export async function ForwarderCostSection({
     console.error(`[ForwarderCostSection tb_settings]`, { code: setErr.code, message: setErr.message });
   }
   const rateDefault = Number(settings?.hratecostdefault ?? 0) || 0;
+  // Customs FX rates (มูลค่าสำแดง ใบขน · mig 0179) — per-currency monthly rate map.
+  const fxRates = fxRateMap(await getCustomsFxRates());
   // Σqty across the direct-forwarder lines — the prorate denominator for the
   // declared-value auto-seed (header cost split by each line's quantity share).
   const fwdTotalQty = fwdItems.reduce((sum, it) => sum + (Number(it.productqty ?? 0) || 0), 0);
@@ -281,6 +292,10 @@ export async function ForwarderCostSection({
                     autoDeclared={autoOrNull(
                       shopAutoDeclaredThb(shopRealCostUnit, shopJobRate, it.camount),
                     )}
+                    declaredCurrency={it.declared_currency}
+                    declaredFxRate={it.declared_fx_rate}
+                    declaredAmountCcy={it.declared_amount_ccy}
+                    fxRates={fxRates}
                   />
                 ) : (
                   <CargoCostLineSummary
@@ -313,6 +328,10 @@ export async function ForwarderCostSection({
                     autoDeclared={autoOrNull(
                       importAutoDeclaredThb(fCostTotal, it.productqty, fwdTotalQty),
                     )}
+                    declaredCurrency={it.declared_currency}
+                    declaredFxRate={it.declared_fx_rate}
+                    declaredAmountCcy={it.declared_amount_ccy}
+                    fxRates={fxRates}
                   />
                 ) : (
                   <CargoCostLineSummary
