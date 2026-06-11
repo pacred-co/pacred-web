@@ -49,3 +49,20 @@ PR112 = Tadsakorn's admin account (`profiles` + `admins` super, created 2026-05-
 - `app/[locale]/(admin)/admin/admins/new/new-form.tsx` — `phone_exists_customer:` handling + confirm checkbox.
 - `scripts/find-cross-system-phone-dups.mjs` — detection tool.
 - `scripts/merge-dup-pr10584-into-pr112-2026-06-08.mjs` — the PR112/PR10584 merge (applied).
+
+---
+
+## 2026-06-11 update — the dedup root cause found + fixed, + the dup landscape mapped
+
+**Trigger:** owner — "เรื่องตอนลูกค้าสมัคร + เลข PR ผี ไล่แก้ให้จบ". A 5-agent signup audit + a prod ghost-PR probe nailed the mechanism and the residue.
+
+**Root cause of the dup class (now fixed):** `findLegacyUserIdByPhone` (the signup phone-guard) checked **`tb_users.userTel` ONLY, never `profiles.phone`**. So a person who exists only as a `profiles` row (a prior native signup, a staff profile, or a broken-link migrated profile) had no `tb_users` row under their phone → the guard passed → the trigger minted a **second** PR for them. Compounded by `registerPersonal` **fire-and-forgetting** the `insertLegacyTbUserRow` mirror (discarding its result) + the mirror's phone pre-check having **no `userStatus!='0'` filter** (a soft-deleted phone made it no-op `{ok:true}` and insert nothing) → a `profiles`+member_code with no `tb_users` mirror = a "ghost PR".
+
+**The fix (ports the proven `adminCreateCustomer` pattern into the register paths):**
+1. `registerPersonal`: capture the mirror result + **re-SELECT `tb_users` by member_code**; on miss → roll back profile + auth.user → `registration_incomplete`/`phone_exists`. (`{ok:true}` alone is NOT proof of a row — the no-op returns it.)
+2. `findLegacyUserIdByPhone`: after the `tb_users` path, **also match `profiles.phone`** (last-9-digit) for a non-suspended profile. Closes the hole across all callers at once.
+3. `insertLegacyTbUserRow`: `userStatus!='0'` on the phone pre-check + a 23505 split — **userID(PK) collision = idempotent `{ok:true}`** (concurrent-signup safe) vs **usertel collision = `{ok:false}`** (no row landed → caller rolls back). Defense-in-depth with #1.
+
+**The dup landscape (prod, as found):** the "broken migration links" turned out to be **dup profiles, not missing mirrors** — high-PR `profiles` rows that match an existing low-PR `tb_users` customer **by phone**: PR10820→PR038, PR1282→PR080, PR1321→PR116, PR9370→PR005. The high-PR dups are EMPTY (0 orders/wallet); the low-PR is canonical. **Lesson: when a migrated profile's member_code resolves to no `tb_users`, check the PHONE before assuming a missing mirror — it's usually a duplicate of a lower code, and a "backfill a mirror" would mint a THIRD identity.** Retire/merge toward the low code; never backfill a dup.
+
+**Also confirmed safe:** mig 0174 (staff `employee_code` → trigger skips member_code) means a STAFF signup can no longer mint a customer PR at insert; the residue (PR009/038/075/112) came from **promoting existing PR-holding customers to staff** (`adminGrantRole` doesn't touch member_code) — the owner ruled these are intended **dual member+super accounts**, kept as-is.
