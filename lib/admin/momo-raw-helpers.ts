@@ -189,6 +189,206 @@ export function momoRawDisplay(raw: unknown): MomoRawDisplay {
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// flattenMomoRaw / collectMomoRawColumns — the "คลี่ทุก field" audit view
+// (พี่ป๊อป flag 2026-06-11). MOMO staff key inconsistently, so before we
+// decide which fields to trust, we spread EVERY field MOMO sends into one
+// long row. These helpers flatten a raw blob into dot-keyed string cells
+// (the MOMO internal `_id` is the only field dropped — พี่ป๊อป: "ยกเว้น _id")
+// and compute the union of columns across many rows so a field that appears
+// in only some rows still gets its own column (blank where MOMO didn't key it).
+// Pure + unit-tested → the client raw-spread table imports them directly.
+// ────────────────────────────────────────────────────────────
+
+/** Render an array cell: primitives joined, arrays-of-objects as compact JSON. */
+function formatRawArray(arr: unknown[]): string {
+  if (arr.length === 0) return "[]";
+  const allPrimitive = arr.every((x) => x === null || typeof x !== "object");
+  if (allPrimitive) return arr.map((x) => (x == null ? "" : String(x))).join(", ");
+  try { return JSON.stringify(arr); } catch { return "[?]"; }
+}
+
+/**
+ * Flatten a MOMO raw blob into ordered `[dotKey, stringValue]` pairs.
+ *
+ * - Nested objects → dot keys (`status_date.kodang`, `container_details.BL_NO`).
+ * - Arrays → one cell (primitives joined; objects → compact JSON) — never
+ *   exploded into per-index columns (that would blow the column count up).
+ * - `_id` is dropped at every level (พี่ป๊อป: keep everything except `_id`).
+ * - null/undefined → "" ; boolean → "true"/"false" ; empty object → "{}".
+ * - A non-object raw yields []. Key order follows the raw's own key order
+ *   (so the spread mirrors how MOMO laid the record out).
+ */
+export function flattenMomoRaw(raw: unknown): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  const walk = (val: unknown, prefix: string): void => {
+    if (val === null || val === undefined) { out.push([prefix, ""]); return; }
+    if (Array.isArray(val)) { out.push([prefix, formatRawArray(val)]); return; }
+    if (typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      const keys = Object.keys(obj).filter((k) => k !== "_id");
+      if (keys.length === 0) { out.push([prefix, "{}"]); return; }
+      for (const k of keys) walk(obj[k], prefix ? `${prefix}.${k}` : k);
+      return;
+    }
+    if (typeof val === "boolean") { out.push([prefix, val ? "true" : "false"]); return; }
+    out.push([prefix, String(val)]);
+  };
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    for (const k of Object.keys(obj).filter((k) => k !== "_id")) walk(obj[k], k);
+  }
+  return out;
+}
+
+/** flattenMomoRaw as a `{ dotKey: value }` map (for per-row column lookup). */
+export function flattenMomoRawMap(raw: unknown): Record<string, string> {
+  return Object.fromEntries(flattenMomoRaw(raw));
+}
+
+/**
+ * Ordered union of every flattened column across many MOMO raws — first-seen
+ * order preserved. A column that appears in only some rows is still included
+ * (so the audit grid shows where MOMO's keying is inconsistent / missing).
+ */
+export function collectMomoRawColumns(raws: unknown[]): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const raw of raws) {
+    for (const [k] of flattenMomoRaw(raw)) {
+      if (!seen.has(k)) { seen.add(k); order.push(k); }
+    }
+  }
+  return order;
+}
+
+// ────────────────────────────────────────────────────────────
+// MOMO-aware spread layer (พี่ป๊อป flag 2026-06-11): the raw-spread grid was
+// too raw to read — user_group/user_code split apart, English dot-keys, and
+// `ship_by: "car"/"ship"` (พี่ป๊อป: "EK=รถ, SEA=เรือ — ใส่ car/ship มาตลก").
+// This layer keeps the "คลี่ทุก field" idea but makes it readable:
+//   1) merge user_group+user_code → one `member_code` (PR+code = our customer)
+//   2) Thai column labels (MOMO_FIELD_TH) — raw key still shown small for audit
+//   3) friendly cell values (ship_by → รถ/เรือ · true/false → ใช่/ไม่)
+// ────────────────────────────────────────────────────────────
+
+/** Thai labels for MOMO raw dot-keys. Unknown keys fall back to the raw key. */
+export const MOMO_FIELD_TH: Record<string, string> = {
+  // identity / customer
+  member_code:   "ลูกค้า (User)",
+  status:        "สถานะ MOMO (เลข)",
+  tracking:      "เลขพัสดุจีน",
+  CG_NO:         "CG_NO (เลขพัสดุย่อย)",
+  // packaging / metrics
+  type:          "ประเภทสินค้า",
+  ship_by:       "ขนส่ง",
+  quantity:      "จำนวน (ชิ้น)",
+  extra_cost:    "ค่าใช้จ่ายเพิ่ม",
+  kg:            "น้ำหนัก (กก.)",
+  cbm:           "ปริมาตร (คิว)",
+  width:         "กว้าง (ซม.)",
+  length:        "ยาว (ซม.)",
+  height:        "สูง (ซม.)",
+  wooden_create: "ตีลังไม้",
+  wooden_info:   "รายละเอียดลังไม้",
+  images:        "รูปสินค้า",
+  real_container:"ตู้จริง (MOMO)",
+  // routing
+  container_no:  "ตู้/รอบ (MOMO)",
+  sack_no:       "กระสอบ",
+  sack_size:     "ขนาดกระสอบ",
+  // timestamps
+  created_date:  "วันที่สร้างรายการ",
+  updated_date:  "อัปเดตล่าสุด",
+  // status_date.* — the China-warehouse lifecycle dates
+  "status_date.waiting":        "วันที่ · รอเข้าโกดังจีน",
+  "status_date.kodang":         "วันที่ · เข้าโกดังจีน",
+  "status_date.mergebox":       "วันที่ · รวมกล่อง/รวมตู้",
+  "status_date.wooden_create":  "วันที่ · ตีลังไม้",
+  "status_date.prepare_export": "วันที่ · เตรียมออก (ขึ้นรอบ)",
+  "status_date.exported":       "วันที่ · ออกจากจีน → มาไทย",
+  // ── container_closed shape ──
+  fid:           "รหัสรอบ (MOMO ref)",
+  cid:           "เลขตู้ (batch)",
+  cid_code:      "เลขตู้เรือจริง (container)",
+  company:       "รหัสบริษัท (MOMO)",
+  total_kg:      "น้ำหนักรวม (กก.)",
+  total_cbm:     "ปริมาตรรวม (คิว)",
+  total_parcel:  "จำนวนพัสดุรวม",
+  closed:        "ปิดตู้แล้ว",
+  is_arrival:    "ถึงไทยแล้ว",
+  loading_date:  "วันที่โหลดตู้",
+  created_by:    "สร้างโดย",
+  updated_by:    "อัปเดตโดย",
+  note:          "หมายเหตุ",
+  track_details: "รายการพัสดุในตู้",
+  __v:           "เวอร์ชัน (ระบบ MOMO)",
+  "container_details.ETD_CN_KODANG":  "ออกจากโกดังจีน (ETD)",
+  "container_details.ESTIMATE_DATE":  "ถึงไทยโดยประมาณ (ETA)",
+  "container_details.VESSEL_NO":      "ชื่อเรือ",
+  "container_details.BL_NO":          "เลข B/L",
+  "container_details.ETD_IMMIGRATION":"ออกจากด่าน ตม. (ETD)",
+  "container_details.TRANSSHIPMENT":  "ท่าเปลี่ยนถ่าย",
+  "container_details.ETA_IMMIGRATION":"ถึงด่าน ตม. (ETA)",
+  "container_details.ETA_TH_KODANG":  "ถึงโกดังไทย (ETA)",
+  // ── sack_info shape ──
+  sack_id:       "เลขกระสอบ",
+  weight:        "น้ำหนัก (กก.)",
+  description:   "รายละเอียด",
+  closed_date:   "วันที่ปิดกระสอบ",
+  is_export:     "ส่งออกแล้ว",
+  tracks:        "พัสดุในกระสอบ",
+};
+
+/**
+ * MOMO-aware flattened row: same as flattenMomoRaw but merges the customer
+ * identity (`user_group` + `user_code`) into a single `member_code` cell
+ * (placed where the first of the two appeared), dropping both originals.
+ * Everything else passes through unchanged, key order preserved.
+ */
+export function momoSpreadRow(raw: unknown): Array<[string, string]> {
+  const flat = flattenMomoRaw(raw);
+  const map = Object.fromEntries(flat);
+  const hasUser = "user_group" in map || "user_code" in map;
+  const member = `${map["user_group"] ?? ""}${map["user_code"] ?? ""}`;
+  const out: Array<[string, string]> = [];
+  let mergedDone = false;
+  for (const [k, v] of flat) {
+    if (k === "user_group" || k === "user_code") {
+      if (hasUser && !mergedDone) { out.push(["member_code", member]); mergedDone = true; }
+      continue;
+    }
+    out.push([k, v]);
+  }
+  return out;
+}
+
+/** momoSpreadRow as a `{ key: value }` map. */
+export function momoSpreadRowMap(raw: unknown): Record<string, string> {
+  return Object.fromEntries(momoSpreadRow(raw));
+}
+
+/** Ordered union of momoSpreadRow columns across many raws (first-seen order). */
+export function collectMomoSpreadColumns(raws: unknown[]): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const raw of raws) {
+    for (const [k] of momoSpreadRow(raw)) {
+      if (!seen.has(k)) { seen.add(k); order.push(k); }
+    }
+  }
+  return order;
+}
+
+/** Friendly cell value for the spread grid: ship_by → Thai, true/false → ใช่/ไม่. */
+export function formatMomoSpreadValue(key: string, value: string): string {
+  if (value === "") return value;
+  if (key === "ship_by") return MOMO_SHIP_BY_TH[value.toLowerCase()] ?? value;
+  if (value === "true")  return "ใช่";
+  if (value === "false") return "ไม่";
+  return value;
+}
+
 /** Package metrics extracted from a MOMO raw blob. */
 export type MomoMetrics = {
   weight: number;

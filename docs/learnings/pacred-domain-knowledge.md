@@ -386,3 +386,20 @@ session showed PR132 in the navbar everywhere instead of PR321.
   hooks if this ever regresses.
 
 ---
+
+## [2026-06-11] MOMO `CG_NO` is the sub-parcel cargo ref — NOT a Certificate of Origin (CO)
+
+**Context:** พี่ป๊อป (owner) reviewing the MOMO Sync preview asked: *"ไอ้ CG_NO นี่มันคือเลข CO ใช่มั้ย หรือไม่ใช่"* — is CG_NO the CO number?
+
+**Answer (verified from source — don't let the "CG" prefix mislead you):** **No.** `CG_NO` (e.g. `CG80622313601`, or a range `CG...769-CG...780`) is MOMO's **per-parcel cargo reference** — the goods-receipt number the MOMO China warehouse mints when a parcel lands. Labelled "เลขพัสดุย่อยจีน" in code; present only on the **import_track** shape (`container_closed`/`sack` carry `momoCgNo: null`). It is an audit/cross-check key against MOMO, nothing more.
+
+Three distinct things people conflate, all different:
+- **`CG_NO`** = MOMO sub-parcel cargo ref. Source: `import_track.raw.CG_NO` → `momoCgNo` ([lib/integrations/momo-isolated/mapper.ts](../../lib/integrations/momo-isolated/mapper.ts) L239) → surfaced by `momoRawDisplay().cgNo`.
+- **CO / Certificate of Origin (Form E)** = a **customs document** proving China origin for the ACFTA tariff. Handled in a totally separate stack: [lib/customs/form-e.ts](../../lib/customs/form-e.ts) + the freight-invoice `form-e` route, issued at customs-clearance/ใบขน time. Zero connection to MOMO.
+- **`tb_co`** = the **company master** (นิติบุคคล), column `coID` — corporate-customer identity, not a document. Yet another unrelated "co".
+
+**Why this matters next time:** the "CG" prefix reads like "Certificate of … " and "CO" is overloaded 3 ways in this domain. When anyone asks "is X the CO number", pin down WHICH co they mean (customs Form-E document vs `tb_co` company id) before answering, and check the actual mapper label/source.
+
+**Cross-links:** [`docs/learnings/customs-brokerage-kit.md`](customs-brokerage-kit.md) (Form E) · `lib/admin/momo-raw-helpers.ts` (`momoRawDisplay` / `flattenMomoRaw` — the Sync preview view-models).
+
+---
