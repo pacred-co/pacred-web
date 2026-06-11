@@ -66,3 +66,11 @@ PR112 = Tadsakorn's admin account (`profiles` + `admins` super, created 2026-05-
 **The dup landscape (prod, as found):** the "broken migration links" turned out to be **dup profiles, not missing mirrors** — high-PR `profiles` rows that match an existing low-PR `tb_users` customer **by phone**: PR10820→PR038, PR1282→PR080, PR1321→PR116, PR9370→PR005. The high-PR dups are EMPTY (0 orders/wallet); the low-PR is canonical. **Lesson: when a migrated profile's member_code resolves to no `tb_users`, check the PHONE before assuming a missing mirror — it's usually a duplicate of a lower code, and a "backfill a mirror" would mint a THIRD identity.** Retire/merge toward the low code; never backfill a dup.
 
 **Also confirmed safe:** mig 0174 (staff `employee_code` → trigger skips member_code) means a STAFF signup can no longer mint a customer PR at insert; the residue (PR009/038/075/112) came from **promoting existing PR-holding customers to staff** (`adminGrantRole` doesn't touch member_code) — the owner ruled these are intended **dual member+super accounts**, kept as-is.
+
+---
+
+## 2026-06-11 — `status='incomplete'` does NOT mean "abandoned signup" (a reaper near-miss)
+
+Building a cron to reap abandoned signups (`profiles.status='incomplete'` + old + no activity), the dry-run-against-prod sanity check caught it about to delete **อะรีนา หลีจิ (PR6529)** + **จิรนันท์ จันทนาม (PR6531)** — real people. Root cause: **6,931 of 6,935 `status='incomplete'` profiles are `migrated_from_pcs=TRUE`** — the migration left migrated customers at `status='incomplete'` (they never completed a *Pacred* profile), but they ARE real customers (real `tb_users` name + phone), just inactive. The "incomplete + no activity" signal conflates *abandoned native signup* with *inactive migrated customer*.
+
+**Rule:** any sweep that deletes/mutates by `profiles.status='incomplete'` MUST also filter `migrated_from_pcs IS NOT TRUE` (and ideally require a tb_users mirror with an empty name for a true native abandon). A genuine abandoned NEW signup is `migrated_from_pcs=false` + empty tb_users name. **Always dry-run a destructive cron against real prod data and eyeball the actual rows before trusting the WHERE clause** — the count (6,935) screamed "this isn't abandoned signups" the moment it was visible.
