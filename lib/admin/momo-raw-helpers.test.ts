@@ -20,6 +20,7 @@ import {
   momoSpreadRow,
   collectMomoSpreadColumns,
   formatMomoSpreadValue,
+  deriveModeFromCid,
   MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
@@ -284,6 +285,14 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("dict: created_date + updated_date have Thai",
     !!MOMO_FIELD_TH["created_date"] && !!MOMO_FIELD_TH["updated_date"]);
   check("dict: member_code labelled ลูกค้า", (MOMO_FIELD_TH["member_code"] ?? "").includes("ลูกค้า"));
+  check("dict: status label = สถานะ (word view, no เลข)", MOMO_FIELD_TH["status"] === "สถานะ");
+
+  // deriveModeFromCid — authoritative mode from the real cabinet (พี่ป๊อป ship_by-mismatch flag)
+  check("cid: GZS → เรือ", deriveModeFromCid("GZS260605-1") === "เรือ");
+  check("cid: GZE → รถ", deriveModeFromCid("GZE260605-1") === "รถ");
+  check("cid: lowercase gzs → เรือ", deriveModeFromCid("gzs260605-1") === "เรือ");
+  check("cid: unknown prefix → null", deriveModeFromCid("ABC123") === null);
+  check("cid: empty → null", deriveModeFromCid("") === null);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

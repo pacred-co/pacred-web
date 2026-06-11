@@ -32,6 +32,7 @@ import {
   momoSpreadRowMap,
   collectMomoSpreadColumns,
   formatMomoSpreadValue,
+  deriveModeFromCid,
   MOMO_FIELD_TH,
   type MomoRawDisplay,
 } from "@/lib/admin/momo-raw-helpers";
@@ -627,24 +628,68 @@ function PreviewTable({
  * where it's missing. This is the tool to eyeball MOMO's inconsistent keying
  * and decide which fields to trust before committing.
  */
+// Status badge color → a light whole-row tint + a matching opaque tint for the
+// sticky first column (พี่ป๊อป: ระบายสีทั้งแถวตามสถานะ — รอเข้าโกดัง=เหลือง ฯลฯ).
+const ROW_TINT: Record<MomoBadgeColor, string> = {
+  yellow: "bg-amber-50",
+  blue:   "bg-sky-50",
+  green:  "bg-emerald-50",
+  red:    "bg-red-50",
+};
+const STICKY_TINT: Record<MomoBadgeColor, string> = {
+  yellow: "bg-amber-100",
+  blue:   "bg-sky-100",
+  green:  "bg-emerald-100",
+  red:    "bg-red-100",
+};
+
+/** In-page image viewer (พี่ป๊อป: กดดูรูปในหน้า ไม่เปิดแท็บใหม่). */
+function ImageLightbox({ images, onClose }: { images: string[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-bold">รูปสินค้า ({images.length})</span>
+          <button type="button" onClick={onClose}
+            className="rounded-lg border border-border px-2 py-0.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+            ปิด ✕
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {images.map((src, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={src} alt={`รูปสินค้า ${i + 1}`} loading="lazy"
+              className="w-full rounded-lg border border-border" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdminRecord[] }) {
+  const [lightbox, setLightbox] = useState<string[] | null>(null);
   if (!rows || rows.length === 0) return null;
   const raws = rows.map((r) => r.raw);
-  const cols = collectMomoSpreadColumns(raws);
-  const maps = raws.map((raw) => momoSpreadRowMap(raw));
+  // image column → very end of the grid (พี่ป๊อป); keep all other columns' order.
+  const all = collectMomoSpreadColumns(raws);
+  const cols = all.includes("images")
+    ? [...all.filter((c) => c !== "images"), "images"]
+    : all;
+
   return (
     <div>
       <h4 className="text-xs font-bold mb-1">
         {title} · ดิบทั้งหมด ({rows.length} แถว · {cols.length} field)
       </h4>
       <p className="text-[10px] text-muted mb-1">
-        ⇆ เลื่อนซ้าย-ขวา · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบของ MOMO อยู่บรรทัดล่าง) · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · array/ออบเจกต์ย่อยแสดงเป็น JSON (ชี้เมาส์เพื่อดูเต็ม)
+        ⇆ เลื่อนซ้าย-ขวา · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบ MOMO อยู่บรรทัดล่าง) · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · ทั้งแถวระบายสีตามสถานะ
       </p>
-      <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
+      <div className="max-h-[70vh] overflow-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="text-[11px] border-collapse">
-          <thead className="bg-surface-alt">
+          <thead className="bg-surface-alt sticky top-0 z-20">
             <tr className="whitespace-nowrap align-bottom">
-              <th className="sticky left-0 z-10 bg-surface-alt border-b border-r px-2 py-1 text-left">#</th>
+              <th className="sticky left-0 z-30 bg-surface-alt border-b border-r px-2 py-1 text-left">#</th>
               {cols.map((c) => {
                 const th = MOMO_FIELD_TH[c];
                 return (
@@ -657,26 +702,81 @@ function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdmi
             </tr>
           </thead>
           <tbody>
-            {maps.map((m, i) => (
-              <tr key={i} className="border-b align-top whitespace-nowrap">
-                <td className="sticky left-0 z-10 bg-white border-r px-2 py-1 text-muted">{i + 1}</td>
-                {cols.map((c) => {
-                  const v = formatMomoSpreadValue(c, m[c] ?? "");
-                  return (
-                    <td key={c} className="px-2 py-1 font-mono">
-                      {v === "" ? (
-                        <span className="text-slate-300">·</span>
-                      ) : (
-                        <div className="max-w-[280px] truncate" title={v}>{v}</div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {rows.map((rec, i) => {
+              const m = momoSpreadRowMap(rec.raw);
+              const ss = rec.shipmentStatus;
+              const color: MomoBadgeColor | null = ss && ss in MOMO_STATUS_BADGE ? MOMO_STATUS_BADGE[ss] : null;
+              const rowTint = color ? ROW_TINT[color] : "";
+              const stickyTint = color ? STICKY_TINT[color] : "bg-white";
+              const statusWord = ss && ss in MOMO_STATUS_TH ? MOMO_STATUS_TH[ss] : null;
+              // ship_by vs real-cabinet mode mismatch (container rows carry `cid`).
+              const cabMode = m["cid"] ? deriveModeFromCid(m["cid"]) : null;
+              const shipMode = m["ship_by"] ? formatMomoSpreadValue("ship_by", m["ship_by"]) : "";
+              const modeMismatch = !!cabMode && (shipMode === "เรือ" || shipMode === "รถ") && cabMode !== shipMode;
+              return (
+                <tr key={i} className={`border-b align-top whitespace-nowrap ${rowTint}`}>
+                  <td className={`sticky left-0 z-10 border-r px-2 py-1 text-muted ${stickyTint}`}>{i + 1}</td>
+                  {cols.map((c) => {
+                    // images → "ดูรูป (N)" → in-page lightbox
+                    if (c === "images") {
+                      const imgs = Array.isArray((rec.raw as Record<string, unknown>)?.images)
+                        ? ((rec.raw as Record<string, unknown>).images as unknown[]).filter((x): x is string => typeof x === "string")
+                        : [];
+                      return (
+                        <td key={c} className="px-2 py-1">
+                          {imgs.length === 0 ? (
+                            <span className="text-slate-300">·</span>
+                          ) : (
+                            <button type="button" onClick={() => setLightbox(imgs)}
+                              className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
+                              ดูรูป ({imgs.length})
+                            </button>
+                          )}
+                        </td>
+                      );
+                    }
+                    // status → Thai word (เหมือนหน้าสรุป) + raw number small
+                    if (c === "status") {
+                      return (
+                        <td key={c} className="px-2 py-1 font-semibold">
+                          {statusWord ?? (m[c] || <span className="text-slate-300">·</span>)}
+                          {statusWord && m[c] && <span className="ml-1 text-[9px] font-mono font-normal text-slate-400">#{m[c]}</span>}
+                        </td>
+                      );
+                    }
+                    // ship_by → value + ⚠ mismatch-vs-real-cabinet flag
+                    if (c === "ship_by") {
+                      const v = formatMomoSpreadValue(c, m[c] ?? "");
+                      return (
+                        <td key={c} className="px-2 py-1 font-mono">
+                          {v === "" ? <span className="text-slate-300">·</span> : v}
+                          {modeMismatch && (
+                            <span className="ml-1 rounded bg-red-100 px-1 text-[9px] font-semibold text-red-700"
+                              title={`โหมดไม่ตรงเลขตู้จริง — ตู้ ${m["cid"]} = ${cabMode} แต่ ship_by = ${v}`}>
+                              ⚠ ไม่ตรงตู้
+                            </span>
+                          )}
+                        </td>
+                      );
+                    }
+                    const v = formatMomoSpreadValue(c, m[c] ?? "");
+                    return (
+                      <td key={c} className="px-2 py-1 font-mono">
+                        {v === "" ? (
+                          <span className="text-slate-300">·</span>
+                        ) : (
+                          <div className="max-w-[280px] truncate" title={v}>{v}</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+      {lightbox && <ImageLightbox images={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
