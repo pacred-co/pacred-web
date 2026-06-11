@@ -11,6 +11,13 @@ import { code128SvgDataUrl } from "@/lib/barcode";
 // combo that /edit's FreightBreakdownTable shows). New Pacred component renders
 // that 1:1 from the real tb_forwarder header values.
 import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
+// 2026-06-11 (Lane A · §0d reachability) — per-line COST + DECLARED capture
+// (P2 tax-invoice platform · `pricing` role). The component was built but never
+// mounted (the SHOP equivalent ShopOrderCostSection already is, on legacy-view).
+// It writes ONLY tb_forwarder_item.cost_unit_thb / declared_value_thb — isolated
+// from the selling-price/status/notify flow (AGENTS.md §0e). It self-gates:
+// super/accounting/pricing get editors, everyone else a read-only summary.
+import { ForwarderCostSection } from "./forwarder-cost-section";
 // 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
 import { ForwarderDeleteButton } from "./forwarder-delete-button";
 // 2026-06-11 (ปอน · owner "ฟอร์มแก้ไขต้อง status-driven · แต่ละสถานะมีให้แก้ไม่
@@ -711,6 +718,16 @@ async function tryRenderTbForwarder(
         </h4>
         <div className="mt-3">
           <ForwarderImportItemsTable r={r} />
+        </div>
+
+        {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
+           capture, the SHOP equivalent of ShopOrderCostSection on
+           /admin/service-orders/[hNo]. Self-gated (super/accounting/pricing edit ·
+           others read-only). Writes ONLY the per-line cost columns · NEVER the
+           selling price / status / customer notify (AGENTS.md §0e). Lane A 2026-06-11
+           — was built but unmounted (§0d unreachable). ── */}
+        <div className="mt-4">
+          <ForwarderCostSection fId={r.id} reforder={r.reforder} />
         </div>
 
         {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php): the sub-forms
