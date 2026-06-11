@@ -139,7 +139,18 @@ export async function ForwarderCostSection({
           "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount",
       )
       .eq("id", fId)
-      .maybeSingle();
+      .maybeSingle<{
+        import_duty_pct: number | string | null;
+        import_duty_thb: number | string | null;
+        ftotalprice: number | string | null;
+        ftransportprice: number | string | null;
+        fpriceupdate: number | string | null;
+        fshippingservice: number | string | null;
+        pricecrate: number | string | null;
+        ftransportpricechnthb: number | string | null;
+        priceother: number | string | null;
+        fdiscount: number | string | null;
+      }>();
     if (error) {
       console.error(`[ForwarderCostSection tb_forwarder header]`, { code: error.code, message: error.message, fid: fId });
     } else if (hdr) {
