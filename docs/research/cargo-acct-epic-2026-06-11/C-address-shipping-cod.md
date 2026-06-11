@@ -1,5 +1,21 @@
 # Workstream C — Delivery address (ตจว vs กทม/ปริมณฑล) · Thai-leg carrier choice · COD ต้นทาง/ปลายทาง · pay-on-arrival-at-Thai-warehouse
 
+> ## 🔴 CORRECTION (2026-06-11 PM · เดฟ verify-from-source) — most of this doc's "NOT ported" verdicts are WRONG
+> This audit only read `actions/forwarder.ts` (the rebuilt-era **orphan**) + a non-existent `forwarder-form.tsx`.
+> It **missed the live faithful path entirely**: **`actions/forwarder-legacy.ts`** + the live add form
+> `app/[locale]/(protected)/service-import/add/{service-import-add-form,service-import-shipby-select}.tsx`.
+> Re-verified against source, the LIVE customer ฝากนำเข้า create flow already does:
+> - **C-1 carrier `<select>`** ✅ `service-import-shipby-select.tsx` (NOT free-text).
+> - **C-2 zone→carrier gating** ✅ `getShipByOptions` (in-free-area = Flash(2)+J&T(24); else the 21-courier roster), gated by `isFreeShippingZip`.
+> - **C-3/C-4 PCSF free-area + promo** ✅ `checkFreeArea` + the `#input-12` promo (forces `fShipBy='PCSF'`, hides the select).
+> - **C-5 COD carrier-coupling** ✅ `createLegacyForwarder` derives `paymethod` from `fShipBy` (`inOrigin` ∈ {PCS,PCSF,PCSE,24,2} → '1' origin, else '2' dest).
+> - **C-6 address snapshot** ✅ copies from `tb_address` by `addressID` (+ "PCS" self-pickup → Pacred TH warehouse).
+> - **C-9 split-brain** ✅ **ALREADY RESOLVED** — `createLegacyForwarder` writes **`tb_forwarder`** (every legacy column); the orphan `createForwarder` that wrote rebuilt `forwarders` **no longer exists in `actions/forwarder.ts`** (cleaned a prior session — grep confirms zero `.from("forwarders")` there). **Nothing to fix.**
+>
+> **What's genuinely left (small):** **C-7** per-customer overrides (PCSFAM free-choice · VIP-maomao-outside-zone · 50฿-exempt) — niche owner-data, the หนองแขม-exempt half is already in `actions/forwarder.ts`. **C-8** the PathumThani `12000` zip-drift decision (owner picks the canonical set). Both are owner-input, not build work.
+> **Lesson:** a gap-map agent that greps the feature name (`createForwarder`) finds the FIRST/orphan match, not the live `*-legacy` twin. Verify the WIRED path (which form/action the live route imports) before declaring "not ported". See `docs/learnings/audit-discipline.md`.
+> The legacy-decode sections below (zone arrays, carrier-by-province map, status spine, pay-on-arrival total) remain CORRECT + useful as reference; only the Pacred-state "GAP" verdicts (§0, §5.2, §6) are superseded by this banner.
+
 > **Grounded legacy audit — 2026-06-11.** AUDIT ONLY (no code changed). Source = staged legacy at
 > `C:/Users/Admin/AppData/Local/Temp/pacred-legacy/member` + `.../pcs-admin`. Cross-ref =
 > Pacred worktree `dave-pacred @ 0f3f5443`. Owner mandate: ห้ามเดา ห้ามตกหล่น — every claim below cites a

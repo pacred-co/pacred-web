@@ -9,7 +9,7 @@ The 4 grounded audits agree: this is **gap-closing + last-mile wiring, NOT a fro
 |---|---|---|---|
 | **A** ราคา/ตะกร้า | engine **exists** | The recalc engine `getCustomerImportEstimate`→`resolveForwarderRate` already reads live `tb_rate_*` + recomputes per รถ/เรือ — but wired ONLY to `/service-import/estimate`, **not the cart**. → surface it as an island. **No one is mischarged today** (admin sets binding price after warehouse measure — faithful). | 🟢 S |
 | **B** เอกสาร/VAT | **ahead** of legacy | Pacred already has the 3-mode picker + persistence + VAT engine (legacy had NONE — always ใบเสร็จ "ไม่ใช่ใบกำกับ" + flat 1% WHT). 🔴 **Owner's exact gap = back-office can't SEE the choice**: `tax_doc_pref` is a dead read, the editor is orphaned, no badge/column/queue. Display-only fix. | 🟢 S |
-| **C** ที่อยู่/ขนส่ง/COD | partial | 🔴 **Blocker C-9 first:** `createForwarder` writes rebuilt `forwarders` but every consumer reads legacy `tb_forwarder` (§0e split-brain) → COD/carrier set at create evaporates. Then build order-time zone→carrier→COD coupling (47-carrier registry, BKK-zip zone gate — `lib/bkk-zip.ts` already faithful). | 🟠 M |
+| **C** ที่อยู่/ขนส่ง/COD | ✅ **DONE/live** (audit was wrong) | ⚠️ **CORRECTED 2026-06-11 PM:** the C doc audited the rebuilt **orphan** (`actions/forwarder.ts`) + a non-existent form, and missed the live `actions/forwarder-legacy.ts` + `service-import/add/service-import-shipby-select.tsx`. Re-verified from source: carrier `<select>` (zone-gated Flash+J&T ↔ 21-courier roster · `getShipByOptions`), COD coupling (`paymethod` from `fShipBy`), PCSF/`checkFreeArea`, address snapshot — **all faithful + live**. **C-9 split-brain ALREADY RESOLVED** (`createLegacyForwarder` writes `tb_forwarder`; orphan `createForwarder` gone — 0 `.from("forwarders")` in forwarder.ts). Left: **C-7** VIP overrides + **C-8** zip-12000 decision = owner-input, not build. | 🟢 done |
 | **D** บัญชี | **~75% faithful** | cost/sell/profit/VAT-on-margin/WHT/receipt/disbursement/commission/wallet ALL match legacy line-for-line. 🔴 **G2 = the Excel-forcing gap:** owner xlsx adds **อากรขาเข้า (import duty) + VAT-inclusive total (ราคารวม Vat)** the app doesn't compute. 🟠 **G1** ใบกำกับ issuance exists but DORMANT (owner-blocked: flag + VAT sign-off + PEAK GL). | 🟠 M (+owner-blocked) |
 
 ## 🔑 Load-bearing facts (don't relearn)
@@ -18,12 +18,12 @@ The 4 grounded audits agree: this is **gap-closing + last-mile wiring, NOT a fro
 - **VAT 7% = on MARGIN** (profit×0.07, profit=sell−cost), NOT gross sell — internal staff figure, never a customer charge in legacy. **WHT 1% = juristic + total≥1000.** Both already ported (`lib/tax/wht.ts`, `lib/forwarder/calc-company-total.ts`).
 - **Pay-on-Thai-arrival** = `tb_forwarder.fstatus = 5 (รอชำระเงิน)`, gate after goods reach TH (status 4); total = china-freight+crate+thai-delivery+service+other−discount +฿50 PCSF −1%WHT. Pacred status-5 pay button already faithful.
 
-## ▶️ Build sequence (waves — each its own review/gate)
-1. **C-9 split-brain fix (FIRST — unblocks C + is a §0e money-safety landmine):** point `createForwarder` at `tb_forwarder` (or tombstone the rebuilt write). Verify no data-loss.
-2. **A — surface the estimator on `/cart` + add-form** (engine exists; wire `getCustomerImportEstimate` as a client island by the shipping-options card; recompute on รถ/เรือ/ตีลัง/qty). Delete dead `cart-manager.tsx` landmine.
-3. **B — make doc-choice visible to back-office** (render `TaxDocBadge`+WHT chip from the already-loaded `tax_doc_pref`; un-orphan the editor; add "เอกสาร" column + "รอออกเอกสารภาษี" queue). Display-only, no schema.
-4. **C — order-time zone→carrier→COD coupling** (port the 47-carrier registry + BKK-zip zone gate + COD carrier-coupling into the customer order form; saved-address picker).
-5. **D-G2 — อากรขาเข้า + VAT-incl total** (new cost cols + etax wiring; ⚠ HS/policy-sensitive → owner/accountant input on the duty base).
+## ▶️ Build sequence (waves — each its own review/gate) · ✅ UPDATED 2026-06-11 PM
+1. ~~**C-9 split-brain fix**~~ ✅ **ALREADY RESOLVED** (verify-from-source): live `createLegacyForwarder` writes `tb_forwarder`; orphan `createForwarder` already removed. No-op.
+2. **A — estimator on `/cart`** ✅ **DONE + browser-verified** (`import-price-estimate.tsx` island · recompute-on-toggle confirmed live · honest no-rate empty-state · commit `76e5ab30`).
+3. **B — doc-choice visible to back-office** ✅ **DONE + browser-verified** (`TaxDocBadge`+WHT chip on detail/edit/list + "เอกสาร" column · commit `76e5ab30`).
+4. ~~**C — order-time zone→carrier→COD coupling**~~ ✅ **ALREADY LIVE + FAITHFUL** (the C doc audited orphan files; the real path `forwarder-legacy.ts` + `service-import-shipby-select.tsx` already does carrier-select/zone-gate/COD-couple/PCSF/address). Remaining C-7 (VIP overrides) + C-8 (zip-12000) = owner-input only.
+5. **D-G2 — อากรขาเข้า + VAT-incl total** ← **the genuine remaining build** (the Excel-forcing gap). New cost cols + etax wiring; ⚠ HS/policy-sensitive → owner/accountant input on the duty base. **VERIFY FROM SOURCE FIRST** (this gap-map under-counted built state on A/B/C — re-confirm D-G2 is truly missing before building).
 6. **Owner-blocked (park):** D-G1 flip `shop_yuan_enabled` after VAT-base sign-off + PEAK GL codes; the dormant issuance.
 
 ## Sub-docs
