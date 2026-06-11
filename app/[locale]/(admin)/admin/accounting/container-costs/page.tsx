@@ -122,6 +122,21 @@ export default async function AdminContainerCostsPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
+      {/* Reference-only banner — this surface is a dead-write (see rate/cost
+          wiring audit). It writes the rebuilt `container_costs` table, which
+          no margin/P&L/price engine reads. The real cost-basis for margin is
+          tb_forwarder.fcosttotalprice, set per-ตู้ on the report-cnt editor. */}
+      <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="font-semibold">⚠️ หน้านี้เป็นข้อมูลอ้างอิง / บันทึกภายในเท่านั้น</p>
+        <p className="mt-1">
+          rate card ที่บันทึกตรงนี้ <strong>ยังไม่ถูกเชื่อมเข้าระบบคำนวณ margin / กำไรจริง</strong> —
+          ต้นทุนที่ระบบใช้คิดกำไรจริงตั้งที่หน้า{" "}
+          <strong>report-cnt</strong> ของแต่ละตู้ (เก็บใน{" "}
+          <code className="rounded bg-amber-100 px-1 text-xs">tb_forwarder.fcosttotalprice</code>).
+          การเพิ่ม / แก้ rate card ที่นี่ยังไม่กระทบการคำนวณราคาหรือกำไร.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ACCOUNTING</p>
