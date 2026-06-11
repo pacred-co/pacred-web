@@ -41,7 +41,11 @@ import {
   EditTrackingChnField,
   EditDateCloseField,
   EditCoverField,
+  EditTaxDocModeField,
 } from "./forwarder-inline-edits";
+// 2026-06-11 (Lane B · doc-choice visibility) — show the customer's tax-doc
+// choice (ใบกำกับ/ใบขน/ไม่รับเอกสาร) + the juristic-WHT signal at a glance.
+import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 import {
   User as UserIcon,
   Pencil,
@@ -261,6 +265,10 @@ async function tryRenderTbForwarder(
       "adminid, adminidcreator, adminidupdate, paymethod, paydeposit, crate, fpallet, fbilltoname, " +
       // 2026-06-05 PM (ภูม flag · breakdown table on detail page too).
       "fusercompany, " +
+      // 2026-06-11 (Lane B · doc-choice visibility) — the customer's tax-document
+      // choice (ใบกำกับ/ใบขน/ไม่รับเอกสาร). Was a dead read on /edit; surfaced here
+      // as a <TaxDocBadge> + made correctable via <EditTaxDocModeField>.
+      "tax_doc_pref, " +
       // B4 · backlog #259 (migration 0150 · 2026-06-08) — cabinet lock flag
       // so the read-only detail can show "🔒 ล็อกแล้ว" badge next to cabinet.
       "fcabinet_locked",
@@ -306,6 +314,7 @@ async function tryRenderTbForwarder(
     crate: string | null; fpallet: number | null;
     fbilltoname: string | null;
     fusercompany: string | null;
+    tax_doc_pref: string | null;
     fcabinet_locked: boolean | null;
   };
 
@@ -546,6 +555,14 @@ async function tryRenderTbForwarder(
                   💳 เครดิตสินค้า
                 </span>
               )}
+              {/* 2026-06-11 (Lane B) — the customer's tax-document choice + the
+                  juristic-WHT signal, surfaced at the order header so staff
+                  immediately see "ทำเอกสารมั้ย · VAT/ไม่ VAT". */}
+              <TaxDocBadge pref={r.tax_doc_pref} />
+              <JuristicWhtChip
+                isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
+                totalThb={Number(r.ftotalprice ?? 0)}
+              />
             </div>
           </div>
           <div className="md:text-right shrink-0 space-y-1.5">
@@ -685,6 +702,10 @@ async function tryRenderTbForwarder(
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
+            {/* 2026-06-11 (Lane B) — เอกสารภาษีที่ลูกค้าเลือก (ใบกำกับ/ใบขน/ไม่รับฯ) ·
+                แสดง + แก้ไขได้ (un-orphan adminUpdateForwarderTaxDocMode · confirm
+                ก่อนบันทึก §0f). */}
+            <EditTaxDocModeField fId={r.id} taxDocPref={r.tax_doc_pref} />
             <p className="text-foreground"><b className="font-semibold">ประเภทสินค้า : </b>{PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "—"}</p>
             {/* รายละเอียดสินค้า (ชื่อสินค้า + รูปปก) — ต่อจากประเภทสินค้า ตาม legacy admin */}
             <div className="pt-1">

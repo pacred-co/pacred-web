@@ -88,8 +88,13 @@ import {
   EditTransportTypeField,
   EditDateCloseField,
   EditAmountCountField,
+  EditTaxDocModeField,
 } from "../forwarder-inline-edits";
 import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-driver-assign-panel";
+// 2026-06-11 (Lane B · doc-choice visibility) — the customer's tax-doc choice
+// (ใบกำกับ/ใบขน/ไม่รับเอกสาร) was loaded into the query but never rendered (dead
+// read). Surface it as a badge + the juristic-WHT signal in the header.
+import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -419,6 +424,13 @@ export default async function AdminForwarderEditPage({
                   ⚠️ รอตรวจสอบสลิป
                 </span>
               )}
+              {/* 2026-06-11 (Lane B) — เอกสารภาษีที่ลูกค้าเลือก + นิติบุคคล/หัก ณ
+                  ที่จ่าย · the dead-read tax_doc_pref now visible at a glance. */}
+              <TaxDocBadge pref={r.tax_doc_pref} />
+              <JuristicWhtChip
+                isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
+                totalThb={Number(r.ftotalprice ?? 0)}
+              />
             </div>
           </div>
 
@@ -668,6 +680,10 @@ export default async function AdminForwarderEditPage({
 
           {/* จำนวน · การรวมกล่อง — inline edit */}
           <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
+
+          {/* 2026-06-11 (Lane B) — โหมดเอกสารภาษี (ใบกำกับ/ใบขน/ไม่รับฯ) · แสดง +
+              แก้ไขได้ · un-orphan adminUpdateForwarderTaxDocMode · confirm §0f */}
+          <EditTaxDocModeField fId={r.id} taxDocPref={r.tax_doc_pref} />
 
           {(Number(r.fweight ?? 0) > 0 || Number(r.fvolume ?? 0) > 0) && (
             <InfoLine label="น้ำหนัก · CBM">

@@ -57,10 +57,18 @@ import {
   adminReassignForwarderOwner,
   adminAddForwarderImage,
   adminRemoveForwarderImage,
+  adminUpdateForwarderTaxDocMode,
 } from "@/actions/admin/forwarders-field-edits";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
+import {
+  TAX_DOC_MODES,
+  TAX_DOC_MODE_META,
+  modeFromPref,
+  type TaxDocMode,
+} from "@/lib/tax/tax-doc-mode";
+import { TaxDocBadge } from "@/components/admin/tax-doc-badge";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error?: string };
 
@@ -1046,6 +1054,87 @@ export function EditBillToField({ fId, fbilltoname, defaultBillTo }: { fId: numb
               <button type="button" disabled={pending} className={btnSave}
                 onClick={() => run(() => adminSetForwarderBillToOverride({ f_no: String(fId), override: billToVal.trim() }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/**
+ * โหมดเอกสารภาษี (ใบกำกับ / ใบขน / ไม่รับเอกสาร) · Lane B.
+ *
+ * UN-ORPHANS adminUpdateForwarderTaxDocMode (the action + the doc-mode UI lived
+ * only in the never-mounted tb-edit-panel.tsx → unreachable). This compact
+ * inline field makes the customer's tax-document choice both VISIBLE (the badge
+ * in the display row) and CORRECTABLE by staff, on the same page as every other
+ * field. Confirm-before-mutate (§0f) via the shared confirm() dialog — the
+ * dialog spells out the new mode + its VAT base + that it only affects documents
+ * issued AFTER the change.
+ *
+ * DISPLAY/PREF only — does NOT re-issue an already-issued document and does NOT
+ * touch the VAT base math (computeTaxForMode stays the SOT).
+ */
+export function EditTaxDocModeField({ fId, taxDocPref }: { fId: number; taxDocPref: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const currentMode = modeFromPref(taxDocPref);
+  const [mode, setMode] = useState<TaxDocMode>(currentMode);
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="เอกสารภาษี"
+        editing={editing}
+        setEditing={setEditing}
+        display={<TaxDocBadge pref={taxDocPref} />}
+      >
+        {(close) => (
+          <>
+            <select
+              className={selectCls}
+              value={mode}
+              onChange={(e) => setMode(e.target.value as TaxDocMode)}
+            >
+              {TAX_DOC_MODES.map((m) => (
+                <option key={m} value={m}>{TAX_DOC_MODE_META[m].title}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-muted">
+              {TAX_DOC_MODE_META[mode].hint}
+              <br />
+              ฐาน VAT: <b>{TAX_DOC_MODE_META[mode].vatBase}</b>
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending || mode === currentMode}
+                className={btnSave}
+                onClick={async () => {
+                  // §0f confirm-before-mutate — name the new mode + VAT base, and
+                  // that it only governs documents issued AFTER this change.
+                  const meta = TAX_DOC_MODE_META[mode];
+                  if (!(await confirm(
+                    `เปลี่ยนโหมดเอกสารภาษีเป็น "${meta.title}" ?\n\n` +
+                    `${meta.hint}\n` +
+                    `ฐาน VAT: ${meta.vatBase}\n\n` +
+                    `(มีผลตอนชำระเงิน — ระบบจะออกเอกสารตามโหมดนี้ · ไม่กระทบเอกสารที่ออกไปแล้ว)`,
+                  ))) return;
+                  run(() => adminUpdateForwarderTaxDocMode({ fId, mode }), close);
+                }}
+              >
+                บันทึก
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                className={btnCancel}
+                onClick={() => { setMode(currentMode); close(); }}
+              >
+                ยกเลิก
+              </button>
             </div>
           </>
         )}
