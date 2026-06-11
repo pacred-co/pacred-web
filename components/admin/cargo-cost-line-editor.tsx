@@ -67,11 +67,36 @@ type CostLineInit = {
   costRateCny: number | string | null;
   declaredValueThb: number | string | null;
   hsCode: string | null;
+  /**
+   * AUTO-FILL seeds (GAP 1 · audit 2026-06-11). When the stored value is
+   * null/0, the editor seeds from these so the per-line cost-sheet renders
+   * pre-filled from the order data above (ไม่ต้องพิมพ์เลข). A small
+   * "ออโต้ — แก้ได้" chip flags the field while it still matches the auto
+   * value; once staff edits, the chip drops (override mode).
+   * Stored value still wins — these are display-only fallbacks; nothing
+   * persists until Save.
+   */
+  autoCostUnit?: number | null;
+  autoCostRate?: number | null;
+  autoDeclared?: number | null;
 };
 
 type EditorMode =
   | { kind: "forwarder"; itemId: number; costUnitThb: number | string | null }
   | { kind: "shop"; orderId: number; costUnitCny: number | string | null };
+
+/** value is "stored as empty" — null, undefined, "" or 0. */
+function isEmptyStored(v: number | string | null | undefined): boolean {
+  if (v == null || v === "") return true;
+  const n = Number(v);
+  return Number.isFinite(n) && n === 0;
+}
+
+/** Format a number for an <input type=number> default value (no trailing zeros). */
+function autoFmt(n: number, digits: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return Number(n.toFixed(digits)).toString();
+}
 
 /**
  * Shared toggle-to-edit cost editor. The `mode` discriminant carries the
@@ -97,28 +122,33 @@ function CostEditorBody({
   const costUnitInit = mode.kind === "shop" ? mode.costUnitCny : mode.costUnitThb;
   const costUnitSymbol = costUnitIsCny ? "¥" : "฿";
 
+  // AUTO-FILL seeds (GAP 1) — when the stored column is empty, prefill the draft
+  // from the order data computed above. These are display-only suggestions;
+  // nothing persists until Save. A per-field chip flags the value while it still
+  // equals the auto seed (the moment staff edits, it becomes their override).
+  const autoCostUnitStr = init.autoCostUnit != null ? autoFmt(init.autoCostUnit, 2) : "";
+  const autoCostRateStr = init.autoCostRate != null ? autoFmt(init.autoCostRate, 4) : "";
+  const autoDeclaredStr = init.autoDeclared != null ? autoFmt(init.autoDeclared, 2) : "";
+  const seed = (stored: number | string | null | undefined, autoStr: string) =>
+    isEmptyStored(stored) ? autoStr : String(stored);
+
   // Draft state — strings so "" clears the column (the action maps "" → null).
-  const [costUnit, setCostUnit] = useState<string>(
-    costUnitInit != null && Number(costUnitInit) !== 0 ? String(costUnitInit) : "",
-  );
-  const [costRate, setCostRate] = useState<string>(
-    init.costRateCny != null && Number(init.costRateCny) !== 0 ? String(init.costRateCny) : "",
-  );
-  const [declared, setDeclared] = useState<string>(
-    init.declaredValueThb != null && Number(init.declaredValueThb) !== 0
-      ? String(init.declaredValueThb)
-      : "",
-  );
+  const [costUnit, setCostUnit] = useState<string>(seed(costUnitInit, autoCostUnitStr));
+  const [costRate, setCostRate] = useState<string>(seed(init.costRateCny, autoCostRateStr));
+  const [declared, setDeclared] = useState<string>(seed(init.declaredValueThb, autoDeclaredStr));
   const [hsCode, setHsCode] = useState<string>(init.hsCode ?? "");
 
+  // A field is "on auto" when the stored column is empty, an auto seed exists,
+  // and the draft still equals that seed (staff hasn't overridden it).
+  const costUnitOnAuto = isEmptyStored(costUnitInit) && autoCostUnitStr !== "" && costUnit === autoCostUnitStr;
+  const costRateOnAuto = isEmptyStored(init.costRateCny) && autoCostRateStr !== "" && costRate === autoCostRateStr;
+  const declaredOnAuto = isEmptyStored(init.declaredValueThb) && autoDeclaredStr !== "" && declared === autoDeclaredStr;
+  const anyOnAuto = costUnitOnAuto || costRateOnAuto || declaredOnAuto;
+
   function resetDraft() {
-    setCostUnit(costUnitInit != null && Number(costUnitInit) !== 0 ? String(costUnitInit) : "");
-    setCostRate(init.costRateCny != null && Number(init.costRateCny) !== 0 ? String(init.costRateCny) : "");
-    setDeclared(
-      init.declaredValueThb != null && Number(init.declaredValueThb) !== 0
-        ? String(init.declaredValueThb)
-        : "",
-    );
+    setCostUnit(seed(costUnitInit, autoCostUnitStr));
+    setCostRate(seed(init.costRateCny, autoCostRateStr));
+    setDeclared(seed(init.declaredValueThb, autoDeclaredStr));
     setHsCode(init.hsCode ?? "");
   }
 
@@ -164,6 +194,7 @@ function CostEditorBody({
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
           <Coins className="h-3.5 w-3.5" /> ต้นทุน (Pricing){label ? ` · ${label}` : ""}
+          {anyOnAuto && <AutoChip />}
         </span>
         {!editing && (
           <button
@@ -183,18 +214,33 @@ function CostEditorBody({
       )}
 
       {!editing ? (
-        // Read-only current values (also shown when the role can't edit — the
-        // page renders <CargoCostLineSummary> in that case).
+        // Read-only view. Shows the STORED value when present, else the AUTO seed
+        // (marked) so Pricing sees the suggested cost/declared without entering
+        // edit mode. Auto values are NOT yet saved — "แก้ไข" → "บันทึก" persists.
         <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
-          <SummaryRow label={`ต้นทุน/หน่วย (${costUnitSymbol})`} value={fmtNum(costUnitInit)} />
-          <SummaryRow label="เรทหยวนต้นทุน" value={fmtNum(init.costRateCny, 4)} />
-          <SummaryRow label="มูลค่าสำแดง ใบขน (฿)" value={fmtNum(init.declaredValueThb)} />
+          <SummaryRow
+            label={`ต้นทุน/หน่วย (${costUnitSymbol})`}
+            value={fmtNum(seed(costUnitInit, autoCostUnitStr) || null)}
+            auto={costUnitOnAuto}
+          />
+          <SummaryRow
+            label="เรทหยวนต้นทุน"
+            value={fmtNum(seed(init.costRateCny, autoCostRateStr) || null, 4)}
+            auto={costRateOnAuto}
+          />
+          <SummaryRow
+            label="มูลค่าสำแดง ใบขน (฿)"
+            value={fmtNum(seed(init.declaredValueThb, autoDeclaredStr) || null)}
+            auto={declaredOnAuto}
+          />
           <SummaryRow label="HS Code" value={init.hsCode?.trim() || "—"} mono />
         </dl>
       ) : (
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">ต้นทุน/หน่วย ({costUnitSymbol})</span>
+            <span className="flex items-center gap-1 text-[10px] text-muted">
+              ต้นทุน/หน่วย ({costUnitSymbol}){costUnitOnAuto && <AutoChip />}
+            </span>
             <input
               type="number"
               min={0}
@@ -205,9 +251,18 @@ function CostEditorBody({
               placeholder="0.00"
               className={inputCls}
             />
+            {/* SHOP cost-unit auto seeds from ¥ SELLING price (cprice) — flag it so
+                staff replace it with the real supplier cost, not bank the sell price. */}
+            {costUnitOnAuto && costUnitIsCny && (
+              <span className="block text-[9px] text-amber-600">
+                ⚠ จากราคาขาย ¥ — แก้เป็นต้นทุนจริงที่จ่ายซัพพลายเออร์
+              </span>
+            )}
           </label>
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">เรทหยวนต้นทุน</span>
+            <span className="flex items-center gap-1 text-[10px] text-muted">
+              เรทหยวนต้นทุน{costRateOnAuto && <AutoChip />}
+            </span>
             <input
               type="number"
               min={0}
@@ -220,7 +275,9 @@ function CostEditorBody({
             />
           </label>
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">มูลค่าสำแดง ใบขน (฿)</span>
+            <span className="flex items-center gap-1 text-[10px] text-muted">
+              มูลค่าสำแดง ใบขน (฿){declaredOnAuto && <AutoChip />}
+            </span>
             <input
               type="number"
               min={0}
@@ -244,6 +301,11 @@ function CostEditorBody({
             />
           </label>
           <div className="sm:col-span-2">
+            {anyOnAuto && (
+              <p className="mb-1 inline-flex items-center gap-1 text-[10px] text-sky-700">
+                <AutoChip /> ค่าที่ขึ้น <b>ออโต้</b> เติมจากข้อมูลออเดอร์ — แก้ได้ · จะบันทึกเมื่อกด “บันทึกต้นทุน”
+              </p>
+            )}
             <p className="mb-1.5 text-[10px] text-emerald-800/80">
               ภายในเท่านั้น — ต้นทุน (PEAK) + มูลค่าสำแดง (ใบขน) · ไม่กระทบราคาขาย/สถานะ/การแจ้งเตือน · เว้นว่าง = ล้างค่า
             </p>
@@ -271,12 +333,38 @@ function CostEditorBody({
   );
 }
 
-function SummaryRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function SummaryRow({
+  label,
+  value,
+  mono,
+  auto,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  /** true → the value shown is the auto seed (not yet saved). */
+  auto?: boolean;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt className="text-muted">{label}</dt>
-      <dd className={mono ? "font-mono tabular-nums" : "tabular-nums"}>{value}</dd>
+      <dd className={`flex items-center gap-1 ${mono ? "font-mono tabular-nums" : "tabular-nums"}`}>
+        {auto && <AutoChip />}
+        {value}
+      </dd>
     </div>
+  );
+}
+
+/** Tiny "ออโต้ — แก้ได้" badge marking a field seeded from the order data (GAP 1). */
+function AutoChip() {
+  return (
+    <span
+      title="เติมอัตโนมัติจากข้อมูลออเดอร์ — แก้ไขได้ · ยังไม่บันทึกจนกดบันทึก"
+      className="inline-flex items-center rounded-full bg-sky-100 px-1.5 py-px text-[9px] font-semibold leading-none text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+    >
+      ออโต้
+    </span>
   );
 }
 
@@ -292,6 +380,9 @@ export function ForwarderItemCostEditor({
   declaredValueThb,
   hsCode,
   label = "",
+  autoCostUnit = null,
+  autoCostRate = null,
+  autoDeclared = null,
 }: {
   itemId: number;
   costUnitThb: number | string | null;
@@ -299,11 +390,15 @@ export function ForwarderItemCostEditor({
   declaredValueThb: number | string | null;
   hsCode: string | null;
   label?: string;
+  /** GAP 1 auto-fill seeds (used only when the stored column is empty). */
+  autoCostUnit?: number | null;
+  autoCostRate?: number | null;
+  autoDeclared?: number | null;
 }) {
   return (
     <CostEditorBody
       mode={{ kind: "forwarder", itemId, costUnitThb }}
-      init={{ costRateCny, declaredValueThb, hsCode }}
+      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared }}
       label={label}
     />
   );
@@ -317,6 +412,9 @@ export function ShopOrderItemCostEditor({
   declaredValueThb,
   hsCode,
   label = "",
+  autoCostUnit = null,
+  autoCostRate = null,
+  autoDeclared = null,
 }: {
   orderId: number;
   costUnitCny: number | string | null;
@@ -324,11 +422,15 @@ export function ShopOrderItemCostEditor({
   declaredValueThb: number | string | null;
   hsCode: string | null;
   label?: string;
+  /** GAP 1 auto-fill seeds (used only when the stored column is empty). */
+  autoCostUnit?: number | null;
+  autoCostRate?: number | null;
+  autoDeclared?: number | null;
 }) {
   return (
     <CostEditorBody
       mode={{ kind: "shop", orderId, costUnitCny }}
-      init={{ costRateCny, declaredValueThb, hsCode }}
+      init={{ costRateCny, declaredValueThb, hsCode, autoCostUnit, autoCostRate, autoDeclared }}
       label={label}
     />
   );

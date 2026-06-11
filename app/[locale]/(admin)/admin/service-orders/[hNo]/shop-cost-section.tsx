@@ -24,6 +24,7 @@ import {
   ShopOrderItemCostEditor,
   CargoCostLineSummary,
 } from "@/components/admin/cargo-cost-line-editor";
+import { autoOrNull, shopAutoDeclaredThb } from "@/lib/forwarder/cargo-cost-autofill";
 
 type ShopCostItem = {
   id: number;
@@ -56,6 +57,17 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
     console.error(`[ShopOrderCostSection tb_order]`, { code: error.code, message: error.message, hno });
   }
   const items = ((data ?? []) as unknown) as ShopCostItem[];
+
+  // GAP 1 auto-fill — the cost yuan-rate seed (tb_settings is single-row).
+  const { data: settings, error: setErr } = await admin
+    .from("tb_settings")
+    .select("hratecostdefault")
+    .limit(1)
+    .maybeSingle<{ hratecostdefault: number | string | null }>();
+  if (setErr) {
+    console.error(`[ShopOrderCostSection tb_settings]`, { code: setErr.code, message: setErr.message });
+  }
+  const costRate = Number(settings?.hratecostdefault ?? 0) || 0;
 
   // Resolve thumbnails in parallel.
   const thumbs: Record<number, string | null> = {};
@@ -126,6 +138,11 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
                 costRateCny={it.cost_rate_cny}
                 declaredValueThb={it.declared_value_thb}
                 hsCode={it.hs_code}
+                autoCostUnit={autoOrNull(Number(it.cprice ?? 0))}
+                autoCostRate={autoOrNull(costRate)}
+                autoDeclared={autoOrNull(
+                  shopAutoDeclaredThb(it.cprice, costRate, it.camount),
+                )}
               />
             ) : (
               <CargoCostLineSummary

@@ -27,6 +27,11 @@ import {
   CargoCostLineSummary,
   ForwarderImportDutyEditor,
 } from "@/components/admin/cargo-cost-line-editor";
+import {
+  autoOrNull,
+  shopAutoDeclaredThb,
+  importAutoDeclaredThb,
+} from "@/lib/forwarder/cargo-cost-autofill";
 
 type FwdCostItem = {
   id: number;
@@ -111,6 +116,20 @@ export async function ForwarderCostSection({
   const usingShop = isShopSpawn && shopItems.length > 0;
   const lineCount = usingShop ? shopItems.length : fwdItems.length;
 
+  // GAP 1 auto-fill — the cost yuan-rate seed (tb_settings is single-row).
+  const { data: settings, error: setErr } = await admin
+    .from("tb_settings")
+    .select("hratecostdefault")
+    .limit(1)
+    .maybeSingle<{ hratecostdefault: number | string | null }>();
+  if (setErr) {
+    console.error(`[ForwarderCostSection tb_settings]`, { code: setErr.code, message: setErr.message });
+  }
+  const costRate = Number(settings?.hratecostdefault ?? 0) || 0;
+  // Σqty across the direct-forwarder lines — the prorate denominator for the
+  // declared-value auto-seed (header cost split by each line's quantity share).
+  const fwdTotalQty = fwdItems.reduce((sum, it) => sum + (Number(it.productqty ?? 0) || 0), 0);
+
   // Resolve shop thumbnails (only the shop source has images).
   const thumbs: Record<number, string | null> = {};
   if (usingShop) {
@@ -131,17 +150,22 @@ export async function ForwarderCostSection({
   let importDutyPct: number | string | null = null;
   let importDutyThb: number | string | null = null;
   let sellNet = 0;
+  // fcosttotalprice — the forwarder header COST total; the prorate numerator for
+  // the direct-forwarder declared-value auto-seed (GAP 1). Has an authoritative
+  // writer (the ไอแต้ม container-cost-sheet sync) — we only READ it here.
+  let fCostTotal = 0;
   {
     const { data: hdr, error } = await admin
       .from("tb_forwarder")
       .select(
-        "import_duty_pct, import_duty_thb, ftotalprice, ftransportprice, fpriceupdate, " +
+        "import_duty_pct, import_duty_thb, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, " +
           "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount",
       )
       .eq("id", fId)
       .maybeSingle<{
         import_duty_pct: number | string | null;
         import_duty_thb: number | string | null;
+        fcosttotalprice: number | string | null;
         ftotalprice: number | string | null;
         ftransportprice: number | string | null;
         fpriceupdate: number | string | null;
@@ -157,6 +181,7 @@ export async function ForwarderCostSection({
       importDutyPct = (hdr.import_duty_pct as number | string | null) ?? null;
       importDutyThb = (hdr.import_duty_thb as number | string | null) ?? null;
       const n = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) ? x : 0; };
+      fCostTotal = n(hdr.fcosttotalprice);
       sellNet = Math.max(
         0,
         n(hdr.ftotalprice) + n(hdr.ftransportprice) + n(hdr.fpriceupdate) +
@@ -217,6 +242,11 @@ export async function ForwarderCostSection({
                     costRateCny={it.cost_rate_cny}
                     declaredValueThb={it.declared_value_thb}
                     hsCode={it.hs_code}
+                    autoCostUnit={autoOrNull(Number(it.cprice ?? 0))}
+                    autoCostRate={autoOrNull(costRate)}
+                    autoDeclared={autoOrNull(
+                      shopAutoDeclaredThb(it.cprice, costRate, it.camount),
+                    )}
                   />
                 ) : (
                   <CargoCostLineSummary
@@ -244,6 +274,10 @@ export async function ForwarderCostSection({
                     costRateCny={it.cost_rate_cny}
                     declaredValueThb={it.declared_value_thb}
                     hsCode={it.hs_code}
+                    autoCostRate={autoOrNull(costRate)}
+                    autoDeclared={autoOrNull(
+                      importAutoDeclaredThb(fCostTotal, it.productqty, fwdTotalQty),
+                    )}
                   />
                 ) : (
                   <CargoCostLineSummary
