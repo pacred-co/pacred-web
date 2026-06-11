@@ -11,6 +11,13 @@ Remaining = ~9 "edit-but-silent" (dead-write / no-reader) settings + ~6 missing/
 None mis-prices a customer TODAY (the live engine reads per-order snapshots or hardcoded consts),
 but they are trust traps + future budget leaks.
 
+> **✅ FIXES APPLIED 2026-06-11 (4-lane wave):** rgdefault chip → hratecostdefault · transfer-rep
+> dead-read → tb_payment · mounted the orphaned import per-line cost editor · seeded PEAK GL editor
+> (mig 0177) · wired freight markup config (live read) + built in-app freight-commission tier confirm ·
+> reference-only banners on container-costs + hratecostsale + the 9 inert business_config keys.
+> Remaining = owner-policy (the open questions below) + the hardcoded-by-design items (sales commission,
+> freight SELL prices) + low-priority hygiene (rate_general truncate, forwarder_cost_adjustments).
+
 ## ✅ COMPLETE (verified write→read same live table)
 - **Cargo rate cards ×4** — general (`tb_rate_g_*`), VIP-group (`tb_rate_vip_*`), custom-user/SVIP (`tb_rate_custom_*`), custom-HS (`tb_customrate_hs` + `tb_hs_rate_custom_*`). Read by `actions/admin/forwarders-edit.ts resolveLiveForwarderRate` + `actions/forwarder-quote.ts`. (The old rebuilt `rate_*` 0-row twins are tombstoned/inert — the classic trap here was already remediated 2026-05-31→06-05.)
 - **Container cost → margin** — `tb_forwarder.fcosttotalprice` (set via report-cnt cost editor) feeds margin-monitor + all P&L. This is the REAL margin basis.
