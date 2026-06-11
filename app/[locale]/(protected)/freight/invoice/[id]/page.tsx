@@ -387,13 +387,10 @@ export default async function FreightInvoicePage({
     if (rowMain.corporatenumber === "") {
       // not a tb_corporate customer (invoiceF.php L68-93)
       if (rowMain.recompname === "") {
-        // invoiceF.php L70-74 — the PCS415 hardcode (rebranded PR415)
-        if (rowMain.userid === "PR415") {
-          rowMain.corporatename = "พีรวันติ์ ติระจารุอนันต์";
-          rowMain.corporatenumber = "-";
-          rowMain.corporateaddress =
-            "222/1 หมู่4 หมู่บ้านลัดดาลม อีลี่ แกรนต์ ตำบล/แขวง บางขุนกอง อำเภอ/เขต บางกรวย จังหวัด นนทบุรี 11130";
-        }
+        // NOTE: the legacy invoiceF.php L70-74 hardcoded PCS415's name + address
+        // here. Dropped under Pacred (ภูม 2026-06-11): Pacred PR codes are
+        // RE-SEQUENCED, so PR415 today is NOT that old PCS member → it would stamp
+        // a stranger's identity on their receipt. Use the real address.
         // invoiceF.php L76-82 — fall back to the main address.
         const { data: addrRow, error: addrRowErr } = await admin
           .from("tb_address_main")
@@ -450,21 +447,12 @@ export default async function FreightInvoicePage({
     // invoiceF.php L97-101 — a spacer <br> when the address is short.
     const addressBR = (rowMain.corporateaddress ?? "").length <= 230;
 
-    // invoiceF.php L102-113 — three more PCS member-code hardcodes
-    // (rebranded PR71 / PR4136 / PR8765).
-    if (rowMain.userid === "PR71") {
-      fName = "บริษัท 3พี อีควิปเม้นท์ เทรดดิ้ง จำกัด ";
-      rowMain.corporatename = "บริษัท 3พี อีควิปเม้นท์ เทรดดิ้ง จำกัด ";
-      rowMain.corporatenumber = "0105565004933";
-      rowMain.corporateaddress =
-        "366/49 หมู่บ้านไอยรา ถนน เลียบคลองภาษีฯฝั่งเหนือ แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160";
-    }
-    if (rowMain.userid === "PR4136") {
-      rowMain.corporatenumber = "1350100500141";
-    }
-    if (rowMain.userid === "PR8765") {
-      rowMain.corporatenumber = "1350100500141";
-    }
+    // NOTE: the legacy invoiceF.php L102-113 hardcoded PCS71/PCS4136/PCS8765's
+    // company name + tax-ID here. Dropped under Pacred (ภูม 2026-06-11) — Pacred PR
+    // codes are RE-SEQUENCED, so stamping a fixed juristic tax-ID on whoever holds
+    // that code today would put a STRANGER's tax-ID on the receipt (tax/compliance
+    // defect). The real corporate identity flows from tb_corporate / the reComp*
+    // override above.
 
     // invoiceF.php L116-121 — the WHT-1% defaults.
     // $textPer1 starts hidden (white) for a personal receipt; for a
