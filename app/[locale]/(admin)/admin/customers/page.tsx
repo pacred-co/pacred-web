@@ -193,6 +193,20 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
   const admin = createAdminClient();
 
+  // Pending-signup count (owner 2026-06-11): every new signup mirrors into
+  // tb_users with userActive IN ('','0') and surfaces at /admin/customers/pending.
+  // Show a prominent banner here so a staffer landing on /admin/customers
+  // immediately sees + can reach new signups to ตรวจสอบ + แบ่งเซล/CS. Same
+  // filter the pending page + deriveStatus("incomplete") use. head:true →
+  // count only, no rows pulled.
+  const { count: pendingSignupCount, error: pendingCountErr } = await admin
+    .from("tb_users")
+    .select("userID", { count: "exact", head: true })
+    .in("userActive", ["", "0"]);
+  if (pendingCountErr) {
+    console.error(`[tb_users pending count] failed`, { code: pendingCountErr.code, message: pendingCountErr.message });
+  }
+
   // PERF (2026-06-03): server-side pagination — fetch ONE page (50 rows) via
   // .range() + an exact count for the pager, instead of pulling 200 rows + all
   // their joins/doc-resolution every render. ?page=N drives the window.
@@ -459,6 +473,24 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     <>
       <PageTopMenubar items={CUSTOMERS_MENUBAR} activeHref="/admin/customers" />
       <main className="p-6 lg:p-8 space-y-5">
+      {(pendingSignupCount ?? 0) > 0 ? (
+        <Link
+          href="/admin/customers/pending"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        >
+          <span className="flex items-center gap-2.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <span className="text-lg leading-none">🔔</span>
+            มีลูกค้าสมัครใหม่รอตรวจสอบ{" "}
+            <span className="rounded-full bg-amber-600 px-2 py-0.5 text-xs font-bold text-white">
+              {(pendingSignupCount ?? 0).toLocaleString("th-TH")}
+            </span>{" "}
+            ราย — ตรวจสอบ + แบ่งเซล/CS
+          </span>
+          <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-400">
+            ไปที่หน้ารออนุมัติ →
+          </span>
+        </Link>
+      ) : null}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
