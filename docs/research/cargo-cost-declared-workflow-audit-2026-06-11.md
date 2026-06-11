@@ -50,7 +50,7 @@ GAP 1 (★ auto-fill) shipped 2026-06-12 (commit `dafa481f` · `lib/forwarder/ca
 
 ---
 
-## ✅ STATUS 2026-06-12 — 9 of 10 gaps SHIPPED (GAP 5 owner-deferred)
+## ✅ STATUS 2026-06-12 — 10 of 10 gaps SHIPPED + Build A (declared FX) + Build B (HS library)
 
 All shipped to dave-pacred + main, each `pnpm verify` EXIT 0 + a 2-lens adversarial review = SHIP (money-isolation lens mandatory on every cost/declared/VAT surface):
 
@@ -65,7 +65,14 @@ All shipped to dave-pacred + main, each `pnpm verify` EXIT 0 + a 2-lens adversar
 | GAP 7 auto-enroll | `e647aeaa` | same — ensures the `tb_cargo_taxdoc_job` row (no more manual "เปิดงาน") |
 | GAP 10 quick-add doc picker | `35c40620` | เอกสารภาษี `<select>` on the admin quick-add forwarder → `tb_forwarder.tax_doc_pref` |
 | GAP 6 cargo ใบขนรวม PDF | `b14b5b70` | cargo branch on `/api/customs-declaration/[id]` (resolves from `tb_forwarder`+customer) + download button |
+| ✅ GAP 5 CS HS-triage queue | `b67d4447`+`ca692439` | owner chose a **dedicated CS คิวงานรวม** (`/admin/accounting/hs-triage`) — per-line items w/ no HS, CS types HS w/ a live คลัง HS duty hint, `setLineHsCode` writes ONLY `hs_code` (§0e), CS-gated (super/sales/sales_admin/ops) |
 
-**🟠 GAP 5 (CS HS-first) — DEFERRED, needs an owner decision** on the CS entry point: where/how does CS enter the HS code BEFORE Pricing costs (the ground-truth flow: CS asks the China warehouse → enters HS → Pricing costs)? Today HS lives only in the Pricing-gated cost editor. Once the owner picks the CS surface (a CS-gated HS field on the forwarder/shop detail, or a dedicated CS queue), it's a small build.
+**★ GAP 1 RE-SEED CORRECTION (owner 2026-06-12):** cost/unit ¥ now seeds from the **real purchase total** the Pricing team filled job-by-job (`tb_header_order.hcostall` ÷ Σqty · `tb_forwarder.hcostall` for shop-spawn / `fCostTotal÷Σqty` direct) — NOT the selling `cprice` ("ตรงกว่า เชื่อได้กว่า เพราะมีคนมาเฟิม"). เรทหยวนต้นทุน seeds from the **real FX** the job used (`hratecost`), editable.
 
-**⚠️ Verify-state:** GAP 1/2/3/4/6/7/8/9/10 are all behind admin auth (cost editor / detail pages / quick-add / cargo PDF) — gated + unit-tested + tsc/lint-clean + adversarially-reviewed-SHIP, but NOT authed-click-tested (no test admin login · standing §0c blocker). The cargo PDF render in particular can't be browser-verified until a test login + a real cargo declaration exist.
+**Build A — declared value via Customs FX** (`mig 0179`): มูลค่าสำแดง is **USD-anchored** with a monthly Customs-Department FX setting (`business_config customs.fx_rates` · default `{USD:36.5,CNY:5.1,pending:true}`) + a **per-job override** (currency-switchable USD/CNY/… · editable rate + amount) → `declared_value_thb = round2(amount × rate)` recomputed server-side (`resolveDeclaredThb`); defaults from real cost (engineer-down). Cols on `tb_order`+`tb_forwarder_item`: `declared_currency`/`declared_fx_rate`/`declared_amount_ccy`. `lib/admin/customs-fx.ts`.
+
+**Build B — คลัง HS library** (`mig 0180`): `hs_codes` += `form_e_duty_pct`/`other_forms`(jsonb)/`hs_note` → **อากรปกติ + Form-E + ฟอร์มอื่นๆ** per code. New `/admin/accounting/hs-library` CRUD + `lookupHsCode` duty-hint wired into the cost editor AND the GAP 5 triage (auto-lookup as CS/Pricing types the HS).
+
+**⚠️ Verify-state:** ALL gaps behind admin auth (cost editor / detail pages / quick-add / cargo PDF / HS library / HS triage) — gated + unit-tested + tsc/lint-clean + adversarially-reviewed-SHIP (GAP 5 + Build B passed a 2-lens money-isolation/correctness review: CLEAN money-isolation · 3 WARN + 1 NIT fixed in `ca692439`), but NOT authed-click-tested (no test admin login · standing §0c blocker). The cargo PDF render can't be browser-verified until a test login + a real cargo declaration exist.
+
+**🟠 OWNER decision still open on GAP 5 scope:** the HS-triage queue currently lists every per-line item with no `hs_code` (bounded, newest-first). Owner to confirm whether to scope it (import/forwarder-only? active-orders-only? exclude domestic shop?) — flagged in-UI, not guessed.

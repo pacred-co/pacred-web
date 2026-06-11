@@ -936,3 +936,21 @@ The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `
 **Bonus lesson:** a teammate branch can ship a lint **error** that their own gate missed — the integrate step's `pnpm verify` is the real net. Always run it (not per-file lint) before distributing a merge to main.
 
 **Cross-links:** the 2026-06-11 notification-exit-mask entry · AGENTS.md §0f gate rule · `branch-integrate-loop` skill (verify before distribute). Recovery this time: fixed the effect with `queueMicrotask` (the documented set-state-in-effect escape), confirmed `FIX_VERIFY_EXIT=0`, re-pushed (`58db8fc1`).
+
+## [2026-06-12] A FOCUSED background tsc/lint gate can false-green — only the full `pnpm verify` is authoritative
+
+**Context:** Building GAP 5, I gated the new files with a focused background task (`tsc-check` + `eslint` on just the changed files). It reported **exit 0**. But when I then ran the full `pnpm verify`, it failed with **3 real TS errors** in the very same files: a wrong-source type import (`AdminRole` imported from `@/lib/admin/phase-access`, which re-exports it but doesn't `export` it) + two `data` possibly-undefined accesses (the `AdminActionResult` success branch is `{ ok: true; data?: T }`, so `res.data` is optional even when `ok`).
+
+**Why the focused gate lied:** a narrowed `tsc` invocation (subset of files, or a looser/seeded tsconfig, or a background task whose summary exit didn't reflect the tsc child) does NOT type-check against the full project graph the real `scripts/tsc-check.mjs` uses. It can miss cross-module export/typing errors entirely.
+
+**Rule:** the ONLY authoritative pre-push gate is the full `pnpm verify` (lint + `scripts/tsc-check.mjs` + test:unit + audit:all), exit read from the log directly. A focused/background gate is a fast smoke, never the gate. Don't commit-then-push on a focused green; run the full verify first.
+
+## [2026-06-12] `pnpm verify` failing only inside `.next/dev/types/validator.ts` = the preview dev server racing the type generator
+
+**Context:** `pnpm verify` failed with `TS1005 '?' expected` / `TS1128` at `.next/dev/types/validator.ts:2069` and `routes.d.ts` — a GENERATED file, not my code. A preview dev server (`preview_start`) was running in the same worktree.
+
+**Root cause:** the running Next dev server continuously regenerates `.next/dev/types/**`; when `tsc` reads those files mid-regeneration it sees a half-written validator → a syntax error in a file I never wrote. `tsconfig` includes `.next/dev/types/**`, so the corrupt generated file fails the typecheck.
+
+**Symptom vs signal:** the errors are ALL inside `.next/dev/types/*` (never in `app/`/`lib/`/`actions/`). That location is the tell — it's an environment race, not a code defect.
+
+**Fix:** stop the preview server (`preview_stop`), `rm -rf .next` (PowerShell `Remove-Item -Recurse -Force .next` — the bash `2>$null` redirect is a parse error in PowerShell and silently no-ops the `rmdir`), then re-run `pnpm verify`. With no dev server regenerating and a clean `.next`, the typecheck reflects only real code. (After this, the same run surfaced 3 REAL errors that the corrupt-generated-file noise had masked — so clearing `.next` is also what lets the real gate speak.)
