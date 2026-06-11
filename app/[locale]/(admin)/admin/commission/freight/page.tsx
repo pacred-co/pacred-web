@@ -16,9 +16,10 @@ import { FreightCommissionClient } from "./freight-commission-client";
  * ledger + queue are still viewable (history), so an accountant can inspect.
  *
  * RBAC: super/accounting/sales_admin + the freight roles can VIEW/approve;
- * the PAID flip is super-only (enforced in the action + the UI hides Pay for
- * non-super). The actions are the single source of truth on RBAC — this page
- * gates the broad view set and passes `canPay` for UI affordance only.
+ * the PAID flip + the tier-RATE confirm (is_owner_confirmed) are super-only
+ * (enforced in the actions + the UI hides those affordances for non-super). The
+ * actions are the single source of truth on RBAC — this page gates the broad
+ * view set and passes `canPay`/`canConfirmTiers` for UI affordance only.
  */
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,9 @@ export default async function AdminFreightCommissionPage() {
   const canPay = roles.includes("super");
   // Approve/reject = super + accounting.
   const canApprove = roles.includes("super") || roles.includes("accounting");
+  // Confirm a commission tier RATE (is_owner_confirmed) = super only (the owner
+  // sign-off gate · mirror adminSetFreightCommissionTierConfirmed).
+  const canConfirmTiers = roles.includes("super");
 
   const [stateRes, accrualsRes, withdrawalsRes] = await Promise.all([
     getFreightCommissionState(),
@@ -66,6 +70,7 @@ export default async function AdminFreightCommissionPage() {
         withdrawals={withdrawals}
         canPay={canPay}
         canApprove={canApprove}
+        canConfirmTiers={canConfirmTiers}
         loadFailed={loadFailed}
       />
     </main>

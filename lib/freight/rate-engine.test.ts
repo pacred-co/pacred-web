@@ -10,6 +10,7 @@
  */
 
 import { composeFreightQuote } from "./rate-engine";
+import { FREIGHT_MARKUP_TIERS_PCT, FREIGHT_DEFAULT_MARKUP_PCT } from "./rate-model";
 
 let pass = 0;
 let fail = 0;
@@ -108,6 +109,24 @@ assertEq("provided → chinaCostPending flips false", exwLclNet.chinaCostPending
 assertEq("chinaFreightCostThb echoed in result", exwLclNet.chinaFreightCostThb, 3000);
 assertEq("subtotalCost = local + 3000 China cost", exwLclNet.subtotalCost, exwLcl.subtotalCost + 3000);
 assertEq("profit = gross − 3000 China cost (NET)", exwLclNet.profit, exwLcl.profit - 3000);
+
+// ── (j) markup config — LIVE read (Lane-C), default = const fallback ──
+section("(j) markup config threading");
+// Omitted → echoes the code consts (identical legacy behaviour, no totals changed).
+assertEq("omitted markup tiers → const fallback", cifLcl4.markupTiersPct, [...FREIGHT_MARKUP_TIERS_PCT]);
+assertEq("omitted default markup → const fallback", cifLcl4.defaultMarkupPct, FREIGHT_DEFAULT_MARKUP_PCT);
+// Threaded config → echoed on the result (the dead-write→live-read fix).
+const cfgMarkup = composeFreightQuote({
+  mode: "sea_lcl", incoterm: "CIF", deliveryTruck: "4W",
+  markupTiersPct: [40, 30, 20], defaultMarkupPct: 18,
+});
+assertEq("configured tiers echoed", cfgMarkup.markupTiersPct, [40, 30, 20]);
+assertEq("configured default markup echoed", cfgMarkup.defaultMarkupPct, 18);
+// Empty/invalid config → falls back to the const (never breaks on an unseeded row).
+assertEq("empty tiers array → const fallback", composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", markupTiersPct: [] }).markupTiersPct, [...FREIGHT_MARKUP_TIERS_PCT]);
+assertEq("zero default markup → const fallback", composeFreightQuote({ mode: "sea_lcl", incoterm: "CIF", defaultMarkupPct: 0 }).defaultMarkupPct, FREIGHT_DEFAULT_MARKUP_PCT);
+// Markup config is REFERENCE-only — it does not move the computed sell totals.
+assertEq("markup config does NOT change subtotalSell", cfgMarkup.subtotalSell, cifLcl4.subtotalSell);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} freight rate-engine: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

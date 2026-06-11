@@ -19,6 +19,8 @@ import {
   INCOTERM_SCOPE,
   FREIGHT_VAT_PCT,
   FREIGHT_MARGIN_CAP_PER_CONTAINER,
+  FREIGHT_MARKUP_TIERS_PCT,
+  FREIGHT_DEFAULT_MARKUP_PCT,
   FREIGHT_COMMISSION,
   type DeliveryTruck,
   type SellTier,
@@ -57,6 +59,27 @@ export type FreightQuoteSpec = {
    * never gates money/commission.
    */
   marginCapPerContainerThb?: number;
+  /**
+   * The configured freight markup tiers (%) — `business_config.freight.markup_tiers_pct`
+   * (mig 0145, seeded [30,25,20,15,10]). Threaded in from the SERVER caller via
+   * getBusinessConfig (server-only — can't be read inside this pure model). Echoed
+   * back on the result (`markupTiersPct`) so the pricer/UI reflects the LIVE config
+   * rather than the hardcoded const — that's what makes the config a live read, not
+   * a dead write. Omit → falls back to the FREIGHT_MARKUP_TIERS_PCT const (identical
+   * legacy behaviour; the existing engine tests pass nothing).
+   *
+   * NOTE: the rate model carries already-marked-up `sell` numbers, so this config
+   * is REFERENCE/snapshot — it does not re-derive the line sells. Surfacing the
+   * configured tiers (vs the const) is the fix: an admin edit is now reflected
+   * everywhere the result is rendered, not silently ignored.
+   */
+  markupTiersPct?: readonly number[];
+  /**
+   * The configured default freight markup % — `business_config.freight.default_markup_pct`
+   * (mig 0145, seeded 25). Threaded from the server caller; echoed on the result
+   * (`defaultMarkupPct`). Omit → falls back to the FREIGHT_DEFAULT_MARKUP_PCT const.
+   */
+  defaultMarkupPct?: number;
 };
 
 export type FreightLineResult = {
@@ -112,6 +135,15 @@ export type FreightQuoteResult = {
    * those costs ARE modelled → profit is reliable).
    */
   chinaCostPending: boolean;
+  /**
+   * The freight markup tiers (%) actually in force for this quote — the configured
+   * `business_config.freight.markup_tiers_pct` when the server caller threaded it in,
+   * else the FREIGHT_MARKUP_TIERS_PCT const. Echoed so the pricer/UI reflects the LIVE
+   * config (the fix that turns the dead-write config into a live read).
+   */
+  markupTiersPct: readonly number[];
+  /** The default freight markup % in force — configured value or the const fallback. */
+  defaultMarkupPct: number;
   commission: {
     freight: number;
     customs: number;
@@ -134,6 +166,20 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
   const scope = INCOTERM_SCOPE[spec.incoterm] ?? ["thai_customs", "thai_transport"];
   const inScope = (s: ScopeCategory) => scope.includes(s);
   const containers = Math.max(1, spec.containers ?? 1);
+
+  // Markup config — admin-editable (business_config keys freight.markup_tiers_pct /
+  // freight.default_markup_pct, mig 0145), threaded in from the SERVER caller
+  // (getBusinessConfig is server-only). Default to the code consts so callers that
+  // pass nothing get identical legacy behaviour. Echoed on the result so the
+  // pricer/UI reflects the LIVE config (turns the dead-write config into a live read).
+  const markupTiersPct =
+    spec.markupTiersPct && spec.markupTiersPct.length > 0
+      ? spec.markupTiersPct
+      : FREIGHT_MARKUP_TIERS_PCT;
+  const defaultMarkupPct =
+    spec.defaultMarkupPct != null && spec.defaultMarkupPct > 0
+      ? spec.defaultMarkupPct
+      : FREIGHT_DEFAULT_MARKUP_PCT;
 
   const lines: FreightLineResult[] = [];
 
@@ -233,6 +279,8 @@ export function composeFreightQuote(spec: FreightQuoteSpec): FreightQuoteResult 
     marginCapThb,
     marginExceedsCap,
     chinaCostPending,
+    markupTiersPct,
+    defaultMarkupPct,
     commission: { freight: commFreight, customs: commCustoms, doc: commDoc, gross, wht, net },
   };
 }

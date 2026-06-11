@@ -8,8 +8,10 @@
  *   1. DORMANT banner — shown when commission.freight_enabled is OFF (or any
  *      seeded tier is not owner-confirmed). Explains the system records nothing.
  *   2. Tier-config view — the seeded AX-JOB rates with a "PENDING owner confirm"
- *      pill on each unconfirmed row (read-only review — the owner confirms via DB
- *      + flips the flag).
+ *      pill on each unconfirmed row. super can confirm/un-confirm a rate IN-APP
+ *      (adminSetFreightCommissionTierConfirmed · confirm-before-mutate §0f) — no
+ *      more manual SQL. Confirming a rate only blesses the VALUE; the system flag
+ *      (commission.freight_enabled) is a SEPARATE owner toggle in business-config.
  *   3. Accruals ledger — the earned-but-unbundled commission rows.
  *   4. Withdrawal queue — approve / reject / pay. Every mutation is
  *      confirm-before-mutate (§0f). The PAID flip is super-only + requires a slip.
@@ -21,12 +23,13 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BadgePercent, CheckCircle2, XCircle, Banknote, Lock, AlertTriangle } from "lucide-react";
+import { BadgePercent, CheckCircle2, XCircle, Banknote, Lock, AlertTriangle, ShieldCheck, RotateCcw } from "lucide-react";
 import { PacredDialog, DialogFooter, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import {
   adminApproveCommissionWithdrawal,
   adminRejectCommissionWithdrawal,
   adminMarkCommissionWithdrawalPaid,
+  adminSetFreightCommissionTierConfirmed,
   type CommissionAccrualRow,
   type CommissionWithdrawalRow,
   type FreightCommissionTierView,
@@ -70,6 +73,7 @@ export function FreightCommissionClient({
   withdrawals,
   canPay,
   canApprove,
+  canConfirmTiers,
   loadFailed,
 }: {
   enabled: boolean;
@@ -79,6 +83,7 @@ export function FreightCommissionClient({
   withdrawals: CommissionWithdrawalRow[];
   canPay: boolean;
   canApprove: boolean;
+  canConfirmTiers: boolean;
   loadFailed: boolean;
 }) {
   const router = useRouter();
@@ -113,6 +118,23 @@ export function FreightCommissionClient({
       const res = await adminRejectCommissionWithdrawal({ id: w.id, reason: reason.trim() });
       if (res.ok) router.refresh();
       else await alert(`ปฏิเสธไม่สำเร็จ: ${res.error}`);
+    });
+  }
+
+  async function handleConfirmTier(t: FreightCommissionTierView, confirmed: boolean) {
+    const rateText =
+      t.flatThb != null ? `${thb(t.flatThb)}/ชิป.` : t.ratePct != null ? `${t.ratePct}%` : "—";
+    const scopeText = SCOPE_LABEL[t.serviceKind] ?? t.serviceKind;
+    const ok = await confirm(
+      confirmed
+        ? `ยืนยันเรทค่าคอม "${scopeText}" ที่ ${rateText} (WHT ${t.whtPct}%)?\n\nเมื่อยืนยันแล้ว เรทนี้จะถูกนำไปใช้สะสมค่าคอมจริง (เมื่อระบบเปิดใช้งาน). นี่คือการอนุมัติ "ตัวเลขเรท" — ยังไม่ใช่การเปิดระบบ (เปิดระบบที่ business-config แยกต่างหาก).`
+        : `ยกเลิกการยืนยันเรท "${scopeText}" (${rateText})?\n\nเรทที่ยังไม่ยืนยันจะ "ไม่ถูกนำไปสะสมค่าคอม".`,
+    );
+    if (!ok) return;
+    start(async () => {
+      const res = await adminSetFreightCommissionTierConfirmed({ tierId: t.id, confirmed });
+      if (res.ok) router.refresh();
+      else await alert(`บันทึกไม่สำเร็จ: ${res.error}`);
     });
   }
 
@@ -164,9 +186,9 @@ export function FreightCommissionClient({
               <p className="text-sm font-semibold text-amber-900">ระบบ DORMANT — รอ owner ยืนยัน rate + เปิดใช้งาน</p>
               <p className="text-xs text-amber-800 max-w-3xl">
                 ระบบค่าคอมมิชชั่น Freight ถูกปิดอยู่ (business_config <code className="rounded bg-amber-100 px-1">commission.freight_enabled</code> = OFF).
-                ขณะปิด: การสะสมค่าคอม (accrual) จะ <strong>ไม่บันทึกอะไรเลย</strong>. เปิดใช้งานเมื่อ
-                owner รีวิว/ยืนยันเรทในตาราง <code className="rounded bg-amber-100 px-1">freight_commission_tiers</code>
-                (ตั้ง <code className="rounded bg-amber-100 px-1">is_owner_confirmed = true</code>) แล้วเปิดแฟล็ก.
+                ขณะปิด: การสะสมค่าคอม (accrual) จะ <strong>ไม่บันทึกอะไรเลย</strong>. เปิดใช้งาน 2 ขั้น:
+                {" "}(1) รีวิว/<strong>ยืนยันเรท</strong>แต่ละแถวในตารางด้านล่าง (ปุ่ม &quot;ยืนยันเรท&quot; — super เท่านั้น)
+                {" "}แล้ว (2) เปิดแฟล็ก <code className="rounded bg-amber-100 px-1">commission.freight_enabled</code> ที่หน้า business-config.
               </p>
             </div>
           </div>
@@ -207,11 +229,12 @@ export function FreightCommissionClient({
                 <th className="px-3 py-3">มีผลตั้งแต่</th>
                 <th className="px-3 py-3">สถานะ owner</th>
                 <th className="px-3 py-3">หมายเหตุ</th>
+                {canConfirmTiers && <th className="px-3 py-3">จัดการ</th>}
               </tr>
             </thead>
             <tbody>
               {tiers.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีเรทค่าคอม</td></tr>
+                <tr><td colSpan={canConfirmTiers ? 7 : 6} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีเรทค่าคอม</td></tr>
               )}
               {tiers.map((t) => (
                 <tr key={t.id} className="border-t border-border hover:bg-surface-alt/30">
@@ -229,6 +252,29 @@ export function FreightCommissionClient({
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted max-w-[260px]">{t.notes ?? "—"}</td>
+                  {canConfirmTiers && (
+                    <td className="px-3 py-3">
+                      {t.isOwnerConfirmed ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => handleConfirmTier(t, false)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-amber-50 px-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3 h-3" /> ยกเลิกยืนยัน
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => handleConfirmTier(t, true)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-green-600 px-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          <ShieldCheck className="w-3 h-3" /> ยืนยันเรท
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -45,6 +45,8 @@ const ROLES_VIEW = [
 const ROLES_APPROVE = ["super", "accounting"] as const;
 // PAY = super ONLY (no auto-pay · the explicit money-out gate).
 const ROLES_PAY = ["super"] as const;
+// CONFIRM-RATE = super ONLY (the owner sign-off gate on a commission tier RATE).
+const ROLES_CONFIRM_TIER = ["super"] as const;
 
 // ════════════════════════════════════════════════════════════════
 // Helpers — load the active+confirmed tiers (the rate catalogue).
@@ -744,5 +746,83 @@ export async function getFreightCommissionState(): Promise<AdminActionResult<Fre
     }));
     const anyTierPending = tiers.some((t) => t.active && !t.isOwnerConfirmed);
     return { ok: true as const, data: { enabled, tiers, anyTierPending } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// 9. adminSetFreightCommissionTierConfirmed — flip is_owner_confirmed.
+//    🔒 SUPER ONLY · the in-app owner sign-off on a commission tier RATE.
+// ════════════════════════════════════════════════════════════════
+
+const confirmTierSchema = z.object({
+  /** the freight_commission_tier row id. */
+  tierId: z.string().uuid(),
+  /** true = confirm the rate (it can now accrue); false = un-confirm. */
+  confirmed: z.boolean(),
+});
+export type AdminSetFreightCommissionTierConfirmedInput = z.infer<typeof confirmTierSchema>;
+
+/**
+ * Set is_owner_confirmed on ONE freight_commission_tier (super only). This
+ * replaces the manual `UPDATE … SET is_owner_confirmed=true` SQL the go-live
+ * needed — the owner can now confirm/un-confirm a RATE in-app.
+ *
+ * Scope: this ONLY blesses the rate VALUE (the calc filters to confirmed tiers,
+ * lib/freight-commission/calc-v2.ts). It does NOT enable the system —
+ * business_config commission.freight_enabled is a SEPARATE owner flag (toggled
+ * at /admin/settings/business-config). Confirming every tier + flipping that
+ * flag together = go-live. Idempotent: a no-op flip (already at the target
+ * value) returns ok without a redundant write.
+ */
+export async function adminSetFreightCommissionTierConfirmed(
+  input: AdminSetFreightCommissionTierConfirmedInput,
+): Promise<AdminActionResult<{ id: string; confirmed: boolean }>> {
+  const parsed = confirmTierSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { tierId, confirmed } = parsed.data;
+
+  return withAdmin<{ id: string; confirmed: boolean }>([...ROLES_CONFIRM_TIER], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Pre-read (so we audit the before-state + can short-circuit a no-op flip).
+    const { data: before, error: beforeErr } = await admin
+      .from("freight_commission_tiers")
+      .select("id, service_kind, rate_pct, flat_thb, is_owner_confirmed")
+      .eq("id", tierId)
+      .maybeSingle<{ id: string; service_kind: string; rate_pct: number | null; flat_thb: number | null; is_owner_confirmed: boolean }>();
+    if (beforeErr) {
+      console.error(`[freight-commission tier confirm lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
+    if (!before) return { ok: false, error: "ไม่พบเรทค่าคอมนี้" };
+
+    // Idempotent no-op (already at the target value) → succeed without a write.
+    if (Boolean(before.is_owner_confirmed) === confirmed) {
+      return { ok: true as const, data: { id: tierId, confirmed } };
+    }
+
+    const { data: updated, error: updErr } = await admin
+      .from("freight_commission_tiers")
+      .update({ is_owner_confirmed: confirmed })
+      .eq("id", tierId)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    if (updErr || !updated) {
+      console.error(`[freight-commission tier confirm update] failed`, { code: updErr?.code, message: updErr?.message });
+      return { ok: false, error: `update_failed: ${updErr?.message ?? "no_row"}` };
+    }
+
+    await logAdminAction(adminId, "freight_commission.tier_confirm", "freight_commission_tiers", tierId, {
+      service_kind: before.service_kind,
+      rate_pct: before.rate_pct,
+      flat_thb: before.flat_thb,
+      from: Boolean(before.is_owner_confirmed),
+      to: confirmed,
+    });
+
+    revalidatePath("/admin/commission/freight");
+    return { ok: true as const, data: { id: tierId, confirmed } };
   });
 }
