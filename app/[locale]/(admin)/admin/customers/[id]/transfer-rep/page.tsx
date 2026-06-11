@@ -25,7 +25,6 @@ export default async function TransferRepPage({
     { data: shopAgg },
     { data: forwarderAgg },
     { data: forwarderLast },
-    { data: yuanAgg },
   ] = await Promise.all([
     admin
       .from("profiles")
@@ -52,11 +51,6 @@ export default async function TransferRepPage({
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    admin
-      .from("yuan_payments")
-      .select("thb_amount")
-      .eq("profile_id", id)
-      .eq("status", "completed"),
   ]);
 
   if (!profile) notFound();
@@ -69,6 +63,25 @@ export default async function TransferRepPage({
   };
   const p = profile as unknown as Profile;
 
+  // Yuan-transfer total — read the LIVE legacy tb_payment (keyed by userid =
+  // the customer's PR member_code), NOT the rebuilt 0-row yuan_payments twin
+  // (which keyed by profile_id → always ฿0). Mirrors the sibling yuan surfaces
+  // (actions/admin/reports.ts getYuanProfitReport + /admin/yuan-payments):
+  // paythb = THB amount, paystatus='2' = อนุมัติ (approved/completed) — match
+  // the original rebuilt read's status='completed' filter.
+  let yuanRows: { paythb: number | null }[] = [];
+  if (p.member_code) {
+    const { data: yuanAgg, error: yuanErr } = await admin
+      .from("tb_payment")
+      .select("paythb")
+      .eq("userid", p.member_code)
+      .eq("paystatus", "2");
+    if (yuanErr) {
+      console.error(`[transfer-rep yuan tb_payment] failed`, { code: yuanErr.code, message: yuanErr.message, userid: p.member_code });
+    }
+    yuanRows = yuanAgg ?? [];
+  }
+
   const sum = <T extends Record<string, unknown>>(rows: T[] | null | undefined, key: keyof T) =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
 
@@ -76,8 +89,8 @@ export default async function TransferRepPage({
   const shopTotal       = sum(shopAgg, "total_thb");
   const forwarderCount  = (forwarderAgg ?? []).length;
   const forwarderTotal  = sum(forwarderAgg, "total_price");
-  const yuanCount       = (yuanAgg ?? []).length;
-  const yuanTotal       = sum(yuanAgg, "thb_amount");
+  const yuanCount       = yuanRows.length;
+  const yuanTotal       = sum(yuanRows, "paythb");
   const forwarderLastDate = (forwarderLast as { created_at?: string } | null)?.created_at ?? null;
 
   const customerDisplay = p.account_type === "juristic" && p.company_name
