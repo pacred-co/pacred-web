@@ -424,3 +424,21 @@ Three distinct things people conflate, all different:
 **Cross-links:** `lib/admin/momo-raw-helpers.ts` (`deriveTransportTypeFromCabinet` · `deriveModeFromCid` · `buildTrackingCabinetMap`) · `lib/admin/commit-momo-row-core.ts` (the fix) · `lib/integrations/momo-isolated/sync.ts` step 2.5 (the cabinet propagation join).
 
 ---
+
+## [2026-06-12] The 3-number cargo model is DATA-flowing, not status-flowing — seed forward or the editors render empty
+
+**Context:** The cargo tax-invoice platform captures THREE prices that must never conflate — SELLING (CS → invoice + VAT), COST (Pricing → PEAK stock-in), DECLARED/มูลค่าสำแดง (Docs → ใบขน). The per-line COST+DECLARED editor (`cargo-cost-line-editor.tsx`, mig 0158 columns) was structurally correct but rendered **EMPTY** in practice — it inited only from the null mig-0158 columns, and nothing seeded the cost basis the order had already computed one section above.
+
+**The insight (audit `docs/research/cargo-cost-declared-workflow-audit-2026-06-11.md` · GAP 1):** the chain is **status-flowing, not data-flowing** — every node (order → cost → declared → ใบขน → ใบกำกับ → PEAK) has the right number available, but nobody threads it forward. The fix is almost never "add a query/column"; it's **pure threading**: pass the already-loaded order figure down as an editable *seed*. Once cost is actually captured this way, the downstream gaps (declared-default, profit panel, margin-VAT, PEAK rollup) all become real — GAP 1 is "the first thread."
+
+**The auto-fill-then-editable seed pattern (reusable):**
+- Seed the draft from order data **only when the stored column is empty** (`isEmptyStored()` — null/""/0). **Stored value ALWAYS wins** (never override a real saved figure).
+- A field is "on auto" while `draft === autoSeedString` (the moment staff types, it's their override — chip drops). No extra state needed; it's derived during render.
+- Flag it ("ออโต้ — แก้ได้" chip) so staff know it's a suggestion, and **persist ONLY on Save** (confirm-before-mutate §0f). Opening + immediately saving banks the auto value — that's the intended "auto-fill then editable" behaviour, not a bug.
+- Keep the math in a **pure, tested helper** (`lib/forwarder/cargo-cost-autofill.ts`) separate from the editor — the seeds are display-only and must never touch the money path (§0e).
+
+**The cargo seed formulas (faithful to the audit · pin these):**
+- **SHOP** (tb_order ¥): `autoCostUnit = cprice` (the ¥ *selling* unit — flag it "จากราคาขาย, แก้เป็นต้นทุนจริง" so staff don't bank selling-as-cost) · `autoCostRate = tb_settings.hratecostdefault` · `autoDeclared = roundUp2(cprice × rate × qty)` (round UP — a declared/customs value should never under-state).
+- **IMPORT** (tb_forwarder_item ฿): `autoCostUnit = none` (tb_forwarder_item has only qty+CBM — no faithful per-unit cost) · `autoCostRate = hratecostdefault` · `autoDeclared = round2(fcosttotalprice × qtyShare)` where `qtyShare = lineQty/Σqty`. Note `fcosttotalprice` has an authoritative external writer (the ไอแต้ม container-cost-sheet sync) — READ it, never write (§0e dead-write trap avoidance). Inexact splits drift a satang (100/3 → 99.99) — acceptable for a per-line editable seed, not a balanced ledger; pin it in a test so a future "make-it-balance" change is a conscious decision.
+
+**Cross-links:** the 10-gap workflow audit (`cargo-cost-declared-workflow-audit-2026-06-11.md`) · `lib/forwarder/cargo-cost-autofill.ts` + its test · the cargo-acct epic master (`docs/research/cargo-acct-epic-2026-06-11/_MASTER.md`) — GAP B forwarder badge was done there; the newer audit's GAP 2 is the SHOP-side badge still missing.

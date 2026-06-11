@@ -896,3 +896,26 @@ The bare `tsc --noEmit` invocation in the CI workflow (and in `package.json` `ve
 **Why this matters next time:** every `{ cmd; echo "$?"; }` / `cmd | tee` / `cmd | tail` / `run_in_background` wrapper detaches the reported exit from the real one. The discipline (AGENTS.md §0f gate rule, phase-verify-loop) is: confirm green by **reading the log content**, not by trusting any exit the harness/wrapper hands you.
 
 **Cross-links:** AGENTS.md §0f (gate discipline) · `branch-integrate-loop` skill step 5 (`| tail` masks exit codes) · this session's recovery commit `a9db6e55`
+
+## [2026-06-12] A "stale lockfile" can be a worktree `node_modules` JUNCTION pointing at an old main-repo install
+
+**Context:** In a fresh `.claude/worktrees/*` worktree, `tsc` failed with `TS2307: Cannot find module 'ws' / 'bwip-js/node' / 'google-auth-library'` — three deps that ARE declared in `package.json`. `pnpm install` kept saying **"Already up to date"** and `pnpm install --lockfile-only` exited 0 but changed nothing. The obvious read ("the committed `pnpm-lock.yaml` is stale — missing these deps") was **WRONG**.
+
+**Symptom:** `pnpm verify` red locally on three modules; every `pnpm install` variant (`--force`, `--no-frozen-lockfile`, `--fix-lockfile`) reported up-to-date; the deps' folders genuinely absent from `node_modules`.
+
+**Root cause — two stacked facts:**
+1. The worktree had **no real `node_modules`** (a brand-new worktree never gets one). The session workaround had created a **junction**: `worktree/node_modules → C:\Users\devvork\pacred-web\node_modules` (the main repo's).
+2. The **main-repo checkout sits on an OLD commit** (e.g. `main`@`82c48ba`, dozens of commits behind `dave-pacred`) whose `package.json` predates `ws`/`bwip-js`/`google-auth-library`. So the main repo's `node_modules` legitimately lacks them, and a `pnpm install` *run from the main repo* correctly says "up to date" for the OLD package.json.
+
+The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `grep -cE '^\s+(ws|bwip-js|google-auth-library):' pnpm-lock.yaml` → 3. The lockfile was never stale; the junction just pointed at the wrong, older install.
+
+**Fix:** drop the junction (NOT the target — on Windows `cmd /c rmdir node_modules` removes a junction without touching the real folder; `Remove-Item -Recurse` on a junction in old PowerShell can recurse INTO the target — don't), then a real `pnpm install` **from the worktree** (reads the worktree's package.json + lockfile) → all three install → `tsc` clean.
+
+**Diagnostic that would have saved the detour:**
+- `ls -la node_modules` → `node_modules -> /c/.../pacred-web/node_modules` (a junction, not a dir) is the tell.
+- `git -C <main-repo> log --oneline -1` vs the worktree HEAD — if the main repo is way behind, its node_modules is the wrong basis.
+- `grep -c '<dep>:' <worktree>/pnpm-lock.yaml` BEFORE concluding "lockfile stale" — if it's there, the lockfile is fine and the problem is the install location.
+
+**Rule:** a junction'd `node_modules` inherits whatever commit the JUNCTION TARGET was installed at — not your worktree's. Before blaming the lockfile, confirm (a) node_modules is real (not a junction) and (b) the install was run against the package.json you're typechecking. For preview/typecheck in a worktree, prefer a real `pnpm install` in the worktree over a junction to a stale sibling.
+
+**Cross-links:** memory `preview_tool_anchor` (the junction workaround) · §13 stale-worktree-base rule (AGENTS.md) · this session voided the "regen pnpm-lock.yaml" owner-action-item (there was nothing to regen).
