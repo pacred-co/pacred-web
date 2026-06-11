@@ -19,6 +19,7 @@
  */
 
 import { createContext, useContext, useState } from "react";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -391,7 +392,7 @@ function SidebarHeader({
             {initial}
           </span>
         )}
-        <span className="min-w-0 flex-1">
+        <span className="admin-rail-hide min-w-0 flex-1">
           <span className="block text-sm font-semibold text-foreground truncate">{adminLabel}</span>
           {roleKey && (
             <span className="block text-[11px] text-muted truncate">{t(roleKey)}</span>
@@ -402,7 +403,7 @@ function SidebarHeader({
           : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
       </button>
       {open && (
-        <div className="mt-2 space-y-0.5">
+        <div className="admin-rail-hide mt-2 space-y-0.5">
           <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <User className="w-4 h-4" />
             <span>{t("account.profile")}</span>
@@ -516,16 +517,44 @@ export function AdminSidebar({
         border + soft shadow; active item stays in Pacred primary-red so the
         brand cue carries through.
       */}
+      {/* 2026-06-11 (ปอน · owner "ยก left sidebar ขึ้นไปทับ nav bar"): top-0 (เดิม top-14)
+          + z-[70] (เหนือ header z-[60]) → แถบข้างพาดขึ้นถึงบนสุด คลุมทับมุมซ้ายของ nav bar
+          (โลโก้ PR Admin อยู่มุมบนซ้าย · แถบแดงเหลือเฉพาะฝั่งขวาที่มีปุ่ม EN/theme). */}
+      {/* owner 2026-06-11 "ไม่เอาเส้นขอบขาวคั่น nav bar กับ sidebar · เป็นเนื้อเดียวกัน":
+          เอา border-r (เส้นขาวขอบขวา) ออก เหลือเงานุ่มๆ → แถบแดงด้านบนต่อเนื่องกับ nav bar. */}
       <aside
-        className={`fixed top-14 bottom-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-white text-foreground border-r border-border shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]
+        className={`admin-sidebar fixed top-0 bottom-0 left-0 z-[70] w-64 flex flex-col transition-transform lg:translate-x-0
+          bg-white text-foreground shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        {/* Brand */}
-        <div className="px-4 pt-4 pb-3 border-b border-border">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-lg font-black tracking-tight text-primary-600">PR</h2>
-            <span className="text-[10px] uppercase tracking-widest text-muted">Admin</span>
+        {/* Brand — red bar เนื้อเดียวกับ nav bar (ไม่มีเส้นขอบขาวคั่น). โลโก้ขนาดกลาง (ไม่เต็มแถบ):
+            F (PRADMIN) ตอนกาง · H (PR ย่อ) ตอนพับ rail · object-cover ตัด whitespace ของไฟล์.
+            owner 2026-06-11: "รูปเล็กลง · ไม่เอาเส้นขอบขาว · เนื้อเดียวกับ nav bar". */}
+        {/* owner 2026-06-11 "PRADMIN ตอนเต็ม ชิดซ้าย · ไม่โดนตัด/ทับ": F โลโก้ชิดซ้าย (ml-4)
+            + กล่องสูง h-12 (เดิม h-9 ทำให้ object-cover ตัดหัว A badge ทิ้ง) → โลโก้เต็มไม่โดนกิน.
+            H (rail) ยังกึ่งกลาง (mx-auto). */}
+        <div className="h-14 shrink-0 bg-[#B91C1C] flex items-center overflow-hidden">
+          {/* F — full logo (expanded) · ชิดซ้าย · กล่องสูงพอให้โลโก้ไม่โดนตัด */}
+          <div className="admin-rail-hide relative h-12 w-[150px] ml-4">
+            <Image
+              src="/images/hero-section/icon-draf/LOGOADMINPACREDF.png"
+              alt="PR Admin"
+              fill
+              sizes="150px"
+              priority
+              className="object-cover object-center"
+            />
+          </div>
+          {/* H — compact logo (rail collapsed) · กึ่งกลาง */}
+          <div className="admin-rail-only relative h-9 w-9 mx-auto">
+            <Image
+              src="/images/hero-section/icon-draf/LOGOADMINPACREDH.png"
+              alt="PR"
+              fill
+              sizes="36px"
+              priority
+              className="object-cover object-center"
+            />
           </div>
         </div>
 
@@ -568,7 +597,7 @@ export function AdminSidebar({
         </nav>
         </AdminAccordionCtx.Provider>
 
-        <div className="px-2.5 py-3 border-t border-border space-y-1">
+        <div className="admin-rail-hide px-2.5 py-3 border-t border-border space-y-1">
           {/* G4 — super-only escape hatch (Wave 26 · 2026-05-28 ดึก). Lets a
               super admin flip between their role's slim menu and the full
               CEO toolbox without re-login. Non-super never sees this row. */}

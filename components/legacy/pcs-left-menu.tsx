@@ -227,19 +227,21 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/wallet-shop">{t("shopWallet")}</CardSubLink>
           </MenuRow>
 
-          {/* กระเป๋าสตางค์เครดิต — credit users only */}
-          {data.creditUser && (
-            <MenuRow
-              iconKey="credit"
-              label={t("creditWallet")}
-              badge={<MenuBadge n={data.countFCreditError} />}
-            >
-              <CardSubLink href="/wallet-credit">{t("accountStatement")}</CardSubLink>
-              <CardSubLink href="/service-import?q=c">
-                <SubLabel label={t("payCredit")} n={data.countFCreditError} />
-              </CardSubLink>
-            </MenuRow>
-          )}
+          {/* กระเป๋าสตางค์เครดิต — owner 2026-06-11 "เอากลับมา": แสดงเสมอ
+              (เดิม legacy PCS gate ด้วย data.creditUser = เฉพาะลูกค้าที่มีแถว tb_credit;
+              บัญชี non-credit จะมองไม่เห็นเมนูนี้). หน้า /wallet-credit ปลอดภัยสำหรับ
+              non-credit (โชว์วงเงิน ฿0 · ไม่ redirect/error). กลับไป gate ได้ด้วยการ
+              ครอบ {data.creditUser && (…)} เหมือนเดิมถ้าต้องการ faithful. */}
+          <MenuRow
+            iconKey="credit"
+            label={t("creditWallet")}
+            badge={<MenuBadge n={data.countFCreditError} />}
+          >
+            <CardSubLink href="/wallet-credit">{t("accountStatement")}</CardSubLink>
+            <CardSubLink href="/service-import?q=c">
+              <SubLabel label={t("payCredit")} n={data.countFCreditError} />
+            </CardSubLink>
+          </MenuRow>
 
           {/* ประวัติตัวแทน — agent codes only */}
           {isAgent && (

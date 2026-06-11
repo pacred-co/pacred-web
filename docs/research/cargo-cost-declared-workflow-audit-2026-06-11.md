@@ -1,0 +1,29 @@
+# Cargo COST → DECLARED → ใบขน → ใบกำกับ → ACCOUNTING + customer VAT-choice — workflow audit (2026-06-11)
+
+> Owner directive: the cost+declared section must AUTO-FILL from the order data above (then editable); the CS→Pricing→DOCS→Accounting handoff must close; the customer VAT/NON-VAT doc choice must be visible + drive issuance; income/expense must be clear. "ไล่เก็บปิด gab workflow มาดีๆ … ให้หมด."
+> Method: 5 parallel code-auditors + synthesis, file:line-verified against live source.
+
+## TL;DR — the one-line break
+**The 3-number model (SELLING/COST/DECLARED) is structurally sound** — read from the right authoritative columns, and the customer doc-choice (`tax_doc_pref`, mig 0127) drives the VAT base for SHOP + IMPORT. **But the chain is status-flowing, not data-flowing:** numbers exist at each node; nobody threads them forward. The per-order cost editor renders EMPTY because it inits only from the null mig-0158 columns and nothing seeds the cost basis the order already computed right above it. **GAP 1 (auto-fill) is the first thread — the declared-default, profit view, margin-VAT, and PEAK rollup all become real once cost is actually captured.**
+
+## The 10 gaps (ranked · auto-fill first)
+1. **★ GAP 1 — cost/declared AUTO-FILL** (the owner ask · pure threading, no new query/DB write). Editor `components/admin/cargo-cost-line-editor.tsx:96-107` inits only from null columns. Add optional `autoCostUnit/autoCostRate/autoDeclared` props → useState falls back to auto* when stored is null/0 → "ออโต้ — แก้ได้" chip → persist only on Save.
+   - SHOP (`shop-cost-section.tsx`): autoCostUnit=`cprice`, autoCostRate=`tb_settings.hratecostdefault`, autoDeclared=`roundUp2(cprice*rate*camount)`.
+   - IMPORT (`forwarder-cost-section.tsx`): autoCostRate=hratecostdefault, autoDeclared=`fcosttotalprice*(productqty/Σqty)`, cost_unit blank (no faithful per-unit source — tb_forwarder_item has qty+CBM only).
+2. **★ GAP 2 — shop admin detail shows the doc choice.** `service-orders/[hNo]/legacy-view.tsx` renders NO `<TaxDocBadge>` (import HAS it: `forwarders/[fNo]/page.tsx:558-565`). Add `tax_doc_pref`(+`fusercompany`) to the select + render the existing `components/admin/tax-doc-badge.tsx` + `JuristicWhtChip`. No new component.
+3. **★ GAP 9 — income/expense/profit panel** (bundle w/ GAP 1). `fcosttotalprice` is a DEAD-READ (`forwarders/[fNo]/page.tsx:258`, never rendered); shop has the `profit` math (`legacy-view.tsx:233`) but no panel. Render SELLING/COST/PROFIT on both detail pages (`forwarderRowProfit()` `reports-profit-types.ts:129`).
+4. **GAP 3 — YUAN doc-choice never captured.** `service-payment/add` has zero `CartTaxDocPref` → every yuan order = `'none'` → mig 0140 + `issueYuanTaxInvoice` stranded. Mount the picker + persist `tax_doc_*`.
+5. **GAP 4 — cost-save → workspace handoff.** `setShop/ForwarderItemCost` never advances `tb_cargo_taxdoc_job.pricing_status`; the 4-role workspace (`/admin/pricing/taxdoc-workspace`) is manual toggles. Advance pricing_status on save + cross-link order↔job.
+6. **GAP 5 — CS HS-first.** HS lives only in the Pricing-gated cost form; CS can't enter it first (the ground-truth flow: CS asks China warehouse → enters HS → then Pricing costs). Add an HS-only field gated to sales/CS; Pricing seeds from it.
+7. **GAP 6 — cargo ใบขน PDF (+ invoice/packing).** Capture WORKS (`cargo-declarations.ts:149-210`) but the only ใบขน PDF route is hard-keyed to `freight_shipment_id` → empty for cargo. Add a cargo branch + download button.
+8. **GAP 7 — auto-enroll into the taxdoc workspace** (currently 100% manual "เปิดงาน").
+9. **GAP 8 — wire `computeMarginVat`** (DEAD function, zero callers · `tax-doc-mode.ts:231`) into a profit surface for the NON-VAT 7%-on-margin Pacred owes (gross profit now captured via GAP 1).
+10. **GAP 10 — quick-add forwarder modal omits the doc picker** (silent default).
+
+## ✅ Already WORKS (don't rebuild)
+- Customer doc-mode pick @ shop + import order entry (mig 0127); forwarder ใบกำกับ issuance honors doc-choice + correct VAT base (live, mig 0129); import detail shows the doc badge + WHT chip + inline editor; the taxdoc-workspace spine + stage RBAC + 3-number side-by-side; PEAK export rolls up SELLING+COST+DECLARED+GL (code-complete; GL codes = owner data, mig 0177 seed exists). ภูม's `lib/forwarder/import-duty-vat.ts` (mig 0178) adds the อากร/VAT-inclusive rollup.
+
+## 🔒 Owner-policy gated (banner in-UI, don't silently no-op)
+flip `tax_invoice.shop_yuan_enabled` (mig 0152) after money-test · accountant fills `peak.gl_accounts` (mig 0177) → flip `glAccounts.pending=false` · sign-off on the ใบขน VAT base (`tax-doc-mode.ts:187-195`).
+
+— full per-lane finding archived in the 2026-06-11 cargo-cost-declared workflow audit run.

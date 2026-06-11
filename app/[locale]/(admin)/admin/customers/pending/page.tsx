@@ -23,8 +23,16 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportCustomersPendingAll } from "@/actions/admin/export/customers-pending";
 import { TbCustomerBulkBar, TbCustomerRowCheckbox, TbCustomerRejectButton } from "./tb-bulk-bar";
+import { getCrmReps, getCrmCsReps } from "@/actions/admin/crm";
+import type { CrmRep, CrmCsRep } from "@/lib/admin/crm-types";
+import { AssignRepCell } from "./assign-rep-cell";
 
 export const dynamic = "force-dynamic";
+
+// Senior roles allowed to (re)assign the owning sales/CS rep — mirrors
+// ROUTING_ROLES in actions/admin/crm.ts (the actions enforce this server-side;
+// we gate the UI to match so non-senior roles see a read-only hint).
+const ASSIGN_ROLES = ["super", "manager", "sales_admin"];
 
 type Row = {
   userID: string;
@@ -35,6 +43,8 @@ type Row = {
   userCompany: string | null;
   userRegistered: string | null;
   userActive: string | null;
+  adminIDSale: string | null;
+  adminIDCS: string | null;
 };
 
 export default async function AdminCustomersPendingPage({
@@ -44,7 +54,10 @@ export default async function AdminCustomersPendingPage({
 }) {
   // W-1 (gap-admin H-1/H-7): role-pin (was bare requireAdmin() — only
   // proved "some admin"). Pending-customer queue lists customer PII.
-  await requireAdmin(["ops", "sales_admin", "accounting"]);
+  const { roles } = await requireAdmin(["ops", "sales_admin", "accounting"]);
+  // super is implicit in requireAdmin (bypasses the role list) but won't
+  // appear in `roles`; treat it as always-allowed to assign.
+  const canAssign = roles.includes("super") || roles.some((r) => ASSIGN_ROLES.includes(r));
 
   const sp = await searchParams;
   const page = parsePage(sp.page);
@@ -54,7 +67,7 @@ export default async function AdminCustomersPendingPage({
   const { data: customers, count, error: customersErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userTel,userEmail,userCompany,userRegistered,userActive",
+      "userID,userName,userLastName,userTel,userEmail,userCompany,userRegistered,userActive,adminIDSale,adminIDCS",
       { count: "exact" },
     )
     // P1-17 (ADR-0019 D-C transitional): legacy migrated pending = userActive='',
@@ -69,6 +82,25 @@ export default async function AdminCustomersPendingPage({
 
   const rows = ((customers ?? []) as Row[]);
   const total = count ?? 0;
+
+  // Assignable sales + CS pools — loaded ONCE here, passed to each row's
+  // AssignRepCell (reuses the CRM actions; no new assignment logic). Only
+  // fetched when the operator can actually assign (saves 2 queries otherwise).
+  let reps: CrmRep[] = [];
+  let csReps: CrmCsRep[] = [];
+  let repsGateNote: string | null = null;
+  let csGateNote: string | null = null;
+  if (canAssign && rows.length > 0) {
+    const [repsRes, csRes] = await Promise.all([getCrmReps(), getCrmCsReps()]);
+    if (repsRes.ok && repsRes.data) {
+      reps = repsRes.data.reps;
+      repsGateNote = repsRes.data.gateNote;
+    }
+    if (csRes.ok && csRes.data) {
+      csReps = csRes.data.reps;
+      csGateNote = csRes.data.gateNote;
+    }
+  }
 
   // CSV export — columns mirror the <thead> 1:1 (รหัสสมาชิก / ชื่อ-บริษัท /
   // เบอร์โทร / อีเมล / ประเภท / วันที่สมัคร). The "จัดการ" column is action-only.
@@ -150,6 +182,9 @@ export default async function AdminCustomersPendingPage({
                   วันที่สมัคร
                 </th>
                 <th className="px-4 py-3 font-semibold text-muted text-xs uppercase tracking-wide">
+                  ผู้ดูแล (เซล / CS)
+                </th>
+                <th className="px-4 py-3 font-semibold text-muted text-xs uppercase tracking-wide">
                   จัดการ
                 </th>
               </tr>
@@ -157,7 +192,7 @@ export default async function AdminCustomersPendingPage({
             <tbody className="divide-y divide-border">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted">
                     ไม่มีสมาชิกรอ Approve · ทุกรายอนุมัติเรียบร้อย
                   </td>
                 </tr>
@@ -181,7 +216,20 @@ export default async function AdminCustomersPendingPage({
                     <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
                       {personalName}
                     </td>
-                    <td className="px-4 py-3 text-muted">{c.userTel ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted">
+                      {c.userTel ? (
+                        // One-tap call-back ("โทรกลับ") for sales — owner directive.
+                        <a
+                          href={`tel:${c.userTel.replace(/[^\d+]/g, "")}`}
+                          className="inline-flex items-center gap-1 text-primary-600 hover:underline"
+                          title={`โทรกลับ ${c.userTel}`}
+                        >
+                          📞 {c.userTel}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-muted max-w-[160px] truncate">
                       {c.userEmail || "—"}
                     </td>
@@ -197,7 +245,19 @@ export default async function AdminCustomersPendingPage({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-muted text-xs">{date}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 align-top">
+                      <AssignRepCell
+                        userid={c.userID}
+                        currentRepLegacyId={c.adminIDSale?.trim() || null}
+                        currentCsAdminId={c.adminIDCS?.trim() || null}
+                        reps={reps}
+                        csReps={csReps}
+                        repsGateNote={repsGateNote}
+                        csGateNote={csGateNote}
+                        canAssign={canAssign}
+                      />
+                    </td>
+                    <td className="px-4 py-3 align-top">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <Link
                           href={`/admin/customers/${c.userID}`}

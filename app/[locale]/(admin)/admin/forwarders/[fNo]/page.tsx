@@ -3,6 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+// 2026-06-11 (ปอน · owner "พอมาหน้านี้พับ sidebar เหลือไอคอน · hover แล้วกางออก"):
+// this page is wide (the Excel-style item/price tables) → collapse the admin
+// sidebar to an icon rail while mounted (page-scoped via body class).
+import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -39,6 +43,7 @@ import {
   EditAmountCountField,
   EditPalletField,
   EditTrackingChnField,
+  EditCabinetField,
   EditDateCloseField,
   EditCoverField,
   EditTaxDocModeField,
@@ -507,6 +512,8 @@ async function tryRenderTbForwarder(
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
+      {/* collapse the admin sidebar to an icon rail while this wide page is open */}
+      <CollapseAdminSidebar />
       {/* ── breadcrumb (outside the card · same as customer page) ── */}
       <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
@@ -693,12 +700,7 @@ async function tryRenderTbForwarder(
             <EditTrackingChnField fId={r.id} ftrackingchn={r.ftrackingchn} fstatus={r.fstatus} />
             <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
             <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{chinaWarehouseDisplay}</p>
-            <p className="text-foreground">
-              <b className="font-semibold">{r.fcabinet_locked === true ? "เลขที่ตู้ 🔒 : " : "เลขที่ตู้ : "}</b>
-              {r.fcabinetnumber ? (
-                <Link href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`} className="text-primary-600 hover:underline">{r.fcabinetnumber}</Link>
-              ) : "—"}
-            </p>
+            <EditCabinetField fId={r.id} fcabinetnumber={r.fcabinetnumber} fcabinetLocked={r.fcabinet_locked === true} />
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
@@ -724,38 +726,12 @@ async function tryRenderTbForwarder(
           </div>
         </div>
 
-        {/* ── รายการสินค้า (breakdown table) ── */}
+        {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php). owner 2026-06-11:
+           "ยกฟอร์มสถานะขึ้นบนรายการสินค้า · ฟอร์มราคา (pricing@4) ให้ต่อจากรายการสินค้า แยกกัน"
+           → <ForwarderStatusWorkflow> รับ รายการสินค้า เป็น children แล้ว render:
+           [ฟอร์มสถานะ+หมายเหตุ] → [รายการสินค้า] → [ฟอร์มเงื่อนไข pricing/tracking/credit]. ── */}
         <hr className="my-4 border-t border-dashed border-border" />
-        <h4 className="text-base md:text-lg font-bold text-red-600">
-          รายการสินค้า
-          {r.reforder && r.reforder !== "" && (
-            <Link
-              href={`/admin/service-orders/${r.reforder}`}
-              className="ml-2 text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
-            >
-              ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
-            </Link>
-          )}
-        </h4>
-        <div className="mt-3">
-          <ForwarderImportItemsTable r={r} />
-        </div>
-
-        {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
-           capture, the SHOP equivalent of ShopOrderCostSection on
-           /admin/service-orders/[hNo]. Self-gated (super/accounting/pricing edit ·
-           others read-only). Writes ONLY the per-line cost columns · NEVER the
-           selling price / status / customer notify (AGENTS.md §0e). Lane A 2026-06-11
-           — was built but unmounted (§0d unreachable). ── */}
-        <div className="mt-4">
-          <ForwarderCostSection fId={r.id} reforder={r.reforder} />
-        </div>
-
-        {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php): the sub-forms
-           below the status <select> change with the picked status — pricing@4 ·
-           เลขพัสดุไทย+ส่งแล้ว@≥6 · เครดิต. ปอน 2026-06-11. ── */}
-        <hr className="my-4 border-t border-dashed border-border" />
-        <h4 className="text-base md:text-lg font-bold text-red-600 mb-3">อัปเดตสถานะรายการ · หมายเหตุ</h4>
+        <h4 className="text-base md:text-lg font-bold text-red-600 mb-3">อัปเดตสถานะรายการ</h4>
         <ForwarderStatusWorkflow
           fId={r.id}
           fNo={String(r.id)}
@@ -767,7 +743,33 @@ async function tryRenderTbForwarder(
           isCredit={(r.fcredit ?? "").trim() === "1"}
           amountEstimate={creditEstimate}
           pricing={pricingInit}
-        />
+        >
+          {/* ── รายการสินค้า (breakdown table) — คั่นกลางระหว่างฟอร์มสถานะ + ฟอร์มราคา ── */}
+          <hr className="my-4 border-t border-dashed border-border" />
+          <h4 className="text-base md:text-lg font-bold text-red-600">
+            รายการสินค้า
+            {r.reforder && r.reforder !== "" && (
+              <Link
+                href={`/admin/service-orders/${r.reforder}`}
+                className="ml-2 text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
+              >
+                ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
+          </h4>
+          <div className="mt-3">
+            <ForwarderImportItemsTable r={r} />
+          </div>
+
+          {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
+             capture (Lane A 2026-06-11 · was built-but-unmounted §0d). Self-gated
+             super/accounting/pricing · writes ONLY the cost columns, never the
+             selling price / status / customer notify (§0e). Placed with the items
+             it annotates, inside ปอน's status-workflow restructure. ── */}
+          <div className="mt-4">
+            <ForwarderCostSection fId={r.id} reforder={r.reforder} />
+          </div>
+        </ForwarderStatusWorkflow>
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}

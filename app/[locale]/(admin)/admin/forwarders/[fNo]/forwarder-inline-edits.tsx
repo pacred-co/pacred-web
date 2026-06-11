@@ -53,12 +53,14 @@ import {
   adminUpdateForwarderAmountCount,
   adminUpdateForwarderPallet,
   adminUpdateForwarderTrackingChn,
+  adminUpdateForwarderCabinet,
   adminUpdateForwarderDateToThai,
   adminReassignForwarderOwner,
   adminAddForwarderImage,
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
 } from "@/actions/admin/forwarders-field-edits";
+import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
@@ -1190,6 +1192,45 @@ export function EditTrackingChnField({ fId, ftrackingchn, fstatus }: { fId: numb
   );
 }
 
+/** เลขที่ตู้ · fcabinetnumber — inline edit (owner 2026-06-11 "เพิ่มปุ่มแก้ไข · แก้เลขตู้ตรงนั้น
+    ได้เลย"). แก้เฉพาะเลขตู้ (ไม่เปลี่ยนสถานะ) · ยังลิงก์ไป /admin/report-cnt เหมือนเดิม. */
+export function EditCabinetField({ fId, fcabinetnumber, fcabinetLocked }: { fId: number; fcabinetnumber: string | null; fcabinetLocked?: boolean }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [cabinetVal, setCabinetVal] = useState<string>(fcabinetnumber ?? "");
+  const cur = (fcabinetnumber ?? "").trim();
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label={fcabinetLocked ? "เลขที่ตู้ 🔒" : "เลขที่ตู้"}
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          cur !== ""
+            ? <Link href={`/admin/report-cnt/${encodeURIComponent(cur)}`} className="text-primary-600 hover:underline font-mono break-all">{fcabinetnumber}</Link>
+            : <span className="text-muted">—</span>
+        }
+      >
+        {(close) => (
+          <>
+            <input type="text" value={cabinetVal} onChange={(e) => setCabinetVal(e.target.value)} maxLength={300}
+              placeholder="GZE-2026-001 / GZS..." className={inputCls} />
+            <p className="text-[10px] text-muted">แก้เฉพาะเลขตู้ (ไม่เปลี่ยนสถานะ) · เว้นว่าง = ล้างเลขตู้</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={pending || cabinetVal.trim() === cur} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderCabinet({ fId, cabinet: cabinetVal.trim() }), close)}>บันทึก</button>
+              <button type="button" disabled={pending} className={btnCancel}
+                onClick={() => { setCabinetVal(fcabinetnumber ?? ""); close(); }}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
 /** รูปแบบขนส่ง จีน-ไทย · PCS L1458 — ftransporttype. */
 export function EditTransportTypeField({ fId, ftransporttype }: { fId: number; ftransporttype: string | null }) {
   const { pending, err, run } = useEditor();
@@ -1372,10 +1413,13 @@ export function EditCoverField({ fId, images }: { fId: number; images: Forwarder
       else setLocalErr(res.error ?? "อัปโหลดไม่สำเร็จ");
     });
   }
-  function onDelete(key: string) {
+  // 2026-06-11 (ปอน · owner "กดแล้วรูปไม่หาย"): confirm() ต้องอยู่ "นอก" startTransition
+  // — เรียก confirm (async dialog ที่รอ user คลิก) ข้างใน transition ทำให้ dialog ไม่เด้ง
+  // → ลบไม่ทำงาน. ถาม-ยืนยันก่อน แล้วค่อย startTransition ทำ mutation (แบบเดียวกับ onSaveAll).
+  async function onDelete(key: string) {
     setLocalErr(null);
+    if (!(await confirm("ลบรูปนี้ออกจากแกลเลอรี?"))) return;
     startTransition(async () => {
-      if (!(await confirm("ลบรูปนี้ออกจากแกลเลอรี?"))) return;
       const res = await adminRemoveForwarderImage({ fId, imageKey: key });
       if (res.ok) router.refresh();
       else setLocalErr(res.error ?? "ลบไม่สำเร็จ");

@@ -79,6 +79,7 @@ function buildMenu(t: Translator): Item[] {
         {
           items: [
             { label: t("aboutPacred"), href: "/about" },
+            { label: t("ourWork"),     href: "/our-work" },
             { label: t("news"),        href: "/news" },
             { label: t("knowledge"),   href: "/knowledge" },
             { label: t("faq"),         href: "/faq" },

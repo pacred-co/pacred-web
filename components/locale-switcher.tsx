@@ -3,6 +3,22 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter, usePathname } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
+import { getReviewBySlugOrId, reviewSlug } from "@/lib/reviews/catalog";
+
+/**
+ * Translate a localized-slug path to the target locale's slug so switching
+ * language on a `/our-work/[slug]` page swaps the Thai ⇆ English slug
+ * (ปอน 2026-06-11 · owner "url sub en ไม่เปลี่ยนเป็นภาษาอังกฤษตามแพทเทิร์น").
+ * Other routes share one slug across locales → returned unchanged.
+ */
+function localizePath(pathname: string, nextLocale: "th" | "en"): string {
+  const m = pathname.match(/^\/our-work\/(.+)$/);
+  if (m) {
+    const review = getReviewBySlugOrId(m[1]);
+    if (review) return `/our-work/${reviewSlug(review, nextLocale)}`;
+  }
+  return pathname;
+}
 
 function FlagTH({ className }: { className?: string }) {
   return (
@@ -43,7 +59,7 @@ export function LocaleSwitcher({ variant = "default" }: { variant?: "default" | 
   const nextLocale = locale === "th" ? "en" : "th";
 
   function handleSwitch() {
-    router.replace(pathname, { locale: nextLocale });
+    router.replace(localizePath(pathname, nextLocale), { locale: nextLocale });
   }
 
   const styles =
