@@ -29,7 +29,7 @@
  *   tb_wallet_hs      — date, status ('1'=รอ '2'=อนุมัติ '3'=ปฏิเสธ),
  *                       amount (>0 deposit, <0 withdraw), userid
  *   tb_cnt            — cntstatus ('1'=รอจ่าย), cntamount, date
- *   tb_settings       — rgdefault (เรทสั่งซื้อ), rsdefault (sale), rpdefault (โอน)
+ *   tb_settings       — hratecostdefault (เรทสั่งซื้อ/ต้นทุน), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
@@ -155,8 +155,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwarder6Count, forwarder62Count,
     containersInTransitRows,
   ] = await Promise.all([
-    admin.from("tb_settings").select("rgdefault,rsdefault,rpdefault").eq("id", 1).maybeSingle<{
-      rgdefault: number | string | null;
+    admin.from("tb_settings").select("hratecostdefault,rsdefault,rpdefault").eq("id", 1).maybeSingle<{
+      hratecostdefault: number | string | null;
       rsdefault: number | string | null;
       rpdefault: number | string | null;
     }>(),
@@ -227,10 +227,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
   // Settings rates — default to 5.00 (parity with legacy default constants
-  // when tb_settings row id=1 is missing). rgdefault = เรทสั่งซื้อ;
-  // rsdefault = เรท Sale (cost); rpdefault = เรทโอน.
+  // when tb_settings row id=1 is missing). "เรทสั่งซื้อ" = the ฝากสั่ง buy/cost
+  // rate = hratecostdefault (เรทฝากสั่งสินค้าต้นทุน on /admin/settings; 4.91 prod).
+  // NOTE: rgdefault is a DEAD legacy column (0.00 on prod, never set) — do NOT
+  // use it for the chip. rsdefault = เรท Sale; rpdefault = เรทโอน.
   const settingsRow = settings.data;
-  const rateShop     = Number(settingsRow?.rgdefault ?? 5);
+  const rateShop     = Number(settingsRow?.hratecostdefault ?? 5);
   const rateSale     = Number(settingsRow?.rsdefault ?? 5);
   const ratePayment  = Number(settingsRow?.rpdefault ?? 5);
 
