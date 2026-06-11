@@ -36,6 +36,118 @@ export function deriveTransportTypeFromMomoRaw(raw: unknown): "1" | "2" {
   return "1";
 }
 
+// ────────────────────────────────────────────────────────────
+// momoRawDisplay — a human-readable view-model of a MOMO raw blob
+// (ภูม flag 2026-06-11). The /api-forwarder-momo Sync-Preview table
+// surfaces the important MOMO fields as columns + a full readable detail
+// so staff can cross-check every value before commit — instead of squinting
+// at the raw JSON. Pure (no server-only) so the client preview table imports
+// it directly; unit-tested in momo-raw-helpers.test.ts.
+// ────────────────────────────────────────────────────────────
+
+/** MOMO `ship_by` → Thai label. */
+export const MOMO_SHIP_BY_TH: Record<string, string> = {
+  ship: "เรือ",
+  car:  "รถ",
+  air:  "เครื่องบิน",
+};
+
+/** The MOMO warehouse lifecycle, in order, with Thai labels (keys = status_date.*). */
+export const MOMO_PHASE_ORDER: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "waiting",        label: "รอเข้าโกดังจีน" },
+  { key: "kodang",         label: "เข้าโกดังจีน" },
+  { key: "mergebox",       label: "รวมกล่อง/รวมตู้" },
+  { key: "wooden_create",  label: "ตีลังไม้" },
+  { key: "prepare_export", label: "เตรียมออก (ขึ้นรอบ)" },
+  { key: "exported",       label: "ออกจากจีน → มาไทย" },
+];
+
+export type MomoRawDisplay = {
+  userCode:     string;       // MOMO user_code (digits) — e.g. "10601"
+  userGroup:    string;       // member prefix — e.g. "PR"
+  memberCode:   string;       // userGroup + userCode — e.g. "PR10601"
+  statusCode:   number | null;// MOMO numeric lifecycle status — e.g. 7
+  tracking:     string;       // เลขพัสดุจีน
+  shipBy:       string;       // raw "ship"/"car"/"air"
+  shipByLabel:  string;       // Thai label, falls back to the raw string
+  productType:  string;       // raw `type` — e.g. "fda" (กลุ่มต้องขอ อย.)
+  cgNo:         string;       // CG_NO — เลขพัสดุย่อยจีน
+  containerNo:  string;       // เลขตู้/รอบ
+  sackNo:       string;       // เลขกระสอบรวม
+  sackSize:     string;       // ขนาดกระสอบ
+  weight:       number;       // kg
+  cbm:          number;       // คิว
+  width:        number;
+  length:       number;
+  height:       number;
+  qty:          number;       // quantity
+  extraCost:    number;       // extra_cost
+  woodenCreate: boolean;      // ตีลังไม้แล้ว?
+  woodenInfo:   string;       // รายละเอียดลังไม้
+  images:       string[];     // รูปพัสดุที่โกดังจีน
+  createdDate:  string;       // MOMO created_date
+  updatedDate:  string;       // MOMO updated_date
+  /** Ordered lifecycle phases with their timestamps (null when not reached). */
+  phases:       Array<{ key: string; label: string; at: string | null }>;
+};
+
+/**
+ * Build a readable display view-model from a MOMO raw blob. Every field is
+ * read defensively (missing / wrong-typed → empty/zero), so a partial or
+ * malformed raw never throws. The MOMO internal `_id` is intentionally NOT
+ * surfaced (it carries no operational meaning for staff).
+ */
+export function momoRawDisplay(raw: unknown): MomoRawDisplay {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
+  const numOr0 = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+    return 0;
+  };
+
+  const metrics   = extractMetricsFromMomoRaw(raw);
+  const shipBy    = str(r.ship_by).toLowerCase();
+  const userCode  = str(r.user_code);
+  const userGroup = str(r.user_group);
+
+  const sd = (r.status_date && typeof r.status_date === "object" ? r.status_date : {}) as Record<string, unknown>;
+  const phases = MOMO_PHASE_ORDER.map((p) => {
+    const at = str(sd[p.key]).trim();
+    return { key: p.key, label: p.label, at: at.length > 0 ? at : null };
+  });
+
+  const images = Array.isArray(r.images) ? r.images.filter((x): x is string => typeof x === "string") : [];
+
+  return {
+    userCode,
+    userGroup,
+    memberCode:   userGroup && userCode ? `${userGroup}${userCode}` : userCode || userGroup,
+    statusCode:   typeof r.status === "number" ? r.status : (str(r.status) ? Number(str(r.status)) : null),
+    tracking:     str(r.tracking),
+    shipBy,
+    shipByLabel:  MOMO_SHIP_BY_TH[shipBy] ?? (shipBy || "—"),
+    productType:  str(r.type),
+    cgNo:         str(r.CG_NO),
+    containerNo:  str(r.container_no),
+    sackNo:       str(r.sack_no),
+    sackSize:     str(r.sack_size),
+    weight:       metrics.weight,
+    cbm:          metrics.cbm,
+    width:        metrics.width,
+    length:       metrics.length,
+    height:       metrics.height,
+    qty:          metrics.qty,
+    extraCost:    numOr0(r.extra_cost),
+    woodenCreate: r.wooden_create === true,
+    woodenInfo:   str(r.wooden_info),
+    images,
+    createdDate:  str(r.created_date),
+    updatedDate:  str(r.updated_date),
+    phases,
+  };
+}
+
 /** Package metrics extracted from a MOMO raw blob. */
 export type MomoMetrics = {
   weight: number;

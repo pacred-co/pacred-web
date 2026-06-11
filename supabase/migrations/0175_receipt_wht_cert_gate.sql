@@ -1,5 +1,6 @@
 -- ════════════════════════════════════════════════════════════
--- 0173 · ใบเสร็จ 50-ทวิ gate — lock customer print until the WHT cert
+-- 0175 · ใบเสร็จ 50-ทวิ gate — lock customer print until the WHT cert
+--        (renumbered 0173→0175: dave-pacred took 0173/0174 first · 2026-06-11)
 --        is uploaded AND admin-approved (ภูม flag 2026-06-10)
 -- ════════════════════════════════════════════════════════════
 -- Rule (owner via ภูม): a juristic customer who withholds 1% CANNOT print /

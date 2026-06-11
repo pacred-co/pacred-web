@@ -11,7 +11,7 @@
  *    momo_* tables. NO direct DB access from this client.
  */
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { confirm } from "@/components/ui/confirm";
 // IMPORTANT: import from "./types" directly — the barrel index.ts re-exports
 // client.ts which is `"server-only"`. Client Components can pull types +
@@ -23,6 +23,9 @@ import {
   type MomoInternalAdminRecord,
   type MomoShipmentStatus,
 } from "@/lib/integrations/momo-isolated/types";
+// ภูม flag 2026-06-11 — surface the MOMO raw fields as readable columns + detail
+// (so staff cross-check every value before commit, not squint at raw JSON).
+import { momoRawDisplay, type MomoRawDisplay } from "@/lib/admin/momo-raw-helpers";
 
 type DbRow = {
   momo_tracking_no?: string | null;
@@ -383,6 +386,83 @@ function Stat({
   );
 }
 
+// ภูม flag 2026-06-11 — the important MOMO fields, gauged out of `raw` into
+// real columns (น้ำหนัก/คิว/จำนวน/ขนส่ง/ประเภท/CG_NO/เข้าโกดัง). Everything else
+// MOMO sends — except its internal `_id` — is in the readable detail sub-row.
+const PREVIEW_COL_COUNT = 15;
+
+/** Full readable breakdown of one MOMO raw blob (every field except `_id`). */
+function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
+  const [rawOpen, setRawOpen] = useState(false);
+  const kv: Array<[string, React.ReactNode]> = [
+    ["ลูกค้า (MOMO)", d.memberCode || "—"],
+    ["สถานะ MOMO (เลข)", d.statusCode ?? "—"],
+    ["เลขพัสดุจีน", d.tracking || "—"],
+    ["ขนส่ง", d.shipBy && d.shipByLabel !== d.shipBy ? `${d.shipByLabel} (${d.shipBy})` : d.shipByLabel],
+    ["ประเภทสินค้า", d.productType ? (d.productType === "fda" ? "fda · กลุ่มต้องขอ อย./ใบอนุญาต" : d.productType) : "—"],
+    ["ตู้/รอบ", d.containerNo || "—"],
+    ["กระสอบ", d.sackNo || "—"],
+    ["ขนาดกระสอบ", d.sackSize || "—"],
+    ["CG_NO (พัสดุย่อย)", d.cgNo || "—"],
+    ["น้ำหนัก", `${d.weight} kg`],
+    ["ปริมาตร", `${d.cbm} คิว`],
+    ["ขนาด (กว้าง×ยาว×สูง)", `${d.width} × ${d.length} × ${d.height} ซม.`],
+    ["จำนวน", `${d.qty} ชิ้น`],
+    ["ค่าใช้จ่ายเพิ่ม", String(d.extraCost)],
+    ["ตีลังไม้", d.woodenCreate ? `ใช่${d.woodenInfo ? ` · ${d.woodenInfo}` : ""}` : "ไม่"],
+    ["สร้างเมื่อ", d.createdDate || "—"],
+    ["อัปเดตล่าสุด", d.updatedDate || "—"],
+  ];
+  return (
+    <div className="space-y-2">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
+        {kv.map(([label, val]) => (
+          <div key={label} className="flex flex-col">
+            <dt className="text-[10px] text-muted">{label}</dt>
+            <dd className="text-[11px] font-medium break-words">{val}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {d.images.length > 0 && (
+        <div>
+          <div className="text-[10px] text-muted mb-0.5">รูปพัสดุที่โกดังจีน ({d.images.length})</div>
+          <div className="flex flex-wrap gap-2">
+            {d.images.map((src, idx) => (
+              <a key={idx} href={src} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] text-sky-600 underline">
+                เปิดรูป {idx + 1}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="text-[10px] text-muted mb-0.5">ไทม์ไลน์ของพัสดุ (status_date)</div>
+        <ol className="flex flex-wrap gap-x-4 gap-y-1">
+          {d.phases.map((p) => (
+            <li key={p.key} className="text-[11px]">
+              <span className={p.at ? "font-semibold text-emerald-700" : "text-muted"}>{p.label}</span>
+              <span className="text-muted"> · {p.at ?? "—"}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <button type="button" onClick={() => setRawOpen((v) => !v)}
+        className="text-sky-600 underline text-[10px]">
+        {rawOpen ? "ซ่อน raw JSON" : "ดู raw JSON (ดิบ)"}
+      </button>
+      {rawOpen && (
+        <pre className="mt-1 max-h-60 overflow-auto rounded bg-slate-100 p-1.5 text-[10px] font-mono">
+          {JSON.stringify(raw, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function PreviewTable({
   title,
   rows,
@@ -400,48 +480,76 @@ function PreviewTable({
   return (
     <div>
       <h4 className="text-xs font-bold mb-1">{title} ({rows.length})</h4>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+      <p className="text-[10px] text-muted mb-1">
+        ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · กด “รายละเอียด” เพื่อดูข้อมูล MOMO ครบทุกช่อง
+      </p>
+      <div className="overflow-x-auto scrollbar-x-visible">
+        <table className="w-full text-[11px] border-collapse">
           <thead className="bg-surface-alt">
-            <tr>
+            <tr className="whitespace-nowrap">
               <th className="text-left px-2 py-1 border-b">#</th>
               <th className="text-left px-2 py-1 border-b">Tracking</th>
-              <th className="text-left px-2 py-1 border-b">Container</th>
-              <th className="text-left px-2 py-1 border-b">Sack</th>
+              <th className="text-left px-2 py-1 border-b">ตู้/รอบ</th>
+              <th className="text-left px-2 py-1 border-b">กระสอบ</th>
               <th className="text-left px-2 py-1 border-b">Phase</th>
-              <th className="text-left px-2 py-1 border-b">Status</th>
+              <th className="text-left px-2 py-1 border-b">สถานะ</th>
+              <th className="text-right px-2 py-1 border-b">น้ำหนัก (kg)</th>
+              <th className="text-right px-2 py-1 border-b">ปริมาตร (คิว)</th>
+              <th className="text-right px-2 py-1 border-b">จำนวน</th>
+              <th className="text-left px-2 py-1 border-b">ขนส่ง</th>
+              <th className="text-left px-2 py-1 border-b">ประเภท</th>
+              <th className="text-left px-2 py-1 border-b">CG_NO</th>
+              <th className="text-left px-2 py-1 border-b">เข้าโกดัง</th>
               <th className="text-left px-2 py-1 border-b">Admin Text</th>
-              <th className="text-left px-2 py-1 border-b">Raw</th>
+              <th className="text-left px-2 py-1 border-b">รายละเอียด</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {
               const k = `${kind}-${i}`;
               const isOpen = !!openMap[k];
+              const d = momoRawDisplay(r.raw);
+              const kodang = d.phases.find((p) => p.key === "kodang")?.at;
               return (
-                <tr key={k} className="border-b">
-                  <td className="px-2 py-1 text-muted">{i + 1}</td>
-                  <td className="px-2 py-1 font-mono">{r.trackingNo ?? "—"}</td>
-                  <td className="px-2 py-1 font-mono">{r.containerNo ?? "—"}</td>
-                  <td className="px-2 py-1 font-mono">{r.sackNo ?? "—"}</td>
-                  <td className="px-2 py-1">{r.phase ?? "—"}</td>
-                  <td className="px-2 py-1"><StatusBadge status={r.shipmentStatus} /></td>
-                  <td className="px-2 py-1">{r.adminStatusText}</td>
-                  <td className="px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => setOpenMap({ ...openMap, [k]: !isOpen })}
-                      className="text-sky-600 underline text-[11px]"
-                    >
-                      {isOpen ? "hide" : "view"}
-                    </button>
-                    {isOpen && (
-                      <pre className="mt-1 max-w-xs overflow-auto rounded bg-slate-50 p-1.5 text-[10px] font-mono">
-                        {JSON.stringify(r.raw, null, 2).slice(0, 800)}
-                      </pre>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={k}>
+                  <tr className="border-b whitespace-nowrap">
+                    <td className="px-2 py-1 text-muted">{i + 1}</td>
+                    <td className="px-2 py-1 font-mono">{r.trackingNo ?? "—"}</td>
+                    <td className="px-2 py-1 font-mono">{r.containerNo ?? "—"}</td>
+                    <td className="px-2 py-1 font-mono">{r.sackNo ?? "—"}</td>
+                    <td className="px-2 py-1">{r.phase ?? "—"}</td>
+                    <td className="px-2 py-1"><StatusBadge status={r.shipmentStatus} /></td>
+                    <td className="px-2 py-1 text-right tabular-nums">{d.weight || "—"}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{d.cbm || "—"}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{d.qty}</td>
+                    <td className="px-2 py-1">{d.shipByLabel}</td>
+                    <td className="px-2 py-1">
+                      {d.productType || "—"}
+                      {d.productType === "fda" && (
+                        <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700">อย.</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1 font-mono">{d.cgNo || "—"}</td>
+                    <td className="px-2 py-1">{kodang ?? "—"}</td>
+                    <td className="px-2 py-1">{r.adminStatusText}</td>
+                    <td className="px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => setOpenMap({ ...openMap, [k]: !isOpen })}
+                        className="text-sky-600 underline text-[11px]"
+                      >
+                        {isOpen ? "ปิด" : "รายละเอียด"}
+                      </button>
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr className="border-b bg-slate-50">
+                      <td colSpan={PREVIEW_COL_COUNT} className="px-3 py-2">
+                        <MomoDetail d={d} raw={r.raw} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
