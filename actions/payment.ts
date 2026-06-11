@@ -12,6 +12,7 @@ import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { checkYuanPaymentEligibility } from "@/lib/payment/yuan-eligibility";
+import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -376,6 +377,9 @@ export async function createYuanPayment(
       imagesslip:        d.slip_url ?? "",
       certifiedtruecopy: d.id_doc_url ?? "",
       imagesslipadmin:   "",
+      // GAP 3 — the customer's tax-document choice for this ฝากโอน (mig 0140).
+      // SELECTION only; issuance stays gated by tax_invoice.shop_yuan_enabled.
+      ...mapTaxDocColumns(d),
     })
     .select("id")
     .single<{ id: number }>();

@@ -11,6 +11,7 @@ import {
   modeFromPref,
   prefFromMode,
   modeRequiresBillingSnapshot,
+  mapTaxDocColumns,
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
   type ModeTaxableParts,
@@ -131,6 +132,40 @@ eq("marginVat(2120*5.01 profit≈?) sanity: marginVat(3000)=210", computeMarginV
   const cu = computeTaxForMode("customs", svcOnly, { isJuristic: true });
   eq("no-goods: tax_invoice VAT == customs VAT (70)", ti.vat, cu.vat);
   eq("no-goods: customs VAT 7% of 1000", cu.vat, 70);
+}
+
+// ── mapTaxDocColumns (GAP 3 · the form→tb_payment.tax_doc_* capture mapper) ──
+{
+  // tax_invoice (VAT-bearing) keeps the billing snapshot; address = "name · addr"
+  const ti = mapTaxDocColumns({
+    taxDocPref: "tax_invoice", taxDocTaxId: "0105564077716",
+    taxDocBillingName: "บจก. แพคเรด", taxDocAddress: "123 ถนนสุขุมวิท",
+  });
+  is("map: tax_invoice pref", ti.tax_doc_pref, "tax_invoice");
+  is("map: tax_invoice tax_id kept", ti.tax_doc_tax_id, "0105564077716");
+  is("map: tax_invoice address combined", ti.tax_doc_address, "บจก. แพคเรด · 123 ถนนสุขุมวิท");
+
+  // customs (VAT-bearing) — same billing retention
+  const cu = mapTaxDocColumns({ taxDocPref: "customs", taxDocTaxId: "1234567890123", taxDocBillingName: "A", taxDocAddress: "B" });
+  is("map: customs pref", cu.tax_doc_pref, "customs");
+  is("map: customs address combined", cu.tax_doc_address, "A · B");
+
+  // receipt / none — billing DROPPED (no VAT doc → no snapshot kept)
+  const rc = mapTaxDocColumns({ taxDocPref: "receipt", taxDocTaxId: "1234567890123", taxDocBillingName: "X", taxDocAddress: "Y" });
+  is("map: receipt pref", rc.tax_doc_pref, "receipt");
+  is("map: receipt drops tax_id", rc.tax_doc_tax_id, null);
+  is("map: receipt drops address", rc.tax_doc_address, null);
+
+  // empty / undefined pref → receipt (the safe default · no billing)
+  const empty = mapTaxDocColumns({});
+  is("map: empty pref → receipt", empty.tax_doc_pref, "receipt");
+  is("map: empty → null tax_id", empty.tax_doc_tax_id, null);
+  is("map: empty → null address", empty.tax_doc_address, null);
+
+  // tax_invoice but blank billing → null (never persist a bare " · ")
+  const blank = mapTaxDocColumns({ taxDocPref: "tax_invoice", taxDocTaxId: "", taxDocBillingName: "", taxDocAddress: "" });
+  is("map: tax_invoice blank tax_id → null", blank.tax_doc_tax_id, null);
+  is("map: tax_invoice blank billing → null (not '·')", blank.tax_doc_address, null);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

@@ -10,6 +10,7 @@ import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon, Plus } from "lucide-react";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { trackPlaceOrder } from "@/lib/analytics";
+import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -18,9 +19,13 @@ type Props = {
   rateUpdatedAt: string;
   walletBalance: number;
   customerName?: string;
+  /** GAP 3 (2026-06-12) — tax-doc picker defaults (juristic id/name/address).
+   *  When present, the form shows <CartTaxDocPref> so the ฝากโอน captures the
+   *  customer's ใบกำกับ/ใบขน/ไม่รับเอกสาร choice (persisted to tb_payment.tax_doc_*). */
+  taxDocDefaults?: TaxDocDefaults;
 };
 
-export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerName }: Props) {
+export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerName, taxDocDefaults }: Props) {
   const t = useTranslations("payment");
   const tp = useTranslations("yuanPaymentExtra");
   const router = useRouter();
@@ -58,7 +63,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
     else setError(res.error);
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -76,6 +81,15 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
       return;
     }
 
+    // GAP 3 — read <CartTaxDocPref>'s hidden inputs synchronously (the form is a
+    // controlled-payload form, not a FormData submit — currentTarget is nulled
+    // once the async transition runs, so capture it now).
+    const fd = new FormData(e.currentTarget);
+    const taxDocPref        = (fd.get("taxDocPref") as string | null) ?? undefined;
+    const taxDocTaxId       = (fd.get("taxDocTaxId") as string | null) ?? undefined;
+    const taxDocBillingName = (fd.get("taxDocBillingName") as string | null) ?? undefined;
+    const taxDocAddress     = (fd.get("taxDocAddress") as string | null) ?? undefined;
+
     startTransition(async () => {
       // P0-2 (ADR-0018 §D-2 rule 1): wallet-paid branch goes to the
       // tb_* lane (createYuanPaymentFromWallet) which debits tb_wallet
@@ -89,6 +103,10 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         paid_via_wallet:  paidViaWallet,
         slip_url:         slipPath ?? undefined,
         id_doc_url:       idDocPath ?? undefined,
+        taxDocPref,
+        taxDocTaxId,
+        taxDocBillingName,
+        taxDocAddress,
       };
       const res = paidViaWallet
         ? await createYuanPaymentFromWallet(payload)
@@ -230,6 +248,12 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           </div>
         </div>
       </div>
+
+      {/* GAP 3 (2026-06-12) — tax-document choice for this ฝากโอน (ใบกำกับ / ใบขน
+          / ไม่รับเอกสาร). Reuses <CartTaxDocPref> (same input names) → persists to
+          tb_payment.tax_doc_* on submit. defaultMode="none" so a juristic customer
+          is never hard-blocked from paying by incomplete billing (opt-in). */}
+      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />}
 
       {/* Payment method */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">

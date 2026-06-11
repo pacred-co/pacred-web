@@ -41,5 +41,13 @@ export const yuanPaymentSchema = z.object({
   paid_via_wallet:  z.boolean().optional(),
   slip_url:         z.string().optional(),
   id_doc_url:       z.string().optional(),
+  // GAP 3 (2026-06-12) — the customer's tax-document choice for THIS yuan
+  // transfer (ฝากโอน). Raw form fields, mapped to tb_payment.tax_doc_* (mig
+  // 0140) the same way cart.ts + forwarder-legacy.ts do. SELECTION only — the
+  // ใบกำกับ issuance stays gated by tax_invoice.shop_yuan_enabled.
+  taxDocPref:        z.string().trim().max(20).optional(),
+  taxDocTaxId:       z.string().trim().max(20).optional(),
+  taxDocBillingName: z.string().trim().max(300).optional(),
+  taxDocAddress:     z.string().trim().max(500).optional(),
 });
 export type YuanPaymentInput = z.infer<typeof yuanPaymentSchema>;

@@ -100,6 +100,7 @@ import { revalidatePath } from "next/cache";
 import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { yuanPaymentSchema, type YuanPaymentInput } from "@/lib/validators/payment";
+import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -253,6 +254,8 @@ export async function createYuanPaymentFromWallet(
       imagesslip:        "",                     // wallet-paid → no slip
       certifiedtruecopy: d.id_doc_url ?? "",
       imagesslipadmin:   "",
+      // GAP 3 — tax-document choice for this ฝากโอน (mig 0140). SELECTION only.
+      ...mapTaxDocColumns(d),
     })
     .select("id")
     .single<{ id: number }>();

@@ -3,7 +3,9 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentYuanRate } from "@/actions/payment";
 import { getWallet } from "@/actions/wallet";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { YuanPaymentForm } from "../yuan-payment-form";
+import type { TaxDocDefaults } from "../../cart/cart-tax-doc-pref";
 import { ArrowLeftRight, ChevronRight, Home } from "lucide-react";
 
 export default async function ServicePaymentAddPage() {
@@ -18,6 +20,30 @@ export default async function ServicePaymentAddPage() {
   const fullName = profile
     ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.company_name || "—"
     : "—";
+
+  // GAP 3 (2026-06-12) — tax-doc picker defaults (juristic id/name/address from
+  // tb_users + tb_corporate), mirroring the cart page. Only built when we have a
+  // member_code; otherwise the picker is simply not shown.
+  let taxDocDefaults: TaxDocDefaults | undefined;
+  const memberCode = profile?.member_code;
+  if (memberCode) {
+    const admin = createAdminClient();
+    const [userRowRes, juristicRes] = await Promise.all([
+      admin.from("tb_users").select("userCompany").eq("userID", memberCode)
+        .maybeSingle<{ userCompany: string | null }>(),
+      admin.from("tb_corporate").select("corporatenumber, corporatename, corporateaddress")
+        .eq("userid", memberCode)
+        .maybeSingle<{ corporatenumber: string | null; corporatename: string | null; corporateaddress: string | null }>(),
+    ]);
+    if (userRowRes.error) console.error(`[service-payment/add tb_users]`, { code: userRowRes.error.code, message: userRowRes.error.message });
+    if (juristicRes.error) console.error(`[service-payment/add tb_corporate]`, { code: juristicRes.error.code, message: juristicRes.error.message });
+    taxDocDefaults = {
+      isJuristic: userRowRes.data?.userCompany === "1",
+      taxId: juristicRes.data?.corporatenumber ?? "",
+      companyName: juristicRes.data?.corporatename ?? "",
+      companyAddress: juristicRes.data?.corporateaddress ?? "",
+    };
+  }
 
   return (
     <>
@@ -59,6 +85,7 @@ export default async function ServicePaymentAddPage() {
           rateUpdatedAt={rateRes.updated_at}
           walletBalance={balance}
           customerName={fullName}
+          taxDocDefaults={taxDocDefaults}
         />
       </main>
     </>

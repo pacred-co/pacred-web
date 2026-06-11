@@ -115,6 +115,32 @@ export function modeRequiresBillingSnapshot(mode: TaxDocMode): boolean {
   return mode === "tax_invoice" || mode === "customs";
 }
 
+/**
+ * Map the 4 raw <CartTaxDocPref> form fields to the `tax_doc_*` snapshot
+ * columns (tb_header_order / tb_forwarder / tb_payment). Same mapping
+ * cart.ts + forwarder-legacy.ts inline (billing name + " · " + address →
+ * tax_doc_address; tax_id + address only kept for VAT-bearing modes). Captures
+ * the choice only — never drives issuance (that stays flag-gated). Empty
+ * billing fields persist as null (never blocks the parent flow).
+ */
+export function mapTaxDocColumns(raw: {
+  taxDocPref?: string | null;
+  taxDocTaxId?: string | null;
+  taxDocBillingName?: string | null;
+  taxDocAddress?: string | null;
+}): { tax_doc_pref: TaxDocPref; tax_doc_tax_id: string | null; tax_doc_address: string | null } {
+  const mode = modeFromPref(raw.taxDocPref);
+  const needsBilling = modeRequiresBillingSnapshot(mode);
+  const taxId = (raw.taxDocTaxId ?? "").trim();
+  const name = (raw.taxDocBillingName ?? "").trim();
+  const addr = (raw.taxDocAddress ?? "").trim();
+  return {
+    tax_doc_pref: prefFromMode(mode),
+    tax_doc_tax_id: needsBilling ? (taxId || null) : null,
+    tax_doc_address: needsBilling ? (`${name} · ${addr}`.trim() === "·" ? null : `${name} · ${addr}`.trim() || null) : null,
+  };
+}
+
 // ────────────────────────────────────────────────────────────
 // Mode-aware tax computation — the per-mode VAT BASE difference
 // ────────────────────────────────────────────────────────────
