@@ -28,6 +28,17 @@ const HS_LIBRARY_ROLES: AdminRole[] = [
   "freight_clearance_both",
 ];
 
+// The reference duty HINT (lookupHsCode) is a read-only dictionary lookup with
+// no money write, surfaced in BOTH the Pricing cost editor AND the CS HS-triage
+// queue. CS-lane roles (sales/sales_admin/ops · GAP 5) must reach the hint or
+// it silently role-fails for the exact users entering the HS. Read-only widen.
+const HS_LOOKUP_ROLES: AdminRole[] = [
+  ...HS_LIBRARY_ROLES,
+  "sales",
+  "sales_admin",
+  "ops",
+];
+
 // ────────────────────────────────────────────────────────────
 // container_hs_lines
 // ────────────────────────────────────────────────────────────
@@ -248,8 +259,13 @@ export async function upsertHsCode(input: UpsertHsCodeInput): Promise<AdminActio
 export type HsCodeListRow = {
   code:             string;
   description:      string;
+  description_en:   string | null;
   default_duty_pct: number;
   form_e_duty_pct:  number;
+  other_forms:      Record<string, number> | null;
+  unit:             string | null;
+  hs_note:          string | null;
+  note:             string | null;
   is_active:        boolean;
 };
 
@@ -270,7 +286,10 @@ export async function listHsCodes(
     const admin = createAdminClient();
     let query = admin
       .from("hs_codes")
-      .select("code, description, default_duty_pct, form_e_duty_pct, is_active")
+      // Full field set (not a lighter projection) so a searched row carries its
+      // real other_forms/description_en/unit/hs_note into the edit form — else
+      // editing a searched row would save other_forms:{} and WIPE the stored map.
+      .select("code, description, description_en, default_duty_pct, form_e_duty_pct, other_forms, unit, hs_note, note, is_active")
       .order("code", { ascending: true })
       .limit(200);
 
@@ -311,7 +330,7 @@ export async function lookupHsCode(
   const parsed = lookupSchema.safeParse({ code });
   if (!parsed.success) return { ok: true, data: null };
 
-  return withAdmin([...HS_LIBRARY_ROLES], async () => {
+  return withAdmin([...HS_LOOKUP_ROLES], async () => {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("hs_codes")

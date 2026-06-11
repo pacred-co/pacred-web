@@ -76,19 +76,20 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
     startSearch(async () => {
       const res = await listHsCodes(term);
       if (res.ok && res.data) {
-        // The list action returns the lighter HsCodeListRow shape; map it into
-        // HsRow so the table renders. The full fields reload on the next save.
+        // listHsCodes returns the FULL field set, so a searched row carries its
+        // real other_forms/description_en/unit/hs_note into openEdit — editing a
+        // searched row no longer wipes the stored other_forms map.
         setRows(
           res.data.map((r: HsCodeListRow) => ({
             code:             r.code,
             description:      r.description,
-            description_en:   null,
+            description_en:   r.description_en,
             default_duty_pct: r.default_duty_pct,
             form_e_duty_pct:  r.form_e_duty_pct,
-            other_forms:      null,
-            unit:             null,
-            hs_note:          null,
-            note:             null,
+            other_forms:      r.other_forms,
+            unit:             r.unit,
+            hs_note:          r.hs_note,
+            note:             r.note,
             is_active:        r.is_active,
           })),
         );

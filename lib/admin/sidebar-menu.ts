@@ -1313,6 +1313,10 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
       // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
       itemTaxdocWorkspace,
+      // 2026-06-12 (เดฟ · GAP 5) — the CS HS-triage queue (ops is a CS-lane role
+      // in the cargo taxdoc workspace → gate ["super","sales","sales_admin","ops"]
+      // needs a nav entry here too, §0d).
+      itemHsTriage,
       // 2026-06-12 (เดฟ · คลัง HS) — the HS-code duty library (อากร reference).
       itemHsLibrary,
       // 2026-06-09 (W11 · customs doc-kit) — accounting/Docs generate DO-LOI +
