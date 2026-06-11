@@ -4,7 +4,8 @@ import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
-import { bulkUpdateShopOrderStatus, SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk";
+import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
+import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
 
 /**
  * Service-orders list table — ภูม flag 2026-05-30 evening.

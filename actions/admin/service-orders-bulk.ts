@@ -45,6 +45,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
+// SHOP_STATUSES + the type live in a plain module — a "use server" file may NOT
+// export a non-async value (the const reaches the client as a server-action ref,
+// not the array → `.map is not a function`). See service-orders-bulk-types.ts.
+import { SHOP_STATUSES, type ShopOrderStatus } from "./service-orders-bulk-types";
 
 const MAX_BULK = 100;
 
@@ -77,8 +81,10 @@ async function resolveLegacyAdminId(): Promise<string> {
   return data?.adminID ?? email;
 }
 
-export const SHOP_STATUSES = ["1", "2", "3", "4", "5", "6"] as const;
-export type ShopOrderStatus = (typeof SHOP_STATUSES)[number];
+// Re-export the TYPE only (types are erased → legal in a "use server" file).
+// The VALUE `SHOP_STATUSES` is imported at the top; clients import it from
+// ./service-orders-bulk-types directly (NOT from this "use server" file).
+export type { ShopOrderStatus } from "./service-orders-bulk-types";
 
 /** Result envelope — mirrors forwarders-bulk so the UI renders partial failure. */
 export type BulkShopOrderResult = {
