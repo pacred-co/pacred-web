@@ -233,6 +233,15 @@ export function ForwarderCostsForm({
                     {changed && <span className="ml-1 text-amber-600">●</span>}
                   </span>
                 </div>
+                {/* hratecostsale is a dead-write (rate/cost wiring audit): no
+                    live consumer reads it. Scope this note to this field ONLY —
+                    hratecostdefault above + the cost matrix below ARE live. */}
+                {m.col === "hratecostsale" && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                    ⚠️ ค่านี้ยังไม่ถูกใช้ในการคำนวณราคา / มาร์จิน (reference-only)
+                    — แก้แล้วยังไม่มีผลกับระบบ.
+                  </p>
+                )}
               </label>
             );
           })}
