@@ -359,6 +359,151 @@ export async function adminUpdateForwarderCover(
   });
 }
 
+// ── MULTI-image gallery (Pacred-added · migration 0176) ──────────────────────
+// 2026-06-11 (ปอน · owner "มันไม่ใช่ 'เปลี่ยนรูปสินค้า' แต่เป็น 'เพิ่มรูปภาพ' · มันจะมี
+// หลายๆรูปภาพ"). Legacy `tb_forwarder.fcover` is a single cover; these two actions
+// drive a per-order gallery stored as a JSON array of bucket keys in the new
+// `tb_forwarder.fimages` column (migration 0176). fcover is kept as the primary
+// (the customer page + receipts read it) and is auto-set from the first upload when
+// it was empty. Storage bucket = `forwarder-covers` (same as the cover) · prefix
+// `admin/<userid>/<fid>`. We store the KEY only — the actual file isn't deleted on
+// remove (a storage GC cron can sweep orphans later) to avoid accidental loss.
+const FORWARDER_GALLERY_CAP = 12;
+
+/** Parse the fimages JSON column → string[] (tolerant of empty / legacy junk). */
+function parseForwarderImages(raw: string | null | undefined): string[] {
+  if (!raw || raw.trim() === "") return [];
+  try {
+    const p = JSON.parse(raw);
+    return Array.isArray(p) ? p.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+  } catch {
+    return [];
+  }
+}
+
+// The fimages column may not exist yet on a given environment (migration 0176 not
+// applied). Both actions detect that (PG 42703 / "column ... does not exist") and
+// return a clean Thai message instead of a 500 — so the UI degrades gracefully.
+function isMissingFimagesColumn(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  return err.code === "42703" || /fimages/i.test(err.message ?? "");
+}
+const FIMAGES_NOT_READY =
+  "แกลเลอรีรูปยังไม่พร้อมใช้งาน — ต้องรัน migration 0176 (เพิ่มคอลัมน์ fimages) บน prod ก่อน · แจ้งทีม backend";
+
+// adminAddForwarderImage — upload one image + append its key to fimages (FormData:
+// `fId` + `file`). The first image on a coverless order also becomes the fcover.
+export async function adminAddForwarderImage(
+  formData: FormData,
+): Promise<AdminActionResult> {
+  const fIdRaw = formData.get("fId");
+  const file = formData.get("file");
+  const fId = Number(fIdRaw);
+  if (!Number.isInteger(fId) || fId <= 0) return { ok: false, error: "fId ไม่ถูกต้อง" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์รูป" };
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid, fcover, fimages")
+      .eq("id", fId)
+      .maybeSingle<{ id: number; userid: string; fcover: string | null; fimages: string | null }>();
+    if (fwdErr) {
+      if (isMissingFimagesColumn(fwdErr)) return { ok: false, error: FIMAGES_NOT_READY };
+      console.error(`[adminAddForwarderImage read] failed`, { code: fwdErr.code, message: fwdErr.message, fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const current = parseForwarderImages(fwd.fimages);
+    if (current.length >= FORWARDER_GALLERY_CAP) {
+      return { ok: false, error: `เพิ่มรูปได้สูงสุด ${FORWARDER_GALLERY_CAP} รูป/ออเดอร์ — ลบบางรูปก่อน` };
+    }
+
+    const upload = await uploadToBucket(file, "forwarder-covers", `admin/${fwd.userid}/${fId}`);
+    if (!upload.ok) return { ok: false, error: upload.error ?? "อัปโหลดรูปไม่สำเร็จ" };
+
+    const next = [...current, upload.filename];
+    const update: Record<string, string> = { fimages: JSON.stringify(next), adminidupdate: legacyAdminId };
+    // First image on a coverless order → also becomes the primary cover.
+    if (!(fwd.fcover && fwd.fcover.trim() !== "")) update.fcover = upload.filename;
+
+    const { error: updErr } = await admin.from("tb_forwarder").update(update).eq("id", fId);
+    if (updErr) {
+      if (isMissingFimagesColumn(updErr)) return { ok: false, error: FIMAGES_NOT_READY };
+      console.error(`[adminAddForwarderImage update] failed`, { code: updErr.code, message: updErr.message, fId });
+      return { ok: false, error: `บันทึกรูปไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.add_image", "tb_forwarder", String(fId), {
+      filename: upload.filename, count: next.length,
+    });
+
+    revalidatePath(`/admin/forwarders/${fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// adminRemoveForwarderImage — drop one image KEY from the fimages gallery. If the
+// removed key was also the fcover, re-derive the cover from the remaining gallery.
+const removeImageSchema = z.object({
+  fId:      z.number().int().positive(),
+  imageKey: z.string().trim().min(1).max(500),
+});
+export type AdminRemoveForwarderImageInput = z.infer<typeof removeImageSchema>;
+
+export async function adminRemoveForwarderImage(
+  rawInput: AdminRemoveForwarderImageInput,
+): Promise<AdminActionResult> {
+  const parsed = removeImageSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fcover, fimages")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; fcover: string | null; fimages: string | null }>();
+    if (fwdErr) {
+      if (isMissingFimagesColumn(fwdErr)) return { ok: false, error: FIMAGES_NOT_READY };
+      console.error(`[adminRemoveForwarderImage read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const current = parseForwarderImages(fwd.fimages);
+    const next = current.filter((k) => k !== d.imageKey);
+    if (next.length === current.length) return { ok: false, error: "ไม่พบรูปที่จะลบในแกลเลอรี" };
+
+    const update: Record<string, string> = { fimages: JSON.stringify(next), adminidupdate: legacyAdminId };
+    // If we removed the image that was also the cover, re-derive (next gallery item, else clear).
+    if ((fwd.fcover ?? "") === d.imageKey) update.fcover = next[0] ?? "";
+
+    const { error: updErr } = await admin.from("tb_forwarder").update(update).eq("id", d.fId);
+    if (updErr) {
+      if (isMissingFimagesColumn(updErr)) return { ok: false, error: FIMAGES_NOT_READY };
+      console.error(`[adminRemoveForwarderImage update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `ลบรูปไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.remove_image", "tb_forwarder", String(d.fId), {
+      imageKey: d.imageKey, count: next.length,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── update_fShipBy — change the courier / ship-by carrier (forwarder.php L1579) ─
 // fShipBy is a free string (external carrier name or a PCS-family code). When the
 // row is still pre-payment (fStatus<=5), legacy re-prices fTransportPrice by the

@@ -163,8 +163,12 @@ export function TbForwarderActionPanel(p: Props) {
   // Previously both stacked vertically which made the page "ดูยืดไปหมดเลย"
   // when used inside the always-open ACTION section on /edit.
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-primary-200 bg-primary-50/30 p-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+    {/* 2026-06-11 (ปอน · owner "จัดสีให้เข้ากับหน้าแรก"): home-page card DNA —
+        clean white card + border-border + shadow-sm + a red brand-accent left
+        bar (primary-500 #B30000), the same red-on-white look as the home StatsBar
+        cards. Replaces the heavy bg-primary-50/30 full-bleed tint. */}
+    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-border border-l-4 border-l-primary-500 bg-white dark:bg-surface shadow-sm p-4 md:p-5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="rounded-full bg-primary-100 text-primary-700 px-2.5 py-0.5 text-[11px] font-semibold">
           ขั้นถัดไป
@@ -318,7 +322,7 @@ export function TbForwarderActionPanel(p: Props) {
 // tb_forwarder.fnote/fnoteuser/fnoteuserread/fnotedate.
 // ─────────────────────────────────────────────────────────────────────
 
-function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; currentNote: string }) {
+export function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; currentNote: string }) {
   const router = useRouter();
   const [note, setNote] = useState<string>(currentNote);
   const [adminOnly, setAdminOnly] = useState<boolean>(true);
@@ -348,8 +352,13 @@ function NotePushForm({ fId, fNo, currentNote }: { fId: number; fNo: string; cur
     });
   }
 
+  // 2026-06-11 (ปอน · owner "จัดสีให้เข้ากับหน้าแรก"): same home-page white-card DNA
+  // as the status form — the heavy amber bg-amber-50/40 tint clashed with the Pacred
+  // red brand. Kept a slim amber left-accent + amber pill so the "note/notify" action
+  // still reads as distinct from the red status action, but the card body is now clean
+  // white like the home StatsBar cards.
   return (
-    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
+    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-border border-l-4 border-l-amber-400 bg-white dark:bg-surface shadow-sm p-4 md:p-5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="rounded-full bg-amber-100 text-amber-800 px-2.5 py-0.5 text-[11px] font-semibold">
           หมายเหตุ + แจ้งเตือน

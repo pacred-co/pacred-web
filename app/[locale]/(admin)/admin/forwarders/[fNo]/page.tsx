@@ -13,9 +13,12 @@ import { code128SvgDataUrl } from "@/lib/barcode";
 import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
 // 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
 import { ForwarderDeleteButton } from "./forwarder-delete-button";
-// 2026-06-10 (ปอน) — full legacy admin update.php on the detail page: the
-// status-update + note form (proven panel from /edit · props all from `r`).
-import { TbForwarderActionPanel } from "./tb-action-panel";
+// 2026-06-11 (ปอน · owner "ฟอร์มแก้ไขต้อง status-driven · แต่ละสถานะมีให้แก้ไม่
+// เหมือนกัน") — the legacy update.php edit area is NOT flat: the visible sub-forms
+// change with fStatus (pricing@4 · tracking@≥6 · credit). <ForwarderStatusWorkflow>
+// reproduces that, reusing the existing actions + <AdminForwarderEditForm> +
+// <NotePushForm>. (The flat <TbForwarderActionPanel> stays on /edit unchanged.)
+import { ForwarderStatusWorkflow } from "./forwarder-status-workflow";
 // 2026-06-10 (ปอน) — PCS-1:1 inline edits ON the detail page (each field shows
 // value + [แก้ไข] → inline form · บันทึก/ยกเลิก · same page). These are the SAME
 // client components /edit mounts; they call the SAME existing server actions
@@ -30,6 +33,7 @@ import {
   EditPalletField,
   EditTrackingChnField,
   EditDateCloseField,
+  EditCoverField,
 } from "./forwarder-inline-edits";
 import {
   User as UserIcon,
@@ -337,10 +341,44 @@ async function tryRenderTbForwarder(
   const isDriverDispatched =
     assignItemRow != null && (assignItemRow.fdistatus ?? "") === "";
 
-  // Resolve cover image — shop-spawned rows may have alicdn URL, legacy path, or empty.
-  const coverHref = r.fcover && r.fcover.trim() !== ""
-    ? (r.fcover.startsWith("http") ? r.fcover : await resolveLegacyUrl(r.fcover, "cover"))
-    : null;
+  // 2026-06-11 (ปอน · owner gallery · migration 0176) — product images are now a
+  // per-order GALLERY: the legacy single fcover (badge "ปก") + the fimages JSON
+  // array. Read fimages best-effort so a pre-0176 env (no column) degrades to
+  // empty instead of 500'ing the page.
+  let fimagesKeys: string[] = [];
+  {
+    const { data: imgRow, error: imgErr } = await admin
+      .from("tb_forwarder").select("fimages").eq("id", r.id).maybeSingle<{ fimages: string | null }>();
+    if (imgErr) {
+      // 42703 / "fimages" = column not yet added (migration 0176 not applied) — silent.
+      if (imgErr.code !== "42703" && !/fimages/i.test(imgErr.message ?? "")) {
+        console.error(`[tb_forwarder fimages] failed`, { code: imgErr.code, message: imgErr.message, fId: r.id });
+      }
+    } else if (imgRow?.fimages) {
+      try {
+        const p = JSON.parse(imgRow.fimages);
+        if (Array.isArray(p)) fimagesKeys = p.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+      } catch { /* malformed json → empty gallery */ }
+    }
+  }
+  // Build the gallery: cover first (fcover · "ปก"), then each gallery key — every
+  // key resolved to a URL (resolveLegacyUrl handles alicdn URLs + bucket keys).
+  // Dedup so the first-upload (which is both fcover + fimages[0]) shows once.
+  const fcoverKey = (r.fcover ?? "").trim();
+  const galleryImages: { key: string; url: string; isCover: boolean; canDelete: boolean }[] = [];
+  {
+    const seen = new Set<string>();
+    if (fcoverKey) {
+      const url = await resolveLegacyUrl(fcoverKey, "cover");
+      if (url) { galleryImages.push({ key: fcoverKey, url, isCover: true, canDelete: fimagesKeys.includes(fcoverKey) }); seen.add(fcoverKey); }
+    }
+    for (const k of fimagesKeys) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const url = await resolveLegacyUrl(k, "cover");
+      if (url) galleryImages.push({ key: k, url, isCover: false, canDelete: true });
+    }
+  }
   const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
   const STATUS_LABEL: Record<string, string> = {
@@ -349,9 +387,22 @@ async function tryRenderTbForwarder(
   };
   // MODE_LABEL removed 2026-06-04 — transport mode is rendered with the status
   // timeline icon (Truck/Plane) above; the editable form lives on /edit.
-  const WAREHOUSE_LABEL: Record<string, string> = {
-    "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
-  };
+  //
+  // 2026-06-11 (ปอน · owner "แก้เป็น Pacred ให้หมด · ให้แสดงผลเป็น Pacred ไม่ว่า
+  // ยังไงก็ตาม"): the China-warehouse field must NEVER surface a partner/
+  // consolidator brand. The old WAREHOUSE_LABEL leaked แสง/CTT/MK/MX/JMF/GOGO/
+  // Cargo Center/MOMO straight onto this order-facing detail. It now renders a
+  // Pacred-branded label only — the granular partner warehouse stays on the ops
+  // console (report-cnt / warehouse-worker), where staff actually route goods.
+  // The city (กว่างโจว/อี้อู) is kept where known: Pacred-neutral geography that
+  // also matches the customer page's faithful nameWarehouseChina(fwarehousechina).
+  const CHINA_CITY: Record<string, string> = { "1": "กว่างโจว", "2": "อี้อู" };
+  const chinaWarehouseDisplay = (() => {
+    const city = CHINA_CITY[(r.fwarehousechina ?? "").trim()];
+    if (city) return `โกดัง Pacred · ${city}`;
+    if ((r.fwarehousename ?? "").trim() !== "") return "โกดัง Pacred (จีน)";
+    return "—";
+  })();
   // legacy forwarder.php product-type map (ประเภทสินค้า).
   const PRODUCT_TYPE_LABEL: Record<string, string> = {
     "1":"ทั่วไป","2":"มอก.","3":"อย.","4":"พิเศษ",
@@ -368,18 +419,17 @@ async function tryRenderTbForwarder(
   // 2026-06-10 (ปอน) — image step-icons copied from the customer page
   // (/service-import/[fNo]) so the admin tracker matches it 1:1.
   const STEP_ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder/";
-  // 2026-06-10 (ปอน · owner "แก้เป็น Pacred ให้หมดเลย"): the เตรียมส่ง step icon
-  // (forwarder-6.png) is a hand-truck carrying a crate stamped "PCS cargo" — a
-  // competitor brand baked into the PNG. img=null → render a clean Lucide
-  // <PackageCheck> instead (brand-neutral · Pacred). Swap in a Pacred-branded
-  // PNG here later if design wants the illustration style back.
+  // 2026-06-10 (ปอน · owner "แก้เป็น Pacred ให้หมดเลย"): the legacy เตรียมส่ง icon
+  // (forwarder-6.png) had a "PCS cargo" crate baked in. 2026-06-11 (owner "cart
+  // เปลี่ยนเป็นภาพนี้") → use the Pacred-branded cart icon. The <PackageCheck>
+  // fallback stays for any future null-img step.
   const TIMELINE: Array<{ key: number; rank: number; label: string; date: string | null; img: string | null }> = [
     { key: 1, rank: 1,   label: "เข้าโกดังจีน",  date: r.fdate ?? null,         img: `${STEP_ICON_BASE}forwarder-1.png` },
     { key: 2, rank: 2,   label: "อยู่โกดังจีน",  date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
     { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  img: `${STEP_ICON_BASE}forwarder-3.png` },
     { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  img: `${STEP_ICON_BASE}forwarder-4.png` },
     { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
-    { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: null },
+    { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: "/images/hero-section/icon/cart.png" },
     { key: 7, rank: 6.5, label: "กำลังจัดส่ง",   date: r.fdatestatus6 ?? null,  img: `${STEP_ICON_BASE}forwarder-6.1.png` },
     { key: 8, rank: 8,   label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  img: `${STEP_ICON_BASE}forwarder-7.png` },
   ];
@@ -407,6 +457,37 @@ async function tryRenderTbForwarder(
       etaTo = fmt(to);
     }
   }
+
+  // 2026-06-11 (ปอน) — init values for the status-driven workflow's conditional
+  // sub-forms (pricing@4 · credit). num() coerces the legacy string/number cols.
+  const num = (v: number | string | null | undefined): number => {
+    const n = typeof v === "number" ? v : parseFloat(String(v ?? "0"));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const VALID_PRODUCT = ["1", "2", "3", "4"];
+  const VALID_WH_TH = ["1", "2", "3", "4", "5", "6", "7", "8"];
+  const pricingInit = {
+    weight: num(r.fweight), width: num(r.fwidth), length: num(r.flength),
+    height: num(r.fheight), volume: num(r.fvolume),
+    productType: (VALID_PRODUCT.includes(r.fproductstype ?? "") ? r.fproductstype : "1") as "1" | "2" | "3" | "4",
+    refPrice: (r.frefprice === "2" ? "2" : "1") as "1" | "2",
+    note: r.fnote ?? "",
+    customRate: (r.customrate === "1" ? "1" : "0") as "0" | "1",
+    customRateKg: num(r.customratekg) || 40,
+    customRateCbm: num(r.customratecbm) || 7500,
+    fDiscount: num(r.fdiscount),
+    fTransportPriceChnThb: num(r.ftransportpricechnthb),
+    priceOther: num(r.priceother),
+    fTransportPrice: num(r.ftransportprice),
+    fShippingService: num(r.fshippingservice),
+    fWarehouseChina: (r.fwarehousechina === "2" ? "2" : "1") as "1" | "2",
+    fWarehouseName: (VALID_WH_TH.includes(r.fwarehousename ?? "") ? r.fwarehousename : "1") as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8",
+  };
+  // Grand-total estimate for the credit form (mirrors adminMarkForwarderCredit's
+  // pricePay formula — the action recomputes authoritatively server-side).
+  const creditEstimate =
+    num(r.ftotalprice) + num(r.ftransportprice) + num(r.fpriceupdate) + num(r.fshippingservice) +
+    num(r.pricecrate) + num(r.ftransportpricechnthb) + num(r.priceother) - num(r.fdiscount);
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
@@ -587,7 +668,7 @@ async function tryRenderTbForwarder(
           <div className="space-y-2.5 md:text-right">
             <EditTrackingChnField fId={r.id} ftrackingchn={r.ftrackingchn} fstatus={r.fstatus} />
             <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
-            <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{(r.fwarehousename && WAREHOUSE_LABEL[r.fwarehousename]) || (r.fwarehousename && r.fwarehousename.trim()) || "—"}</p>
+            <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{chinaWarehouseDisplay}</p>
             <p className="text-foreground">
               <b className="font-semibold">{r.fcabinet_locked === true ? "เลขที่ตู้ 🔒 : " : "เลขที่ตู้ : "}</b>
               {r.fcabinetnumber ? (
@@ -606,12 +687,11 @@ async function tryRenderTbForwarder(
               ) : (
                 <p className="mt-0.5 text-muted">—</p>
               )}
-              {coverHref && (
-                <a href={coverHref} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={coverHref} alt="cover" className="w-full max-w-[200px] rounded-lg border border-border object-cover md:ml-auto" />
-                </a>
-              )}
+              {/* 2026-06-11 (ปอน) — รูปสินค้า (fCover) is now uploadable inline
+                  here, like legacy PCS update.php's "เปลี่ยนรูปปกสินค้า". Wires the
+                  already-built adminUpdateForwarderCover action that previously had
+                  an entry point only on /edit (§0d reachability). */}
+              <EditCoverField fId={r.id} images={galleryImages} />
             </div>
           </div>
         </div>
@@ -633,12 +713,12 @@ async function tryRenderTbForwarder(
           <ForwarderImportItemsTable r={r} />
         </div>
 
-        {/* ── อัปเดตสถานะรายการ + หมายเหตุ — legacy admin update form (proven
-           TbForwarderActionPanel from /edit · status + ตู้ + Tracking-TH + note ·
-           props all come from `r`). ปอน 2026-06-10. ── */}
+        {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php): the sub-forms
+           below the status <select> change with the picked status — pricing@4 ·
+           เลขพัสดุไทย+ส่งแล้ว@≥6 · เครดิต. ปอน 2026-06-11. ── */}
         <hr className="my-4 border-t border-dashed border-border" />
         <h4 className="text-base md:text-lg font-bold text-red-600 mb-3">อัปเดตสถานะรายการ · หมายเหตุ</h4>
-        <TbForwarderActionPanel
+        <ForwarderStatusWorkflow
           fId={r.id}
           fNo={String(r.id)}
           currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
@@ -646,6 +726,9 @@ async function tryRenderTbForwarder(
           currentTrackingTh={r.ftrackingth ?? ""}
           currentNote={r.fnote ?? ""}
           currentCabinetLocked={r.fcabinet_locked === true}
+          isCredit={(r.fcredit ?? "").trim() === "1"}
+          amountEstimate={creditEstimate}
+          pricing={pricingInit}
         />
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +

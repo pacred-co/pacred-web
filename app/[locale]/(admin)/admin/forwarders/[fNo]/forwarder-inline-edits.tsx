@@ -42,9 +42,9 @@
  * acknowledges the cascading impact before reassigning.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, AlertTriangle } from "lucide-react";
+import { Pencil, AlertTriangle, Camera, Trash2 } from "lucide-react";
 import {
   adminUpdateForwarderTransportType,
   adminUpdateForwarderCrate,
@@ -55,8 +55,12 @@ import {
   adminUpdateForwarderTrackingChn,
   adminUpdateForwarderDateToThai,
   adminReassignForwarderOwner,
+  adminAddForwarderImage,
+  adminRemoveForwarderImage,
 } from "@/actions/admin/forwarders-field-edits";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
+import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { confirm } from "@/components/ui/confirm";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error?: string };
 
@@ -1223,6 +1227,152 @@ export function EditAmountCountField({ fId, famountcount, famount }: { fId: numb
           </>
         )}
       </EditableRow>
+    </div>
+  );
+}
+
+export type ForwarderGalleryImage = { key: string; url: string; isCover: boolean; canDelete: boolean };
+
+/**
+ * รูปสินค้า (GALLERY) · migration 0176 — multi-image gallery on the forwarder
+ * detail page.
+ *
+ * 2026-06-11 (ปอน · owner "มันไม่ใช่ 'เปลี่ยนรูปสินค้า' แต่เป็น 'เพิ่มรูปภาพ' · มันจะ
+ * มีหลายๆรูปภาพ"): replaces the single cover-replace with a per-order gallery. Shows
+ * the cover (fcover · badge "ปก") + every uploaded image (fimages), "เพิ่มรูปภาพ"
+ * appends (adminAddForwarderImage), and each gallery image is deletable
+ * (adminRemoveForwarderImage). Confirm-before-mutate (§0f): explicit edit-mode +
+ * preview before อัปโหลด, and a confirm dialog before delete. Client type + 5 MB
+ * guard → clean Thai error before the 12 MB bodySizeLimit (nextjs-16-quirks).
+ */
+export function EditCoverField({ fId, images }: { fId: number; images: ForwarderGalleryImage[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [localErr, setLocalErr] = useState<string | null>(null);
+
+  // Revoke the preview blob URL when it changes / unmounts.
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  function clearPick() { setFile(null); setPreview(null); setLocalErr(null); }
+  function close() { setEditing(false); clearPick(); }
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    setLocalErr(null);
+    const f = e.target.files?.[0] ?? null;
+    if (!f) { clearPick(); return; }
+    if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
+      setLocalErr("รับเฉพาะรูป PNG / JPEG / WEBP"); setFile(null); setPreview(null); return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      const mb = Math.round((f.size / (1024 * 1024)) * 10) / 10;
+      setLocalErr(`ไฟล์ใหญ่เกิน 5 MB (ขนาด ${mb} MB) — เลือกรูปใหม่`); setFile(null); setPreview(null); return;
+    }
+    setFile(f); setPreview(URL.createObjectURL(f));
+  }
+  function onUpload() {
+    if (!file) return;
+    setLocalErr(null);
+    const fd = new FormData();
+    fd.append("fId", String(fId));
+    fd.append("file", file);
+    startTransition(async () => {
+      const res = await adminAddForwarderImage(fd);
+      if (res.ok) { close(); router.refresh(); }
+      else setLocalErr(res.error ?? "อัปโหลดไม่สำเร็จ");
+    });
+  }
+  function onDelete(key: string) {
+    setLocalErr(null);
+    startTransition(async () => {
+      if (!(await confirm("ลบรูปนี้ออกจากแกลเลอรี?"))) return;
+      const res = await adminRemoveForwarderImage({ fId, imageKey: key });
+      if (res.ok) router.refresh();
+      else setLocalErr(res.error ?? "ลบไม่สำเร็จ");
+    });
+  }
+
+  return (
+    <div className="pt-1">
+      {localErr && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {localErr}</div>}
+
+      {/* HAS images → gallery thumbnails (cover badge + per-image delete).
+          NO images → the Pacred upload placeholder (UploadimagesPacred.png),
+          clickable to open the picker. Owner 2026-06-11: "ถ้าไม่มีรูปให้เอาภาพนี้
+          ขึ้นไว้ · กดที่ภาพแล้วอัปได้ · ถ้ามีภาพให้แสดงภาพจริง". */}
+      {images.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-2 md:justify-end">
+          {images.map((img) => (
+            <div key={img.key} className="relative">
+              <a href={img.url} target="_blank" rel="noopener noreferrer" className="block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt="รูปสินค้า" className="h-20 w-20 rounded-lg border border-border object-cover" />
+              </a>
+              {img.isCover && (
+                <span className="absolute left-1 top-1 rounded bg-primary-600 px-1 py-0.5 text-[9px] font-semibold text-white shadow">ปก</span>
+              )}
+              {img.canDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(img.key)}
+                  disabled={pending}
+                  aria-label="ลบรูป"
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-red-600 p-0.5 text-white shadow hover:bg-red-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="คลิกเพื่อเพิ่มรูปภาพ"
+          className="mt-1 block rounded-lg transition-opacity hover:opacity-80 md:ml-auto"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/hero-section/icon-draf/UploadimagesPacred.png"
+            alt="เพิ่มรูปภาพ — ยังไม่มีรูปสินค้า"
+            className="h-28 w-28 object-contain"
+          />
+        </button>
+      )}
+
+      {/* "เพิ่มรูปภาพ" — ALWAYS visible (owner: "ไม่ซ่อนปุ่ม เพิ่มรูปภาพไว้เลย") */}
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline"
+      >
+        <Camera className="h-3.5 w-3.5" /> เพิ่มรูปภาพ
+      </button>
+
+      {/* file picker — opens BELOW (the button above stays visible) */}
+      {editing && (
+        <div className="mt-2 space-y-2 text-left">
+          <StyledFileInput
+            accept="image/png,image/jpeg,image/webp"
+            disabled={pending}
+            label="เลือกรูปภาพ (คลิกเพื่อเลือกรูป)"
+            hint="PNG / JPEG / WEBP · ไม่เกิน 5 MB · เพิ่มได้หลายรูป"
+            onChange={onPick}
+          />
+          {preview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview} alt="ตัวอย่างรูปใหม่" className="w-full max-w-[160px] rounded-lg border border-border object-cover" />
+          )}
+          <div className="flex gap-2">
+            <button type="button" disabled={pending || !file} className={btnSave} onClick={onUpload}>
+              {pending ? "กำลังอัปโหลด…" : "เพิ่มรูปนี้"}
+            </button>
+            <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
