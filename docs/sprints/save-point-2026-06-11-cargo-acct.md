@@ -47,3 +47,17 @@ The cargo rate resolves in **4 tiers** (legacy `calPriceForwarder`, most-specifi
 3. **Owner-blocked (พี่ป๊อป/บัญชี)**: D-G1 ใบกำกับ issuance (PEAK GL + VAT-base sign-off + flip `tax_invoice.shop_yuan_enabled`) · commission rates · duty-base policy.
 4. **Carryover from prior save-points** (unchanged): 4 staff-code review cases · `RECEIPT_TOKEN_SECRET` in Vercel · `contact@pacred.co` mailbox · test-customer login.
 5. **Legacy staged in Temp** (for continued work): `C:\Users\Admin\AppData\Local\Temp\pacred-legacy` (cargo PHP) + `...\pacred-freight` (axglobal/cargoT freight code).
+
+## 🟡 PARKED — coID "PCS" → "PR" rebrand (analyzed, NOT executed · ภูม sync dave-pacred first, then revisit)
+ภูม flagged "PR = coID=PCS · เปลี่ยน PCS เป็น PR ให้หมด" but **paused** to sync `dave-pacred` first. **NO change was made** (money-path · clean). Full analysis below so it's one-pass executable when revisited:
+
+**🚨 The critical trap (caught in analysis): "PCS" has TWO unrelated meanings in code** — only #1 changes:
+1. **`coID === "PCS"`** = the general-tier company code (the rate system). ← CHANGE to "PR".
+2. **`addressID/fShipBy/hShipBy === "PCS"`** (รับเองที่โกดัง self-pickup · + PCSF/PCSE promos) and **`unit ?? "PCS"`** (freight line unit = pieces). ← **DO NOT TOUCH** (a blanket find-replace breaks shipping + freight units).
+
+**Why (DEV data, read-only verified):** `tb_users.coID` = PCS 938 / **PR 41** (e.g. PR009) / VIP groups. The general rate cards `tb_rate_g_kg/cbm.coid` are ALL "PCS" (16+16). The code sentinel `isGeneral = coID==="PCS"` means the **41 "PR" customers are mis-tiered as VIP → read empty `tb_rate_vip` → "ไม่มีเรต"** (the bug ภูม saw). Rebranding the general code to "PR" fixes them. `tb_co` has no PCS/PR row (general is implicit, not registered).
+
+**Exact scope to change (coID-general ONLY):**
+- DATA (dry-run→apply): `tb_users.coID` "PCS"→"PR" · `tb_rate_g_kg.coid` + `tb_rate_g_cbm.coid` "PCS"→"PR". (DEV first; **PROD data UPDATE = separate prod-data-op**, env-DEV can't touch prod.)
+- CODE (9 sentinel sites): `actions/forwarder-quote.ts:141,146` · `actions/admin/quote-multimode.ts:210,218` · `actions/admin/quote-comparison.ts:153` · `actions/admin/forwarders-edit.ts:210` · `actions/admin/forwarders-new.ts:200` (`GENERAL_COIDS`) · `actions/admin/earn-trigger-tb-user-sales.ts:109` (`isVipCoid` + `VipCoid` type) · `app/[locale]/(admin)/admin/customers/page.tsx:116` · `actions/admin/export/customers.ts:90` · `actions/admin/rate-edits.ts:245` (schema comment + accepts).
+- **Recommended approach = defensive:** default coID "PR" + `isGeneral`/`GENERAL_COIDS` accept BOTH "PR" and "PCS" (and ""/"GENERAL") → data flips to PR fully, but any stray/prod "PCS" still resolves general (zero mis-price during the prod-data lag). The `rate-edits.ts:221-223` comment notes a prior session intentionally KEPT the general bucket "PCS" during the member-code rebrand — this finishes that.
