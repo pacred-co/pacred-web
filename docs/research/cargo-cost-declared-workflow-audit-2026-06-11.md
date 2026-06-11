@@ -27,3 +27,23 @@
 flip `tax_invoice.shop_yuan_enabled` (mig 0152) after money-test · accountant fills `peak.gl_accounts` (mig 0177) → flip `glAccounts.pending=false` · sign-off on the ใบขน VAT base (`tax-doc-mode.ts:187-195`).
 
 — full per-lane finding archived in the 2026-06-11 cargo-cost-declared workflow audit run.
+
+---
+
+## ▶️ Build sequence — waves (added 2026-06-12 · GAP 1 shipped)
+
+GAP 1 (★ auto-fill) shipped 2026-06-12 (commit `dafa481f` · `lib/forwarder/cargo-cost-autofill.ts`). The remaining 9 gaps are all **buildable-now mechanism work** (display/capture/handoff — none need the owner-blocked issuance levers, which live downstream in G1: flip `shop_yuan_enabled` + PEAK GL + VAT-base sign-off). Grouped by file-locality so parallel agents never collide:
+
+| Wave | Gaps | Owner-surface (disjoint) | Notes |
+|---|---|---|---|
+| **2** ★ | GAP 2 (shop doc badge) + GAP 9-shop (profit panel) | `service-orders/[hNo]/legacy-view.tsx` | one agent owns the shop detail. Reuse `<TaxDocBadge>`/`<JuristicWhtChip>` (already on forwarder [fNo]) + `forwarderRowProfit`/shop `profit` math. Add `tax_doc_pref`+`fusercompany` to the select. |
+| **2** ★ | GAP 9-forwarder (profit panel) | `forwarders/[fNo]/page.tsx` | render SELLING/COST/PROFIT (`fcosttotalprice` is a DEAD-READ today, L258). Disjoint file → parallel with the shop agent. |
+| **3** | GAP 3 (yuan doc-choice) | `service-payment/add` | mount `<CartTaxDocPref>` + persist `tax_doc_*` (mig 0140 + `issueYuanTaxInvoice` are stranded today — every yuan order = 'none'). |
+| **3** | GAP 5 (CS HS-first) | cost editor / shop+fwd detail | HS-only field gated to sales/CS so HS can be entered before Pricing costs; Pricing seeds from it. |
+| **4** | GAP 4 (cost-save → workspace handoff) | `actions/admin/cargo-cost.ts` + taxdoc-workspace | advance `tb_cargo_taxdoc_job.pricing_status` on cost save + cross-link order↔job. |
+| **4** | GAP 7 (auto-enroll into taxdoc workspace) | enrolment path | currently 100% manual "เปิดงาน". |
+| **5** | GAP 6 (cargo ใบขน PDF) | the ใบขน PDF route (hard-keyed to `freight_shipment_id`) | add a cargo branch + download button (capture already works `cargo-declarations.ts:149`). |
+| **5** | GAP 8 (wire `computeMarginVat`) | a profit surface | DEAD function (0 callers · `tax-doc-mode.ts:231`) — wire the NON-VAT 7%-on-margin figure now that GAP 1/9 capture gross profit. |
+| **5** | GAP 10 (quick-add forwarder modal doc picker) | the quick-add modal | omits the doc picker → silent default. small. |
+
+**Cadence:** each wave = parallel build agents (worktree isolation) → integrate serially → `pnpm verify` → adversarial review workflow (money-isolation lens mandatory — these are cost/declared/VAT surfaces) → push dave-pacred + main at each gated wave (a save-point). The ★ wave-2 cluster is highest leverage (the audit's "auto-fill first" — profit/declared become real once cost is captured + visible).
