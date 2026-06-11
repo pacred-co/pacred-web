@@ -27,6 +27,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+// GAP 4+7 — on cost capture, auto-enroll the taxdoc job + mark pricing started.
+import { markCargoPricingStarted } from "./cargo-taxdoc-workspace";
 
 // Roles allowed to capture cost (mirror the cargo cost domain).
 const ROLES_COST = ["super", "accounting", "pricing"] as const;
@@ -85,6 +87,18 @@ export async function setForwarderItemCost(
       cost_unit_thb: d.costUnitThb, cost_rate_cny: d.costRateCny,
       declared_value_thb: d.declaredValueThb, hs_code: d.hsCode,
     });
+
+    // GAP 4+7 — auto-enroll the taxdoc job + mark pricing started (best-effort,
+    // NEVER fails the cost write). Resolve the parent forwarder id from the line.
+    try {
+      const { data: parent, error: pErr } = await admin
+        .from("tb_forwarder_item").select("fid").eq("id", d.itemId)
+        .maybeSingle<{ fid: number | null }>();
+      if (pErr) console.error("[setForwarderItemCost parent lookup]", { code: pErr.code, message: pErr.message });
+      else if (parent?.fid) await markCargoPricingStarted({ fid: parent.fid });
+    } catch (e) {
+      console.error("[setForwarderItemCost → markCargoPricingStarted]", e instanceof Error ? e.message : String(e));
+    }
 
     revalidatePath("/admin/forwarders");
     return { ok: true };
@@ -185,6 +199,18 @@ export async function setShopOrderItemCost(
       cost_unit_cny: d.costUnitCny, cost_rate_cny: d.costRateCny,
       declared_value_thb: d.declaredValueThb, hs_code: d.hsCode,
     });
+
+    // GAP 4+7 — auto-enroll the taxdoc job + mark pricing started (best-effort).
+    // Resolve the parent shop-order hno from the line.
+    try {
+      const { data: parent, error: pErr } = await admin
+        .from("tb_order").select("hno").eq("id", d.orderId)
+        .maybeSingle<{ hno: string | null }>();
+      if (pErr) console.error("[setShopOrderItemCost parent lookup]", { code: pErr.code, message: pErr.message });
+      else if (parent?.hno) await markCargoPricingStarted({ hno: parent.hno });
+    } catch (e) {
+      console.error("[setShopOrderItemCost → markCargoPricingStarted]", e instanceof Error ? e.message : String(e));
+    }
 
     revalidatePath("/admin/service-orders");
     return { ok: true };

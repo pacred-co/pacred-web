@@ -319,6 +319,45 @@ export async function adminEnsureCargoTaxdocJob(
 }
 
 // ════════════════════════════════════════════════════════════════════
+// 1b) GAP 4+7 (2026-06-12) — auto-enroll on cost capture. Called best-effort
+//     from the cargo cost editor (actions/admin/cargo-cost.ts) when Pricing
+//     saves a per-line cost: it creates the taxdoc job if missing (GAP 7 —
+//     no more manual "เปิดงาน") and bumps pricing_status '' → 'in_progress'
+//     (GAP 4 — the CS→Pricing→Docs→Account handoff now starts itself). It
+//     NEVER flips to 'done' (that stays the staff's explicit close) and never
+//     touches money/issuance. Idempotent: re-saving a cost on an already
+//     in_progress/done job is a no-op for the status.
+// ════════════════════════════════════════════════════════════════════
+export async function markCargoPricingStarted(
+  input: { fid?: number; hno?: string },
+): Promise<AdminActionResult<{ id: string }>> {
+  const parsed = ensureJobSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin([...ROLES_PRICING], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const key = d.fid != null ? { fid: d.fid } : { hno: d.hno! };
+    const res = await ensureJobRow(admin, key, adminId);   // GAP 7 — auto-enroll
+    if (!res.ok) return res;
+    // GAP 4 — advance ONLY from not-started; never demote a working/closed stage.
+    if (res.row.pricing_status === "") {
+      const { error } = await admin
+        .from("tb_cargo_taxdoc_job")
+        .update({ pricing_status: "in_progress", updated_by_admin_id: adminId })
+        .eq("id", res.row.id);
+      if (error) {
+        console.error("[markCargoPricingStarted update]", { id: res.row.id, code: error.code, message: error.message });
+        return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+      }
+      revalidatePath("/admin/pricing/taxdoc-workspace");
+      revalidatePath(`/admin/pricing/taxdoc-workspace/${res.row.id}`);
+    }
+    return { ok: true, data: { id: res.row.id } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
 // 2) Advance a stage status (the state machine). Account gated on cs+pricing.
 // ════════════════════════════════════════════════════════════════════
 const advanceStageSchema = z.object({
