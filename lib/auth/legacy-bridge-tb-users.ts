@@ -130,10 +130,20 @@ export async function insertLegacyTbUserRow(
   // We pre-check and no-op: the customer already HAS a tb_users identity
   // under the other code, so the admin queue + approve flow can still act on
   // them via that row. Logged at info (expected), not error.
+  //
+  // Ghost-PR fix (2026-06-11): the pre-check had NO userStatus filter, so a
+  // soft-deleted (userStatus='0') account that still holds the phone would
+  // make this no-op {ok:true} and insert NOTHING → the fresh signup became a
+  // ghost (profiles + member_code with no tb_users mirror). Align with
+  // findLegacyUserIdByPhone's filter (userStatus != '0'): a soft-deleted phone
+  // owner must NOT block the mirror insert. The customer is genuinely starting
+  // over; the real unique index still guards against a LIVE duplicate below
+  // (the 23505 branch degrades that to a no-op too).
   const { data: phoneOwner, error: phoneOwnerErr } = await admin
     .from("tb_users")
     .select("userID")
     .eq("userTel", legacyTel)
+    .neq("userStatus", "0")
     .maybeSingle();
   if (phoneOwnerErr) {
     // Not fatal — same as the userID pre-check above: the insert below will
@@ -223,12 +233,35 @@ export async function insertLegacyTbUserRow(
 
   const { error: insertErr } = await admin.from("tb_users").insert(payload);
   if (insertErr) {
-    // 23505 = unique_violation. A phone-collision that slipped past the
-    // pre-check above (race between two concurrent signups, or the legacy
-    // usertel index) is NOT an orphan risk worth an error page — the other
-    // row already represents this customer's identity. Degrade to info.
+    // 23505 = unique_violation. Two distinct sources, treated differently:
+    //
+    //  · userID (PK) collision — a row with this member_code already exists
+    //    (rerun of register with the same code). Genuinely idempotent: the
+    //    customer already HAS their mirror under this exact code → {ok:true}.
+    //
+    //  · usertel collision — the phone is taken by ANOTHER row. With the
+    //    soft-deleted-aware pre-check above (`.neq userStatus '0'`), this now
+    //    fires when ONLY a soft-deleted (userStatus='0') account holds the
+    //    phone: the pre-check correctly let us through, but the FULL unique
+    //    index on usertel (0082 · not partial) still blocks the insert. NO row
+    //    landed under our member_code → blanket {ok:true} here would strand a
+    //    ghost PR. Report {ok:false} so the caller's verify-and-rollback
+    //    (registerPersonal) cleans up instead of leaving an unreachable orphan.
+    //
+    // The error details name the offending constraint (Postgres includes the
+    // index/constraint name). usertel index = `idx_17047_usertel` (0082).
     if (insertErr.code === "23505") {
-      logger.info(SCOPE, "tb_users insert hit unique constraint — treating as already-present (no orphan)", {
+      const blob = `${insertErr.details ?? ""} ${insertErr.message ?? ""}`.toLowerCase();
+      const isUserTelCollision = blob.includes("usertel");
+      if (isUserTelCollision) {
+        logger.error(SCOPE, "tb_users insert blocked by usertel unique index — phone held by another (likely soft-deleted) row · NO mirror landed", insertErr, {
+          memberCode,
+          phone: redactPhone(phone),
+          constraint: insertErr.details ?? insertErr.message,
+        });
+        return { ok: false, error: "phone_collision_no_row" };
+      }
+      logger.info(SCOPE, "tb_users insert hit userID unique constraint — already present (no orphan)", {
         memberCode,
         constraint: insertErr.details ?? insertErr.message,
       });
@@ -383,37 +416,92 @@ export async function seedLegacyWalletRows(
 }
 
 /**
- * Look up an existing legacy `tb_users` account by phone — used by the signup
- * guard (actions/auth.ts) to BLOCK a re-registration that would otherwise mint
- * a parallel orphan identity (profiles/corporate disconnected from the real
- * customer). Returns the existing `userID` (member code) or null.
+ * Look up an existing customer account by phone — used by the signup guard
+ * (actions/auth.ts) to BLOCK a re-registration that would otherwise mint a
+ * parallel orphan identity (profiles/corporate disconnected from the real
+ * customer). Returns the existing `member_code` (`PR<n>`) or null.
  *
- * The customer's phone is the stable key: `tb_users.userTel` carries a UNIQUE
- * index. We convert the signup's E.164 phone to the legacy 10-digit form before
- * the lookup. Fail-open on a transient read error (return null = allow signup)
- * so a DB hiccup never blocks a legitimate new customer.
+ * The customer's phone is the stable key. We check BOTH identity stores:
+ *   1. `tb_users.userTel` (legacy 10-digit form · UNIQUE index) — the primary
+ *      mirror for migrated + Pacred-native customers.
+ *   2. `profiles.phone` (E.164 form) — the AUTH store. A customer can exist in
+ *      profiles WITHOUT a tb_users mirror: profiles-only signups before the
+ *      bridge existed, a broken-link migrated row, or a synthetic-email
+ *      identity. Without this second check, re-registering such a customer
+ *      slips past the tb_users guard and mints a duplicate ghost — exactly the
+ *      orphan class this function exists to prevent (2026-06-11 hardening).
+ *
+ * Order: tb_users first (the canonical ops identity); fall back to profiles
+ * only when tb_users has no live match. Fail-open on a transient read error
+ * (return null = allow signup) so a DB hiccup never blocks a legitimate new
+ * customer.
  */
 export async function findLegacyUserIdByPhone(
   admin: SupabaseClient,
   phone: string,
 ): Promise<string | null> {
+  // ── 1. tb_users (legacy 10-digit usertel) ───────────────────────────────
   const legacyTel = e164ToLegacyThaiPhone(phone);
-  if (!legacyTel) return null;
-  const { data, error } = await admin
-    .from("tb_users")
-    .select("userID, userStatus")
-    .eq("userTel", legacyTel)
-    .maybeSingle<{ userID: string; userStatus: string | null }>();
-  if (error) {
-    logger.warn(SCOPE, "phone-existence pre-check failed — allowing signup (fail-open)", {
+  if (legacyTel) {
+    const { data, error } = await admin
+      .from("tb_users")
+      .select("userID, userStatus")
+      .eq("userTel", legacyTel)
+      .maybeSingle<{ userID: string; userStatus: string | null }>();
+    if (error) {
+      logger.warn(SCOPE, "tb_users phone pre-check failed — allowing signup (fail-open)", {
+        phone: redactPhone(phone),
+        reason: error.message,
+      });
+      return null;
+    }
+    // userStatus='0' = legacy soft-deleted account. A deleted legacy account
+    // should NOT block a fresh signup (the customer genuinely starts over).
+    if (data && data.userStatus !== "0") return data.userID;
+  }
+
+  // ── 2. profiles fallback (E.164 phone) ──────────────────────────────────
+  // No live tb_users match → check the AUTH store. This closes
+  // re-register-duplicate for profiles-only / broken-link-migrated /
+  // synthetic-email identities that never got a tb_users mirror.
+  //
+  // profiles.phone is stored E.164 (`+66...` · register actions normalize
+  // before insert) so we match the E.164 `phone` directly, then fall back to a
+  // last-9-digits comparison to tolerate any stored format drift. A
+  // `status='suspended'` profile is the soft-deleted / retired marker
+  // (profiles.status ∈ incomplete|active|suspended) — like userStatus='0', a
+  // suspended account must NOT block a fresh signup, so we exclude it.
+  const last9 = phone.replace(/\D/g, "").slice(-9);
+  if (last9.length < 9) return null;
+  // `like %last9` is a digits-only loose pre-filter (no special chars → safe
+  // in PostgREST); the exact last-9 match is re-asserted in code below. We
+  // deliberately avoid embedding the raw `+66…` E.164 value in an `.or()`
+  // filter string (the `+` / format can trip PostgREST parsing) — the last-9
+  // suffix uniquely identifies a Thai mobile across both stored formats.
+  const { data: profByPhone, error: profErr } = await admin
+    .from("profiles")
+    .select("member_code, phone, status")
+    .like("phone", `%${last9}`)
+    .neq("status", "suspended")
+    .limit(5);
+  if (profErr) {
+    logger.warn(SCOPE, "profiles phone pre-check failed — allowing signup (fail-open)", {
       phone: redactPhone(phone),
-      reason: error.message,
+      reason: profErr.message,
     });
     return null;
   }
-  // userStatus='0' = legacy soft-deleted account. A deleted legacy account
-  // should NOT block a fresh signup (the customer genuinely starts over).
-  if (data && data.userStatus !== "0") return data.userID;
+  if (profByPhone && profByPhone.length > 0) {
+    // Confirm the last-9-digits actually match (the `like %last9` is a loose
+    // pre-filter; the eq is exact). Prefer a row that carries a member_code.
+    const match = profByPhone.find(
+      (p) =>
+        p.member_code &&
+        typeof p.phone === "string" &&
+        p.phone.replace(/\D/g, "").slice(-9) === last9,
+    );
+    if (match?.member_code) return match.member_code;
+  }
   return null;
 }
 
