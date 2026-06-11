@@ -147,7 +147,6 @@ pacred-web/
 | `/login` | ✅ wired | email/phone/member-code + Google/Facebook OAuth (LINE = mocked) |
 | `/register` | ✅ wired | Personal + Juristic 3-step (with file uploads) |
 | `/dashboard` | ✅ basic | profile info + member_code + quick links (placeholder for full feature) |
-| `/orders` | ✅ demo | list + create — pattern reference for new features |
 | `/complete-profile` | ⏳ placeholder | จะมี form ทีหลัง |
 | `/auth/callback` (server) | ✅ | OAuth code exchange |
 | `/auth/signout` (POST) | ✅ | clears session |
@@ -202,7 +201,7 @@ pacred-web/
 
 ## Adding a new feature
 
-ทำตาม pattern นี้ (อ้างอิง [actions/orders.ts](actions/orders.ts) + [app/[locale]/(protected)/orders/](app/[locale]/(protected)/orders/) เป็นตัวอย่าง):
+ทำตาม pattern นี้ (อ้างอิง [lib/validators/refund.ts](lib/validators/refund.ts) + [actions/refunds.ts](actions/refunds.ts) + [app/[locale]/(protected)/refunds/](app/[locale]/(protected)/refunds/) เป็นตัวอย่าง · เดิมชี้ `/orders` demo ที่ลบไป 2026-06-10):
 
 1. **SQL** — เพิ่ม table + RLS ที่ `supabase/migrations/00NN_<name>.sql` → รันใน Supabase SQL Editor
 2. **Validator** — Zod schema ใน `lib/validators/<name>.ts`

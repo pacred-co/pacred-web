@@ -224,6 +224,27 @@ The cherry-picks may conflict if `dave-pacred` also touched those files — reso
 **Why this matters next time:**
 - **Always check `git log <merge-base>..` before a merge from a teammate's branch** — the diff stat is misleading when the source branch is behind. The TRUE delta is the commit list since merge-base, not the file count.
 - A teammate's branch being "behind on backend work" is the norm in this team (ปอน focuses on frontend, ภูม on V3, เดฟ on integration). Default integration strategy is cherry-pick (or rebase the teammate's branch onto current `dave-pacred` first), never blind merge.
+
+---
+
+## L-PAS-09 · A worktree-isolation agent that hits the ACCOUNT session limit mid-run loses its ENTIRE worktree if it hasn't committed — instruct every lane to commit incrementally
+
+**Trigger.** 2026-06-10: spawned 4 `Agent({ isolation: "worktree", run_in_background })` lanes. All 4 hit `"You've hit your session limit · resets 3pm (Asia/Bangkok)"` at ~12 min in. Outcome by lane on completion notification:
+- Lane A — had made **1 commit** → branch + worktree survived; that commit was salvageable.
+- Lane B — had **uncommitted working-tree changes** (no commit) → the worktree happened to still exist, so the integrator could `git add -A && git commit` it from outside. Survived by luck.
+- Lanes C & D — **no commits, worktree auto-removed** (the harness cleans an *unchanged* worktree on agent exit) → `git worktree list` no longer shows them, the branch never existed, **all work lost**. Had to re-run from scratch.
+
+**Rule.** Every worktree-lane spawn prompt MUST say: *"Commit your work incrementally as you finish each logical chunk — do NOT batch all commits for the end. If you're interrupted, only committed work survives."* The re-runs with this instruction (Lanes C & D round 2) each landed 4–5 incremental commits and survived cleanly. An uncommitted worktree is not a save-point; a session/usage limit can end a lane at any token.
+
+**Recovery when it happens:** for a lane whose worktree still exists with uncommitted changes, commit it from the integrator side (`git -C <worktree> add -A && git -C <worktree> commit`) BEFORE doing anything else — that converts "survived by luck" into "safe". For lanes whose worktree is gone, the work is unrecoverable; re-spawn after the limit resets (check the wall-clock vs the stated reset time first — at 15:35 the 3pm reset had already passed, so re-spawn succeeded immediately).
+
+---
+
+## L-PAS-10 · `next build` in the SAME worktree as a running `next dev` corrupts the shared `.next` and kills the dev server
+
+**Trigger.** 2026-06-10: dev server (`preview_start` → `next dev`, :3000) was running from the integration worktree. I ran the production-build gate (`node next build`) in that *same* worktree. Both write `.next/`; the build clobbered the dev server's build state → the server went from `200` to `Unable to connect to the remote server` (process dead). A subsequent customer-surface browser-verify failed with `Frame ID 0 is showing error page` until I restarted dev.
+
+**Rule.** Before running `next build` as a deploy gate, **stop the dev server first** (`preview_stop`), optionally `rm -rf .next` for a clean build, run the build, then `preview_start` again for any post-build browser-verify. Never run `dev` and `build` against the same `.next` concurrently. (Companion to the older note in `ci-and-deploy-gotchas.md`: don't `rm -rf .next` while dev is live, and the shared :3000-from-main-checkout gotcha — same root cause: one `.next` dir, two writers.)
 - The DESTRUCTIVENESS of a blind merge scales with team velocity. With 4 active branches (`podeng`/`dave-pacred`/`Poom-pacred`/`main`) and dozens of commits per day, the "behind" cost compounds — a merge that's safe on Monday morning has 30 file-reverts in it by Monday evening.
 - **The `branch-integrate-loop` skill** ([`.claude/skills/branch-integrate-loop/SKILL.md`](../../.claude/skills/branch-integrate-loop/SKILL.md)) is the canonical playbook for this — "integrate → verify → distribute" with cherry-pick as default and merge only when source IS up-to-date with target. Today's session followed it; this entry documents the diagnostic step that justified the choice.
 

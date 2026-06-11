@@ -27,25 +27,20 @@ import { useRouter } from "next/navigation";
 import { Save, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminUpdateCustomerHsRates } from "@/actions/admin/rate-edits";
+// V-D2 — warehouse + product-type labels are canonical
+// (lib/warehouse/rate-dimensions.ts); transport keeps its local เครื่องบิน variant.
+import { RATE_WAREHOUSE_LABEL, RATE_PRODUCT_LABEL } from "@/lib/warehouse/rate-dimensions";
 
 // Warehouse encoding (legacy + price engine truth): 1=กวางโจว, 2=อี้อู.
 // (Was previously labelled BACKWARDS here → admin edited the wrong warehouse's
 // rate. Fixed 2026-06-05 to match lib/admin/customer-rate-tables.ts + the engine.)
-const WAREHOUSE_LABEL: Record<string, string> = {
-  "1": "กวางโจว",
-  "2": "อี้อู",
-};
+const WAREHOUSE_LABEL: Record<string, string> = RATE_WAREHOUSE_LABEL;
 const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚚 รถ",
   "2": "🚢 เรือ",
   "3": "✈️ เครื่องบิน",
 };
-const PRODUCT_LABEL: Record<string, string> = {
-  "1": "ทั่วไป",
-  "2": "มอก.",
-  "3": "อย.",
-  "4": "พิเศษ",
-};
+const PRODUCT_LABEL: Record<string, string> = RATE_PRODUCT_LABEL;
 
 type Wh = "1" | "2";
 type Tt = "1" | "2" | "3";

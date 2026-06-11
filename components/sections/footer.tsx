@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { SOCIAL, STAFF } from "@/components/seo/site";
 
 // Brand SVG icons (inline)
 function IconYoutube({ className }: { className?: string }) {
@@ -27,11 +28,15 @@ function IconLine({ className }: { className?: string }) {
   );
 }
 
+// Social URLs sourced from the single SOT (components/seo/site.ts). LINE keeps
+// the internal /line redirect (add-friend deep link lives there).
 const LINE_URL = "/line";
-const YOUTUBE_URL = "https://www.youtube.com/@PacredShipping";
-const FACEBOOK_URL = "https://www.facebook.com/PacredShippingCustomsClearanceImportExport/";
-const TIKTOK_URL = "https://www.tiktok.com/@pacred.co";
-const INSTAGRAM_URL = "https://www.instagram.com/pacred.co/";
+const YOUTUBE_URL = SOCIAL.youtube;
+const FACEBOOK_URL = SOCIAL.facebook;
+const TIKTOK_URL = SOCIAL.tiktok;
+const INSTAGRAM_URL = SOCIAL.instagram;
+// Footer QR contact line = แนท's sales line (STAFF.sales[3]).
+const FOOTER_QR_PHONE = STAFF.sales[3].phone;
 
 const PARTNERS = [
   { file: "upspartner.png",         url: "https://www.ups.com/th" },
@@ -172,7 +177,7 @@ export function Footer() {
                 />
               </div>
               <p className="mt-2 text-[11px] font-black text-[#111827] dark:text-white text-center tracking-wider">
-                066-131-0253
+                {FOOTER_QR_PHONE}
               </p>
             </TrackedExternalLink>
           </div>

@@ -185,6 +185,31 @@ export default async function AdminReportCntDetailPage({
   const fWarehouseChina = String(firstRow.fwarehousechina ?? "");
   const fTransportType = String(firstRow.ftransporttype ?? "1");
 
+  // ── 1b) V-D3 — carrier physical container number ──
+  // The Pacred cabinet code (fcabinetnumber = GZS260525-2) is what staff and
+  // customers see. The carrier's real B/L container number (e.g. JXLU6157980)
+  // already arrives via MOMO: momo_container_closed.container_batch_no = the
+  // cabinet code, .real_container_no = the carrier number (migrations 0119/
+  // 0130). It was never surfaced — pull it here keyed on the cabinet code and
+  // show it in the header. NULL = not a MOMO-synced container (manual / other
+  // carrier) → the field simply doesn't render.
+  let carrierContainerNo: string | null = null;
+  {
+    const { data: momoClosed, error: momoClosedErr } = await admin
+      .from("momo_container_closed")
+      .select("real_container_no")
+      .eq("container_batch_no", fCabinetNumber)
+      .not("real_container_no", "is", null)
+      .limit(1)
+      .maybeSingle<{ real_container_no: string | null }>();
+    if (momoClosedErr) {
+      console.error(`[momo_container_closed carrier-no] failed`, {
+        code: momoClosedErr.code, message: momoClosedErr.message, cabinet: fCabinetNumber,
+      });
+    }
+    carrierContainerNo = momoClosed?.real_container_no?.trim() || null;
+  }
+
   // ── 2) Container payment status ── (tb_cnt_item row presence)
   const { data: cntItemRow, error: cntItemRowErr } = await admin
     .from("tb_cnt_item")
@@ -257,19 +282,27 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
-  // ── 6) tb_forwarder_import2 — flags "ยิงเข้าโกดังไทยแล้ว" rows ──
+  // ── 6) tb_forwarder_import2 — flags "ยิงเข้าโกดังไทยแล้ว" rows +
+  //       V-D4 per-row received box count (fi2amount = boxes scanned in at
+  //       the TH warehouse). receivedByFid sums fi2amount per fid so the
+  //       detail table can show "received N of M" per parcel (split-receipt
+  //       aware · the legacy app only recorded a binary received flag). A
+  //       forwarder may have >1 import2 row (re-link edge cases) → sum them.
   const fIds = cntRows.map((r) => r.id);
   const shippedSet = new Set<number>();
+  const receivedByFid = new Map<number, number>();
   if (fIds.length > 0) {
     const { data: imp2, error: imp2Err } = await admin
       .from("tb_forwarder_import2")
-      .select("fid")
+      .select("fid, fi2amount")
       .in("fid", fIds);
     if (imp2Err) {
       console.error(`[tb_forwarder_import2 list] failed`, { code: imp2Err.code, message: imp2Err.message });
     }
-    for (const r of (imp2 ?? []) as Array<{ fid: number }>) {
-      shippedSet.add(Number(r.fid));
+    for (const r of (imp2 ?? []) as Array<{ fid: number; fi2amount: number | null }>) {
+      const fid = Number(r.fid);
+      shippedSet.add(fid);
+      receivedByFid.set(fid, (receivedByFid.get(fid) ?? 0) + Math.max(0, Number(r.fi2amount ?? 0)));
     }
   }
 
@@ -362,7 +395,9 @@ export default async function AdminReportCntDetailPage({
       fdetail: r.fdetail,
       fcover: r.fcover,
       famount: Number(r.famount ?? 0) || null,
-      famountfi: null, // tb_forwarder_import2 amount not surfaced in this row — skipped for P0-1
+      // V-D4 — boxes actually received at TH warehouse (sum of fi2amount).
+      // null when the parcel has no import2 scan row yet (shows "-/M").
+      famountfi: receivedByFid.has(Number(r.id)) ? receivedByFid.get(Number(r.id))! : null,
       fvolume: Number(r.fvolume ?? 0),
       fweight: Number(r.fweight ?? 0),
       fproductstype: pType || null,
@@ -510,6 +545,16 @@ export default async function AdminReportCntDetailPage({
               </h1>
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-y-1 text-sm">
                 <div>โกดังจีน: <span className="font-medium">{warehouseLabel}</span> ({warehouseChinaLabel})</div>
+                {/* V-D3 — carrier physical container number (from MOMO). Only
+                    shows when known; the Pacred code is in the title above. */}
+                {carrierContainerNo && (
+                  <div>
+                    เลขตู้สายเรือ (carrier):{" "}
+                    <span className="font-mono font-medium" title="เลขตู้คอนเทนเนอร์จริงของสายเรือ/ผู้ขนส่ง (จาก B/L)">
+                      {carrierContainerNo}
+                    </span>
+                  </div>
+                )}
                 <div>
                   สถานะตู้สินค้า:{" "}
                   {cabinetIsPaid ? (

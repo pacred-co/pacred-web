@@ -3102,6 +3102,37 @@
     "statusInlineLabel": "Status"
   },
   "pcsAdminNav": {
+    "classNav": {
+      "hr": "Human Resources",
+      "acc": "Accounting & Finance",
+      "marketing": "Marketing",
+      "dev": "Developer",
+      "warehouse": "Logistics"
+    },
+    "serviceNav": {
+      "importList": "Import",
+      "freightExport": "Export Service",
+      "customs": "Customs & Documents",
+      "combinedDecl": "Combined Declaration"
+    },
+    "marketingNav": {
+      "sales": "Sales",
+      "customerService": "Customer Services",
+      "pricing": "Pricing",
+      "marketing": "Extensions"
+    },
+    "additionalServices": {
+      "title": "Add-on Services",
+      "taxInvoice": "Issue Tax Invoice",
+      "domesticShipping": "Domestic Shipping"
+    },
+    "logisticsNav": {
+      "docFreight": "Doc Freight",
+      "docShipping": "Doc Shipping",
+      "warehouse": "Warehouse",
+      "transport": "Transport"
+    },
+    "comingSoon": "Coming soon",
     "wallet": {
       "title": "Wallet"
     },
@@ -3362,7 +3393,7 @@
     },
     "settingsCargo": {
       "title": "Cargo system settings",
-      "general": "General",
+      "general": "Adjust Yuan Rate",
       "homeNotice": "Home-page notice",
       "popup": "Customer popup",
       "promos": "Promo banners",
@@ -3373,7 +3404,7 @@
       "rateCustomHs": "Custom-HS rates",
       "vipTiers": "VIP membership tiers",
       "system": "System",
-      "crons": "Cron jobs",
+      "crons": "System Health",
       "systemNotifs": "System notifications",
       "notifyDispatch": "Notification dispatch",
       "pcsSync": "PCS ↔ Pacred Sync",
@@ -5281,6 +5312,7 @@
     "estimateImport": "Estimate import cost",
     "importHistory": "Import history",
     "importReceiptHistory": "Import receipt history",
+    "billingRunNav": "My billing invoices",
     "shipmentTracking": "Track shipment",
     "refundStatus": "Refund status",
     "shopWallet": "Shop wallet (Affiliate)",

@@ -4,6 +4,7 @@ import { relativeTimeTh } from "@/lib/utils/relative-time";
 import {
   getCrmConversations,
   getCrmReps,
+  getCrmCsReps,
   getCrmFunnel,
   getCustomer360,
 } from "@/actions/admin/crm";
@@ -17,6 +18,7 @@ import type { ActivityEntry } from "@/actions/admin/customer-activity-types";
 import { TagChips } from "@/components/admin/tag-chips";
 import { CustomerActivityTimeline } from "@/components/admin/customer-activity-timeline";
 import { RepRouting } from "./rep-routing";
+import { CsRouting } from "./cs-routing";
 import { RepFilter } from "./rep-filter";
 import {
   MessageSquare, Users, MessageCircle, PhoneCall, ImageIcon, ChevronLeft,
@@ -85,12 +87,13 @@ export default async function AdminCrmPage({
   const selectedId = sp.c ?? null;
   const repFilter = (sp.rep ?? "").trim() || null;
 
-  // Funnel + reps always load. Conversations + thread + 360 only for the LINE
-  // channel (Facebook is a placeholder). Run them together (no waterfall).
+  // Funnel + reps + CS pool always load. Conversations + thread + 360 only for
+  // the LINE channel (Facebook is a placeholder). Run them together (no waterfall).
   const isLine = channel === "line";
-  const [funnelRes, repsRes, convRes, threadData, c360Res] = await Promise.all([
+  const [funnelRes, repsRes, csRepsRes, convRes, threadData, c360Res] = await Promise.all([
     getCrmFunnel(),
     getCrmReps(),
+    getCrmCsReps(),
     isLine ? getCrmConversations({ repFilter }) : Promise.resolve(null),
     isLine && selectedId ? getLineCustomerThread(selectedId) : Promise.resolve(null),
     isLine && selectedId
@@ -101,6 +104,8 @@ export default async function AdminCrmPage({
   const funnel = funnelRes.ok ? funnelRes.data : undefined;
   const reps = repsRes.ok ? (repsRes.data?.reps ?? []) : [];
   const repGateNote = repsRes.ok ? (repsRes.data?.gateNote ?? null) : null;
+  const csReps = csRepsRes.ok ? (csRepsRes.data?.reps ?? []) : [];
+  const csGateNote = csRepsRes.ok ? (csRepsRes.data?.gateNote ?? null) : null;
   const conversations = convRes?.ok ? (convRes.data?.conversations ?? []) : [];
   const convErr = convRes && !convRes.ok ? convRes.error : null;
   const messages = threadData?.messages ?? [];
@@ -215,6 +220,8 @@ export default async function AdminCrmPage({
                     c360={c360}
                     reps={reps}
                     repGateNote={repGateNote}
+                    csReps={csReps}
+                    csGateNote={csGateNote}
                     canRoute={canRoute}
                     tags={custTags}
                     activity={custActivity}
@@ -478,6 +485,8 @@ function Customer360Panel({
   c360,
   reps,
   repGateNote,
+  csReps,
+  csGateNote,
   canRoute,
   tags,
   activity,
@@ -486,6 +495,8 @@ function Customer360Panel({
   c360: import("@/lib/admin/crm-types").Customer360 | null;
   reps: import("@/lib/admin/crm-types").CrmRep[];
   repGateNote: string | null;
+  csReps: import("@/lib/admin/crm-types").CrmCsRep[];
+  csGateNote: string | null;
   canRoute: boolean;
   tags: string[];
   activity: ActivityEntry[];
@@ -569,13 +580,26 @@ function Customer360Panel({
         <p className="text-[10px] text-muted/70 -mt-2">โทรล่าสุด {relativeTimeTh(c360.lastCallAt)}</p>
       )}
 
-      {/* Rep routing — the one mutation */}
+      {/* Rep routing — sales-rep mutation */}
       <div className="pt-3 border-t border-border">
         <RepRouting
           userid={c360.userid}
           currentRepLegacyId={c360.repLegacyId}
           reps={reps}
           gateNote={repGateNote}
+          canEdit={canRoute}
+        />
+      </div>
+
+      {/* CS routing — manual override of the close→CS auto-handoff (CEO §5:
+          sale/CS ownership is flexible — assign / change / clear all allowed) */}
+      <div className="pt-3 border-t border-border">
+        <CsRouting
+          userid={c360.userid}
+          currentCsId={c360.csLegacyId}
+          currentCsName={c360.csName}
+          reps={csReps}
+          gateNote={csGateNote}
           canEdit={canRoute}
         />
       </div>

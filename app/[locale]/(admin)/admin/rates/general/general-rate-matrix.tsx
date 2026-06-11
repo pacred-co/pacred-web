@@ -20,6 +20,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateGeneralRateCells } from "@/actions/admin/rate-edits";
 import { confirm } from "@/components/ui/confirm";
+import {
+  RATE_WAREHOUSE_LABEL,
+  RATE_TRANSPORT_LABEL_EMOJI,
+  RATE_PRODUCT_LABEL,
+} from "@/lib/warehouse/rate-dimensions";
 
 type WH = "1" | "2";
 type TT = "1" | "2" | "3";
@@ -31,9 +36,10 @@ export type GeneralCellData = {
 };
 export type GeneralMatrix = Record<string, GeneralCellData>; // key `${wh}|${tt}|${pt}`
 
-const WH_LABEL: Record<WH, string> = { "1": "กวางโจว", "2": "อี้อู" };
-const TT_LABEL: Record<TT, string> = { "1": "🚚 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
-const PT_LABEL: Record<PT, string> = { "1": "ทั่วไป", "2": "มอก.", "3": "อย.", "4": "พิเศษ" };
+// V-D2 — canonical labels from lib/warehouse/rate-dimensions.ts (single source).
+const WH_LABEL: Record<WH, string> = RATE_WAREHOUSE_LABEL;
+const TT_LABEL: Record<TT, string> = RATE_TRANSPORT_LABEL_EMOJI;
+const PT_LABEL: Record<PT, string> = RATE_PRODUCT_LABEL;
 const WHS: WH[] = ["1", "2"];
 const TTS: TT[] = ["1", "2", "3"];
 const PTS: PT[] = ["1", "2", "3", "4"];

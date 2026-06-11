@@ -114,7 +114,7 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
       // customers/credit · commissions · accounting/wht-certs ·
       // accounting/quote-compare · api-forwarder-momo ·
       // accounting/near-churn · reports/shops-profit-pay).
-      className="sticky top-0 z-30 rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
+      className="sticky top-14 z-30 rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
     >
       {/* Desktop · md+ — full cascading menubar */}
       <ul className="hidden md:flex flex-wrap items-stretch">

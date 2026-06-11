@@ -34,9 +34,18 @@ import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema, serviceSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { CONTACT, STAFF, LINE_OA } from "@/components/seo/site";
 
 const PATH = "/customs-clearance-shipping-suvarnabhumi";
 const NS = "seo.services.customsClearance";
+
+// Contact values sourced from the single SOT (components/seo/site.ts):
+//   PHONE_COMPANY = company main line · PHONE_DOC = วิน (DOCS) · LINE handle.
+const PHONE_COMPANY = CONTACT.phoneCompanyDisplay; // "02-421-3325"
+const PHONE_COMPANY_TEL = `tel:${PHONE_COMPANY.replace(/-/g, "")}`;
+const PHONE_DOC = STAFF.doc[0].phone;              // "062-603-0456" (วิน)
+const PHONE_DOC_TEL = `tel:${PHONE_DOC.replace(/-/g, "")}`;
+const LINE_HANDLE = LINE_OA.premiumId;             // "@pacred"
 
 export async function generateMetadata({
   params,
@@ -539,10 +548,10 @@ export default async function CustomsClearancePage({
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>062-603-0456</span>
+                      <span>{PHONE_DOC}</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>{tp("lineBannerLineHandle")} <span className="font-black">@pacred</span></span>
+                      <span>{tp("lineBannerLineHandle")} <span className="font-black">{LINE_HANDLE}</span></span>
                     </p>
 
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
@@ -680,10 +689,10 @@ export default async function CustomsClearancePage({
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>062-603-0456</span>
+                      <span>{PHONE_DOC}</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>{tp("lineBannerLineHandle")} <span className="font-black">@pacred</span></span>
+                      <span>{tp("lineBannerLineHandle")} <span className="font-black">{LINE_HANDLE}</span></span>
                     </p>
 
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
@@ -1072,18 +1081,18 @@ export default async function CustomsClearancePage({
                   {/* Phones — stacked column right of the QR */}
                   <div className="flex flex-col gap-1.5 lg:gap-2">
                     <a
-                      href="tel:024213325"
+                      href={PHONE_COMPANY_TEL}
                       className="inline-flex items-center gap-1.5 lg:gap-2 bg-white/95 backdrop-blur-sm rounded-md lg:rounded-lg px-2.5 lg:px-3 py-1 lg:py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.22)] hover:scale-[1.04] hover:bg-white transition-all"
                     >
                       <Phone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-primary-600" strokeWidth={2.7} />
-                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">02-421-3325</span>
+                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">{PHONE_COMPANY}</span>
                     </a>
                     <a
-                      href="tel:0626030456"
+                      href={PHONE_DOC_TEL}
                       className="inline-flex items-center gap-1.5 lg:gap-2 bg-white/95 backdrop-blur-sm rounded-md lg:rounded-lg px-2.5 lg:px-3 py-1 lg:py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.22)] hover:scale-[1.04] hover:bg-white transition-all"
                     >
                       <Phone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-primary-600" strokeWidth={2.7} />
-                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">062-603-0456</span>
+                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">{PHONE_DOC}</span>
                     </a>
                   </div>
                 </div>
@@ -1160,18 +1169,18 @@ export default async function CustomsClearancePage({
                 {/* Phones — each on its own row, tap to call */}
                 <div className="flex flex-col gap-1.5 pointer-events-auto">
                   <a
-                    href="tel:024213325"
+                    href={PHONE_COMPANY_TEL}
                     className="inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.28)]"
                   >
                     <Phone className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.8} />
-                    <span className="text-[13px] font-black text-primary-700 tracking-tight">02-421-3325</span>
+                    <span className="text-[13px] font-black text-primary-700 tracking-tight">{PHONE_COMPANY}</span>
                   </a>
                   <a
-                    href="tel:0626030456"
+                    href={PHONE_DOC_TEL}
                     className="inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.28)]"
                   >
                     <Phone className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.8} />
-                    <span className="text-[13px] font-black text-primary-700 tracking-tight">062-603-0456</span>
+                    <span className="text-[13px] font-black text-primary-700 tracking-tight">{PHONE_DOC}</span>
                   </a>
                 </div>
               </div>

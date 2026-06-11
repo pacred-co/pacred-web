@@ -1,22 +1,18 @@
 # 🚀 Pacred Roadmap — the D1 master phase plan (faithful PCS port)
 
-> ## 🚨 2026-05-19 EVENING — Direction shift to 1:1 transcription
+> ## 2026-05-19 — Direction shift to 1:1 transcription (method still applies; branch loop superseded)
 >
-> Team pivoted from V3 (the `main → dave → Poom` loop with Wave A/B/R staging
-> sidebar fixes) to **literal 1:1 transcription** of legacy PHP → Next.js per
+> Team pivoted to **literal 1:1 transcription** of legacy PHP → Next.js per the
 > owner's "100% sameness FIRST" rule. The phases below (A migration · B
-> workflow fidelity · C enhancements) still apply BUT **the work-loop shifted**:
+> workflow fidelity · C enhancements) still apply, and the transcription
+> *method* ([`runbook/faithful-port-transcription.md`](runbook/faithful-port-transcription.md))
+> remains the Phase-B way of working.
 >
-> **New branch loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer
-> + integrate) + `podeng` (ปอน) → **`faithful-port`** (integration target) →
-> ก๊อต production gate → **`main`** (Vercel auto-deploy). V3 branches
-> (`Poom`/`dave`) are FROZEN — preserved in `faithful-port` via merge, but no
-> new commits land there until further notice.
->
-> The "Phase-B waves" listed below are now realized via **transcription**
-> rather than the wave-1 reinterpretation pattern. Read:
-> [`research/poom-save-point-2026-05-19-night.md`](research/poom-save-point-2026-05-19-night.md)
-> + [`runbook/faithful-port-transcription.md`](runbook/faithful-port-transcription.md).
+> ⟦superseded⟧ The branch loop described then (`… → faithful-port → main`) is
+> **gone** — `faithful-port` was deleted 2026-05-24. **Current model
+> ([`team.md`](team.md) §0):** ภูม `Poom-pacred` + ปอน `InwPond007` → เดฟ
+> integrates on **`dave-pacred`** (the trunk) → `main` on the owner's go
+> (ก๊อต reviews; Vercel auto-deploys `main`).
 
 > **The single canonical forward plan** — current state, stages, and
 > who-owns-what for `pacred-web` under **D1**. The doc CLAUDE.md / AGENTS.md /
@@ -43,42 +39,38 @@
 
 ---
 
-## 0. Master plan at a glance — current state (2026-05-19 night)
+## 0. Master plan at a glance — current state (refreshed 2026-06-10)
 
 **DIRECTION** — Pacred = a faithful port of legacy PCS Cargo. Owner rule: copy
 the original to 100% sameness FIRST, then improve.
 
-**STATE:**
-- **Phase A — data migration — ✅ DONE.** The legacy `pcsc_main` (117 tables ·
-  ~8,898 customers) is **fully loaded on dev + prod Supabase**. Migrations
-  `0081`-`0083` + `0087` applied; Supabase **Pro upgrade done** (ก๊อต) →
-  **all 117 tables loaded** including the 3 log tables (`tb_web_hs` ·
-  `tb_history_key` · `tb_history`) backfilled post-Pro; **customer image +
-  storage files uploaded to Supabase S3 production** (`pcsracgo/public/member`)
-  by ภูม 2026-05-24. Stage `A-final` complete — Phase B is the live forward
-  work.
-- **Phase B — workflow fidelity** — **WAVE 1 done + integrated** on `dave`:
-  customer 9-icon launchpad · customer order flow · admin per-role RBAC
-  sidebar + badges · admin container `tb_cnt` payment ledger · the legacy-auth
-  bridge. Wave 1 is **first-pass — not yet fidelity-verified.**
-- **Phase C — Pacred enhancements** — the Tier 0/1/2/3 roadmap · ads/marketing ·
-  the 8-specialist R&D stream — **deferred** (see the appendix, §6).
+> **📍 Live state lives elsewhere — don't duplicate it here (conventions §13):**
+> the dated save-points at the top of [`/CLAUDE.md`](../CLAUDE.md) (canonical
+> session state) + [`STRATEGY.md`](STRATEGY.md) §9 (shipped-vs-pending
+> snapshot, refreshed 2026-06-10) + [`runbook/migration-ledger.md`](runbook/migration-ledger.md)
+> (migration numbering SOT).
 
-**STAGES** — `A-final` → `B-0` → `B-waves` → `C`. Detail in §2–§4 below.
+**STATE (one-glance, 2026-06-10):**
+- **Phase A — data migration — ✅ DONE** (117/117 tables on dev + prod ·
+  images on S3 prod · auth bridge live). Detail in §2.
+- **Phase B — workflow fidelity — well past wave 1.** The faithful-port era
+  largely closed: legacy `tb_*` is canonical, the money loop is closed, and
+  the June-2026 build waves (tax-invoice platform P1–P4 · freight ERP cockpit/
+  P&L/commission · warehouse worker-app · customs doc-kit · W1-W11) shipped on
+  top of it — several DORMANT behind owner flags. ~9 customer screens remain
+  un-transcribed 1:1 (briefs/dave.md pickup list).
+- **Phase C — Pacred enhancements** — much of the June build is effectively
+  early Phase-C work layered on the faithful base; the formal Tier 0/1/2/3
+  appendix (§7) remains the deferred idea bank.
 
-**WORK LANES** (priority order: เดฟ + ก๊อต first, then ปอน + ภูม):
-- **เดฟ** — integrator + 1:1 customer-backend lane (`dave-pacred`) +
-  Phase-B integration + the `dave-pacred → main` deploy gate.
-- **ก๊อต** — production gate + 1:1 admin back-office lane (NEW 2026-05-24,
-  was ภูม pre-reset) + the JMF API (Phase C) + production watch. *Supabase Pro
-  + แต้ม handover ✅ done.*
-- **ปอน** — Phase-B **frontend** — the customer screens (`podeng` → merged
-  into `dave-pacred`).
-- **ภูม** — V3 backend continuation (UNLOCKED 2026-05-24, `Poom-pacred`) —
-  DPX ERP enhancements + customer-image upload ✅ done; merges in after 1:1
-  ships to main.
+**STAGES** — `A-final` ✅ → `B-0` ✅ → `B-waves` (tail: fidelity-verify +
+remaining screens) → `C`. Detail in §2–§4 below.
 
-Full who-owns-what in §5.
+**WORK LANES** (canonical: [`team.md`](team.md) §0): **เดฟ** = `dave-pacred`
+trunk/integrator + release gate · **ภูม** = backend/admin/accounting
+(`Poom-pacred`) · **ปอน** = frontend/UI (`InwPond007`) · **ก๊อต** = `main`
+review + delegated (Supabase Pro + แต้ม handover ✅ done; Google-Sheets creds
+still pending). Full who-owns-what in §5.
 
 ---
 

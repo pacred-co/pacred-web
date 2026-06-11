@@ -13,6 +13,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { confirm } from "@/components/ui/confirm";
 import { setCustomerSalesRep } from "@/actions/admin/crm";
 import type { CrmRep } from "@/lib/admin/crm-types";
 import { Check, UserCog, Loader2 } from "lucide-react";
@@ -41,6 +42,14 @@ export function RepRouting({
   function save() {
     setMsg(null);
     startTransition(async () => {
+      // §0f — confirm before mutate (re-routes who owns this customer).
+      const target = selected ? reps.find((r) => r.legacyId === selected) : null;
+      const message = selected
+        ? `เปลี่ยนเซลล์ผู้ดูแลของลูกค้า ${userid} เป็น “${target?.name ?? selected}”?`
+        : `ล้างเซลล์ผู้ดูแลของลูกค้า ${userid}?`;
+      const ok = await confirm(message, { title: "เปลี่ยนเซลล์ผู้ดูแล" });
+      if (!ok) return;
+
       const res = await setCustomerSalesRep({ userid, legacyId: selected });
       if (res.ok) {
         setMsg({ kind: "ok", text: "บันทึกเซลล์ผู้ดูแลแล้ว" });

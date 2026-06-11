@@ -10,6 +10,7 @@ import {
   adminRestoreForwarderFromSpecial,
 } from "@/actions/admin/forwarders";
 import { confirm } from "@/components/ui/confirm";
+import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 
 /**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
@@ -1471,6 +1472,20 @@ export function ForwardersTable({
               >
                 {pending ? "กำลังอัพเดต..." : `อัพเดต ${selected.size} รายการ`}
               </button>
+            </div>
+            {/* V-G1 — driver-assign + cancel bulk actions (faithful
+                forwarder-action.php multi-row · backend actions/admin/
+                forwarders-bulk.ts). Mounted here so the previously-orphaned
+                BulkActionsToolbar is reachable (AGENTS.md §0d). The inline
+                row above keeps status/cabinet/print; this adds the two
+                actions it lacked. Selection is shared — same Set<id>. */}
+            <div className="w-full">
+              <BulkActionsToolbar
+                selectedFNos={Array.from(selected).map(String)}
+                onClearSelection={clearSelection}
+                actions={["driver", "cancel"]}
+                hideHeader
+              />
             </div>
           </div>
         </div>

@@ -4,7 +4,13 @@
 >
 > **Read first:** [`docs/research/tax-invoice-platform-build-plan-2026-06-09.md`](tax-invoice-platform-build-plan-2026-06-09.md) (the canonical tax-invoice 5-phase plan) · [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](../learnings/pacred-cargo-tax-invoice-flow.md) (the 3-number model) · NEW [`docs/learnings/freight-erp-model.md`](../learnings/freight-erp-model.md) + [`docs/learnings/customs-brokerage-kit.md`](../learnings/customs-brokerage-kit.md) (domain knowledge mined this session).
 >
-> **State as of this doc:** tax-invoice **P1 + P2** SHIPPED earlier (mig 0158). **ALL backlog waves W1-W11 now BUILT + on main (2026-06-09).** **NEXT FREE migration = 0172.**
+> **State as of this doc:** tax-invoice **P1 + P2** SHIPPED earlier (mig 0158). **ALL backlog waves W1-W11 now BUILT + on main (2026-06-09).** ~~NEXT FREE migration = 0172.~~ **NEXT FREE migration = `0174`** (updated 2026-06-10 · 0172 tax-invoice period-freeze + 0173 count_forwarder_by_owner RPC both since landed; 0173 pending-apply; 0065/0168 are intentional gaps).
+>
+> ## ⚠️ WAVE-NUMBERING NOTE (added 2026-06-10 — this doc has TWO conflicting numberings)
+> The **"✅ SHIPPED" headers below** (the SHIPPED summary) label the customs doc-kit as **"W11"**, but the **WAVE-body sections** (the numbered `## WAVE n` headings) number it as **WAVE 12**. They do not line up. The reconciliation:
+> - **Shipped "W11" (customs doc-kit · `/admin/accounting/customs-doc-kit`) = this doc's WAVE 12 body.** ✅ BUILT.
+> - **This doc's WAVE 11 body (Partner portal + API-as-a-service · Theme 7 Phase 3/4) is UNBUILT + owner-blocked** — it was NOT what shipped as "W11".
+> - So "ALL waves W1-W11 BUILT" is true for the *SHIPPED-header* W-numbers (where W11=customs-kit), but the *WAVE-body* WAVE 11 (partner portal) remains unbuilt. ⚠️ This also mismatches the memory note "WAVE 11 partner portal ≠ shipped W11 doc-kit". Cross-reference by **description**, not number.
 >
 > ## ✅ SHIPPED 2026-06-09 EVE (deep-source build · dave-pacred · migrations applied+verified prod)
 > - **W1** Freight RFQ leads triage — verified **already built** (page + `[ref]` + convert-to-quote + deep-link); no rebuild.
@@ -130,6 +136,8 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 
 ## WAVE 6 — Commission ledger + withdrawal workflow (V-E8/H1/H2) · 🟡💰 ⏱ L
 
+> ✅ **SHIPPED 2026-06-09 NIGHT** (freight lane · `freight_commission_*` ×4 · mig `0167`) — ships **DORMANT** behind `business_config commission.freight_enabled` (OFF · 0/4 tiers owner-confirmed) · idempotent accrual · NO auto-pay. 🔴 owner confirms tier rates + flips the flag to activate. Interpreter (ล่าม · V-H1) lane still open.
+
 **Why:** revenue-side staff-payout automation. The current commission path is per-customer-only workaround; the proper ledger is fully designed but ZERO migrations exist. Unblocks interpreter (ล่าม) + sales-rep payouts and the cockpit's commission panel. Money-critical → strict WHT handling.
 
 **Items (per commission MINE spec · effort L):**
@@ -171,6 +179,8 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 
 ## WAVE 9 — Tax-invoice P4: 4-role workspace + PEAK rollup + shop/yuan store · 🟡💰 ⏱ M–L
 
+> ✅ **SHIPPED 2026-06-09 NIGHT** — `/admin/pricing/taxdoc-workspace` (CS→Pricing→Docs→Account over `tb_cargo_taxdoc_job` · 3 numbers + 4 status pills · ACC gated on cs+pricing) + PEAK 3-number rollup + shop/yuan etax read (no new schema). 🔴 issuance stays gated on the owner flag + ใบขน VAT sign-off.
+
 **Why:** completes the tax-invoice platform's role-gated workflow + activates the dormant shop/yuan tax-invoice stores. Money/tax-critical → multiple sign-offs + a test-order money loop. Sequenced after P3 (Wave 2) which provides the declarations.
 
 **Items (per build-plan P4):**
@@ -186,6 +196,8 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 
 ## WAVE 10 — MOMO/CargoThai warehouse worker-app (Theme 7 Phase 1) · 🔴 ⏱ L
 
+> ✅ **SHIPPED 2026-06-09 NIGHT** — `/admin/warehouse/worker/*` (intake/measure/sack/ship/follow · mig `0169-0171` · isolated audit tables · no money write · respects `fcabinet_locked`). 🔴 owner/China-team confirm the `warehouse` role assignment to activate.
+
 **Why:** the "ไม่ต้องโทรถาม" USP — workers receive/measure/pack/seal/track. The pixel reference (cargothai.html 7-view SPA) + the data model (extend `tb_forwarder`/`tb_forwarder_item`/`momo_sack_*`/`tb_cnt`) are clear. But it needs RBAC roles (`warehouse_worker`/`warehouse_supervisor`) + China-team authority sign-off → owner-blocked to start.
 
 **Items (per MOMO warehouse MINE spec · effort L):** 7 pages under `/admin/warehouse/*` (dashboard/intake/dataentry/sacks/shipping/transit/follow) · 8 server actions (intake/measure/sack/print/seal/depart/arrive/status-override) · extend tables + `warehouse_intake_log` + `momo_sack_print_log` audit tables · new admin roles + RLS scoped by warehouse_id · reuse Quagga2 barcode + `notifyStaffGroup` + CBM calc.
@@ -196,6 +208,8 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 
 ## WAVE 11 — Partner portal + API-as-a-service (Theme 7 Phase 3/4) · 🔴 ⏱ XL
 
+> ⛔ **NOT BUILT — owner-blocked (as of 2026-06-10).** ⚠️ This WAVE-body WAVE 11 (partner portal) is **distinct** from the "W11" in the SHIPPED header above — that shipped "W11" is the **customs doc-kit (WAVE 12 below)**. This partner-portal wave remains unbuilt (RBAC overhaul + multi-tenancy + billing are hard owner-blockers).
+
 **Why:** the inverse of current MOMO consumption — Pacred becomes the provider (multi-tenant partner login + API leasing + metering/billing). Long-term moat. Hard owner-blockers (RBAC overhaul + multi-tenancy + billing).
 
 **Items:** multi-tenant login + branch/warehouse row-scoping + partner role · expose MOMO-like endpoints (import/track, container/closed, sack/info) with API-key issuance + Upstash rate-limit + usage metering/billing · partner-API live pulls (GOGO/JMF/TTP — only MOMO/CargoThai/CTT done · ก๊อต-owned).
@@ -205,6 +219,8 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 ---
 
 ## WAVE 12 — Customs doc-kit + Form-E engine + export flow (Phase C / DPX) · 🔴💰 ⏱ L–XL
+
+> ✅ **SHIPPED 2026-06-09 NIGHT as "W11"** (the SHIPPED-header label · this is the doc-numbering mismatch) — `/admin/accounting/customs-doc-kit` (DO-LOI per carrier + 45-day/POA/amend/lost-doc letters + Form-E/ACFTA eligibility + HS-assist + port codes · advisory/PDF only). 🔴 **NETBAY e-filing DEFERRED** (no creds · manual filing). The export reverse-flow + multi-currency declared values remain unbuilt.
 
 **Why:** the customs-letter kit (D/O-LOI carrier variants · 45-day waiver · POA · amend · lost-doc · port-code master) + Form-E ACFTA eligibility engine + the export reverse-flow. High value for the brokerage moat but deferred post-V1 / DPX ERP.
 
@@ -235,7 +251,7 @@ If the table already has `status` + `assigned_admin_id` and the page lists them,
 
 ## Appendix B — Cross-cutting build rules (read before any wave)
 
-- **Migration numbering:** NEXT FREE = **0161** as of this doc (0158/0159/0160 applied prod). Reserve numbers in the ledger (`docs/runbook/migration-ledger.md`) before parallel agents start, or collisions happen.
+- **Migration numbering:** ~~NEXT FREE = **0161** as of this doc (0158/0159/0160 applied prod).~~ **UPDATED 2026-06-10: NEXT FREE = `0174`** (0161-0167 + 0169-0172 applied prod; 0173 count_forwarder_by_owner pending-apply; 0065/0168 are intentional gaps). Reserve numbers in the ledger (`docs/runbook/migration-ledger.md`) before parallel agents start, or collisions happen.
 - **The 3-number model is load-bearing:** never conflate SELLING (CS · invoice+VAT) / COST (Pricing · PEAK+profit) / DECLARED (Docs · ใบขน, audited, edits down from cost). DECLARED **NEVER auto-equals selling.** See [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](../learnings/pacred-cargo-tax-invoice-flow.md).
 - **Dead-write trap (§0e):** before claiming any admin write-surface works, grep the WRITE target table vs the READER's table — a 0-row rebuilt twin written while consumers read `tb_*` = silent no-op. (This is exactly the freight-quote singular/plural split.)
 - **Reachability (§0d):** every new function ships its nav entry in the same diff (≤3 clicks from sidebar/dashboard).

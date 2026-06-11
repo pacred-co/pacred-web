@@ -95,6 +95,16 @@ ACC      invoice.issued → freight_invoice_payments (WHT, collections)
 - **MISSING (the genuine gap):** commission ledger (4 tables · ZERO migrations) · ops cockpit `freight_job_operations`+`freight_stage_checklists` (Kanban) · doc_data/doc_plan/messenger/acc_statement/acc_shipment tracking tables · role dashboards (V-E12 · 10 role-specific) · freight P&L persistence (margin-cap flag · cost snapshot on shipment) · export reverse-flow (current schema is import-only) · `adminConvertQuoteToShipment` may still be a stub (verify the INSERT).
 - **Owner-blocked:** NETBAY e-filing · commission-rate sign-off · ≤15k cap policy · FX monthly refresh (manual) · legacy freight-data import.
 
+### ✅ CORRECTION (2026-06-09 NIGHT → 2026-06-10) — most of §6's "MISSING" list shipped same-day
+The §6 MISSING list above was the 2026-06-09 *pre-build* snapshot. The deep-source build (W4/W5/W6) closed most of it within the same day — keeping §6 for history, the current truth is:
+- **Commission ledger** — ✅ SHIPPED. `freight_commission_*` ×4, migration `0167_freight_commission_ledger.sql`, **DORMANT** behind `business_config commission.freight_enabled` (0/4 tiers owner-confirmed · no auto-pay). (W6.)
+- **Ops cockpit Kanban** — ✅ SHIPPED. `freight_job_operations` + `freight_stage_checklists`, migrations `0163`/`0164`, `/admin/freight/operations` + `freight-ops-cockpit.ts` (money-isolation reviewed CLEAN). (W4.)
+- **Freight P&L persistence** — ✅ SHIPPED. Persisted cost/margin/commission + `/admin/freight/shipments/[id]/p-and-l` + FX-refresh control, migration `0165_freight_pnl_margin.sql`; ≤15k cap = ADVISORY only. (W5.)
+- **`adminConvertQuoteToShipment`** — ✅ **confirmed REAL** (not a stub — it does the INSERT). The §6 "may still be a stub" caveat was resolved.
+- **RFQ leads triage bridge** — ✅ SHIPPED. `/admin/freight/leads` triage, migration `0151_freight_quote_triage.sql` (status + assigned_admin_id on `freight_quote`).
+- **Still genuinely open:** export reverse-flow (schema still import-only) · role dashboards (V-E12) · the doc_data/doc_plan/messenger/acc tracking tables (partly subsumed by the cockpit) · interpreter (ล่าม) commission lane (V-H1).
+- **Cross-ref:** ADR-0016 freight value-model freeze (declared ≠ selling · audited manual field) + the **2026-06-10 tax-invoice dead-twin closure** (the World-A `tax_invoices` table was retired; live stores = `tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`; mig `0172` freezes them on period close) — see [`docs/learnings/pacred-cargo-tax-invoice-flow.md`](pacred-cargo-tax-invoice-flow.md) + the CLAUDE.md 2026-06-10 save-point.
+
 ## Cross-links
 - Build sequence: [`docs/research/build-backlog-2026-06-09.md`](../research/build-backlog-2026-06-09.md) (Waves 1, 4, 5, 6).
 - ADR-0016 freight value model: [`docs/decisions/0016-freight-value-model.md`](../decisions/0016-freight-value-model.md).

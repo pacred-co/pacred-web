@@ -30,8 +30,8 @@ Legend: ✅ shipped + faithful · 🟢 shipped (modern, fidelity-check needed) �
 | `member/index.php` | `(protected)/dashboard` | ✅ | `index.css` ported · 9-icon launchpad + promo carousel + 4 stat cards |
 | `member/login.php` | `(auth)/login` + `/pcs-login` | ✅ | Legacy-auth bridge (`lib/auth/pcs-legacy-bridge.ts`) verifies the 79-char legacy hash |
 | `member/register.php` | `(auth)/register` | ✅ | OTP-gated |
-| `member/regis-tam.php` | — | 🔴 | TAMIT integration registration — paste 1688/Taobao link + auto-fill TAMIT user. Defer to Phase C if not active. |
-| `member/register-id.php` | — | 🔴 | Corporate-juristic registration (separate signup form for juristic entity). Currently we treat all signups the same. |
+| `member/regis-tam.php` | `(auth)/register` (juristic tab) | ⚫ OBSOLETE | **Resolved 2026-06-10** — filename misleading: "tam" = `pass_tam()` hash, NOT TAMIT integration. Legacy = old juristic-only signup, superseded by unified `register.php`. Pacred `register-client.tsx` PersonalForm+JuristicForm tabs cover both. Per `docs/audit/fidelity-auth-screens-2026-05-28.md` §4. No port/scrub needed. |
+| `member/register-id.php` | `(auth)/register` (juristic tab) | ✅ | **Resolved** — juristic signup folded into main `/register` per 2026-06-08 urgent-fix (real นิติบุคคล signup w/ file uploads + tax-ID + OTP). |
 | `member/account-settings.php` | `(protected)/account-settings` | ✅ | `account-settings.css` ported |
 | `member/profile.php` | `(protected)/profile` | ✅ | + `/profile/security/change-phone` |
 | `member/address.php` | `(protected)/addresses` | ✅ | `address.css` ported |
@@ -45,10 +45,10 @@ Legend: ✅ shipped + faithful · 🟢 shipped (modern, fidelity-check needed) �
 | `member/pay.php` | `(protected)/pay` | ✅ | `pay.css` ported (PromptPay QR generator) |
 | `member/search.php` | `(protected)/search` | ✅ | `search.css` ported (China product search via TAMIT/AkuCargo/Laonet) |
 | `member/map.php` | `(protected)/map` | ✅ | Google Maps embed |
-| `member/invoiceF.php` | — | 🔴 | Customer-side standalone invoice PDF for forwarder orders. We have admin-side at `/admin/accounting/forwarder-invoice` but no customer download endpoint. Customer printing currently goes through `/service-import/[fNo]/receipt` which may not be the same document. |
+| `member/invoiceF.php` | `(protected)/invoiceF` → `/freight/invoice/[id]` | ✅ | **Resolved 2026-06-10** (commit `36a2bbcb`) — full 1:1 transcription already existed at `/freight/invoice/[id]` (every mysqli query · PR415/PR71/PR4136/PR8765 hardcodes · WHT-1% personal gate · `Convert()` baht-text · 13-rows A4 pagination · `print-receipt-f.css`). Gap was discoverability — added `/invoiceF?id=X` URL mirror (preserves legacy SMS/email links) + entry button on `/service-import/[fNo]` when `rID && fStatus>=6`. |
 | `member/printShop.php` | `(protected)/service-order/print` | 🟢 | `print-shop.css` ported · **fidelity check needed:** does the print layout match legacy 1:1? |
 | `member/printReceiptF.php` | `(protected)/service-import/receipts/print` | 🟢 | `print-receipt-f.css` ported · **fidelity check needed** |
-| `member/history.php` | — | 🔴 | Customer usage history page (last login + actions + audit-log feed). Common admin support tool — "เราโทรหาคุณตอนไหน". Defer? Phase B nice-to-have. |
+| `member/history.php` | — | ⚫ NO FILE | **Verified 2026-06-10** — `history.php` does NOT exist in `D:\xampp\htdocs\pcscargo\member\` (audit was stale; possibly conflated with `report-user-sales-history.php` · already ported to `/sales/history`). |
 | `member/line-notify.php` + `member/line.php` | — | 🟡 | LINE webhook/notify endpoints. We have Messaging API + LIFF in code — confirm equivalent endpoints exist and the legacy LINE Notify EOL behavior is handled. |
 | `member/fb-callback.php` | — | 🔴 | Facebook OAuth callback. Currently NOT WIRED — `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` keeps social login OFF per [ADR-0017](../decisions/0017-pacred-faithful-pcs-port.md) (legacy was password-only). Defer to Phase C. |
 | `member/mail.php` | — | ⚫ | Server-side helper — Pacred uses Resend SDK. Not a customer-facing page. |

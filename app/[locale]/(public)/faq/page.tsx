@@ -10,8 +10,16 @@ import { FaqAccordion, type FaqGroup } from "@/components/sections/faq-accordion
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema, faqPageSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { STAFF } from "@/components/seo/site";
 
 const PATH = "/faq";
+
+// Sales contact line shown in the FAQ support answers (= แนท · STAFF.sales[3]),
+// sourced from the single SOT instead of a hardcoded literal.
+// NOTE (flagged to เดฟ): the FAQ email "contact@pacred.co" has NO matching
+// entry in components/seo/site.ts CONTACT (which exposes sales@ / docs@ / acc@
+// …). Left as-is pending a decision on whether contact@ is a real mailbox.
+const FAQ_PHONE = STAFF.sales[3].phone;
 
 export async function generateMetadata({
   params,
@@ -113,7 +121,7 @@ const FAQ_GROUPS_TH: FaqGroup[] = [
     items: [
       {
         q: "ติดต่อทีม Pacred ได้ทางไหนบ้าง?",
-        a: "LINE OA: pacred.co/line (เร็วสุด ตอบภายใน 5 นาที), โทร 066-131-0253, อีเมล contact@pacred.co, Facebook / TikTok / Instagram / YouTube @PacredShipping",
+        a: `LINE OA: pacred.co/line (เร็วสุด ตอบภายใน 5 นาที), โทร ${FAQ_PHONE}, อีเมล contact@pacred.co, Facebook / TikTok / Instagram / YouTube @PacredShipping`,
       },
       {
         q: "เปิดทำการวันไหน เวลาอะไร?",
@@ -218,7 +226,7 @@ const FAQ_GROUPS_EN: FaqGroup[] = [
     items: [
       {
         q: "How do I reach the Pacred team?",
-        a: "LINE OA: pacred.co/line (fastest — replies within 5 minutes), phone 066-131-0253, email contact@pacred.co, plus Facebook / TikTok / Instagram / YouTube @PacredShipping.",
+        a: `LINE OA: pacred.co/line (fastest — replies within 5 minutes), phone ${FAQ_PHONE}, email contact@pacred.co, plus Facebook / TikTok / Instagram / YouTube @PacredShipping.`,
       },
       {
         q: "What are your hours?",

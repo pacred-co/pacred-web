@@ -1,5 +1,21 @@
 # Pacred CARGO tax-invoice (ใบกำกับภาษี) flow — the 3-number model + 4-role workflow
 
+> ⚠️ **MIGRATION NUMBERS HERE ARE HISTORICAL (note added 2026-06-10).** This file
+> was written 2026-06-09 and cites in-flight migration numbers (e.g. "NEXT-FREE =
+> 0158", "shop store DORMANT 0152") as a build-plan snapshot. **The migration
+> ledger ([`supabase/migrations/README.md`](../../supabase/migrations/README.md))
+> is the single source of truth — not this file.** Current reality (2026-06-10):
+> the **shop store landed as mig `0152`** (built · DORMANT); the **live tax-invoice
+> stores are the `tb_*` pair** (`tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`);
+> the **World-A `tax_invoices` table (0034) was RETIRED 2026-06-10** as a dead twin
+> (the whole dead-twin integrity arc: consolidate→repoint→retire→forward-fix→FREEZE,
+> with **mig `0172`** freezing the live stores on period close); **NEXT FREE
+> migration = `0174`** (0173 = count_forwarder RPC pending-apply; 0065/0168 gaps).
+> **ADR-0027 reconciliation:** see that ADR's 2026-06-10 status addendum — its core
+> decision still holds; the shop store it called for shipped as `0152`. Read the
+> ledger + the CLAUDE.md 2026-06-10 save-point for live state; trust this file only
+> for the **domain model** (the 3-number / 4-role logic), not the numbers.
+
 **Date:** 2026-06-09 · **Source:** owner (พี่ป๊อป) spec + the AXELRA Google-Sheet template (`PACRED ใบกำกับภาษี.xlsx`, 70+ filled sheets) + the `olddata dev/data งานเก่า` chats (AX Pricing+SALE+DOC, PR PRICING+NINESPEED) + the AXELRA "ใบประหน้า Sale and Pricing" examples + AX JOB/BOOKING. **Built artifact:** `/Users/dev/Downloads/PACRED-ใบกำกับภาษี-form-v2-pricing.xlsx` (build script captured below). **Why durable:** this is the spec for building the in-platform tax-invoice + cost workflow ("เสร็จโปรเจคนี้ เอามาใส่ใช้จริงใน platform"). PCS + ไอแต้ม both failed at this — root cause was conflating the three numbers below.
 
 ## The big picture — CARGO *is* Freight-LCL with a consolidated ใบขน

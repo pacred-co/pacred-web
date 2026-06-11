@@ -7,13 +7,16 @@
 > ทุก agent ใช้ Claude Code Windows — ทำงาน async. การอ่าน brief ให้ตรงกัน
 > = ทุกคนทำงานไปในทิศทางเดียวกัน
 
-> 🚀 **POST-LAUNCH (production live since 2026-05-17)** — the emergency
-> cargo sprint is behind us. Current work is sequenced in
-> [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) (the post-launch roadmap).
-> Each brief still opens with its role's current pickup list — read
-> your brief, then the UPGRADE_PLAN work-split for your role.
+> 🧭 **Current direction = D1 (faithful PCS Cargo port — [ADR-0017](../decisions/0017-pacred-faithful-pcs-port.md)).**
+> [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) is the **D1 master phase plan**
+> (Phase A ✅ done → Phase B workflow fidelity → Phase C enhancements).
+> The freshest session state lives in the dated save-points at the top of
+> [`/CLAUDE.md`](../../CLAUDE.md) + [`../STRATEGY.md`](../STRATEGY.md) §9.
+> Branch model (canonical: [`../team.md`](../team.md) §0): เดฟ = `dave-pacred`
+> trunk/integrator · ภูม = `Poom-pacred` · ปอน = `InwPond007` · ก๊อต = `main`
+> review; the owner (CEO) sets direction but does not commit code.
 
-Last reviewed: 2026-05-18 (post-launch revision)
+Last reviewed: 2026-06-10 (docs-refresh wave)
 
 ---
 
@@ -107,8 +110,8 @@ This pattern is now **mandatory** per [`/CLAUDE.md`](../../CLAUDE.md) "Read brie
 | Doc | Purpose |
 |---|---|
 | [`../STRATEGY.md`](../STRATEGY.md) | **Master strategic single-read** — all briefs/ADRs/plans condensed (use as session warm-up) |
-| [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) | **Post-launch roadmap** — the canonical forward plan (phase/stage + work-split) |
-| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 12 playbooks for repeatable patterns |
+| [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) | **The D1 master phase plan** — Phase A/B/C sequencing + work-split |
+| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 16 playbooks for repeatable patterns |
 | [`../learnings/_index.md`](../learnings/_index.md) | Compounding learnings — scan at session start |
 | [`../HANDBOOK.md`](../HANDBOOK.md) | Master index — start of everything |
 | [`../team.md`](../team.md) | Role + branch + workflow rules |
@@ -118,7 +121,7 @@ This pattern is now **mandatory** per [`/CLAUDE.md`](../../CLAUDE.md) "Read brie
 | [`../sprints/archive-a-to-n.md`](../sprints/archive-a-to-n.md) | Historic survey + earlier sprint plans (Parts A–N) |
 | [`../architecture/container-centric-model.md`](../architecture/container-centric-model.md) | Warehouse + container + shipment data spine |
 | [`../integrations/momo-jmf.md`](../integrations/momo-jmf.md) | MOMO partner API spec |
-| [`../decisions/`](../decisions/) | ADRs (locked decisions — 0001..0016 + V3 drafts) |
+| [`../decisions/`](../decisions/) | ADRs (locked decisions — 0001..0028 + V3 drafts; start at 0017 = D1) |
 | [`../research/_index.md`](../research/_index.md) | R&D / gap-hunt / audit evidence base behind the UPGRADE_PLAN |
 | [`../audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) | Pre-launch security posture audit |
 | [`../audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) | Deep legacy PHP audit |

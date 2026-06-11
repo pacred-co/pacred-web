@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { LINE_OA } from "@/components/seo/site";
+import { LINE_OA, CONTACT } from "@/components/seo/site";
 import { trackCtaClick } from "@/lib/analytics";
 
 // Was hardcoded to `https://lin.ee/r3b1BuOC` (PCS Cargo legacy clearance
@@ -144,9 +144,11 @@ export function ClearanceBanner() {
                 ))}
               </div>
 
-              {/* Contact phone */}
+              {/* Contact phone — CS line (พลอย), sourced from site.ts SOT.
+                  The displayed text comes from t("contactPhone") = the same
+                  062-603-4456 number. */}
               <a
-                href="tel:0626034456"
+                href={`tel:${CONTACT.phoneCsDisplay.replace(/-/g, "")}`}
                 onClick={() => trackCtaClick("banner_phone", "home_clearance_banner", { surface: "inline_phone" })}
                 className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
                 style={{ textShadow: FEATURE_TEXT_SHADOW }}

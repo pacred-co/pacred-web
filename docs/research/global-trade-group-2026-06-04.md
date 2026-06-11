@@ -95,6 +95,13 @@ Per-service workflow chains (who touches what):
 - ใบกำกับ: `sale → cs → ฝากสั่ง/doc → acc`
 - **Commission:** whoever owns the service gets its commission · stay in your lane.
 
+**Sales↔CS handoff rules (CEO brief 2026-06-10 — additions over the chains above):**
+- **Quote-link signup funnel:** เซลทำให้ลูกค้าสมัคร — ส่งลิงก์ให้ลูกค้าโดยแจ้งว่าคือ "ใบเสนอราคา" (เนียนๆ หลอกสมัครเข้าระบบ) → ปิดการขายแล้ว CS เห็นงาน + ทำงานต่อ. ข้อยกเว้น: งานเคลียร์/แอร์ ทะลุข้าม CS ได้เลย (ตรงกับ bypass checkbox ที่ ship แล้ว `c6ce6e73`).
+- **CS ไม่คุยกับสายเรือ** — เอาสถานะจาก Doc; แต่ถ้าได้เบอร์คนรถแล้ว CS ตามสถานะ/โทรต่อเองได้เลย. (เซลขาย → CS ส่งวิธีการ.)
+- **Tag self-serve:** เซล + CS เลือก tag ลูกค้าเองได้ (ระบบ tag = mig 0154).
+- **Flexible ownership:** ลูกค้ามีทั้ง sale และ cs · CS ปิดงานเต็มคนเดียวได้ (ไม่มี CS แยกก็ได้) และ sales ก็แย่งทำหน้าที่ CS ได้เหมือนกัน — กติกา commission "ใครเซอร์วิสคนนั้นได้ค่าคอม" ยังคุมอยู่.
+- **Customer-chase order (ละเอียดกว่า §6):** 1) AXELRA ลูกค้าเก่าทั้งหมด → 2) PCS เจ้าใหญ่ + ใบกำกับ/ใบขน ดึงมาให้หมด (ฝั่งนั้นไม่เปิดแน่นอน) → 3) Pacred ad leads (ยิงแอด/ทิ้งเบอร์ → เซลไล่โทร/แอดไลน์/สมัครเข้าระบบ) → 4) TTP ใบกำกับ/ใบขน (รอระบบสมบูรณ์). ไล่ตามตั้งแต่วันแรกที่ลูกค้าส่งเบอร์มา — โทรปิดการขายซ้ำ.
+
 ## 9. 🔴 Branding cleanup mandate (owner — high priority)
 
 - **Pacred stamp/logo** must replace the old (PCS) one on EVERY document: ใบเสร็จ (receipt), ใบกำกับภาษี (tax invoice), ใบเสนอราคา (quotation), ใบตามหนี้/วางบิล (invoice/billing), ใบส่งสินค้า, etc. ⚠️ stamp image needed as a FILE to wire in.

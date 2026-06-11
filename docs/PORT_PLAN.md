@@ -27,15 +27,23 @@ in the Parts O–U archive.
 
 ## 📊 TL;DR — สรุป 5 บรรทัด
 
-| | สถานะปัจจุบัน |
-|---|---|
-| ✅ **Customer-facing (ฝั่งลูกค้า)** | **~85% เสร็จ** — auth, dashboard, orders, forwarders, wallet, payment ทำงานได้จริง |
-| ✅ **Admin HR** | **100% เสร็จ** — org chart, employees, recruitment, attendance, training, policies, audit |
-| 🟡 **Admin Operations** | **~40% เสร็จ** — list views มี, ปุ่ม approve/reject/edit ส่วนใหญ่ยังไม่ครบ |
-| 🔴 **Admin Finance/Reports** | **~10% เสร็จ** — accounting, reports เป็น stub |
-| 🔴 **API Integrations** | **0% เสร็จ** — JMF/TTP/Sheets/PDF generation ยังไม่ทำ |
+> **🔄 UPDATED 2026-06-10 (Lane A docs-refresh).** The 2026-05-16 snapshot below
+> was the original PHP-port survey; the platform has since moved far past it.
+> Per the **2026-06-08 full-scope-gap headline** ([`docs/research/full-scope-gap-2026-06-08.md`](research/full-scope-gap-2026-06-08.md)),
+> the platform is now **~90% built** — most Part V/Part W rows are ✅ shipped
+> (see the per-row ticks below + the CLAUDE.md 2026-06-* save-points). Finance/
+> reports/integrations are no longer stubs (accounting/etax/CSV-export/MOMO-sync
+> all live). The old percentages are kept for history; trust the row-level status.
 
-**Critical gaps สำหรับ launch:** PDF receipts (จริงๆ), admin forwarder/order status workflow, admin wallet approve, rate management UI
+| | สถานะปัจจุบัน (2026-05-16 original survey — ดู note ด้านบนสำหรับสถานะล่าสุด) |
+|---|---|
+| ✅ **Customer-facing (ฝั่งลูกค้า)** | **~85% เสร็จ** — auth, dashboard, orders, forwarders, wallet, payment ทำงานได้จริง (now ~90%+) |
+| ✅ **Admin HR** | **100% เสร็จ** — org chart, employees, recruitment, attendance, training, policies, audit |
+| 🟡 **Admin Operations** | **~40% เสร็จ** — list views มี, ปุ่ม approve/reject/edit ส่วนใหญ่ยังไม่ครบ (now ~90% — Part V/W rows ticked) |
+| 🔴 **Admin Finance/Reports** | **~10% เสร็จ** — accounting, reports เป็น stub (now LIVE — accounting/etax/periods/CSV-export shipped) |
+| 🔴 **API Integrations** | **0% เสร็จ** — JMF/TTP/Sheets/PDF generation ยังไม่ทำ (now: MOMO-isolated sync live */5, PDF generators shipped) |
+
+**Critical gaps สำหรับ launch (original):** PDF receipts (จริงๆ), admin forwarder/order status workflow, admin wallet approve, rate management UI — **all ✅ shipped since.**
 
 ---
 
@@ -85,37 +93,37 @@ in the Parts O–U archive.
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-A1 | Payment record stores the **slip transfer time** (editable + audited) — not the approval-click time | ภูม | 🟠 | ⬜ |
-| V-A2 | Order/payment **status rollback** with reason + audit row — staff self-serve, no dev (ADR-0014) | ภูม | 🔴 | ⬜ |
-| V-A3 | Payment↔order **reconciliation** — a matched slip auto-clears "เครดิตค้างนำเข้า"; mismatch surfaced to staff | ภูม | 🔴 | ⬜ |
-| V-A4 | Rate-entry **validation** — exchange/price rate range-guarded; block the "เรทเบิ้ล" (doubled-rate) class of error | ภูม | 🟠 | ⬜ |
-| V-A5 | **Manual adjustment line** on an invoice (±amount, reason, audited) — ends the per-cent dev tickets | ภูม | 🟡 | ⬜ |
+| V-A1 | Payment record stores the **slip transfer time** (editable + audited) — not the approval-click time. ✅ SHIPPED (per [`full-scope-gap-2026-06-08.md`](research/full-scope-gap-2026-06-08.md) §4 "already fixed" + ภูม commit `8874d83a`). | ภูม | 🟠 | ✅ |
+| V-A2 | Order/payment **status rollback** with reason + audit row — staff self-serve, no dev (ADR-0014). ✅ SHIPPED (full-scope-gap §4 "status rollback" already-fixed). | ภูม | 🔴 | ✅ |
+| V-A3 | Payment↔order **reconciliation** — a matched slip auto-clears "เครดิตค้างนำเข้า"; mismatch surfaced to staff. ✅ SHIPPED (full-scope-gap §4 "paid-desync fstatus 5→6" already-fixed). | ภูม | 🔴 | ✅ |
+| V-A4 | Rate-entry **validation** — exchange/price rate range-guarded; block the "เรทเบิ้ล" (doubled-rate) class of error. ✅ SHIPPED (full-scope-gap §4 ">10% reconfirm gate" already-fixed). | ภูม | 🟠 | ✅ |
+| V-A5 | **Manual adjustment line** on an invoice (±amount, reason, audited) — ends the per-cent dev tickets. ✅ SHIPPED (commit `2b226829` "V-A5 manual invoice adjustments ±amount, reason, audited"; full-scope-gap §4 "cost-adjust lines"). | ภูม | 🟡 | ✅ |
 | V-A6 | **Withholding-tax model** — invoice gross → WHT 1%/3% → net paid; receipt issuance **gated on WHT-certificate (50 ทวิ) upload**. Design = [ADR-0015](decisions/0015-withholding-tax-model.md) (✅ LOCKED 2026-05-16 — PORT_PLAN was stale). ✅ V1 SHIPPED: migration `0044_withholding_tax.sql` (full `withholding_tax_entries` schema per ADR §Decision) + `actions/admin/wht.ts` (6 actions: createWhtEntry, markCertReceived, waiveCert, cancelEntry, uploadCert, listEntries) + `actions/wht.ts` customer cert upload + tax-invoice WhtPanel on `/admin/tax-invoices/[id]` + GATE wired at `actions/admin/tax-invoices.tsx:113` and `actions/admin/freight-invoices.ts:340` (refuses issuance while `cert_status='pending'`) + customer receipt pages render WHT row + accounting dashboard MTD sum. **Sprint-15-prelude added** `/admin/wht` centralized chase queue (pending/received/waived filter chips · aged-days red ≥30d · 4 status counts · link to parent) — closes the "ตามแทบไม่ได้เลย" staff gap from ADR §Context. Pairs w/ ADR-0006 + migration 0034. | ภูม + เดฟ | 🔴 | ✅ V1 |
-| V-A7 | Receipt-number cleanup — one canonical number, drop the error-prone `-N` suffix | ภูม | 🟡 | ⬜ |
+| V-A7 | Receipt-number cleanup — one canonical number, drop the error-prone `-N` suffix. ⚠️ **INVESTIGATED — no change (NOT a bug).** The `-N` suffix is **load-bearing split-receipt semantics** (one container/order → multiple receipts), not an error; ~6,196 prod rows depend on it. Designed-out already (commit `aaadddb1` "receipt-number -N suffix already designed out — no port work needed"). Leave as-is. | ภูม | 🟡 | ✅ (no-op) |
 | V-A8 | Accounting export reconcilable with **ภพ.30** (sales-tax report = filed VAT return) | ภูม | 🟡 | ⬜ |
 
 ## V-B — Self-serve reports
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-B1 | Admin report screens (zero dev tickets): pending-import payments · credit-pending imports · containers awaiting TH warehouse · debtors · refunds issued · month's orders — CSV export each | ภูม | 🟠 | ⬜ |
+| V-B1 | Admin report screens (zero dev tickets): pending-import payments · credit-pending imports · containers awaiting TH warehouse · debtors · refunds issued · month's orders — CSV export each. ✅ SHIPPED (full-scope-gap §4 "self-serve CSV reports" already-fixed; **+ platform-wide CSV export 2026-06-07** — ~72 admin list surfaces got "⬇ CSV หน้านี้"/"ทั้งหมด" via `components/admin/csv-button.tsx` + `actions/admin/export/*` + migration `0147_admin_export_log` PII audit, per CLAUDE.md 2026-06-07 save-point). | ภูม | 🟠 | ✅ |
 
 ## V-C — Order-lifecycle flexibility
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-C1 | **Post-lock refund** path — refund over-collected shipping when the carrier changes after "preparing to ship" | ภูม | 🔴 | ⬜ |
-| V-C2 | Bill-header (buyer name) **editable by staff**, audited | ภูม | 🟠 | ⬜ |
-| V-C3 | "ตัดตู้" UX — enforce + explain the container close-date (วันที่ปิดตู้) before assigning parcels | ภูม | 🟠 | ⬜ |
+| V-C1 | **Post-lock refund** path — refund over-collected shipping when the carrier changes after "preparing to ship". ✅ SHIPPED (full-scope-gap §4 "post-lock refund" already-fixed). | ภูม | 🔴 | ✅ |
+| V-C2 | Bill-header (buyer name) **editable by staff**, audited. ✅ SHIPPED (full-scope-gap §4 "editable bill-header" already-fixed). | ภูม | 🟠 | ✅ |
+| V-C3 | "ตัดตู้" UX — enforce + explain the container close-date (วันที่ปิดตู้) before assigning parcels. ✅ SHIPPED THIS WAVE (2026-06-10) — commit `ab8a09d4` "block silent cabinet overwrite of locked container rows" (ตัดตู้ lock guard) + earlier ภูม `8874d83a`. | ภูม | 🟠 | ✅ |
 
 ## V-D — Container & volume integrity (revenue-critical)
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-D1 | Store CBM **per source** (received / queue / manifest) on `cargo_shipments`; surface the diff to staff **before billing** (real case GZE260422-1: 16.79 vs 21.28) | ภูม | 🔴 | ⬜ |
-| V-D2 | One **canonical cargo-type enum**; map both legacy sets (API `A/M/X/O/Z` + manifest `G/T/F`) onto it | ภูม | 🟠 | ⬜ |
-| V-D3 | Link the Pacred container code ↔ the carrier's physical container number | ภูม | 🟡 | ⬜ |
-| V-D4 | Split-receipt expected-vs-received box count — migration 0037 (U1-5) schema ✅; wire the UI | ภูม | 🟠 | ⬜ |
+| V-D1 | Store CBM **per source** (received / queue / manifest) on `cargo_shipments`; surface the diff to staff **before billing** (real case GZE260422-1: 16.79 vs 21.28). ✅ SHIPPED (full-scope-gap §4 "CBM/cost reconcile" already-fixed). | ภูม | 🔴 | ✅ |
+| V-D2 | One **canonical cargo-type enum**; map both legacy sets (API `A/M/X/O/Z` + manifest `G/T/F`) onto it. ✅ SHIPPED THIS WAVE (2026-06-10) — commit `5aef292b` "V-D2: canonical rate-axis label module + repoint 5 admin editors". | ภูม | 🟠 | ✅ |
+| V-D3 | Link the Pacred container code ↔ the carrier's physical container number. ✅ SHIPPED THIS WAVE (2026-06-10) — commit `7320dd1a` "V-D3: surface carrier real container no on the container detail page". | ภูม | 🟡 | ✅ |
+| V-D4 | Split-receipt expected-vs-received box count — migration 0037 (U1-5) schema ✅; wire the UI. ✅ SHIPPED THIS WAVE (2026-06-10) — commit `bd29d5bc` "V-D4: wire per-parcel received-vs-expected box count in container detail". | ภูม | 🟠 | ✅ |
 
 > 📐 **Schema spec for V-D1/D2/D3** → [`docs/port-specs/cargo-volume-reconciliation.md`](port-specs/cargo-volume-reconciliation.md) — เดฟ prep (proposed columns + canonical cargo-type enum + legacy mapping); ภูม implements + finalises.
 
@@ -124,7 +132,7 @@ in the Parts O–U archive.
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
 | V-E1 | Commercial **Invoice + Packing List** generator — ✅ V1 SHIPPED 2026-05-17 (commit 6478efe). freight_shipments + parties + invoices + lines + 14 admin actions + admin list/new/detail + V-E6 convert wired. PDF generators + customer portal = V-E1.1 follow-up. | ภูม | 🟠 | ✅ V1 |
-| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure. Design = [ADR-0016](decisions/0016-freight-value-model.md) (🟡 DRAFT — ก๊อต to lock) | ภูม impl · ก๊อต lock ADR-0016 | 🟠 | ⬜ |
+| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure. Design = [ADR-0016](decisions/0016-freight-value-model.md) (✅ **Accepted** — locked by ก๊อต 2026-05-16 night; PORT_PLAN said "DRAFT" but the ADR header is Accepted). ✅ **Declared-value layer SHIPPED** — migration `0158_cargo_3number_lines.sql` (cost/declared/HS cols) + W2 cargo-declarations surface (`/admin/accounting/cargo-declarations`, CLAUDE.md 2026-06-09 NIGHT). | ภูม impl · ก๊อต lock ADR-0016 | 🟠 | ✅ V1 |
 | V-E3 | **Form E** (ASEAN-China FTA Certificate of Origin) generator — 12-box form, HS code, origin criterion. ✅ V1 SHIPPED 2026-05-17 (commit `98a4c85`). `components/pdf/freight-form-e.tsx` + `app/api/freight-invoice/[id]/form-e/route.tsx` + admin download button on shipment-detail. Pure templating over `freight_shipments`/`freight_invoice_lines` — no new schema. Audited 2026-05-25 by Sprint-13 Agent M. | ภูม | 🟡 | ✅ V1 |
 | V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording. ✅ V1 SHIPPED 2026-05-17 (same commit `98a4c85` as V-E3). `components/pdf/freight-do-letter.tsx` + `app/api/freight-invoice/[id]/do-letter/route.tsx`. Pure templating; carrier-name lookup from B/L prefix; Thai พ.ศ. dates. Audited 2026-05-25. | ภูม | 🟡 | ✅ V1 |
 | V-E5 | Range-guard **every numeric import** — legacy invoice sheets carry int32-overflow garbage (`-2146826xxx`) | ภูม | 🟡 | ⬜ |
@@ -139,7 +147,7 @@ in the Parts O–U archive.
 |---|---|---|---|---|
 | V-E6 | **Quotation workflow** — ✅ V1 SHIPPED 2026-05-17 (commit a0c9c78). freight_quotes + items + 7-state workflow + 11 admin actions + admin list/new/detail UI + audit timeline. Convert-to-shipment stub (V-E1 dep). Customer portal + PDF deferred to V-E6.1. 📐 spec [`port-specs/freight-quotation.md`](port-specs/freight-quotation.md). | ภูม | 🟠 | ✅ V1 |
 | V-E7 | **Receipt & payment tracking** — payment ledger w/ withholding-tax + RD Code 86. Schema `freight_invoices` + `freight_invoice_lines` + `freight_invoice_payments` (was `tb_receipt*`). 📐 spec → [`port-specs/freight-receipt-and-payment.md`](port-specs/freight-receipt-and-payment.md). ✅ V1 SHIPPED (migrations `0052_freight_invoice_payments.sql` + `0053_freight_invoice_wht.sql`). `actions/admin/freight-invoice-payments.ts` (670 lines · record/void/uploadSlip/listPayments/getReceiptGate) + `lib/validators/freight-payment.ts` + admin payments panel embedded in `shipment-detail-client.tsx` + customer surfaces `/freight/receipts/{print/[id], history}` + receipt PDF at `app/api/freight-receipt/[id]/route.tsx`. Audited 2026-05-25 by Sprint-13 Agent N. | ภูม | 🟠 | ✅ V1 |
-| V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law (Revenue Code §50). 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (covers V-E8 + V-H1 + V-H2 combined). PHP ref `pages/withdraw-commission-{interpreter,sale}/` | ภูม | 🟠 | ⬜ |
+| V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law (Revenue Code §50). 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (covers V-E8 + V-H1 + V-H2 combined). PHP ref `pages/withdraw-commission-{interpreter,sale}/`. 🟡 **PARTIAL** — the **freight commission ledger** shipped (W6 build wave · migration `0167_freight_commission_ledger.sql`, `freight_commission_*` ×4) but ships **DORMANT** behind `business_config commission.freight_enabled` (0 owner-confirmed tiers · owner must confirm rates + flip the flag, CLAUDE.md 2026-06-09 LATE-NIGHT). The **interpreter (ล่าม) lane (V-H1)** is still **open**. | ภูม | 🟠 | 🟡 partial |
 | V-E9 | **Monthly closing ritual for forwarder accounting** — `accounting_periods` with status=open\|closing\|closed + frozen-via-trigger; read-only past periods. 📐 spec → [`port-specs/freight-monthly-closing.md`](port-specs/freight-monthly-closing.md). ✅ V1 SHIPPED (migration `0056_accounting_periods.sql` 324 lines · `accounting_periods` + `period_close_event` + DB-level freeze trigger). `actions/admin/accounting-periods.ts` 428 lines (openPeriod/requestClose/finalizeClose/adminReopenPeriod) + `/admin/accounting/periods/{page.tsx, [period_yyyymm]/page.tsx, period-detail-actions.tsx, open-period-button.tsx}`. Audited 2026-05-25 by Sprint-13 Agent N. | ภูม | 🟠 | ✅ V1 |
 | V-E10 | **QA/QC intake inspection** — pre-billing gate; checklist (damage / missing / quality); pass→release, fail→rework. Schema `freight_qa_inspections` (was `tb_check_forwarder`). 📐 spec → [`port-specs/freight-qa-qc-inspection.md`](port-specs/freight-qa-qc-inspection.md). ✅ V1 SHIPPED (migration `0045_freight_qa_inspections.sql` + FK backfill in `0050_freight_shipments.sql` §6). `actions/admin/qa-inspections.ts` (createQaInspection/updateQaInspectionNotes/uploadQaPhoto/isCargoShipmentQaPassed/`isFreightShipmentQaPassed`) + `/admin/warehouse/qa-inspections/{page.tsx, new/page.tsx, [id]/page.tsx}`. **QA-gate WIRE landed Sprint-13** (`eb3cd85`) — `adminCreateFreightInvoice` now blocks invoice INSERT when QA not passed (V-E10 pre-billing gate was a "V1 stub" comment before; wired now). | ภูม | 🟡 | ✅ V1 |
 | V-E11 | **Customs declaration UI (ใบขนสินค้า)** — internal-only V2 (no Thai Customs API integration yet — Phase III). Schema `freight_customs_declarations` + lines. 📐 spec → [`port-specs/freight-customs-declaration.md`](port-specs/freight-customs-declaration.md). ✅ V1 SHIPPED (migration `0057_customs_declarations.sql`). `actions/admin/customs-declarations.ts` (full CRUD + draft/submit/mark_accepted) + `/admin/freight/declarations/{page.tsx, [id]/page.tsx, [id]/declaration-detail-client.tsx}`. Audited 2026-05-25 by Sprint-13 Agent O. | ภูม | 🟡 | ✅ V1 |
@@ -149,8 +157,8 @@ in the Parts O–U archive.
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-G1 | **Bulk forwarder actions** — multi-shipment status update / driver assignment / cancel. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G1. PHP ref `forwarder-action.php` | ภูม | 🟡 | ⬜ |
-| V-G2 | **Bulk transfer customers to sales rep** — currently per-customer only at `/admin/customers/[id]/transfer-rep`. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G2. PHP ref `transferSalesCustomers.php` | ภูม | 🟡 | ⬜ |
+| V-G1 | **Bulk forwarder actions** — multi-shipment status update / driver assignment / cancel. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G1. PHP ref `forwarder-action.php`. ✅ SHIPPED THIS WAVE (2026-06-10) — commit `244f39e1` "V-G1: mount bulk driver-assign + cancel on /admin/forwarders" (`bulk-actions-toolbar.tsx` mounted on the live forwarders table). | ภูม | 🟡 | ✅ |
+| V-G2 | **Bulk transfer customers to sales rep** — currently per-customer only at `/admin/customers/[id]/transfer-rep`. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G2. PHP ref `transferSalesCustomers.php`. ✅ **ALREADY BUILT** — `actions/admin/customer-transfer-bulk.ts` + `/admin/customers/transfer-bulk/page.tsx` (the bulk surface exists; not a gap). | ภูม | 🟡 | ✅ |
 | V-G3 | **Admin push broadcast (popup)** — admin send notifications TO users via ad-hoc UI. ✅ V1 SHIPPED (commits `ca3626d` + `08afee6` + `f0bc812` audit follow-ups). migration `0055_broadcasts.sql` (broadcasts table + notifications.broadcast_id FK + RLS super/sales_admin) · validators `lib/validators/broadcast.ts` · server actions `actions/admin/broadcasts.ts` (create/schedule/send-now/cancel + audience-paged fan-out) · admin pages `/admin/broadcasts/{list,new,[id]}` + client action panel · cron `/api/cron/send-scheduled-broadcasts` (every 5 min, race-safe optimistic lock). V1 = in-app notifications only; LINE push fan-out deferred to V-G3.2 (needs LINE Messaging API quota wiring). 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G3. PHP ref `popup.php` | ภูม | 🟡 | ✅ V1 |
 | V-G4 | **Cargo TOS version management UI** — ✅ V1 SHIPPED 2026-05-17 (commit c0af160). tos_versions + tos_acceptances tables + /admin/settings/tos-versions admin UI (create/edit/activate/per-version acceptance count). V1 = backend management only; customer gate still reads CURRENT_TOS_VERSION from lib/tos.ts (V-G4.1 wires DB read). | ภูม | 🟡 | ✅ V1 |
 | V-G5 | **Organization 5 contact CRUDs** — ✅ V1 SHIPPED 2026-05-17 (commit 8befff5). org_contacts table + /admin/settings/contacts (tabs per kind). V1 = backend management only; customer-side wire to footer + JSON-LD = V-G5.1 follow-up. | ภูม | 🟢 | ✅ V1 |
@@ -204,6 +212,16 @@ Full hand-off + acceptance criteria → [`docs/briefs/poom.md`](briefs/poom.md).
 
 # 🕳 Part W — Gap-hunt backlog (2026-05-17)
 
+> ⚠️ **NUMBERING CLASH — read this first (note added 2026-06-10).** The
+> `W-1..W-8` rows in *this* Part W are the **2026-05-17 gap-hunt backlog**
+> (security keystone / wallet integrity / flow-wiring). They are a **different
+> numbering scheme** from the **"waves W1-W11"** referenced in the CLAUDE.md
+> 2026-06-09 save-points + [`docs/research/build-backlog-2026-06-09.md`](research/build-backlog-2026-06-09.md)
+> (W6 = freight commission ledger · W9 = taxdoc workspace · W10 = warehouse
+> worker-app · shipped "W11" = customs doc-kit, etc.). **`Part-W W-n` ≠ `wave W-n`.**
+> When a save-point says "W6 shipped" it means the *build-backlog wave*, not
+> Part-W row W-6 (admin supervisory layer). Cross-reference by scheme, not number.
+
 > **Source:** the 5-angle source-code gap-hunt + the chained synthesis in
 > [`docs/research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md)
 > — read that doc for the **why** (the 4 chains: the P0 security keystone, the
@@ -223,11 +241,11 @@ Full hand-off + acceptance criteria → [`docs/briefs/poom.md`](briefs/poom.md).
 | **W-1** | **Security keystone** — role-pin every money/PII/order RLS policy (`is_admin(array[...])`, never bare); add `requireAdmin([roles])` to the 11 ungated finance pages; make the `createAdminClient` ownership check un-skippable via a `lib/` helper; add a DB-level money-mutation audit trigger. ✅ V1 SHIPPED — migration `0062_rls_role_pin_money_pii.sql`: §1-2 re-pins every money/PII/order RLS policy with explicit role arrays (`['super','accounting','ops']` etc) — closes the `driver`/`warehouse` direct-PostgREST exploit S-1; §3 adds `audit_wallet_transaction()` SECURITY DEFINER fn + `wallet_tx_audit_trigger` AFTER INSERT/UPDATE on `wallet_transactions` → writes to `admin_audit_log` regardless of code path (catches the non-action write path that `logAdminAction` structurally cannot). `lib/auth/owned-write.ts` provides `assertOwnedProfileId` + `assertOwnsRecord` helpers for createAdminClient ownership checks. Admin layout `requireAdmin()` at `app/[locale]/(admin)/layout.tsx` gates ALL `/admin/*` pages — the "11 ungated finance pages" concern was misframed (per-page gates not needed when layout gate covers all). Sprint-18 audit confirmed: 2026-05-25 query found only 2 bare `is_admin()` remaining on money/PII tables (`containers` — legacy, being deprecated; `forwarder_driver` — driver-role table). Other 19 bare-`is_admin()` are operational tables (HR/audit/CSV/work-items) out of W-1 money/PII/order scope. Audited 2026-05-25 by Sprint-18 solo audit — PORT_PLAN was stale. | Money is reachable (read), movable (write) + un-attributed: a low-trust `driver`/`warehouse` admin JWT passes RLS to every wallet/order/tax table, the finance pages have no page gate, and direct PostgREST writes leave no `admin_audit_log` row | 🔴 P0 | M | none | ✅ V1 already in prod | sec S-1·S-2·G-6 · admin H-1·H-2·H-7 |
 | **W-3** | **Wallet-integrity guard** — add `freight_invoice` to `wallet_transactions.reference_type` CHECK + a real debit in `recordFreightPayment`; sum **pending+completed** debits in every balance check; add a status-transition guard to `adminUpdateYuanPayment` + fire the refund credit for a *completed* wallet-tx; atomic non-negative-balance mechanism (`SELECT … FOR UPDATE` in a DB fn, not a naive CHECK). ✅ V1 SHIPPED — migration `0063_wallet_freight_invoice_reference.sql` (adds 'freight_invoice' to reference_type CHECK + `wallet_tx_freight_payment_uniq` partial-unique index) + `0064_wallet_overdraw_guard.sql` (`wallet_available_balance(profile, bucket)` SQL fn = completed PLUS open pending debits + `wallet_assert_no_overdraw()` BEFORE trigger with row `FOR UPDATE` lock). `debitWalletForFreightPayment` writes a real debit at `actions/admin/freight-invoice-payments.ts:169` with available-balance pre-check + 23505 idempotent retry; `adminUpdateYuanPayment` has status-transition allow-list at `actions/admin/yuan-payments.ts:12+` + refund branch at L267 fires the reversal debit. `getWalletAvailableBalance` in `lib/wallet/balance.ts` is the app-layer mirror of the DB function. Audited 2026-05-25 by Sprint-16 solo audit — PORT_PLAN was stale. | One bug class leaking money: freight wallet-pay flips invoice `paid` with no debit; stacked pending debits overdraw to negative; yuan refund→re-completed never re-debits | 🔴 P0/P1 | M | none | ✅ V1 already in prod | sec G-3·S-5 · customer H-1 · rev-flow H-1·H-2 |
 | **W-2** | **Wire the flow** — unify the 2 container tables (`cargo_containers` canonical, migrate `containers`, repoint `forwarders.container_id`, redirect `/admin/containers`); propagate container status onto `forwarders`/`service_orders` via a documented enum; arrival→billing gate (block `mark*Paid` until container-no + final CBM confirmed); freight `quote.convert`→shipment + `markDelivered`→invoice wiring + `freight_invoices` partial-unique index; order auto-close action + trigger. ✅ V1 SHIPPED (with Sprint-16 prod-state recovery). Container unify = `0059_container_unify.sql` (cargo_containers canonical + legacy_container_id backfill key + `forwarders.cargo_container_id` + `service_orders.cargo_container_id` FK columns). Spine = `0016_phase_h_upgrades.sql` (legacy `containers`) + `0033_containers.sql` (`cargo_containers` + `cargo_shipments` + tracking + status_history). Quote→shipment = `actions/admin/freight-quotes.ts:467+` (`freight_quote.auto_convert_on_accept` on accept-status flip). markDelivered→invoice + order auto-close = `0078_warehouse_cascade_rpc.sql` (`service_order.auto_close_on_delivery` fires when all items delivered). freight_invoices partial-unique = `wallet_tx_freight_payment_uniq` in 0063. **Sprint-16 finding (2026-05-25)**: cargo spine parent tables (cargo_containers + cargo_shipments + legacy containers) had been **DROPPED from prod** at some point — only orphan child tables (cargo_container_status_history + cargo_shipment_tracking, no FK to parent) survived. Sprint-11 MOMO sync + Sprint-13 V-E10 QA + Sprint-13 V-E11 customs would all 500 at runtime against missing parent. Sprint-16 re-applied 0016+0033+0059 via psql (all idempotent CREATE TABLE IF NOT EXISTS · backfill processed 0 rows · empty tables, no data loss). New `docs/learnings/parallel-agent-sprints.md` L-PAS-05 captures the "migrations in repo not applied to prod" pattern. | Pacred-web is correct islands with no edges: container `delivered` never closes the order, the customer portal reads a frozen status, freight jobs reach `delivered` un-billed, no order ever auto-closes — the legacy "ของอยู่ไหน" leak rebuilt inside Pacred. Precondition for `R-1` having value | 🟠 P1 | L | container-unify must precede `R-1`/`R-10` | ✅ Re-applied 2026-05-25 | rev-flow Stages 4·6·7·9 · admin H-3 |
-| **W-4** | **MOMO JMF sync made runnable** — fill the `sync.ts` upsert loop, add `app/api/cron/momo-jmf-sync/route.ts`, add the 7th `vercel.json` cron, capture the real `?api=` endpoint names | `lib/integrations/momo-jmf/` has a typed client but the sync body is a stub with **zero callers and no cron** — it cannot run at all; every container is hand-typed. MOMO is Pacred's only digital container-status source | 🔴 P0 | L | the `?api=` endpoint capture + the MOMO-1 call | No (manual entry covers launch; P0 immediately after) | integrations G-1 |
-| **W-5** | **Refund money path** — one credit-writing action (`kind='refund'`) covering cancel-after-paid, yuan refund of a *completed* payment, carrier-change over-collection (`V-C1`); plus a customer-facing claim/issue entry ("ตกหล่น" — type, photos, status lifecycle) that can link an `R-9` warehouse discrepancy row | Statuses say "refunded" while no money moves; cancelling a paid order orphans the wallet debit; customers have no channel but LINE to report a missing/damaged item or request a refund | 🟠 P1 | M | `V-C1`; loosely `R-9` | No | rev-flow H-3 · admin G-6 · customer G-C2 |
-| **W-6** | **Admin supervisory layer** — audit-log search/filter/export + per-target history; staff RBAC console (capability view, section scoping, `super`-holder review); notification delivery log; admin global search (customer / h_no / f_no / container); cron-health panel; bulk-action failed-id summary rows | The admin can write money but nobody can answer "who changed this / can I trust the team with RLS-bypass UI"; `admin_audit_log` is write-only with no query UI; `super` proliferation has no review surface; failed LINE pushes vanish silently | 🟠 P1 | M | pairs with W-1 (audit trigger) | No | admin G-1·G-2·G-5·G-7·G-9·H-5·H-6 |
-| **W-7** | **Customer credit line (เครดิตสินค้า / "pay later")** — `profiles.credit_limit` + a credit-charge ledger kind + a credit-outstanding view + a "pay my credit" action + an admin grant/limit + aging screen | `wallet.credit_balance` + the `/wallet` "เครดิต — วงเงินเครดิตจาก Pacred" card are rendered but **no code earns, grants, or spends credit** — the largest customer-facing dead surface; the legacy portal had a real credit line as a repeat-importer retention lever | 🟠 High | L | a small ADR (eligibility + limit rules + overdue handling); feeds `R-7` | No | customer G-C1 |
-| **W-8** | **Freight WHT gate + per-container cost basis** — add `freight_invoice_id` to `withholding_tax_entries` + relax the XOR CHECK so `getFreightReceiptGate` stops being a permanent no-op; add a `container_costs` carrier-rate-card table (cost per cabinet × cargo type) | A juristic freight customer can pull a receipt with no 50-ทวิ cert on file (the ADR-0015 control simply does not exist for freight); Pacred has no record of what a container *cost* it → margin-blind on the cargo side; feeds `R-7` | 🟠 P1 | M | feeds `R-7` (which must be 2 tables: rate card + AP ledger) | No | sec G-1·G-4 · rev-flow Stage 8 |
+| **W-4** | ✅ **SOLVED via a DIFFERENT path — ⚠️ do NOT build on `momo-jmf`.** The live MOMO container-status sync is **`lib/integrations/momo-isolated/`** (`runMomoSync` → `momo_import_tracks` + `momo_container_closed` → propagated to `tb_forwarder`), wired to `app/api/cron/momo-sync/route.ts` on a **`*/5` cron** (`vercel.json` + `lib/cron/registry.ts`). The original row targeted `lib/integrations/momo-jmf/` — that path is a **DEAD STUB**: its `sync.ts` writes to the **RETIRED `cargo_*` spine** (`cargo_containers`/`cargo_shipments`) and the cron route itself flags `syncContainersFromMomo` as "DEPRECATED here". **Build cargo-status work on `momo-isolated/` (target `tb_forwarder`), never `momo-jmf/`.** (verified 2026-06-10: both paths exist on disk; only `momo-isolated` is invoked by the cron.) | `lib/integrations/momo-jmf/` was a typed client with a stub sync + no cron → superseded by `momo-isolated/` (live */5). MOMO is Pacred's only digital container-status source | 🔴 P0 | L | the `?api=` endpoint capture + the MOMO-1 call | ✅ live (momo-isolated cron */5) | integrations G-1 |
+| **W-5** | ✅ **SHIPPED.** **Refund money path** — one credit-writing action (`kind='refund'`) covering cancel-after-paid, yuan refund of a *completed* payment, carrier-change over-collection (`V-C1`); plus a customer-facing claim/issue entry ("ตกหล่น" — type, photos, status lifecycle) that can link an `R-9` warehouse discrepancy row. Live: `actions/admin/service-orders-refund.ts` + `refunds.ts` + refund-history; customer `/refunds` (request form) + `/my-issues` (missing/damaged claim). (full-scope-gap §4 "post-lock refund" + customer-reachability wiring 2026-06-08.) | Statuses say "refunded" while no money moves; cancelling a paid order orphans the wallet debit; customers have no channel but LINE to report a missing/damaged item or request a refund | 🟠 P1 | M | `V-C1`; loosely `R-9` | ✅ shipped | rev-flow H-3 · admin G-6 · customer G-C2 |
+| **W-6** | ✅ **SHIPPED.** **Admin supervisory layer** — audit-log search/filter/export + per-target history; staff RBAC console (capability view, section scoping, `super`-holder review); notification delivery log; admin global search (customer / h_no / f_no / container); cron-health panel; bulk-action failed-id summary rows. Live: `/admin/audit` (search + `app/api/admin/audit/export`), `/admin/search` global search, `/admin/system/cron-health` + `/admin/system/crons`, RBAC console at `/admin/admins/[id]/edit`. | The admin can write money but nobody can answer "who changed this / can I trust the team with RLS-bypass UI"; `admin_audit_log` is write-only with no query UI; `super` proliferation has no review surface; failed LINE pushes vanish silently | 🟠 P1 | M | pairs with W-1 (audit trigger) | ✅ shipped | admin G-1·G-2·G-5·G-7·G-9·H-5·H-6 |
+| **W-7** | ✅ **SHIPPED (repointed to legacy SOT — ADR-0023).** **Customer credit line (เครดิตสินค้า / "pay later")**. The rebuilt model (`profiles.credit_limit` · `wallet_transactions` bucket='credit') was EMPTY on prod; ADR-0023 repointed reads/writes onto the LIVE legacy pair (`tb_users.userCreditValue` limit + `tb_credit.creditvalue` outstanding). Live: `actions/credit.ts` (`getMyCredit` + `customerPayCreditFromWallet`) + `actions/admin/credit.ts` (grant/limit) + `/wallet` credit card + aging. (24 real customers carry a `tb_credit.creditvalue>0`.) | `wallet.credit_balance` card was rendered but no code earned/spent credit (the rebuilt twin was a dead surface); the legacy portal had a real credit line as a repeat-importer retention lever | 🟠 High | L | ADR-0023 (eligibility + limit rules + overdue handling); feeds `R-7` | ✅ shipped | customer G-C1 |
+| **W-8** | ✅ **SHIPPED.** **Freight WHT gate + per-container cost basis** — `freight_invoice_id` on `withholding_tax_entries` + the receipt gate now enforces (`getFreightReceiptGate` in `actions/admin/freight-invoice-payments.ts`, migrations `0053_freight_invoice_wht.sql`); `container_costs` carrier-cost basis = `0069_container_costs_disbursements.sql` (+ `0142_container_cost_sheet_cache.sql`). | A juristic freight customer could pull a receipt with no 50-ทวิ cert on file; Pacred had no record of what a container *cost* it → margin-blind on the cargo side; feeds `R-7` | 🟠 P1 | M | feeds `R-7` (rate card + AP ledger) | ✅ shipped | sec G-1·G-4 · rev-flow Stage 8 |
 
 ## W-9+ — Tier 2 tail (post-launch P2/P3)
 
@@ -263,11 +281,19 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 > never hardcoded. This section is the audit of residual hardcoded values found
 > as string literals in `.ts`/`.tsx` files **outside** `site.ts`.
 >
-> **Status: NOT YET FIXED — audit only.** Fixing touches frontend files owned
-> by ปอน + ภูม; the migration must be coordinated to avoid merge collisions.
-> Each row below = `file:line` · the hardcoded value · the `site.ts` constant
-> it should import. Tests + `docs/` are out of scope; `lib/bkk-zip.ts` (a
-> Bangkok zip-code dataset) is **not** an address leak and is excluded.
+> **Status: PARTIALLY FIXED (updated 2026-06-10).** The 2026-06-10 docs-refresh
+> wave refactored these to `site.ts`: **footer.tsx** (commit `b31c6c41` — covers
+> LC-1o + LC-3b), **faq/page.tsx** (`b31c6c41` — LC-1p + LC-2b),
+> **clearance-banner.tsx** + **home-bottom-banner.tsx** (`e55131ee` — LC-1c +
+> the home banner), and the **customs-clearance-shipping-suvarnabhumi** landing
+> pages (`8d78dad9` — LC-1l). The remaining rows are still audit-only. **The
+> rep-card display tuples** (sales-rep phone/name pairs in carousel/booking-data)
+> were **intentionally left** — they are ปอน's domain and the rendered values
+> are already correct; do NOT auto-rewrite them in a scrub. Fixing the rest
+> touches frontend files owned by ปอน + ภูม; coordinate to avoid merge
+> collisions. Each row below = `file:line` · the hardcoded value · the `site.ts`
+> constant it should import. Tests + `docs/` are out of scope; `lib/bkk-zip.ts`
+> (a Bangkok zip-code dataset) is **not** an address leak and is excluded.
 
 ## LC-1 — Phone numbers (highest count)
 
@@ -277,7 +303,7 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 |---|---|---|---|
 | LC-1a | `components/sections/contact-sales.tsx:27,37,48` | `066-125-3007` · `02-421-3325` · `066-090-1217` | `CONTACT.phoneDisplay` · `.phoneCompanyDisplay` · `.phoneCsDisplay` |
 | LC-1b | `components/sections/import-export-banner.tsx:12-14,142,151` | same 3 numbers + `tel:0661253007` | same — `tel:` href from `CONTACT.phone` |
-| LC-1c | `components/sections/clearance-banner.tsx:17-19,148,158` | same 3 numbers + `tel:0660901217` | same — `tel:` href from `CONTACT.phoneCs` |
+| LC-1c ✅ | `components/sections/clearance-banner.tsx:17-19,148,158` | same 3 numbers + `tel:0660901217` | ✅ **DONE 2026-06-10** (commit `e55131ee`) — now from `CONTACT.*` |
 | LC-1d | `components/sections/purchase-banner.tsx:22-24,106,116` | same 3 numbers + `tel:0661253007` | same — `tel:` href from `CONTACT.phone` |
 | LC-1e | `components/ui/sales-carousel.tsx:19-21` | same 3 numbers | `CONTACT.phoneDisplay` · `.phoneCompanyDisplay` · `.phoneCsDisplay` |
 | LC-1f | `lib/booking-data.ts:37-39` | same 3 numbers | same (file already imports `LINE_OA` — extend to `CONTACT`) |
@@ -286,11 +312,11 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 | LC-1i | `components/sections/floating-tabs.tsx:13` | `const OFFICE_PHONE = "024213325"` | derive from `CONTACT.phoneCompany` |
 | LC-1j | `app/[locale]/(public)/warehouses/thailand/page.tsx:147,151` | `tel:0661253007` + `066-125-3007` | `CONTACT.phone` / `.phoneDisplay` |
 | LC-1k | `app/[locale]/(public)/about/page.tsx:209,213` | `tel:0661253007` + `066-125-3007` | `CONTACT.phone` / `.phoneDisplay` |
-| LC-1l | `app/[locale]/(public)/customs-clearance-shipping-suvarnabhumi/page.tsx:374,505` | `066-125-3007` (×2) | `CONTACT.phoneDisplay` |
+| LC-1l ✅ | `app/[locale]/(public)/customs-clearance-shipping-suvarnabhumi/page.tsx:374,505` (+ `[port]/page.tsx`) | `066-125-3007` (×2) | ✅ **DONE 2026-06-10** (commit `8d78dad9`) — now from `CONTACT.phoneDisplay` |
 | LC-1m ⚠️ | `components/sections/clearance-promo.tsx:115,119` | `tel:0661310253` + `066-131-0253` | **STALE** — `066-131-0253` is **not** in `CONTACT`; reconcile (likely → `CONTACT.phoneDisplay`) before migrating |
 | LC-1n ⚠️ | `components/sections/warehouse-detail.tsx:186,190` | `tel:0661310253` + `066-131-0253` | **STALE** — same as LC-1m |
-| LC-1o ⚠️ | `components/sections/footer.tsx:174` | `066-131-0253` | **STALE** — footer should show a canonical `CONTACT.*` number; `066-131-0253` is unknown to `site.ts` |
-| LC-1p ⚠️ | `app/[locale]/(public)/faq/page.tsx:115,220` | `066-131-0253` (TH + EN copy) | **STALE** — reconcile to a `CONTACT.*` number |
+| LC-1o ✅ | `components/sections/footer.tsx:174` | `066-131-0253` | ✅ **DONE 2026-06-10** (commit `b31c6c41`) — stale `066-131-0253` reconciled to `STAFF.sales[3].phone` (แนท's sales line) + socials → `SOCIAL.*` |
+| LC-1p ✅ | `app/[locale]/(public)/faq/page.tsx:115,220` | `066-131-0253` (TH + EN copy) | ✅ **DONE 2026-06-10** (commit `b31c6c41`) — phone reconciled to `STAFF.sales[3].phone` (`FAQ_PHONE`) |
 
 ## LC-2 — Emails
 
@@ -299,7 +325,7 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 | # | File:line | Hardcoded value | Should use |
 |---|---|---|---|
 | LC-2a | `components/sections/clearance-process.tsx:9` | `sales@pacred.co` (in step copy) | `CONTACT.emailSales` |
-| LC-2b ⚠️ | `app/[locale]/(public)/faq/page.tsx:115,220` | `contact@pacred.co` (TH + EN copy) | **STALE** — `contact@pacred.co` is **not** in `CONTACT`; reconcile (likely → `CONTACT.email`) |
+| LC-2b ⚠️ | `app/[locale]/(public)/faq/page.tsx:115,220` | `contact@pacred.co` (TH + EN copy) | **STALE — STILL OPEN** (2026-06-10 wave touched this file but **deliberately left the email**): `contact@pacred.co` has **no** matching `CONTACT.*` entry (site.ts exposes `sales@`/`docs@`/`acc@`). 🔴 needs an owner decision — is `contact@` a real mailbox, or should it be `CONTACT.email`? Code carries a `NOTE (flagged to เดฟ)` comment. |
 | LC-2c | `lib/notifications/index.ts:151` | `"Pacred <noreply@pacred.co>"` fallback `From:` | low priority — `noreply@` is an infra address, not in `CONTACT`; consider a `CONTACT.emailNoReply` constant or leave as-is |
 
 > Note: `lib/logger.ts:145` (`redactEmail("admin@pacred.co")`) is a JSDoc usage
@@ -310,7 +336,7 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 | # | File:line | Hardcoded value | Should use |
 |---|---|---|---|
 | LC-3a | `components/sections/navbar.tsx:81,86,91,96` | the 4 social URLs (Facebook · YouTube · TikTok · Instagram) | `SOCIAL.facebook` · `.youtube` · `.tiktok` · `.instagram` |
-| LC-3b | `components/sections/footer.tsx:31-34` | `const YOUTUBE_URL/FACEBOOK_URL/TIKTOK_URL/INSTAGRAM_URL` | `SOCIAL.*` |
+| LC-3b ✅ | `components/sections/footer.tsx:31-34` | `const YOUTUBE_URL/FACEBOOK_URL/TIKTOK_URL/INSTAGRAM_URL` | ✅ **DONE 2026-06-10** (commit `b31c6c41`) — now `SOCIAL.youtube/.facebook/.tiktok/.instagram` |
 | LC-3c | `components/sections/customs-video-clips.tsx:13` | `const YOUTUBE_CHANNEL = "https://www.youtube.com/@PacredShipping"` | `SOCIAL.youtube` |
 | LC-3d | `components/sections/blog.tsx:20` | `const YOUTUBE_CHANNEL = "https://www.youtube.com/@PacredShipping"` | `SOCIAL.youtube` |
 | LC-3e | `app/[locale]/(public)/about/page.tsx:194-195` | office address (`28/40 หมู่บ้าน สิริ ...`) — note typo `เอเวนิว` vs `อเวนิว` in `ADDRESSES` | `ADDRESSES.office.full` (also fixes the typo divergence) |
@@ -325,6 +351,12 @@ Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped b
 > company-data leaks — lowest priority.
 
 ## Summary
+
+> **Progress (2026-06-10):** ✅ migrated — LC-1c (clearance-banner), LC-1l
+> (suvarnabhumi landings), LC-1o (footer phone), LC-1p (faq phone), LC-3b
+> (footer socials), + home-bottom-banner. ⚠️ still open — LC-2b (`contact@pacred.co`
+> needs an owner decision) + the remaining ~15 rows. The rep-card display tuples
+> (LC-1e/LC-1f sales-rep pairs) were intentionally left (ปอน's domain · values correct).
 
 - **~24 sites** carry hardcoded company values across `.ts`/`.tsx` (excluding
   `docs/`, tests, `site.ts`, and the `lib/bkk-zip.ts` zip dataset).

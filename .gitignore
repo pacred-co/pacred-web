@@ -53,3 +53,6 @@ scripts/backfill/.progress/
 
 .claude/scheduled_tasks.lock
 .pcs-sync-token-*.txt
+
+# customer-code swap backups (PII — never commit)
+*-backup.json

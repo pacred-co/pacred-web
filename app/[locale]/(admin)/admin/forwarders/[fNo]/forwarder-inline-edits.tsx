@@ -97,24 +97,28 @@ function EditableRow({
   compact?: boolean;
 }) {
   if (compact) {
+    // 2026-06-10 (ปอน) — customer-page 1:1 format: "<b>label : </b>value [แก้ไข]"
+    // (the same shape as /service-import/[fNo]). The แก้ไข link is sky-blue like
+    // the customer page; the inline form is always left-aligned even when the
+    // row sits in a md:text-right column.
     return (
-      <div className="space-y-1">
-        <div className="flex items-baseline gap-2 text-sm">
-          <span className="text-muted text-xs flex-shrink-0">{label}:</span>
+      <div className="text-sm text-foreground">
+        <p>
+          <b className="font-semibold">{label} : </b>
           {editing ? null : (
             <>
-              <span className="flex-1 break-words">{display}</span>
+              <span className="break-words">{display}</span>
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 hover:underline flex-shrink-0"
+                className="ml-1.5 text-xs font-medium text-sky-600 hover:underline"
               >
-                <Pencil className="h-3 w-3" /> แก้ไข
+                แก้ไข
               </button>
             </>
           )}
-        </div>
-        {editing && <div className="space-y-2">{children(() => setEditing(false))}</div>}
+        </p>
+        {editing && <div className="mt-2 space-y-2 text-left">{children(() => setEditing(false))}</div>}
       </div>
     );
   }
@@ -169,8 +173,17 @@ const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "
 const PAY_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
 const AMOUNT_COUNT_LABEL: Record<string, string> = { "1": "รวมกล่อง", "2": "ไม่รวมกล่อง" };
 
-// PCS-family ship-by preset options (matches tb-edit-panel.tsx L57-L61).
+// In-house ship-by preset CODES (stored verbatim in tb_forwarder.fshipby +
+// consumed by the pricing engine — DO NOT rename the codes, only the labels;
+// scrubbing the codes/API is gated on ก๊อต's switchover · AGENTS.md §3).
 const SHIPBY_PRESETS = ["PCS", "PCSF", "PCSE"] as const;
+// 2026-06-10 (ปอน) — what the operator SEES: Pacred-branded names, never the
+// raw PCS* code (mirrors the customer page label map).
+const SHIPBY_LABEL: Record<string, string> = {
+  PCS:  "รับเองโกดัง Pacred (สมุทรสาคร)",
+  PCSF: "Pacred เหมาเหมา (ส่งฟรีในเขต)",
+  PCSE: "Pacred Express (ส่งด่วน)",
+};
 
 type Props = {
   fId:            number;            // tb_forwarder.id — primary key for all writers
@@ -314,7 +327,7 @@ export function ForwarderInlineEdits(p: Props) {
 
       {/* Location / pallet (PCS L2417-2427 update_fPallet) — warehouse pallet number */}
       <EditableRow
-        label="Location (pallet)"
+        label="Location"
         editing={editPallet}
         setEditing={setEditPallet}
         display={
@@ -839,7 +852,7 @@ export function EditPalletField({ fId, fpallet }: { fId: number; fpallet: number
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
       <EditableRow
         compact
-        label="Location (pallet)"
+        label="Location"
         editing={editing}
         setEditing={setEditing}
         display={
@@ -970,14 +983,14 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
         label="บริษัทขนส่ง"
         editing={editing}
         setEditing={setEditing}
-        display={fshipby ? <span className="font-mono">{fshipby}</span> : "—"}
+        display={fshipby ? (SHIPBY_LABEL[fshipby] ?? <span className="break-words">{fshipby}</span>) : "—"}
       >
         {(close) => (
           <>
             <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
-              <option value="PCS">PCS · รับเองที่โกดัง (ค่าขนส่ง 0)</option>
-              <option value="PCSF">PCSF · ส่งฟรี (ค่าขนส่ง 0)</option>
-              <option value="PCSE">PCSE · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
+              <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
+              <option value="PCSF">Pacred เหมาเหมา · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
+              <option value="PCSE">Pacred Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
               <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
             </select>
             {shipByMode === "_ext" && (
@@ -985,7 +998,7 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
                 placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express" className={inputCls} />
             )}
             <p className="text-[10px] text-muted">
-              PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ
+              รับเองโกดัง Pacred → ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · ตัวเลือก Pacred คิดค่าขนส่งใหม่อัตโนมัติ
             </p>
             <div className="flex gap-2">
               <button type="button" disabled={pending || !effectiveShipBy} className={btnSave}

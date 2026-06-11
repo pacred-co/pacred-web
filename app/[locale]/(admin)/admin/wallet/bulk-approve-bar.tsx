@@ -80,7 +80,7 @@ export function WalletBulkApproveBar() {
   }
 
   return (
-    <div className="sticky top-0 z-20 -mx-2 mb-3 rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-950/30 p-3 shadow-sm flex flex-wrap items-center gap-3">
+    <div className="sticky top-14 z-20 -mx-2 mb-3 rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-950/30 p-3 shadow-sm flex flex-wrap items-center gap-3">
       <span className="text-sm font-medium">
         🗳 เลือกแล้ว <span className="font-bold">{selected.size}</span> รายการ
       </span>
