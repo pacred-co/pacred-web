@@ -271,7 +271,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     inactiveCustomers:  inactiveUsers,
   };
 
-  const tabDefs: { key: TabKey; label: string }[] = [
+  // `href` overrides the default `?tab=` self-link → the tab navigates to a
+  // dedicated full-feature page instead of the dashboard mini-table. shop3
+  // (สั่งสินค้า · ชำระแล้ว) points at the real /admin/service-orders?q=3 workflow
+  // (status-driven edit · the proper process · owner 2026-06-11) — the dashboard
+  // mini-table only had a generic ดู/แก้ไข row.
+  const tabDefs: { key: TabKey; label: string; href?: string }[] = [
     { key: "inactiveCustomers", label: "ลูกค้าที่ยังไม่ได้ใช้งาน" },
     { key: "topup",             label: "ชำระเงิน" },
     // Wave 7.2 (ภูม audit): payShop reads rebuilt `sales_payouts` which is
@@ -281,7 +286,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "withdraw",          label: "ถอนเงิน" },
     { key: "shop1",             label: "สั่งซื้อรอดำเนินการ" },
     { key: "shop2",             label: "รอชำระเงินสินค้า" },
-    { key: "shop3",             label: "สั่งสินค้า (ชำระแล้ว)" },
+    { key: "shop3",             label: "สั่งสินค้า (ชำระแล้ว)", href: "/admin/service-orders?q=3" },
     { key: "shop4",             label: "รอร้านจีนจัดส่ง" },
     { key: "forwarder1",        label: "รอเข้าโกดังจีน" },
     { key: "forwarder5",        label: "รอชำระเงินนำเข้า" },
@@ -392,7 +397,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
               return (
                 <Link
                   key={tab.key}
-                  href={`/admin?tab=${tab.key}`}
+                  href={tab.href ?? `/admin?tab=${tab.key}`}
                   className={`inline-flex items-center gap-1.5 px-2 py-2 text-xs font-medium border-b-2 whitespace-nowrap shrink-0 transition-colors ${
                     isActive ? "border-primary-500 text-primary-600 bg-primary-50/30" : "border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50"
                   }`}
