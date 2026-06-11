@@ -919,3 +919,20 @@ The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `
 **Rule:** a junction'd `node_modules` inherits whatever commit the JUNCTION TARGET was installed at — not your worktree's. Before blaming the lockfile, confirm (a) node_modules is real (not a junction) and (b) the install was run against the package.json you're typechecking. For preview/typecheck in a worktree, prefer a real `pnpm install` in the worktree over a junction to a stale sibling.
 
 **Cross-links:** memory `preview_tool_anchor` (the junction workaround) · §13 stale-worktree-base rule (AGENTS.md) · this session voided the "regen pnpm-lock.yaml" owner-action-item (there was nothing to regen).
+
+## [2026-06-12] Don't chain `git push` after a gate command with `;` — a non-zero gate won't stop the push
+
+**Context:** Integrating a teammate branch, I ran one Bash call: `eslint <files>; echo LINT_EXIT=$?; git push ...; git push ...`. ESLint exited **1** (a real `react-hooks/set-state-in-effect` error in the merged code), but `;` runs each command unconditionally, so **both pushes ran anyway** — shipping a verify-RED commit to dave-pacred + main. Caught it only by reading the lint output that scrolled by above the push confirmation.
+
+**Symptom:** main briefly carried a commit where `pnpm verify` (→ `pnpm lint`) fails. Vercel/CI would go red; a teammate pulling it inherits the break.
+
+**Root cause:** Same family as the `| tail` / `run_in_background`-echo exit-mask, but worse — here the exit code WAS visible (`LINT_EXIT=1`) yet the `;`-chained `git push` ignored it. The gate ran, reported red, and the push fired regardless because `;` is not `&&`.
+
+**Fix / rule:** **Never `;`-chain a push after a gate in the same command.** Either:
+- run the gate ALONE, read its exit, and only THEN issue the push in a separate call (what I should have done), or
+- use `&&` so a non-zero gate aborts the chain: `pnpm verify && git push ...` (but for `pnpm lint` specifically, warnings-only exits 0 so `&&` is safe; an error exits 1 and stops the push).
+- For an integration push, gate with the FULL `pnpm verify` (not just `eslint <files>`) and read `VERIFY_EXIT` before pushing — a teammate's merge can carry an error in a file you didn't touch.
+
+**Bonus lesson:** a teammate branch can ship a lint **error** that their own gate missed — the integrate step's `pnpm verify` is the real net. Always run it (not per-file lint) before distributing a merge to main.
+
+**Cross-links:** the 2026-06-11 notification-exit-mask entry · AGENTS.md §0f gate rule · `branch-integrate-loop` skill (verify before distribute). Recovery this time: fixed the effect with `queueMicrotask` (the documented set-state-in-effect escape), confirmed `FIX_VERIFY_EXIT=0`, re-pushed (`58db8fc1`).
