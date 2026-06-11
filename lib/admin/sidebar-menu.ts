@@ -377,6 +377,14 @@ const itemHsLibrary: MenuItem = {
   icon: "BookMarked",
 };
 
+/** GAP 5 (2026-06-12) — CS HS-triage queue: lines with no HS yet → CS enters the
+ *  HS before Pricing costs (writes only tb_*.hs_code · §0e). CS/sales-facing. */
+const itemHsTriage: MenuItem = {
+  labelKey: "accFreight.hsTriage",
+  href: "/admin/accounting/hs-triage",
+  icon: "ClipboardList",
+};
+
 /** 2026-06-09 (W4 · freight ops cockpit) — the AX-JOB unified
  *  PRICING→SALES→DOC→ACC Kanban board (/admin/freight/operations). A
  *  read-mostly layer over the existing freight spine (freight_shipments);
@@ -1092,6 +1100,7 @@ const wrapServiceCustoms: MenuItem = {
   children: [
     itemCargoDeclarations,
     itemTaxdocWorkspace,
+    itemHsTriage,
     itemHsLibrary,
     itemCustomsDocKit,
     // 2026-06-10 (ปอน) — "ใบขนพ่วง" (combined/attached customs declaration ·
@@ -1339,6 +1348,7 @@ const menuSalesAdmin: MenuSection[] = [
   {
     header: "Cargo & Freight",
     items: [
+      itemHsTriage,
       {
         labelKey: "manageCustomers.titleSales",
         icon: "Users",
@@ -1525,6 +1535,7 @@ const menuSales: MenuSection[] = [
   {
     header: "Cargo & Freight",
     items: [
+      itemHsTriage,
       {
         labelKey: "manageCustomers.titleSales",
         icon: "Users",

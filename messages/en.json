@@ -3379,7 +3379,8 @@
       "declarations": "Customs declarations",
       "costRates": "China freight cost rates",
       "cargoDeclarations": "Consolidated cargo declaration",
-      "hsLibrary": "HS library (duty)"
+      "hsLibrary": "HS library (duty)",
+      "hsTriage": "HS queue (CS first)"
     },
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
