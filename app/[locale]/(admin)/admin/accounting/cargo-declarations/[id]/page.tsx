@@ -167,9 +167,21 @@ export default async function CargoDeclarationDetailPage({
             </Link>
           </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[header.status]}`}>
-          {CUSTOMS_DECLARATION_STATUS_LABEL[header.status]}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* GAP 6 (2026-06-12) — the cargo ใบขนรวม PDF now renders (the route
+              gained a cargo branch). An <a> to the /api route (not next/Link). */}
+          <a
+            href={`/api/customs-declaration/${header.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+          >
+            📄 ดู / พิมพ์ ใบขน PDF
+          </a>
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[header.status]}`}>
+            {CUSTOMS_DECLARATION_STATUS_LABEL[header.status]}
+          </span>
+        </div>
       </div>
 
       {/* Forwarder + cabinet summary */}

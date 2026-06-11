@@ -56,7 +56,9 @@ type DeclarationRow = {
   port_of_entry:              string | null;
   paid_through_promptpay:     boolean;
   notes:                      string | null;
-  freight_shipment_id:        string;
+  freight_shipment_id:        string | null;
+  cargo_forwarder_id:         number | null;
+  cargo_cabinet_no:           string | null;
   total_declared_value_thb:   number | null;
   total_duty_thb:             number | null;
   total_vat_thb:              number | null;
@@ -122,7 +124,7 @@ export async function GET(
       declared_at, submitted_at, accepted_at, released_at,
       customs_office, customs_control_no, broker_name, broker_license_no,
       ship_or_truck_arrival_date, port_of_entry, paid_through_promptpay,
-      notes, freight_shipment_id,
+      notes, freight_shipment_id, cargo_forwarder_id, cargo_cabinet_no,
       total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb
     `)
     .eq("id", id)
@@ -136,30 +138,86 @@ export async function GET(
   }
 
   // Pull shipment + parties + lines via admin client (we've already
-  // proven the caller is entitled to the declaration row).
+  // proven the caller is entitled to the declaration row). The customs schema
+  // serves BOTH freight + cargo (mig 0162): resolve the shipment-equivalent +
+  // the parties from whichever source this declaration is keyed to.
   const admin = createAdminClient();
-  const { data: shipment, error: shipmentErr } = await admin
-    .from("freight_shipments")
-    .select(`
-      job_no, transport_mode, container_code, carrier_container_no,
-      bl_no, vessel_voyage, port_loading, port_discharge, origin_country
-    `)
-    .eq("id", declaration.freight_shipment_id)
-    .maybeSingle<ShipmentRow>();
-  if (shipmentErr) {
-    console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
-  }
+  let shipment: ShipmentRow | null = null;
+  let shipper: PartyRow | undefined;
+  let consignee: PartyRow | undefined;
 
-  const { data: partiesRaw, error: partiesRawErr } = await admin
-    .from("freight_parties")
-    .select("role, name, address, tax_id, branch")
-    .eq("freight_shipment_id", declaration.freight_shipment_id);
-  if (partiesRawErr) {
-    console.error(`[freight_parties list] failed`, { code: partiesRawErr.code, message: partiesRawErr.message });
+  if (declaration.freight_shipment_id) {
+    // ── FREIGHT path — the original freight_shipment + freight_parties source.
+    const { data: s, error: shipmentErr } = await admin
+      .from("freight_shipments")
+      .select(`
+        job_no, transport_mode, container_code, carrier_container_no,
+        bl_no, vessel_voyage, port_loading, port_discharge, origin_country
+      `)
+      .eq("id", declaration.freight_shipment_id)
+      .maybeSingle<ShipmentRow>();
+    if (shipmentErr) {
+      console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+    }
+    shipment = s ?? null;
+
+    const { data: partiesRaw, error: partiesRawErr } = await admin
+      .from("freight_parties")
+      .select("role, name, address, tax_id, branch")
+      .eq("freight_shipment_id", declaration.freight_shipment_id);
+    if (partiesRawErr) {
+      console.error(`[freight_parties list] failed`, { code: partiesRawErr.code, message: partiesRawErr.message });
+    }
+    const partyList = (partiesRaw ?? []) as unknown as PartyRow[];
+    shipper   = partyList.find((p) => p.role === "shipper");
+    consignee = partyList.find((p) => p.role === "consignee");
+  } else if (declaration.cargo_forwarder_id) {
+    // ── CARGO path (GAP 6) — the consolidated ใบขนรวม keyed to a forwarder.
+    // There is no freight_shipment / freight_parties row; the shipment-equivalent
+    // comes from tb_forwarder and the consignee (importer of record) from the
+    // customer record. Lines come from customs_declaration_lines below (same as
+    // freight). Missing fields (BL / vessel / ports) render blank — correct for
+    // a cargo draft.
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fidorco, ftransporttype, fcabinetnumber, userid")
+      .eq("id", declaration.cargo_forwarder_id)
+      .maybeSingle<{ id: number; fidorco: string | null; ftransporttype: string | null; fcabinetnumber: string | null; userid: string | null }>();
+    if (fwdErr) {
+      console.error(`[cargo decl tb_forwarder] failed`, { code: fwdErr.code, message: fwdErr.message });
+    }
+    if (fwd) {
+      shipment = {
+        job_no:               fwd.fidorco?.trim() || String(fwd.id),
+        transport_mode:       fwd.ftransporttype === "2" ? "sea" : "road",
+        container_code:       declaration.cargo_cabinet_no ?? fwd.fcabinetnumber ?? null,
+        carrier_container_no: fwd.fcabinetnumber ?? null,
+        bl_no:                null,
+        vessel_voyage:        null,
+        port_loading:         null,
+        port_discharge:       null,
+        origin_country:       "CN",
+      };
+      if (fwd.userid) {
+        const [{ data: u, error: uErr }, { data: corp, error: corpErr }] = await Promise.all([
+          admin.from("tb_users").select("userName, userLastName").eq("userID", fwd.userid)
+            .maybeSingle<{ userName: string | null; userLastName: string | null }>(),
+          admin.from("tb_corporate").select("corporatename, corporatenumber, corporateaddress").eq("userid", fwd.userid)
+            .maybeSingle<{ corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null }>(),
+        ]);
+        if (uErr) console.error(`[cargo decl tb_users] failed`, { code: uErr.code, message: uErr.message });
+        if (corpErr) console.error(`[cargo decl tb_corporate] failed`, { code: corpErr.code, message: corpErr.message });
+        const personName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim();
+        consignee = {
+          role:    "consignee",
+          name:    corp?.corporatename?.trim() || personName || fwd.userid,
+          address: corp?.corporateaddress?.trim() || "",
+          tax_id:  corp?.corporatenumber?.trim() || null,
+          branch:  null,
+        };
+      }
+    }
   }
-  const partyList = (partiesRaw ?? []) as unknown as PartyRow[];
-  const shipper   = partyList.find((p) => p.role === "shipper");
-  const consignee = partyList.find((p) => p.role === "consignee");
 
   const { data: linesRaw, error: linesRawErr } = await admin
     .from("customs_declaration_lines")
