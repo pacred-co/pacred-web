@@ -24,6 +24,24 @@ type Group = { category: string; items: BusinessConfigRow[] };
 
 type Props = { groups: Group[] };
 
+// Keys that exist + are editable here but are NOT YET read by any code path
+// (the real value is hardcoded in a validator/const) — flagged from the
+// 2026-06-11 rate/cost wiring audit so staff don't think editing them takes
+// effect. otp.ttl_ms is additionally STALE (config 5min, code uses 15min).
+// (freight.default_markup_pct / freight.markup_tiers_pct were wired live in the
+//  same wave, so they are NOT listed here.)
+const NOT_YET_WIRED = new Set<string>([
+  "otp.ttl_ms",
+  "otp.rate_limit_per_hour",
+  "wallet.deposit_min_thb",
+  "wallet.deposit_max_thb",
+  "wallet.withdraw_min_thb",
+  "wallet.withdraw_max_thb",
+  "cashback.default_pct",
+  "features.liff_enabled",
+  "features.china_search_demo",
+]);
+
 export function BusinessConfigEditor({ groups }: Props) {
   const [activeCat, setActiveCat] = useState<string>(groups[0]?.category ?? "");
 
@@ -107,6 +125,11 @@ function ConfigRow({ row }: { row: BusinessConfigRow }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <p className="font-mono text-sm font-semibold">{row.key}</p>
+          {NOT_YET_WIRED.has(row.key) && (
+            <p className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              ⚠️ ยังไม่เชื่อมโค้ด (reference-only) — แก้แล้วยังไม่มีผลกับระบบ{row.key === "otp.ttl_ms" ? " · ค่าจริงในโค้ด = 15 นาที" : ""}
+            </p>
+          )}
           <p className="text-[11px] text-muted font-mono">
             {row.value_type}
             {row.updated_at && (
