@@ -542,22 +542,60 @@ export async function registerJuristicStep1(
   // (step 2 collects it) — leave userName/userLastName empty for now.
   // Wave-2 follow-up: hydrate userName/userLastName from corporate after
   // step 2 if ops want richer pending-queue rows.
-  if (profileRow?.member_code) {
-    await insertLegacyTbUserRow(admin, {
-      memberCode:  profileRow.member_code,
-      phone,
-      email:       null,
-      accountType: "juristic",
-      firstName:   null,
-      lastName:    null,
-    });
-  } else {
+  //
+  // Ghost-PR hardening (2026-06-11) — step 1 used to discard the seed result.
+  // Lighter than registerPersonal's full verify (step 1 is RESUMABLE and
+  // nothing irreversible is committed yet — no money rows, no corporate), but
+  // we must stop swallowing {ok:false}: a failed mirror left a profiles row +
+  // member_code with no tb_users twin = a juristic ghost the customer could
+  // never complete into ops visibility. On a non-23505 seed failure, roll back
+  // the profile + auth.user (both fully reversible at step 1) so the phone/email
+  // free up for a clean retry instead of stranding the ghost.
+  if (!profileRow?.member_code) {
     logger.error(
       "auth",
-      "registerJuristicStep1: profile insert returned no member_code — skipping tb_users bridge",
+      "registerJuristicStep1: profile insert returned no member_code — rolling back auth+profile",
       undefined,
       { userId: created.user.id },
     );
+    await admin.from("profiles").delete().eq("id", created.user.id);
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      logger.error("auth", "registerJuristicStep1: orphan auth.user cleanup failed (no member_code)", delErr, {
+        userId: created.user.id,
+      });
+    }
+    return { ok: false, error: "registration_incomplete" };
+  }
+
+  const seeded = await insertLegacyTbUserRow(admin, {
+    memberCode:  profileRow.member_code,
+    phone,
+    email:       null,
+    accountType: "juristic",
+    firstName:   null,
+    lastName:    null,
+  });
+  if (!seeded.ok) {
+    logger.error(
+      "auth",
+      "registerJuristicStep1: tb_users seed failed — rolling back to avoid juristic ghost PR",
+      undefined,
+      { memberCode: profileRow.member_code, seedReason: seeded.error },
+    );
+    await admin.from("profiles").delete().eq("id", created.user.id);
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      logger.error("auth", "registerJuristicStep1: orphan auth.user cleanup failed (seed failed)", delErr, {
+        userId: created.user.id,
+      });
+    }
+    // A usertel collision (the bridge reports phone_collision_no_row) means a
+    // soft-deleted account already owns the phone. Surface its code (OTP-gated
+    // → safe) so the UI routes the customer to sign-in.
+    const phoneOwner = await findLegacyUserIdByPhone(admin, phone);
+    if (phoneOwner) return { ok: false, error: `phone_exists:${phoneOwner}` };
+    return { ok: false, error: "registration_incomplete" };
   }
 
   // Sign in (session needed for step 2/3 since they use server client + RLS)
