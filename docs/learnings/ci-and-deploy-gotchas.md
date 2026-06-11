@@ -882,3 +882,17 @@ The bare `tsc --noEmit` invocation in the CI workflow (and in `package.json` `ve
 - `.github/workflows/ci.yml` Typecheck step
 - 2026-05-21 entry: `googleapis` package crash (different cause — a single bad dep) but same OOM-shape symptom
 - Local-dev workaround that this supersedes: `NODE_OPTIONS=--max-old-space-size=8192 pnpm build`
+
+## [2026-06-11] A run_in_background task's completion-notification reports the WRAPPER exit, not the wrapped command's
+
+**Context:** Ran `pnpm verify` for a merge gate via `run_in_background` as `{ pnpm verify > log 2>&1; echo "VERIFY_EXIT=$?" >> log; }`. The `<task-notification>` said **"completed (exit code 0)"** — I trusted it and pushed the merge. The merge was actually **failing** (`VERIFY_EXIT=2` in the log: 10 TS2339 errors).
+
+**Symptom:** Pushed a typecheck-failing commit to Poom-pacred. Caught only when a LATER step re-read the log and saw `VERIFY_EXIT=2`. The same trap had silently let an earlier commit (`0db474a4`) ship without a real green gate.
+
+**Root cause:** Same family as the `| tail` exit-mask. The shell job's exit code = the **last command in the block** = the `echo` (always 0). The harness `<task-notification>`'s "exit code" is that shell-job exit, NOT `pnpm verify`'s. So a green-looking notification can sit on top of a red verify. `echo "...$?"` *captures* the real code into the log but does not *propagate* it to the job's exit.
+
+**Fix / rule:** **Never trust the notification's "exit code N" for a wrapped/redirected command. Read the real result out of the log** — `grep "VERIFY_EXIT" log` (or the `N pass, M fail` summary) — before claiming green or pushing. If you want the job's own exit to be truthful, don't append an `echo` after it: run the bare command, or end the block with the command whose status you care about (e.g. `pnpm verify > log 2>&1` with no trailing echo → the job exit IS verify's exit). The `&& echo committed && { verify } &` form also backgrounds the *whole* `git commit` chain — verify the commit actually landed (`git log`/`git status`), don't assume.
+
+**Why this matters next time:** every `{ cmd; echo "$?"; }` / `cmd | tee` / `cmd | tail` / `run_in_background` wrapper detaches the reported exit from the real one. The discipline (AGENTS.md §0f gate rule, phase-verify-loop) is: confirm green by **reading the log content**, not by trusting any exit the harness/wrapper hands you.
+
+**Cross-links:** AGENTS.md §0f (gate discipline) · `branch-integrate-loop` skill step 5 (`| tail` masks exit codes) · this session's recovery commit `a9db6e55`
