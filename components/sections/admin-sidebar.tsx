@@ -35,7 +35,7 @@ import {
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
-  ClipboardList, ReceiptText, FileSignature, Ship,
+  ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -137,6 +137,9 @@ const ICONS: Record<string, LucideIcon> = {
   FileSignature,
   // 2026-06-10 (ปอน · sidebar IA regroup) — บริการ → ส่งออก/Freight wrapper.
   Ship,
+  // 2026-06-12 (เดฟ · คลัง HS) — HS-code duty library leaf
+  // (accFreight.hsLibrary · /admin/accounting/hs-library).
+  BookMarked,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

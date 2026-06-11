@@ -364,6 +364,19 @@ const itemCargoDeclarations: MenuItem = {
   icon: "ClipboardList",
 };
 
+/** 2026-06-12 (เดฟ · คลัง HS) — the HS-code duty LIBRARY (/admin/accounting/
+ *  hs-library · mig 0030 + 0180). Extends the existing hs_codes dictionary with
+ *  อากรปกติ + Form-E/ACFTA + other preferential forms; the cost-editor reads it
+ *  as an informational duty hint. REFERENCE DATA ONLY (§0e) — never touches a
+ *  selling price / order / a declaration's persisted duty. The page + actions
+ *  gate RBAC themselves (super/accounting/pricing/freight_import_doc/
+ *  freight_clearance_both). */
+const itemHsLibrary: MenuItem = {
+  labelKey: "accFreight.hsLibrary",
+  href: "/admin/accounting/hs-library",
+  icon: "BookMarked",
+};
+
 /** 2026-06-09 (W4 · freight ops cockpit) — the AX-JOB unified
  *  PRICING→SALES→DOC→ACC Kanban board (/admin/freight/operations). A
  *  read-mostly layer over the existing freight spine (freight_shipments);
@@ -1079,6 +1092,7 @@ const wrapServiceCustoms: MenuItem = {
   children: [
     itemCargoDeclarations,
     itemTaxdocWorkspace,
+    itemHsLibrary,
     itemCustomsDocKit,
     // 2026-06-10 (ปอน) — "ใบขนพ่วง" (combined/attached customs declaration ·
     // ตั๋วพ่วง). No page yet → coming-soon stub (no dead link · §0d).
@@ -1290,6 +1304,8 @@ const menuAccounting: MenuSection[] = [
       // 2026-06-09 (W9 · tax-invoice P4) — accounting owns the ACCOUNT (close-out)
       // stage of the CARGO tax-doc 4-role workspace (PEAK + ใบกำกับ readiness).
       itemTaxdocWorkspace,
+      // 2026-06-12 (เดฟ · คลัง HS) — the HS-code duty library (อากร reference).
+      itemHsLibrary,
       // 2026-06-09 (W11 · customs doc-kit) — accounting/Docs generate DO-LOI +
       // customs letters + Form-E/HS advisory.
       itemCustomsDocKit,
@@ -1824,6 +1840,9 @@ const menuFreightImportDoc: MenuSection[] = [
       // 2026-06-09 (W9 · tax-invoice P4) — Docs owns the DOCS (declared/ใบขน)
       // stage of the CARGO tax-doc 4-role workspace.
       itemTaxdocWorkspace,
+      // 2026-06-12 (เดฟ · คลัง HS) — the HS-code duty library (อากร reference ·
+      // Form-E/ACFTA) the Docs role consults when setting มูลค่าสำแดง.
+      itemHsLibrary,
       // 2026-06-09 (W11 · customs doc-kit) — DO-LOI per carrier + customs letters
       // + Form-E/HS advisory (Docs role generates these draft documents).
       itemCustomsDocKit,
@@ -1915,6 +1934,9 @@ const menuPricing: MenuSection[] = [
       // 2026-06-09 (เดฟ · tax-invoice P3) — pricing captures COST + DECLARED;
       // the cargo ใบขนรวม surfaces the per-line declared value (defaults from cost).
       itemCargoDeclarations,
+      // 2026-06-12 (เดฟ · คลัง HS) — Pricing maintains the HS duty library that
+      // seeds the cost-editor's reference hint (อากรปกติ + Form-E).
+      itemHsLibrary,
       // 2026-06-09 (audit S3) — the customs doc-kit page/action/PDF already grant
       // `pricing`; without this leaf a pricing-only user could only reach it by URL.
       itemCustomsDocKit,

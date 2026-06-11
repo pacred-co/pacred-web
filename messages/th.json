@@ -3378,7 +3378,8 @@
       "overview": "ภาพรวมรายงาน",
       "declarations": "ใบขนสินค้า",
       "costRates": "ต้นทุนเฟรทจีน (Cost Rates)",
-      "cargoDeclarations": "ใบขนรวม (CARGO)"
+      "cargoDeclarations": "ใบขนรวม (CARGO)",
+      "hsLibrary": "คลัง HS (อากร)"
     },
     "freightOps": {
       "title": "Freight Operations (AX JOB)"

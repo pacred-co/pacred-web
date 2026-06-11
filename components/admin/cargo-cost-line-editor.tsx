@@ -34,7 +34,7 @@
  * id key (itemId / orderId) is sent as a string.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Coins, Receipt } from "lucide-react";
 import {
@@ -42,6 +42,7 @@ import {
   setShopOrderItemCost,
   setForwarderImportDuty,
 } from "@/actions/admin/cargo-cost";
+import { lookupHsCode, type HsLookupRow } from "@/actions/admin/hs-codes";
 import { computeImportDutyVat, dutyThbFromPct } from "@/lib/forwarder/import-duty-vat";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
@@ -152,6 +153,37 @@ function CostEditorBody({
   const [costUnit, setCostUnit] = useState<string>(seed(costUnitInit, autoCostUnitStr));
   const [costRate, setCostRate] = useState<string>(seed(init.costRateCny, autoCostRateStr));
   const [hsCode, setHsCode] = useState<string>(init.hsCode ?? "");
+
+  // ── คลัง HS lookup (reference hint · mig 0030/0180) ──────────
+  // Debounce a lookup of the typed HS code → show อากรปกติ/Form-E/desc under the
+  // input. Informational ONLY — never auto-changes any duty/cost field (§0e).
+  // `hsHint`: null = idle/empty · "loading" = in-flight · row|notfound otherwise.
+  const [hsHint, setHsHint] = useState<HsHint>(null);
+  useEffect(() => {
+    const code = hsCode.trim();
+    let cancelled = false;
+    // Defer the synchronous state set out of the effect body (React 19
+    // set-state-in-effect rule) — the actual lookup runs in setTimeout/.then.
+    queueMicrotask(() => {
+      if (!cancelled) setHsHint(code ? "loading" : null);
+    });
+    if (!code) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const timer = setTimeout(() => {
+      lookupHsCode(code).then((res) => {
+        if (cancelled) return;
+        if (res.ok) setHsHint(res.data ?? "notfound");
+        else setHsHint("notfound");
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [hsCode]);
 
   // ── Declared customs-FX (mig 0179) — declared THB = amount(ccy) × customs rate.
   const fxRates = init.fxRates ?? {};
@@ -386,6 +418,7 @@ function CostEditorBody({
               placeholder="เช่น 8471.30.20"
               className={textInputCls}
             />
+            <HsLookupHint hint={hsHint} />
           </label>
           <div className="sm:col-span-2">
             {anyOnAuto && (
@@ -440,6 +473,30 @@ function SummaryRow({
         {value}
       </dd>
     </div>
+  );
+}
+
+/** คลัง HS lookup state — idle/empty · loading · not-found · the found row. */
+type HsHint = null | "loading" | "notfound" | HsLookupRow;
+
+/**
+ * Read-only คลัง HS hint rendered under the HS Code input. Shows the dictionary
+ * duty (อากรปกติ + Form-E) + description when the code is found, or a "ไม่พบ"
+ * note when not. Reference ONLY — never mutates any cost/duty field (§0e).
+ */
+function HsLookupHint({ hint }: { hint: HsHint }) {
+  if (hint == null) return null;
+  if (hint === "loading") {
+    return <span className="block text-[9px] text-muted">กำลังค้นคลัง HS…</span>;
+  }
+  if (hint === "notfound") {
+    return <span className="block text-[9px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
+  }
+  return (
+    <span className="block text-[9px] text-sky-700">
+      อากรปกติ {hint.default_duty_pct}% · Form-E {hint.form_e_duty_pct}%
+      {hint.description ? ` · ${hint.description}` : ""}
+    </span>
   );
 }
 
