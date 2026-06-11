@@ -364,25 +364,76 @@ export async function registerPersonal(
   // customer into legacy `tb_users` with userActive='0' so the admin
   // approval queue (/admin/customers/pending) sees them. Without this,
   // every Pacred-native signup was invisible to ops + never approved +
-  // never auto-assigned a sales rep. Best-effort: a failure here logs
-  // loud but does NOT roll back the profile (the customer is already
-  // signed up + can use the app; ops can manually backfill via SQL).
-  if (profileRow?.member_code) {
-    await insertLegacyTbUserRow(admin, {
-      memberCode:  profileRow.member_code,
-      phone,
-      email:       data.email && data.email.length > 0 ? data.email : null,
-      accountType: "personal",
-      firstName:   data.firstName,
-      lastName:    data.lastName,
-    });
-  } else {
+  // never auto-assigned a sales rep.
+  //
+  // Ghost-PR hardening (2026-06-11) — this used to be fire-and-forget:
+  // the seed result was discarded. Two failure modes silently stranded a
+  // "ghost PR" (a profiles row + member_code with NO tb_users mirror):
+  //   1. A soft-deleted (userStatus='0') phone made insertLegacyTbUserRow's
+  //      phone pre-check no-op {ok:true} → NOTHING inserted (the no-userStatus
+  //      filter bug, fixed separately in legacy-bridge-tb-users.ts).
+  //   2. A genuine insert failure (RLS / schema) returned {ok:false} that
+  //      nobody read → the orphan was created anyway.
+  // We now MIRROR adminCreateCustomer's gold-standard verify-and-rollback:
+  // capture the result, re-SELECT tb_users under the member_code to CONFIRM
+  // a row actually exists, and on either failure roll back profile + auth.user
+  // so the phone/email free up for a clean retry instead of an unreachable ghost.
+  if (!profileRow?.member_code) {
     logger.error(
       "auth",
-      "registerPersonal: profile insert returned no member_code — skipping tb_users bridge",
+      "registerPersonal: profile insert returned no member_code — rolling back auth+profile",
       undefined,
       { userId: created.user.id },
     );
+    await admin.from("profiles").delete().eq("id", created.user.id);
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      logger.error("auth", "registerPersonal: orphan auth.user cleanup failed (no member_code)", delErr, {
+        userId: created.user.id,
+      });
+    }
+    return { ok: false, error: "registration_incomplete" };
+  }
+
+  const memberCode = profileRow.member_code;
+  const seeded = await insertLegacyTbUserRow(admin, {
+    memberCode,
+    phone,
+    email:       data.email && data.email.length > 0 ? data.email : null,
+    accountType: "personal",
+    firstName:   data.firstName,
+    lastName:    data.lastName,
+  });
+
+  // Confirm a tb_users row exists under this member_code. insertLegacyTbUserRow
+  // returns {ok:true} on a phone-collision no-op (a soft-deleted account holds
+  // the phone) WITHOUT inserting — so {ok:true} alone is not proof of a row.
+  // Re-SELECT to catch both that no-op AND a genuine seed failure.
+  const { data: mirrorRow, error: mirrorErr } = await admin
+    .from("tb_users")
+    .select("userID")
+    .eq("userID", memberCode)
+    .maybeSingle<{ userID: string }>();
+  if (!seeded.ok || mirrorErr || !mirrorRow) {
+    logger.error(
+      "auth",
+      "registerPersonal: tb_users mirror missing after seed — rolling back to avoid ghost PR",
+      mirrorErr ?? undefined,
+      { memberCode, seededOk: seeded.ok, seedReason: seeded.error, hadRow: !!mirrorRow },
+    );
+    await admin.from("profiles").delete().eq("id", created.user.id);
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      logger.error("auth", "registerPersonal: orphan auth.user cleanup failed (mirror missing)", delErr, {
+        userId: created.user.id,
+      });
+    }
+    // The phone-collision no-op means another account already owns this phone.
+    // Surface its code (OTP-gated above → safe to reveal the customer's own
+    // code) so the UI can route them to sign-in instead of looping on retry.
+    const phoneOwner = await findLegacyUserIdByPhone(admin, phone);
+    if (phoneOwner) return { ok: false, error: `phone_exists:${phoneOwner}` };
+    return { ok: false, error: "registration_incomplete" };
   }
 
   // Sign in to set session cookies
@@ -397,10 +448,9 @@ export async function registerPersonal(
   // sales rep) so the client shows "สมัครสำเร็จ · รหัสสมาชิก PRxxx · เซลที่ดูแล …"
   // instead of bouncing straight to /dashboard. The rep was written into
   // tb_users.adminIDSale by the bridge above (round-robin); we read it back.
-  if (profileRow?.member_code) {
-    return { ok: true, data: await buildRegisterSuccess(profileRow.member_code) };
-  }
-  return { ok: true };
+  // `memberCode` is guaranteed non-null + mirror-confirmed past the rollback
+  // block above (a missing/unmirrored code already returned an error).
+  return { ok: true, data: await buildRegisterSuccess(memberCode) };
 }
 
 // ─────────────────────────────────────────────────────────────
