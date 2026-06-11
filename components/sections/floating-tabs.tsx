@@ -28,6 +28,14 @@ const OFFICE_PHONE = "0661310253";
  *  initial state below. */
 let lastKnownPayDue = 0;
 
+/** Remount-memo for the admin check — stores the user id the admin status was
+ *  CONFIRMED for (not a bare boolean). Keeping it identity-keyed means a stale
+ *  `true` from a previous admin session can never paint the "Admin" tab under a
+ *  different (non-admin) identity — the tab only seeds visible when the memo's
+ *  id matches the CURRENT user. Same admin remounting (public↔protected layout
+ *  boundary) still gets an instant, no-blink tab. */
+let lastKnownAdminUserId: string | null = null;
+
 /** Circular red count pill over a tab icon — "ค้างกี่รายการ" on the ชำระ tab.
  *  Renders nothing when the count is 0 (or on public pages where it's unset). */
 function TabCountBadge({ n }: { n: number }) {
@@ -83,6 +91,46 @@ export function FloatingTabs({
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Admin-only "กลับหลังบ้าน" tab (ปอน 2026-06-12) — checked CLIENT-side via
+  // the anon-key RLS self-read on `admins` (policy admins_select, mig 0015:
+  // `profile_id = auth.uid() OR is_admin(['super'])`). A customer / anonymous
+  // session always gets 0 rows, an error degrades to false (fail-closed), and
+  // /admin itself is still hard-gated by requireAdmin + the proxy.ts edge
+  // backstop — this tab is pure navigation, zero privilege. Client-side keeps
+  // the check OFF every customer page's server render path AND lets the tab
+  // appear on the (static) public pages too, where no server layout could
+  // pass an isAdmin prop without de-static-ing the marketing site.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!user) {
+      lastKnownAdminUserId = null;
+      setIsAdmin(false);
+      return;
+    }
+    // Optimistic seed: trust the memo ONLY when it was confirmed for THIS exact
+    // user id — so a different (non-admin) identity never inherits a stale true.
+    setIsAdmin(lastKnownAdminUserId === user.id);
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("admins")
+      .select("role")
+      .eq("profile_id", user.id)
+      .eq("is_active", true)
+      .limit(1)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        const ok = !error && (data?.length ?? 0) > 0;
+        // Record/clear the memo against the CURRENT id (never leave another
+        // user's id memoized as admin).
+        lastKnownAdminUserId = ok ? user.id : null;
+        setIsAdmin(ok);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Live payment-due count for the "ชำระ" badge — fetched client-side so the
   // number appears on EVERY page (incl. the public site, not just where the
@@ -163,6 +211,17 @@ export function FloatingTabs({
     { label: t("pay"),      iconImg: "/images/home/iconfloating/pcs-payment.png",      href: "/payment-due", badge: payDue },
     { label: t("chat"),     iconImg: "/images/home/iconfloating/pcs-line-notify.png",  href: "/line", external: true },
     { label: t("menu"),     iconNode: <Menu className="w-8 h-8" strokeWidth={2.2} />,  href: "/dashboard" },
+    // Staff-only "กลับหลังบ้าน" tab — appended ONLY for active admins (RLS
+    // self-read above), so customers always see the same 5-tab rail. The
+    // shield keeps its emerald tint (element class beats the wrapper's
+    // inherited text-muted) as the staff marker.
+    ...(isAdmin
+      ? [{
+          label: "Admin",
+          iconImg: "/images/hero-section/icon-draf/LOGOADMINPACREDH.png", // PR-admin compact logo (PRh)
+          href: "/admin",
+        }]
+      : []),
   ];
 
   return (
