@@ -33,6 +33,7 @@ import {
   collectMomoSpreadColumns,
   formatMomoSpreadValue,
   deriveModeFromCid,
+  buildTrackingCabinetMap,
   MOMO_FIELD_TH,
   type MomoRawDisplay,
 } from "@/lib/admin/momo-raw-helpers";
@@ -359,11 +360,18 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
               </div>
 
               {rawSpread ? (
-                <>
-                  <RawSpreadTable title="Import Track" rows={result.preview.importTrack} />
-                  <RawSpreadTable title="Container Closed" rows={result.preview.containerClosed} />
-                  <RawSpreadTable title="Sack Info" rows={result.preview.sackInfo} />
-                </>
+                (() => {
+                  // tracking → real cabinet (cid) join — so Import Track shows
+                  // which physical container each tracking landed in (พี่ป๊อป #4).
+                  const cabinetMap = buildTrackingCabinetMap(result.preview.containerClosed.map((r) => r.raw));
+                  return (
+                    <>
+                      <RawSpreadTable title="Import Track" rows={result.preview.importTrack} cabinetMap={cabinetMap} />
+                      <RawSpreadTable title="Container Closed" rows={result.preview.containerClosed} />
+                      <RawSpreadTable title="Sack Info" rows={result.preview.sackInfo} />
+                    </>
+                  );
+                })()
               ) : (
                 <>
                   <PreviewTable
@@ -667,15 +675,34 @@ function ImageLightbox({ images, onClose }: { images: string[]; onClose: () => v
   );
 }
 
-function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdminRecord[] }) {
+function RawSpreadTable({
+  title,
+  rows,
+  cabinetMap,
+}: {
+  title: string;
+  rows: MomoInternalAdminRecord[];
+  cabinetMap?: Record<string, string>;
+}) {
   const [lightbox, setLightbox] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   if (!rows || rows.length === 0) return null;
   const raws = rows.map((r) => r.raw);
-  // image column → very end of the grid (พี่ป๊อป); keep all other columns' order.
+  // Column order (พี่ป๊อป): รูป FIRST · เลขตู้จริง (join) ต่อ · ...ที่เหลือ... ·
+  // ตีลังไม้/รายละเอียดลังไม้ ไว้ท้ายสุด.
   const all = collectMomoSpreadColumns(raws);
-  const cols = all.includes("images")
-    ? [...all.filter((c) => c !== "images"), "images"]
-    : all;
+  const BACK = ["wooden_create", "wooden_info"];
+  const mid = all.filter((c) => c !== "images" && !BACK.includes(c));
+  const cols = [
+    ...(all.includes("images") ? ["images"] : []),
+    ...(cabinetMap ? ["__cabinet"] : []),
+    ...mid,
+    ...BACK.filter((c) => all.includes(c)),
+  ];
+  const colSpan = cols.length + 1;
+
+  const headerLabel = (c: string) => (c === "__cabinet" ? "เลขตู้จริง" : (MOMO_FIELD_TH[c] ?? c));
+  const headerRaw = (c: string) => (c === "__cabinet" ? "จากตู้ที่ปิด (GZS/GZE)" : (MOMO_FIELD_TH[c] ? c : null));
 
   return (
     <div>
@@ -683,22 +710,20 @@ function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdmi
         {title} · ดิบทั้งหมด ({rows.length} แถว · {cols.length} field)
       </h4>
       <p className="text-[10px] text-muted mb-1">
-        ⇆ เลื่อนซ้าย-ขวา · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบ MOMO อยู่บรรทัดล่าง) · ช่องว่าง (<span className="text-slate-300">·</span>) = MOMO ไม่ได้คีย์ field นั้นมาในแถวนี้ · ทั้งแถวระบายสีตามสถานะ
+        ⇆ เลื่อนซ้าย-ขวา · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบ MOMO อยู่บรรทัดล่าง) · ทั้งแถวระบายสีตามสถานะ
+        {cabinetMap && " · เลขตู้จริง = join จาก Container Closed (เชื่อได้กว่า ship_by)"}
       </p>
       <div className="max-h-[70vh] overflow-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="text-[11px] border-collapse">
           <thead className="bg-surface-alt sticky top-0 z-20">
             <tr className="whitespace-nowrap align-bottom">
               <th className="sticky left-0 z-30 bg-surface-alt border-b border-r px-2 py-1 text-left">#</th>
-              {cols.map((c) => {
-                const th = MOMO_FIELD_TH[c];
-                return (
-                  <th key={c} className="border-b px-2 py-1 text-left">
-                    <div className="font-semibold">{th ?? c}</div>
-                    {th && <div className="text-[9px] font-mono font-normal text-slate-400">{c}</div>}
-                  </th>
-                );
-              })}
+              {cols.map((c) => (
+                <th key={c} className="border-b px-2 py-1 text-left">
+                  <div className="font-semibold">{headerLabel(c)}</div>
+                  {headerRaw(c) && <div className="text-[9px] font-mono font-normal text-slate-400">{headerRaw(c)}</div>}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -709,68 +734,130 @@ function RawSpreadTable({ title, rows }: { title: string; rows: MomoInternalAdmi
               const rowTint = color ? ROW_TINT[color] : "";
               const stickyTint = color ? STICKY_TINT[color] : "bg-white";
               const statusWord = ss && ss in MOMO_STATUS_TH ? MOMO_STATUS_TH[ss] : null;
-              // ship_by vs real-cabinet mode mismatch (container rows carry `cid`).
-              const cabMode = m["cid"] ? deriveModeFromCid(m["cid"]) : null;
+              // ship_by vs real-cabinet mode mismatch. Container rows carry `cid`;
+              // Import Track rows resolve the cabinet via the join (cabinetMap).
+              const joinedCab = cabinetMap?.[m["tracking"] ?? ""] ?? "";
+              const realCab = m["cid"] || joinedCab;
+              const cabMode = realCab ? deriveModeFromCid(realCab) : null;
               const shipMode = m["ship_by"] ? formatMomoSpreadValue("ship_by", m["ship_by"]) : "";
               const modeMismatch = !!cabMode && (shipMode === "เรือ" || shipMode === "รถ") && cabMode !== shipMode;
+              const trackDetails = Array.isArray((rec.raw as Record<string, unknown>)?.track_details)
+                ? ((rec.raw as Record<string, unknown>).track_details as unknown[])
+                : [];
               return (
-                <tr key={i} className={`border-b align-top whitespace-nowrap ${rowTint}`}>
-                  <td className={`sticky left-0 z-10 border-r px-2 py-1 text-muted ${stickyTint}`}>{i + 1}</td>
-                  {cols.map((c) => {
-                    // images → "ดูรูป (N)" → in-page lightbox
-                    if (c === "images") {
-                      const imgs = Array.isArray((rec.raw as Record<string, unknown>)?.images)
-                        ? ((rec.raw as Record<string, unknown>).images as unknown[]).filter((x): x is string => typeof x === "string")
-                        : [];
-                      return (
-                        <td key={c} className="px-2 py-1">
-                          {imgs.length === 0 ? (
-                            <span className="text-slate-300">·</span>
-                          ) : (
-                            <button type="button" onClick={() => setLightbox(imgs)}
-                              className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
-                              ดูรูป ({imgs.length})
-                            </button>
-                          )}
-                        </td>
-                      );
-                    }
-                    // status → Thai word (เหมือนหน้าสรุป) + raw number small
-                    if (c === "status") {
-                      return (
-                        <td key={c} className="px-2 py-1 font-semibold">
-                          {statusWord ?? (m[c] || <span className="text-slate-300">·</span>)}
-                          {statusWord && m[c] && <span className="ml-1 text-[9px] font-mono font-normal text-slate-400">#{m[c]}</span>}
-                        </td>
-                      );
-                    }
-                    // ship_by → value + ⚠ mismatch-vs-real-cabinet flag
-                    if (c === "ship_by") {
+                <Fragment key={i}>
+                  <tr className={`border-b align-top whitespace-nowrap ${rowTint}`}>
+                    <td className={`sticky left-0 z-10 border-r px-2 py-1 text-muted ${stickyTint}`}>{i + 1}</td>
+                    {cols.map((c) => {
+                      // images → "ดูรูป (N)" → in-page lightbox
+                      if (c === "images") {
+                        const imgs = Array.isArray((rec.raw as Record<string, unknown>)?.images)
+                          ? ((rec.raw as Record<string, unknown>).images as unknown[]).filter((x): x is string => typeof x === "string")
+                          : [];
+                        return (
+                          <td key={c} className="px-2 py-1">
+                            {imgs.length === 0 ? (
+                              <span className="text-slate-300">·</span>
+                            ) : (
+                              <button type="button" onClick={() => setLightbox(imgs)}
+                                className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
+                                ดูรูป ({imgs.length})
+                              </button>
+                            )}
+                          </td>
+                        );
+                      }
+                      // __cabinet → the real container this tracking landed in (join)
+                      if (c === "__cabinet") {
+                        const md = joinedCab ? deriveModeFromCid(joinedCab) : null;
+                        return (
+                          <td key={c} className="px-2 py-1 font-mono">
+                            {joinedCab ? (
+                              <span>
+                                {joinedCab}
+                                {md && (
+                                  <span className={`ml-1 rounded px-1 text-[9px] font-semibold ${md === "เรือ" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>{md}</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">ยังไม่เข้าตู้ปิด</span>
+                            )}
+                          </td>
+                        );
+                      }
+                      // track_details → "ดูพัสดุ (N)" expandable (พี่ป๊อป #5)
+                      if (c === "track_details") {
+                        return (
+                          <td key={c} className="px-2 py-1">
+                            {trackDetails.length === 0 ? (
+                              <span className="text-slate-300">·</span>
+                            ) : (
+                              <button type="button"
+                                onClick={() => setExpanded((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                                className="rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100">
+                                {expanded.has(i) ? "ซ่อนพัสดุ ▲" : `ดูพัสดุ (${trackDetails.length}) ▼`}
+                              </button>
+                            )}
+                          </td>
+                        );
+                      }
+                      // status → Thai word (เหมือนหน้าสรุป) + raw number small
+                      if (c === "status") {
+                        return (
+                          <td key={c} className="px-2 py-1 font-semibold">
+                            {statusWord ?? (m[c] || <span className="text-slate-300">·</span>)}
+                            {statusWord && m[c] && <span className="ml-1 text-[9px] font-mono font-normal text-slate-400">#{m[c]}</span>}
+                          </td>
+                        );
+                      }
+                      // ship_by → value + ⚠ mismatch-vs-real-cabinet flag
+                      if (c === "ship_by") {
+                        const v = formatMomoSpreadValue(c, m[c] ?? "");
+                        return (
+                          <td key={c} className="px-2 py-1 font-mono">
+                            {v === "" ? <span className="text-slate-300">·</span> : v}
+                            {modeMismatch && (
+                              <span className="ml-1 rounded bg-red-100 px-1 text-[9px] font-semibold text-red-700"
+                                title={`โหมดไม่ตรงเลขตู้จริง — ตู้ ${realCab} = ${cabMode} แต่ ship_by = ${v}`}>
+                                ⚠ ไม่ตรงตู้
+                              </span>
+                            )}
+                          </td>
+                        );
+                      }
                       const v = formatMomoSpreadValue(c, m[c] ?? "");
                       return (
                         <td key={c} className="px-2 py-1 font-mono">
-                          {v === "" ? <span className="text-slate-300">·</span> : v}
-                          {modeMismatch && (
-                            <span className="ml-1 rounded bg-red-100 px-1 text-[9px] font-semibold text-red-700"
-                              title={`โหมดไม่ตรงเลขตู้จริง — ตู้ ${m["cid"]} = ${cabMode} แต่ ship_by = ${v}`}>
-                              ⚠ ไม่ตรงตู้
-                            </span>
+                          {v === "" ? (
+                            <span className="text-slate-300">·</span>
+                          ) : (
+                            <div className="max-w-[280px] truncate" title={v}>{v}</div>
                           )}
                         </td>
                       );
-                    }
-                    const v = formatMomoSpreadValue(c, m[c] ?? "");
-                    return (
-                      <td key={c} className="px-2 py-1 font-mono">
-                        {v === "" ? (
-                          <span className="text-slate-300">·</span>
-                        ) : (
-                          <div className="max-w-[280px] truncate" title={v}>{v}</div>
-                        )}
+                    })}
+                  </tr>
+                  {expanded.has(i) && trackDetails.length > 0 && (
+                    <tr className="border-b bg-indigo-50/40">
+                      <td colSpan={colSpan} className="px-3 py-2">
+                        <div className="mb-1 text-[10px] font-bold text-indigo-900">
+                          พัสดุในตู้ {m["cid"] || ""} ({trackDetails.length} รายการ)
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          {trackDetails.map((t, ti) => {
+                            const tt = (t && typeof t === "object" ? t : {}) as Record<string, unknown>;
+                            return (
+                              <span key={ti} className="text-[11px] font-mono">
+                                {String(tt.reTrack ?? "?")}
+                                <span className="text-muted"> · {Number(tt.kg ?? 0)}kg · {Number(tt.cbm ?? 0)}คิว</span>
+                              </span>
+                            );
+                          })}
+                        </div>
                       </td>
-                    );
-                  })}
-                </tr>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>

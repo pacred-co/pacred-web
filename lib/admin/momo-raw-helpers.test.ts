@@ -21,6 +21,8 @@ import {
   collectMomoSpreadColumns,
   formatMomoSpreadValue,
   deriveModeFromCid,
+  deriveTransportTypeFromCabinet,
+  buildTrackingCabinetMap,
   MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
@@ -293,6 +295,24 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("cid: lowercase gzs → เรือ", deriveModeFromCid("gzs260605-1") === "เรือ");
   check("cid: unknown prefix → null", deriveModeFromCid("ABC123") === null);
   check("cid: empty → null", deriveModeFromCid("") === null);
+
+  // deriveTransportTypeFromCabinet — legacy code for the commit fix (พี่ป๊อป #1)
+  check("transport: GZS → '2' (sea)", deriveTransportTypeFromCabinet("GZS260528-1") === "2");
+  check("transport: GZE → '1' (truck)", deriveTransportTypeFromCabinet("GZE260605-1") === "1");
+  check("transport: unknown → null (falls back to ship_by)", deriveTransportTypeFromCabinet("PR20260605-SEA01") === null);
+  check("transport: null → null", deriveTransportTypeFromCabinet(null) === null);
+
+  // buildTrackingCabinetMap — tracking → real cabinet (พี่ป๊อป #4)
+  const cabMap = buildTrackingCabinetMap([
+    { cid: "GZS260528-1", track_details: [{ reTrack: "0004065", kg: 869.5 }] },
+    { cid: "GZS260606-1", track_details: [{ reTrack: "1780629608", kg: 28 }, { reTrack: "1780555730", kg: 17 }] },
+    { cid: "", track_details: [{ reTrack: "SKIP", kg: 1 }] },   // no cid → skipped
+    { /* no cid/track_details */ },
+  ]);
+  check("cabMap: 0004065 → GZS260528-1 (the proven sea parcel)", cabMap["0004065"] === "GZS260528-1");
+  check("cabMap: multi-track container maps all", cabMap["1780629608"] === "GZS260606-1" && cabMap["1780555730"] === "GZS260606-1");
+  check("cabMap: container without cid skipped", !("SKIP" in cabMap));
+  check("cabMap: mode of 0004065 cabinet = เรือ (proves ship_by=รถ was wrong)", deriveModeFromCid(cabMap["0004065"]) === "เรือ");
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

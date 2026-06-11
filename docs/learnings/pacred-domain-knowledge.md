@@ -403,3 +403,24 @@ Three distinct things people conflate, all different:
 **Cross-links:** [`docs/learnings/customs-brokerage-kit.md`](customs-brokerage-kit.md) (Form E) · `lib/admin/momo-raw-helpers.ts` (`momoRawDisplay` / `flattenMomoRaw` — the Sync preview view-models).
 
 ---
+
+## [2026-06-11] MOMO `ship_by` is NOT the physical shipping mode — the cabinet (GZS/GZE) is
+
+**Context:** พี่ป๊อป reviewing the MOMO Sync raw-spread: Import Track shows some parcels `ship_by=รถ`, yet every closed container is `GZS…` (sea). "ทำไม ship_by เป็นรถ แต่ตู้เป็นเรือหมด?"
+
+**The proof (cross-referenced live, not inferred):** Parcel `0004065` (PR099, 869.5 kg) is tagged **`ship_by=รถ`** in import_track. Its container, joined via `container_closed.track_details[].reTrack`, is **`GZS260528-1` = a SEA cabinet**. So a parcel labelled "รถ" physically shipped by **เรือ**. → `ship_by` ≠ the physical container mode.
+
+**What each field actually means:**
+- **`ship_by` (รถ/เรือ)** = the per-parcel *requested/tagged* type MOMO records. **Unreliable** — MOMO consolidates by operational reality (a 869 kg parcel goes by sea regardless of the รถ tag), and staff key it loosely.
+- **The real cabinet `cid` (`GZS…`=เรือ / `GZE…`=รถ)** = the PHYSICAL truth. This is what the goods actually rode. Lives on `container_closed`; joined back to each tracking via `momo_import_tracks.container_batch_no` (sync.ts step 2.5).
+- **`container_no` (`PR…-SEA01`)** = MOMO's *routing-batch* label, NOT a mode (every batch is named "…SEA0X" regardless of รถ/เรือ). The mapper already documents this as "internal routing batch id, not the physical cabinet."
+- Why "Container Closed all เรือ": only the GZS (sea) containers had *closed* in that window; the GZE (truck) containers were still open + some รถ-tagged parcels got consolidated into sea containers.
+
+**The fix (commit logic):** `commitMomoRowCore` wrote `tb_forwarder.ftransporttype` from `deriveTransportTypeFromMomoRaw(raw)` (= ship_by) → it could write the WRONG mode (รถ for a sea parcel) → wrong rate + wrong ETA (+7 vs +14 days). Now it prefers the cabinet:
+`fTransportType = d.fTransportType ?? deriveTransportTypeFromCabinet(container_batch_no) ?? deriveTransportTypeFromMomoRaw(raw)` — admin override → real cabinet GZS/GZE → ship_by only as last resort (parcel not in a closed container yet).
+
+**Why this matters next time:** for ANY "what mode did this cargo ship" question, trust the **GZS/GZE cabinet**, never `ship_by` or the `SEA`-suffixed routing batch. The Sync raw-spread now surfaces the conflict with a `⚠ ไม่ตรงตู้` badge (ship_by vs joined cabinet) so staff can spot MOMO mis-tags.
+
+**Cross-links:** `lib/admin/momo-raw-helpers.ts` (`deriveTransportTypeFromCabinet` · `deriveModeFromCid` · `buildTrackingCabinetMap`) · `lib/admin/commit-momo-row-core.ts` (the fix) · `lib/integrations/momo-isolated/sync.ts` step 2.5 (the cabinet propagation join).
+
+---
