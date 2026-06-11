@@ -29,21 +29,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 // GAP 4+7 — on cost capture, auto-enroll the taxdoc job + mark pricing started.
 import { markCargoPricingStarted } from "./cargo-taxdoc-workspace";
+// Range-guarded field schemas (per-kind bounds + int32-overflow reject). RATE
+// fields get a sane ~5/~37 ceiling instead of the old generic ฿100M cap — a
+// fat-finger rate silently mis-values declared_value_thb = amount × rate.
+import {
+  cargoCostAmount,
+  cargoDeclaredThb,
+  cargoDeclaredCcy,
+  cargoCnyRate,
+  cargoCustomsFx,
+  cargoDutyPct,
+  cargoDutyThb,
+  nullableShortText,
+} from "@/lib/validators/cargo-cost-fields";
 
 // Roles allowed to capture cost (mirror the cargo cost domain).
 const ROLES_COST = ["super", "accounting", "pricing"] as const;
-
-// Optional numeric field: "" / undefined / null → null (clear); else coerce.
-// (preprocess BEFORE coerce so "" maps to null rather than 0.)
-const optNum = z.preprocess(
-  (v) => (v === "" || v === undefined || v === null ? null : v),
-  z.coerce.number().min(0).max(99_999_999).nullable(),
-);
-// Optional short text (HS code): trimmed, ≤ 40, "" → null.
-const optText = z.preprocess(
-  (v) => (v === "" || v === undefined || v === null ? null : v),
-  z.string().trim().max(40).nullable(),
-);
 
 // ────────────────────────────────────────────────────────────
 // Import-forwarder line (tb_forwarder_item · COST in THB)
@@ -65,13 +66,13 @@ function resolveDeclaredThb(amountCcy: number | null, fxRate: number | null, fal
 
 const forwarderItemCostSchema = z.object({
   itemId:            z.coerce.number().int().positive(),
-  costUnitThb:       optNum,   // cost per unit (THB)
-  costRateCny:       optNum,   // cost-side yuan rate snapshot
-  declaredValueThb:  optNum,   // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
-  declaredCurrency:  declaredCcyText,  // มูลค่าสำแดง สกุล (USD default · CNY · …)
-  declaredFxRate:    optNum,   // เรทศุลกากร (THB ต่อ 1 หน่วยสกุล)
-  declaredAmountCcy: optNum,   // มูลค่าสำแดง ในสกุล declared_currency (engineer-down)
-  hsCode:            optText,
+  costUnitThb:       cargoCostAmount,   // cost per unit (THB)
+  costRateCny:       cargoCnyRate,      // cost-side yuan rate snapshot (≈5 · bounded)
+  declaredValueThb:  cargoDeclaredThb,  // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
+  declaredCurrency:  declaredCcyText,   // มูลค่าสำแดง สกุล (USD default · CNY · …)
+  declaredFxRate:    cargoCustomsFx,    // เรทศุลกากร (THB ต่อ 1 หน่วยสกุล · bounded)
+  declaredAmountCcy: cargoDeclaredCcy,  // มูลค่าสำแดง ในสกุล declared_currency (engineer-down)
+  hsCode:            nullableShortText,
 });
 
 export async function setForwarderItemCost(
@@ -140,8 +141,8 @@ export async function setForwarderItemCost(
 // ────────────────────────────────────────────────────────────
 const forwarderImportDutySchema = z.object({
   id:            z.coerce.number().int().positive(),  // tb_forwarder.id
-  importDutyPct: optNum,                              // อากรขาเข้า (%) — informational
-  importDutyThb: optNum,                              // อากรขาเข้า (บาท) — authoritative
+  importDutyPct: cargoDutyPct,                        // อากรขาเข้า (%) — informational [0,100]
+  importDutyThb: cargoDutyThb,                        // อากรขาเข้า (บาท) — authoritative
 });
 
 export async function setForwarderImportDuty(
@@ -185,13 +186,13 @@ export async function setForwarderImportDuty(
 // ────────────────────────────────────────────────────────────
 const shopOrderItemCostSchema = z.object({
   orderId:           z.coerce.number().int().positive(),
-  costUnitCny:       optNum,   // cost per unit (CNY ¥)
-  costRateCny:       optNum,   // cost-side yuan rate snapshot
-  declaredValueThb:  optNum,   // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
+  costUnitCny:       cargoCostAmount,   // cost per unit (CNY ¥)
+  costRateCny:       cargoCnyRate,      // cost-side yuan rate snapshot (≈5 · bounded)
+  declaredValueThb:  cargoDeclaredThb,  // มูลค่าสำแดง (ใบขน) — THB (fallback / direct edit)
   declaredCurrency:  declaredCcyText,
-  declaredFxRate:    optNum,
-  declaredAmountCcy: optNum,
-  hsCode:            optText,
+  declaredFxRate:    cargoCustomsFx,    // เรทศุลกากร (bounded)
+  declaredAmountCcy: cargoDeclaredCcy,
+  hsCode:            nullableShortText,
 });
 
 export async function setShopOrderItemCost(
