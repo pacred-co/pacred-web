@@ -22,6 +22,10 @@ import { instrumentCron } from "@/lib/cron/instrument";
  *
  * ── Deletion criteria (ALL must hold) ──────────────────────────────────────
  *   - profiles.status = 'incomplete'                  (never completed signup)
+ *   - profiles.migrated_from_pcs IS NOT TRUE          (🔴 CRITICAL: a MIGRATED
+ *       customer is status='incomplete' too — 6,931 of them on prod. They are
+ *       REAL customers (real tb_users name + phone), NOT abandoned signups.
+ *       Reap ONLY native signups; a migrated row is NEVER an abandon.)
  *   - profiles.created_at < now() - 14 days           (conservative grace)
  *   - profiles.member_code ~ '^PR[0-9]+$'             (a customer code, not staff)
  *   - coalesce(employee_code,'') = '' AND NOT in admins  (NEVER touch staff)
@@ -68,8 +72,11 @@ export async function GET(request: Request) {
       //    below can whittle it down and still fill a batch.
       const { data: candidates, error: candErr } = await supabase
         .from("profiles")
-        .select("id, member_code, employee_code, status, created_at")
+        .select("id, member_code, employee_code, status, created_at, migrated_from_pcs")
         .eq("status", "incomplete")
+        // 🔴 NEVER reap a migrated customer — they are status='incomplete' too
+        //    (6,931 on prod) but are REAL people, not abandoned signups.
+        .or("migrated_from_pcs.is.null,migrated_from_pcs.eq.false")
         .lt("created_at", cutoffIso)
         .is("employee_code", null)
         .order("created_at", { ascending: true })
@@ -91,11 +98,17 @@ export async function GET(request: Request) {
         employee_code: string | null;
         status: string | null;
         created_at: string | null;
+        migrated_from_pcs: boolean | null;
       };
       // member_code must be a pure customer code (PR + digits). Defends against
-      // any non-PR/staff/legacy-anchor row slipping through.
+      // any non-PR/staff/legacy-anchor row slipping through. The migrated guard
+      // is re-asserted in code (belt-and-suspenders with the SQL .or above) —
+      // a migrated customer must NEVER be reaped, even if the SQL filter shifts.
       const pool = ((candidates ?? []) as Cand[]).filter(
-        (c) => typeof c.member_code === "string" && /^PR[0-9]+$/.test(c.member_code),
+        (c) =>
+          typeof c.member_code === "string" &&
+          /^PR[0-9]+$/.test(c.member_code) &&
+          c.migrated_from_pcs !== true,
       );
 
       if (pool.length === 0) {
