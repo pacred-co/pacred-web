@@ -32,6 +32,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type Props = {
   r: {
     id: number;
+    ftrackingchn?: string | null;
     reforder: string | null;
     fdetail: string | null;
     fproductstype: string | null;
@@ -102,13 +103,16 @@ export async function ForwarderImportItemsTable({ r }: Props) {
         .filter((s) => s !== "");
     }
   }
-  // legacy uses fdetail as the row label; fall back to the joined item names.
+  // legacy uses fdetail as the row label; fall back to the joined item names,
+  // then to the China tracking number. MOMO/auto imports carry no product name
+  // (only a tracking), so showing the tracking beats "ไม่พบข้อมูล" when there IS
+  // an identifier. (ภูม flag 2026-06-12.)
   const detailText =
     r.fdetail && r.fdetail.trim() !== "" && r.fdetail.trim() !== "..."
       ? r.fdetail.trim()
       : itemNames.length > 0
         ? itemNames[0]
-        : "";
+        : (r.ftrackingchn ?? "").trim();
 
   // ── Header money (legacy detail.php L372-377) ──
   const frefRate              = Number(r.frefrate ?? 0);
