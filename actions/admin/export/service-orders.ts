@@ -22,6 +22,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 
 const EXPORT_CAP = 10000;
 
@@ -187,7 +188,7 @@ export async function exportServiceOrdersAll(
       ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || null
       : null;
     const coid = user?.coID ?? null;
-    const isVip = coid !== null && coid !== "" && coid !== "PCS";
+    const isVip = !isGeneralCoid(coid);
     const vipTier = isVip ? coid : null;
     const isCorporate = corporateUserIds.has(r.userid);
     const salesRep = user?.adminIDSale && user.adminIDSale !== "" ? user.adminIDSale : null;

@@ -37,6 +37,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
@@ -374,7 +375,7 @@ export default async function AdminServiceOrdersPage({
       ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || null
       : null;
     const coid = user?.coID ?? null;
-    const isVip = coid !== null && coid !== "" && coid !== "PCS";
+    const isVip = !isGeneralCoid(coid);
     return {
       id: r.id,
       hno: r.hno,

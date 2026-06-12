@@ -201,7 +201,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
   const userid = input.customerUserid?.trim() ? input.customerUserid.trim() : null;
 
   // ── Resolve customer rate context (coID + SVIP) ONCE — same for all modes ──
-  let coID = "PCS";
+  let coID: string = GENERAL_COID;
   let isSvip = false;
   if (userid) {
     const { data: u, error: uErr } = await admin
@@ -219,9 +219,9 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
   const isGeneral = !isSvip && isGeneralCoid(coID);
   const rateContextNote = isSvip
     ? `SVIP per-user (tb_rate_custom_*) · ${userid}`
-    : coID !== "PCS"
+    : !isGeneralCoid(coID)
       ? `VIP group ${coID} (tb_rate_vip_*)`
-      : `General PCS tiered (tb_rate_g_*)`;
+      : `General tiered (tb_rate_g_*) · ${coID}`;
 
   // ── Comparison flags to force the chargeable basis ──
   // The legacy engine, when comparisonEnabled, bills by KG if KGPerCBM >

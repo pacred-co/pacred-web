@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
@@ -112,12 +113,10 @@ function deriveStatus(u: { userActive: string | null; userStatus: string | null 
 //   (Sorting + the inline juristic review now live in customers-table.tsx.)
 // ────────────────────────────────────────────────────────────────────
 
-/** True for any legacy `coid` that signals a non-default VIP tier. */
+/** True for any legacy `coid` that signals a non-default VIP tier.
+ *  General = ''/'PR'/'PCS'/'GENERAL' (coid.ts SOT · 'PR' canonical post-0182). */
 function isVipCoid(coid: string | null | undefined): boolean {
-  if (!coid) return false;
-  const v = coid.trim().toUpperCase();
-  // "" / "PCS" / "GENERAL" all = ลูกค้าทั่วไป.
-  return v !== "" && v !== "PCS" && v !== "GENERAL";
+  return !isGeneralCoid(coid);
 }
 
 /** Parse YYYY-MM-DD or ISO into { dm, age }. Returns nulls on failure. */

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { GeneralRateMatrix, type GeneralMatrix } from "./general-rate-matrix";
 
 // Theme B (2026-05-31 · เดฟ) — FAITHFUL general-rate editor.
@@ -11,14 +12,13 @@ import { GeneralRateMatrix, type GeneralMatrix } from "./general-rate-matrix";
 // reads (see forwarders-edit.ts L222-238). Edits here now take effect on the
 // next forwarder re-price.
 //
-// The general bucket = coid 'PCS' (the PCS<n>→PR<n> rebrand kept the legacy
-// 'PCS' coid token for non-VIP/general customers; resolve-rate.ts gates
-// isGeneral on coID==='PCS'). Per-customer-group VIP rates live in
-// /admin/rates/* (tb_rate_vip_* via rate-edits.ts adminUpdateVipRateCells).
+// The general bucket coid = GENERAL_COID = **'PR'** (coid.ts SOT). mig 0182
+// renamed tb_rate_g_* PCS→PR; the live resolver reads the customer's coID ('PR')
+// against these cards, so the editor MUST read/write 'PR' too — keying 'PCS' here
+// (pre-0182) read 0 rows + wrote a dead 'PCS' bucket no resolver sees (§0e).
+// Per-customer-group VIP rates live in /admin/rates/* (tb_rate_vip_*).
 
 export const dynamic = "force-dynamic";
-
-const GENERAL_COID = "PCS";
 
 type KgRow = { sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgkg1: number | string | null; rgkg2: number | string | null; rgkg3: number | string | null };
 type CbmRow = { sourcewarehouse: string; rgtransporttype: string; rgproductstype: string; rgcbm1: number | string | null; rgcbm2: number | string | null; rgcbm3: number | string | null };

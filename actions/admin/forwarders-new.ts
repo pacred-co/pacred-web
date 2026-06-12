@@ -53,6 +53,7 @@ import { ADDRESSES } from "@/components/seo/site";
 // GAP 10 (2026-06-12) — capture the tax-document choice at admin quick-add
 // (the modal silently defaulted to no-doc). Display/selection only.
 import { modeFromPref, prefFromMode } from "@/lib/tax/tax-doc-mode";
+import { GENERAL_COID_VALUES, isGeneralCoid } from "@/lib/forwarder/coid";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -198,13 +199,11 @@ export type CustomerGroup =
   | "comparison"
   | "freight";
 
-// "" / "PCS" / "GENERAL" all = ลูกค้าทั่วไป (the default tier). Anything else
-// = a non-default VIP-style coID. Same predicate as /admin/customers isVipCoid.
-const GENERAL_COIDS = ["", "PCS", "GENERAL"] as const;
+// "" / "PR" / "PCS" / "GENERAL" all = ลูกค้าทั่วไป (the default tier · coid.ts SOT,
+// post-0182 the canonical general code is 'PR'). Anything else = a VIP-style coID.
+const GENERAL_COIDS = GENERAL_COID_VALUES;
 function isVipCoidValue(coid: string | null | undefined): boolean {
-  if (!coid) return false;
-  const v = coid.trim().toUpperCase();
-  return v !== "" && v !== "PCS" && v !== "GENERAL";
+  return !isGeneralCoid(coid);
 }
 
 export async function fetchUsersByGroup(

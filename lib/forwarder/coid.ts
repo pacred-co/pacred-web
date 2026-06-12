@@ -18,6 +18,15 @@
 export const GENERAL_COID = "PR";
 
 /**
+ * Every literal coID value that means "general / default tier" — for SQL
+ * `.in("coID", …)` / `.not("coID","in",…)` filters that can't call a JS
+ * predicate. Keep in lock-step with isGeneralCoid below.
+ *   '' / null  — no coID set · 'PR' — canonical Pacred general (post-0182)
+ *   'PCS'      — legacy alias · 'GENERAL' — a legacy general sentinel
+ */
+export const GENERAL_COID_VALUES = ["", "PR", "PCS", "GENERAL"] as const;
+
+/**
  * True when a customer's coID is the **general/default** tier (i.e. NOT a VIP
  * group → reads the tiered general rate card, not a VIP flat rate).
  *
@@ -36,6 +45,6 @@ export const GENERAL_COID = "PR";
  * (general vs VIP) the resolver takes.
  */
 export function isGeneralCoid(coid: string | null | undefined): boolean {
-  const c = (coid ?? "").trim();
-  return c === "" || c === GENERAL_COID || c === "PCS";
+  const c = (coid ?? "").trim().toUpperCase();
+  return c === "" || c === "PR" || c === "PCS" || c === "GENERAL";
 }

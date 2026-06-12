@@ -33,6 +33,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { logAdminExport } from "../export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 
 // Safety cap for the unpaginated "ทั้งหมด" pull. tb_users has ~8,898 rows, so
 // 10,000 comfortably covers the full base with no filter; a no-filter export
@@ -86,11 +87,10 @@ async function resolveLegacyCorpDocs(
 
 // ── Display helpers — IDENTICAL to page.tsx. ──
 
-/** True for any legacy `coid` that signals a non-default VIP tier. */
+/** True for any legacy `coid` that signals a non-default VIP tier.
+ *  General = ''/'PR'/'PCS'/'GENERAL' (coid.ts SOT · 'PR' post-0182). */
 function isVipCoid(coid: string | null | undefined): boolean {
-  if (!coid) return false;
-  const v = coid.trim().toUpperCase();
-  return v !== "" && v !== "PCS" && v !== "GENERAL";
+  return !isGeneralCoid(coid);
 }
 
 /** Parse YYYY-MM-DD or ISO into { dm, age }. Returns nulls on failure. */

@@ -218,9 +218,10 @@ export async function adminUpdateVipRateCells(
 // 3 CBM tiers per cell).
 //
 // Legacy ref: rate.php (the general rate screen · tb_rate_g_kg/cbm). The
-// general bucket is keyed by coid='PCS' (the PCS<n>→PR<n> rebrand keeps the
-// legacy 'PCS' coid token for the general/non-VIP customers — verified: prod
-// tb_rate_g_kg has coid='PCS', 16 rows).
+// general bucket is keyed by coid='PR' (GENERAL_COID · coid.ts SOT) — mig 0182
+// renamed tb_rate_g_* PCS→PR. The writer is parameterized on the passed `coid`
+// (the page sends GENERAL_COID='PR'), so it writes the same 'PR' cards the live
+// resolver reads. (Pre-0182 this was 'PCS'.)
 //
 // Cell identity: (coid, sourcewarehouse '1'กวางโจว/'2'อี้อู, rgtransporttype
 // '1'รถ/'2'เรือ/'3'อากาศ, rgproductstype '1'ทั่วไป/'2'มอก/'3'อย/'4'พิเศษ).
@@ -242,7 +243,7 @@ const generalCellSchema = z.object({
   cbm3: z.number().nonnegative().max(1_000_000).nullable(),
 });
 const generalUpdateSchema = z.object({
-  coid:  z.string().trim().min(1).max(10),     // 'PCS' = the general bucket
+  coid:  z.string().trim().min(1).max(10),     // 'PR' = the general bucket (post-0182)
   cells: z.array(generalCellSchema).min(1).max(48), // 2 wh × 3 tt × 4 prod = 24
 });
 export type AdminUpdateGeneralRateCellsInput = z.infer<typeof generalUpdateSchema>;
