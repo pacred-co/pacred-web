@@ -20,11 +20,17 @@
  * environment-facing camera, 640x480 min, code_128 default reader,
  * 2 workers, frequency 10, medium half-sample locator.
  *
- * Same controls (L43-87): Stop button + Barcode-Type select (12 options,
- * Code 128 default) + Camera select (filled in by enumerateVideoDevices)
- * + hidden Zoom/Torch toggles (revealed via checkCapabilities).
+ * Controls = the SAME knobs as legacy (Stop · Barcode-Type select · Camera
+ * select filled by enumerateVideoDevices) but the UI is **Pacred Tailwind
+ * design** per AGENTS.md §0a — we steal the workflow, not the Bootstrap-4
+ * chrome. Framed `aspect-video` viewport with a crosshair overlay (matches the
+ * USB-scanner page), a live "กำลังสแกน" status dot, and a rounded controls card.
+ * The legacy dead `#result_strip`/`.thumbnails` (never populated) + the unwired
+ * hidden Zoom/Torch toggles are dropped. ภูม warehouse-polish 2026-06-12.
  *
- * Bootstrap-4 classes scoped under `.pcs-legacy` (see admin-base.css).
+ * NOTE: legacy shipped NO sizing CSS for `#interactive`/`.viewport` — the
+ * injected <video>/<canvas> are sized here via Tailwind arbitrary child
+ * variants (`[&_video]:object-cover` etc.), which the raw port lacked.
  *
  * `@ericblade/quagga2` (1.12.x) IS installed (package.json + lockfile +
  * node_modules) — the dynamic require below is wrapped in try/catch purely as a
@@ -33,6 +39,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { Camera, Square, AlertTriangle } from "lucide-react";
 
 // quagga2 is installed; this dynamic require + try/catch is a defensive guard
 // only (keeps a hypothetical missing-dep state from hard-crashing the page).
@@ -260,23 +267,75 @@ export function CameraScanner({
   };
 
   return (
-    <section id="container" className="container">
-      <div className="controls">
-        <fieldset className="input-group">
-          <button type="button" className="stop btn btn-outline-secondary" onClick={handleStop}>
-            Stop
+    <div className="space-y-3">
+      {/* Camera viewport — Quagga injects <video> + <canvas> into this node,
+          so we keep id="interactive" + the ref. Legacy shipped NO sizing CSS
+          for these; the arbitrary child variants below size the injected
+          video/overlay responsively (a real improvement, not just a reskin). */}
+      <div
+        ref={viewportRef}
+        id="interactive"
+        className="relative w-full aspect-video overflow-hidden rounded-2xl bg-black shadow-sm
+          [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover
+          [&_canvas]:absolute [&_canvas]:inset-0 [&_canvas]:h-full [&_canvas]:w-full"
+      >
+        {/* Crosshair frame (decorative · matches the USB-scanner page) */}
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <div className="relative h-36 w-56">
+            <span className="absolute left-0 top-0 h-5 w-5 rounded-tl border-l-2 border-t-2 border-primary-400" />
+            <span className="absolute right-0 top-0 h-5 w-5 rounded-tr border-r-2 border-t-2 border-primary-400" />
+            <span className="absolute bottom-0 left-0 h-5 w-5 rounded-bl border-b-2 border-l-2 border-primary-400" />
+            <span className="absolute bottom-0 right-0 h-5 w-5 rounded-br border-b-2 border-r-2 border-primary-400" />
+          </div>
+        </div>
+        {/* Idle / not-running overlay */}
+        {!running && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-white/80">
+            <Camera className="h-10 w-10" aria-hidden="true" />
+            <span className="text-sm font-medium">
+              {error ? "กล้องไม่พร้อม" : "กำลังเปิดกล้อง…"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Error alert */}
+      {error && (
+        <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm text-red-900" role="alert">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
+            <div>
+              <div className="font-semibold">เปิดกล้องไม่ได้</div>
+              <div className="mt-0.5">{error}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Controls card */}
+      <div className="space-y-3 rounded-2xl border-2 border-primary-200 bg-primary-50/30 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+            <span className={`h-2.5 w-2.5 rounded-full ${running ? "animate-pulse bg-emerald-500" : "bg-slate-300"}`} />
+            {running ? "กล้องกำลังสแกน…" : "กล้องหยุด"}
+          </span>
+          <button
+            type="button"
+            onClick={handleStop}
+            disabled={!running}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border-2 border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-surface-alt disabled:opacity-50"
+          >
+            <Square className="h-4 w-4" aria-hidden="true" /> หยุด
           </button>
-          {!running && !error && (
-            <span className="ml-2 text-muted small">Camera stopped — change settings to restart.</span>
-          )}
-        </fieldset>
-        <fieldset className="reader-config-group">
-          <label>
-            <span>Barcode-Type</span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">ชนิดบาร์โค้ด</span>
             <select
-              name="decoder_readers"
               value={reader}
               onChange={(e) => setReader(e.target.value)}
+              className="mt-1 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
             >
               {BARCODE_READERS.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -285,13 +344,12 @@ export function CameraScanner({
               ))}
             </select>
           </label>
-          <label>
-            <span>Camera</span>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">กล้อง</span>
             <select
-              name="input-stream_constraints"
-              id="deviceSelection"
               value={deviceId}
               onChange={(e) => setDeviceId(e.target.value)}
+              className="mt-1 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
             >
               <option value="">— เลือกกล้อง —</option>
               {devices.map((d) => {
@@ -305,28 +363,12 @@ export function CameraScanner({
               })}
             </select>
           </label>
-          {/* Zoom + Torch hidden by default; legacy reveals them via checkCapabilities
-              (L150-157). Not wired into the React component — Wave 3 backlog item. */}
-          <label style={{ display: "none" }}>
-            <span>Zoom</span>
-            <select name="settings_zoom"></select>
-          </label>
-          <label style={{ display: "none" }}>
-            <span>Torch</span>
-            <input type="checkbox" name="settings_torch" />
-          </label>
-        </fieldset>
-      </div>
-      {error && (
-        <div className="alert alert-danger mt-2" role="alert">
-          {error}
         </div>
-      )}
-      <div id="result_strip">
-        <ul className="thumbnails"></ul>
-        <ul className="collector"></ul>
+
+        <p className="text-xs text-muted">
+          เล็งบาร์โค้ดเข้ากรอบ — ระบบจะอ่านอัตโนมัติแล้วพาไปยังรายการ
+        </p>
       </div>
-      <div id="interactive" className="viewport" ref={viewportRef}></div>
-    </section>
+    </div>
   );
 }

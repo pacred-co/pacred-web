@@ -1,21 +1,20 @@
 /**
  * /admin/barcode/cargo/prepare — สแกนบาร์โค้ดรายการเตรียมส่งด้วยกล้อง
  *
- * Faithful 1:1 transcription of legacy
- * `member/pcs-admin/barcode-c-prepare.php` (409 LOC). NOTE the legacy
- * title says "เตรียมส่งด้วยกล้อง" (prep-for-delivery with camera) — the
- * task brief wrote "เตรียมส่งด้วยมือถือ" (mobile), we keep legacy.
+ * Faithful port of legacy `member/pcs-admin/barcode-c-prepare.php` (409 LOC):
+ * mobile-camera scanner for the "เตรียมส่ง" stage → redirects to
+ * `/admin/barcode/gateway?type=6&device=mobile&tracking=<code>` (gateway type
+ * "6", barcode-c-prepare.php L401).
  *
- * Differences from the `all` page (only):
- *   - title:  "สแกนบาร์โค้ดรายการเตรียมส่งด้วยกล้อง"  (barcode-c-prepare.php L4, L20)
- *   - gateway type = "6"                              (barcode-c-prepare.php L401)
- *
- * Everything else (markup, controls, Quagga config) is identical to
- * barcode-c-all.php — shared via <CameraScanner>.
+ * **Workflow stolen from legacy · UI = Pacred Tailwind** per AGENTS.md §0a —
+ * chrome matches the approved USB-scanner page (driver/import). The legacy
+ * Bootstrap-4 `.app-content`/`.card`/`la la-barcode` scaffold is gone.
+ * ภูม warehouse-polish 2026-06-12.
  */
 
-import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { ScanBarcode } from "lucide-react";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { CameraScanner } from "@/components/admin/camera-scanner";
 import { TopMenuBarcode } from "@/components/admin/top-menu-barcode";
 
@@ -27,55 +26,27 @@ export default async function BarcodeCargoPreparePage() {
   return (
     <>
       <TopMenuBarcode activeHref="/admin/barcode/cargo/prepare" />
-      <div className="pcs-legacy">
-        <div className="app-content content">
-          <div className="content-overlay"></div>
-          <div className="content-wrapper">
-            <div className="content-header row">
-              <div className="content-header-left col-12 mb-2">
-                <div className="row breadcrumbs-top">
-                  <div className="breadcrumb-wrapper col-12">
-                    <ol className="breadcrumb">
-                      <li className="breadcrumb-item">
-                        <Link href="/admin">หน้าแรก</Link>
-                      </li>
-                      <li className="breadcrumb-item active">
-                        สแกนบาร์โค้ดรายการเตรียมส่งด้วยกล้อง
-                      </li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
+          <nav className="mb-3 text-sm text-slate-500" aria-label="breadcrumb">
+            <Link href="/admin" className="hover:text-primary-700">หน้าแรก</Link>
+            <span className="mx-1.5">/</span>
+            <span className="text-slate-700">สแกนบาร์โค้ดรายการเตรียมส่งด้วยกล้อง</span>
+          </nav>
+
+          <div className="mb-5 flex items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <ScanBarcode className="h-7 w-7" aria-hidden="true" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">สแกนรายการเตรียมส่ง</h1>
+              <p className="mt-1 text-sm text-slate-600">ด้วยกล้องมือถือ · สถานะ &quot;เตรียมส่ง&quot;</p>
             </div>
-            <div className="content-body">
-              <section id="basic-carousel">
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    <div className="card">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="row">
-                            <div className="content-header-left col-md-6 col-12">
-                              <div className="text-center text-md-left">
-                                <h3 className="text-center text-md-left">
-                                  <span className="la la-barcode" style={{ fontSize: "2.4rem" }}></span>{" "}
-                                  สแกนบาร์โค้ดรายการเตรียมส่งด้วยกล้อง
-                                </h3>
-                              </div>
-                            </div>
-                            <div className="content-header-right col-md-6 col-12"></div>
-                          </div>
-                          <div className="row">
-                            <div className="col-md-12">
-                              <CameraScanner gatewayType="6" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-4 sm:p-6">
+              <CameraScanner gatewayType="6" />
             </div>
           </div>
         </div>

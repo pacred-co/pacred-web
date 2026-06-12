@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Loader2 } from "lucide-react";
 import { CameraScanner } from "@/components/admin/camera-scanner";
 import { Link } from "@/i18n/navigation";
 import {
@@ -193,13 +194,8 @@ export function CargoImportScanner() {
       <CameraScanner onDetected={handleDetected} />
 
       {isPending && (
-        <div className="text-center py-2">
-          <div className="lds-ring inline-block">
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-          </div>
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary-600" aria-label="กำลังบันทึก" />
         </div>
       )}
 
