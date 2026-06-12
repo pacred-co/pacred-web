@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { createYuanPayment } from "@/actions/payment";
 import { createYuanPaymentFromWallet } from "@/actions/payment-tb";
+import { confirm } from "@/components/ui/confirm";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon, Plus } from "lucide-react";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
@@ -63,7 +64,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
     else setError(res.error);
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -83,12 +84,23 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
 
     // GAP 3 — read <CartTaxDocPref>'s hidden inputs synchronously (the form is a
     // controlled-payload form, not a FormData submit — currentTarget is nulled
-    // once the async transition runs, so capture it now).
+    // once the async transition runs, so capture it now). Capture BEFORE the
+    // awaited confirm() below, for the same currentTarget-nulling reason.
     const fd = new FormData(e.currentTarget);
     const taxDocPref        = (fd.get("taxDocPref") as string | null) ?? undefined;
     const taxDocTaxId       = (fd.get("taxDocTaxId") as string | null) ?? undefined;
     const taxDocBillingName = (fd.get("taxDocBillingName") as string | null) ?? undefined;
     const taxDocAddress     = (fd.get("taxDocAddress") as string | null) ?? undefined;
+
+    // §0f — the wallet-paid branch (createYuanPaymentFromWallet) debits
+    // tb_wallet immediately on submit; confirm before the irreversible
+    // money move (slip-paid branch creates a pending row, no debit → no gate).
+    if (paidViaWallet) {
+      const ok = await confirm(
+        t("confirmPayFromWalletDialog", { amount: thb.toLocaleString("th-TH", { minimumFractionDigits: 2 }) }),
+      );
+      if (!ok) return;
+    }
 
     startTransition(async () => {
       // P0-2 (ADR-0018 §D-2 rule 1): wallet-paid branch goes to the

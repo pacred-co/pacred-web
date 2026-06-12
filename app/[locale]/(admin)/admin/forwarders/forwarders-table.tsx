@@ -3,6 +3,14 @@
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+// 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
+// shared, unit-tested helper so the report / completeness / check-queue Σ
+// reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
+import {
+  baseTracking,
+  trackingSuffix,
+  filterCountableForwarderRows,
+} from "@/lib/admin/momo-bill-header";
 import { Link } from "@/i18n/navigation";
 import { ArrowUpDown, Lock } from "lucide-react";
 import {
@@ -323,26 +331,8 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
 // simply groups what each page has. Pagination itself is untouched.
 // ─────────────────────────────────────────────────────────────────────
 
-/** Strip ONE trailing sibling suffix so box-siblings collapse to a base:
- *    "1779955936-3"      → "1779955936"   (the "-N" form)
- *    "302098539663-1/7"  → "302098539663" (the "-N/M" box-of-boxes form · ภูม
- *                                          flag round 10 — was NOT stripped, so
- *                                          a 7-box parcel never grouped)
- *  A value with no suffix keeps itself. Empty/null/"-" never groups. */
-function baseTracking(tracking: string | null): string | null {
-  if (!tracking) return null;
-  const t = tracking.trim();
-  if (!t || t === "-") return null;
-  return t.replace(/-\d+(?:\/\d+)?$/, "");
-}
-
-/** Numeric sibling suffix (the box number) · no suffix → 0 so the base row
- *  sorts first (= preferred main row), then 1, 2, … Ties broken by id.
- *  Handles both "-3" and "-3/7" (captures the box number 3). */
-function trackingSuffix(tracking: string | null): number {
-  const m = (tracking ?? "").trim().match(/-(\d+)(?:\/\d+)?$/);
-  return m ? Number(m[1]) : 0;
-}
+// baseTracking / trackingSuffix are imported from @/lib/admin/momo-bill-header
+// (the shared, unit-tested home of the MOMO sibling-suffix rule).
 
 /** Members that should feed a group's Σ aggregates — drops the MOMO
  *  "หัวบิล" (bill-header) placeholder. When a carrier (MOMO) splits a parcel
@@ -352,13 +342,17 @@ function trackingSuffix(tracking: string | null): number {
  *  double-counts (e.g. header 6 + boxes 6 = 12 for a 6-box parcel · ภูม flag
  *  2026-06-12). So when box-suffixed siblings exist, drop any bare member with
  *  zero weight. A bare row WITH weight is a real order (legacy `-1` groups) and
- *  is kept — no regression. */
+ *  is kept — no regression.
+ *
+ *  Delegates to the shared `filterCountableForwarderRows`: a display group's
+ *  members all share one (baseTracking, userid), so filtering that group ==
+ *  the old local logic (verified identical · locked by momo-bill-header.test). */
 function countableGroupMembers(members: Row[]): Row[] {
-  const hasBoxSibling = members.some((m) => trackingSuffix(m.tracking_chn) > 0);
-  if (!hasBoxSibling) return members;
-  return members.filter(
-    (m) => !(trackingSuffix(m.tracking_chn) === 0 && (m.weight_kg || 0) === 0),
-  );
+  return filterCountableForwarderRows(members, {
+    tracking: (m) => m.tracking_chn,
+    weight: (m) => m.weight_kg,
+    userid: (m) => m.customer?.userid ?? "",
+  });
 }
 
 type DisplayUnit =
