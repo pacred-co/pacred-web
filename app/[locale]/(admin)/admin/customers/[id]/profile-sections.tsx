@@ -21,7 +21,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import {
-  Pencil, Save, Plus, Trash2, Star, Check, AlertTriangle,
+  Pencil, Save, Plus, Trash2, Star, Check, AlertTriangle, X,
   Package, Ship, Wallet, ArrowDownCircle, CreditCard, ArrowUpCircle, Gift, ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -275,7 +275,21 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
 
 // ──────────────────────────────────────────────────────────────────────────
 // 1) Stat cards — 8 cards (faithful to legacy profile.php tiles)
+// 2026-06-12 (owner: "ทำให้เหมือนหน้าบ้าน") — restyled to the customer-dashboard
+// service-card look: a big tone-colored number + label on the left, the icon in a
+// rounded tinted square on the right, a colored accent bar at the bottom, and a
+// hover-lift. Colours are full static class names so Tailwind never purges them.
 // ──────────────────────────────────────────────────────────────────────────
+const STAT_TONE: Record<string, { icon: string; num: string; bar: string }> = {
+  sky:     { icon: "text-sky-600 bg-sky-50",         num: "text-sky-700",     bar: "bg-sky-500" },
+  indigo:  { icon: "text-indigo-600 bg-indigo-50",   num: "text-indigo-700",  bar: "bg-indigo-500" },
+  violet:  { icon: "text-violet-600 bg-violet-50",   num: "text-violet-700",  bar: "bg-violet-500" },
+  primary: { icon: "text-primary-600 bg-primary-50", num: "text-primary-600", bar: "bg-primary-600" },
+  emerald: { icon: "text-emerald-600 bg-emerald-50", num: "text-emerald-700", bar: "bg-emerald-500" },
+  amber:   { icon: "text-amber-600 bg-amber-50",     num: "text-amber-700",   bar: "bg-amber-500" },
+  rose:    { icon: "text-rose-600 bg-rose-50",       num: "text-rose-700",    bar: "bg-rose-500" },
+  fuchsia: { icon: "text-fuchsia-600 bg-fuchsia-50", num: "text-fuchsia-700", bar: "bg-fuchsia-500" },
+};
 export function StatCards({
   userid,
   walletBalance,
@@ -293,35 +307,45 @@ export function StatCards({
     value: string;
     icon: React.ReactNode;
     href?: string;
-    accent: string;
+    tone: keyof typeof STAT_TONE;
     unverified?: boolean;
   }[] = [
-    { label: "ฝากสั่งซื้อสินค้า", value: fmtInt(counts.shop), icon: <ShoppingCart className="w-5 h-5" />, href: `/admin/service-orders?q=${enc}`, accent: "text-sky-600 bg-sky-50" },
-    { label: "ฝากนำเข้าสินค้า", value: fmtInt(counts.forwarder), icon: <Package className="w-5 h-5" />, href: `/admin/forwarders?focus=search&q=${enc}`, accent: "text-indigo-600 bg-indigo-50" },
-    { label: "ฝากชำระเงิน/โอน", value: fmtInt(counts.payment), icon: <Ship className="w-5 h-5" />, href: `/admin/yuan-payments?q=${enc}`, accent: "text-violet-600 bg-violet-50" },
-    { label: "กระเป๋าสตางค์ (฿)", value: `฿${walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <Wallet className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, accent: "text-primary-600 bg-primary-50" },
-    { label: "รายการชำระเงิน", value: fmtInt(counts.walletAdd), icon: <ArrowDownCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, accent: "text-emerald-600 bg-emerald-50" },
-    { label: "รายการชำระเงิน", value: fmtInt(counts.walletPay), icon: <CreditCard className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, accent: "text-amber-600 bg-amber-50" },
-    { label: "รายการถอนเงิน", value: fmtInt(counts.walletWithdraw), icon: <ArrowUpCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, accent: "text-rose-600 bg-rose-50" },
-    { label: "ประวัติ Cash Back", value: fmtInt(counts.cashBack), icon: <Gift className="w-5 h-5" />, accent: "text-fuchsia-600 bg-fuchsia-50" },
+    { label: "ฝากสั่งซื้อสินค้า", value: fmtInt(counts.shop), icon: <ShoppingCart className="w-5 h-5" />, href: `/admin/service-orders?q=${enc}`, tone: "sky" },
+    { label: "ฝากนำเข้าสินค้า", value: fmtInt(counts.forwarder), icon: <Package className="w-5 h-5" />, href: `/admin/forwarders?focus=search&q=${enc}`, tone: "indigo" },
+    { label: "ฝากชำระเงิน/โอน", value: fmtInt(counts.payment), icon: <Ship className="w-5 h-5" />, href: `/admin/yuan-payments?q=${enc}`, tone: "violet" },
+    { label: "กระเป๋าพักเงิน", value: `฿${walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <Wallet className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "primary" },
+    { label: "รายการชำระเงิน", value: fmtInt(counts.walletAdd), icon: <ArrowDownCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "emerald" },
+    { label: "รายการชำระเงิน", value: fmtInt(counts.walletPay), icon: <CreditCard className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "amber" },
+    { label: "รายการถอนเงิน", value: fmtInt(counts.walletWithdraw), icon: <ArrowUpCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "rose" },
+    { label: "ประวัติ Cash Back", value: fmtInt(counts.cashBack), icon: <Gift className="w-5 h-5" />, tone: "fuchsia" },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-      {cards.map((c) => {
+    // Customer-dashboard (หน้าบ้าน) service-card look — number + label on the
+    // left, icon square on the right, a colored accent bar at the bottom.
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+      {cards.map((c, i) => {
+        const t = STAT_TONE[c.tone];
         const inner = (
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 h-full flex flex-col gap-1.5 hover:border-primary-300 transition-colors">
-            <span className={`inline-flex w-9 h-9 items-center justify-center rounded-xl ${c.accent}`}>{c.icon}</span>
-            <p className="text-[11px] text-muted leading-tight mt-1">{c.label}</p>
-            <p className="text-xl font-bold font-mono tabular-nums">{c.value}</p>
+          <div className="group h-full rounded-2xl border border-black/[0.10] dark:border-white/10 bg-white dark:bg-surface shadow-sm p-4 md:p-5 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:duration-75">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 text-left">
+                <p className={`text-2xl font-bold font-mono tabular-nums leading-none ${t.num}`}>{c.value}</p>
+                <p className="mt-1.5 text-[12px] font-medium leading-tight text-foreground/80">{c.label}</p>
+              </div>
+              <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.icon}`}>
+                {c.icon}
+              </span>
+            </div>
+            <div className={`mt-4 h-[2px] w-full rounded-full ${t.bar}`} />
           </div>
         );
         return c.href ? (
-          <Link key={c.label} href={c.href} className="block">
+          <Link key={i} href={c.href} className="block">
             {inner}
           </Link>
         ) : (
-          <div key={c.label}>{inner}</div>
+          <div key={i}>{inner}</div>
         );
       })}
     </div>
@@ -412,10 +436,12 @@ export function SaleRepEditor({
   userid,
   currentRep,
   admins,
+  compact = false,
 }: {
   userid: string;
   currentRep: string | null;
   admins: SalesAdminOption[];
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -447,6 +473,70 @@ export function SaleRepEditor({
     if (found) return `${found.nickname ? found.nickname + " · " : ""}${found.name} (${found.adminID})`;
     return rep || "ยังไม่กำหนด";
   })();
+
+  // Compact "tag" variant — a small pill for the profile meta row (FB pattern).
+  // Reuses the same editing/save state; just a denser presentation.
+  if (compact) {
+    const found = admins.find((a) => a.adminID === rep);
+    const short = found ? found.nickname || found.adminID : rep || "ยังไม่กำหนด";
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/50 px-2.5 py-1 text-xs">
+        <span className="text-muted">Sales</span>
+        {!editing ? (
+          <>
+            <span className="font-medium">{short}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setChoice(rep);
+                setEditing(true);
+              }}
+              className="shrink-0 text-primary-600 hover:text-primary-700"
+              aria-label="แก้ไขเซลล์ผู้ดูแล"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="max-w-[150px] rounded border border-border bg-white px-1 py-0.5 text-xs dark:bg-surface"
+            >
+              <option value="">— เลือก —</option>
+              {admins.map((a) => (
+                <option key={a.adminID} value={a.adminID}>
+                  {a.nickname ? `${a.nickname} · ` : ""}
+                  {a.name} ({a.adminID})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending}
+              className="text-primary-600 disabled:opacity-50"
+              aria-label="บันทึก"
+            >
+              <Save className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={pending}
+              className="text-muted hover:text-foreground"
+              aria-label="ยกเลิก"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
+        {error && <span className="text-red-600">{error}</span>}
+      </span>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
@@ -508,10 +598,12 @@ export function CsRepEditor({
   userid,
   currentRep,
   admins,
+  compact = false,
 }: {
   userid: string;
   currentRep: string | null;
   admins: SalesAdminOption[];
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -543,6 +635,69 @@ export function CsRepEditor({
     if (found) return `${found.nickname ? found.nickname + " · " : ""}${found.name} (${found.adminID})`;
     return rep || "ยังไม่กำหนด";
   })();
+
+  // Compact "tag" variant — small pill for the profile meta row (FB pattern).
+  if (compact) {
+    const found = admins.find((a) => a.adminID === rep);
+    const short = found ? found.nickname || found.adminID : rep || "ยังไม่กำหนด";
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/50 px-2.5 py-1 text-xs">
+        <span className="text-muted">CS</span>
+        {!editing ? (
+          <>
+            <span className="font-medium">{short}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setChoice(rep);
+                setEditing(true);
+              }}
+              className="shrink-0 text-primary-600 hover:text-primary-700"
+              aria-label="แก้ไข CS ผู้ดูแล"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="max-w-[150px] rounded border border-border bg-white px-1 py-0.5 text-xs dark:bg-surface"
+            >
+              <option value="">— เลือก —</option>
+              {admins.map((a) => (
+                <option key={a.adminID} value={a.adminID}>
+                  {a.nickname ? `${a.nickname} · ` : ""}
+                  {a.name} ({a.adminID})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending}
+              className="text-primary-600 disabled:opacity-50"
+              aria-label="บันทึก"
+            >
+              <Save className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={pending}
+              className="text-muted hover:text-foreground"
+              aria-label="ยกเลิก"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
+        {error && <span className="text-red-600">{error}</span>}
+      </span>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
