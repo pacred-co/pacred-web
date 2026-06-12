@@ -28,3 +28,26 @@
 ## 🔴 carryover (พี่เดฟ — prod)
 - **prod = พี่เดฟ merge + จัดการเอง** (ผมไม่แตะ prod)
 - MOMO rate backfill: **DEV ทำแล้ว** (48 rows) · code auto-price going-forward อยู่ใน commit เก่าแล้ว · prod `--apply` = `scripts/backfill-momo-forwarder-rates.mjs --apply` พี่เดฟกดเอง (dry-run ก่อน)
+
+---
+
+## 🎯 งานต่อ (NEXT UP — ทำที่บ้านต่อได้เลย)
+
+### A. 🔴 P0 — test→fix loop ของงาน session นี้ (ทำก่อนเลย)
+Login จริง (super) แล้วเทส 6 อย่างด้านบน — **เจอบัคแก้ทันที**. จุดเสี่ยงสุด 3 จุด:
+1. **กล้องมือถือ + เครื่องสแกน** ยิงกล่อง → ป้ายพิมพ์เด้งจริงมั้ย (flow ใหม่ scan→printAll?fNo&autoprint) — ลองทั้ง 2 device
+2. **printAll auto-print** เด้ง print dialog ทุกครั้งที่สแกน — ถ้าพี่ป๊อป/พนักงานรำคาญ → ปรับเป็นโชว์ป้าย+กดพิมพ์เอง (เอา `&autoprint=1` ออกจาก `gateway/page.tsx` case `from`)
+3. **review grid** — agent เทสตอน pending = 0 rows → ตอนมี MOMO rows จริงให้ดูว่า per-row form + ปุ่มสร้างใหม่ ยังสวย/ใช้ได้
+
+### B. 🟠 ระบบโกดัง/ขนส่ง/คนขับ "ให้ใช้งานได้จริงเป็นระบบ" (direction ภูมิ ค้างจาก session นี้)
+ภูมิอยากเทส flow คนโกดังจริง — เดิน **end-to-end ด้วย login จริง**: รับเข้าโกดัง→ชั่ง/วัด→กระสอบ→ใส่ตู้→ส่ง (`/admin/warehouse/worker/*`) + มอบคนขับ→deliver (`/admin/barcode/driver/*` · fstatus 1→7) → **เจอ gap ตรงไหนค่อย build เพิ่ม**.
+> ⚠️ audit เก่า (3 ตัว) บอก P0 พัง = **FALSE หมด** (fstatus=7 cascade มีจริง · worker app มีจริง · driver pages อ่าน tb_forwarder_driver จริง 4102 batches) — ระบบทำงานได้มากกว่าที่ audit อ้าง **แต่ยังไม่ authed-click-test** → เทสจริงคือ next step
+
+### C. 🟡 backlog ค้าง (task list)
+- **#228** บริการฝากสั่ง (shop-order) detail — faithful port ละเอียด
+- **#259** cabinet manual override + lock flag (Option B)
+
+### D. ⏳ รอ พี่ป๊อป flag เพิ่ม (pattern หลัก)
+พี่ป๊อปรีวิวหน้าจอแล้วสั่งแก้ทีละจุด (รูป 1-4 + cart = แบบนี้) → เปิด browser ค้างไว้ รอ flag ใหม่
+
+**แนะนำเริ่มที่ A** (เทสงานที่เพิ่งทำ + แก้บัค) แล้วต่อ B (เทส flow โกดัง/คนขับจริง)
