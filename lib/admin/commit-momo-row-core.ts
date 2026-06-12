@@ -45,6 +45,7 @@ import {
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -565,6 +566,30 @@ export async function commitMomoRowCore(
   if (insErr || !row) {
     console.error(`[tb_forwarder insert] failed`, { code: insErr?.code, message: insErr?.message });
     return { ok: false, error: insErr?.message ?? "insert failed" };
+  }
+
+  // ── 5b. Auto-compute the China→Thailand import rate (faithful port of
+  //         legacy api-forwarder-momo.php → calPriceForwarder). The INSERT
+  //         above lands frefrate=0 / frefprice='0' / ftotalprice=0; without
+  //         this the admin detail page shows "ไม่พบข้อมูล" + ฿0.00. The helper
+  //         runs the SAME rate waterfall the admin dimension-edit save uses
+  //         and writes ONLY frefrate/frefprice/ftotalprice (money-isolated).
+  //
+  //   BEST-EFFORT: a rate-compute miss (no rate card for the customer's
+  //   warehouse/transport/product tuple, or a transient DB error) must NEVER
+  //   fail the commit — the forwarder row is already real + the customer
+  //   notification has fired. The helper never persists a silent ฿0 (it
+  //   skips the write on rateMissing), so leaving the row at 0 is safe and an
+  //   admin can still set the rate manually via the edit form.
+  try {
+    const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
+    if (!rateRes.ok) {
+      console.error(`[momo commit: auto-rate] did not resolve (id=${row.id})`, {
+        reason: rateRes.reason,
+      });
+    }
+  } catch (e) {
+    console.error(`[momo commit: auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
   }
 
   // ── 6. Stamp committed_at on the source row ────────────────
