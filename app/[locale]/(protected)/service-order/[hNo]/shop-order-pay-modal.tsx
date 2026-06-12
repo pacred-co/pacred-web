@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { QrCode, UploadCloud, CheckCircle2, Loader2, X, Wallet } from "lucide-react";
+import { confirm } from "@/components/ui/confirm";
 import { getForwarderPaymentQr } from "@/actions/forwarder";
 import {
   uploadShopOrderSlip,
@@ -100,6 +101,9 @@ export function ShopOrderPayButton({
       setErr(t("attachSlipFirst"));
       return;
     }
+    // §0f — confirm before the irreversible submit (debits wallet when applied
+    // + sends the slip for review). Mirrors the forwarder pay-modal's gate.
+    if (!(await confirm(t("submitPaymentConfirm", { hNo })))) return;
     setErr(null);
     setSubmitting(true);
     const r = await submitShopOrderSlipPayment(hNo, {
@@ -117,6 +121,9 @@ export function ShopOrderPayButton({
   }
 
   async function onPayWallet() {
+    // §0f — one-click full-wallet pay debits the balance immediately + is
+    // irreversible; confirm first (mirrors pay-from-wallet-button.tsx).
+    if (!(await confirm(t("payFullFromWalletConfirm", { amount: fmt(totalThb) })))) return;
     setErr(null);
     setSubmitting(true);
     const r = await payServiceOrderFromWallet(hNo);
