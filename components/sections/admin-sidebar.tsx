@@ -36,6 +36,7 @@ import {
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
+  Rocket,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -140,6 +141,9 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-12 (เดฟ · คลัง HS) — HS-code duty library leaf
   // (accFreight.hsLibrary · /admin/accounting/hs-library).
   BookMarked,
+  // 2026-06-12 (เดฟ · Go-Live Control Panel) — super-only owner switchboard
+  // (settingsCargo.goLive · /admin/settings/go-live).
+  Rocket,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

@@ -58,3 +58,6 @@ scripts/backfill/.progress/
 *-backup.json
 _backup-deleted-profiles.json
 _backup-dup-profiles.json
+
+# scratch / extraction temp artifacts (config backups, PDF/xlsx text dumps)
+.tmp-*

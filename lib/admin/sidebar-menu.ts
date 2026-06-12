@@ -549,6 +549,8 @@ const blockSettingsCargo: MenuItem = {
   icon: "Settings",
   children: [
     { labelKey: "settingsCargo.general",   href: "/admin/settings",                  icon: "Settings" },
+    // Go-Live Control Panel — super-only owner switchboard (phase 2 = super sees it).
+    { labelKey: "settingsCargo.goLive",    href: "/admin/settings/go-live",          icon: "Rocket", phase: 2 },
     { labelKey: "settingsCargo.homeNotice", href: "/admin/settings/notifications",   icon: "MessageCircle" },
     { labelKey: "settingsCargo.popup",     href: "/admin/settings/business-config",  icon: "MessageCircle" },
     { labelKey: "settingsCargo.promos",    href: "/admin/settings/promos",           icon: "Megaphone" },

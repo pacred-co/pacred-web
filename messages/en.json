@@ -3398,6 +3398,7 @@
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "Adjust Yuan Rate",
+      "goLive": "Go-Live Control Panel",
       "homeNotice": "Home-page notice",
       "popup": "Customer popup",
       "promos": "Promo banners",
