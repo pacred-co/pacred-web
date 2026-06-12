@@ -38,11 +38,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
-  resolveForwarderRate,
-  type ResolveRateCandidates,
-  type ResolvedRate,
-} from "@/lib/forwarder/resolve-rate";
-import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+  resolveLiveForwarderRate,
+  type PricingRowContext,
+} from "@/lib/forwarder/live-rate";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -157,158 +155,17 @@ function num(v: number | string | null | undefined): number {
 }
 
 // ────────────────────────────────────────────────────────────
-// LIVE PRICING WATERFALL — port of forwarder.php `update_data` getPrice()
-// (L1806-1931) + the SVIP probe (L1841-1843). This is the SQL half; the
-// decision logic lives in lib/forwarder/resolve-rate.ts (pure + unit-tested).
+// LIVE PRICING WATERFALL — the SQL waterfall (`resolveLiveForwarderRate`) +
+// its `PricingRowContext` type were extracted (behavior-preserving) to
+// `lib/forwarder/live-rate.ts` so the MOMO import path can reuse the exact
+// same engine. Imported at the top of this file. The decision logic still
+// lives in the pure `lib/forwarder/resolve-rate.ts`.
 //
-// Inputs come from the EXISTING tb_forwarder row (warehouse/transport/
-// comparison/refOrder/amount — legacy reads these from the row in
-// update_data L1770-1798) + the dimensions the admin just submitted
-// (weight/cbm/productType).
-//
-// ⚠️ MONEY PATH. The rate this resolves is written to tb_forwarder as
+// ⚠️ MONEY PATH. The rate it resolves is written to tb_forwarder as
 //    fTotalPrice (the China→Thailand TRANSPORT subtotal · legacy naming —
 //    see resolve-rate.ts header FLAG). It does NOT touch fTransportPrice
 //    (the Thailand domestic-delivery leg, set by the Flash/PCSE flow).
 // ────────────────────────────────────────────────────────────
-interface PricingRowContext {
-  userid: string;
-  fwarehousechina: string;
-  ftransporttype: string;
-  fproductstype: string;
-  weightKg: number;
-  /** CBMProduct = (famountcount==1) ? fvolume : fvolume*famount  (legacy L1935-1941) */
-  cbmProduct: number;
-  famountcount: string | null;
-  famount: number;
-  reforder: string | null;
-  customRateSwitch: boolean;
-  customRateKg: number;
-  customRateCbm: number;
-  userComparison: boolean;
-  userComparisonValue: number;
-}
-
-async function resolveLiveForwarderRate(
-  admin: ReturnType<typeof createAdminClient>,
-  ctx: PricingRowContext,
-): Promise<{ resolved: ResolvedRate; coID: string } | { error: string }> {
-  // tb_users — coID drives general(=='PCS') vs VIP-group; legacy reads
-  // userComparison/userComparisonValue/userCompany too (update_data L1764-1798).
-  // tb_users is camelCase (batch 1) — coID/userCompany/userComparison*.
-  const { data: userRow, error: userErr } = await admin
-    .from("tb_users")
-    .select("coID")
-    .eq("userID", ctx.userid)
-    .maybeSingle<{ coID: string | null }>();
-  if (userErr) {
-    console.error(`[resolveLiveForwarderRate: tb_users] failed`, {
-      code: userErr.code, message: userErr.message, userid: ctx.userid,
-    });
-    return { error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${userErr.message}` };
-  }
-  const coID = (userRow?.coID ?? "").trim() || GENERAL_COID;
-  const isGeneral = isGeneralCoid(coID);
-
-  const wh = ctx.fwarehousechina;
-  const tt = ctx.ftransporttype;
-  const pt = ctx.fproductstype;
-
-  const candidates: ResolveRateCandidates = {
-    manualOverride: ctx.customRateSwitch,
-    manualKg: ctx.customRateKg,
-    manualCbm: ctx.customRateCbm,
-    isSvip: false,
-    svipKg: null,
-    svipCbm: null,
-    isGeneral,
-    generalKg: null,
-    generalCbm: null,
-    vipKg: null,
-    vipCbm: null,
-  };
-
-  if (!ctx.customRateSwitch) {
-    // SVIP probe — legacy `SELECT ID FROM tb_rate_custom_cbm WHERE userID`
-    // (forwarder.php L1841). ANY row → SVIP.
-    const { data: svipProbe, error: svipErr } = await admin
-      .from("tb_rate_custom_cbm")
-      .select("id")
-      .eq("userid", ctx.userid)
-      .limit(1)
-      .maybeSingle<{ id: number }>();
-    if (svipErr) {
-      console.error(`[resolveLiveForwarderRate: tb_rate_custom_cbm probe] failed`, {
-        code: svipErr.code, message: svipErr.message, userid: ctx.userid,
-      });
-      return { error: `ตรวจสอบเรท SVIP ไม่สำเร็จ: ${svipErr.message}` };
-    }
-    candidates.isSvip = svipProbe != null;
-
-    if (candidates.isSvip) {
-      // SVIP per-user rates for the tuple (forwarder.php L1907-1925).
-      const { data: svipKgRow, error: svipKgErr } = await admin
-        .from("tb_rate_custom_kg")
-        .select("rkg")
-        .eq("userid", ctx.userid).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rkg: number | string | null }>();
-      if (svipKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_custom_kg] failed`, { code: svipKgErr.code, message: svipKgErr.message });
-      const { data: svipCbmRow, error: svipCbmErr } = await admin
-        .from("tb_rate_custom_cbm")
-        .select("rcbm")
-        .eq("userid", ctx.userid).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rcbm: number | string | null }>();
-      if (svipCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_custom_cbm rate] failed`, { code: svipCbmErr.code, message: svipCbmErr.message });
-      candidates.svipKg = svipKgRow?.rkg ?? null;
-      candidates.svipCbm = svipCbmRow?.rcbm ?? null;
-    } else if (isGeneral) {
-      // General tiered rates (forwarder.php L1846-1880). tb_rate_g_* keyed
-      // by coid (not userid) — here coid='PCS', the general bucket.
-      const { data: gKg, error: gKgErr } = await admin
-        .from("tb_rate_g_kg")
-        .select("rgkg1, rgkg2, rgkg3")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt)
-        .maybeSingle<{ rgkg1: number | string | null; rgkg2: number | string | null; rgkg3: number | string | null }>();
-      if (gKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_g_kg] failed`, { code: gKgErr.code, message: gKgErr.message });
-      const { data: gCbm, error: gCbmErr } = await admin
-        .from("tb_rate_g_cbm")
-        .select("rgcbm1, rgcbm2, rgcbm3")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt)
-        .maybeSingle<{ rgcbm1: number | string | null; rgcbm2: number | string | null; rgcbm3: number | string | null }>();
-      if (gCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_g_cbm] failed`, { code: gCbmErr.code, message: gCbmErr.message });
-      candidates.generalKg = gKg ? { tier1: gKg.rgkg1, tier2: gKg.rgkg2, tier3: gKg.rgkg3 } : null;
-      candidates.generalCbm = gCbm ? { tier1: gCbm.rgcbm1, tier2: gCbm.rgcbm2, tier3: gCbm.rgcbm3 } : null;
-    } else {
-      // VIP-group flat rates by coID (forwarder.php L1884-1904).
-      const { data: vKg, error: vKgErr } = await admin
-        .from("tb_rate_vip_kg")
-        .select("rkg")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rkg: number | string | null }>();
-      if (vKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_kg] failed`, { code: vKgErr.code, message: vKgErr.message });
-      const { data: vCbm, error: vCbmErr } = await admin
-        .from("tb_rate_vip_cbm")
-        .select("rcbm")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rcbm: number | string | null }>();
-      if (vCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_cbm] failed`, { code: vCbmErr.code, message: vCbmErr.message });
-      candidates.vipKg = vKg?.rkg ?? null;
-      candidates.vipCbm = vCbm?.rcbm ?? null;
-    }
-  }
-
-  const resolved = resolveForwarderRate(candidates, {
-    weightKg: ctx.weightKg,
-    volumeCbm: ctx.cbmProduct,
-    comparisonEnabled: ctx.userComparison,
-    comparisonValue: ctx.userComparisonValue,
-    // customComparison (per-order comparison override) is not part of the
-    // dimensions form; legacy reads it from the calPrice POST. For the
-    // dimension-edit save we follow the customer's stored userComparison.
-  });
-
-  return { resolved, coID };
-}
 
 // ────────────────────────────────────────────────────────────
 // adminUpdateForwarderDimensions — UPDATE tb_forwarder + tb_forwarder_item.
@@ -470,7 +327,7 @@ export async function adminUpdateForwarderDimensions(
       const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
       const userComparisonValue = num(cmpRow?.userComparisonValue);
 
-      const priceResult = await resolveLiveForwarderRate(admin, {
+      const priceCtx: PricingRowContext = {
         userid:            before.userid,
         fwarehousechina:   effectiveWarehouseChina,
         ftransporttype:    before.ftransporttype,
@@ -485,7 +342,8 @@ export async function adminUpdateForwarderDimensions(
         customRateCbm:     effectiveCustomRateCbm,
         userComparison,
         userComparisonValue,
-      });
+      };
+      const priceResult = await resolveLiveForwarderRate(admin, priceCtx);
       if ("error" in priceResult) {
         return { ok: false, error: priceResult.error };
       }

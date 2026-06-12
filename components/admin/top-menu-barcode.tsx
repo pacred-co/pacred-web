@@ -71,8 +71,12 @@ export function TopMenuBarcode({ activeHref }: { activeHref?: string } = {}) {
     (href === activeHref || activeHref.startsWith(href + "/") || activeHref === href);
 
   const groups: { key: Group; tag: string; accent: "cargo" | "driver" }[] = [
-    { key: "cargo",  tag: "เครื่องสแกน",  accent: "cargo"  },
-    { key: "driver", tag: "มือถือคนขับ",   accent: "driver" },
+    // Labels are by INPUT DEVICE (the real cargo/* vs driver/* split): cargo/*
+    // pages decode with the phone CAMERA, driver/* pages read a USB handheld
+    // SCANNER. (The old tags "เครื่องสแกน"/"มือถือคนขับ" were swapped + misleading —
+    // ภูม flag 2026-06-12.) The sidebar blockBarcode already gets this split right.
+    { key: "cargo",  tag: "กล้องมือถือ",  accent: "cargo"  },
+    { key: "driver", tag: "เครื่องสแกน",   accent: "driver" },
   ];
 
   return (
