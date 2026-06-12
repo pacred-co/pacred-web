@@ -3475,6 +3475,7 @@
     "extension": {
       "juristicCheck": "เช็คข้อมูลลูกค้านิติบุคคล",
       "thaiTransport": "จัดการขนส่งไทย",
+      "thaiShippingTools": "ตรวจสอบขนส่งไทย",
       "meetingRoom": "จองห้องประชุม",
       "history": "บันทึกการทำรายการแอดมิน",
       "incidents": "แจ้งเตือนระบบ (Incident)",

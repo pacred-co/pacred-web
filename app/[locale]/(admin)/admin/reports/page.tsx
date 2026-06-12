@@ -107,6 +107,8 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     children: [
       { label: "เข้าใช้ระบบ",       href: "/admin/reports/system" },
       { label: "ยืนยัน OTP สำเร็จ", href: "/admin/reports/otp-success" },
+      // Wave 1 gap-fill (2026-06-12 · port report-otp-not-pass.php)
+      { label: "OTP ไม่ผ่าน (สมัครใหม่)", href: "/admin/reports/otp-failed" },
     ],
   },
   // Re-sweep A2 #24 (2026-05-31 · §0d reachability): 2 monitoring reports
@@ -120,6 +122,9 @@ const REPORTS_MENUBAR: MenubarItem[] = [
       // Wave C BI (2026-06-01 · §0d): per-stage dwell + stuck-order alerts
       // (fdatestatus2..7) — Theme 1 SLA/cycle-time intelligence.
       { label: "⏱ SLA / เวลาต่อสเตจ", href: "/admin/reports/sla-cycle-time" },
+      // Wave 1 gap-fill (2026-06-12 · port report-api-china.php + hs-customrate.php)
+      { label: "การใช้ API จีน",        href: "/admin/reports/api-china" },
+      { label: "ประวัติปรับเรทลูกค้า",  href: "/admin/reports/rate-change-history" },
     ],
   },
   {
@@ -131,6 +136,9 @@ const REPORTS_MENUBAR: MenubarItem[] = [
       // Wave 7.3 (2026-05-22): wired containers-hs orphan per ภูม decision
       // in page-inventory-2026-05-21-night.md §🔴 DEAD.
       { label: "ตู้ตาม HS code",      href: "/admin/reports/containers-hs" },
+      // Wave 1 gap-fill (2026-06-12 · port report-user-all.php + report-sales-group-by-user.php)
+      { label: "ยอดรวมทุกบริการ/ลูกค้า", href: "/admin/reports/user-all" },
+      { label: "ยอดขายรวมตามรหัส",      href: "/admin/reports/sales-group" },
     ],
   },
   { label: "ลูกค้า", href: "/admin/reports/user-sales-history" },

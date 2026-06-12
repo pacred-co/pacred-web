@@ -193,6 +193,9 @@ type RawForwarderRow = {
   fcover: string | null;
   fweight: number | null;
   fvolume: number | null;
+  fwidth: number | null;
+  flength: number | null;
+  fheight: number | null;
   famount: number | null;
   ftotalprice: number | null;
   fcosttotalprice: number | null;
@@ -303,6 +306,12 @@ export type Row = {
   /** Lane B — the customer's tax-document choice (tb_forwarder.tax_doc_pref ·
    * raw 'tax_invoice'|'customs'|'receipt'|null). Rendered as <TaxDocBadge>. */
   tax_doc_pref: string | null;
+  /** 2026-06-12 (พี่ป๊อป) — dimensions (cm) + MOMO CG_NO for the group
+   * breakdown (mirrors forwarders-table.tsx Row). */
+  width_cm: number | null;
+  length_cm: number | null;
+  height_cm: number | null;
+  cg_no: string | null;
   customer: {
     userid: string;
     name: string;
@@ -846,6 +855,8 @@ export async function fetchForwarderList(
       "id,fdate,fstatus,ftransporttype,fwarehousechina,fwarehousename," +
       "fcabinetnumber,ftrackingchn,ftrackingth,fidorco,userid,fnote,fcover," +
       "fweight,fvolume,famount,ftotalprice,fcosttotalprice," +
+      // 2026-06-12 (พี่ป๊อป) — physical dimensions for the group breakdown (ก×ย×ส)
+      "fwidth,flength,fheight," +
       "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
       // Wave 11 fidelity port — extra cols for the legacy 12-column layout
       "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
@@ -1128,6 +1139,11 @@ export async function fetchForwarderList(
       pallet,
       cabinet_locked: r.fcabinet_locked === true,
       tax_doc_pref: r.tax_doc_pref,
+      // 2026-06-12 (พี่ป๊อป) — dimensions (cm) for the group breakdown; 0/null = ยังไม่วัด
+      width_cm:  r.fwidth  != null && Number(r.fwidth)  > 0 ? Number(r.fwidth)  : null,
+      length_cm: r.flength != null && Number(r.flength) > 0 ? Number(r.flength) : null,
+      height_cm: r.fheight != null && Number(r.fheight) > 0 ? Number(r.fheight) : null,
+      cg_no: null as string | null, // filled by the momo_import_tracks lookup below
       customer: user
         ? {
             userid: user.userID,
@@ -1209,6 +1225,39 @@ export async function fetchForwarderList(
     "cover",
   );
   rows = rows.map((r) => ({ ...r, coverUrl: coverMap[String(r.id)] ?? null }));
+
+  // ─── 2026-06-12 (พี่ป๊อป) — MOMO CG_NO for the group breakdown ──────────
+  // CG_NO is NOT a tb_forwarder column — it lives in momo_import_tracks.raw
+  // (the carrier sub-parcel id). The MOMO commit copies the carrier tracking
+  // verbatim into ftrackingchn, so momo_tracking_no === ftrackingchn (an exact
+  // join key). Bounded to the visible page's trackings · pulls only the
+  // extracted string (raw->>CG_NO, not the whole blob) · best-effort (a
+  // failure logs + leaves cg_no null → "—", never blocks the list).
+  const cgTrackings = Array.from(
+    new Set(rows.map((r) => r.tracking_chn).filter((t): t is string => !!t && t !== "-")),
+  );
+  if (cgTrackings.length > 0) {
+    const { data: cgRows, error: cgErr } = await admin
+      .from("momo_import_tracks")
+      .select("momo_tracking_no, cg_no:raw->>CG_NO")
+      .in("momo_tracking_no", cgTrackings);
+    if (cgErr) {
+      console.error("[forwarders cg_no lookup] failed", cgErr);
+    } else if (cgRows && cgRows.length > 0) {
+      const cgMap = new Map<string, string>();
+      for (const c of cgRows as unknown as { momo_tracking_no: string | null; cg_no: string | null }[]) {
+        if (c.momo_tracking_no && c.cg_no && c.cg_no.trim() !== "") {
+          cgMap.set(c.momo_tracking_no, c.cg_no.trim());
+        }
+      }
+      if (cgMap.size > 0) {
+        rows = rows.map((r) => ({
+          ...r,
+          cg_no: r.tracking_chn ? cgMap.get(r.tracking_chn) ?? null : null,
+        }));
+      }
+    }
+  }
 
   return { rows, totalForwarders, forwarderErr };
 }

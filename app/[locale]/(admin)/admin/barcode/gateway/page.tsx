@@ -14,8 +14,8 @@
  *           all  — generic search → forwarder detail with ?barcodeF=<t>
  *           4    — เข้าโกดัง        → forwarder detail with ?barcode=<t>&action=save#form4
  *           6    — เตรียมส่ง        → forwarder detail with #form6 (status guard happens in detail page)
- *           from — ปริ้น           → legacy went to /printAll/?print=1&id[]=<id>;
- *                                     no /admin/printAll yet, fall back to forwarder detail
+ *           from — ปริ้น           → scan→print: /admin/printAll?fNo=<id>&autoprint=1
+ *                                     (the box label opens to print · PCS fast path)
  *   device = "scanner" | "mobile"          (controls fallback URL on 0 matches)
  *   tracking = the scanned tracking string (matched against fTrackingCHN)
  *
@@ -79,10 +79,13 @@ function detailUrlFor(type: GatewayType, id: number, tracking: string): string {
       // itself is <Type6ConfirmPanel>, rendered upstream on a single hit.
       return `/admin/forwarders/${id}#form6`;
     case "from":
-      // Legacy went to /printAll/?print=1&id[]=<ID>. /admin/printAll isn't
-      // ported yet — drop a Wave-3 TODO and route to the detail with the
-      // tracking marker so a human can hit "พิมพ์" from the detail page.
-      return `/admin/forwarders/${id}?barcodeF=${enc}&print=1`;
+      // พี่ป๊อป 2026-06-12 — restore the PCS scan→print fast path. Legacy
+      // gateway.php case "from" went to /printAll/?print=1&id[]=<ID> (the box
+      // label opens to print). Pacred's /admin/printAll renders that label from
+      // ?fNo=<id>; &autoprint=1 opens the print dialog on load — so a warehouse
+      // worker scans a box and the label prints immediately (1 step, like PCS),
+      // instead of bouncing to the forwarder detail to hunt the print button.
+      return `/admin/printAll?fNo=${id}&autoprint=1`;
   }
 }
 

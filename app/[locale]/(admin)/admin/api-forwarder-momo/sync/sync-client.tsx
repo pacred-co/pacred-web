@@ -691,9 +691,13 @@ function RawSpreadTable({
   // Column order (พี่ป๊อป): รูป FIRST · เลขตู้จริง (join) ต่อ · ...ที่เหลือ... ·
   // ตีลังไม้/รายละเอียดลังไม้ ไว้ท้ายสุด.
   const all = collectMomoSpreadColumns(raws);
+  // พี่ป๊อป 2026-06-12 — "ดูพัสดุ" (track_details) ย้ายมาเป็นคอลัมน์แรกสุด
+  // (เดิมอยู่ท้ายตาราง · Container Closed เท่านั้นที่มี field นี้).
+  const FRONT = ["track_details"];
   const BACK = ["wooden_create", "wooden_info"];
-  const mid = all.filter((c) => c !== "images" && !BACK.includes(c));
+  const mid = all.filter((c) => c !== "images" && !BACK.includes(c) && !FRONT.includes(c));
   const cols = [
+    ...FRONT.filter((c) => all.includes(c)),
     ...(all.includes("images") ? ["images"] : []),
     ...(cabinetMap ? ["__cabinet"] : []),
     ...mid,

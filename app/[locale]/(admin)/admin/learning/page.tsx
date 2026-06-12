@@ -95,6 +95,23 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
       href:    "/admin/learning/news",
       external: false,
     },
+    // Wave 1 gap-fill (2026-06-12 · port publicRelations.php + introdNewSystem.php)
+    {
+      slug:    "public-relations",
+      icon:    "📣",
+      title:   "ประชาสัมพันธ์",
+      desc:    "ข่าวประชาสัมพันธ์ · กิจกรรม · ประกาศภายในองค์กร",
+      href:    "/admin/learning/public-relations",
+      external: false,
+    },
+    {
+      slug:    "new-system",
+      icon:    "✨",
+      title:   "แนะนำระบบใหม่",
+      desc:    "อัปเดตฟีเจอร์/ระบบใหม่ที่เพิ่งเปิดใช้งาน",
+      href:    "/admin/learning/new-system",
+      external: false,
+    },
     {
       slug:    "customer-terms",
       icon:    "📋",

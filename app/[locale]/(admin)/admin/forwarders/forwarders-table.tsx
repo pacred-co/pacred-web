@@ -108,6 +108,15 @@ export type Row = {
    * Rendered as <TaxDocBadge> in the "เอกสาร" column so staff see VAT/no-VAT
    * + which document to issue, per row. */
   tax_doc_pref: string | null;
+  /** 2026-06-12 (พี่ป๊อป) — physical dimensions in cm (tb_forwarder.fwidth/
+   *  flength/fheight · measured at the warehouse). Shown on the group
+   *  breakdown as ก×ย×ส. null when not yet measured. */
+  width_cm: number | null;
+  length_cm: number | null;
+  height_cm: number | null;
+  /** 2026-06-12 (พี่ป๊อป) — MOMO CG_NO (carrier sub-parcel id · from
+   *  momo_import_tracks.raw.CG_NO, joined by tracking). null for non-MOMO rows. */
+  cg_no: string | null;
   customer: {
     userid: string;
     name: string;
@@ -763,6 +772,12 @@ export function ForwardersTable({
                   // weight/cbm/outstanding Σ are unchanged; the box count + the
                   // allPaid flag (header paydeposit='0' would force false) get fixed.
                   const aggMembers = group ? countableGroupMembers(group.members) : [];
+                  // 2026-06-12 (พี่ป๊อป) — sequence # over countable members
+                  // only, so the breakdown numbers the real boxes 1..N and
+                  // flags the MOMO หัวบิล (bill-header) row as "หัวบิล".
+                  const memberSeq = new Map(
+                    aggMembers.map((m, i) => [m.id, i + 1] as const),
+                  );
                   const agg = group
                     ? {
                         boxes: aggMembers.reduce((s, m) => s + (m.amount_count || 0), 0),
@@ -1015,11 +1030,10 @@ export function ForwardersTable({
                                   ฝากสั่งซื้อ : {r.ref_order}
                                 </Link>
                               )}
-                              {r.f_no_cargo && (
-                                <span className="text-[9px] text-muted font-mono" title="Cargo API tracking (fidorco)">
-                                  {r.f_no_cargo}
-                                </span>
-                              )}
+                              {/* 2026-06-12 (พี่ป๊อป) — the raw "MO…" fidorco
+                                  string used to render here; removed per owner
+                                  ("ใส่มาทำไม"). It's redundant with the tracking
+                                  shown + the cabinet, and still searchable. */}
                             </div>
                           </div>
                         </div>
@@ -1119,9 +1133,9 @@ export function ForwardersTable({
                                 type="button"
                                 onClick={() => toggleGroupExpand(group.key)}
                                 className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-700"
-                                title={`พัสดุกลุ่มเดียวกัน ${group.members.length} เลข (MOMO แตกกล่อง) — คลิกดูรายเลข`}
+                                title={`พัสดุกลุ่มเดียวกัน ${aggMembers.length} เลข (MOMO แตกกล่อง · ไม่นับหัวบิล) — คลิกดูรายเลข`}
                               >
-                                📦 {group.members.length} เลขพัสดุ
+                                📦 {aggMembers.length} เลขพัสดุ
                                 <span aria-hidden>{isExpanded ? "▲" : "▼"}</span>
                               </button>
                               <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
@@ -1297,7 +1311,7 @@ export function ForwardersTable({
                           <div className="pl-8">
                             <div className="mb-1.5 text-[10px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
-                              {group.members.length} เลข · ลูกค้า{" "}
+                              {aggMembers.length} เลข · ลูกค้า{" "}
                               <span className="font-mono">{r.customer?.userid ?? "—"}</span>
                             </div>
                             <table className="w-full max-w-4xl text-[10px]">
@@ -1306,6 +1320,8 @@ export function ForwardersTable({
                                   <th className="px-2 py-1 w-8" aria-label="เลือก" />
                                   <th className="px-2 py-1 w-8">#</th>
                                   <th className="px-2 py-1">เลขพัสดุ (จีน)</th>
+                                  <th className="px-2 py-1">CG_NO</th>
+                                  <th className="px-2 py-1">ขนาด (ก×ย×ส)</th>
                                   <th className="px-2 py-1 text-right">กล่อง</th>
                                   <th className="px-2 py-1 text-right">น้ำหนัก</th>
                                   <th className="px-2 py-1 text-right">CBM</th>
@@ -1315,9 +1331,12 @@ export function ForwardersTable({
                                 </tr>
                               </thead>
                               <tbody>
-                                {group.members.map((m, idx) => {
+                                {group.members.map((m) => {
                                   const mBadge = STATUS_BADGE[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
                                   const mOn = selected.has(m.id);
+                                  // 2026-06-12 — countable box # (undefined = the
+                                  // MOMO หัวบิล placeholder → label "หัวบิล").
+                                  const mSeq = memberSeq.get(m.id);
                                   return (
                                     <tr
                                       key={m.id}
@@ -1331,7 +1350,13 @@ export function ForwardersTable({
                                           aria-label={`เลือก ออเดอร์ #${m.id}`}
                                         />
                                       </td>
-                                      <td className="px-2 py-1.5 text-slate-500">{idx + 1}</td>
+                                      <td className="px-2 py-1.5 text-slate-500">
+                                        {mSeq ?? (
+                                          <span className="text-amber-600" title="หัวบิล MOMO — ไม่นับเป็นกล่อง">
+                                            หัวบิล
+                                          </span>
+                                        )}
+                                      </td>
                                       <td className="px-2 py-1.5 font-mono">
                                         {m.tracking_chn}
                                         {m.id === r.id && (
@@ -1345,6 +1370,18 @@ export function ForwardersTable({
                                           >
                                             <Lock className="inline-block text-amber-500" size={9} aria-hidden />
                                           </span>
+                                        )}
+                                      </td>
+                                      {/* 2026-06-12 (พี่ป๊อป) — CG_NO (MOMO carrier sub-parcel id) */}
+                                      <td className="px-2 py-1.5 font-mono text-slate-600">
+                                        {m.cg_no ? m.cg_no : <span className="text-muted">—</span>}
+                                      </td>
+                                      {/* 2026-06-12 (พี่ป๊อป) — dimensions ก×ย×ส (cm) */}
+                                      <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">
+                                        {m.width_cm && m.length_cm && m.height_cm ? (
+                                          `${m.width_cm}×${m.length_cm}×${m.height_cm}`
+                                        ) : (
+                                          <span className="text-muted">—</span>
                                         )}
                                       </td>
                                       <td className="px-2 py-1.5 text-right">{m.amount_count}</td>

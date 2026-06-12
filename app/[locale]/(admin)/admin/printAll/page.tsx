@@ -78,6 +78,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { PrintAllPicker, AutoPrintOnLoad } from "./print-all-picker";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { SITE_NAME, CONTACT } from "@/components/seo/site";
 
@@ -94,6 +95,7 @@ type SearchParams = {
   cabinet?: string | string[];
   fNo?: string | string[];
   id?: string | string[];
+  autoprint?: string | string[]; // "1" → open the print dialog on load (scan→print)
 };
 
 // The tb_forwarder columns the legacy box-label SELECT pulls (L40-44).
@@ -161,6 +163,7 @@ export default async function PrintAllPage({
 
   const sp = await searchParams;
   const cabinet = firstParam(sp.cabinet)?.trim();
+  const autoprint = firstParam(sp.autoprint) === "1";
   const admin = createAdminClient();
 
   // ── Resolve the forwarder rows ──
@@ -262,23 +265,32 @@ export default async function PrintAllPage({
         @page { size: A4 portrait; margin: 1cm; }
       `}</style>
 
+      {/* พี่ป๊อป 2026-06-12 — scan→print fast path: auto-open the print dialog
+          when reached with ?autoprint=1 (e.g. from a barcode scan). */}
+      {autoprint && <AutoPrintOnLoad />}
+
       {/* On-screen toolbar */}
-      <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur">
-        <div className="flex items-center gap-3 text-sm">
-          <Link
-            href="/admin/report-cnt"
-            className="text-primary-600 hover:underline"
-          >
-            ← กลับรายงานตู้
-          </Link>
-          <span className="text-xs text-gray-500">
-            พิมพ์ป้ายกล่อง · {headerLabel}
-            {warehouseName ? ` · โกดัง: ${warehouseName}` : ""} · {labels.length}{" "}
-            ป้าย ({totalBoxes} กล่อง · {fmt(totalWeight, 2)} kg ·{" "}
-            {fmt(totalVolume, 3)} m³)
-          </span>
+      <div className="no-print sticky top-0 z-10 space-y-2 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-sm">
+            <Link
+              href="/admin/report-cnt"
+              className="text-primary-600 hover:underline"
+            >
+              ← กลับรายงานตู้
+            </Link>
+            <span className="text-xs text-gray-500">
+              พิมพ์ป้ายกล่อง · {headerLabel}
+              {warehouseName ? ` · โกดัง: ${warehouseName}` : ""} · {labels.length}{" "}
+              ป้าย ({totalBoxes} กล่อง · {fmt(totalWeight, 2)} kg ·{" "}
+              {fmt(totalVolume, 3)} m³)
+            </span>
+          </div>
+          <PrintButton label="🖨 พิมพ์ป้ายกล่องทั้งหมด" />
         </div>
-        <PrintButton label="🖨 พิมพ์ป้ายกล่องทั้งหมด" />
+        {/* In-page scan/cabinet picker — print the next box/container without
+            leaving (no bounce to รายงานตู้). */}
+        <PrintAllPicker compact />
       </div>
 
       <main className="print-area mx-auto max-w-[800px] p-4 space-y-4">
@@ -373,29 +385,46 @@ function Cell({ label, value }: { label: string; value: string }) {
 
 function PrintAllGuide() {
   return (
-    <main className="min-h-screen bg-white p-8 text-black">
-      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-alt/40 p-6 text-sm space-y-3">
-        <h1 className="text-lg font-bold">พิมพ์ป้ายกล่อง (Scan → Print)</h1>
-        <p className="text-muted">
-          พิมพ์ป้ายกล่องของทั้งตู้ในครั้งเดียว — เปิดด้วยพารามิเตอร์:
-        </p>
-        <ul className="space-y-1 text-xs">
-          <li>
-            <code className="px-1 bg-surface-alt rounded">?cabinet=GZS260529-1</code>{" "}
-            — ป้ายของทุกกล่องในตู้
-          </li>
-          <li>
-            <code className="px-1 bg-surface-alt rounded">?fNo=51976</code> —
-            รายการเดียว
-          </li>
-        </ul>
-        <p className="text-xs text-muted">
-          เข้าถึงปกติจากหน้า{" "}
-          <Link href="/admin/report-cnt" className="text-primary-600 hover:underline">
-            รายงานตู้
-          </Link>{" "}
-          → เลือกตู้ → ปุ่ม &quot;พิมพ์ป้ายกล่อง&quot;
-        </p>
+    <main className="min-h-screen bg-slate-50 p-4 text-black sm:p-8">
+      <div className="mx-auto max-w-2xl space-y-4">
+        <header>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
+            พิมพ์ป้ายกล่อง
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            สแกนกล่อง → พิมพ์ป้ายทันที · หรือพิมพ์ทั้งตู้ในครั้งเดียว — ทำได้ในหน้านี้เลย
+          </p>
+        </header>
+
+        {/* The tool — scan/cabinet picker (พี่ป๊อป: ไม่ต้องเด้งไปหน้ารายงานตู้) */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <PrintAllPicker />
+        </div>
+
+        {/* Reference — the URL contract + the รายงานตู้ entry, kept for staff
+            who arrive from a deep link or the container report. */}
+        <details className="rounded-xl border border-slate-200 bg-white/60 p-4 text-sm">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+            วิธีอื่น / พารามิเตอร์ URL
+          </summary>
+          <ul className="mt-2 space-y-1 text-xs text-slate-600">
+            <li>
+              <code className="rounded bg-slate-100 px-1">?cabinet=GZS260529-1</code>{" "}
+              — ป้ายของทุกกล่องในตู้
+            </li>
+            <li>
+              <code className="rounded bg-slate-100 px-1">?fNo=51976</code> —
+              รายการเดียว
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-slate-500">
+            หรือเข้าจากหน้า{" "}
+            <Link href="/admin/report-cnt" className="text-primary-600 hover:underline">
+              รายงานตู้
+            </Link>{" "}
+            → เลือกตู้ → ปุ่ม &quot;พิมพ์ป้ายกล่อง&quot;
+          </p>
+        </details>
       </div>
     </main>
   );

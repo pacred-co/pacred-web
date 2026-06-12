@@ -36,6 +36,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { Search } from "lucide-react";
 
 type ScannerType = "all" | "from" | "4" | "6";
 
@@ -96,14 +97,13 @@ export function ScannerInput({
   }
 
   return (
-    <form
-      className="my-2 my-lg-0 justify-content-center"
-      onSubmit={onSubmit}
-      autoComplete="off"
-    >
+    <form onSubmit={onSubmit} autoComplete="off" className="space-y-3">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="device" value="scanner" />
-      <div className="input-group mb-2">
+
+      {/* Auto-search toggle — legacy `js-switch` (barcode-d-all.php L37-39),
+          now a Pacred checkbox. Behaviour preserved verbatim. */}
+      <label className="inline-flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600">
         <input
           type="checkbox"
           id="customSwitch"
@@ -111,43 +111,34 @@ export function ScannerInput({
           value="1"
           checked={autoSearch}
           onChange={(e) => setAutoSearch(e.target.checked)}
-          className="js-switch pt-3"
-          data-color="#f96262"
-          data-size="small"
+          className="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
         />
-        <span className="font-14 pl-2"> ค้นหาอัตโนมัติ</span>
-      </div>
-      <div className="input-group">
-        <div className="w-100">
-          <input
-            ref={inputRef}
-            type="text"
-            id="search-tracking"
-            name="tracking"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyUp={onKeyUp}
-            className="w-100 form-control product-search br-30"
-            placeholder={placeholder}
-          />
-          <button className="btn btn-main r0" type="submit">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="feather feather-search"
-            >
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </button>
-        </div>
+        ค้นหาอัตโนมัติ
+      </label>
+
+      {/* USB-handheld-scanner input — big, auto-focused, mono. USB scanners
+          paste the code + emit Enter (handled in onKeyUp). */}
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          id="search-tracking"
+          name="tracking"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyUp={onKeyUp}
+          className="min-h-[44px] flex-1 rounded-xl border-2 border-primary-300 bg-white px-4 py-2.5 text-base font-mono text-slate-900 placeholder:text-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+          placeholder={placeholder}
+          inputMode="text"
+        />
+        <button
+          type="submit"
+          aria-label="ค้นหา"
+          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700"
+        >
+          <Search className="h-5 w-5" aria-hidden="true" />
+          <span className="hidden sm:inline">ค้นหา</span>
+        </button>
       </div>
     </form>
   );
