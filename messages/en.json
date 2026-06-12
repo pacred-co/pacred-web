@@ -3475,6 +3475,7 @@
     "extension": {
       "juristicCheck": "Juristic customer check",
       "thaiTransport": "Manage TH carriers",
+      "thaiShippingTools": "Thai Shipping Checker",
       "meetingRoom": "Meeting-room booking",
       "history": "Admin action log",
       "incidents": "System incidents",

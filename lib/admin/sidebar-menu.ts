@@ -772,6 +772,12 @@ const blockExtJuristic: MenuItem = {
 const blockExtThaiTransport: MenuItem = {
   labelKey: "extension.thaiTransport", href: "/admin/carriers", icon: "Truck", phase: 4,
 };
+// Wave 1 gap-fill (2026-06-12) — the 6 legacy ขนส่งไทย checker tools
+// (check-price-flash / check-shipby / check-payMethod / maomao-free /
+// maomao-vip / shipby-freedom) consolidated into one read-only hub.
+const blockExtThaiShippingTools: MenuItem = {
+  labelKey: "extension.thaiShippingTools", href: "/admin/tools/thai-shipping", icon: "Calculator",
+};
 const blockExtMeetingRoom: MenuItem = {
   labelKey: "extension.meetingRoom", href: "/admin/hr/attendance?tab=meeting-room", icon: "CalendarCheck", phase: 4,
 };
@@ -1251,6 +1257,7 @@ const menuManager: MenuSection[] = [
     blockExtWithdrawalsAll,
     blockExtJuristic,
     blockExtThaiTransport,
+    blockExtThaiShippingTools,
     blockExtMeetingRoom,
     blockExtHistory,
     blockExtIncidents,
@@ -1292,7 +1299,7 @@ const menuOps: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtThaiShippingTools, blockExtIncidents]),
 ];
 
 /**
