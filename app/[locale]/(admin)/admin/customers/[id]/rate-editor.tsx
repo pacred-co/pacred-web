@@ -13,7 +13,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, AlertTriangle, X, BadgeCheck, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import {
@@ -47,9 +47,9 @@ export function CustomerRateEditor({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
-  // Owner ask 2026-05-30: "ทำปุ่ม ย่อ/ขยาย ได้ด้วย". The profile page is
-  // long, so the rate editor starts COLLAPSED — the header (title + SVIP
-  // badge + chevron) is always visible; clicking it reveals the tabs/grid.
+  // 2026-06-12 (owner: "เป็น pop up ทั้งก้อนเลย ไม่ต้องมีแถบล่าง") — the editor is
+  // now a MODAL (legacy #rate-settings), opened from the gear in the profile
+  // header. No inline bottom panel. `open` controls the modal.
   const [open, setOpen] = useState(false);
 
   // Seed inputs: current live value, else the legacy default-start for that wh.
@@ -140,39 +140,60 @@ export function CustomerRateEditor({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-      {/* Header — click to ย่อ/ขยาย (collapse/expand). Always shows the
-          title + SVIP badge + chevron even when collapsed. */}
+    <>
+      {/* Trigger — the legacy ⚙️ "ตั้งค่าเรทขนส่ง" gear in the profile header.
+          Opens the rate editor as a Pacred-themed MODAL (no inline panel). */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3 bg-gradient-to-r from-rose-50/70 via-white to-white dark:from-surface-alt/40 text-left hover:bg-rose-50/40 transition-colors"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-alt"
       >
-        <div className="flex items-center gap-2 flex-wrap">
-          <Settings className="w-4 h-4 text-primary-600 shrink-0" />
-          <span className="text-sm font-semibold">ตั้งค่าเรทขนส่ง (เรทขายต่อลูกค้า)</span>
-          {matrix.isSvip ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
-              <BadgeCheck className="w-3 h-3" /> SVIP · มีเรทเฉพาะตัว
-            </span>
-          ) : (
-            <span className="rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[10px]">
-              ใช้เรทกลุ่ม / default
-            </span>
-          )}
-        </div>
-        <span className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-muted font-mono hidden sm:block">{userid}</span>
-          <span className="inline-flex items-center gap-1 text-xs text-primary-600 font-medium">
-            {open ? "ย่อ" : "ขยาย"}
-            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        <Settings className="w-3.5 h-3.5" /> ตั้งค่าเรทขนส่ง
+        {matrix.isSvip ? (
+          <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-1.5 py-0.5 text-[9px] font-semibold">
+            <BadgeCheck className="w-2.5 h-2.5" /> SVIP
           </span>
-        </span>
+        ) : null}
       </button>
 
-      {!open ? null : (
-      <>
+      {open && (
+        // Modal overlay — click backdrop to close; the card stops propagation.
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          onClick={() => setOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="my-8 w-full max-w-3xl overflow-hidden rounded-2xl bg-white dark:bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header (legacy "แก้ไขเรทราคาสำหรับ <รหัส> กลุ่ม : …" + ปิด) */}
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-rose-50/70 via-white to-white dark:from-surface-alt/40 px-5 py-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Settings className="w-4 h-4 text-primary-600 shrink-0" />
+                <span className="text-sm font-semibold">ตั้งค่าเรทขนส่ง (เรทขายต่อลูกค้า)</span>
+                <span className="text-[11px] text-muted font-mono">{userid}</span>
+                {matrix.isSvip ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+                    <BadgeCheck className="w-3 h-3" /> SVIP · มีเรทเฉพาะตัว
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[10px]">
+                    ใช้เรทกลุ่ม / default
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-muted hover:text-foreground"
+                aria-label="ปิด"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
       {/* Tabs */}
       <div className="flex border-b border-border bg-surface-alt/30 text-sm">
         {WAREHOUSES.map((w) => (
@@ -203,7 +224,7 @@ export function CustomerRateEditor({
         </button>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{error}</span>
@@ -242,22 +263,23 @@ export function CustomerRateEditor({
         {/* Info + cost floor */}
         {tab === "info" && <InfoTab />}
       </div>
-      </>
-      )}
+          </div>
 
-      {/* Confirm dialog */}
-      {confirmWh && (
-        <ConfirmSave
-          wh={confirmWh}
-          cells={collectCells(confirmWh)}
-          below={belowFloor(confirmWh)}
-          customerName={customerName}
-          onCancel={() => setConfirmWh(null)}
-          onConfirm={() => doSave(confirmWh)}
-          pending={pending}
-        />
+          {/* Confirm dialog (nested · higher z than the rate modal) */}
+          {confirmWh && (
+            <ConfirmSave
+              wh={confirmWh}
+              cells={collectCells(confirmWh)}
+              below={belowFloor(confirmWh)}
+              customerName={customerName}
+              onCancel={() => setConfirmWh(null)}
+              onConfirm={() => doSave(confirmWh)}
+              pending={pending}
+            />
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -387,7 +409,7 @@ function ConfirmSave({
 }) {
   const whLabel = WAREHOUSES.find((w) => w.id === wh)?.label;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
       <div className="rounded-2xl bg-white dark:bg-surface shadow-2xl max-w-lg w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between">
           <h3 className="font-bold text-lg">ยืนยันบันทึกเรท {whLabel}?</h3>

@@ -24,9 +24,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { getBusinessConfig } from "@/lib/business-config";
+import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY } from "@/actions/admin/profile-cover-keys";
+import { CoverEditor } from "./cover-editor";
+import { RowLimitSelect } from "./row-limit-select";
+import { parseRowLimit } from "./row-limit-options";
 import { Link } from "@/i18n/navigation";
-import { Settings } from "lucide-react";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
@@ -37,6 +42,7 @@ import { legacyOrderStatusThai, legacyForwarderStatusThai } from "@/lib/legacy-s
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
+import { AdminToolsPinGate } from "./admin-tools-gate";
 // CRM depth (2026-06-08) — tags + activity timeline panels.
 import { getTags } from "@/actions/admin/customer-tags";
 import { getCustomerActivity } from "@/actions/admin/customer-activity";
@@ -83,13 +89,34 @@ type URow = {
   userCreditDate: number | string | null;
 };
 
+// 2026-06-12 — column set expanded to faithfully reproduce the legacy PCS
+// `users/profile` forwarder table (วันที่ · รหัสลูกค้า · รายละเอียด+รูป · ยอดค้างชำระ+
+// kg/cbm · เลขพัสดุจีน+ตู้/ประเภท/กล่อง · เลขพัสดุไทย+ขนส่ง/ที่อยู่ · สถานะ · อัปเดต ·
+// ตัวเลือก). All columns are READ-only — no money math change.
 type FRow = {
   id: number;
   fdate: string | null;
   fidorco: string | null;          // ← legacy uses fidorco as the customer-facing F-no
-  fcabinetnumber: string | null;
   fstatus: string | null;
+  ftransporttype: string | null;
+  fcabinetnumber: string | null;
+  ftrackingchn: string | null;
+  ftrackingth: string | null;
+  fdetail: string | null;
+  reforder: string | null;         // shop hno that spawned this forwarder (if any)
+  fproductstype: string | null;    // ประเภท (ทั่วไป/มอก./อย./…)
+  fpallet: string | null;          // warehouse location chip
+  fshipby: string | null;          // ขนส่งไทย (carrier name)
+  fweight: number | string | null;
+  fvolume: number | string | null;
+  famount: number | null;          // กล่อง
   ftotalprice: number | null;
+  fcover: string | null;           // product/cover photo (legacy thumbnail)
+  faddressname: string | null;
+  faddresslastname: string | null;
+  faddresszipcode: string | null;
+  fdateadminstatus: string | null; // last status-update timestamp
+  adminidkey: string | null;       // admin who last updated
 };
 type HRow = {
   id: number;
@@ -98,13 +125,19 @@ type HRow = {
   hstatus: string | null;
   htotalpriceuser: number | null;
   htitle: string | null;
+  hcover: string | null;           // product photo (legacy thumbnail)
+  hdateupdate: string | null;      // last update timestamp
+  adminidupdate: string | null;    // admin who last updated
 };
 type PRow = {
   id: number;
   paydate: string | null;
   paystatus: string | null;
+  paytype: string | null;          // วิธีการชำระ code
+  paydetail: string | null;        // รายละเอียด (e.g. 1688/Taobao channel)
   payyuan: number | null;
   paythb: number | null;
+  adminid: string | null;          // อัปเดต admin
 };
 // Wallet-history rows (legacy ประวัติการจ่ายเงิน table) — column set mirrors the
 // proven customer reader app/[locale]/(protected)/wallet/page.tsx (2026-06-12).
@@ -115,6 +148,7 @@ type WHRow = {
   amount: number | string | null;
   type: string | null;
   reforder: string | null;
+  imagesslip: string | null;       // สลิปรายการ (legacy "Lock" popup link)
 };
 type WRow = {
   wallettotal: number | null;
@@ -191,8 +225,18 @@ function forwarderStatusTone(code: string | null): PillTone {
   return code === "7" ? "green" : code === "5" ? "amber" : "blue";
 }
 
-export async function renderLegacyCustomerView(id: string) {
+export async function renderLegacyCustomerView(
+  id: string,
+  searchParams?: Record<string, string | string[] | undefined>,
+) {
   const admin = createAdminClient();
+
+  // Per-table row-count, driven by URL params (the <RowLimitSelect> dropdowns
+  // in each table header). Clamped to the allowed option set (default 10).
+  const shopN = parseRowLimit(searchParams?.shopN);
+  const fwdN = parseRowLimit(searchParams?.fwdN);
+  const yuanN = parseRowLimit(searchParams?.yuanN);
+  const payN = parseRowLimit(searchParams?.payN);
 
   // Wave 18 follow-up (2026-05-25 ค่ำ): the previous version of this query
   // destructured ONLY `data` — so any transient Supabase error (PgBouncer
@@ -273,31 +317,36 @@ export async function renderLegacyCustomerView(id: string) {
       .maybeSingle(),
     admin
       .from("tb_forwarder")
-      .select("id,fdate,fidorco,fcabinetnumber,fstatus,ftotalprice")
+      .select(
+        "id,fdate,fidorco,fstatus,ftransporttype,fcabinetnumber,ftrackingchn," +
+          "ftrackingth,fdetail,reforder,fproductstype,fpallet,fshipby,fweight," +
+          "fvolume,famount,ftotalprice,fcover,faddressname,faddresslastname," +
+          "faddresszipcode,fdateadminstatus,adminidkey",
+      )
       .eq("userid", u.userID)
       .order("fdate", { ascending: false })
-      .limit(10),
+      .limit(fwdN),
     admin
       .from("tb_header_order")
-      .select("id,hdate,hno,hstatus,htotalpriceuser,htitle")
+      .select("id,hdate,hno,hstatus,htotalpriceuser,htitle,hcover,hdateupdate,adminidupdate")
       .eq("userid", u.userID)
       .order("hdate", { ascending: false })
-      .limit(10),
+      .limit(shopN),
     admin
       .from("tb_payment")
-      .select("id,paydate,paystatus,payyuan,paythb")
+      .select("id,paydate,paystatus,paytype,paydetail,payyuan,paythb,adminid")
       .eq("userid", u.userID)
       .order("paydate", { ascending: false })
-      .limit(10),
+      .limit(yuanN),
     // ประวัติการจ่ายเงิน (wallet-hs) recent 10 — legacy profile section 8.
     // Best-effort: column set mirrors the customer wallet reader; degrades
     // to an empty list on error (not in the load-bearing throw set).
     admin
       .from("tb_wallet_hs")
-      .select("id,date,status,amount,type,reforder")
+      .select("id,date,status,amount,type,reforder,imagesslip")
       .eq("userid", u.userID)
       .order("id", { ascending: false })
-      .limit(10),
+      .limit(payN),
     // Exact activity counts for the super-only hard-delete safety gate
     // (HardDeletePanel) — head:true counts are cheap. The recents above cap at
     // 10; these report the true totals so the gate shows accurate "ลบไม่ได้"
@@ -355,6 +404,16 @@ export async function renderLegacyCustomerView(id: string) {
   const hos = (shopRows ?? []) as unknown as HRow[];
   const pys = (yuanRows ?? []) as unknown as PRow[];
   const whs = (walletHsRowsRes.data ?? []) as unknown as WHRow[];
+
+  // 2026-06-12 — resolve the legacy thumbnails + slip images for the faithful
+  // PCS users/profile tables. Bounded to the recent-10 sets (≤30 signed-URL
+  // calls). `kind="cover"` also rewrites external alicdn/taobao URLs to the
+  // thumb size; `kind="slip"` points at the wallet slip bucket.
+  const [fwCoverMap, shopCoverMap, slipMap] = await Promise.all([
+    resolveLegacyUrlMap(fws.map((r) => ({ id: r.id, filename: r.fcover })), "cover"),
+    resolveLegacyUrlMap(hos.map((r) => ({ id: r.id, filename: r.hcover })), "cover"),
+    resolveLegacyUrlMap(whs.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip"),
+  ]);
 
   // Main shipping address (legacy "ที่อยู่จัดส่ง (หลัก)" summary in the profile
   // detail). Falls back to "—" when none flagged.
@@ -427,91 +486,101 @@ export async function renderLegacyCustomerView(id: string) {
   const fmtBaht = (n: number) =>
     `฿${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
+  // Facebook-style cover — a GLOBAL admin-set image (business_config) signed on
+  // read; falls back to the bundled default GIF when unset. Editable inline by
+  // any admin via <CoverEditor> (actions/admin/profile-cover.ts).
+  const DEFAULT_COVER = "/images/admin/customerprofile/bannertest01g.gif";
+  const coverPath = await getBusinessConfig<string>(PROFILE_COVER_KEY, "");
+  const coverSrc =
+    (coverPath ? await getSignedBucketUrl(PROFILE_COVER_BUCKET, coverPath, 86400) : null) ||
+    DEFAULT_COVER;
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* ── SECTION 1 · Profile header card (legacy users/profile top card) ── */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <p className="text-xs font-semibold tracking-widest text-primary-600">
-            ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
-          </p>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* legacy rate-settings gear (top-right of the profile card) →
-                anchors to the Pacred rate editor below */}
-            <a
-              href="#rate-settings"
-              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-alt"
-            >
-              <Settings className="w-3.5 h-3.5" /> ตั้งค่าเรทขนส่ง
-            </a>
+      <div className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface p-5">
+        {/* FB-style cover photo — full-bleed Pacred brand banner, FLUSH to the card
+            top (-mt-5 cancels the card's top padding · card is overflow-hidden so
+            the corners clip to the rounded card). The action buttons that used to
+            sit above the cover now live in the name row. Admin-editable (global)
+            via the overlaid <CoverEditor> button. */}
+        <div className="relative -mx-5 -mt-5 h-32 sm:h-40 overflow-hidden bg-primary-600">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={coverSrc}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+          <CoverEditor hasCustom={!!coverPath} />
+        </div>
+
+        {/* Facebook-style profile header — avatar OVERLAPS the cover (bottom-left),
+            ชื่อ + รหัส/tags stacked to its right (left-aligned). */}
+        <div className="flex items-start gap-4 px-1">
+          {/* Wave 13: legacy avatar — resolved signed URL or initial-letter
+              fallback when no portrait was uploaded. The avatar alone is pulled
+              up (-mt-12) so it OVERLAPS the cover; the name/tags stay below it on
+              the white area so they're readable (never dark-on-red). */}
+          {userImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={userImageUrl}
+              alt={fullName}
+              className="relative z-20 -mt-12 w-24 h-24 shrink-0 rounded-full object-cover bg-white ring-4 ring-white dark:ring-surface shadow-sm"
+            />
+          ) : (
+            <div className="relative z-20 -mt-12 w-24 h-24 shrink-0 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-3xl ring-4 ring-white dark:ring-surface shadow-sm">
+              {(u.userName ?? u.userID).trim().charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
+          <div className="min-w-0 flex flex-col gap-2 pt-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 className="text-lg font-semibold">{fullName}</h2>
+              <span className="text-[11px] font-semibold tracking-wide text-primary-600">
+                ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
+              </span>
+            </div>
+            {/* Meta row — รหัสลูกค้า + สถานะ + Sales/CS tags inline
+                (legacy "Sale : admin_xxx แก้ไข" badge → compact editable pills). */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl font-bold font-mono">{u.userID}</span>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
+                {statusCfg.label}
+              </span>
+              {rateMatrix.isSvip ? (
+                <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
+                  SVIP · เรทเฉพาะตัว
+                </span>
+              ) : null}
+              <SaleRepEditor compact userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
+              <CsRepEditor compact userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
+            </div>
+          </div>
+          {/* Action buttons — moved into the name row (right-aligned · FB-style)
+              instead of a separate top bar above the cover. */}
+          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-3 pt-2">
+            <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
             <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
               ← รายการลูกค้า
             </Link>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-col items-center text-center gap-2">
-          {/* Wave 13: legacy avatar — resolved signed URL or initial-letter
-              fallback when no portrait was uploaded. */}
-          {userImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={userImageUrl}
-              alt={fullName}
-              className="w-24 h-24 rounded-full object-cover border border-border"
-            />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-3xl border border-border">
-              {(u.userName ?? u.userID).trim().charAt(0).toUpperCase() || "?"}
-            </div>
-          )}
-          <h2 className="text-lg font-semibold">{fullName}</h2>
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <span className="text-2xl font-bold font-mono">{u.userID}</span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
-              {statusCfg.label}
-            </span>
-            {rateMatrix.isSvip ? (
-              <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
-                SVIP · เรทเฉพาะตัว
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Sale + CS rep editors (legacy "Sale : admin_xxx แก้ไข" badge) */}
-        <div className="mt-4 grid sm:grid-cols-2 gap-3">
-          <SaleRepEditor userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
-          <CsRepEditor userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
+        {/* ── 8 stat cards — moved UP inside the profile header card to match the
+            legacy PCS users/profile layout (avatar → ชื่อ → รหัสสมาชิก → Sale →
+            [8 tiles]). Counts from tb_header_order / tb_forwarder / tb_payment /
+            tb_wallet(_hs) / tb_cash_back_hs (unverifiable → "—"). ── */}
+        <div className="mt-5 border-t border-border/60 pt-5">
+          <StatCards userid={u.userID} walletBalance={walletBalance} counts={statCounts} />
         </div>
       </div>
 
-      {/* ── SECTION 2 · Profile detail (legacy 2-col: left=account meta + main
-          address, right=identity). Note editor directly below (legacy โน้ต). ── */}
-      <div className="grid lg:grid-cols-2 gap-5 items-start">
-        {/* Left: account meta + main shipping address */}
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
-          <h2 className="text-sm font-semibold">ข้อมูลบัญชี</h2>
-          <KV
-            label="วันที่สมัคร"
-            value={u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
-          />
-          <KV
-            label="ล่าสุดล็อกอิน"
-            value={u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
-          />
-          <div className="pt-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted">ที่อยู่จัดส่ง (หลัก)</span>
-              <a href="#address-manager" className="text-xs text-primary-600 hover:underline">
-                จัดการที่อยู่ ↓
-              </a>
-            </div>
-            <p className="mt-1 text-foreground">{mainAddrText}</p>
-          </div>
-        </div>
-
-        {/* Right: identity editor (faithful editUser — email/phone/sex/birthday/
+      {/* ── SECTION 2 · Profile detail — 2-col (owner 2026-06-12: สลับตำแหน่ง
+          ข้อมูลบัญชี ↔ ข้อมูลส่วนตัวลูกค้า + โน้ตใต้ข้อมูลบัญชี). LEFT = identity
+          editor (ข้อมูลส่วนตัวลูกค้า · tall) · RIGHT = ข้อมูลบัญชี + หมายเหตุภายใน
+          stacked, so the two columns balance to roughly equal height. ── */}
+      <div className="grid lg:grid-cols-2 gap-5 lg:items-stretch">
+        {/* Left: identity editor (faithful editUser — email/phone/sex/birthday/
             line/fb + senior-only rep/coID) */}
         <IdentityEditor
           userid={u.userID}
@@ -530,15 +599,44 @@ export async function renderLegacyCustomerView(id: string) {
             coID:         u.coID ?? "",
           }}
         />
+
+        {/* Right: account meta (ข้อมูลบัญชี) + the internal note stacked under it
+            (legacy โน้ต) — compact padding/gap so the stack is "บาง" (thin) and,
+            with the grid's lg:items-stretch, the two columns end equal-height. */}
+        <div className="flex h-full flex-col gap-4">
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 space-y-2 text-sm">
+            <h2 className="text-sm font-semibold">ข้อมูลบัญชี</h2>
+            {/* วันที่สมัคร + ล่าสุดล็อกอิน on ONE row (2 cols, label-over-value)
+                so the long date+time strings don't make the card tall (ไม่บวม). */}
+            <div className="grid grid-cols-2 gap-x-4 border-b border-border/40 pb-2">
+              <div className="min-w-0">
+                <div className="text-xs text-muted">วันที่สมัคร</div>
+                <div className="truncate">
+                  {u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-muted">ล่าสุดล็อกอิน</div>
+                <div className="truncate">
+                  {u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
+                </div>
+              </div>
+            </div>
+            <div className="pt-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">ที่อยู่จัดส่ง (หลัก)</span>
+                <a href="#address-manager" className="text-xs text-primary-600 hover:underline">
+                  จัดการที่อยู่ ↓
+                </a>
+              </div>
+              <p className="mt-1 text-foreground">{mainAddrText}</p>
+            </div>
+          </div>
+
+          {/* Inline note editor (tb_users.userNote) — legacy โน้ต, under ข้อมูลบัญชี */}
+          <NoteEditor userid={u.userID} initialNote={u.userNote} />
+        </div>
       </div>
-
-      {/* Inline note editor (tb_users.userNote) — legacy โน้ต in profile card */}
-      <NoteEditor userid={u.userID} initialNote={u.userNote} />
-
-      {/* ── SECTION 3 · 8 stat cards (faithful to legacy profile.php tiles ·
-          counts from tb_header_order / tb_forwarder / tb_payment / tb_wallet(_hs)
-          / tb_cash_back_hs). Unverifiable counts render "—" not a wrong number. ── */}
-      <StatCards userid={u.userID} walletBalance={walletBalance} counts={statCounts} />
 
       {/* ── SECTION 4 · Shipping addresses table (legacy ที่อยู่จัดส่งในไทย) —
           full CRUD + set-main, main flag from tb_address_main. ── */}
@@ -546,8 +644,14 @@ export async function renderLegacyCustomerView(id: string) {
         <AddressManager userid={u.userID} addresses={addresses} mainAddressId={mainAddrId} />
       </div>
 
-      {/* ── SECTION 5 · ออเดอร์ฝากสั่งซื้อ (legacy shop table) ── */}
-      <Section title={`ออเดอร์ฝากสั่งซื้อ (${hos.length})`} viewAllHref={`/admin/service-orders?q=${u.userID}`}>
+      {/* ── SECTION 5 · ออเดอร์ฝากสั่งซื้อ (legacy shop table · faithful PCS
+          users/profile columns: วันที่ · รหัสสมาชิก · เลขที่ · ข้อมูลสินค้า+รูป ·
+          ราคารวม · สถานะ · อัปเดต · ตัวเลือก) ── */}
+      <Section
+        title={`ออเดอร์ฝากสั่งซื้อ (${hos.length}${ordCount > hos.length ? ` / ${ordCount}` : ""})`}
+        viewAllHref={`/admin/service-orders?q=${u.userID}`}
+        headerExtra={<RowLimitSelect param="shopN" value={shopN} />}
+      >
         {hos.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากสั่งซื้อ</Empty>
         ) : (
@@ -555,34 +659,57 @@ export async function renderLegacyCustomerView(id: string) {
             <thead>
               <tr>
                 <Th>วันที่สร้าง</Th>
+                <Th>รหัสสมาชิก</Th>
                 <Th>เลขที่ออเดอร์</Th>
                 <Th>ข้อมูลสินค้า</Th>
                 <Th right>ราคารวม (บาท)</Th>
                 <Th>สถานะ</Th>
+                <Th>อัปเดต</Th>
                 <Th>ตัวเลือก</Th>
               </tr>
             </thead>
             <tbody>
               {hos.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.hdate ? String(r.hdate).slice(0, 10) : "-"}</Td>
+                <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                  <Td>{r.hdate ? new Date(r.hdate).toLocaleString("th-TH") : "-"}</Td>
+                  <Td>
+                    <span className="font-mono">{u.userID}</span>
+                    <SaleBadge adminId={u.adminIDSale} />
+                  </Td>
                   <Td mono>{r.hno ?? "-"}</Td>
                   <Td>
-                    <span className="block max-w-[260px] truncate" title={r.htitle ?? ""}>
-                      {r.htitle ?? "-"}
-                    </span>
+                    <div className="flex gap-2 items-start">
+                      <Thumb url={shopCoverMap[String(r.id)] ?? null} alt={r.hno ?? `#${r.id}`} />
+                      <span className="block max-w-[240px] break-words" title={r.htitle ?? ""}>
+                        {r.htitle ?? "-"}
+                      </span>
+                    </div>
                   </Td>
                   <Td right>{fmtBaht(Number(r.htotalpriceuser ?? 0))}</Td>
                   <Td>
                     <StatusPill label={legacyOrderStatusThai(r.hstatus) || "-"} tone={orderStatusTone(r.hstatus)} />
                   </Td>
                   <Td>
-                    <Link
-                      href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
-                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
-                    >
-                      ดูรายละเอียด
-                    </Link>
+                    <div className="text-[10px] text-muted whitespace-nowrap">
+                      {r.hdateupdate ? new Date(r.hdateupdate).toLocaleString("th-TH") : "-"}
+                    </div>
+                    {r.adminidupdate ? <div className="text-[10px]">{r.adminidupdate}</div> : null}
+                  </Td>
+                  <Td>
+                    <div className="flex flex-col gap-1">
+                      <Link
+                        href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
+                        className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50 text-center"
+                      >
+                        ดูรายละเอียด
+                      </Link>
+                      <Link
+                        href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
+                        className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500 text-center"
+                      >
+                        อัปเดตรายการ
+                      </Link>
+                    </div>
                   </Td>
                 </tr>
               ))}
@@ -591,8 +718,15 @@ export async function renderLegacyCustomerView(id: string) {
         )}
       </Section>
 
-      {/* ── SECTION 6 · ออเดอร์ฝากนำเข้า (legacy forwarder table) ── */}
-      <Section title={`ออเดอร์ฝากนำเข้า (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}>
+      {/* ── SECTION 6 · ออเดอร์ฝากนำเข้า (legacy forwarder table · faithful PCS
+          users/profile columns: วันที่ · รหัสลูกค้า · รายละเอียด+รูป · ยอดรวม+kg/cbm ·
+          เลขพัสดุจีน+ตู้/ประเภท/กล่อง · เลขพัสดุไทย+ขนส่ง/ที่อยู่ · สถานะ · อัปเดต ·
+          ตัวเลือก). READ-only — money values unchanged. ── */}
+      <Section
+        title={`ออเดอร์ฝากนำเข้า (${fws.length}${fwdCount > fws.length ? ` / ${fwdCount}` : ""})`}
+        viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}
+        headerExtra={<RowLimitSelect param="fwdN" value={fwdN} />}
+      >
         {fws.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากนำเข้า</Empty>
         ) : (
@@ -600,40 +734,123 @@ export async function renderLegacyCustomerView(id: string) {
             <thead>
               <tr>
                 <Th>วันที่สร้าง</Th>
-                <Th>เลขที่รายการ</Th>
-                <Th>เบอร์ตู้</Th>
+                <Th>รหัสลูกค้า</Th>
+                <Th>รายละเอียด</Th>
                 <Th right>ยอดรวม (บาท)</Th>
+                <Th>เลขพัสดุ (จีน)</Th>
+                <Th>เลขพัสดุ (ไทย)</Th>
                 <Th>สถานะ</Th>
+                <Th>อัปเดต</Th>
                 <Th>ตัวเลือก</Th>
               </tr>
             </thead>
             <tbody>
-              {fws.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</Td>
-                  <Td mono>{r.fidorco ?? "-"}</Td>
-                  <Td mono>{r.fcabinetnumber ?? "-"}</Td>
-                  <Td right>{fmtBaht(Number(r.ftotalprice ?? 0))}</Td>
-                  <Td>
-                    <StatusPill label={legacyForwarderStatusThai(r.fstatus) || "-"} tone={forwarderStatusTone(r.fstatus)} />
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
-                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
-                    >
-                      ดูรายละเอียด
-                    </Link>
-                  </Td>
-                </tr>
-              ))}
+              {fws.map((r) => {
+                const addr = [
+                  `${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim(),
+                  r.faddresszipcode,
+                ]
+                  .filter((s) => s && String(s).trim() !== "")
+                  .join(" ");
+                return (
+                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                    <Td>{r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "-"}</Td>
+                    <Td>
+                      <span className="font-mono">{u.userID}</span>
+                      <SaleBadge adminId={u.adminIDSale} />
+                    </Td>
+                    <Td>
+                      <div className="flex gap-2 items-start">
+                        <Thumb url={fwCoverMap[String(r.id)] ?? null} alt={`#${r.id}`} />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-primary-600">#{r.id}</div>
+                          {r.fdetail && r.fdetail.trim() !== "" && r.fdetail.trim() !== "..." ? (
+                            <div className="max-w-[200px] break-words text-muted">{r.fdetail}</div>
+                          ) : null}
+                          {r.reforder && r.reforder.trim() !== "" ? (
+                            <Link
+                              href={`/admin/service-orders/${encodeURIComponent(r.reforder)}`}
+                              className="mt-0.5 inline-block rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[9px] hover:bg-sky-100"
+                            >
+                              ฝากสั่งซื้อ : {r.reforder}
+                            </Link>
+                          ) : (
+                            <span className="mt-0.5 inline-block rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0.5 text-[9px]">
+                              ฝากนำเข้า
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Td>
+                    <Td right>
+                      <div className="font-mono">{fmtBaht(Number(r.ftotalprice ?? 0))}</div>
+                      <div className="text-[10px] text-muted mt-0.5">
+                        {TRANSPORT_LABEL_FW[r.ftransporttype ?? ""] ?? ""}
+                      </div>
+                      <div className="text-[10px] text-muted">
+                        {Number(r.fweight ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg ·{" "}
+                        {Number(r.fvolume ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 5 })} CBM
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="font-mono text-[10px]">{r.ftrackingchn ?? "-"}</div>
+                      {r.fcabinetnumber ? (
+                        <div className="text-[10px] mt-0.5">
+                          เลขตู้: <span className="font-mono">{r.fcabinetnumber}</span>
+                        </div>
+                      ) : null}
+                      <div className="text-[10px] text-muted">
+                        ประเภท: {PRODUCT_TYPE_LABEL_FW[r.fproductstype ?? ""] ?? "-"}
+                      </div>
+                      {r.fpallet ? <div className="text-[10px] text-muted">location: {r.fpallet}</div> : null}
+                      <div className="text-[10px] text-muted">{r.famount ?? 0} กล่อง</div>
+                    </Td>
+                    <Td>
+                      {r.fshipby ? <div className="text-[11px]">{r.fshipby}</div> : null}
+                      {r.ftrackingth ? <div className="font-mono text-[10px]">{r.ftrackingth}</div> : null}
+                      {addr ? <div className="text-[10px] text-muted max-w-[200px] break-words">{addr}</div> : null}
+                    </Td>
+                    <Td>
+                      <StatusPill label={legacyForwarderStatusThai(r.fstatus) || "-"} tone={forwarderStatusTone(r.fstatus)} />
+                    </Td>
+                    <Td>
+                      <div className="text-[10px] text-muted whitespace-nowrap">
+                        {r.fdateadminstatus ? new Date(r.fdateadminstatus).toLocaleString("th-TH") : "-"}
+                      </div>
+                      {r.adminidkey ? <div className="text-[10px]">{r.adminidkey}</div> : null}
+                    </Td>
+                    <Td>
+                      <div className="flex flex-col gap-1">
+                        <Link
+                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50 text-center"
+                        >
+                          ดูรายละเอียด
+                        </Link>
+                        <Link
+                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500 text-center"
+                        >
+                          อัปเดตรายการ
+                        </Link>
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         )}
       </Section>
 
-      {/* ── SECTION 7 · ออเดอร์ฝากโอน/ชำระ (legacy yuan-payment table) ── */}
-      <Section title={`ออเดอร์ฝากโอน/ชำระ (${pys.length})`} viewAllHref={`/admin/yuan-payments?q=${u.userID}`}>
+      {/* ── SECTION 7 · ออเดอร์ฝากโอน/ชำระ (legacy yuan-payment table · faithful
+          PCS columns: วันที่ · เลขที่ · ชื่อ-นามสกุล · รายละเอียด · ยอดรวม · สถานะ ·
+          อัปเดต · ตัวเลือก) ── */}
+      <Section
+        title={`ออเดอร์ฝากโอน/ชำระ (${pys.length}${payCount > pys.length ? ` / ${payCount}` : ""})`}
+        viewAllHref={`/admin/yuan-payments?q=${u.userID}`}
+        headerExtra={<RowLimitSelect param="yuanN" value={yuanN} />}
+      >
         {pys.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากโอน/ชำระ</Empty>
         ) : (
@@ -641,18 +858,29 @@ export async function renderLegacyCustomerView(id: string) {
             <thead>
               <tr>
                 <Th>วันที่สร้าง</Th>
-                <Th right>ยอดหยวน</Th>
+                <Th>เลขที่ออเดอร์</Th>
+                <Th>ชื่อ-นามสกุล</Th>
+                <Th>รายละเอียด</Th>
                 <Th right>ยอดรวม (บาท)</Th>
                 <Th>สถานะ</Th>
+                <Th>อัปเดต</Th>
                 <Th>ตัวเลือก</Th>
               </tr>
             </thead>
             <tbody>
               {pys.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <Td>{r.paydate ? String(r.paydate).slice(0, 10) : "-"}</Td>
-                  <Td right>
-                    ¥{Number(r.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                  <Td>{r.paydate ? new Date(r.paydate).toLocaleString("th-TH") : "-"}</Td>
+                  <Td mono>{r.id}</Td>
+                  <Td>
+                    <div className="font-mono">{u.userID}</div>
+                    <div className="text-[11px] text-muted">{fullName}</div>
+                  </Td>
+                  <Td>
+                    {r.paydetail ? <div>{r.paydetail}</div> : null}
+                    <div className="text-[10px] text-muted">
+                      ¥{Number(r.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
                   </Td>
                   <Td right>{fmtBaht(Number(r.paythb ?? 0))}</Td>
                   <Td>
@@ -661,12 +889,13 @@ export async function renderLegacyCustomerView(id: string) {
                       tone={paystatusTone(r.paystatus)}
                     />
                   </Td>
+                  <Td>{r.adminid ? <span className="text-[10px]">{r.adminid}</span> : "-"}</Td>
                   <Td>
                     <Link
                       href={`/admin/yuan-payments/${r.id}`}
-                      className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50"
+                      className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500"
                     >
-                      ดูรายละเอียด
+                      แก้ไข/ดูรายละเอียด
                     </Link>
                   </Td>
                 </tr>
@@ -676,8 +905,13 @@ export async function renderLegacyCustomerView(id: string) {
         )}
       </Section>
 
-      {/* ── SECTION 8 · ประวัติการจ่ายเงิน (legacy wallet-hs table) ── */}
-      <Section title={`ประวัติการจ่ายเงิน (${whs.length}${walletHsCount > whs.length ? ` จาก ${walletHsCount}` : ""})`} viewAllHref={`/admin/wallet?view=tx&q=${u.userID}`}>
+      {/* ── SECTION 8 · ประวัติการจ่ายเงิน (legacy wallet-hs table · faithful PCS
+          columns + the legacy green(เข้า)/pink(ออก) row tint + สลิปรายการ) ── */}
+      <Section
+        title={`ประวัติการจ่ายเงิน (${whs.length}${walletHsCount > whs.length ? ` / ${walletHsCount}` : ""})`}
+        viewAllHref={`/admin/wallet?view=tx&q=${u.userID}`}
+        headerExtra={<RowLimitSelect param="payN" value={payN} />}
+      >
         {whs.length === 0 ? (
           <Empty>ยังไม่มีประวัติการจ่ายเงิน</Empty>
         ) : (
@@ -686,7 +920,9 @@ export async function renderLegacyCustomerView(id: string) {
               <tr>
                 <Th>วันที่ทำรายการ</Th>
                 <Th>เลขที่ดำเนินการ</Th>
+                <Th>รหัสสมาชิก</Th>
                 <Th>ประเภทรายการ</Th>
+                <Th>สลิปรายการ</Th>
                 <Th>รายการอ้างอิง</Th>
                 <Th>สถานะ</Th>
                 <Th right>จำนวนเงิน (บาท)</Th>
@@ -696,15 +932,34 @@ export async function renderLegacyCustomerView(id: string) {
               {whs.map((r) => {
                 const amt = Number(r.amount ?? 0);
                 const isNeg = amt < 0;
+                const slipUrl = slipMap[String(r.id)] ?? null;
+                // NOTE — legacy tints rows green(เข้า)/pink(ออก) by direction, but
+                // our migrated tb_wallet_hs.amount is stored UNSIGNED and the `type`
+                // labels don't reliably encode in/out (a slip "ชำระเงิน" is a top-up
+                // IN; a "เติม (manual)" can carry an order ref = OUT). Coloring by a
+                // guessed direction would misstate money flow (§0f), so we match the
+                // canonical /admin/wallet transactions view: neutral rows, honest
+                // magnitude, red only when the stored value is actually negative.
                 return (
-                  <tr key={r.id} className="border-t border-border">
+                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                     <Td>{r.date ? new Date(r.date).toLocaleString("th-TH") : "-"}</Td>
                     <Td>
                       <Link href={`/admin/wallet/${r.id}`} className="font-mono text-primary-600 hover:underline">
                         {r.id}
                       </Link>
                     </Td>
+                    <Td mono>{u.userID}</Td>
                     <Td>{WHS_TYPE_LABEL[r.type ?? ""] ?? (r.type ? `type ${r.type}` : "-")}</Td>
+                    <Td>
+                      {slipUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <a href={slipUrl} target="_blank" rel="noreferrer" className="inline-block">
+                          <img src={slipUrl} alt="สลิป" className="h-10 w-10 rounded border border-border object-cover" loading="lazy" />
+                        </a>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </Td>
                     <Td mono>{r.reforder ?? "-"}</Td>
                     <Td>
                       <StatusPill
@@ -713,7 +968,7 @@ export async function renderLegacyCustomerView(id: string) {
                       />
                     </Td>
                     <Td right>
-                      <span className={isNeg ? "text-red-600" : "text-emerald-600"}>
+                      <span className={isNeg ? "text-red-600 font-medium" : "font-medium"}>
                         {isNeg ? "−" : ""}฿
                         {Math.abs(amt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
@@ -726,7 +981,9 @@ export async function renderLegacyCustomerView(id: string) {
         )}
       </Section>
 
-      {/* ════════ เครื่องมือผู้ดูแล · Pacred (เพิ่มเติมจาก legacy) ════════ */}
+      {/* ════════ เครื่องมือผู้ดูแล · Pacred — collapsed behind a light-gray "V"
+          dropdown that opens a PIN dialog before revealing the tools ════════ */}
+      <AdminToolsPinGate>
       <div className="flex items-center gap-3 pt-4">
         <div className="h-px flex-1 bg-border" />
         <span className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -739,13 +996,6 @@ export async function renderLegacyCustomerView(id: string) {
           surfaces this customer's margin history (avg margin vs ฿15k cap).
           Pairs with /admin/accounting/margin-monitor. */}
       <CustomerMarginPanel summary={marginSummary} />
-
-      {/* Per-customer rate editor (เดฟ 2026-05-30) — faithful port of the legacy
-          #rate-settings modal (writes LIVE tb_rate_custom_kg/cbm + history).
-          The header ⚙️ gear anchors here. */}
-      <div id="rate-settings" className="scroll-mt-20">
-        <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
-      </div>
 
       {/* Pricing segments (money · 2026-06-05) — legacy users/comparison (ค่าเทียบ/
           CPS) + users/credit (เครดิต). The price + credit engines already read
@@ -801,37 +1051,35 @@ export async function renderLegacyCustomerView(id: string) {
         {" · "}
         <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>).
       </div>
+      </AdminToolsPinGate>
     </main>
   );
 }
 
 // ── tiny helpers ─────────────────────────────────────────
-function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex justify-between border-b border-border/40 py-1.5 gap-3">
-      <span className="text-muted shrink-0">{label}</span>
-      <span className={mono ? "font-mono text-right" : "text-right"}>{value}</span>
-    </div>
-  );
-}
 function Section({
   title,
   viewAllHref,
+  headerExtra,
   children,
 }: {
   title: string;
   viewAllHref?: string;
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
-        {viewAllHref ? (
-          <Link href={viewAllHref} className="text-xs text-primary-600 hover:underline">
-            ดูทั้งหมด →
-          </Link>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2.5">
+          {headerExtra}
+          {viewAllHref ? (
+            <Link href={viewAllHref} className="text-xs text-primary-600 hover:underline">
+              ดูทั้งหมด →
+            </Link>
+          ) : null}
+        </div>
       </div>
       {children}
     </div>
@@ -839,15 +1087,15 @@ function Section({
 }
 function Table({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">{children}</table>
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-[11px]">{children}</table>
     </div>
   );
 }
 function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
   return (
     <th
-      className={`px-3 py-2 text-[10px] uppercase text-muted bg-surface-alt/50 ${right ? "text-right" : "text-left"}`}
+      className={`px-2 py-3 text-[10px] uppercase tracking-wide text-muted bg-surface-alt/50 whitespace-nowrap ${right ? "text-right" : "text-left"}`}
     >
       {children}
     </th>
@@ -856,14 +1104,44 @@ function Th({ children, right }: { children?: React.ReactNode; right?: boolean }
 function Td({ children, mono, right }: { children?: React.ReactNode; mono?: boolean; right?: boolean }) {
   return (
     <td
-      className={`px-3 py-2 ${mono ? "font-mono" : ""} ${right ? "text-right" : "text-left"}`}
+      className={`px-2 py-2.5 align-top ${mono ? "font-mono" : ""} ${right ? "text-right" : "text-left"}`}
     >
       {children}
     </td>
   );
 }
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="p-8 text-center text-sm text-muted">{children}</p>;
+  return <p className="p-12 text-center text-sm text-muted">{children}</p>;
+}
+
+// ── legacy users/profile order-table helpers (faithful PCS port · 2026-06-12) ──
+// Product-type + transport labels mirror function.php nameProductsType / the
+// legacy forwarder table chips.
+const PRODUCT_TYPE_LABEL_FW: Record<string, string> = {
+  "1": "ทั่วไป", "2": "มอก.", "3": "อย.", "4": "พิเศษ", "5": "ควบคุมพิเศษ",
+};
+const TRANSPORT_LABEL_FW: Record<string, string> = {
+  "1": "ขนส่งทางรถ", "2": "ขนส่งทางเรือ", "3": "ขนส่งทางอากาศ",
+};
+function SaleBadge({ adminId }: { adminId: string | null }) {
+  return (
+    <span className="ml-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
+      Sale : {adminId || "ไม่ระบุ"}
+    </span>
+  );
+}
+function Thumb({ url, alt }: { url: string | null; alt: string }) {
+  if (!url) {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-border/60 bg-surface-alt/40 text-lg text-muted">
+        📦
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt={alt} className="h-12 w-12 shrink-0 rounded border border-border object-cover bg-surface-alt" loading="lazy" />
+  );
 }
 
 const PILL_TONE: Record<PillTone, string> = {

@@ -28,17 +28,25 @@ import { renderLegacyCustomerView } from "./legacy-view";
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
 export const dynamic = "force-dynamic";
 
-export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminCustomerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Customer detail =
   // full PII (corporate, addresses, wallet). ops + sales + accounting.
   await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const { id } = await params;
+  const sp = await searchParams;
 
   // legacy-view destructures `error` from EVERY supabase read and throws on
   // a real error (AGENTS §0c). A null return means "row genuinely not in
-  // tb_users" — only then do we 404.
-  const view = await renderLegacyCustomerView(id);
+  // tb_users" — only then do we 404. searchParams drives the per-table
+  // row-count dropdowns (shopN / fwdN / yuanN / payN).
+  const view = await renderLegacyCustomerView(id, sp);
   if (!view) notFound();
   return view;
 }
