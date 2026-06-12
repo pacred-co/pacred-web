@@ -39,22 +39,22 @@ const INSTAGRAM_URL = SOCIAL.instagram;
 const FOOTER_QR_PHONE = STAFF.sales[3].phone;
 
 const PARTNERS = [
-  { file: "upspartner.png",         url: "https://www.ups.com/th" },
-  { file: "fedexpartner.png",       url: "https://www.fedex.com/th" },
-  { file: "coscopartner.png",       url: "https://lines.coscoshipping.com" },
-  { file: "alibabapartner.png",     url: "https://www.alibaba.com" },
-  { file: "dhlpartner.png",         url: "https://www.dhl.com/th" },
-  { file: "tntpartner.png",         url: "https://www.tnt.com" },
-  { file: "maerskpartner.png",      url: "https://www.maersk.com" },
-  { file: "tmallpartner.png",       url: "https://www.tmall.com" },
-  { file: "taobaopartner.png",      url: "https://world.taobao.com" },
-  { file: "bkp.png",                url: "https://www.bkp.co.th" },
-  { file: "patpartner.png",         url: "https://www.port.co.th" },
-  { file: "aotpartner.png",         url: "https://www.airportthai.co.th" },
-  { file: "thaicargo.png",          url: "https://www.thaicargo.com" },
-  { file: "bfs.png",                url: "https://www.bfs.co.th" },
-  { file: "etracking.png",          url: "https://e-tracking.customs.go.th" },
-  { file: "laemchabangpartner.png", url: "https://www.port.co.th" },
+  { file: "upspartner.png",         name: "UPS",                        url: "https://www.ups.com/th" },
+  { file: "fedexpartner.png",       name: "FedEx",                      url: "https://www.fedex.com/th" },
+  { file: "coscopartner.png",       name: "COSCO Shipping",             url: "https://lines.coscoshipping.com" },
+  { file: "alibabapartner.png",     name: "Alibaba",                    url: "https://www.alibaba.com" },
+  { file: "dhlpartner.png",         name: "DHL",                        url: "https://www.dhl.com/th" },
+  { file: "tntpartner.png",         name: "TNT",                        url: "https://www.tnt.com" },
+  { file: "maerskpartner.png",      name: "Maersk",                     url: "https://www.maersk.com" },
+  { file: "tmallpartner.png",       name: "Tmall",                      url: "https://www.tmall.com" },
+  { file: "taobaopartner.png",      name: "Taobao",                     url: "https://world.taobao.com" },
+  { file: "bkp.png",                name: "BKP iService",               url: "https://www.bkp.co.th" },
+  { file: "patpartner.png",         name: "Port Authority of Thailand", url: "https://www.port.co.th" },
+  { file: "aotpartner.png",         name: "Airports of Thailand",       url: "https://www.airportthai.co.th" },
+  { file: "thaicargo.png",          name: "Thai Cargo",                 url: "https://www.thaicargo.com" },
+  { file: "bfs.png",                name: "Bangkok Flight Services",    url: "https://www.bfs.co.th" },
+  { file: "etracking.png",          name: "e-Tracking ศุลกากร",         url: "https://e-tracking.customs.go.th" },
+  { file: "laemchabangpartner.png", name: "Laem Chabang Port",          url: "https://www.port.co.th" },
 ];
 
 export function Footer() {
@@ -230,12 +230,14 @@ export function Footer() {
                   href={p.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={p.name}
+                  title={p.name}
                   className="flex items-center justify-center h-10 md:h-12 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:scale-110 transition-all duration-300"
                 >
                   <div className="relative w-full h-full">
                     <Image
                       src={`/images/partners/${p.file}`}
-                      alt=""
+                      alt={`${p.name} — พาร์ทเนอร์ขนส่งและศุลกากร Pacred Shipping`}
                       fill
                       sizes="80px"
                       className="object-contain"

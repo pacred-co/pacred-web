@@ -88,7 +88,7 @@ export function ServiceCarousel({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={blogItem.imageSrc}
-                    alt=""
+                    alt={blogItem.title}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                 )}
