@@ -1046,6 +1046,12 @@ const wrapClassWarehouse: MenuItem = {
       children: [
         blockWarehouseWorker,
         itemBarcodeRecordIntakeFlat,
+        // 2026-06-12 (ภูม flag) — the full "สแกนบาร์โค้ด" toolbox (search /
+        // intake / prepare / scan-from-box · scanner + camera) was warehouse-
+        // role-only; super's default org-IA sidebar (this OPERATIONS→Logistics→
+        // Warehouse group) had only the flat intake shortcut above. Add the
+        // nested block so super reaches every barcode screen here (§0d).
+        blockBarcode,
         // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
         // (faithful port of legacy `printAll.php`).
         { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -1210,12 +1216,6 @@ const menuManager: MenuSection[] = [
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // Matches the menuSuper / menuWarehouse / menuDriver placement.
       itemBarcodeRecordIntakeFlat,
-      // 2026-06-12 (ภูม flag) — the full "สแกนบาร์โค้ด" toolbox (blockBarcode) was
-      // in menuWarehouse ONLY, so super saw just the flat intake shortcut above and
-      // could NOT reach the search / prepare / scan-from-box screens that warehouse
-      // staff had. §0d: super must reach every screen. Mirror menuWarehouse — keep
-      // the flat shortcut AND the full nested block.
-      blockBarcode,
       // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app.
       blockWarehouseWorker,
       // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
