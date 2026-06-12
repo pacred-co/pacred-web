@@ -16,17 +16,18 @@ export const dynamic = "force-dynamic";
 
 export default async function HsTriagePage() {
   await requireAdmin(["super", "sales", "sales_admin", "ops"]);
-  const res = await listHsTriage(150);
+  const res = await listHsTriage({ limit: 150 });
   const data = res.ok && res.data ? res.data : { forwarderLines: [], shopLines: [] };
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">คิวกรอก HS Code (CS)</h1>
+          <h1 className="text-2xl font-bold">คิวกรอกพิกัด HS (CS)</h1>
           <p className="mt-1 text-xs text-muted leading-relaxed">
-            รายการที่ <b>ยังไม่มี HS Code</b> — CS กรอกก่อน Pricing คิดต้นทุน · กรอกแล้วระบบนำไปใช้ใน
-            ใบขน/ต้นทุนอัตโนมัติ (Pricing เห็นเลย). พิมพ์เลข HS แล้วระบบดึงอากรจาก <b>คลัง HS</b> ให้ดู.
+            กรอก <b>พิกัด (HS + รหัสสถิติ)</b> ให้สินค้าแต่ละรายการ (นำเข้า & ส่งออก) — CS กรอกก่อน Pricing คิดต้นทุน ·
+            กรอกแล้วระบบนำไปใช้ใน ใบขน/ต้นทุนอัตโนมัติ. <b>หาของซ้ำ → เลือกหลายรายการ → ใส่พิกัดเดียวกันทีเดียว</b>.
+            พิมพ์เลข HS แล้วระบบดึงอากร + รหัสสถิติปกติจาก <b>คลัง HS</b> ให้.
           </p>
         </div>
         <Link

@@ -203,6 +203,8 @@ const upsertHsCodeSchema = z.object({
   form_e_duty_pct:  z.number().min(0).max(100).optional(),
   other_forms:      otherFormsSchema,
   hs_note:          z.string().trim().max(1000).optional(),
+  // 0181 — the usual รหัสสถิติ (Thai tariff stat suffix · default "000").
+  default_stat_code: z.string().trim().max(10).optional(),
   unit:             z.string().trim().max(20).optional(),
   note:             z.string().trim().max(500).optional(),
   is_active:        z.boolean().optional(),
@@ -223,8 +225,9 @@ export async function upsertHsCode(input: UpsertHsCodeInput): Promise<AdminActio
       description:      d.description,
       default_duty_pct: d.default_duty_pct,
     };
-    if (d.description_en  !== undefined) payload.description_en  = d.description_en;
-    if (d.form_e_duty_pct !== undefined) payload.form_e_duty_pct = d.form_e_duty_pct;
+    if (d.description_en   !== undefined) payload.description_en   = d.description_en;
+    if (d.form_e_duty_pct  !== undefined) payload.form_e_duty_pct  = d.form_e_duty_pct;
+    if (d.default_stat_code !== undefined) payload.default_stat_code = d.default_stat_code;
     if (d.other_forms     !== undefined) {
       // Drop empty/whitespace form names so the map stays clean.
       const cleaned: Record<string, number> = {};
@@ -266,6 +269,7 @@ export type HsCodeListRow = {
   unit:             string | null;
   hs_note:          string | null;
   note:             string | null;
+  default_stat_code: string | null;
   is_active:        boolean;
 };
 
@@ -289,7 +293,7 @@ export async function listHsCodes(
       // Full field set (not a lighter projection) so a searched row carries its
       // real other_forms/description_en/unit/hs_note into the edit form — else
       // editing a searched row would save other_forms:{} and WIPE the stored map.
-      .select("code, description, description_en, default_duty_pct, form_e_duty_pct, other_forms, unit, hs_note, note, is_active")
+      .select("code, description, description_en, default_duty_pct, form_e_duty_pct, other_forms, unit, hs_note, note, default_stat_code, is_active")
       .order("code", { ascending: true })
       .limit(200);
 
@@ -314,6 +318,7 @@ export type HsLookupRow = {
   default_duty_pct: number;
   form_e_duty_pct:  number;
   other_forms:      Record<string, number>;
+  default_stat_code: string | null;
 };
 
 const lookupSchema = z.object({ code: z.string().trim().min(1).max(20) });
@@ -334,13 +339,14 @@ export async function lookupHsCode(
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("hs_codes")
-      .select("description, default_duty_pct, form_e_duty_pct, other_forms")
+      .select("description, default_duty_pct, form_e_duty_pct, other_forms, default_stat_code")
       .eq("code", parsed.data.code)
       .maybeSingle<{
         description: string;
         default_duty_pct: number;
         form_e_duty_pct: number;
         other_forms: Record<string, number> | null;
+        default_stat_code: string | null;
       }>();
     if (error) {
       console.error("[hs_codes lookup]", { code: error.code, message: error.message });
@@ -354,6 +360,7 @@ export async function lookupHsCode(
         default_duty_pct: Number(data.default_duty_pct),
         form_e_duty_pct:  Number(data.form_e_duty_pct),
         other_forms:      (data.other_forms ?? {}) as Record<string, number>,
+        default_stat_code: data.default_stat_code,
       },
     };
   });

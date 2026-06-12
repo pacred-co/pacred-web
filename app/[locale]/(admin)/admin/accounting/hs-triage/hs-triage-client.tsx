@@ -1,14 +1,18 @@
 "use client";
 
 /**
- * GAP 5 — the CS HS-triage queue UI. One row per line missing an HS code;
- * CS types the HS (with a live คลัง HS duty hint via lookupHsCode), confirms,
- * and saves (setLineHsCode writes ONLY hs_code · §0e). A saved row drops out of
- * the queue. Reference duty hint is informational — it never changes any cost.
+ * GAP 5 (+owner 2026-06-12) — the CS HS-triage queue UI.
+ *
+ * One flat, numbered list of per-line items (ฝากนำเข้า + ฝากสั่งซื้อ · นำเข้า & ส่งออก).
+ * CS can: search by product name · toggle "เฉพาะที่ยังไม่มีพิกัด" · edit a single
+ * line's พิกัด (HS + รหัสสถิติ) inline · OR **multi-select** lines and BULK-assign
+ * one พิกัด to all of them ("เลือกรายการ 1,2,3,5… → เพิ่มเข้าพิกัด 3926.90.99"). A live
+ * คลัง HS hint shows the duty + suggests the usual รหัสสถิติ. Everything writes ONLY
+ * hs_code + hs_stat_code (§0e) via setLineHsCode / setBulkHsCode.
  */
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { Link } from "@/i18n/navigation";
-import { setLineHsCode } from "@/actions/admin/hs-triage";
+import { setLineHsCode, setBulkHsCode, listHsTriage } from "@/actions/admin/hs-triage";
 import { lookupHsCode, type HsLookupRow } from "@/actions/admin/hs-codes";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { HsTriageForwarderLine, HsTriageShopLine } from "@/actions/admin/hs-triage";
@@ -16,9 +20,44 @@ import type { HsTriageForwarderLine, HsTriageShopLine } from "@/actions/admin/hs
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
+type LineKind = "forwarder" | "shop";
+type Row = {
+  kind: LineKind;
+  id: number;
+  title: string;
+  subtitle: string;
+  href: string;
+  hsCode: string | null;
+  statCode: string | null;
+};
+
+const keyOf = (r: { kind: LineKind; id: number }) => `${r.kind}:${r.id}`;
+
+function flatten(fwd: HsTriageForwarderLine[], shop: HsTriageShopLine[]): Row[] {
+  const a: Row[] = fwd.map((l) => ({
+    kind: "forwarder",
+    id: l.id,
+    title: l.productname || "(ไม่มีชื่อสินค้า)",
+    subtitle: `📦 ฝากนำเข้า · ออเดอร์ #${l.fNo ?? l.fid ?? "—"}${l.customer ? ` · ${l.customer}` : ""}`,
+    href: `/admin/forwarders/${l.fid ?? ""}`,
+    hsCode: l.hsCode,
+    statCode: l.statCode,
+  }));
+  const b: Row[] = shop.map((l) => ({
+    kind: "shop",
+    id: l.id,
+    title: l.ctitle || "(ไม่มีชื่อสินค้า)",
+    subtitle: `🛒 ฝากสั่งซื้อ · ออเดอร์ ${l.hno ?? "—"}`,
+    href: `/admin/service-orders/${l.hno ?? ""}`,
+    hsCode: l.hsCode,
+    statCode: l.statCode,
+  }));
+  return [...a, ...b];
+}
+
 type HsHint = null | "loading" | "notfound" | HsLookupRow;
 
-/** Debounced คลัง HS lookup → duty hint. Reference only. */
+/** Debounced คลัง HS lookup → duty hint + the usual รหัสสถิติ. Reference only. */
 function useHsHint(code: string): HsHint {
   const [hint, setHint] = useState<HsHint>(null);
   useEffect(() => {
@@ -46,75 +85,67 @@ function HsHintLine({ hint }: { hint: HsHint }) {
   if (hint === "notfound") return <span className="text-[10px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
   return (
     <span className="text-[10px] text-emerald-700">
-      อากรปกติ {hint.default_duty_pct}% · Form-E {hint.form_e_duty_pct}%
+      อากรปกติ {hint.default_duty_pct}% · Form-E {hint.form_e_duty_pct}% · สถิติปกติ {hint.default_stat_code ?? "000"}
       {hint.description ? ` · ${hint.description}` : ""}
     </span>
   );
 }
 
+/** Inline single-line editor (HS + stat) for one row. */
 function TriageRow({
-  title,
-  subtitle,
-  href,
-  onSave,
+  index,
+  row,
+  selected,
+  onToggle,
+  onSaved,
 }: {
-  title: string;
-  subtitle: string;
-  href: string;
-  onSave: (hs: string) => Promise<{ ok: boolean; error?: string }>;
+  index: number;
+  row: Row;
+  selected: boolean;
+  onToggle: () => void;
+  onSaved: (hs: string, stat: string) => void;
 }) {
-  const [hs, setHs] = useState("");
+  const [hs, setHs] = useState(row.hsCode ?? "");
+  const [stat, setStat] = useState(row.statCode ?? "");
   const [pending, startTransition] = useTransition();
-  const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const hint = useHsHint(hs);
   const { confirm, dialogs } = useConfirmDialogs();
 
   async function save() {
     setErr(null);
-    if (hs.trim() === "") { setErr("กรอกเลข HS ก่อน"); return; }
-    const ok = await confirm(`บันทึก HS "${hs.trim()}" ให้รายการนี้?`);
+    const ok = await confirm(`บันทึกพิกัด "${hs.trim() || "(ล้าง)"}"${stat.trim() ? ` · สถิติ ${stat.trim()}` : ""} ให้รายการนี้?`);
     if (!ok) return;
     startTransition(async () => {
-      const res = await onSave(hs.trim());
-      if (res.ok) setDone(true);
+      const res = await setLineHsCode({ kind: row.kind, id: row.id, hsCode: hs.trim(), statCode: stat.trim() });
+      if (res.ok) onSaved(hs.trim(), stat.trim());
       else setErr(res.error ?? "บันทึกไม่สำเร็จ");
     });
   }
 
-  if (done) {
-    return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-        ✓ บันทึก HS <b>{hs.trim()}</b> แล้ว — {title}
-      </div>
-    );
-  }
+  const dirty = (hs.trim() !== (row.hsCode ?? "")) || (stat.trim() !== (row.statCode ?? ""));
 
   return (
-    <div className="rounded-xl border border-border bg-white dark:bg-surface p-2.5">
+    <div className={`rounded-xl border p-2.5 ${selected ? "border-primary-400 bg-primary-50/40" : "border-border bg-white dark:bg-surface"}`}>
       {dialogs}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <Link href={href} className="text-xs font-medium text-primary-600 hover:underline break-words line-clamp-1">
-            {title}
-          </Link>
-          <p className="text-[10px] text-muted truncate">{subtitle}</p>
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1 h-4 w-4 accent-primary-600" aria-label="เลือก" />
+          <span className="mt-0.5 text-[10px] text-muted tabular-nums w-6 shrink-0">{index}</span>
+          <div className="min-w-0">
+            <Link href={row.href} className="text-xs font-medium text-primary-600 hover:underline break-words line-clamp-1">
+              {row.title}
+            </Link>
+            <p className="text-[10px] text-muted truncate">{row.subtitle}</p>
+            {row.hsCode && <p className="text-[10px] text-emerald-700">พิกัดเดิม {row.hsCode}{row.statCode ? ` · สถิติ ${row.statCode}` : ""}</p>}
+          </div>
         </div>
-        <div className="sm:w-64 space-y-0.5">
+        <div className="sm:w-80 space-y-0.5">
           <div className="flex gap-1.5">
-            <input
-              value={hs}
-              onChange={(e) => setHs(e.target.value)}
-              placeholder="HS เช่น 8471.30.20"
-              maxLength={40}
-              className={inputCls}
-            />
-            <button
-              type="button"
-              disabled={pending}
-              onClick={save}
-              className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap"
-            >
+            <input value={hs} onChange={(e) => setHs(e.target.value)} placeholder="HS 8471.30.20" maxLength={40} className={inputCls} />
+            <input value={stat} onChange={(e) => setStat(e.target.value)} placeholder="สถิติ" maxLength={10} className={inputCls + " w-20 tabular-nums"} />
+            <button type="button" disabled={pending || !dirty} onClick={save}
+              className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-40 whitespace-nowrap">
               {pending ? "…" : "บันทึก"}
             </button>
           </div>
@@ -133,47 +164,151 @@ export function HsTriageClient({
   forwarderLines: HsTriageForwarderLine[];
   shopLines: HsTriageShopLine[];
 }) {
-  const total = forwarderLines.length + shopLines.length;
-  if (total === 0) {
-    return (
-      <p className="rounded-xl border border-dashed border-border bg-surface-alt/30 px-4 py-10 text-center text-sm text-muted">
-        🎉 ไม่มีรายการค้าง — ทุกรายการมี HS Code แล้ว
-      </p>
-    );
+  const [rows, setRows] = useState<Row[]>(() => flatten(forwarderLines, shopLines));
+  const [search, setSearch] = useState("");
+  const [missingOnly, setMissingOnly] = useState(false);
+  const [querying, startQuery] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkHs, setBulkHs] = useState("");
+  const [bulkStat, setBulkStat] = useState("");
+  const [bulkPending, startBulk] = useTransition();
+  const [banner, setBanner] = useState<string | null>(null);
+  const bulkHint = useHsHint(bulkHs);
+  const { confirm, dialogs } = useConfirmDialogs();
+
+  // Pre-fill the bulk stat from the คลัง HS default when the duty hint lands.
+  useEffect(() => {
+    if (bulkHint && typeof bulkHint === "object" && bulkStat.trim() === "") {
+      const d = bulkHint.default_stat_code;
+      if (d) queueMicrotask(() => setBulkStat(d));
+    }
+  }, [bulkHint]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function runQuery(nextSearch: string, nextMissing: boolean) {
+    startQuery(async () => {
+      const res = await listHsTriage({ search: nextSearch, missingOnly: nextMissing, limit: 300 });
+      if (res.ok && res.data) {
+        setRows(flatten(res.data.forwarderLines, res.data.shopLines));
+        setSelected(new Set());
+      }
+    });
   }
+
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key); else n.add(key);
+      return n;
+    });
+  }
+  function selectAllVisible() {
+    setSelected(new Set(rows.map(keyOf)));
+  }
+  function clearSel() { setSelected(new Set()); }
+
+  const selectedRows = useMemo(() => rows.filter((r) => selected.has(keyOf(r))), [rows, selected]);
+
+  async function applyBulk() {
+    if (selectedRows.length === 0) return;
+    const ok = await confirm(
+      `เพิ่ม ${selectedRows.length} รายการ เข้าพิกัด "${bulkHs.trim() || "(ล้าง)"}"${bulkStat.trim() ? ` · สถิติ ${bulkStat.trim()}` : ""}?`,
+    );
+    if (!ok) return;
+    startBulk(async () => {
+      const res = await setBulkHsCode({
+        items: selectedRows.map((r) => ({ kind: r.kind, id: r.id })),
+        hsCode: bulkHs.trim(),
+        statCode: bulkStat.trim(),
+      });
+      if (res.ok) {
+        const hs = bulkHs.trim() || null;
+        const stat = bulkStat.trim() || null;
+        setRows((prev) => prev.map((r) => (selected.has(keyOf(r)) ? { ...r, hsCode: hs, statCode: stat } : r)));
+        setSelected(new Set());
+        setBulkHs(""); setBulkStat("");
+        setBanner(`✓ เพิ่ม ${res.data?.updated ?? selectedRows.length} รายการ เข้าพิกัดแล้ว`);
+      } else {
+        setBanner(`✗ ${res.error ?? "บันทึกไม่สำเร็จ"}`);
+      }
+    });
+  }
+
   return (
-    <div className="space-y-5">
-      {forwarderLines.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-bold text-foreground">📦 ฝากนำเข้า ({forwarderLines.length})</h2>
-          {forwarderLines.map((l) => (
+    <div className="space-y-4">
+      {dialogs}
+
+      {/* controls */}
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={(e) => { e.preventDefault(); runQuery(search, missingOnly); }}
+      >
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="ค้นหาชื่อสินค้า (หาของซ้ำเพื่อให้พิกัดเดียวกัน)…"
+          className={inputCls + " max-w-xs"}
+        />
+        <button type="submit" disabled={querying} className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt disabled:opacity-50">
+          {querying ? "ค้นหา…" : "ค้นหา"}
+        </button>
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          <input type="checkbox" checked={missingOnly} onChange={(e) => { setMissingOnly(e.target.checked); runQuery(search, e.target.checked); }} className="h-4 w-4 accent-primary-600" />
+          เฉพาะที่ยังไม่มีพิกัด
+        </label>
+        <span className="text-[11px] text-muted">· {rows.length} รายการ</span>
+      </form>
+
+      {banner && (
+        <p className={`rounded-lg px-3 py-2 text-sm ${banner.startsWith("✓") ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-700"}`}>
+          {banner}
+        </p>
+      )}
+
+      {/* bulk-assign bar (sticky when selecting) */}
+      {selectedRows.length > 0 && (
+        <div className="sticky top-2 z-10 rounded-xl border border-primary-300 bg-primary-50 dark:bg-surface p-3 shadow-sm space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-primary-800">เลือก {selectedRows.length} รายการ → เพิ่มเข้าพิกัด:</span>
+            <input value={bulkHs} onChange={(e) => setBulkHs(e.target.value)} placeholder="HS เช่น 3926.90.99" maxLength={40} className={inputCls + " w-44"} />
+            <input value={bulkStat} onChange={(e) => setBulkStat(e.target.value)} placeholder="สถิติ 000" maxLength={10} className={inputCls + " w-24 tabular-nums"} />
+            <button type="button" disabled={bulkPending} onClick={applyBulk}
+              className="rounded-md bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
+              {bulkPending ? "กำลังเพิ่ม…" : "เพิ่มเข้าพิกัด"}
+            </button>
+            <button type="button" onClick={clearSel} className="text-xs text-muted hover:underline">ยกเลิกการเลือก</button>
+          </div>
+          <HsHintLine hint={bulkHint} />
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border bg-surface-alt/30 px-4 py-10 text-center text-sm text-muted">
+          {missingOnly ? "🎉 ไม่มีรายการค้าง — ทุกรายการมีพิกัดแล้ว" : "ไม่พบรายการตามที่ค้นหา"}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 text-[11px] text-muted">
+            <button type="button" onClick={selectAllVisible} className="hover:underline">เลือกทั้งหมดที่แสดง</button>
+            {selected.size > 0 && <button type="button" onClick={clearSel} className="hover:underline">ล้าง</button>}
+          </div>
+          {rows.map((r, i) => (
             <TriageRow
-              key={`fwd-${l.id}`}
-              title={l.productname || "(ไม่มีชื่อสินค้า)"}
-              subtitle={`ออเดอร์ #${l.fNo ?? l.fid ?? "—"}${l.customer ? ` · ลูกค้า ${l.customer}` : ""}`}
-              href={`/admin/forwarders/${l.fid ?? ""}`}
-              onSave={(hs) => setLineHsCode({ kind: "forwarder", id: l.id, hsCode: hs })}
+              key={keyOf(r)}
+              index={i + 1}
+              row={r}
+              selected={selected.has(keyOf(r))}
+              onToggle={() => toggle(keyOf(r))}
+              onSaved={(hs, stat) =>
+                setRows((prev) => prev.map((x) => (keyOf(x) === keyOf(r) ? { ...x, hsCode: hs || null, statCode: stat || null } : x)))
+              }
             />
           ))}
-        </section>
+        </div>
       )}
-      {shopLines.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-bold text-foreground">🛒 ฝากสั่งซื้อ ({shopLines.length})</h2>
-          {shopLines.map((l) => (
-            <TriageRow
-              key={`shop-${l.id}`}
-              title={l.ctitle || "(ไม่มีชื่อสินค้า)"}
-              subtitle={`ออเดอร์ ${l.hno ?? "—"}`}
-              href={`/admin/service-orders/${l.hno ?? ""}`}
-              onSave={(hs) => setLineHsCode({ kind: "shop", id: l.id, hsCode: hs })}
-            />
-          ))}
-        </section>
-      )}
+
       <p className="pt-1 text-[10px] leading-relaxed text-muted">
-        แสดงรายการ <b>ล่าสุด</b>ที่ยังไม่มี HS (เรียงใหม่→เก่า · จำกัดจำนวนเพื่อความเร็ว) — กรอกไล่ลงไปเรื่อยๆ
-        แล้วรายการเก่าจะโผล่ขึ้นมา. ขอบเขตคิว (เช่น กรองเฉพาะออเดอร์นำเข้า/ที่ยัง active) ปรับได้ตามที่ Owner กำหนด.
+        แสดงรายการล่าสุด (เรียงใหม่→เก่า · จำกัดจำนวนเพื่อความเร็ว) — ใช้ค้นหาเพื่อหาของซ้ำแล้วเลือกหลายรายการ
+        ใส่พิกัดเดียวกันทีเดียว. เขียนเฉพาะ HS + รหัสสถิติ (ไม่กระทบราคา/ต้นทุน/สถานะ).
       </p>
     </div>
   );

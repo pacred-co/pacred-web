@@ -40,7 +40,7 @@ export default async function HsLibraryPage() {
     .from("hs_codes")
     .select(
       "code, description, description_en, default_duty_pct, form_e_duty_pct, " +
-        "other_forms, unit, hs_note, note, is_active",
+        "other_forms, unit, hs_note, note, default_stat_code, is_active",
     )
     .order("code", { ascending: true })
     .limit(200);

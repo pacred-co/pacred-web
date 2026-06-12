@@ -26,6 +26,7 @@ export type HsRow = {
   unit:             string | null;
   hs_note:          string | null;
   note:             string | null;
+  default_stat_code: string | null;
   is_active:        boolean;
 };
 
@@ -68,6 +69,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
   const [fFormE, setFFormE] = useState("");
   const [fUnit, setFUnit] = useState("");
   const [fNote, setFNote] = useState("");
+  const [fStat, setFStat] = useState("000");
   const [fActive, setFActive] = useState(true);
   const [fOther, setFOther] = useState<OtherFormDraft[]>([]);
   const [formErr, setFormErr] = useState<string | null>(null);
@@ -90,6 +92,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
             unit:             r.unit,
             hs_note:          r.hs_note,
             note:             r.note,
+            default_stat_code: r.default_stat_code,
             is_active:        r.is_active,
           })),
         );
@@ -107,6 +110,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
     setFFormE("");
     setFUnit("");
     setFNote("");
+    setFStat("000");
     setFActive(true);
     setFOther([]);
     setFormErr(null);
@@ -122,6 +126,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
     setFFormE(r.form_e_duty_pct == null ? "" : String(r.form_e_duty_pct));
     setFUnit(r.unit ?? "");
     setFNote(r.hs_note ?? "");
+    setFStat(r.default_stat_code ?? "000");
     setFActive(r.is_active);
     setFOther(otherFormsToDrafts(r.other_forms));
     setFormErr(null);
@@ -181,6 +186,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
         other_forms:      other,
         unit:             fUnit.trim() || undefined,
         hs_note:          fNote.trim() || undefined,
+        default_stat_code: fStat.trim() || undefined,
         is_active:        fActive,
       });
       if (!res.ok) {
@@ -199,6 +205,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
         unit:             fUnit.trim() || null,
         hs_note:          fNote.trim() || null,
         note:             null,
+        default_stat_code: fStat.trim() || null,
         is_active:        fActive,
       };
       setRows((prev) => {
@@ -297,6 +304,17 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
                 placeholder="piece / kg / set"
                 maxLength={20}
                 className={inputCls}
+              />
+            </label>
+            <label className="space-y-0.5">
+              <span className="block text-[11px] text-muted">รหัสสถิติ (ปกติ)</span>
+              <input
+                type="text"
+                value={fStat}
+                onChange={(e) => setFStat(e.target.value)}
+                placeholder="000 / 001 / 090"
+                maxLength={10}
+                className={inputCls + " tabular-nums"}
               />
             </label>
             <label className="space-y-0.5 sm:col-span-2">
