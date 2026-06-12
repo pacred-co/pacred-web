@@ -1697,6 +1697,7 @@
     "saving": "กำลังบันทึก...",
     "confirmPayment": "ยืนยันสั่งฝากชำระ",
     "confirmPaymentWithAmount": "ยืนยันสั่งฝากชำระ ฿{amount}",
+    "confirmPayFromWalletDialog": "ยืนยันตัด ฿{amount} จากกระเป๋าเงินของคุณเพื่อชำระ? — ระบบจะหักยอดทันที",
     "alipay": {
       "title": "วิธีการโอนเงินผ่าน Alipay",
       "description": "คู่มือฝากโอนชำระ Alipay กับ Pacred Shipping — ปลอดภัย เรทคุ้มค่า ตรวจสอบยอดได้ทันที"
@@ -4620,6 +4621,8 @@
     "walletClear": "ล้าง",
     "walletDeducted": "หักจากกระเป๋า ฿{applied}",
     "remainingToPay": "เหลือจ่าย ฿{remaining}",
+    "payFullFromWalletConfirm": "ยืนยันชำระ ฿{amount} จากกระเป๋าเงินของคุณ? — ระบบจะหักยอดทันที",
+    "submitPaymentConfirm": "ยืนยันส่งชำระเงินออเดอร์ #{hNo}? — ระบบจะหักกระเป๋าเงิน (ถ้าใช้) และส่งสลิปให้ทีมงานตรวจสอบ",
     "payFullFromWallet": "ชำระจากกระเป๋าเต็มจำนวน (฿{amount})",
     "scanToPay": "สแกนจ่าย ฿{amount}",
     "confirmPaymentSplit": "ยืนยันการชำระเงิน (หัก wallet ฿{applied} + สลิป ฿{remaining})",
