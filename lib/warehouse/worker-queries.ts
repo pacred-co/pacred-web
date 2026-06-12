@@ -27,9 +27,9 @@ export type WorkerForwarderRow = {
   fdatestatus2: string | null;
 };
 
-// NOTE: deliberately does NOT select tb_forwarder.warehouse_app_intake (mig 0171)
-// so the read path stays decoupled from the not-yet-applied W10 migrations. The
-// "intaked today" count comes from warehouse_intake_log (mig 0169), not this col.
+// NOTE: deliberately does NOT select tb_forwarder.warehouse_app_intake (mig 0171,
+// now applied prod+dev) — it isn't needed here; the "intaked today" count comes
+// from warehouse_intake_log (mig 0169), not this column. Keeps the SELECT lean.
 const WORKER_SELECT =
   "id, ftrackingchn, fidorco, fstatus, fwarehousename, fcabinetnumber, fcabinet_locked, userid, fdetail, famount, fweight, fvolume, fdate, fdatestatus2";
 

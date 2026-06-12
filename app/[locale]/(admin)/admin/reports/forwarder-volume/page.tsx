@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 
 /**
  * V-G6 #1 — Forwarder volume per period.
@@ -43,6 +44,11 @@ type FwRow = {
   fvolume:         number | null;
   ftotalprice:     number | null;
   fstatus:         string | null;
+  // 2026-06-12 — needed to drop MOMO หัวบิล (bill-header) from the box +
+  // row counts (see filterCountableForwarderRows). A bare zero-weight
+  // tracking with `-N/M` box siblings is a placeholder, not a parcel.
+  ftrackingchn:    string | null;
+  userid:          string | null;
 };
 
 function thb(n: number): string {
@@ -70,7 +76,7 @@ export default async function ForwarderVolumeReport({
   const { data, error } = await admin
     .from("tb_forwarder")
     .select(
-      "fwarehousechina,ftransporttype,famountcount,fweight,fvolume,ftotalprice,fstatus",
+      "fwarehousechina,ftransporttype,famountcount,fweight,fvolume,ftotalprice,fstatus,ftrackingchn,userid",
     )
     .gte("fdate", from)
     .neq("fstatus", "99")
@@ -78,7 +84,16 @@ export default async function ForwarderVolumeReport({
   if (error) {
     console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
   }
-  const rows = (data ?? []) as unknown as FwRow[];
+  const rawRows = (data ?? []) as unknown as FwRow[];
+  // 2026-06-12 — drop MOMO หัวบิล placeholders BEFORE aggregating so the
+  // box count (famountcount) + the row count (count/totalCount) don't
+  // double-count a split parcel (header 6 + its 6 box siblings = 12). The
+  // header's weight/volume/price are 0, so those Σ are unaffected either way.
+  const rows = filterCountableForwarderRows(rawRows, {
+    tracking: (r) => r.ftrackingchn,
+    weight: (r) => r.fweight,
+    userid: (r) => r.userid,
+  });
 
   // Aggregate by (warehouse, transport).
   type Agg = {

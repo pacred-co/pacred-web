@@ -32,6 +32,7 @@ import {
   resolveForwarderRate,
   type ResolveRateCandidates,
 } from "@/lib/forwarder/resolve-rate";
+import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -207,7 +208,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
       .from("tb_users").select("coID").eq("userID", userid)
       .maybeSingle<{ coID: string | null }>();
     if (uErr) console.error(`[quote-multimode tb_users] failed`, { code: uErr.code, message: uErr.message });
-    coID = (u?.coID ?? "PCS").trim() || "PCS";
+    coID = (u?.coID ?? GENERAL_COID).trim() || GENERAL_COID;
 
     const { data: svip, error: svipErr } = await admin
       .from("tb_rate_custom_cbm").select("id").eq("userid", userid).limit(1)
@@ -215,7 +216,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
     if (svipErr) console.error(`[quote-multimode svip-probe] failed`, { code: svipErr.code, message: svipErr.message });
     isSvip = svip != null;
   }
-  const isGeneral = !isSvip && coID === "PCS";
+  const isGeneral = !isSvip && isGeneralCoid(coID);
   const rateContextNote = isSvip
     ? `SVIP per-user (tb_rate_custom_*) · ${userid}`
     : coID !== "PCS"

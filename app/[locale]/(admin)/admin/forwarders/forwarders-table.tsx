@@ -2,6 +2,15 @@
 
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
+// 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
+// shared, unit-tested helper so the report / completeness / check-queue Σ
+// reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
+import {
+  baseTracking,
+  trackingSuffix,
+  filterCountableForwarderRows,
+} from "@/lib/admin/momo-bill-header";
 import { Link } from "@/i18n/navigation";
 import { ArrowUpDown, Lock } from "lucide-react";
 import {
@@ -238,7 +247,7 @@ function CustomerBadges({
   // Tier-color map mirrors the legacy `badge-vip` palette but uses our
   // Tailwind tokens (no Bootstrap badge classes).
   const tierBadge = (() => {
-    if (!coid || coid === "PCS") return null;  // PCS = default tier = no chip
+    if (isGeneralCoid(coid)) return null;  // general/default tier (PR · legacy PCS) = no chip
     const label = coid;
     return (
       <span className="rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700">
@@ -322,25 +331,28 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
 // simply groups what each page has. Pagination itself is untouched.
 // ─────────────────────────────────────────────────────────────────────
 
-/** Strip ONE trailing sibling suffix so box-siblings collapse to a base:
- *    "1779955936-3"      → "1779955936"   (the "-N" form)
- *    "302098539663-1/7"  → "302098539663" (the "-N/M" box-of-boxes form · ภูม
- *                                          flag round 10 — was NOT stripped, so
- *                                          a 7-box parcel never grouped)
- *  A value with no suffix keeps itself. Empty/null/"-" never groups. */
-function baseTracking(tracking: string | null): string | null {
-  if (!tracking) return null;
-  const t = tracking.trim();
-  if (!t || t === "-") return null;
-  return t.replace(/-\d+(?:\/\d+)?$/, "");
-}
+// baseTracking / trackingSuffix are imported from @/lib/admin/momo-bill-header
+// (the shared, unit-tested home of the MOMO sibling-suffix rule).
 
-/** Numeric sibling suffix (the box number) · no suffix → 0 so the base row
- *  sorts first (= preferred main row), then 1, 2, … Ties broken by id.
- *  Handles both "-3" and "-3/7" (captures the box number 3). */
-function trackingSuffix(tracking: string | null): number {
-  const m = (tracking ?? "").trim().match(/-(\d+)(?:\/\d+)?$/);
-  return m ? Number(m[1]) : 0;
+/** Members that should feed a group's Σ aggregates — drops the MOMO
+ *  "หัวบิล" (bill-header) placeholder. When a carrier (MOMO) splits a parcel
+ *  it sends a BARE tracking (no `-N` suffix) whose `famount` is the DECLARED
+ *  box count AND whose weight is 0 — a bill-open, not a real parcel — plus the
+ *  real boxes as `-N/M` siblings. Summing the bare header with its boxes
+ *  double-counts (e.g. header 6 + boxes 6 = 12 for a 6-box parcel · ภูม flag
+ *  2026-06-12). So when box-suffixed siblings exist, drop any bare member with
+ *  zero weight. A bare row WITH weight is a real order (legacy `-1` groups) and
+ *  is kept — no regression.
+ *
+ *  Delegates to the shared `filterCountableForwarderRows`: a display group's
+ *  members all share one (baseTracking, userid), so filtering that group ==
+ *  the old local logic (verified identical · locked by momo-bill-header.test). */
+function countableGroupMembers(members: Row[]): Row[] {
+  return filterCountableForwarderRows(members, {
+    tracking: (m) => m.tracking_chn,
+    weight: (m) => m.weight_kg,
+    userid: (m) => m.customer?.userid ?? "",
+  });
 }
 
 type DisplayUnit =
@@ -745,21 +757,27 @@ export function ForwardersTable({
                   const sameStatus = group
                     ? group.members.every((m) => m.status === r.status)
                     : true;
+                  // Σ over countable members only — drops the MOMO หัวบิล
+                  // placeholder so a 6-box parcel reads 6 boxes, not 6+6=12
+                  // (ภูม flag 2026-06-12). The header is weight/price 0 so the
+                  // weight/cbm/outstanding Σ are unchanged; the box count + the
+                  // allPaid flag (header paydeposit='0' would force false) get fixed.
+                  const aggMembers = group ? countableGroupMembers(group.members) : [];
                   const agg = group
                     ? {
-                        boxes: group.members.reduce((s, m) => s + (m.amount_count || 0), 0),
-                        weight: group.members.reduce((s, m) => s + (m.weight_kg || 0), 0),
+                        boxes: aggMembers.reduce((s, m) => s + (m.amount_count || 0), 0),
+                        weight: aggMembers.reduce((s, m) => s + (m.weight_kg || 0), 0),
                         // mirror the single-row display semantics: CBM cell
                         // shows volume_cbm × box count per row.
-                        cbm: group.members.reduce(
+                        cbm: aggMembers.reduce(
                           (s, m) => s + (m.volume_cbm || 0) * (m.amount_count || 1),
                           0,
                         ),
-                        outstanding: group.members.reduce(
+                        outstanding: aggMembers.reduce(
                           (s, m) => s + (m.outstanding_thb || 0),
                           0,
                         ),
-                        allPaid: group.members.every((m) => m.paydeposit === "1"),
+                        allPaid: aggMembers.every((m) => m.paydeposit === "1"),
                       }
                     : null;
 

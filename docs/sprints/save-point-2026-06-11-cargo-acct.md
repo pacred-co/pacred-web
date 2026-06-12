@@ -48,7 +48,13 @@ The cargo rate resolves in **4 tiers** (legacy `calPriceForwarder`, most-specifi
 4. **Carryover from prior save-points** (unchanged): 4 staff-code review cases · `RECEIPT_TOKEN_SECRET` in Vercel · `contact@pacred.co` mailbox · test-customer login.
 5. **Legacy staged in Temp** (for continued work): `C:\Users\Admin\AppData\Local\Temp\pacred-legacy` (cargo PHP) + `...\pacred-freight` (axglobal/cargoT freight code).
 
-## 🟡 PARKED — coID "PCS" → "PR" rebrand (analyzed, NOT executed · ภูม sync dave-pacred first, then revisit)
+## 🟢 SHIPPED 2026-06-12 — coID "PCS" → "PR" rebrand (executed per the defensive plan below)
+**DONE.** Owner picked "data+rate+code ครบชุด". Built `lib/forwarder/coid.ts` (`GENERAL_COID='PR'` + `isGeneralCoid()` accepting 'PR' | legacy 'PCS' | empty) → swapped the tier-decision sites in all 4 resolvers (`forwarder-quote` · `forwarders-edit` · `quote-multimode` · `quote-comparison`) + 3 display sites (forwarders-table chip · warehouse-history page + export). **Kept the general-card lookup `.eq("coid", coID)`** (NOT a fixed sentinel) so a migration-lag never breaks the 8,742 — blast radius stays at the 43 already-broken 'PR' rows. `isVipCoid` (whitelist) needed no change. Migration **`0182_coid_pcs_to_pr.sql`** applied DEV (tb_co 1 · tb_rate_g_* 16+16 · **tb_users 8,742** · tb_register 16,853 → 'PR' · PCS-leftover=0). **⚠️ PROD-apply pending** (เดฟ — land it WITH the code deploy; the `isGeneralCoid` 'PCS'-alias makes the order safe either way). **Verified live (§0c):** PR009 on /cart, 25kg → ทางรถ ฿500 / ทางเรือ ฿375 (was "ไม่มีเรต"). Learning: `docs/learnings/pacred-domain-knowledge.md` (2026-06-12).
+
+**🔎 Two corrections to the parked analysis (caught by a FRESH `information_schema` survey, not by trusting the parked numbers):** (a) real count = **8,742 PCS / 43 PR** (the "938/41" below was a stale partial read); (b) `tb_co` **DOES** have a 'PCS' row (ID 21 'ทั่วไป' — the analysis below wrongly said "no PCS/PR row"), and `tb_register.coid` (16,853) was a 4th table the parked scope missed. Lesson: survey every `coid` column from `information_schema` before a rename.
+
+<details><summary>Original parked analysis (kept for the trail)</summary>
+
 ภูม flagged "PR = coID=PCS · เปลี่ยน PCS เป็น PR ให้หมด" but **paused** to sync `dave-pacred` first. **NO change was made** (money-path · clean). Full analysis below so it's one-pass executable when revisited:
 
 **🚨 The critical trap (caught in analysis): "PCS" has TWO unrelated meanings in code** — only #1 changes:
@@ -61,3 +67,5 @@ The cargo rate resolves in **4 tiers** (legacy `calPriceForwarder`, most-specifi
 - DATA (dry-run→apply): `tb_users.coID` "PCS"→"PR" · `tb_rate_g_kg.coid` + `tb_rate_g_cbm.coid` "PCS"→"PR". (DEV first; **PROD data UPDATE = separate prod-data-op**, env-DEV can't touch prod.)
 - CODE (9 sentinel sites): `actions/forwarder-quote.ts:141,146` · `actions/admin/quote-multimode.ts:210,218` · `actions/admin/quote-comparison.ts:153` · `actions/admin/forwarders-edit.ts:210` · `actions/admin/forwarders-new.ts:200` (`GENERAL_COIDS`) · `actions/admin/earn-trigger-tb-user-sales.ts:109` (`isVipCoid` + `VipCoid` type) · `app/[locale]/(admin)/admin/customers/page.tsx:116` · `actions/admin/export/customers.ts:90` · `actions/admin/rate-edits.ts:245` (schema comment + accepts).
 - **Recommended approach = defensive:** default coID "PR" + `isGeneral`/`GENERAL_COIDS` accept BOTH "PR" and "PCS" (and ""/"GENERAL") → data flips to PR fully, but any stray/prod "PCS" still resolves general (zero mis-price during the prod-data lag). The `rate-edits.ts:221-223` comment notes a prior session intentionally KEPT the general bucket "PCS" during the member-code rebrand — this finishes that.
+
+</details>

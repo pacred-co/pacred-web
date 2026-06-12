@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { getAdminRoles, hasRole } from "@/lib/auth/require-admin";
 import { SettingsForm } from "./settings-form";
 
 export default async function AdminSettingsPage() {
+  const roles = await getAdminRoles();
+  const isSuper = roles != null && hasRole(roles, ["super"]);
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("settings")
@@ -64,6 +67,28 @@ export default async function AdminSettingsPage() {
           </Link>
         </p>
       </div>
+
+      {/* Go-Live Control Panel — super-only owner switchboard (the 9 dormant
+          go-live levers in one place). Linked here so super lands on it ≤2 clicks. */}
+      {isSuper && (
+        <Link
+          href="/admin/settings/go-live"
+          className="block rounded-2xl border-2 border-amber-300 bg-amber-50/70 dark:bg-amber-950/20 p-5 hover:border-amber-400 transition-colors"
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-bold text-amber-800 dark:text-amber-300">🚦 Go-Live Control Panel</h2>
+              <p className="text-[11px] text-muted mt-0.5">
+                ศูนย์รวมสวิตช์เปิดระบบทั้งหมด — ใบกำกับ ฝากสั่ง/ฝากโอน · ค่าคอม Freight · เรทศุลกากร · PEAK GL ·
+                role พนักงาน · checklist ภายนอก. เปิดได้ปลอดภัยจากหน้าเดียว (super).
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white">
+              เปิดแผงควบคุม →
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Live daily yuan rates (legacy tb_settings) — READ-ONLY here; edited at
           /admin/settings/legacy-rates. The old editable settings.yuan_rate field

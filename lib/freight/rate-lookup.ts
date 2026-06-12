@@ -1,8 +1,14 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeChinaFreightCostThb, type FreightRateRow } from "./rate-lookup-math";
+import {
+  computeChinaFreightCostThb,
+  selectBestFreightRate,
+  type FreightRateRow,
+  type FreightRateRouteRow,
+  type FreightRoute,
+} from "./rate-lookup-math";
 
-export { computeChinaFreightCostThb, type FreightRateRow };
+export { computeChinaFreightCostThb, selectBestFreightRate, type FreightRateRow, type FreightRoute };
 
 /**
  * Look up the admin-maintained China-side freight cost (migration 0145 ·
@@ -11,41 +17,57 @@ export { computeChinaFreightCostThb, type FreightRateRow };
  * into `composeFreightQuote({ chinaFreightCostThb })` → the quote's profit
  * becomes a real NET margin (not gross "กำไรขั้นต้น").
  *
- * Keyed by mode + the DEFAULT route (pol=''/pod='' sort first) for the MVP —
- * a per-route×carrier match can be added later (the table already has the
- * columns). Returns `null` when no active rate exists → the engine keeps the
- * gross "chinaCostPending" behaviour (graceful · the feature is opt-in per rate).
+ * G1 — ROUTE-AWARE. When `route.pol`/`route.pod` are supplied the lookup prefers
+ * the most-specific active row for the shipment's lane, falling back gracefully:
  *
- * The DB-free cost math + unit selection + degrade-to-null logic lives in
- * `computeChinaFreightCostThb` (./rate-lookup-math) so it can be unit-tested
- * without a Supabase client.
+ *   (mode, pol, pod)   →   (mode, pol, '')   →   (mode, '', '')   [newest active]
+ *
+ * (the 0145 table already carries the `pol`/`pod` columns + a matching index).
+ * When `route` is omitted the behaviour is unchanged from the MVP — the newest
+ * active rate for the mode wins (mode-default), so existing callers are safe.
+ *
+ * Returns `null` when no active rate exists → the engine keeps the gross
+ * "chinaCostPending" behaviour (graceful · the feature is opt-in per rate).
+ *
+ * The DB-free cost math + the route-precedence selection both live in
+ * `./rate-lookup-math` (`computeChinaFreightCostThb` + `selectBestFreightRate`)
+ * so they can be unit-tested without a Supabase client.
  */
 export async function lookupChinaFreightCostThb(
   // accepts any freight mode string ("sea_fcl"/"sea_lcl"/"air"/"truck"); the
   // tb_freight_rate CHECK only allows sea/air, so "truck" simply finds no row → null.
   mode: string,
   qty: { cbm?: number; kgm?: number; containers?: number },
+  route?: FreightRoute,
 ): Promise<number | null> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const hasRoute = Boolean(route?.pol?.trim() || route?.pod?.trim());
+
+  // Pull the candidate active rates for this mode, deterministically ordered
+  // (newest effective_from first, then pol/pod asc as a stable secondary key).
+  // Without a route we only need the single newest row (mode-default, unchanged);
+  // with a route we fetch a small bounded set and pick the best lane match in JS.
+  let query = admin
     .from("tb_freight_rate")
-    .select("cost_usd, unit, fx_thb_per_usd")
+    .select("cost_usd, unit, fx_thb_per_usd, pol, pod, effective_from")
     .eq("transport_mode", mode)
     .eq("active", true)
-    // effective_from FIRST → the most-recently-effective rate for this mode wins
-    // (deterministic). pol is NOT a matcher here — the engine doesn't pass the
-    // shipment route yet, so route/carrier columns are informational until
-    // per-route matching ships (the CRUD route fields carry that hint). The old
-    // `pol ASC` primary made the '' default row always beat a newer specific row.
     .order("effective_from", { ascending: false })
     .order("pol", { ascending: true })
-    .limit(1)
-    .maybeSingle<FreightRateRow>();
+    .order("pod", { ascending: true });
+  query = hasRoute ? query.limit(200) : query.limit(1);
+
+  const { data, error } = await query.returns<FreightRateRouteRow[]>();
   if (error) {
     console.error(`[lookupChinaFreightCostThb] failed`, { code: error.code, message: error.message, mode });
     return null;
   }
-  if (!data) return null;
+  if (!data || data.length === 0) return null;
 
-  return computeChinaFreightCostThb(data, qty);
+  // selectBestFreightRate honours the precedence above; with no route every '' row
+  // ties at score 0 → the newest (already first) active row for the mode wins.
+  const best = selectBestFreightRate(data, route);
+  if (!best) return null;
+
+  return computeChinaFreightCostThb(best, qty);
 }

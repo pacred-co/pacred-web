@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportWarehouseHistoryAll } from "@/actions/admin/export/warehouse-history";
@@ -139,7 +140,7 @@ function BadgeNameWarehouseChina({ w }: { w: string | null }) {
  *  The 3 supplementary flags (SVIP / CPS / นิติ) are a follow-up — the
  *  additional queries per row would N+1; better to pre-aggregate them. */
 function BadgeVIP2({ coid }: { coid: string | null }) {
-  if (!coid || coid === "PCS") return null;
+  if (isGeneralCoid(coid)) return null;
   return (
     <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-bold uppercase">
       {coid}
@@ -593,7 +594,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
       scan_time: scanTime,
       keysearch: row.keysearch,
       userid: row.f_userid ?? "",
-      coid: !row.u_coid || row.u_coid === "PCS" ? "" : row.u_coid,
+      coid: isGeneralCoid(row.u_coid) ? "" : row.u_coid,
       box: `${row.fi2amount}/${row.f_famount ?? 0}`,
       detail: row.f_fdetail ?? "",
       products_type: nameProductsType(row.f_fproductstype),

@@ -39,6 +39,7 @@ import {
   adminRemoveFromCheckQueue,
 } from "@/actions/admin/forwarder-check";
 import { confirm } from "@/components/ui/confirm";
+import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 
 // ────────────────────────────────────────────────────────────
 // Row type — exported so page.tsx can reuse
@@ -335,10 +336,26 @@ export function ForwarderCheckTable({
 
   // Pinned "รวม" summary row (legacy bg-color top row at table line 304-330).
   // Sums the relevant numeric columns across the entire dataset.
+  //
+  // 2026-06-12 — the box-count Σ (amount / amount_fi = "received/expected
+  // กล่อง") excludes MOMO หัวบิล placeholders: a bare zero-weight tracking
+  // whose `-N/M` box siblings exist carries the DECLARED box count and would
+  // double the parcel's boxes (header 6 + 6 boxes = 12). The money/weight/CBM
+  // sums stay over ALL rows (the header is weight/price 0, so they're already
+  // correct, and the billing acts per-row on outstanding — not on this Σ).
+  const countableRows = useMemo(
+    () =>
+      filterCountableForwarderRows(rows, {
+        tracking: (r) => r.tracking_chn,
+        weight: (r) => r.weight_kg,
+        userid: (r) => r.userid,
+      }),
+    [rows],
+  );
   const datasetSummary = useMemo(() => {
     return {
-      amount:               rows.reduce((s, r) => s + r.amount, 0),
-      amountFi:             rows.reduce((s, r) => s + r.amount_fi, 0),
+      amount:               countableRows.reduce((s, r) => s + r.amount, 0),
+      amountFi:             countableRows.reduce((s, r) => s + r.amount_fi, 0),
       volumeCbm:            rows.reduce((s, r) => s + r.volume_cbm, 0),
       weightKg:             rows.reduce((s, r) => s + r.weight_kg, 0),
       transportPrice:       rows.reduce((s, r) => s + r.transport_price, 0),
@@ -346,7 +363,7 @@ export function ForwarderCheckTable({
       onePercent:           rows.reduce((s, r) => s + r.one_percent, 0),
       profit:               rows.reduce((s, r) => s + r.profit_item, 0),
     };
-  }, [rows]);
+  }, [rows, countableRows]);
 
   return (
     <div className="space-y-3">

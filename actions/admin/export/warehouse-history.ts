@@ -33,6 +33,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import type { CsvRow } from "@/components/admin/csv-button";
 
 // Safety cap for the "export all filtered" path. The page caps 'all' mode at
@@ -332,7 +333,7 @@ export async function exportWarehouseHistoryAll(
       scan_time: scanTime,
       keysearch: row.keysearch,
       userid: f?.userid ?? "",
-      coid: !coid || coid === "PCS" ? "" : coid,
+      coid: isGeneralCoid(coid) ? "" : coid,
       box: `${row.fi2amount}/${f?.famount ?? 0}`,
       detail: f?.fdetail ?? "",
       products_type: nameProductsType(f?.fproductstype ?? null),

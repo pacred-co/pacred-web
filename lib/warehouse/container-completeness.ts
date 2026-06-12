@@ -23,8 +23,23 @@
 
 import "server-only";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
+
+/**
+ * The forwarder shape `summarise` needs. `ftrackingchn` + `fweight` + `userid`
+ * are read ONLY to drop MOMO หัวบิล placeholders from the expected box count
+ * (a bare zero-weight tracking with `-N/M` box siblings is a bill-open
+ * placeholder, not a parcel to receive). See filterCountableForwarderRows.
+ */
+type FwForCompleteness = {
+  id: number;
+  famount: number | null;
+  ftrackingchn: string | null;
+  fweight: number | null;
+  userid: string | null;
+};
 
 export type ContainerCompleteness = {
   /** Sum of expected parcel counts (`SUM(tb_forwarder.famount)` in this cabinet). */
@@ -64,9 +79,19 @@ const EMPTY: ContainerCompleteness = {
  * `fi2amount` is an int that could in theory be 0 or null).
  */
 function summarise(
-  forwarders: Array<{ id: number; famount: number | null }>,
+  forwardersRaw: Array<FwForCompleteness>,
   scans: Array<{ fid: number | null; fi2amount: number | null }>,
 ): ContainerCompleteness {
+  // 2026-06-12 — drop MOMO หัวบิล placeholders so a split parcel's DECLARED
+  // box count (e.g. 6 on the bare header) isn't summed on TOP of its 6 box
+  // siblings → expected would be 12 vs 6 scanned and the cabinet could NEVER
+  // read "ครบ". The header has no scan (it's not a physical parcel), so it
+  // also wrongly kept forwardersComplete < forwardersTotal forever.
+  const forwarders = filterCountableForwarderRows(forwardersRaw, {
+    tracking: (f) => f.ftrackingchn,
+    weight: (f) => f.fweight,
+    userid: (f) => f.userid,
+  });
   if (forwarders.length === 0) return EMPTY;
 
   // Sum scans per fid (a forwarder may have multiple import2 rows in legacy
@@ -126,7 +151,7 @@ export async function getContainerCompleteness(
 
   const { data: fws, error: fwErr } = await admin
     .from("tb_forwarder")
-    .select("id, famount")
+    .select("id, famount, ftrackingchn, fweight, userid")
     .eq("fcabinetnumber", fcabinetnumber)
     .limit(50_000);
   if (fwErr) {
@@ -137,7 +162,7 @@ export async function getContainerCompleteness(
     });
     return EMPTY;
   }
-  const forwarders = (fws ?? []) as Array<{ id: number; famount: number | null }>;
+  const forwarders = (fws ?? []) as Array<FwForCompleteness>;
   if (forwarders.length === 0) return EMPTY;
 
   const fwIds = forwarders.map((r) => r.id);
@@ -182,7 +207,7 @@ export async function getContainerCompletenessBatch(
 
   const { data: fws, error: fwErr } = await admin
     .from("tb_forwarder")
-    .select("id, fcabinetnumber, famount")
+    .select("id, fcabinetnumber, famount, ftrackingchn, fweight, userid")
     .in("fcabinetnumber", uniqCabs)
     .limit(100_000);
   if (fwErr) {
@@ -194,21 +219,27 @@ export async function getContainerCompletenessBatch(
     // Empty everything on failure — UI degrades to "-" badges.
     return Object.fromEntries(uniqCabs.map((c) => [c, EMPTY]));
   }
-  const forwarders = (fws ?? []) as Array<{
-    id: number;
-    fcabinetnumber: string;
-    famount: number | null;
-  }>;
+  const forwarders = (fws ?? []) as Array<
+    FwForCompleteness & { fcabinetnumber: string }
+  >;
 
-  // Group forwarders by cabinet
-  const byCabinet = new Map<string, Array<{ id: number; famount: number | null }>>();
+  // Group forwarders by cabinet (carry the tracking/weight/userid fields so
+  // summarise can drop MOMO หัวบิล placeholders per-cabinet).
+  const byCabinet = new Map<string, Array<FwForCompleteness>>();
   const allFids: number[] = [];
   for (const f of forwarders) {
     const key = f.fcabinetnumber;
     if (!key) continue;
+    const member: FwForCompleteness = {
+      id: f.id,
+      famount: f.famount,
+      ftrackingchn: f.ftrackingchn,
+      fweight: f.fweight,
+      userid: f.userid,
+    };
     const arr = byCabinet.get(key);
-    if (arr) arr.push({ id: f.id, famount: f.famount });
-    else byCabinet.set(key, [{ id: f.id, famount: f.famount }]);
+    if (arr) arr.push(member);
+    else byCabinet.set(key, [member]);
     allFids.push(f.id);
   }
 

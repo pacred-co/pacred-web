@@ -295,9 +295,9 @@ export async function adminComposeQuoteFromRateCard(
 
     const { data: parent, error: parentErr } = await admin
       .from("freight_quotes")
-      .select("status, quote_no")
+      .select("status, quote_no, port_loading, port_discharge")
       .eq("id", d.freight_quote_id)
-      .maybeSingle<{ status: string; quote_no: string }>();
+      .maybeSingle<{ status: string; quote_no: string; port_loading: string | null; port_discharge: string | null }>();
     if (parentErr) {
       console.error(`[freight_quotes mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
       return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
@@ -311,9 +311,15 @@ export async function adminComposeQuoteFromRateCard(
     // includes freight/origin (CFR/CPT/CIP/EXW/…). For CIF/FOB the seller already
     // paid the China freight — we neither sell nor incur it, so folding the looked-up
     // cost would understate the NET margin. Skip the lookup → cost stays null.
+    // G1 — thread the quote's lane (POL/POD) so the lookup prefers the route-specific
+    // rate, falling back to the mode-default when the lane isn't set / has no rate.
     const incursChinaFreight = incursChinaFreightCost(d.incoterm);
     const chinaFreightCostThb = incursChinaFreight
-      ? await lookupChinaFreightCostThb(d.mode, { cbm: d.cbm, kgm: d.kgm, containers: d.containers })
+      ? await lookupChinaFreightCostThb(
+          d.mode,
+          { cbm: d.cbm, kgm: d.kgm, containers: d.containers },
+          { pol: parent.port_loading ?? undefined, pod: parent.port_discharge ?? undefined },
+        )
       : null;
     // W5 — when the China-side scope IS billed but no cost rate matched, profit is
     // GROSS only → flag it so the UI shows a "ก่อนหักต้นทุนเฟรทจีน" yellow banner.

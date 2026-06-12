@@ -1697,6 +1697,7 @@
     "saving": "Saving...",
     "confirmPayment": "Confirm payment order",
     "confirmPaymentWithAmount": "Confirm payment ฿{amount}",
+    "confirmPayFromWalletDialog": "Confirm debiting ฿{amount} from your wallet to pay? — the balance is debited immediately.",
     "alipay": {
       "title": "How to Pay via Alipay",
       "description": "Pacred Shipping's Alipay payment guide — safe Yuan transfers at fair market rates with real-time confirmation."
@@ -3398,6 +3399,7 @@
     "settingsCargo": {
       "title": "Cargo system settings",
       "general": "Adjust Yuan Rate",
+      "goLive": "Go-Live Control Panel",
       "homeNotice": "Home-page notice",
       "popup": "Customer popup",
       "promos": "Promo banners",
@@ -4621,6 +4623,8 @@
     "walletClear": "Clear",
     "walletDeducted": "From wallet ฿{applied}",
     "remainingToPay": "Left to pay ฿{remaining}",
+    "payFullFromWalletConfirm": "Confirm paying ฿{amount} from your wallet? — the balance is debited immediately.",
+    "submitPaymentConfirm": "Submit payment for order #{hNo}? — your wallet will be debited (if used) and the slip sent for review.",
     "payFullFromWallet": "Pay fully from wallet (฿{amount})",
     "scanToPay": "Scan to pay ฿{amount}",
     "confirmPaymentSplit": "Confirm payment (wallet ฿{applied} + slip ฿{remaining})",

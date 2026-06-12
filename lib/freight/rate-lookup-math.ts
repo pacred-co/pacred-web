@@ -18,6 +18,20 @@ export type FreightRateRow = {
   fx_thb_per_usd: number | string;
 };
 
+/**
+ * A rate row carrying its route + recency, for route-aware precedence selection.
+ * `pol`/`pod` = '' means "any" (the migration-0145 default). `effective_from` is
+ * the recency tie-breaker (newest wins within a specificity tier).
+ */
+export type FreightRateRouteRow = FreightRateRow & {
+  pol: string;
+  pod: string;
+  effective_from: string;
+};
+
+/** The shipment route to match against (China port → Thai port). Both optional. */
+export type FreightRoute = { pol?: string; pod?: string };
+
 /** Quantity drivers for the shipment (only one matters, per the rate's unit). */
 export type FreightCostQty = { cbm?: number; kgm?: number; containers?: number };
 
@@ -45,4 +59,54 @@ export function computeChinaFreightCostThb(
   if (units <= 0) return null;
 
   return Math.round(costUsd * fx * units * 100) / 100;
+}
+
+/**
+ * Pick the single most-specific active rate row for a shipment route from a
+ * candidate list (all already filtered to the same mode + active=true by the DB).
+ * DB-free so the route-precedence logic is unit-testable without Supabase.
+ *
+ * A row is ELIGIBLE only if it doesn't contradict the requested route: its `pol`
+ * must be '' (any) or equal the requested pol, and likewise for `pod`. Among the
+ * eligible rows the winner is the most-specific:
+ *
+ *   (pol, pod) exact   →   (pol, '')   →   ('', pod)   →   ('', '')   [newest active]
+ *
+ * pol-specificity outranks pod-specificity (matches the 0145 index order
+ * `transport_mode, pol, pod`). Ties within a tier break by `effective_from` desc
+ * (newest wins) — preserving the deterministic ordering of the mode-default path.
+ *
+ * When `route` is undefined/empty this still works: every row is eligible and the
+ * '' rows tie at score 0, so the newest active rate for the mode wins — identical
+ * to the legacy mode-default behaviour.
+ */
+export function selectBestFreightRate<T extends FreightRateRouteRow>(
+  rows: readonly T[],
+  route?: FreightRoute,
+): T | null {
+  const wantPol = route?.pol?.trim() ?? "";
+  const wantPod = route?.pod?.trim() ?? "";
+
+  let best: T | null = null;
+  let bestScore = -1;
+  for (const r of rows) {
+    const rowPol = r.pol ?? "";
+    const rowPod = r.pod ?? "";
+    // A specific row that names a DIFFERENT pol/pod than requested is ineligible.
+    if (rowPol !== "" && rowPol !== wantPol) continue;
+    if (rowPod !== "" && rowPod !== wantPod) continue;
+
+    // Specificity score: pol match weighted above pod (the 0145 index order).
+    const score = (rowPol !== "" ? 2 : 0) + (rowPod !== "" ? 1 : 0);
+    if (
+      score > bestScore ||
+      // same specificity → newest effective_from wins (deterministic recency)
+      (score === bestScore && best != null &&
+        String(r.effective_from) > String(best.effective_from))
+    ) {
+      best = r;
+      bestScore = score;
+    }
+  }
+  return best;
 }
