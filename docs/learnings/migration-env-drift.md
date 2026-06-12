@@ -74,3 +74,14 @@ A guessed marker gives a false "MISSING" on an object that is actually present �
 you'd wrongly re-apply (and maybe dup). **Derive the marker from the file:**
 `grep -ioE 'create table (if not exists )?(public\.)?\w+|add column (if not exists )?\w+' <file>` —
 the filename is a HINT, not the object name.
+
+## L-MIG-04 · A VALUE-rename migration (`coID 'PCS'→'PR'`) must be swept through EVERY surface that hardcodes the old literal — the resolver passing because it reads the customer's OWN (migrated) value HIDES the broken editors/exports
+
+**Trigger.** 2026-06-12 mig 0182 renamed the general-tier company code `coID 'PCS'→'PR'` across `tb_users` + `tb_co` + **`tb_rate_g_kg`/`tb_rate_g_cbm`** (the general rate cards). The matching app change updated `lib/forwarder/coid.ts` (`isGeneralCoid` accepts both) + the 4 rate RESOLVERS — and a customer (PR009) was verified to get rates live. Shipped, looked done.
+
+**What the resolver-passing HID.** The live resolver reads the rate card by the customer's OWN coID: `tb_rate_g_kg WHERE coid = <customer.coID>`. Post-0182 the customer is `'PR'` and the card is `'PR'` → match → works. **But every surface that hardcoded the OLD literal `'PCS'` silently broke**, and none of them is on the resolve path so the smoke-verify never touched them:
+
+- **`/admin/rates/general` editor** keyed `const GENERAL_COID = "PCS"` → read `tb_rate_g_* WHERE coid='PCS'` → **0 rows** (prod probe confirmed: 16 rows all `'PR'`, zero `'PCS'`). The general-rate editor for ~8,700 customers rendered an **empty matrix**, and a Save would have written a dead `'PCS'` bucket no resolver reads (§0e dead-write). Broken since 0182, invisible because nobody re-priced FROM the editor.
+- **6 "is-VIP" BLACKLIST predicates** (`coid !== "" && coid !== "PCS" && coid !== "GENERAL"`) forgot `'PR'` → a `'PR'` general customer classified as VIP → wrong CSV tier label, wrong customer-group filter (a "general customers" filter excluded all 8,700), wrong list badge.
+
+**Rule — after ANY value-rename migration, grep the whole codebase for the OLD literal and audit each hit:** `grep -rn '"PCS"' actions/ lib/ app/` (then filter the unrelated meanings — here `fShipBy/addressID='PCS'` = self-pickup, `unit='PCS'` = pieces; only the coID/tier columns were renamed). Three hit-classes to fix: (a) a hardcoded WRITE/READ key on the old value (editor/writer) → dead-write/empty; (b) a blacklist predicate that enumerates "everything except the general values" but lists the OLD general value not the NEW; (c) a SQL `.in("col", [...old values])` filter array. **Centralize on ONE predicate + ONE value-list** (here `isGeneralCoid` + `GENERAL_COID_VALUES` in coid.ts) so the next rename is a one-file change, and add a regression test that asserts the NEW value resolves general. The resolver passing is necessary-but-NOT-sufficient evidence the rename is complete.
