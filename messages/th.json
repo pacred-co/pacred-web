@@ -3398,6 +3398,7 @@
     "settingsCargo": {
       "title": "ตั้งค่าระบบ Cargo",
       "general": "ปรับเรทหยวน",
+      "goLive": "Go-Live Control Panel",
       "homeNotice": "ประกาศหน้าแรก",
       "popup": "Popup ประกาศลูกค้า",
       "promos": "แบนเนอร์โปรโมชัน",
