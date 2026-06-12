@@ -229,7 +229,11 @@ export async function ForwarderCostSection({
 
   return (
     <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm overflow-hidden">
-      <header className="bg-emerald-600 text-white px-4 py-2.5 flex items-center gap-2 flex-wrap">
+      {/* Collapsible (ปอน 2026-06-12) — default-folded: only the green bar shows;
+          click it to expand. Native <details>/<summary> keeps this a Server
+          Component (no client JS needed). */}
+      <details className="group">
+      <summary className="bg-emerald-600 text-white px-4 py-2.5 flex items-center gap-2 flex-wrap cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
         <span className="text-base">💲</span>
         <h2 className="text-sm font-bold">ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน)</h2>
         {lineCount > 0 && (
@@ -238,7 +242,8 @@ export async function ForwarderCostSection({
         <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
           {canEdit ? "super / accounting / pricing" : "อ่านอย่างเดียว"}
         </span>
-      </header>
+        <svg className="w-4 h-4 shrink-0 transition-transform duration-200 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </summary>
 
       <div className="p-3 sm:p-4 space-y-3">
         <p className="text-[11px] text-muted leading-relaxed">
@@ -345,6 +350,7 @@ export async function ForwarderCostSection({
               </CostLineCard>
             ))}
       </div>
+      </details>
     </section>
   );
 }

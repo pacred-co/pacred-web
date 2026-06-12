@@ -68,7 +68,7 @@ export function ProductCategories() {
               <div className="w-[64px] h-[64px] rounded-full overflow-hidden bg-red-50 dark:bg-red-950/20 shrink-0 mb-3 transition-transform duration-300 group-hover:scale-110">
                 <Image
                   src={item.image}
-                  alt={item.title}
+                  alt={`นำเข้า${item.title}จากจีน 1688 Taobao Tmall กับ Pacred Shipping`}
                   width={64}
                   height={64}
                   className="w-full h-full object-cover"
@@ -102,7 +102,7 @@ export function ProductCategories() {
                 <div className="w-[50px] h-[50px] rounded-full overflow-hidden bg-red-50 dark:bg-red-950/20 shrink-0 mb-2">
                   <Image
                     src={item.image}
-                    alt={item.title}
+                    alt={`นำเข้า${item.title}จากจีน 1688 Taobao Tmall กับ Pacred Shipping`}
                     width={50}
                     height={50}
                     className="w-full h-full object-cover"

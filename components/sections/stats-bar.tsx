@@ -11,18 +11,21 @@ export function StatsBar() {
       value: "10,600",
       unit: t("customersUnit"),
       icon: "/images/hero-section/icon/customer.png",
+      alt: "ลูกค้าที่ไว้วางใจใช้บริการนำเข้าสินค้าจากจีนกับ Pacred Shipping",
     },
     {
       label: t("orders"),
       value: "48,842",
       unit: t("ordersUnit"),
       icon: "/images/hero-section/icon/cart.png",
+      alt: "ออเดอร์นำเข้า-ฝากสั่งซื้อสินค้าจากจีนกับ Pacred Shipping",
     },
     {
       label: t("deposit"),
       value: "4.88",
       unit: "฿/¥",
       icon: "/images/hero-section/icon/shop.png",
+      alt: "เรทค่าฝากสั่งซื้อ-ฝากโอนเงินหยวนชำระสินค้าจีน Pacred Shipping",
     },
   ];
 
@@ -41,7 +44,7 @@ export function StatsBar() {
 
               <Image
                 src={s.icon}
-                alt=""
+                alt={s.alt}
                 width={56}
                 height={56}
                 className="h-8 w-8 md:h-14 md:w-14 shrink-0 object-contain transition-transform duration-300 group-hover:scale-110"

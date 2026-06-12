@@ -93,7 +93,7 @@ export function PurchaseBanner() {
               <div className="relative w-[108px] h-[104px] shrink-0">
                 <Image
                   src="/images/Character_Icon/visitmobileshop02.png"
-                  alt="ทีมงาน Pacred"
+                  alt="ทีมงาน Pacred Shipping บริการฝากสั่งซื้อนำเข้าสินค้าจากจีน 1688 Taobao"
                   fill
                   sizes="108px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)]"
@@ -120,7 +120,7 @@ export function PurchaseBanner() {
             >
               <Image
                 src="/images/bannerdesktop/shoppingbanner02.png"
-                alt="Order Worldwide Pacred Shipping"
+                alt="ฝากสั่งซื้อสินค้าทั่วโลก 1688 Taobao Tmall Alibaba กับ Pacred Shipping"
                 fill
                 sizes="(min-width: 1200px) 1140px, 100vw"
                 quality={100}

@@ -89,7 +89,7 @@ export function WhyPacred() {
                   <div className="relative w-14 h-14 md:w-16 md:h-16 mb-4 flex items-center justify-center rounded-xl md:rounded-2xl bg-gray-100/70 dark:bg-background border border-border group-hover:bg-primary-50 dark:group-hover:bg-primary-900/20 group-hover:border-primary-200 dark:group-hover:border-primary-900/60 transition-all duration-400">
                     <Image
                       src={f.iconSrc}
-                      alt=""
+                      alt={`${fTitle} — Pacred Shipping นำเข้าสินค้าจากจีน`}
                       width={64}
                       height={64}
                       className="relative w-[42px] h-[42px] md:w-[48px] md:h-[48px] object-contain grayscale opacity-50 saturate-0 transition-all duration-400 group-hover:grayscale-0 group-hover:opacity-100 group-hover:saturate-100 group-hover:scale-110 group-hover:-rotate-6"

@@ -37,7 +37,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Package, CreditCard, ClipboardCheck } from "lucide-react";
+import { Package, CreditCard, ClipboardCheck, ChevronDown, ExternalLink } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
@@ -92,6 +93,11 @@ type Props = {
   // รายการสินค้า (product list) — render ระหว่างฟอร์มสถานะ กับ ฟอร์มเงื่อนไข (pricing@4/…)
   // owner 2026-06-11: "ฟอร์มสถานะอยู่บน · รายการสินค้าอยู่กลาง · ฟอร์มราคาต่อจากรายการสินค้า".
   children?: React.ReactNode;
+  /** รายการสินค้า (table only) — render ก่อน cost panel. @ถึงไทยแล้ว(4): คลิกหัวข้อ
+   *  "รายการสินค้า" พับ/กางฟอร์มแก้ไขขนาด/ราคา (default กาง · owner 2026-06-12). */
+  itemsTable?: React.ReactNode;
+  /** ออเดอร์ต้นทาง (reforder) — สำหรับลิงก์ "ดูออเดอร์ต้นทาง" ข้างหัวข้อรายการสินค้า. */
+  reforder?: string | null;
 };
 
 // h-10 (40px) on every control so the merged row lines up on ONE straight,
@@ -112,6 +118,9 @@ export function ForwarderStatusWorkflow(p: Props) {
 
   // The dropdown selection — drives the conditional sub-forms (legacy #fStatus).
   const [selected, setSelected] = useState<string>(p.currentStatus);
+  // owner 2026-06-12 — @ถึงไทยแล้ว(4): คลิกหัวข้อ "รายการสินค้า" เพื่อพับ/กางฟอร์มกรอกรายละเอียด.
+  // default = กาง (true) ตามที่ owner สั่ง.
+  const [itemsOpen, setItemsOpen] = useState(true);
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -238,43 +247,71 @@ export function ForwarderStatusWorkflow(p: Props) {
         )}
       </form>
 
-      {/* ── รายการสินค้า (children) — คั่นกลางระหว่างฟอร์มสถานะ + ฟอร์มราคา (owner 2026-06-11) ── */}
-      {p.children}
-
-      {/* ── #form4 — ฟอร์มราคา/ขนาด (เด้งเมื่อเลือกสถานะ 4 · ถึงไทยแล้ว) ── */}
-      {showPricing && (
-        <section className="rounded-2xl border border-border border-l-4 border-l-indigo-400 bg-white dark:bg-surface shadow-sm overflow-hidden">
-          <header className="flex items-center gap-2 px-4 pt-4">
-            <Package className="h-4 w-4 text-indigo-500" />
-            <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา (สถานะ: ถึงไทยแล้ว)</h3>
-          </header>
-          <div className="p-3 sm:p-4">
-            <AdminForwarderEditForm
-              fNo={p.fNo}
-              idNumeric={p.fId}
-              weightInit={p.pricing.weight}
-              widthInit={p.pricing.width}
-              lengthInit={p.pricing.length}
-              heightInit={p.pricing.height}
-              volumeInit={p.pricing.volume}
-              productTypeInit={p.pricing.productType}
-              refPriceInit={p.pricing.refPrice}
-              noteInit={p.pricing.note}
-              itemsInit={[]}
-              customRateInit={p.pricing.customRate}
-              customRateKgInit={p.pricing.customRateKg}
-              customRateCbmInit={p.pricing.customRateCbm}
-              fDiscountInit={p.pricing.fDiscount}
-              fTransportPriceChnThbInit={p.pricing.fTransportPriceChnThb}
-              priceOtherInit={p.pricing.priceOther}
-              fTransportPriceInit={p.pricing.fTransportPrice}
-              fShippingServiceInit={p.pricing.fShippingService}
-              fWarehouseChinaInit={p.pricing.fWarehouseChina}
-              fWarehouseNameInit={p.pricing.fWarehouseName}
-            />
+      {/* ── รายการสินค้า · @ถึงไทยแล้ว(4): คลิกหัวข้อ "รายการสินค้า" (มี chevron) เพื่อพับ/กาง
+           ฟอร์มแก้ไขขนาด/ราคา · default กาง (owner 2026-06-12 "กดที่รายการให้หุบ/กาง · กางเป็น default")
+           — ฟอร์มเดิม · order-level · ไม่แตะ backend/เงิน ── */}
+      {p.itemsTable && (
+        <div>
+          <hr className="my-4 border-t border-dashed border-border" />
+          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => showPricing && setItemsOpen((o) => !o)}
+              className={`flex items-center gap-2 text-base md:text-lg font-bold text-red-600 ${showPricing ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+            >
+              {showPricing && (
+                <ChevronDown className={`w-5 h-5 shrink-0 transition-transform duration-200 ${itemsOpen ? "rotate-180" : ""}`} />
+              )}
+              รายการสินค้า
+            </button>
+            {p.reforder && p.reforder !== "" && (
+              <Link
+                href={`/admin/service-orders/${p.reforder}`}
+                className="text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
+              >
+                ดูออเดอร์ต้นทาง {p.reforder} <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
           </div>
-        </section>
+          {p.itemsTable}
+          {showPricing && itemsOpen && (
+            <section className="mt-3 rounded-2xl border border-border border-l-4 border-l-indigo-400 bg-white dark:bg-surface shadow-sm overflow-hidden">
+              <header className="flex items-center gap-2 px-4 pt-4">
+                <Package className="h-4 w-4 text-indigo-500" />
+                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา (ถึงไทยแล้ว)</h3>
+              </header>
+              <div className="p-3 sm:p-4">
+                <AdminForwarderEditForm
+                  fNo={p.fNo}
+                  idNumeric={p.fId}
+                  weightInit={p.pricing.weight}
+                  widthInit={p.pricing.width}
+                  lengthInit={p.pricing.length}
+                  heightInit={p.pricing.height}
+                  volumeInit={p.pricing.volume}
+                  productTypeInit={p.pricing.productType}
+                  refPriceInit={p.pricing.refPrice}
+                  noteInit={p.pricing.note}
+                  itemsInit={[]}
+                  customRateInit={p.pricing.customRate}
+                  customRateKgInit={p.pricing.customRateKg}
+                  customRateCbmInit={p.pricing.customRateCbm}
+                  fDiscountInit={p.pricing.fDiscount}
+                  fTransportPriceChnThbInit={p.pricing.fTransportPriceChnThb}
+                  priceOtherInit={p.pricing.priceOther}
+                  fTransportPriceInit={p.pricing.fTransportPrice}
+                  fShippingServiceInit={p.pricing.fShippingService}
+                  fWarehouseChinaInit={p.pricing.fWarehouseChina}
+                  fWarehouseNameInit={p.pricing.fWarehouseName}
+                />
+              </div>
+            </section>
+          )}
+        </div>
       )}
+
+      {/* ── ส่วนที่เหลือ (cost panel · ฯลฯ) ── */}
+      {p.children}
 
       {/* ── #form6 — เลขพัสดุไทย + ส่งแล้ว (เด้งเมื่อเลือกสถานะ ≥ 6) ── */}
       {showTracking && (

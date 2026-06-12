@@ -4,22 +4,26 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 
-const LEFT_SLIDES = [
-  "/images/promotion/clearanceman.png",
-  "/images/promotion/fclimportchinjesus.png",
-  "/images/promotion/importchinawidth.png",
+// Each slide carries an SEO-rich Thai alt (service + brand keywords) instead of
+// the old generic "Slide N" — Google Images + screen readers read this.
+type Slide = { src: string; alt: string };
+
+const LEFT_SLIDES: Slide[] = [
+  { src: "/images/promotion/clearanceman.png",       alt: "บริการเคลียร์สินค้าติดด่านศุลกากร นำเข้าจากจีน รถ เรือ อากาศ กับ Pacred Shipping" },
+  { src: "/images/promotion/fclimportchinjesus.png", alt: "นำเข้าสินค้าจากจีนแบบเหมาตู้ FCL ราคาถูก ส่งถึงโกดัง Pacred Shipping" },
+  { src: "/images/promotion/importchinawidth.png",   alt: "บริการนำเข้าสินค้าจากจีนครบวงจร ชิปปิ้งจีน-ไทย Pacred Shipping" },
 ];
 // Desktop right slot — shorter promotion banners (same folder, paired with LEFT_SLIDES)
-const RIGHT_DESKTOP_SLIDES = [
-  "/images/promotion/clearanceshort.png",
-  "/images/promotion/fclimportchinman.png",
-  "/images/promotion/importlclchina.png",
+const RIGHT_DESKTOP_SLIDES: Slide[] = [
+  { src: "/images/promotion/clearanceshort.png",   alt: "เคลียร์ศุลกากรสินค้าติดด่าน ออกของไว นำเข้าจากจีน Pacred Shipping" },
+  { src: "/images/promotion/fclimportchinman.png", alt: "นำเข้าสินค้าจีนเหมาตู้ FCL LCL ราคาถูก ชิปปิ้งจีน Pacred Shipping" },
+  { src: "/images/promotion/importlclchina.png",   alt: "นำเข้าสินค้าจากจีนแบบ LCL ไม่เต็มตู้ ส่งถึงบ้าน Pacred Shipping" },
 ];
 // Mobile right slot — mobile-optimised banners
-const RIGHT_MOBILE_SLIDES = [
-  "/images/mobilebanner/1.png",
-  "/images/mobilebanner/2.png",
-  "/images/mobilebanner/3.png",
+const RIGHT_MOBILE_SLIDES: Slide[] = [
+  { src: "/images/mobilebanner/1.png", alt: "โปรโมชั่นนำเข้าสินค้าจากจีน FCL LCL Pacred Shipping" },
+  { src: "/images/mobilebanner/2.png", alt: "โปรโมชั่นฝากสั่งซื้อสินค้าจีน 1688 Taobao Tmall Pacred Shipping" },
+  { src: "/images/mobilebanner/3.png", alt: "โปรโมชั่นเคลียร์ศุลกากรและขนส่งนำเข้าสินค้าจากจีน Pacred Shipping" },
 ];
 
 function InnerCarousel({
@@ -27,7 +31,7 @@ function InnerCarousel({
   containerClass,
   delay,
 }: {
-  slides: string[];
+  slides: Slide[];
   containerClass: string;
   delay?: number;
 }) {
@@ -57,16 +61,16 @@ function InnerCarousel({
         className="flex h-full transition-transform duration-500 ease-in-out"
         style={{ transform: `translateX(-${current * 100}%)` }}
       >
-        {slides.map((src, i) => (
+        {slides.map((slide, i) => (
           <Link
-            key={src}
+            key={slide.src}
             href="/register"
             aria-label="สมัครสมาชิก Pacred"
             className="relative w-full h-full shrink-0 block overflow-hidden cursor-pointer"
           >
             <Image
-              src={src}
-              alt={`Slide ${i + 1}`}
+              src={slide.src}
+              alt={slide.alt}
               fill
               sizes="(max-width: 768px) 100vw, 730px"
               className="object-cover transition-transform duration-500 ease-out group-hover/promo:scale-[1.045]"
