@@ -26,15 +26,16 @@
  *
  * Bootstrap-4 classes scoped under `.pcs-legacy` (see admin-base.css).
  *
- * NOTE: `@ericblade/quagga2` is not yet installed in package.json.
- * TODO: pnpm add @ericblade/quagga2 (and pnpm add -D @types/quagga2 if needed)
+ * `@ericblade/quagga2` (1.12.x) IS installed (package.json + lockfile +
+ * node_modules) — the dynamic require below is wrapped in try/catch purely as a
+ * defensive fallback (a future dep removal surfaces a friendly in-UI error
+ * instead of crashing the scan page).
  */
 
 import { useEffect, useRef, useState } from "react";
 
-// TODO: pnpm add @ericblade/quagga2 — until then this import won't resolve
-// and the page will fail to compile. Left intentionally so Wave 2 install
-// gates on the missing dep being noticed.
+// quagga2 is installed; this dynamic require + try/catch is a defensive guard
+// only (keeps a hypothetical missing-dep state from hard-crashing the page).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Quagga: any;
 try {
