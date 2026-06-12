@@ -3,54 +3,47 @@
 /**
  * <CameraScanner>
  *
- * Faithful 1:1 port of the legacy PCS Cargo mobile barcode-scanner UI
- * shared by `pcs-admin/barcode-c-{all,from,import,prepare}.php` (L106-407 of
- * each — the inline <script> + the `.controls` markup at L43-87). The PHP
- * page invoked Quagga.js via a global `<script src=".../quagga.js">` tag;
- * here we import `@ericblade/quagga2` (the maintained ESM fork) inside a
- * client component so the camera lifecycle binds to React mount/unmount.
+ * Mobile barcode/QR scanner shared by the 4 cargo camera pages
+ * (`/admin/barcode/cargo/{all,from,prepare,import}`). It decodes a tracking
+ * code from the back camera and either calls the `onDetected` prop (the
+ * parent owns the response — e.g. cargo/import → `adminBarcodeImportScan`)
+ * or, when no callback is given, redirects to the legacy gateway route
+ * `/admin/barcode/gateway?type=…&device=mobile&tracking=<code>`.
  *
- * Behaviour mirrored exactly from the legacy `Quagga.onDetected` handler
- * (L391-404 of each barcode-c-*.php): on first successful decode of a NEW
- * code (App.lastResult dedupe), navigate to `gateway.php?type=…&device=mobile&tracking=<code>`.
- * Here we redirect to `/admin/barcode/gateway?type=…&device=mobile&tracking=<code>`
- * — Agent 3's gateway route handles the dispatch.
+ * ENGINE: the native `window.BarcodeDetector` API (same proven approach as
+ * `app/[locale]/(admin)/admin/barcode/scan-form.tsx`) — NOT a 3rd-party lib.
+ * The previous build used `@ericblade/quagga2`, a 1D-only engine defaulted to
+ * `code_128`; it could not read the QR codes on the real warehouse labels
+ * (收货单 / PR receipt labels), so the camera never decoded them. BarcodeDetector
+ * reads `qr_code` + `code_128` + many 1D formats out of the box and auto-detects
+ * the format (no barcode-type picker needed); `facingMode:'environment'` picks
+ * the back camera (no camera picker needed) — both legacy dropdowns are gone.
  *
- * Same Quagga config as legacy state{} block (L341-364): LiveStream,
- * environment-facing camera, 640x480 min, code_128 default reader,
- * 2 workers, frequency 10, medium half-sample locator.
+ * FALLBACK: an always-present, auto-focused text input. Staff can TYPE the
+ * tracking number OR point a USB scanner at it (USB scanners emit keystrokes +
+ * Enter) — submitting fires the exact same onDetected/gateway path as a camera
+ * decode. This guarantees the page works even where BarcodeDetector is
+ * unavailable (Safari / Firefox / desktop without a webcam), in which case we
+ * surface a small note and still attempt the camera preview best-effort.
  *
- * Controls = the SAME knobs as legacy (Stop · Barcode-Type select · Camera
- * select filled by enumerateVideoDevices) but the UI is **Pacred Tailwind
- * design** per AGENTS.md §0a — we steal the workflow, not the Bootstrap-4
- * chrome. Framed `aspect-video` viewport with a crosshair overlay (matches the
- * USB-scanner page), a live "กำลังสแกน" status dot, and a rounded controls card.
- * The legacy dead `#result_strip`/`.thumbnails` (never populated) + the unwired
- * hidden Zoom/Torch toggles are dropped. ภูม warehouse-polish 2026-06-12.
- *
- * NOTE: legacy shipped NO sizing CSS for `#interactive`/`.viewport` — the
- * injected <video>/<canvas> are sized here via Tailwind arbitrary child
- * variants (`[&_video]:object-cover` etc.), which the raw port lacked.
- *
- * `@ericblade/quagga2` (1.12.x) IS installed (package.json + lockfile +
- * node_modules) — the dynamic require below is wrapped in try/catch purely as a
- * defensive fallback (a future dep removal surfaces a friendly in-UI error
- * instead of crashing the scan page).
+ * The camera lifecycle is bound to React mount/unmount (start on mount, stop +
+ * release the MediaStream tracks on unmount). UI = Pacred Tailwind (framed
+ * aspect-video viewport with crosshair corners, a live status dot, rounded
+ * card, lucide icons) per AGENTS.md §0a. Mobile-first: tap targets ≥44px, the
+ * manual input ≥16px text. ภูม warehouse-polish 2026-06-12.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { Camera, Square, AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Camera, AlertTriangle, Keyboard } from "lucide-react";
 
-// quagga2 is installed; this dynamic require + try/catch is a defensive guard
-// only (keeps a hypothetical missing-dep state from hard-crashing the page).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Quagga: any;
-try {
-  // dynamic require so missing dep doesn't break the build entirely
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Quagga = require("@ericblade/quagga2").default;
-} catch {
-  Quagga = null;
+// Native BarcodeDetector (Chrome/Android). Typed here because TS lib.dom
+// does not yet ship the declaration. Mirrors scan-form.tsx.
+declare global {
+  interface Window {
+    BarcodeDetector?: new (options?: { formats?: string[] }) => {
+      detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string; format: string }>>;
+    };
+  }
 }
 
 /** type values match legacy `gateway.php?type=…` values verbatim:
@@ -61,20 +54,18 @@ try {
  */
 export type GatewayType = "all" | "from" | "4" | "6";
 
-const BARCODE_READERS = [
-  { value: "code_128", label: "Code 128" },
-  { value: "code_39", label: "Code 39" },
-  { value: "code_39_vin", label: "Code 39 VIN" },
-  { value: "ean", label: "EAN" },
-  { value: "ean_extended", label: "EAN-extended" },
-  { value: "ean_8", label: "EAN-8" },
-  { value: "upc", label: "UPC" },
-  { value: "upc_e", label: "UPC-E" },
-  { value: "codabar", label: "Codabar" },
-  { value: "i2of5", label: "Interleaved 2 of 5" },
-  { value: "2of5", label: "Standard 2 of 5" },
-  { value: "code_93", label: "Code 93" },
-] as const;
+// qr_code FIRST — the real warehouse labels carry QR codes. The 1D formats
+// follow so USB-printed Code128/Code39 box labels keep decoding too.
+const BARCODE_FORMATS = [
+  "qr_code",
+  "code_128",
+  "code_39",
+  "code_93",
+  "ean_13",
+  "ean_8",
+  "itf",
+  "data_matrix",
+];
 
 /**
  * Props:
@@ -94,101 +85,40 @@ export function CameraScanner({
   gatewayType?: GatewayType;
   onDetected?: (code: string) => void;
 }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const lastResultRef = useRef<string | null>(null);
-  const [reader, setReader] = useState<string>("code_128");
-  const [deviceId, setDeviceId] = useState<string>("");
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastCodeRef = useRef<string>("");
+  const lastCodeTimeRef = useRef<number>(0);
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [manual, setManual] = useState("");
   const [running, setRunning] = useState(false);
+  const [cameraErr, setCameraErr] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
 
-  // Build the reader-config object from the selected dropdown value
-  // mirroring legacy inputMapper.decoder.readers (L322-339).
-  const buildReaders = (value: string) => {
-    if (value === "ean_extended") {
-      return [
-        {
-          format: "ean_reader",
-          config: { supplements: ["ean_5_reader", "ean_2_reader"] },
-        },
-      ];
-    }
-    return [{ format: `${value}_reader`, config: {} }];
-  };
-
-  // Init Quagga — legacy state{} block (L341-364).
-  useEffect(() => {
-    if (!Quagga) {
-      // Defer setError to a microtask so the effect doesn't trigger a
-      // synchronous re-render (react-hooks/set-state-in-effect lint).
-      queueMicrotask(() => setError("Quagga library not installed. Run: pnpm add @ericblade/quagga2"));
-      return;
-    }
-    if (!viewportRef.current) return;
-
-    const constraints: MediaTrackConstraints = {
-      width: { min: 640 },
-      height: { min: 480 },
-      facingMode: "environment",
-      aspectRatio: { min: 1, max: 2 },
-    };
-    if (deviceId) {
-      (constraints as MediaTrackConstraints & { deviceId?: string }).deviceId = deviceId;
-    }
-
-    Quagga.init(
-      {
-        inputStream: {
-          type: "LiveStream",
-          target: viewportRef.current,
-          constraints,
-        },
-        locator: { patchSize: "medium", halfSample: true },
-        numOfWorkers: 2,
-        frequency: 10,
-        decoder: { readers: buildReaders(reader) },
-        locate: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (err: any) => {
-        if (err) {
-          console.error("[CameraScanner] Quagga.init failed:", err);
-          setError(typeof err === "string" ? err : (err?.message ?? "Camera init failed"));
-          return;
-        }
-        Quagga.start();
-        setRunning(true);
-
-        // Populate camera dropdown — legacy initCameraSelection (L194-214).
-        Quagga.CameraAccess.enumerateVideoDevices()
-          .then((d: MediaDeviceInfo[]) => setDevices(d))
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .catch((e: any) => console.warn("[CameraScanner] enumerate failed:", e));
-      },
-    );
-
-    // onDetected — the redirect-on-scan handler. Legacy L391-404.
-    //
-    // Wave 17 P1-7: when `onDetected` prop is provided, hand the code
-    // up to the parent (e.g. for cargo/import which calls the server
-    // action `adminBarcodeImportScan` to do the WRITE). When no
-    // callback is provided, fall back to the legacy gateway redirect.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onDetected = (result: any) => {
-      const code: string | undefined = result?.codeResult?.code;
+  // ── Dispatch (camera decode OR manual submit both flow through here) ───────
+  // Stable identity: depends only on the props. Dedupe the same raw code within
+  // ~2.5s so one parcel held in front of the lens fires exactly once.
+  const dispatch = useCallback(
+    (raw: string) => {
+      const code = raw.trim();
       if (!code) return;
-      if (lastResultRef.current === code) return;
-      lastResultRef.current = code;
+
+      const now = Date.now();
+      if (code === lastCodeRef.current && now - lastCodeTimeRef.current < 2500) return;
+      lastCodeRef.current = code;
+      lastCodeTimeRef.current = now;
 
       if (onDetectedProp) {
+        // Parent owns the response (cargo/import calls the server action).
         onDetectedProp(code);
         return;
       }
 
       if (!gatewayType) {
-        console.warn(
-          "[CameraScanner] no gatewayType + no onDetected; ignoring scan",
-        );
+        console.warn("[CameraScanner] no gatewayType + no onDetected; ignoring scan");
         return;
       }
 
@@ -199,86 +129,117 @@ export function CameraScanner({
         tracking: code,
       });
       window.location.href = `/admin/barcode/gateway?${params.toString()}`;
-    };
-    Quagga.onDetected(onDetected);
+    },
+    [gatewayType, onDetectedProp],
+  );
 
-    // onProcessed — overlay boxes. Legacy L368-390.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onProcessed = (result: any) => {
-      const drawingCtx = Quagga.canvas?.ctx?.overlay;
-      const drawingCanvas = Quagga.canvas?.dom?.overlay;
-      if (!result || !drawingCtx || !drawingCanvas) return;
+  // Keep the camera loop calling the latest dispatch without re-binding the
+  // camera (the detection interval reads this ref, not dispatch directly).
+  const dispatchRef = useRef(dispatch);
+  useEffect(() => {
+    dispatchRef.current = dispatch;
+  }, [dispatch]);
 
-      if (result.boxes) {
-        drawingCtx.clearRect(
-          0,
-          0,
-          parseInt(drawingCanvas.getAttribute("width") ?? "0"),
-          parseInt(drawingCanvas.getAttribute("height") ?? "0"),
+  // ── Camera lifecycle — start on mount, release tracks on unmount ──────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function start() {
+      // BarcodeDetector missing → keep the manual input usable, attempt the
+      // preview best-effort so a sighted-camera browser without the API still
+      // shows video.
+      if (typeof window === "undefined" || !window.BarcodeDetector) {
+        queueMicrotask(() => setUnsupported(true));
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 } },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        setCameraErr(null);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+
+        if (window.BarcodeDetector) {
+          detectorRef.current = new window.BarcodeDetector({ formats: BARCODE_FORMATS });
+          setRunning(true);
+
+          // ~200ms detection loop (mirrors scan-form.tsx).
+          intervalRef.current = setInterval(async () => {
+            const video = videoRef.current;
+            const detector = detectorRef.current;
+            if (!video || !detector) return;
+            try {
+              const codes = await detector.detect(video);
+              if (!codes.length) return;
+              const raw = codes[0].rawValue;
+              if (raw) dispatchRef.current(raw);
+            } catch {
+              // transient detect errors (frame not ready) — ignore
+            }
+          }, 200);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : "ไม่สามารถเปิดกล้องได้";
+        setCameraErr(
+          msg.includes("Permission") || msg.includes("denied")
+            ? "ไม่ได้รับอนุญาตเปิดกล้อง — กรุณาอนุญาตใน browser settings (หรือพิมพ์/ยิงเครื่องสแกนแทน)"
+            : msg,
         );
-        result.boxes
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .filter((box: any) => box !== result.box)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .forEach((box: any) => {
-            Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, {
-              color: "green",
-              lineWidth: 2,
-            });
-          });
       }
-      if (result.box) {
-        Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, {
-          color: "#00F",
-          lineWidth: 2,
-        });
-      }
-      if (result.codeResult?.code) {
-        Quagga.ImageDebug.drawPath(result.line, { x: "x", y: "y" }, drawingCtx, {
-          color: "red",
-          lineWidth: 3,
-        });
-      }
-    };
-    Quagga.onProcessed(onProcessed);
+    }
+
+    start();
 
     return () => {
-      try {
-        Quagga.offDetected(onDetected);
-        Quagga.offProcessed(onProcessed);
-        Quagga.stop();
-      } catch (e) {
-        console.warn("[CameraScanner] cleanup error:", e);
+      cancelled = true;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      detectorRef.current = null;
       setRunning(false);
     };
-    // Re-init on reader/deviceId change — mirrors legacy setState() → init() loop (L286-303).
-  }, [reader, deviceId, gatewayType, onDetectedProp]);
+  }, []);
 
-  // Manual Stop button — mirrors legacy `.controls button.stop` (L46-48, L219-223).
-  const handleStop = () => {
-    if (!Quagga) return;
-    try {
-      Quagga.stop();
-      setRunning(false);
-    } catch (e) {
-      console.warn("[CameraScanner] stop error:", e);
-    }
-  };
+  // Auto-focus the manual input so a USB scanner (types + Enter) lands here.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function onManualSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const code = manual.trim();
+    if (!code) return;
+    setManual("");
+    dispatch(code);
+  }
 
   return (
     <div className="space-y-3">
-      {/* Camera viewport — Quagga injects <video> + <canvas> into this node,
-          so we keep id="interactive" + the ref. Legacy shipped NO sizing CSS
-          for these; the arbitrary child variants below size the injected
-          video/overlay responsively (a real improvement, not just a reskin). */}
-      <div
-        ref={viewportRef}
-        id="interactive"
-        className="relative w-full aspect-video overflow-hidden rounded-2xl bg-black shadow-sm
-          [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover
-          [&_canvas]:absolute [&_canvas]:inset-0 [&_canvas]:h-full [&_canvas]:w-full"
-      >
+      {/* Camera viewport */}
+      <div className="relative w-full aspect-video overflow-hidden rounded-2xl bg-black shadow-sm">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+
         {/* Crosshair frame (decorative · matches the USB-scanner page) */}
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="relative h-36 w-56">
@@ -288,85 +249,74 @@ export function CameraScanner({
             <span className="absolute bottom-0 right-0 h-5 w-5 rounded-br border-b-2 border-r-2 border-primary-400" />
           </div>
         </div>
+
         {/* Idle / not-running overlay */}
         {!running && (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-white/80">
             <Camera className="h-10 w-10" aria-hidden="true" />
             <span className="text-sm font-medium">
-              {error ? "กล้องไม่พร้อม" : "กำลังเปิดกล้อง…"}
+              {cameraErr ? "กล้องไม่พร้อม" : unsupported ? "กล้องสแกนไม่ได้บนเบราว์เซอร์นี้" : "กำลังเปิดกล้อง…"}
             </span>
           </div>
         )}
       </div>
 
-      {/* Error alert */}
-      {error && (
+      {/* Camera error alert */}
+      {cameraErr && (
         <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm text-red-900" role="alert">
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
             <div>
               <div className="font-semibold">เปิดกล้องไม่ได้</div>
-              <div className="mt-0.5">{error}</div>
+              <div className="mt-0.5">{cameraErr}</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Controls card */}
+      {/* Status + manual input card */}
       <div className="space-y-3 rounded-2xl border-2 border-primary-200 bg-primary-50/30 p-4">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
             <span className={`h-2.5 w-2.5 rounded-full ${running ? "animate-pulse bg-emerald-500" : "bg-slate-300"}`} />
-            {running ? "กล้องกำลังสแกน…" : "กล้องหยุด"}
+            {running ? "กล้องกำลังสแกน…" : "กล้องไม่ทำงาน"}
           </span>
-          <button
-            type="button"
-            onClick={handleStop}
-            disabled={!running}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border-2 border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-surface-alt disabled:opacity-50"
-          >
-            <Square className="h-4 w-4" aria-hidden="true" /> หยุด
-          </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted">ชนิดบาร์โค้ด</span>
-            <select
-              value={reader}
-              onChange={(e) => setReader(e.target.value)}
-              className="mt-1 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
-            >
-              {BARCODE_READERS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+        {unsupported && !running && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            เบราว์เซอร์นี้สแกนกล้องไม่ได้ — พิมพ์เลข tracking หรือยิงเครื่องสแกน USB ลงช่องด้านล่างแทน
+          </p>
+        )}
+
+        {/* Manual / USB-scanner input — fires the SAME path as a camera decode */}
+        <form onSubmit={onManualSubmit} className="space-y-2">
+          <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+            <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
+            พิมพ์ / ยิงเครื่องสแกน
           </label>
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted">กล้อง</span>
-            <select
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-              className="mt-1 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              className="min-h-[44px] flex-1 rounded-xl border-2 border-primary-300 bg-white px-4 py-2.5 text-base font-mono focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              placeholder="เลข tracking / บาร์โค้ด…"
+              autoComplete="off"
+              inputMode="text"
+            />
+            <button
+              type="submit"
+              disabled={!manual.trim()}
+              className="inline-flex min-h-[44px] items-center rounded-xl bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
             >
-              <option value="">— เลือกกล้อง —</option>
-              {devices.map((d) => {
-                const id = d.deviceId || (d as MediaDeviceInfo & { id?: string }).id || "";
-                const label = (d.label || id).slice(0, 30);
-                return (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-        </div>
+              OK
+            </button>
+          </div>
+        </form>
 
         <p className="text-xs text-muted">
-          เล็งบาร์โค้ดเข้ากรอบ — ระบบจะอ่านอัตโนมัติแล้วพาไปยังรายการ
+          เล็งบาร์โค้ด/คิวอาร์เข้ากรอบ — ระบบจะอ่านอัตโนมัติ หรือพิมพ์/ยิงเครื่องสแกนลงช่องด้านบน
         </p>
       </div>
     </div>
