@@ -550,27 +550,27 @@ function PreviewTable({
     <div>
       <h4 className="text-xs font-bold mb-1">{title} ({rows.length})</h4>
       <p className="text-[10px] text-muted mb-1">
-        ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · กด “รายละเอียด” เพื่อดูข้อมูล MOMO ครบทุกช่อง
+        ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · กด “รายละเอียด” เพื่อดูข้อมูล MOMO ครบทุกช่อง
       </p>
-      <div className="overflow-x-auto scrollbar-x-visible">
+      <div className="max-h-[70vh] overflow-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="w-full text-[11px] border-collapse">
-          <thead className="bg-surface-alt">
+          <thead className="bg-surface-alt sticky top-0 z-20">
             <tr className="whitespace-nowrap">
-              <th className="text-left px-2 py-1 border-b">#</th>
-              <th className="text-left px-2 py-1 border-b">Tracking</th>
-              <th className="text-left px-2 py-1 border-b">ตู้/รอบ</th>
-              <th className="text-left px-2 py-1 border-b">กระสอบ</th>
-              <th className="text-left px-2 py-1 border-b">Phase</th>
-              <th className="text-left px-2 py-1 border-b">สถานะ</th>
-              <th className="text-right px-2 py-1 border-b">น้ำหนัก (kg)</th>
-              <th className="text-right px-2 py-1 border-b">ปริมาตร (คิว)</th>
-              <th className="text-right px-2 py-1 border-b">จำนวน</th>
-              <th className="text-left px-2 py-1 border-b">ขนส่ง</th>
-              <th className="text-left px-2 py-1 border-b">ประเภท</th>
-              <th className="text-left px-2 py-1 border-b">CG_NO</th>
-              <th className="text-left px-2 py-1 border-b">เข้าโกดัง</th>
-              <th className="text-left px-2 py-1 border-b">Admin Text</th>
-              <th className="text-left px-2 py-1 border-b">รายละเอียด</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">#</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">Tracking</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">ตู้/รอบ</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">กระสอบ</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">Phase</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">สถานะ</th>
+              <th className="text-right px-2 py-1.5 border-b font-semibold">น้ำหนัก (kg)</th>
+              <th className="text-right px-2 py-1.5 border-b font-semibold">ปริมาตร (คิว)</th>
+              <th className="text-right px-2 py-1.5 border-b font-semibold">จำนวน</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">ขนส่ง</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">ประเภท</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">CG_NO</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">เข้าโกดัง</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">Admin Text</th>
+              <th className="text-left px-2 py-1.5 border-b font-semibold">รายละเอียด</th>
             </tr>
           </thead>
           <tbody>
@@ -579,35 +579,38 @@ function PreviewTable({
               const isOpen = !!openMap[k];
               const d = momoRawDisplay(r.raw);
               const kodang = d.phases.find((p) => p.key === "kodang")?.at;
+              const ss = r.shipmentStatus;
+              const color: MomoBadgeColor | null = ss && ss in MOMO_STATUS_BADGE ? MOMO_STATUS_BADGE[ss] : null;
+              const rowTint = color ? ROW_TINT[color] : (i % 2 === 1 ? "bg-slate-50/60" : "");
               return (
                 <Fragment key={k}>
-                  <tr className="border-b whitespace-nowrap">
-                    <td className="px-2 py-1 text-muted">{i + 1}</td>
-                    <td className="px-2 py-1 font-mono">{r.trackingNo ?? "—"}</td>
-                    <td className="px-2 py-1 font-mono">{r.containerNo ?? "—"}</td>
-                    <td className="px-2 py-1 font-mono">{r.sackNo ?? "—"}</td>
-                    <td className="px-2 py-1">{r.phase ?? "—"}</td>
-                    <td className="px-2 py-1"><StatusBadge status={r.shipmentStatus} /></td>
-                    <td className="px-2 py-1 text-right tabular-nums">{d.weight || "—"}</td>
-                    <td className="px-2 py-1 text-right tabular-nums">{d.cbm || "—"}</td>
-                    <td className="px-2 py-1 text-right tabular-nums">{d.qty}</td>
-                    <td className="px-2 py-1">{d.shipByLabel}</td>
-                    <td className="px-2 py-1">
+                  <tr className={`border-b whitespace-nowrap transition-colors hover:bg-sky-50/70 ${rowTint}`}>
+                    <td className="px-2 py-1.5 text-muted tabular-nums">{i + 1}</td>
+                    <td className="px-2 py-1.5 font-mono">{r.trackingNo ?? "—"}</td>
+                    <td className="px-2 py-1.5 font-mono">{r.containerNo ?? "—"}</td>
+                    <td className="px-2 py-1.5 font-mono">{r.sackNo ?? "—"}</td>
+                    <td className="px-2 py-1.5">{r.phase ?? "—"}</td>
+                    <td className="px-2 py-1.5"><StatusBadge status={r.shipmentStatus} /></td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{d.weight || "—"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{d.cbm || "—"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{d.qty}</td>
+                    <td className="px-2 py-1.5">{d.shipByLabel}</td>
+                    <td className="px-2 py-1.5">
                       {d.productType || "—"}
                       {d.productType === "fda" && (
                         <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700">อย.</span>
                       )}
                     </td>
-                    <td className="px-2 py-1 font-mono">{d.cgNo || "—"}</td>
-                    <td className="px-2 py-1">{kodang ?? "—"}</td>
-                    <td className="px-2 py-1">{r.adminStatusText}</td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5 font-mono">{d.cgNo || "—"}</td>
+                    <td className="px-2 py-1.5">{kodang ?? "—"}</td>
+                    <td className="px-2 py-1.5">{r.adminStatusText}</td>
+                    <td className="px-2 py-1.5">
                       <button
                         type="button"
                         onClick={() => setOpenMap({ ...openMap, [k]: !isOpen })}
-                        className="text-sky-600 underline text-[11px]"
+                        className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100"
                       >
-                        {isOpen ? "ปิด" : "รายละเอียด"}
+                        {isOpen ? "ปิด ▲" : "รายละเอียด ▼"}
                       </button>
                     </td>
                   </tr>
