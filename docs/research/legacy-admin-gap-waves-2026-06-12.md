@@ -17,13 +17,14 @@ Lowest-risk, fully autonomous, real shipped value. Parallel agents:
 - **hs-customrate** ประวัติปรับเรทลูกค้า (read-only over the rate-change log).
 - **Filter edits (I do — existing files)**: SVIP customer filter · driver vehicle-type filter · `segment=freight` customer filter.
 
-## WAVE 2 — Freight money surfaces (stub → real · §0e/§0f · migration likely) 💰
-Data exists; mostly placeholder/stub today. Build real flow + gate hard.
-- freight-th withdrawal (เบิกเงินค่าขนส่งไทย) — placeholder → real approve/history.
-- Freight income docs write-paths: ใบเสนอราคา · ใบแจ้งหนี้ · ใบหัก (currently catch-all stub).
-- Freight ledger/history (รายการเดินบัญชี) + เงินออก/รายจ่าย.
-- segment=freight member approval flow (ยืนยันการสมัคร Freight).
-- ⚠️ Freight commission rate/50-50 policy = OWNER (flagged in Go-Live panel).
+## WAVE 2 — Freight money surfaces (stub → real · §0e/§0f) 💰 ✅ SHIPPED 2026-06-12
+The freight BACKEND was already built (freight_quotes/invoices/shipments/payments + 8 action files); the gap was the admin UI. Surfaced the EXISTING actions into real pages (0 new write-paths · all mutations via existing audited actions · §0e clean · money-isolation reviewed):
+- ✅ `/admin/accounting/freight/quotes` — ใบเสนอราคา list+detail (adminSubmit/Approve/Reject/Send/MarkAccepted/Expire/Convert · §0f confirm each).
+- ✅ `/admin/accounting/freight/invoices` — ใบแจ้งหนี้ list+detail (adminIssue/Cancel/recordFreightPayment · VAT/WHT/payment-ledger · PDF print).
+- ✅ `/admin/accounting/freight/ledger` — รายรับ-รายจ่าย (เงินเข้า freight_invoice_payments − เงินออก freight_shipments cost = สุทธิ · CSV · read-only).
+- ✅ `/admin/withdrawal/freight-th-list` — ค่าขนส่งไทย เบิกเงิน real read-surface; approve/pay gated+bannered until owner confirms commission 50/50 (isFreightCommissionEnabled).
+- Wired: freight hub menubar +3 leaves · HUB cards repointed (the old ใบเสนอราคา card pointed at a non-existent route) · sidebar freight-th repointed stub→real. Gate REAL verify=0/build=0.
+- ⏳ Still owner: Freight commission 50/50 policy (unlocks the freight-th pay button + accrual). Remaining stub TODOs (รายจ่าย/ผู้ติดต่อ/การเงิน/การบัญชี menubar) = Phase C. segment=freight member-approval = Wave 5.
 
 ## WAVE 3 — Payroll / HR (new system · big · OWNER policy) 🔴 needs input
 - ตั้งเงินเดือน · สรุปเงินเดือน · ประวัติการจ่ายเงินเดือน · บัญชีธนาคารพนักงาน.

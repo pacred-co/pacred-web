@@ -709,8 +709,11 @@ const blockWithdrawalList: MenuItem = {
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
         // Phase 3 — container-costs deeper-future per 2026-05-20 brief.
         { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney", phase: 3 },
-        // Phase 2 — freight-th stub (no legacy source · still placeholder per brief).
-        { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th",  icon: "Truck", phase: 2 },
+        // Phase 2 — Wave 2 (2026-06-12) repointed from the Tailwind placeholder
+        // /admin/withdrawal/freight-th to the REAL read-surface freight-th-list
+        // (the approve/pay button is gated+bannered until the owner confirms the
+        // freight commission 50/50 policy · isFreightCommissionEnabled).
+        { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th-list",  icon: "Truck", phase: 2 },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
         // Phase 2 — sales-only commissions / payouts (not live to customers).
         { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },

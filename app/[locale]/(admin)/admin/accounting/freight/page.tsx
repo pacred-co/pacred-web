@@ -94,6 +94,13 @@ function notesStatuses(typeSlug: string): MenubarItem[] {
 
 const FREIGHT_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/accounting/freight" },
+  // Wave 2 (2026-06-12) — the REAL freight income-doc surfaces (built on the
+  // existing freight_quotes / freight_invoices / freight_invoice_payments
+  // backend). The "รายรับ" cascade below still points at the per-service
+  // catch-all stubs; these 3 are the working pages.
+  { label: "📄 ใบเสนอราคา (จริง)", href: "/admin/accounting/freight/quotes" },
+  { label: "🧾 ใบแจ้งหนี้ (จริง)", href: "/admin/accounting/freight/invoices" },
+  { label: "📒 รายการเดินบัญชี", href: "/admin/accounting/freight/ledger" },
   {
     label: "รายรับ",
     children: [
@@ -158,7 +165,20 @@ const HUB_CARDS = [
   {
     title: "ใบเสนอราคา (Freight Quotes)",
     desc: "ใบเสนอราคาฝั่งฟอร์เวอร์เดอร์ — สร้าง / ค้นหา / จัดการสถานะ",
-    href: "/admin/freight/quotes",
+    href: "/admin/accounting/freight/quotes",
+    badge: "live",
+  },
+  // Wave 2 (2026-06-12) — the new real income-doc surfaces.
+  {
+    title: "ใบแจ้งหนี้ (Freight Invoices)",
+    desc: "ใบแจ้งหนี้ Freight — ออก / บันทึกชำระ / พิมพ์ + ยอดค้าง · VAT · หัก ณ ที่จ่าย",
+    href: "/admin/accounting/freight/invoices",
+    badge: "live",
+  },
+  {
+    title: "รายการเดินบัญชี Freight (Ledger)",
+    desc: "เงินเข้า (ชำระใบแจ้งหนี้) − เงินออก (ต้นทุน shipment) = สุทธิ · กรองวันที่ · CSV",
+    href: "/admin/accounting/freight/ledger",
     badge: "live",
   },
   {
