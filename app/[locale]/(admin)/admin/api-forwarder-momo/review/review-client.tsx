@@ -385,76 +385,101 @@ export function ReviewGridClient({
   return (
     <div className="space-y-5">
       {/* Bulk action bar */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm">
-          <strong>{totalPending}</strong> รายการรอ commit
-          {" · "}
-          <strong className="text-primary-700">{totalReady}</strong> พร้อม commit
-          {" "}
-          <span className="text-xs text-muted">
-            (มี userID + บริษัทขนส่ง)
-          </span>
-          {totalUserMissing > 0 && (
-            <>
-              {" · "}
-              <strong className="text-red-600">{totalUserMissing}</strong>{" "}
-              <span className="text-xs text-red-600">
-                userID ไม่อยู่ในระบบ
+      <section className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
+          {/* Stat chips — at-a-glance counts */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-alt px-3.5 py-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-200 text-slate-700">
+                <Truck className="h-4 w-4" />
               </span>
-            </>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => router.refresh()}
-            disabled={pending || bulkRunning}
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold hover:bg-surface-alt disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-            รีเฟรช
-          </button>
-          <button
-            type="button"
-            onClick={commitAll}
-            disabled={bulkRunning || pending || totalReady === 0}
-            className="inline-flex items-center gap-1 rounded-lg border border-primary-700 bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
-          >
-            <Truck className="h-3.5 w-3.5" />
-            {bulkRunning
-              ? `กำลัง commit ${totalReady}…`
-              : `สร้างทั้งหมด (${totalReady})`}
-          </button>
+              <span className="leading-tight">
+                <span className="block text-lg font-extrabold tabular-nums text-foreground">{totalPending}</span>
+                <span className="block text-[11px] text-muted">รอ commit</span>
+              </span>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3.5 py-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-100 text-primary-700">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
+              <span className="leading-tight">
+                <span className="block text-lg font-extrabold tabular-nums text-primary-700">{totalReady}</span>
+                <span className="block text-[11px] text-primary-700/70">พร้อม commit · มี userID + ขนส่ง</span>
+              </span>
+            </div>
+            {totalUserMissing > 0 && (
+              <div className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2">
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-red-100 text-red-600">
+                  <AlertCircle className="h-4 w-4" />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-lg font-extrabold tabular-nums text-red-600">{totalUserMissing}</span>
+                  <span className="block text-[11px] text-red-600/80">userID ไม่อยู่ในระบบ</span>
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.refresh()}
+              disabled={pending || bulkRunning}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} />
+              รีเฟรช
+            </button>
+            <button
+              type="button"
+              onClick={commitAll}
+              disabled={bulkRunning || pending || totalReady === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-primary-700 bg-primary-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Truck className="h-4 w-4" />
+              {bulkRunning
+                ? `กำลัง commit ${totalReady}…`
+                : `สร้างทั้งหมด (${totalReady})`}
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Bulk result banner */}
       {bulkSummary && (
-        <div className={`rounded-2xl border p-3 text-sm ${
+        <div className={`flex items-start gap-2.5 rounded-2xl border p-3.5 text-sm shadow-sm ${
           bulkSummary.failed === 0
             ? "border-emerald-200 bg-emerald-50 text-emerald-900"
             : "border-amber-200 bg-amber-50 text-amber-900"
         }`}>
-          <strong>Bulk commit เสร็จ:</strong>{" "}
-          ทั้งหมด {bulkSummary.total} · สำเร็จ {bulkSummary.succeeded}
-          {bulkSummary.failed > 0 ? ` · ล้มเหลว ${bulkSummary.failed} (ดู message ในแต่ละ row)` : ""}
+          {bulkSummary.failed === 0
+            ? <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+            : <AlertCircle className="h-5 w-5 flex-shrink-0 text-amber-500" />}
+          <div>
+            <strong>Bulk commit เสร็จ:</strong>{" "}
+            ทั้งหมด {bulkSummary.total} · สำเร็จ {bulkSummary.succeeded}
+            {bulkSummary.failed > 0 ? ` · ล้มเหลว ${bulkSummary.failed} (ดู message ในแต่ละ row)` : ""}
+          </div>
         </div>
       )}
 
       {/* Pending error banner */}
       {pendingError && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-          <strong>Load failed:</strong> {pendingError}
+        <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-900 shadow-sm">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-500" />
+          <div><strong>Load failed:</strong> {pendingError}</div>
         </div>
       )}
 
       {/* Empty state */}
       {totalPending === 0 && !pendingError && (
-        <section className="rounded-2xl border border-border bg-white p-8 text-center text-sm text-muted shadow-sm">
-          <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
-          <p className="mt-2">
+        <section className="rounded-2xl border border-dashed border-border bg-white px-6 py-12 text-center shadow-sm">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50">
+            <CheckCircle2 className="h-9 w-9 text-emerald-500" />
+          </span>
+          <p className="mt-4 text-base font-semibold text-foreground">เคลียร์หมดแล้ว!</p>
+          <p className="mx-auto mt-1.5 max-w-md text-sm text-muted">
             ไม่มีรายการรอ commit — sync ใหม่จาก{" "}
-            <Link href="/admin/api-forwarder-momo/sync" className="text-primary-700 underline">
+            <Link href="/admin/api-forwarder-momo/sync" className="font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800">
               /sync
             </Link>{" "}
             เพื่อนำรายการเข้า momo_import_tracks
@@ -465,23 +490,29 @@ export function ReviewGridClient({
       {/* Pending grid */}
       {totalPending > 0 && (
         <section className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-alt/40 px-4 py-3">
+            <h3 className="text-sm font-bold text-foreground">รายการรอ commit เข้าระบบ</h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-[11px] font-medium text-muted">
+              ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์
+            </span>
+          </header>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs border-collapse min-w-[1100px]">
-              <thead className="bg-surface-alt sticky top-0">
-                <tr>
-                  <th className="text-left px-3 py-2 border-b w-8">#</th>
-                  <th className="text-left px-3 py-2 border-b">Tracking</th>
-                  <th className="text-left px-3 py-2 border-b">ตู้ / Sack</th>
-                  <th className="text-center px-3 py-2 border-b w-20">
+              <thead className="bg-surface-alt sticky top-0 z-10">
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <th className="text-left px-3 py-3 border-b border-border w-8">#</th>
+                  <th className="text-left px-3 py-3 border-b border-border">Tracking</th>
+                  <th className="text-left px-3 py-3 border-b border-border">ตู้ / Sack</th>
+                  <th className="text-center px-3 py-3 border-b border-border w-20">
                     รูปป้าย
-                    <div className="text-[9px] font-normal text-muted">(คลิกซูม · ตรวจ user_code)</div>
+                    <div className="text-[9px] font-normal normal-case tracking-normal text-muted">(คลิกซูม · ตรวจ user_code)</div>
                   </th>
-                  <th className="text-left px-3 py-2 border-b">Phase</th>
-                  <th className="text-left px-3 py-2 border-b">Qty</th>
-                  <th className="text-left px-3 py-2 border-b w-32">userID *</th>
-                  <th className="text-left px-3 py-2 border-b w-44">บริษัทขนส่ง *</th>
-                  <th className="text-left px-3 py-2 border-b w-32">ประเภท</th>
-                  <th className="text-left px-3 py-2 border-b w-44">Action</th>
+                  <th className="text-left px-3 py-3 border-b border-border">Phase</th>
+                  <th className="text-left px-3 py-3 border-b border-border">Qty</th>
+                  <th className="text-left px-3 py-3 border-b border-border w-32">userID *</th>
+                  <th className="text-left px-3 py-3 border-b border-border w-44">บริษัทขนส่ง *</th>
+                  <th className="text-left px-3 py-3 border-b border-border w-32">ประเภท</th>
+                  <th className="text-left px-3 py-3 border-b border-border w-44">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,12 +523,12 @@ export function ReviewGridClient({
                   const isReady = !!f && /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
 
                   return (
-                    <tr key={r.id} className={`border-b align-top ${
-                      result?.ok ? "bg-emerald-50/60" : ""
+                    <tr key={r.id} className={`border-b border-border align-top transition-colors ${
+                      result?.ok ? "bg-emerald-50/60" : "hover:bg-surface-alt/40"
                     }`}>
-                      <td className="px-3 py-2 text-muted">{idx + 1}</td>
-                      <td className="px-3 py-2 font-mono">{r.momoTrackingNo ?? "—"}</td>
-                      <td className="px-3 py-2 font-mono">
+                      <td className="px-3 py-3 font-semibold text-muted tabular-nums">{idx + 1}</td>
+                      <td className="px-3 py-3 font-mono font-semibold text-foreground">{r.momoTrackingNo ?? "—"}</td>
+                      <td className="px-3 py-3 font-mono">
                         {/*
                           Cabinet display — prefer the REAL cabinet from
                           container_closed.cid (containerBatchNo). Show the
@@ -505,25 +536,25 @@ export function ReviewGridClient({
                         */}
                         {r.containerBatchNo ? (
                           <>
-                            <div className="font-bold text-emerald-700">{r.containerBatchNo}</div>
+                            <div className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-700">{r.containerBatchNo}</div>
                             {r.momoContainerNo && r.momoContainerNo !== r.containerBatchNo && (
-                              <div className="text-[10px] text-muted">
+                              <div className="mt-0.5 text-[10px] text-muted">
                                 MOMO batch: {r.momoContainerNo}
                               </div>
                             )}
                           </>
                         ) : (
                           <>
-                            <div>{r.momoContainerNo ?? "—"}</div>
+                            <div className="text-foreground">{r.momoContainerNo ?? "—"}</div>
                             {r.momoContainerNo && (
-                              <div className="text-[10px] text-amber-600">
+                              <div className="mt-0.5 text-[10px] text-amber-600">
                                 ⏳ ยังไม่ join cabinet (รอ container_closed sync)
                               </div>
                             )}
                           </>
                         )}
                         {r.momoSackNo && (
-                          <div className="text-[10px] text-muted">sack: {r.momoSackNo}</div>
+                          <div className="mt-0.5 text-[10px] text-muted">sack: {r.momoSackNo}</div>
                         )}
                       </td>
                       {/* 2026-06-04 (ภูม flag) — รูปป้ายแปะ thumbnail ที่
@@ -531,7 +562,7 @@ export function ReviewGridClient({
                           quick-zoom ตรวจว่า user_code ที่ MOMO กรอกตรงกับ
                           ป้ายของจริงรึเปล่า (เคสจริง: MOMO กรอก "023" แต่
                           ป้ายเขียน "PR025"). */}
-                      <td className="px-2 py-2 text-center">
+                      <td className="px-2 py-3 text-center">
                         {r.imageUrls.length > 0 ? (
                           <button
                             type="button"
@@ -549,11 +580,11 @@ export function ReviewGridClient({
                             <img
                               src={r.imageUrls[0]}
                               alt={`MOMO label · ${r.momoTrackingNo ?? "—"}`}
-                              className="h-12 w-12 rounded border border-border object-cover group-hover:ring-2 group-hover:ring-primary-400 transition-all"
+                              className="h-12 w-12 rounded-lg border border-border object-cover shadow-sm transition-all group-hover:ring-2 group-hover:ring-primary-400 group-hover:shadow-md"
                               loading="lazy"
                             />
                             {r.imageUrls.length > 1 && (
-                              <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 text-white text-[9px] px-1.5 py-0.5 font-bold">
+                              <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 text-white text-[9px] px-1.5 py-0.5 font-bold shadow-sm">
                                 +{r.imageUrls.length - 1}
                               </span>
                             )}
@@ -562,18 +593,22 @@ export function ReviewGridClient({
                           <span className="text-[10px] text-muted">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2">
-                        <div>{r.phase ?? "—"}</div>
+                      <td className="px-3 py-3">
+                        <div className="font-medium text-foreground">{r.phase ?? "—"}</div>
                         {r.adminStatusText && (
-                          <div className="text-[10px] text-muted">
+                          <div className="mt-0.5 text-[10px] text-muted">
                             {r.adminStatusText}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2">{r.qty ?? 1}</td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex min-w-[1.75rem] justify-center rounded-md bg-surface-alt px-2 py-0.5 font-semibold tabular-nums text-foreground">
+                          {r.qty ?? 1}
+                        </span>
+                      </td>
 
                       {/* userID input */}
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-3">
                         <input
                           type="text"
                           value={f?.userID ?? ""}
@@ -582,7 +617,7 @@ export function ReviewGridClient({
                           }
                           placeholder="PR12345"
                           disabled={isCommitting || !!result?.ok}
-                          className="w-full rounded border border-border px-2 py-1 font-mono text-xs uppercase"
+                          className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 font-mono text-xs uppercase shadow-sm transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:bg-surface-alt disabled:opacity-70"
                         />
                         {r.guessedUserId && f?.userID !== r.guessedUserId && (
                           <button
@@ -590,7 +625,7 @@ export function ReviewGridClient({
                             onClick={() =>
                               setRowField(r.id, "userID", r.guessedUserId ?? "")
                             }
-                            className="mt-0.5 text-[10px] text-sky-600 underline"
+                            className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 underline underline-offset-2 hover:text-sky-700"
                           >
                             ใช้ค่าจาก MOMO: {r.guessedUserId}
                           </button>
@@ -601,13 +636,13 @@ export function ReviewGridClient({
                           so admin knows the row will skip / fail.
                         */}
                         {r.userIdValid === false && r.guessedUserId && (
-                          <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
                             <AlertCircle className="h-2.5 w-2.5" />
                             ไม่มี {r.guessedUserId} ในระบบ
                           </div>
                         )}
                         {r.userIdValid === true && (
-                          <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
                             <CheckCircle2 className="h-2.5 w-2.5" />
                             พบใน tb_users
                           </div>
@@ -615,14 +650,14 @@ export function ReviewGridClient({
                       </td>
 
                       {/* ship-by select */}
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-3">
                         <select
                           value={f?.fShipBy ?? "PCS"}
                           onChange={(e) =>
                             setRowField(r.id, "fShipBy", e.target.value)
                           }
                           disabled={isCommitting || !!result?.ok}
-                          className="w-full rounded border border-border px-2 py-1 text-xs"
+                          className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs shadow-sm transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:bg-surface-alt disabled:opacity-70"
                         >
                           {SHIP_BY_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>
@@ -633,7 +668,7 @@ export function ReviewGridClient({
                       </td>
 
                       {/* products-type select */}
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-3">
                         <select
                           value={f?.fProductsType ?? "1"}
                           onChange={(e) =>
@@ -644,7 +679,7 @@ export function ReviewGridClient({
                             )
                           }
                           disabled={isCommitting || !!result?.ok}
-                          className="w-full rounded border border-border px-2 py-1 text-xs"
+                          className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs shadow-sm transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:bg-surface-alt disabled:opacity-70"
                         >
                           {PRODUCT_TYPE_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>
@@ -655,10 +690,10 @@ export function ReviewGridClient({
                       </td>
 
                       {/* commit button + result */}
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-3">
                         {result?.ok ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">
-                            <CheckCircle2 className="h-3 w-3" />
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-100 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
                             #{result.forwarderId}
                           </span>
                         ) : (
@@ -672,17 +707,19 @@ export function ReviewGridClient({
                                 bulkRunning ||
                                 pending
                               }
-                              className="w-full rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-2 py-2 text-xs font-bold text-primary-700 shadow-sm transition-colors hover:bg-primary-100 hover:border-primary-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                               title={
                                 isReady
                                   ? "INSERT ลง tb_forwarder (atomic)"
                                   : "กรอก userID และเลือก บ.ขนส่ง ก่อน"
                               }
                             >
-                              {isCommitting ? "กำลัง..." : "สร้างใหม่"}
+                              {isCommitting
+                                ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> กำลัง...</>
+                                : <><CheckCircle2 className="h-3.5 w-3.5" /> สร้างใหม่</>}
                             </button>
                             {result && !result.ok && (
-                              <div className="mt-1 flex items-start gap-1 text-[10px] text-red-700">
+                              <div className="mt-1.5 flex items-start gap-1 rounded-md bg-red-50 px-1.5 py-1 text-[10px] text-red-700">
                                 <AlertCircle className="h-3 w-3 flex-shrink-0 mt-0.5" />
                                 <span>{result.message}</span>
                               </div>
@@ -701,38 +738,43 @@ export function ReviewGridClient({
 
       {/* Recent committed strip (history) */}
       {recentCommitted.length > 0 && (
-        <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-bold mb-2">
-            ⏱ commit ล่าสุด ({recentCommitted.length}) — landed ใน tb_forwarder
-          </h3>
-          <div className="overflow-x-auto">
+        <section className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+          <header className="flex items-center gap-2 border-b border-border bg-surface-alt/40 px-4 py-3">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">
+              commit ล่าสุด <span className="font-normal text-muted">({recentCommitted.length}) — landed ใน tb_forwarder</span>
+            </h3>
+          </header>
+          <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs border-collapse">
               <thead className="bg-surface-alt">
-                <tr>
-                  <th className="text-left px-2 py-1 border-b">Tracking</th>
-                  <th className="text-left px-2 py-1 border-b">ตู้</th>
-                  <th className="text-left px-2 py-1 border-b">userID</th>
-                  <th className="text-left px-2 py-1 border-b">tb_forwarder id</th>
-                  <th className="text-left px-2 py-1 border-b">เวลา</th>
+                <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <th className="text-left px-3 py-2.5 border-b border-border">Tracking</th>
+                  <th className="text-left px-3 py-2.5 border-b border-border">ตู้</th>
+                  <th className="text-left px-3 py-2.5 border-b border-border">userID</th>
+                  <th className="text-left px-3 py-2.5 border-b border-border">tb_forwarder id</th>
+                  <th className="text-left px-3 py-2.5 border-b border-border">เวลา</th>
                 </tr>
               </thead>
               <tbody>
                 {recentCommitted.map((c) => (
-                  <tr key={c.id} className="border-b">
-                    <td className="px-2 py-1 font-mono">{c.momoTrackingNo ?? "—"}</td>
-                    <td className="px-2 py-1 font-mono">{c.momoContainerNo ?? "—"}</td>
-                    <td className="px-2 py-1 font-mono">{c.commitUserId ?? "—"}</td>
-                    <td className="px-2 py-1">
+                  <tr key={c.id} className="border-b border-border transition-colors hover:bg-surface-alt/40">
+                    <td className="px-3 py-2.5 font-mono font-semibold text-foreground">{c.momoTrackingNo ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-mono">{c.momoContainerNo ?? "—"}</td>
+                    <td className="px-3 py-2.5 font-mono">{c.commitUserId ?? "—"}</td>
+                    <td className="px-3 py-2.5">
                       {c.committedForwarderId ? (
                         <Link
                           href={`/admin/forwarders/${c.committedForwarderId}`}
-                          className="text-primary-700 underline font-bold"
+                          className="font-bold text-primary-700 underline underline-offset-2 hover:text-primary-800"
                         >
                           #{c.committedForwarderId}
                         </Link>
                       ) : "—"}
                     </td>
-                    <td className="px-2 py-1 text-muted">
+                    <td className="px-3 py-2.5 text-muted">
                       {c.committedAt
                         ? new Date(c.committedAt).toLocaleString("th-TH")
                         : "—"}
