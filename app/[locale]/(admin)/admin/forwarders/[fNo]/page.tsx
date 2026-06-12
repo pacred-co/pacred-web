@@ -55,7 +55,6 @@ import {
   User as UserIcon,
   Pencil,
   ArrowLeft,
-  ExternalLink,
   PackageCheck,
 } from "lucide-react";
 
@@ -743,23 +742,9 @@ async function tryRenderTbForwarder(
           isCredit={(r.fcredit ?? "").trim() === "1"}
           amountEstimate={creditEstimate}
           pricing={pricingInit}
+          reforder={r.reforder}
+          itemsTable={<ForwarderImportItemsTable r={r} />}
         >
-          {/* ── รายการสินค้า (breakdown table) — คั่นกลางระหว่างฟอร์มสถานะ + ฟอร์มราคา ── */}
-          <hr className="my-4 border-t border-dashed border-border" />
-          <h4 className="text-base md:text-lg font-bold text-red-600">
-            รายการสินค้า
-            {r.reforder && r.reforder !== "" && (
-              <Link
-                href={`/admin/service-orders/${r.reforder}`}
-                className="ml-2 text-xs font-normal text-sky-600 hover:underline inline-flex items-center gap-1"
-              >
-                ดูออเดอร์ต้นทาง {r.reforder} <ExternalLink className="h-3 w-3" />
-              </Link>
-            )}
-          </h4>
-          <div className="mt-3">
-            <ForwarderImportItemsTable r={r} />
-          </div>
 
           {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
              capture (Lane A 2026-06-11 · was built-but-unmounted §0d). Self-gated
