@@ -31,6 +31,9 @@ type Row = {
   statCode: string | null;
 };
 
+// The `kind:` prefix is LOAD-BEARING: forwarder id and shop id are PKs of
+// DIFFERENT tables, so they can collide as bare ints. Keep the prefix here AND in
+// setBulkHsCode's per-kind partition or selection rows would silently merge.
 const keyOf = (r: { kind: LineKind; id: number }) => `${r.kind}:${r.id}`;
 
 function flatten(fwd: HsTriageForwarderLine[], shop: HsTriageShopLine[]): Row[] {
@@ -177,6 +180,8 @@ export function HsTriageClient({
   const { confirm, dialogs } = useConfirmDialogs();
 
   // Pre-fill the bulk stat from the คลัง HS default when the duty hint lands.
+  // bulkHint is referentially stable (it's useHsHint's own useState), so [bulkHint]
+  // can't loop; setBulkStat is queueMicrotask-wrapped (React-19 set-state-in-effect).
   useEffect(() => {
     if (bulkHint && typeof bulkHint === "object" && bulkStat.trim() === "") {
       const d = bulkHint.default_stat_code;
@@ -221,12 +226,12 @@ export function HsTriageClient({
         statCode: bulkStat.trim(),
       });
       if (res.ok) {
-        const hs = bulkHs.trim() || null;
-        const stat = bulkStat.trim() || null;
-        setRows((prev) => prev.map((r) => (selected.has(keyOf(r)) ? { ...r, hsCode: hs, statCode: stat } : r)));
-        setSelected(new Set());
-        setBulkHs(""); setBulkStat("");
         setBanner(`✓ เพิ่ม ${res.data?.updated ?? selectedRows.length} รายการ เข้าพิกัดแล้ว`);
+        setBulkHs(""); setBulkStat("");
+        // Authoritative refetch (NOT an optimistic patch) so the row badges reflect
+        // exactly what the DB matched — `updated` can be < selected if a row went
+        // stale between load and apply (§0f badge accuracy). runQuery clears selection.
+        runQuery(search, missingOnly);
       } else {
         setBanner(`✗ ${res.error ?? "บันทึกไม่สำเร็จ"}`);
       }
