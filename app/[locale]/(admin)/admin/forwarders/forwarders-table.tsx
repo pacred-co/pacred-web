@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { Link } from "@/i18n/navigation";
 import { ArrowUpDown, Lock } from "lucide-react";
 import {
@@ -238,7 +239,7 @@ function CustomerBadges({
   // Tier-color map mirrors the legacy `badge-vip` palette but uses our
   // Tailwind tokens (no Bootstrap badge classes).
   const tierBadge = (() => {
-    if (!coid || coid === "PCS") return null;  // PCS = default tier = no chip
+    if (isGeneralCoid(coid)) return null;  // general/default tier (PR · legacy PCS) = no chip
     const label = coid;
     return (
       <span className="rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700">

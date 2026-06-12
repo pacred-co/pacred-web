@@ -42,6 +42,7 @@ import {
   type ResolveRateCandidates,
   type ResolvedRate,
 } from "@/lib/forwarder/resolve-rate";
+import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -206,8 +207,8 @@ async function resolveLiveForwarderRate(
     });
     return { error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${userErr.message}` };
   }
-  const coID = (userRow?.coID ?? "").trim();
-  const isGeneral = coID === "PCS";
+  const coID = (userRow?.coID ?? "").trim() || GENERAL_COID;
+  const isGeneral = isGeneralCoid(coID);
 
   const wh = ctx.fwarehousechina;
   const tt = ctx.ftransporttype;
