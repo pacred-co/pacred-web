@@ -442,3 +442,35 @@ Three distinct things people conflate, all different:
 - **IMPORT** (tb_forwarder_item ฿): `autoCostUnit = none` (tb_forwarder_item has only qty+CBM — no faithful per-unit cost) · `autoCostRate = hratecostdefault` · `autoDeclared = round2(fcosttotalprice × qtyShare)` where `qtyShare = lineQty/Σqty`. Note `fcosttotalprice` has an authoritative external writer (the ไอแต้ม container-cost-sheet sync) — READ it, never write (§0e dead-write trap avoidance). Inexact splits drift a satang (100/3 → 99.99) — acceptable for a per-line editable seed, not a balanced ledger; pin it in a test so a future "make-it-balance" change is a conscious decision.
 
 **Cross-links:** the 10-gap workflow audit (`cargo-cost-declared-workflow-audit-2026-06-11.md`) · `lib/forwarder/cargo-cost-autofill.ts` + its test · the cargo-acct epic master (`docs/research/cargo-acct-epic-2026-06-11/_MASTER.md`) — GAP B forwarder badge was done there; the newer audit's GAP 2 is the SHOP-side badge still missing.
+
+---
+
+## [2026-06-12] The customer rate tier is keyed on coID — and 'PCS'→'PR' rebrand was a silent rate-killer
+
+**Context:** owner asked to rebrand the default company code `coID='PCS'` → `'PR'` ("เปลี่ยนที่เป็น PCS เป็น PR ให้หมด"). Started from ภูม's report that customer PR009 showed **"ไม่มีเรต"** on `/cart` price-estimate.
+
+**The 3-tier rate model (pin this — `lib/forwarder/resolve-rate.ts` + 4 resolver call-sites):** every customer resolves a forwarder rate through exactly one of three buckets, most-specific-wins:
+1. **SVIP** — a per-user card exists in `tb_rate_custom_*` (probe by `userid`). Flat ฿/kg + ฿/cbm.
+2. **General/default** — `isGeneral` is true → tiered card in `tb_rate_g_kg`/`tb_rate_g_cbm` (3 tiers by value). This is THE default bucket.
+3. **VIP-group** — everything else → flat card in `tb_rate_vip_*` keyed by the customer's `coID` (THADA.VIP / SIN.VIP / OOAEOM.VIP / SWAN / VIP1-5 / PRO*).
+
+**Root cause of "ไม่มีเรต":** `isGeneral` was a strict literal `coID === 'PCS'` in all 4 resolvers (`forwarder-quote.ts`, `forwarders-edit.ts`, `quote-multimode.ts`, `quote-comparison.ts`'s inverse `coid !== 'PCS'`). But **new signups already write `coID='PR'`** (`lib/auth/legacy-bridge-tb-users.ts`). So a 'PR' customer failed `=== 'PCS'` → fell through to the **VIP-group** branch → looked up `tb_rate_vip_*` WHERE coid='PR' → no card → **ไม่มีเรต**. 43 native-'PR' customers were silently rate-broken in prod before the rebrand even started.
+
+**The fix = a deliberate, central sentinel — NOT a blind find-replace.** `'PCS'` has FOUR unrelated meanings in this codebase; only ONE is the company tier:
+- ✅ `coID/coid === 'PCS'` — the company/general-tier code → **rename to 'PR'** (this task).
+- 🚫 `fShipBy/hShipBy/addressID === 'PCS'` — รับเองที่โกดัง (self-pickup) → **DO NOT TOUCH**.
+- 🚫 `PCSF` / `PCSE` — Flash/EMS ship-by promos → **DO NOT TOUCH**.
+- 🚫 `unit === 'PCS'` — freight line unit (pieces) → **DO NOT TOUCH**.
+A blanket `sed s/PCS/PR/` would have broken shipping + freight. Solution: one module `lib/forwarder/coid.ts` (`GENERAL_COID='PR'` + `isGeneralCoid()` accepting 'PR' | legacy 'PCS' | empty), and surgically swap only the tier-decision sites to use it.
+
+**The safe-cutover design (money path · "ห้ามทำงานบัค"):** a data rename across 8,742 customer rows + the rate card has a deploy-ordering trap (code can ship to prod before the migration applies — the same class as the 0175 prod-gap). Two safety choices made it order-independent:
+1. `isGeneralCoid()` accepts **BOTH 'PR' and legacy 'PCS'** as general → a not-yet-migrated row never falls through to VIP.
+2. **KEEP the general card lookup as `.eq("coid", coID)`** (the customer's own value), do NOT switch it to a fixed `'PR'` sentinel. Reason: if the migration lags the deploy, the 8,742 'PCS' customers still have `coID='PCS'` + the card is still at `coid='PCS'` → they MATCH and keep working. Blast radius if migration lags = the 43 already-broken 'PR' rows, NOT all 8,785. A fixed-'PR' lookup would have inverted that (all 8,785 break until the card migrates). The migration (`0182`) renames customers + card **atomically in one txn**, so the steady state is always consistent.
+
+**`isVipCoid` is a whitelist, not `!== 'PCS'`** (`earn-trigger-tb-user-sales.ts`): it returns true ONLY for the 4 commission VIP coids. 'PR' isn't in it → already correct → needed NO change. Don't "helpfully" rewrite it.
+
+**The data lived in 4 tables (always survey `information_schema` for EVERY `coid` column before a rename — don't trust the 1-2 you remember):** `tb_users.coID` (8,742) · `tb_co.coID` (1 — the company master, ID 21 'ทั่วไป') · `tb_rate_g_kg`/`_cbm.coid` (16+16 — the general card) · `tb_register.coid` (16,853 — archive, unread by code but renamed for consistency). VIP cards (`tb_rate_vip_*`) had 0 'PCS' rows → untouched. No FK references any coid column (verified via `pg_constraint`), and tb_co's PK is on `ID` not `coID`, so the value rename is free + collision-free (no pre-existing 'PR' in tb_co).
+
+**Verified live (§0c):** PR009 on `/cart`, weight 25kg → ทางรถ ฿500 / ทางเรือ ฿375 (15฿/kg × 25). Was "ไม่มีเรต" before. The rebrand fixed the original bug as a side effect.
+
+**Cross-links:** `lib/forwarder/coid.ts` · migration `0182_coid_pcs_to_pr.sql` · `docs/sprints/save-point-2026-06-11-cargo-acct.md` §coID (the parked analysis this executed) · ADR-0029 (the rate-store SOT ledger) · the "PCS has 4 meanings" trap also bites the [[pacred-design-philosophy]] copy work.

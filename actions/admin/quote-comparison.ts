@@ -30,6 +30,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { CARRIERS, costColumn } from "@/app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport
     if (uErr) {
       console.error("[quote-compare tb_users] failed", { code: uErr.code, message: uErr.message });
     }
-    coid = (u?.coID ?? "PCS").trim() || "PCS";
+    coid = (u?.coID ?? GENERAL_COID).trim() || GENERAL_COID;
   }
 
   // 1b. SVIP probe (any tb_rate_custom_cbm row for the user)
@@ -188,7 +189,7 @@ export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport
     saleNote   = saleRate > 0
       ? `SVIP per-user rate (tb_rate_custom_${input.basis})`
       : "SVIP cell empty — admin needs to set it";
-  } else if (coid !== "PCS") {
+  } else if (!isGeneralCoid(coid)) {
     // VIP — coID-group flat rate (tb_rate_vip_*)
     const table = input.basis === "kg" ? "tb_rate_vip_kg" : "tb_rate_vip_cbm";
     const col   = input.basis === "kg" ? "rkg" : "rcbm";
@@ -227,7 +228,7 @@ export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport
     saleRate   = generalTier(input.basis, billableValue, n(row?.[c1]), n(row?.[c2]), n(row?.[c3]));
     saleSource = saleRate > 0 ? "general" : "missing";
     saleNote   = saleRate > 0
-      ? `General PCS tiered (${input.basis === "kg" ? "value≤100 t1 · ≤500 t2 · else t3" : "value≤2 t1 · ≤5 t2 · else t3"})`
+      ? `General PR tiered (${input.basis === "kg" ? "value≤100 t1 · ≤500 t2 · else t3" : "value≤2 t1 · ≤5 t2 · else t3"})`
       : "General tier cell empty — admin should fill tb_rate_g_*";
   }
   const saleSubtotal = round2(billableValue * saleRate);

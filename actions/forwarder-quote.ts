@@ -29,6 +29,7 @@ import {
   resolveForwarderRate,
   type ResolveRateCandidates,
 } from "@/lib/forwarder/resolve-rate";
+import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 
 export type CustomerEstimateInput = {
   warehouse: "1" | "2";          // 1 = กวางโจว · 2 = อี้อู
@@ -138,12 +139,12 @@ export async function getCustomerImportEstimate(
   const { data: u, error: uErr } = await admin
     .from("tb_users").select("coID").eq("userID", userid).maybeSingle<{ coID: string | null }>();
   if (uErr) console.error(`[customer-estimate tb_users] failed`, { code: uErr.code, message: uErr.message });
-  const coID = (u?.coID ?? "PCS").trim() || "PCS";
+  const coID = (u?.coID ?? GENERAL_COID).trim() || GENERAL_COID;
   const { data: svip, error: svipErr } = await admin
     .from("tb_rate_custom_cbm").select("id").eq("userid", userid).limit(1).maybeSingle<{ id: number }>();
   if (svipErr) console.error(`[customer-estimate svip-probe] failed`, { code: svipErr.code, message: svipErr.message });
   const isSvip = svip != null;
-  const isGeneral = !isSvip && coID === "PCS";
+  const isGeneral = !isSvip && isGeneralCoid(coID);
 
   // Pin basis (auto = legacy "ราคามากสุด"; kg/cbm pinned via extreme threshold).
   const pinKg = input.basis === "kg";
