@@ -446,6 +446,15 @@ export async function adminCreateCommissionWithdrawal(
   const d = parsed.data;
 
   return withAdmin([...ROLES_VIEW], async ({ adminId }) => {
+    // 🔒 DORMANT GATE — gate the WRITE path on the SAME single flag as the mint
+    // path (adminAccrueFreightCommission), fail-closed. Previously the workflow
+    // stayed closed only by the implicit "no accruals exist while OFF" property
+    // + a client-side disable (audit 2026-06-14 #1) — this makes the closure
+    // explicit + provable: flag OFF ⇒ no withdrawal can be created.
+    if (!(await isFreightCommissionEnabled())) {
+      return { ok: false, error: "ระบบค่าคอมเฟรทปิดอยู่ (dormant)" };
+    }
+
     const admin = createAdminClient();
 
     // Load the accruals — must all belong to the earner + be 'accrued'.
@@ -546,6 +555,10 @@ export async function adminApproveCommissionWithdrawal(
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
   return withAdmin([...ROLES_APPROVE], async ({ adminId }) => {
+    // 🔒 DORMANT GATE (audit 2026-06-14 #1) — same flag as mint/create.
+    if (!(await isFreightCommissionEnabled())) {
+      return { ok: false, error: "ระบบค่าคอมเฟรทปิดอยู่ (dormant)" };
+    }
     const admin = createAdminClient();
     const now = new Date().toISOString();
     // Optimistic: only flip a still-pending row.

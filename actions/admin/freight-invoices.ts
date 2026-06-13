@@ -48,6 +48,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { isFreightShipmentQaPassed } from "./qa-inspections";
 import { adminAccrueFreightCommission } from "./freight-commission";
+import { bucketCommissionBases } from "@/lib/freight-commission/calc-v2";
 import {
   createFreightInvoiceSchema, type CreateFreightInvoiceInput,
   addInvoiceLineSchema,       type AddInvoiceLineInput,
@@ -530,18 +531,11 @@ async function accrueFreightInvoiceCommission(
       .select("commission_scope, line_total_thb")
       .eq("freight_quote_id", ship.source_quote_id);
     if (itemsErr) return;
-    const bases: { freightThb: number; customsThb: number; docThb: number; shipmentCount: number } = {
-      freightThb: 0, customsThb: 0, docThb: 0, shipmentCount: 1,
-    };
-    for (const it of (items ?? []) as Array<{ commission_scope: string | null; line_total_thb: number | string | null }>) {
-      const amt = Number(it.line_total_thb ?? 0);
-      switch (it.commission_scope) {
-        case "freight":        bases.freightThb += amt; break;
-        case "thai_customs":   bases.customsThb += amt; break;
-        case "origin":         bases.docThb     += amt; break; // origin/doc revenue → doc commission bucket
-        default: break;                                        // thai_transport / import_tax → no commission
-      }
-    }
+    // Pure, tested scope→bases mapping (lib/freight-commission/calc-v2 · audit
+    // 2026-06-14 test-gap #2) — single SOT for which revenue accrues which commission.
+    const bases = bucketCommissionBases(
+      (items ?? []) as Array<{ commission_scope: string | null; line_total_thb: number | string | null }>,
+    );
     if (bases.freightThb <= 0 && bases.customsThb <= 0 && bases.docThb <= 0) return;
 
     await adminAccrueFreightCommission({

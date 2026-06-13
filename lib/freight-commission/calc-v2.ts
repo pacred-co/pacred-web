@@ -79,6 +79,38 @@ export type FreightCommissionBases = {
   shipmentCount?: number;
 };
 
+/**
+ * Bucket a freight quote's line items into the three commission revenue bases by
+ * their `commission_scope` (the SOLE source-of-truth mapping for what revenue
+ * accrues which commission). Extracted from the freight-invoice accrual hook so a
+ * re-label regression (e.g. renaming a scope, or a new scope silently bucketing
+ * to zero) is caught by a test rather than silently changing accrual amounts
+ * (audit 2026-06-14 test-gap #2).
+ *
+ *   freight      → freightThb
+ *   thai_customs → customsThb
+ *   origin       → docThb        (origin/doc revenue → doc commission)
+ *   anything else (thai_transport · import_tax · null) → NO commission
+ *
+ * Pure. `shipmentCount` defaults to 1 (one invoice = one shipment).
+ */
+export function bucketCommissionBases(
+  items: ReadonlyArray<{ commission_scope: string | null; line_total_thb: number | string | null }>,
+): Required<Omit<FreightCommissionBases, "shipmentCount">> & { shipmentCount: number } {
+  const bases = { freightThb: 0, customsThb: 0, docThb: 0, shipmentCount: 1 };
+  for (const it of items) {
+    const amt = Number(it.line_total_thb ?? 0);
+    if (!Number.isFinite(amt)) continue;
+    switch (it.commission_scope) {
+      case "freight":      bases.freightThb += amt; break;
+      case "thai_customs": bases.customsThb += amt; break;
+      case "origin":       bases.docThb     += amt; break;
+      default: break; // thai_transport / import_tax / null → no commission
+    }
+  }
+  return bases;
+}
+
 /** One line of the commission breakdown. */
 export type FreightCommissionLine = {
   scope: FreightCommissionScope;

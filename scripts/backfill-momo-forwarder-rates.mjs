@@ -41,8 +41,13 @@ const MAX_ROWS = 4000; // cap a few thousand
 
 // ────────────────────────────────────────────────────────────
 // Pure helpers — faithful inline copy of lib/forwarder/resolve-rate.ts.
-// (live-rate.ts is `server-only` so it can't be imported from plain node;
-//  the decision logic is deterministic + small, so we mirror it here.)
+// (`live-rate.ts` is `server-only`, but resolve-rate.ts itself is NOT — if this
+//  script is ever run via `tsx` instead of plain node, IMPORT the canonical pure
+//  helpers from "@/lib/forwarder/resolve-rate" directly to ELIMINATE this drift
+//  twin. ⚠️ DRIFT CONTRACT (audit 2026-06-14 #4): the canonical resolver has 49
+//  unit tests, this mirror has ZERO — any edit to resolve-rate.ts's money formula
+//  (tier boundaries · priceCbm>=priceKg tie-favours-CBM · round2 · VIP KG→CBM
+//  fallback) MUST be mirrored here or the backfill math silently diverges.)
 // ────────────────────────────────────────────────────────────
 function n(v) {
   if (v === null || v === undefined) return 0;
@@ -211,6 +216,12 @@ async function main() {
       .select("id, ftrackingchn, fidorco, userid, fweight, fvolume, famount, famountcount, fwarehousechina, ftransporttype, fproductstype, frefrate, fwarehousename, fstatus")
       .or("fwarehousename.eq.8,fidorco.ilike.MO%")
       .neq("fstatus", "0")
+      // Exclude already-BILLED rows (fstatus 5=billing raised / 6 / 7) — a backfill
+      // must NOT retroactively change ftotalprice on a row an invoice was based on
+      // (audit 2026-06-14 #3). An under-billed billed row is a manual accounting
+      // decision, not a bulk rewrite. frefrate=0 alone is the already-priced guard
+      // only for NON-billed rows.
+      .not("fstatus", "in", "(5,6,7)")
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) { console.error("✗ tb_forwarder select failed:", error.message); process.exit(1); }

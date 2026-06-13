@@ -117,3 +117,19 @@ The 2026-05-25 audit used 4 agents (legacy×2 split by domain + pacred×2 split)
 **Why this matters next time:** Any audit that says "feature X is missing / writes the wrong table" must name the **live entry point** (route → form → action) and show that path is broken — not just show that *an* orphan action with the name is broken. Two-table D1 ports + `*-legacy.ts` twins make the bare-name grep systematically land on the dead one. Cheapest guard: `grep "import.*<ActionName>"` to see if anyone calls it; 0 importers = orphan, not a live bug.
 
 **Cross-links:** `docs/research/cargo-acct-epic-2026-06-11/C-address-shipping-cod.md` (correction banner) · CLAUDE.md §0e (dead-write traps) · `actions/forwarder-legacy.ts` (the live twin)
+
+---
+
+## [2026-06-14] Money-workflow review patterns — 3 lessons from the integration-review of the just-merged waves
+
+A 5-agent adversarial review of a 199-commit integration (freight-commission · MOMO auto-rate · coID rebrand) found ZERO §0e dead-write traps + no auto-pay/double-accrual — but surfaced 3 recurring *latent* patterns worth gating against:
+
+**1 — Gate every money-mutating action on the flag, not just the mint point + a UI disable.** The freight-commission dormant flag (`commission.freight_enabled`) was correctly fail-closed at the SOLE mint point (`adminAccrueFreightCommission`), but the downstream `create/approve/pay` withdrawal actions gated on role only — they stayed closed merely because "no accruals exist while OFF" (a data-absence invariant) + a client-side button disable. Implicit data-absence invariants are brittle: a future code path that mints differently, or a stale UI, breaks the closure. **Fix: re-check `isFreightCommissionEnabled()` (fail-closed) at the top of the WRITE action too**, so the closure is provable from one flag, not emergent. (Fixed `actions/admin/freight-commission.ts` create+approve.)
+
+**2 — One-off `.mjs` backfill/maintenance scripts are where documented platform contracts get silently violated**, because they're written outside the runtime path that enforces the guard. `backfill-momo-cabinet.mjs` overwrote `fcabinetnumber` without honouring `fcabinet_locked` (migration 0150's MUST-skip contract that `propagate.ts` + the admin bulk-bar both respect). **Audit rule: any script that UPDATEs a lock/contract-protected column must mirror the runtime guard.** Grep `\.update(` in `scripts/*.mjs` against the protected-column list.
+
+**3 — Hand-copying a tested money formula into a plain-`node` script creates an untested drift twin.** `backfill-momo-forwarder-rates.mjs` re-implemented `lib/forwarder/resolve-rate.ts` (49 tests) inline with ZERO tests, citing "server-only" — but only `live-rate.ts` is server-only; `resolve-rate.ts` itself is importable. **Before mirroring a money formula, check whether the PURE helper is actually server-only**; prefer running the script via `tsx` + importing the canonical function over a drift twin. If you must mirror, write a fixture test asserting equality.
+
+Also reinforced **[L-MIG-04](migration-env-drift.md)**: a data-rebrand (0182 coID PCS→PR) left a display-layer literal `Record` (`sales/page.tsx CO_ID_BADGE`, keyed on the old `'PCS'` sentinel) rendering the raw new value `'PR'` as a misleading VIP chip for ~8,700 general customers — even though every MONEY path correctly routed through `lib/forwarder/coid.ts`. Rebrand sweeps must grep for literal maps/switches keyed on the old sentinel, or route display decisions through the same SOT as the money decisions.
+
+**Cross-links:** CLAUDE.md §0e (dead-write) · §0f (confirm-before-mutate) · [migration-env-drift L-MIG-04](migration-env-drift.md) · `lib/freight-commission/bucket-bases.test.ts` (the scope→bases regression lock added this session).

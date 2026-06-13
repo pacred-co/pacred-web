@@ -212,7 +212,7 @@ console.log(`  tracking → cabinet map: ${trackToCabinet.size} entries (work=${
 } + existing=${filledTracks?.length ?? 0})`);
 
 const trackings = Array.from(trackToCabinet.keys());
-let fwdMatched = 0, fwdWillUpdate = 0, fwdAlreadyOk = 0, fwdSkippedAdminSet = 0;
+let fwdMatched = 0, fwdWillUpdate = 0, fwdAlreadyOk = 0, fwdSkippedAdminSet = 0, fwdSkippedLocked = 0;
 const fwdUpdatePlan = []; // [{ id, oldCab, newCab }]
 
 if (trackings.length > 0) {
@@ -221,7 +221,7 @@ if (trackings.length > 0) {
     const slice = trackings.slice(i, i + 200);
     const { data: matching, error: matchErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fcabinetnumber")
+      .select("id, ftrackingchn, fcabinetnumber, fcabinet_locked")
       .in("ftrackingchn", slice);
     if (matchErr) {
       console.error(`  match chunk ${i} failed:`, matchErr);
@@ -231,6 +231,10 @@ if (trackings.length > 0) {
       fwdMatched++;
       const newCab = trackToCabinet.get(f.ftrackingchn);
       if (!newCab) continue;
+      // HONOUR migration 0150 — fcabinet_locked = true ⇒ MOMO/partner sync MUST
+      // skip fcabinetnumber (mirror propagate.ts + the admin bulk-bar). A one-off
+      // script is exactly where this contract gets forgotten (audit 2026-06-14 #2).
+      if (f.fcabinet_locked === true) { fwdSkippedLocked++; continue; }
       const oldCab = (f.fcabinetnumber ?? "").trim();
       if (oldCab === newCab) {
         fwdAlreadyOk++;
@@ -254,6 +258,7 @@ console.log(`  tb_forwarder rows matched:   ${fwdMatched}`);
 console.log(`  already correct:             ${fwdAlreadyOk}`);
 console.log(`  will UPDATE (empty/MOMO):    ${fwdWillUpdate}`);
 console.log(`  skipped (admin-set value):   ${fwdSkippedAdminSet}`);
+console.log(`  skipped (fcabinet_locked):   ${fwdSkippedLocked}`);
 
 if (fwdUpdatePlan.length > 0 && fwdUpdatePlan.length <= 10) {
   console.log("\n  Preview (first 10):");

@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyUserPictureUrl } from "@/lib/legacy-image";
+import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { resolveSalesAgent } from "./team-map";
 
 /**
@@ -445,7 +446,11 @@ function BadgeVIP2({
   // switch ($coID): PCS → ''; STAR/DIAMOND/CROWN → that text;
   // default → the raw coID.
   const coId = row.coID ?? "";
-  const coLabel = coId in CO_ID_BADGE ? CO_ID_BADGE[coId] : coId;
+  // Route the general-tier decision through the coid.ts SOT so the 0182 PCS→PR
+  // rebrand can't leave a stale literal map rendering a misleading "PR" VIP chip
+  // for ~8,700 general customers (audit 2026-06-14 #5). General (PCS/PR/empty/
+  // GENERAL) → no chip; STAR/DIAMOND/CROWN keep their label; other VIP coIDs show raw.
+  const coLabel = isGeneralCoid(coId) ? null : coId in CO_ID_BADGE ? CO_ID_BADGE[coId] : coId;
   // Tailwind chip for the VIP/corporate badge cluster (was the legacy
   // `badge badge-vip badge-pill`). Amber tone reads as the "VIP" accent.
   const vipChip =
