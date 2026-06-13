@@ -50,13 +50,19 @@ export const dynamic = "force-dynamic";
 // search box). The 10 status tabs render below; this menubar is just
 // quick-jumps + work / barcode / search shortcuts.
 // ─────────────────────────────────────────────────────────────────────
-const FORWARDER_MENUBAR: MenubarItem[] = [
+// Built per-request so the actionable queues carry a prominent notification
+// badge (เลขแจ้งเตือนเด่นๆ · 2026-06-14). รอชำระ (status 5) + เตรียมส่ง (status 6 ·
+// the dispatch queue) are the staff-action queues; the counts bubble up to the
+// "ตามประเภท" top item so they're visible without opening the menu.
+function buildForwarderMenubar(c: { s5: number; s6: number }): MenubarItem[] {
+  return [
   { label: "หน้าหลัก", href: "/admin/forwarders" },
   {
     label: "ตามประเภท",
     children: [
       { label: "ทั้งหมด",   href: "/admin/forwarders" },
-      { label: "เตรียมส่ง", href: "/admin/forwarders?status=6" },
+      { label: "รอชำระเงิน", href: "/admin/forwarders?status=5", badge: c.s5 },
+      { label: "เตรียมส่ง", href: "/admin/forwarders?status=6", badge: c.s6 },
       { label: "เครดิต",   href: "/admin/forwarders?status=c" },
       { label: "พิเศษ",    href: "/admin/forwarders?status=p" },
     ],
@@ -94,7 +100,8 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
       { label: "หลายรหัส",     href: "/admin/forwarders/bulk-search" },
     ],
   },
-];
+  ];
+}
 
 // Legacy STATUS_LABEL — fStatus values (string in legacy too: char(2))
 const STATUS_LABEL: Record<string, string> = {
@@ -407,7 +414,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
 
   return (
     <>
-      <PageTopMenubar items={FORWARDER_MENUBAR} activeHref="/admin/forwarders" />
+      <PageTopMenubar items={buildForwarderMenubar(counts)} activeHref="/admin/forwarders" />
       <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

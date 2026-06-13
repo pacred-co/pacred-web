@@ -63,14 +63,18 @@ export const dynamic = "force-dynamic";
 // + cart actions + notes + search live in this horizontal menubar so
 // the sidebar stays slim (matches /admin/forwarders pattern).
 // ─────────────────────────────────────────────────────────────────────
-const PURCHASING_MENUBAR: MenubarItem[] = [
+// Built per-request so the staff-action queues carry a prominent notification
+// badge (เลขแจ้งเตือนเด่นๆ · 2026-06-14). รอดำเนินการ (s1) + รอชำระเงิน (s2) are the
+// queues staff must clear; counts bubble up to the "สถานะ" top item.
+function buildPurchasingMenubar(c: { s1: number; s2: number }): MenubarItem[] {
+  return [
   { label: "หน้าหลัก", href: "/admin/service-orders" },
   {
     label: "สถานะ",
     children: [
       { label: "ทั้งหมด",          href: "/admin/service-orders" },
-      { label: "รอดำเนินการ",      href: "/admin/service-orders?q=1" },
-      { label: "รอชำระเงิน",       href: "/admin/service-orders?q=2" },
+      { label: "รอดำเนินการ",      href: "/admin/service-orders?q=1", badge: c.s1 },
+      { label: "รอชำระเงิน",       href: "/admin/service-orders?q=2", badge: c.s2 },
       { label: "สั่งสินค้า",        href: "/admin/service-orders?q=3" },
       { label: "รอร้านจีนจัดส่ง",  href: "/admin/service-orders?q=4" },
       { label: "สำเร็จ",           href: "/admin/service-orders?q=5" },
@@ -86,7 +90,8 @@ const PURCHASING_MENUBAR: MenubarItem[] = [
       { label: "ประวัติคืนเงิน",          href: "/admin/service-orders/refunds" },
     ],
   },
-];
+  ];
+}
 
 // Legacy STATUS_LABEL — hstatus is char(1) "1".."6" (no "7").
 const STATUS_LABEL: Record<string, string> = {
@@ -488,7 +493,7 @@ export default async function AdminServiceOrdersPage({
 
   return (
     <>
-      <PageTopMenubar items={PURCHASING_MENUBAR} activeHref="/admin/service-orders" />
+      <PageTopMenubar items={buildPurchasingMenubar(counts)} activeHref="/admin/service-orders" />
       <main className="p-6 lg:p-8 space-y-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

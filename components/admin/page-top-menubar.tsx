@@ -52,7 +52,39 @@ export type MenubarItem = {
   href?: string;
   /** Nested children open in a cascading sub-dropdown. */
   children?: MenubarItem[];
+  /**
+   * Optional notification count (เลขแจ้งเตือนเด่นๆ). Renders a prominent red
+   * pill on this item. A PARENT shows the SUM of its descendants' badges
+   * (bubbled up via subtreeBadge) so the alert is visible on the collapsed
+   * top-item without opening the dropdown — modelled on the accounting page's
+   * pending-queue counts. 0/undefined → no pill.
+   */
+  badge?: number;
 };
+
+/** Total pending count for an item = its own badge + every descendant's.
+ *  Bubbles dropdown-leaf counts up to the collapsed top-item. */
+function subtreeBadge(item: MenubarItem): number {
+  const own = item.badge ?? 0;
+  const kids = (item.children ?? []).reduce((s, c) => s + subtreeBadge(c), 0);
+  return own + kids;
+}
+
+/** Prominent notification count pill. Conventional red badge; `onDark` adds a
+ *  white ring so it pops on the red-gradient menubar. Renders nothing at 0. */
+function CountPill({ count, onDark = false }: { count: number; onDark?: boolean }) {
+  if (!count || count <= 0) return null;
+  return (
+    <span
+      className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ${
+        onDark ? "ring-2 ring-white" : ""
+      }`}
+      aria-label={`${count} รายการรอดำเนินการ`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 export type PageTopMenubarProps = {
   items: MenubarItem[];
@@ -146,6 +178,7 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
                   }`}
                 >
                   {item.label}
+                  <CountPill count={subtreeBadge(item)} onDark />
                 </Link>
               </li>
             );
@@ -154,6 +187,7 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
             <li key={`${item.label}-${i}`} className="shrink-0">
               <span className="block px-4 py-3 text-sm font-medium opacity-70">
                 {item.label}
+                <CountPill count={subtreeBadge(item)} onDark />
               </span>
             </li>
           );
@@ -196,6 +230,7 @@ function TopItem({
           }`}
         >
           {item.label}
+          <CountPill count={subtreeBadge(item)} onDark />
         </Link>
       </li>
     );
@@ -222,6 +257,7 @@ function TopItem({
         }`}
       >
         <span>{item.label}</span>
+        <CountPill count={subtreeBadge(item)} onDark />
         <ChevronDown className="h-3.5 w-3.5 opacity-80" aria-hidden="true" />
       </button>
 
@@ -336,13 +372,14 @@ function NestedItem({
         <Link
           href={item.href ?? "#"}
           onClick={onLeafClick}
-          className={`block px-4 py-2 text-sm transition-colors ${
+          className={`flex items-center px-4 py-2 text-sm transition-colors ${
             isActive
               ? "bg-primary-50 text-primary-900 font-semibold"
               : "text-gray-800 hover:bg-primary-50 hover:text-primary-900"
           }`}
         >
           {item.label}
+          <CountPill count={item.badge ?? 0} />
         </Link>
       </li>
     );
@@ -372,7 +409,7 @@ function NestedItem({
           aria-expanded={showSubPanel}
           className="flex items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
-          <span>{item.label}</span>
+          <span className="flex items-center">{item.label}<CountPill count={subtreeBadge(item)} /></span>
           <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
         </Link>
       ) : (
@@ -383,7 +420,7 @@ function NestedItem({
           aria-expanded={showSubPanel}
           className="flex w-full items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
-          <span>{item.label}</span>
+          <span className="flex items-center">{item.label}<CountPill count={subtreeBadge(item)} /></span>
           <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
         </button>
       )}
