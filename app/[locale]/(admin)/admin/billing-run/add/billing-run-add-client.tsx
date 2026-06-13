@@ -206,19 +206,40 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     });
   }
 
+  // ── Step state (UX 2026-06-07 · พี่ป๊อปถาม "ตรวจสอบเครดิตได้มั้ย" → ภูม flag
+  //   หน้านี้ "ดูแล้วงงๆ" → wired step indicator). Tracks the 3 stages: pick
+  //   customer · pick forwarders · finalize. Used to drive the breadcrumb pills
+  //   + section disclosure (don't render section 3 + sticky bar before items
+  //   are picked, removes empty-space confusion). ──
+  const step: 1 | 2 | 3 = !selectedUserid ? 1 : selectedIds.size === 0 ? 2 : 3;
+  const noteTemplate =
+    "กรุณาชำระเงินภายในวันที่ครบกำหนด ผ่านบัญชีธนาคารกสิกร 123-4-56789-0 บริษัท แพคเรด (ประเทศไทย) จำกัด · หมายเหตุ: หากมีการหัก ณ ที่จ่าย กรุณาส่งหนังสือรับรอง 50 ทวิ กลับมาด้วย";
+
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form onSubmit={onSubmit} className="space-y-5 pb-24 md:pb-28">
+      {/* Step indicator — 3 pills active by `step` */}
+      <ol className="flex items-center flex-wrap gap-2 text-xs">
+        <StepPill n={1} label="เลือกลูกค้า"      active={step >= 1} done={step > 1} />
+        <span className="text-muted/50">→</span>
+        <StepPill n={2} label="เลือกรายการ"     active={step >= 2} done={step > 2} />
+        <span className="text-muted/50">→</span>
+        <StepPill n={3} label="ตรวจยอด + ออกใบ" active={step >= 3} done={false} />
+      </ol>
+
       {/* SECTION 1 — Customer picker */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <h3 className="font-bold text-sm mb-3">ข้อมูลลูกค้า</h3>
+        <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">1</span>
+          ข้อมูลลูกค้า + วันที่
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          <label className="md:col-span-6">
-            <span className={labelCls}>รหัสสมาชิก / ชื่อ / เลขนิติบุคคล <span className="text-red-500">*</span></span>
+          <label className="md:col-span-8">
+            <span className={labelCls}>เลือกลูกค้า <span className="text-red-500">*</span></span>
             <select
               required
               value={selectedUserid}
               onChange={(e) => onCustomerChange(e.target.value)}
-              className={inputCls}
+              className={inputCls + " text-base"}
             >
               <option value="">— เลือกลูกค้า ({customers.length} ราย) —</option>
               {customers.map((c) => (
@@ -231,7 +252,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               แสดงเฉพาะลูกค้าที่มีรายการสถานะ <strong>รอชำระเงิน (fStatus=5)</strong>
             </p>
           </label>
-          <label className="md:col-span-3">
+          <label className="md:col-span-2">
             <span className={labelCls}>วันที่ออกเอกสาร</span>
             <input
               type="date"
@@ -241,8 +262,8 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               className={inputCls}
             />
           </label>
-          <label className="md:col-span-3">
-            <span className={labelCls}>วันที่ครบกำหนดจ่าย <span className="text-red-500">*</span></span>
+          <label className="md:col-span-2">
+            <span className={labelCls}>วันครบกำหนด <span className="text-red-500">*</span></span>
             <input
               type="date"
               value={dateDue}
@@ -250,7 +271,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               required
               className={inputCls}
             />
-            <p className="text-xs text-muted mt-0.5">ค่าเริ่มต้น = วันนี้ + 7 วัน</p>
+            <p className="text-[10px] text-muted mt-0.5">ค่าเริ่มต้น = วันนี้ + 7 วัน</p>
           </label>
         </div>
 
@@ -280,21 +301,27 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
 
       {/* SECTION 2 — Forwarder picker */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-sm">รายการฝากนำเข้าที่จะรวมในใบวางบิลนี้</h3>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="font-bold text-sm flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">2</span>
+            รายการฝากนำเข้าที่จะรวมในใบวางบิลนี้
+          </h3>
           {visibleForwarders.length > 0 && (
             <button
               type="button"
               onClick={() => toggleAll(selectedIds.size !== visibleForwarders.length)}
-              className="text-xs text-primary-600 hover:underline"
+              className="text-xs rounded-md border border-primary-200 bg-primary-50 px-2.5 py-1 text-primary-700 hover:bg-primary-100"
             >
-              {selectedIds.size === visibleForwarders.length ? "ยกเลิกเลือกทั้งหมด" : "เลือกทั้งหมด"}
+              {selectedIds.size === visibleForwarders.length ? "ยกเลิกเลือกทั้งหมด" : `เลือกทั้งหมด (${visibleForwarders.length} รายการ)`}
             </button>
           )}
         </div>
 
         {!selectedUserid && (
-          <p className="text-sm text-muted text-center py-6">เลือกลูกค้าก่อน เพื่อดูรายการที่สามารถออกใบวางบิลได้</p>
+          <div className="text-center py-10 space-y-2">
+            <div className="text-4xl opacity-60" aria-hidden>📦</div>
+            <p className="text-sm text-muted">เลือกลูกค้าก่อน เพื่อดูรายการที่ออกใบวางบิลได้</p>
+          </div>
         )}
 
         {selectedUserid && loadingFwd && (
@@ -370,115 +397,271 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         )}
       </section>
 
-      {/* SECTION 3 — Money summary */}
+      {/* SECTION 3 — Money summary (LEDGER-STYLE single column · 2026-06-07 ภูม UX
+          flag "ดูแล้วงงๆ"). Previous design had a 2-column form (left = 4 inputs ·
+          right = 4 display rows) where the input labels looked identical to the
+          display labels → admin couldn't tell what to type where. New design =
+          one ledger going top-to-bottom · auto-rows on the left · admin-override
+          rows have an inline input pinned to the right · final total highlighted. */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <h3 className="font-bold text-sm mb-3">สรุปยอดเงิน</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label>
-              <span className={labelCls}>ค่าขนส่งจีน (CHN)</span>
-              <input type="number" step="0.01" min="0" value={deliveryChn} onChange={(e) => setDeliveryChn(e.target.value)} className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>ค่าขนส่งไทย (TH)</span>
-              <input type="number" step="0.01" min="0" value={deliveryTh} onChange={(e) => setDeliveryTh(e.target.value)} className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>อื่นๆ</span>
-              <input type="number" step="0.01" min="0" value={other} onChange={(e) => setOther(e.target.value)} className={inputCls} />
-            </label>
-            <label>
-              <span className={labelCls}>ส่วนลด</span>
-              <input type="number" step="0.01" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} className={inputCls} />
-            </label>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm py-1">
-              <span className="text-muted">ค่าขนส่งรายการ (Subtotal)</span>
-              <span className="font-medium">฿{thbFmt(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm py-1">
-              <span className="text-muted">+ ค่าขนส่งจีน</span>
-              <span>฿{thbFmt(numChn)}</span>
-            </div>
-            <div className="flex justify-between text-sm py-1">
-              <span className="text-muted">+ ค่าขนส่งไทย</span>
-              <span>฿{thbFmt(numTh)}</span>
-            </div>
-            <div className="flex justify-between text-sm py-1">
-              <span className="text-muted">+ อื่นๆ</span>
-              <span>฿{thbFmt(numOther)}</span>
-            </div>
-            <div className="flex justify-between text-sm py-1 text-red-600">
-              <span>− ส่วนลด</span>
-              <span>฿{thbFmt(numDiscount)}</span>
-            </div>
-            <hr className="border-border" />
-            {showWht ? (
-              <>
-                <div className="flex justify-between text-sm py-1">
-                  <span className="font-medium">ยอดรวมทั้งสิ้น</span>
-                  <span className="font-medium">฿{thbFmt(totalAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1 text-red-600">
-                  <span>หัก ณ ที่จ่าย 1% (นิติบุคคล)</span>
-                  <span>−฿{thbFmt(whtAmount)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold py-1 bg-amber-50/30 -mx-2 px-2 rounded">
-                  <span>ยอดชำระสุทธิ</span>
-                  <span className="text-amber-700">฿{thbFmt(netPayable)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between text-lg font-bold py-1 bg-amber-50/30 -mx-2 px-2 rounded">
-                  <span>ยอดรวมทั้งสิ้น</span>
-                  <span className="text-amber-700">฿{thbFmt(totalAmount)}</span>
-                </div>
-                {selectedCustomer?.is_juristic && totalAmount > 0 && totalAmount < 1000 && (
-                  <p className="text-xs text-muted">* ยอดน้อยกว่า ฿1,000 — ไม่หักภาษี ณ ที่จ่าย</p>
-                )}
-              </>
-            )}
-          </div>
+        <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">3</span>
+          สรุปยอดเงิน
+          <span className="ml-auto text-[10px] font-normal text-muted">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-200 mr-1 align-middle" /> คำนวณอัตโนมัติ
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-200 ml-3 mr-1 align-middle" /> ใส่เอง
+          </span>
+        </h3>
+
+        <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+          {/* Subtotal — auto-computed (display only) */}
+          <LedgerRow
+            kind="auto"
+            label="ค่าขนส่งรายการ (Subtotal)"
+            hint={`จาก ${selectedIds.size} รายการที่ tick`}
+            value={subtotal}
+          />
+          {/* 4 admin-override rows — input pinned right */}
+          <LedgerRow
+            kind="input"
+            label="+ ค่าขนส่งจีน (CHN)"
+            hint="ค่าขนส่งฝั่งจีน เพิ่มเติม (ถ้ามี)"
+            value={deliveryChn}
+            onChange={setDeliveryChn}
+          />
+          <LedgerRow
+            kind="input"
+            label="+ ค่าขนส่งไทย (TH)"
+            hint="ค่าขนส่งฝั่งไทย เพิ่มเติม (ถ้ามี)"
+            value={deliveryTh}
+            onChange={setDeliveryTh}
+          />
+          <LedgerRow
+            kind="input"
+            label="+ อื่นๆ"
+            hint="ค่าบริการอื่นๆ เพิ่มเติม"
+            value={other}
+            onChange={setOther}
+          />
+          <LedgerRow
+            kind="input"
+            label="− ส่วนลด"
+            hint="ส่วนลดเฉพาะใบนี้"
+            value={discount}
+            onChange={setDiscount}
+            isDiscount
+          />
+
+          {/* Grand total — auto · highlight */}
+          <LedgerRow
+            kind="grand"
+            label="ยอดรวมทั้งสิ้น"
+            value={totalAmount}
+          />
+
+          {/* Optional WHT block · only นิติบุคคล + ≥฿1,000 */}
+          {showWht && (
+            <>
+              <LedgerRow
+                kind="auto"
+                label="− หัก ณ ที่จ่าย 1% (นิติบุคคล)"
+                hint="ลูกค้าหักจ่ายเงินสุทธิ"
+                value={whtAmount}
+                isDiscount
+              />
+              <LedgerRow
+                kind="net"
+                label="ยอดชำระสุทธิ"
+                value={netPayable}
+              />
+            </>
+          )}
         </div>
+
+        {selectedCustomer?.is_juristic && totalAmount > 0 && totalAmount < 1000 && !showWht && (
+          <p className="text-xs text-muted mt-2">* นิติบุคคล แต่ยอดน้อยกว่า ฿1,000 — ไม่หักภาษี ณ ที่จ่าย</p>
+        )}
       </section>
 
       {/* SECTION 4 — Note */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <h3 className="font-bold text-sm mb-3">หมายเหตุสำหรับลูกค้า</h3>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="font-bold text-sm flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">4</span>
+            หมายเหตุสำหรับลูกค้า
+            <span className="text-[10px] font-normal text-muted">(จะปรินต์ใต้ใบวางบิล)</span>
+          </h3>
+          {!note.trim() && (
+            <button
+              type="button"
+              onClick={() => setNote(noteTemplate)}
+              className="text-xs rounded-md border border-primary-200 bg-primary-50 px-2.5 py-1 text-primary-700 hover:bg-primary-100"
+            >
+              + ใช้ข้อความมาตรฐาน
+            </button>
+          )}
+        </div>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={4}
-          placeholder="เช่น 'กรุณาชำระเงินภายในวันที่ครบกำหนด ผ่านบัญชีธนาคารกสิกร 123-4-56789-0 บริษัทแพคเรด (ประเทศไทย) จำกัด'"
+          placeholder="กดปุ่ม “+ ใช้ข้อความมาตรฐาน” ด้านบน หรือพิมพ์เอง"
           className={inputCls}
         />
       </section>
 
-      {/* Submit */}
+      {/* Submit error (inline, before sticky bar) */}
       {submitErr && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {submitErr}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 items-center justify-end">
-        <button
-          type="button"
-          onClick={() => router.push("/admin/billing-run")}
-          className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm hover:bg-surface-alt"
-        >
-          ยกเลิก
-        </button>
-        <button
-          type="submit"
-          disabled={pending || selectedIds.size === 0 || !selectedUserid}
-          className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {pending ? "กำลังสร้าง..." : `สร้างใบวางบิล (${selectedIds.size} รายการ · ฿${thbFmt(showWht ? netPayable : totalAmount)}${showWht ? " สุทธิ" : ""})`}
-        </button>
+      {/* Sticky bottom CTA — เห็นยอดและปุ่มตลอดเวลา · ไม่ต้อง scroll กลับมา */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-white/95 dark:bg-surface/95 backdrop-blur shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="flex flex-col text-xs leading-tight">
+            <span className="text-muted">
+              ลูกค้า: <strong className="text-foreground">{selectedCustomer?.display_name ?? "—"}</strong> ·{" "}
+              เลือก <strong className="text-foreground">{selectedIds.size}</strong>/{visibleForwarders.length} รายการ
+            </span>
+            <span className="text-base font-bold mt-0.5">
+              ยอด{showWht ? "ชำระสุทธิ" : "รวมทั้งสิ้น"}:{" "}
+              <span className="text-amber-700">฿{thbFmt(showWht ? netPayable : totalAmount)}</span>
+              {showWht && <span className="ml-1 text-[10px] font-normal text-muted">(หัก WHT 1% ฿{thbFmt(whtAmount)})</span>}
+            </span>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/admin/billing-run")}
+              className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm hover:bg-surface-alt"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={pending || selectedIds.size === 0 || !selectedUserid}
+              className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {pending ? "กำลังสร้าง..." : "🧾 สร้างใบวางบิล"}
+            </button>
+          </div>
+        </div>
       </div>
     </form>
+  );
+}
+
+// ── Step indicator pill ──────────────────────────────────────────────
+function StepPill({
+  n,
+  label,
+  active,
+  done,
+}: {
+  n: number;
+  label: string;
+  active: boolean;
+  done: boolean;
+}) {
+  const base = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1";
+  const cls = done
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : active
+      ? "border-primary-300 bg-primary-50 text-primary-700"
+      : "border-border bg-surface-alt text-muted";
+  return (
+    <li className={`${base} ${cls}`}>
+      <span
+        className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+          done
+            ? "bg-emerald-600 text-white"
+            : active
+              ? "bg-primary-600 text-white"
+              : "bg-muted/30 text-muted"
+        }`}
+        aria-hidden
+      >
+        {done ? "✓" : n}
+      </span>
+      <span className="font-medium">{label}</span>
+    </li>
+  );
+}
+
+// ── Single ledger row — used in section 3 (สรุปยอดเงิน) ──────────────
+//   kind = "auto"  → display-only row (computed subtotal / WHT line)
+//   kind = "input" → admin-override row · inline number input pinned right
+//   kind = "grand" → grand total · highlight row (เด่นแต่ไม่ใช่ final)
+//   kind = "net"   → ยอดชำระสุทธิ · final highlight (amber)
+function LedgerRow({
+  kind,
+  label,
+  hint,
+  value,
+  onChange,
+  isDiscount = false,
+}: {
+  kind: "auto" | "input" | "grand" | "net";
+  label: string;
+  hint?: string;
+  value: number | string;
+  onChange?: (v: string) => void;
+  isDiscount?: boolean;
+}) {
+  const fmt = (n: number) =>
+    n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const dotCls =
+    kind === "input"
+      ? "bg-amber-200"
+      : kind === "grand" || kind === "net"
+        ? "bg-transparent"
+        : "bg-slate-200";
+
+  const rowCls =
+    kind === "net"
+      ? "bg-amber-50/60"
+      : kind === "grand"
+        ? "bg-surface-alt/60"
+        : "bg-white dark:bg-surface";
+
+  const valueCls =
+    kind === "net"
+      ? "text-amber-700 text-lg font-bold tabular-nums"
+      : kind === "grand"
+        ? "text-foreground text-base font-bold tabular-nums"
+        : isDiscount
+          ? "text-red-600 tabular-nums"
+          : "text-foreground tabular-nums";
+
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2.5 ${rowCls}`}>
+      <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotCls} shrink-0`} aria-hidden />
+      <div className="flex-1 min-w-0">
+        <div className={kind === "net" || kind === "grand" ? "text-sm font-semibold" : "text-sm"}>
+          {label}
+        </div>
+        {hint && <div className="text-[10px] text-muted">{hint}</div>}
+      </div>
+      {kind === "input" && onChange ? (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted">฿</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-32 rounded-lg border border-amber-200 bg-amber-50/30 px-2.5 py-1.5 text-right text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-300 focus:bg-white"
+          />
+        </div>
+      ) : (
+        <span className={`${valueCls} text-right`}>
+          {isDiscount && (value as number) > 0 ? "−" : ""}฿{fmt(value as number)}
+        </span>
+      )}
+    </div>
   );
 }
