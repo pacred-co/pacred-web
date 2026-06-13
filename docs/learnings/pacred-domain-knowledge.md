@@ -474,3 +474,25 @@ A blanket `sed s/PCS/PR/` would have broken shipping + freight. Solution: one mo
 **Verified live (§0c):** PR009 on `/cart`, weight 25kg → ทางรถ ฿500 / ทางเรือ ฿375 (15฿/kg × 25). Was "ไม่มีเรต" before. The rebrand fixed the original bug as a side effect.
 
 **Cross-links:** `lib/forwarder/coid.ts` · migration `0182_coid_pcs_to_pr.sql` · `docs/sprints/save-point-2026-06-11-cargo-acct.md` §coID (the parked analysis this executed) · ADR-0029 (the rate-store SOT ledger) · the "PCS has 4 meanings" trap also bites the [[pacred-design-philosophy]] copy work.
+
+---
+
+## [2026-06-14] Thai shipping ต้นทาง/ปลายทาง pay-method = carrier-derived, NOT a province switch (setPayMethodShip)
+
+**Owner rule (verbatim):** *"ต่างจังหวัด นอกเขต กทม → ให้เขาเลือกขนส่ง เก็บเงินค่าขนส่งปลายทาง · ใน กรุงเทพ → บังคับจ่ายต้นทาง ตั้ง default ไปเลย."* (Upcountry → customer picks a carrier, COD/pay-at-destination · BKK → force pay-at-origin as the default.)
+
+**The trap — there is NO `if(province==BKK) forcePayAtOrigin` in legacy.** The rule is EMERGENT from two composed legacy mechanisms. Any audit hunting for an explicit province→payMethod switch will wrongly conclude "gap":
+1. **Carrier-eligibility-by-zip** — the BKK-metro free-shipping zip band only EXPOSES origin-billing carriers (Flash/J&T/PCS), while upcountry exposes the full private-carrier roster (`lib/cart/ship-by-eligibility.ts` + `lib/bkk-zip.ts::isFreeShippingZip`, ports `function.php` L3-9 + `cart/api-shipBy.php`).
+2. **Carrier→payMethod** — `setPayMethodShip($fShipBy)` (`pcs-admin/include/function.php` L2839-2843): payMethod=`1` (ต้นทาง) for the **6** origin-billing carriers `{Flash 2, J&T 24, ไปรษณีย์ไทย 11, PCS, PCSF, PCSE}`; default `2` (ปลายทาง) for every other private carrier. Admin can override per-case (`update_fPayMethod`).
+
+So BKK exposes only origin carriers → fed through the map → ต้นทาง; upcountry private carriers → ปลายทาง. **The province behaviour falls out of the carrier list × the carrier map.**
+
+**The bug it hid (§0e duplicated-money-rule trap · fixed this session · `f3062fad`):** the rule was transcribed TWICE — `actions/forwarder-legacy.ts` (ฝากนำเข้า) derived it correctly, but `actions/cart.ts` (shop) wrote `paymethod: input.payMethod ?? ""` **straight from client input** + mirrored to `tb_users.userPayMethod` — so a BKK shop order was NOT force-set to ต้นทาง, and the value could contradict the chosen carrier. **A business rule duplicated across entry points WILL silently diverge** — one path will be the faithful copy, the other an omission. Fix = ONE shared helper `lib/forwarder/pay-method.ts::derivePayMethod(fShipBy)` called by both paths (cart derives from `hShipBy`, the resolved carrier). The forwarder UPDATE path keeps the legacy asymmetry (`forwarder.php` L1590-1592: only stamp payMethod when origin, else leave the stored value alone → `isPayAtOriginCarrier ? "1" : undefined`).
+
+**Faithfulness drift caught (GAP-2):** both inline copies OMITTED carrier id `11` (ไปรษณีย์ไทย) that legacy treats as ต้นทาง — a value-set drift a faithful port shouldn't have. The shared helper restores it. 16-assertion `lib/forwarder/pay-method.test.ts` locks the set.
+
+**Data model — it's CODE-resident, not a DB/spreadsheet table (don't assume a "data model" implies a table):** there is NO `tb_carrier`/`tb_shipby`/carrier-zone/min-charge table (grep'd migrations + the olddata xlsx — none). The carrier roster, the carrier↔province if-chain (`lib/tools/thai-shipby-rules.ts::resolveShipByCarriers`, ports `pcs-admin/check-shipby.php` 1:1 incl. its dup-id quirks), and the carrier↔payMethod map are all TS constants. The only external data is ZIP→province (`raw_database.json`, bundled in `public/legacy/.../jquery.Thailand.js`). DB-backed pieces: the customer default (`tb_users.userShipBy`/`userPayMethod`), the per-order value (`tb_forwarder.fshipby`/`paymethod` · `tb_header_order.hshipby`/`paymethod`), the address, the maomao free-zone whitelist (`tb_address_maomao_free`).
+
+**Flash remote/tourist +50 surcharge:** `lib/tools/flash-price.ts` (added 2026-06-13) DOES port `calPriceFlash` + the พื้นที่ห่างไกล (`$zipCodeRemoteArea`, ~365 zips) + special-tourist-area (~33 zips) arrays — each adds +50฿, surfaced as a separate "รวมราคา +50" line exactly as legacy. BUT it's consumed ONLY by the admin reference tool `/admin/tools/thai-shipping`, **not wired into the customer cart estimate** → the customer-facing surcharge is a flagged Phase-C gap (an editable `tb_carrier_zone` + pointing the cart at `resolveShipByCarriers` is the same Phase-C item · no xlsx import needed).
+
+**Cross-links:** `lib/forwarder/pay-method.ts` · `actions/forwarder-legacy.ts` · `actions/cart.ts` · `lib/cart/ship-by-eligibility.ts` · `lib/tools/{thai-shipby-rules,flash-price}.ts` · `lib/bkk-zip.ts` · the §0e duplicated-rule trap is the same shape as the [[verify-deep-flow]] dead-write traps · the 8-screen deep-read this folds into = `docs/research/legacy-admin-deep-read-2026-06-14.md`.
