@@ -133,3 +133,15 @@ A 5-agent adversarial review of a 199-commit integration (freight-commission · 
 Also reinforced **[L-MIG-04](migration-env-drift.md)**: a data-rebrand (0182 coID PCS→PR) left a display-layer literal `Record` (`sales/page.tsx CO_ID_BADGE`, keyed on the old `'PCS'` sentinel) rendering the raw new value `'PR'` as a misleading VIP chip for ~8,700 general customers — even though every MONEY path correctly routed through `lib/forwarder/coid.ts`. Rebrand sweeps must grep for literal maps/switches keyed on the old sentinel, or route display decisions through the same SOT as the money decisions.
 
 **Cross-links:** CLAUDE.md §0e (dead-write) · §0f (confirm-before-mutate) · [migration-env-drift L-MIG-04](migration-env-drift.md) · `lib/freight-commission/bucket-bases.test.ts` (the scope→bases regression lock added this session).
+
+---
+
+## [2026-06-14] Two audit dimensions from the legacy-admin deep-read (forwarder/MOMO/wh-scan/payment)
+
+Full read: [`docs/research/legacy-admin-deep-read-2026-06-14.md`](../research/legacy-admin-deep-read-2026-06-14.md) (~26/30 screens verified faithfully built · 0 §0e traps · 3 false gaps corrected). Two reusable additions:
+
+**1 — A screen's Pacred home is organized by FUNCTION, not the legacy file's directory.** 3 "missing" verdicts were false: `acc-payment.php` is built as `/admin/reports/yuan-profit` (a REPORT — the auditor searched `/yuan-payments/*` by name and missed it under `/reports/*`); yuan bulk-approve + add-form both exist. Before trusting any "missing", grep `admin/*` by the DATA the screen reads (`tb_payment paystatus=2`, etc.), not by the legacy filename.
+
+**2 — NEW money-audit dimension: a money-mutating DETAIL page needs a concurrent-edit guard, not just a reachable mutate action.** The single highest-value gap in that whole set was not a missing screen — it was the absent yuan-verify lock on a BUILT page (`/admin/yuan-payments/[id]`): two accountants can open the same pending ฝากโอน and both verify/refund → double wallet reversal. Legacy guarded it (`payment.php` payLockDate + session). Add to the §0c/§0e checklist: for any money-mutating detail page, check for a concurrency/lock guard (optimistic `.eq(status, expected)` on the flip, or a lock row), not only that the action exists + is reachable + writes the right table.
+
+(Also reinforced: "missing legacy screen" often = "re-architected into a better Pacred mechanism" — MOMO's tb_tmp staging → cron + review/sync/history. Score PARTIAL/re-arch; flag REAL only when a capability has zero equivalent.)
