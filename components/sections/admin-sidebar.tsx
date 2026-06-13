@@ -506,6 +506,20 @@ export function AdminSidebar({
 
   const closeMobile = () => setOpenMobile(false);
 
+  // Pin / collapse the desktop icon rail (owner 2026-06-13 "กดปุ่ม pr แล้วแถบ
+  // ขึ้นค้างไว้"): clicking the PR brand logo toggles body.admin-sidebar-rail
+  // (rail ⇄ full) and persists the choice so a pinned-open bar stays open
+  // across navigations + reloads. Desktop-only effect (mobile = drawer · the
+  // class is a no-op under lg) so it's harmless to toggle there.
+  const togglePinRail = () => {
+    const rail = document.body.classList.toggle("admin-sidebar-rail");
+    try {
+      localStorage.setItem("admin-sidebar-rail", rail ? "1" : "0");
+    } catch {
+      /* localStorage blocked → in-session toggle still works via the class */
+    }
+  };
+
   return (
     <>
       {/* Mobile toggle */}
@@ -540,7 +554,16 @@ export function AdminSidebar({
         {/* owner 2026-06-11 "PRADMIN ตอนเต็ม ชิดซ้าย · ไม่โดนตัด/ทับ": F โลโก้ชิดซ้าย (ml-4)
             + กล่องสูง h-12 (เดิม h-9 ทำให้ object-cover ตัดหัว A badge ทิ้ง) → โลโก้เต็มไม่โดนกิน.
             H (rail) ยังกึ่งกลาง (mx-auto). */}
-        <div className="h-14 shrink-0 bg-[#B91C1C] flex items-center overflow-hidden">
+        {/* The PR brand bar is also the rail PIN toggle (owner 2026-06-13 "กดปุ่ม
+            pr แล้วแถบขึ้นค้างไว้"): click to pin the sidebar open (full) ⇄ collapse
+            back to the icon rail. Choice persists via togglePinRail. */}
+        <button
+          type="button"
+          onClick={togglePinRail}
+          aria-label="ปักหมุด/ย่อเมนู"
+          title="คลิกเพื่อกางเมนูค้างไว้ / ย่อกลับเป็นแถบไอคอน"
+          className="h-14 shrink-0 bg-[#B91C1C] flex items-center overflow-hidden border-0 p-0 w-full cursor-pointer hover:brightness-110 transition-[filter]"
+        >
           {/* F — full logo (expanded) · ชิดซ้าย · กล่องสูงพอให้โลโก้ไม่โดนตัด */}
           <div className="admin-rail-hide relative h-12 w-[150px] ml-4">
             <Image
@@ -563,7 +586,7 @@ export function AdminSidebar({
               className="object-cover object-center"
             />
           </div>
-        </div>
+        </button>
 
         {/* Avatar + adminID + role badge — legacy itop block */}
         <SidebarHeader adminLabel={adminLabel} adminAvatar={adminAvatar} roleKey={roleKey} t={t} />
