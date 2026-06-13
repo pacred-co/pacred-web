@@ -197,6 +197,13 @@ export default async function ExecCockpitPage() {
         rows={r.profitBySalesRep}
         okEmpty={res.ok}
         repNote
+        // Drill into the rep's customers → click a customer → edit sales/CS on the
+        // detail page. "(ไม่มีเซลล์)" → the no-rep queue so staff can assign one.
+        linkFor={(key) =>
+          key === "(ไม่มีเซลล์)"
+            ? "/admin/customers?adminidsale=__none__"
+            : `/admin/customers?adminidsale=${encodeURIComponent(key)}`
+        }
       />
 
       <p className="text-[11px] text-muted">
@@ -258,9 +265,14 @@ function FunnelBar({ f, max }: { f: FunnelStage; max: number }) {
   const pct = max > 0 ? Math.max(0, (f.count / max) * 100) : 0;
   // Awaiting-payment (5) is the cash-waiting stage → amber accent.
   const barCls = f.code === "5" ? "bg-amber-500" : "bg-primary-500";
+  // Drill into the orders of this status (ดูที่มา/รายละเอียดของงาน · owner ask).
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-32 shrink-0 text-xs text-muted truncate">{f.label}</span>
+    <Link
+      href={`/admin/forwarders?status=${encodeURIComponent(f.code)}`}
+      className="flex items-center gap-3 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-alt transition-colors group"
+      title={`ดูออเดอร์: ${f.label}`}
+    >
+      <span className="w-32 shrink-0 text-xs text-muted truncate group-hover:text-primary-700">{f.label}</span>
       <div className="flex-1 h-5 rounded-md bg-surface-alt overflow-hidden">
         <div
           className={`h-full rounded-md ${barCls} flex items-center justify-end pr-2`}
@@ -270,7 +282,7 @@ function FunnelBar({ f, max }: { f: FunnelStage; max: number }) {
         </div>
       </div>
       {pct < 18 && <span className="w-12 shrink-0 text-right font-mono text-xs">{intTh(f.count)}</span>}
-    </div>
+    </Link>
   );
 }
 
@@ -326,12 +338,17 @@ function ProfitTable({
   rows,
   okEmpty,
   repNote,
+  linkFor,
 }: {
   title: string;
   firstColLabel: string;
   rows: CockpitProfitRow[];
   okEmpty: boolean;
   repNote?: boolean;
+  /** Optional drill-down: row key → URL of the underlying customers/orders.
+   *  Return null for a non-linkable row. Makes the cockpit actionable
+   *  (ดูที่มา + แก้ sales/cs · owner ask 2026-06-14). */
+  linkFor?: (key: string) => string | null;
 }) {
   const maxProfit = Math.max(0, ...rows.map((x) => x.profit));
   return (
@@ -360,10 +377,17 @@ function ProfitTable({
             ) : (
               rows.map((x) => {
                 const pct = maxProfit > 0 ? Math.max(0, (x.profit / maxProfit) * 100) : 0;
+                const href = linkFor?.(x.key) ?? null;
                 return (
                   <tr key={x.key} className="border-t border-border">
                     <td className="px-3 py-2">
-                      <div className="font-medium">{x.label}</div>
+                      {href ? (
+                        <Link href={href} className="font-medium text-primary-700 hover:underline inline-flex items-center gap-1">
+                          {x.label}<span aria-hidden="true" className="opacity-60">→</span>
+                        </Link>
+                      ) : (
+                        <div className="font-medium">{x.label}</div>
+                      )}
                       <div className="mt-1 h-1.5 w-full max-w-[140px] rounded-full bg-surface-alt overflow-hidden">
                         <div
                           className={`h-full rounded-full ${x.profit < 0 ? "bg-red-400" : "bg-primary-500"}`}

@@ -231,12 +231,18 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const groupCol = group ? GROUP_CFG[group].col : undefined;
   if (groupCol) q = q.eq(groupCol, "1");
 
-  // G6 — sales-rep filter (sp.adminidsale).
+  // G6 — sales-rep filter (sp.adminidsale). The sentinel "__none__" = the
+  // NO-REP queue (cockpit "(ไม่มีเซลล์)" drill-down · 2026-06-14) so staff can
+  // open unassigned customers + set sales/CS on the detail page.
   const adminidsale =
     typeof sp.adminidsale === "string" && sp.adminidsale.trim() !== ""
       ? sp.adminidsale.trim()
       : null;
-  if (adminidsale) q = q.eq("adminIDSale", adminidsale);
+  if (adminidsale === "__none__") {
+    q = q.or("adminIDSale.is.null,adminIDSale.eq.");
+  } else if (adminidsale) {
+    q = q.eq("adminIDSale", adminidsale);
+  }
 
   if (sp.q) {
     const term = sp.q.replace(/[\\%_,]/g, (m) => "\\" + m);
@@ -504,7 +510,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           ) : null}
           {adminidsale ? (
             <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-              <span>เซลล์ผู้ดูแล: {adminidsale}</span>
+              <span>{adminidsale === "__none__" ? "⚠️ ยังไม่มีเซลล์ดูแล (กดเข้าลูกค้าเพื่อ set เซลล์/CS)" : `เซลล์ผู้ดูแล: ${adminidsale}`}</span>
               <Link href="/admin/customers?nofilter=1" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด" title="ดูทั้งหมด">×</Link>
             </div>
           ) : null}
