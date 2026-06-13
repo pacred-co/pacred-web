@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
+import { derivePayMethod, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 import { ADDRESSES } from "@/components/seo/site";
 import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
 
@@ -160,10 +161,9 @@ export async function createLegacyForwarder(
   if (d.addressID === "PCS") {
     fShipBy = "PCS"; // PCS self-pickup wins over Flash promo
   }
-  // forwarder.php L49-53 — paymethod derived from fShipBy
-  const inOrigin = fShipBy === "PCS" || fShipBy === "PCSF" || fShipBy === "PCSE"
-    || fShipBy === "24" || fShipBy === "2";
-  const paymethod = inOrigin ? "1" : "2";
+  // forwarder.php L49-53 — paymethod derived from fShipBy (setPayMethodShip).
+  // Shared with the shop-cart path via lib/forwarder/pay-method.ts.
+  const paymethod = derivePayMethod(fShipBy);
 
   // forwarder.php L55-87 — address copy (PCS warehouse fallback ELSE tb_address lookup)
   let addressName = "", addressLastname = "", addressTel = "", addressTel2 = "";
@@ -366,10 +366,11 @@ export async function updateLegacyForwarderShipBy(
   const userID = session.profile.member_code ?? "";
   if (!userID) return { ok: false, error: "no_member_code" };
 
-  // forwarder.php L1590-1592 — derive payMethod when fShipBy is in-origin.
-  const inOrigin = fShipBy === "PCS" || fShipBy === "PCSF" || fShipBy === "PCSE"
-    || fShipBy === "24" || fShipBy === "2";
-  const paymethod = inOrigin ? "1" : undefined;
+  // forwarder.php L1590-1592 — only stamp payMethod when the carrier is
+  // pay-at-origin; a destination carrier leaves the stored value alone
+  // (preserve the legacy update-only-on-origin asymmetry). Origin set
+  // shared with the shop-cart path via lib/forwarder/pay-method.ts.
+  const paymethod = isPayAtOriginCarrier(fShipBy) ? "1" : undefined;
 
   const admin = createAdminClient();
 

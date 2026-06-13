@@ -17,6 +17,7 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 // 600+ chars of tracking params (utparam/scm/spm/abtest/etc.) → overflow.
 // Strip to canonical id+skuId only.
 import { normalizeProductUrl } from "@/lib/url/normalize-product-url";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
   modeFromPref,
@@ -456,7 +457,12 @@ export async function submitCartOrder(input: {
       adminidip: "customer",
       userid: userID,
       crate: input.crate,
-      paymethod: input.payMethod ?? "",
+      // setPayMethodShip — payMethod is DERIVED from the chosen carrier, not
+      // trusted from client input (the forwarder path already does this). This
+      // is what makes BKK orders ต้นทาง (BKK exposes only origin-billing
+      // carriers) and upcountry private carriers ปลายทาง. Shared helper:
+      // lib/forwarder/pay-method.ts.
+      paymethod: derivePayMethod(hShipBy),
       fshippingservice: fShippingService,
       hno: hNo,
       // P1 — tax-doc snapshot. 'receipt' (ไม่รับเอกสาร, default) snapshots
@@ -576,7 +582,10 @@ export async function submitCartOrder(input: {
     .update({
       ...(input.addressID !== "INLINE" ? { userAddressID: input.addressID } : {}),
       userShipBy: hShipBy ?? "",
-      userPayMethod: input.payMethod ?? "",
+      // Mirror the carrier-derived payMethod (not raw client input) into the
+      // customer's last-used default — keeps the saved default consistent with
+      // the order it came from.
+      userPayMethod: derivePayMethod(hShipBy),
     })
     .eq("userID", userID);
   if (userDefaultsErr) {
