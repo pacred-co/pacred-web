@@ -21,7 +21,7 @@
  *     tb_cnt_item but the forwarder lifecycle is independent.
  */
 
-import { withAdmin } from "@/actions/admin/common";
+import { withAdmin, logAdminAction } from "@/actions/admin/common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
@@ -53,15 +53,36 @@ async function setCntStatus(cntId: number, newStatus: "2" | "3"): Promise<Result
       };
     }
 
-    const { error: updErr } = await admin
+    // 💰 Atomic guard (2026-06-14 disbursement audit): fold cntStatus='1' into
+    // the UPDATE WHERE so the prior-SELECT above can't race a concurrent
+    // approve/reject (or a double-click). 0 rows matched = another admin
+    // already flipped it. Mirrors adminMarkSalesPayoutPaidTb (sales-payouts-tb.ts).
+    const { data: updated, error: updErr } = await admin
       .from("tb_cnt")
       .update({
         cntStatus: newStatus,
         adminIDUpdate: safeLegacyAdminId(adminId, 30),
         dateUpdate: new Date().toISOString(),
       })
-      .eq("ID", cntId);
+      .eq("ID", cntId)
+      .eq("cntStatus", "1")
+      .select("ID")
+      .maybeSingle<{ ID: number }>();
     if (updErr) return { ok: false, error: `Update failed: ${updErr.message}` };
+    if (!updated) {
+      return {
+        ok: false,
+        error: `cnt #${cntId} ถูกดำเนินการไปแล้ว (มีผู้ทำรายการพร้อมกันหรือกดซ้ำ) — โปรดรีเฟรชหน้าแล้วลองใหม่`,
+      };
+    }
+
+    await logAdminAction(
+      adminId,
+      newStatus === "2" ? "cnt_hs.approve" : "cnt_hs.reject",
+      "tb_cnt",
+      String(cntId),
+      { legacy_admin_id: safeLegacyAdminId(adminId, 30), fromStatus: "1", toStatus: newStatus },
+    );
 
     revalidatePath(`/admin/cnt-hs/${cntId}`);
     revalidatePath("/admin/cnt-hs");
@@ -127,7 +148,11 @@ export async function adminUploadCntSlip(
       if (!up.ok) return { ok: false, error: up.error };
 
       // UPDATE the cnt row — slip filename + auto-approve.
-      const { error: updErr } = await admin
+      // 💰 Atomic guard (2026-06-14 disbursement audit): fold cntStatus='1'
+      // into the UPDATE WHERE so the prior-SELECT can't race a concurrent
+      // slip-upload/approve. On a 0-row result the row was already flipped →
+      // remove the just-uploaded orphan slip (mirrors adminMarkSalesPayoutPaidTb).
+      const { data: updated, error: updErr } = await admin
         .from("tb_cnt")
         .update({
           cntImagesSlip: up.filename,
@@ -135,13 +160,30 @@ export async function adminUploadCntSlip(
           adminIDUpdate: safeLegacyAdminId(adminId, 30),
           dateUpdate:    new Date().toISOString(),
         })
-        .eq("ID", cntId);
+        .eq("ID", cntId)
+        .eq("cntStatus", "1")
+        .select("ID")
+        .maybeSingle<{ ID: number }>();
       if (updErr) {
         return {
           ok: false,
           error: `อัปโหลดสำเร็จที่ ${up.filename} แต่ UPDATE tb_cnt ล้มเหลว: ${updErr.message}`,
         };
       }
+      if (!updated) {
+        await admin.storage.from("slips").remove([up.filename]);
+        return {
+          ok: false,
+          error: `cnt #${cntId} ถูกดำเนินการไปแล้ว (มีผู้ทำรายการพร้อมกันหรือกดซ้ำ) — โปรดรีเฟรชหน้าแล้วลองใหม่`,
+        };
+      }
+
+      await logAdminAction(adminId, "cnt_hs.slip_upload_approve", "tb_cnt", String(cntId), {
+        legacy_admin_id: safeLegacyAdminId(adminId, 30),
+        filename: up.filename,
+        fromStatus: "1",
+        toStatus: "2",
+      });
 
       revalidatePath(`/admin/cnt-hs/${cntId}`);
       revalidatePath("/admin/cnt-hs");
