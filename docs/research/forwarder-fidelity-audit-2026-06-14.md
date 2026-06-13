@@ -15,24 +15,30 @@ Held DOWN from a naive "95% of features exist" because a dead-read or a money-TO
 | Wave | scope | sev | migration | owner-gated | status |
 |---|---|---|---|---|---|
 | **1** | In-code money-safety: 2 TOCTOU + 2 dead-reads + nav drift | P0 | no | no | **✅ SHIPPED `d6f466b4`** (momo-lcl dead-read DEFERRED — needs prod probe) |
-| **2** | Money-correctness display + capture (yuan-approve cost, WHT-1% col, notPortage filter, badge counts) | P1 | no | partly (yuan cost source — flag 3) | TODO |
-| **3** | Missing in-code writers (notPortage combine-shipping, shop print-flag, per-fStatus tab strip, manual edit branch + dedup/auto-price) | P0 | no | no | TODO |
+| **2** | Money-correctness display + capture (yuan-approve cost, badge counts) | P1 | no | no (owner OK'd legacy default) | **✅ SHIPPED `88214472`** — yuan cost single+bulk + real error-queue badges + FREE_SHIPPING_ZIPS shared lib. **WHT-1% col = FALSE-POSITIVE** (legacy detail items table has NO WHT — confirmed via the dropped dump + forwarder.php; WHT applied at payment). notPortage **filter** → folded into W3 (same surface as the writer). |
+| **3** | Missing in-code writers (notPortage combine-shipping + filter, shop print-flag, per-fStatus tab strip, manual edit branch + dedup/auto-price) | P0 | no | no | TODO (next) |
 | **4** | cnt-hs/report-cnt cost-correction (paid-container cost tab, financial summary, cntFile PDF, fProfit* recompute) | P0 | no | no | TODO |
-| **5** | DB UNIQUE constraints (create-side double-pay) | P0 | **yes (0183)** | **yes** | OWNER (carryover from 2026-06-14 disbursement audit) |
-| **6** | Missing partner carriers JMF / GOGO / TTP (+ CN sync) | P1 | no | **yes (creds)** | OWNER |
+| **5** | DB UNIQUE constraints (create-side double-pay) | P0 | **yes (0183)** | **✅ owner-APPROVED** | TODO — run prod dup-precheck FIRST, then apply + reconcile dev |
+| **6** | Missing partner carriers JMF / TTP read-only (+ CN) | P1 | no | partly (creds) | TODO — **GOGO = DECOMMISSIONED** (owner: "ไม่ได้ใช้ละ ใช้ momo") → banner, do NOT build importer. JMF/TTP view+history buildable read-only now. |
 | **7** | Low-severity parity polish | P2/P3 | no | no | TODO |
+
+### Owner decisions (2026-06-14, all approved — "อนุญาต อนุมัติ ทุกอย่าง")
+- **GOGO carrier = decommissioned** ("ไม่ได้ใช้ละ ใช้ momo") → W6 banners GOGO as retired, no importer.
+- **yuan-approve cost = legacy default** (`tb_settings.hRateCostDefault`) "แล้วค่อยพัฒนาต่อ". ✅ done in W2a.
+- **migration 0183 = approved** → W5 may run the prod dup-precheck + add the UNIQUE constraints (dup-precheck is the gate).
+- **Standing mantra (ฝังหัวไว้): legacy-first, then develop — applies to EVERYTHING.**
 
 ## Money risks (the 11 — fix before trusting each surface)
 
 1. **MOMO commit double-INSERT TOCTOU** — `lib/admin/commit-momo-row-core.ts`. ✅ FIXED Wave 1 (atomic claim before INSERT).
 2. **Forwarder credit double-debt TOCTOU** — `actions/admin/forwarders-field-edits.ts`. ✅ FIXED Wave 1 (`.in("fstatus",[1..5])` fold).
-3. **Yuan-approve profit miss** — approve (`actions-cell.tsx:33`) + bulk (`tb-bulk.ts:422`) flip paystatus 1→2 with no `payRateCost` → `paythbcost`/`payprofitthb`=0 → every margin report wrong. FIX = capture cost (default `tb_settings.hRateCostDefault`) + compute margin before flip. (Wave 2 · owner flag 3.)
+3. **Yuan-approve profit miss** — ✅ FIXED Wave 2a (`88214472`): both `adminUpdateYuanPayment` (single) + `adminBulkApproveYuanPaymentsTb` (bulk) now default `payRateCost` from `tb_settings.hRateCostDefault` and compute `paythbcost`/`payprofitthb` before the flip.
 4. **Bulk-tracking-search DEAD-READ** — `actions/admin/bulk-tracking-search.ts`. ✅ FIXED Wave 1 (repointed to `tb_forwarder`/`tb_forwarder_item`).
 5. **MOMO-LCL sack DEAD-READ** — `momo-lcl.ts:114/121` reads `tb_tmp_forwarder_item_momo`. ⚠️ DEFERRED — it faithfully reads the same legacy tmp table `check-tracks.php` reads; the "repoint to momo_import_tracks" claim needs a **prod probe** (confirm tmp table is empty + the data really lives in `momo_import_tracks`/`momo_sack_infos`) before touching a working faithful port.
 6. **notPortage combine-shipping writer MISSING** + no UNIQUE on `tb_forwarder_tran_th_sub.fid` → double-billed TH delivery when built. (Wave 3 — port the legacy atomic idempotency precheck.)
 7. **cnt-pay CREATE-side double-pay** — no UNIQUE on `tb_cnt_item.fcabinetnumber`. (Wave 5 · owner-gated migration 0183.)
 8. **Delivery-complete commission accrual idempotency UNVERIFIED** — `tb_user_sales.idf` UNIQUE (Wave 5 · verify one row per fid).
-9. **Juristic WHT-1% column dropped on forwarder DETAIL items table** — `forwarder-import-items-table.tsx:127-129` shows gross → overstates juristic payable by 1%. (Wave 2.)
+9. **Juristic WHT-1% column on forwarder DETAIL items table** — ❌ FALSE POSITIVE (verified 2026-06-14): the dropped `forwarder:detail:3880` dump has ZERO WHT markers + legacy `forwarder.php` has no `price1Per`/`*0.01` on the items/update table. The legacy detail items table shows GROSS (ราคารวม); the juristic WHT-1% is applied downstream at payment/receipt, NOT on this table. `forwarder-import-items-table.tsx` is faithful as-is. The audit agent conflated it with the `/edit` FreightBreakdownTable. No change.
 10. **Manual MOMO/CN INSERT** — no dedup + ฿0 sell price (`api-forwarder-manual.ts:447/519`). (Wave 3.)
 11. **customRate/resetCustomRate** leave `fProfit*`/`fCompany1Per` stale. (Wave 4 — or confirm derive-at-read.)
 
