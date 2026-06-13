@@ -3,40 +3,36 @@
 /**
  * Client form for /admin/forwarders/new-bulk — BULK forwarder create.
  *
- * Shape (3 sections + rows table):
- *   1. Pick ONE customer (shared)
- *   2. Pick shared shipping options (carrier / transport / address / tax-doc)
- *   3. Edit N rows of {tracking, detail, amount}
- *   4. Submit → call `adminCreateForwarder` N times sequentially · per-row
- *      status (pending → success #ID / error message)
+ * v2 (2026-06-07 ภูม flag): "ไม่ใช่รายการที่เพิ่มหลายรายการ จะเป็นลูกค้า
+ * คนเดียวกันไง" — bulk = ลูกค้าหลายคนในใบเดียว (ปกติแอดมินจะรับ tracking
+ * จากลูกค้าหลายคนพร้อมกัน). v1 เป็นลูกค้าเดียว — pivot:
  *
- * Re-uses the audited customer/address pickers + the audited
- * `adminCreateForwarder` action verbatim — zero new write path (the action
- * already runs withAdmin + audit log + RBAC gate per row).
+ * Shape (1 shared section + per-row table):
+ *   ── Shared (Section 1) — บริษัทขนส่ง · รูปแบบขนส่ง · เอกสารภาษี
+ *      (ใช้ตัวเดียวกันทุก row · ปกติ batch มาจาก channel เดียว)
+ *
+ *   ── Per-row (Table) — # · ลูกค้า · Tracking · รายละเอียด · จำนวน
+ *      · สถานะ · ✕
+ *      เมื่อ user เลือกลูกค้า → adopt customer's coID + auto-load main
+ *      address (no per-row address dropdown — รักษา UX ลื่น · ถ้าต้องการ
+ *      address อื่นแก้ที่ /edit หลัง create)
+ *
+ *   ── Submit · sequential per-row · per-row status + error
+ *
+ * Re-uses the audited customer search action + `adminCreateForwarder`
+ * verbatim — zero new write path.
  */
 
-import { useState, useTransition, useMemo, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminCreateForwarder,
-  fetchUsersByGroup,
   fetchAddressesByUserid,
   searchCustomers,
   type CustomerOption,
   type CustomerSearchResult,
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
-
-// Mirror single form — 7 clean member-type groups · same as /admin/customers.
-const CUSTOMER_GROUP_OPTIONS: { value: string; label: string }[] = [
-  { value: "general",    label: "ลูกค้าทั่วไป" },
-  { value: "vip",        label: "VIP" },
-  { value: "svip",       label: "SVIP" },
-  { value: "corporate",  label: "นิติบุคคล" },
-  { value: "credit",     label: "เครดิต" },
-  { value: "comparison", label: "คิดค่าเทียบ (CPS)" },
-  { value: "freight",    label: "ลูกค้า Freight" },
-];
 
 // Mirror single form — copied verbatim from legacy optionHShipByCart().
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
@@ -98,38 +94,52 @@ const TAX_DOC_OPTIONS = [
   { value: "customs",     label: "📜 ใบขนสินค้า",  hint: "ส่งออกเอง" },
 ];
 
-function customerLabel(c: CustomerOption | null | undefined): string {
+function customerShortLabel(c: CustomerOption | null): string {
   if (!c) return "—";
   const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
   return `${c.userID} · ${name || c.userTel || "(ไม่มีชื่อ)"}`;
 }
 
-function addressFullLine(a: AddressOption): string {
-  const lastname = a.addresslastname ? ` ${a.addresslastname}` : "";
-  return `คุณ${a.addressname}${lastname} · ${a.addressno} · ต.${a.addresssubdistrict} อ.${a.addressdistrict} จ.${a.addressprovince} ${a.addresszipcode}`;
-}
-
-// ── Row state ──────────────────────────────────────────────
+// ── Per-row state ─────────────────────────────────────────────
 type RowStatus = "idle" | "pending" | "success" | "error";
 type Row = {
-  /** Stable React key — random when row is added · NOT submitted. */
+  /** Stable React key — random when row added · NOT submitted. */
   key: string;
+  // Customer (per-row):
+  customer: CustomerOption | null;   // null = ยังไม่เลือก
+  coid: string;                       // customer's own coID (set on pick)
+  addressId: number | null;           // auto = main address (loaded after pick)
+  addressLoading: boolean;            // true while address fetch is in-flight
+  // Tracking:
   trackingChn: string;
   detail: string;
   amount: string;
+  // Submit status:
   status: RowStatus;
-  /** Server response: id on success · message on error. */
   resultId?: number;
   errorMsg?: string;
+  // Inline customer-search UI state:
+  search: string;
+  searchOpen: boolean;
+  searchResults: CustomerSearchResult[];
+  searchLoading: boolean;
 };
 
 function makeEmptyRow(): Row {
   return {
     key: `row-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`,
+    customer: null,
+    coid: "",
+    addressId: null,
+    addressLoading: false,
     trackingChn: "",
     detail: "",
     amount: "1",
     status: "idle",
+    search: "",
+    searchOpen: false,
+    searchResults: [],
+    searchLoading: false,
   };
 }
 
@@ -147,137 +157,39 @@ export function AdminForwarderNewBulkForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  // ── Customer picker (mirrors single form simplified) ──────
-  const [group, setGroup]                           = useState<string>("");
-  const [coid, setCoid]                             = useState<string>(presetCoid ?? "");
-  const [users, setUsers]                           = useState<CustomerSearchResult[]>(
-    presetUser ? [{ ...presetUser, coID: presetCoid ?? null }] : [],
-  );
-  const [usersLoading, setUsersLoading]             = useState(false);
-  const [userid, setUserid]                         = useState<string>(presetUser?.userID ?? "");
-  const [userFilter, setUserFilter]                 = useState<string>("");
-  const [userPickerOpen, setUserPickerOpen]         = useState(false);
-  const [pickedCustomer, setPickedCustomer]         = useState<CustomerOption | null>(presetUser ?? null);
-  const [searchResults, setSearchResults]           = useState<CustomerSearchResult[]>([]);
-  const [searchLoading, setSearchLoading]           = useState(false);
-  const userPickerRef                               = useRef<HTMLDivElement | null>(null);
+  // ── Shared shipping options (Section 1) ─────────────────────
+  const [shipBy, setShipBy]               = useState<string>("");
+  const [transportType, setTransportType] = useState<TransportType>("1");
+  const [taxDocPref, setTaxDocPref]       = useState<string>("receipt");
 
-  // ── Shared shipping options ───────────────────────────────
-  const [shipBy, setShipBy]                         = useState<string>("");
-  const [addresses, setAddresses]                   = useState<AddressOption[]>(presetAddresses);
-  const [addressesLoading, setAddressesLoading]     = useState(false);
-  const [addressId, setAddressId]                   = useState<number | null>(
-    presetAddresses.find((a) => a.isMain)?.addressid ?? presetAddresses[0]?.addressid ?? null,
-  );
-  const [transportType, setTransportType]           = useState<TransportType>("1");
-  const [taxDocPref, setTaxDocPref]                 = useState<string>("receipt");
-
-  // ── Rows (default 5 empty rows so admin can fill ทันที) ──
-  const [rows, setRows] = useState<Row[]>(() => [
-    makeEmptyRow(), makeEmptyRow(), makeEmptyRow(), makeEmptyRow(), makeEmptyRow(),
-  ]);
-
-  // ── Feedback ──
-  const [error, setError]       = useState<string | null>(null);
-  const [summary, setSummary]   = useState<{ ok: number; failed: number; total: number } | null>(null);
-
-  // ── Outside-click for user picker ─────────────────────────
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (userPickerRef.current && !userPickerRef.current.contains(e.target as Node)) {
-        setUserPickerOpen(false);
-      }
+  // ── Rows (default 5 empty) — multi-customer per row ─────────
+  const [rows, setRows] = useState<Row[]>(() => {
+    const defaults = [
+      makeEmptyRow(),
+      makeEmptyRow(),
+      makeEmptyRow(),
+      makeEmptyRow(),
+      makeEmptyRow(),
+    ];
+    // If page opened with ?q=PR1234 preset, pre-fill the first row's customer
+    // so admin opens the form ready (rest of the rows still empty).
+    if (presetUser) {
+      const main = presetAddresses.find((a) => a.isMain)?.addressid ?? presetAddresses[0]?.addressid ?? null;
+      defaults[0] = {
+        ...defaults[0],
+        customer: presetUser,
+        coid: (presetCoid ?? "").trim().slice(0, 10) || "-",
+        addressId: main,
+      };
     }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+    return defaults;
+  });
 
-  // ── Group-filtered customer loader ─────────────────────────
-  async function onGroupChange(g: string) {
-    setGroup(g);
-    setUserid("");
-    setPickedCustomer(null);
-    setAddresses([]);
-    setAddressId(null);
-    if (!g) {
-      setUsers([]);
-      return;
-    }
-    setUsersLoading(true);
-    const res = await fetchUsersByGroup(g as Parameters<typeof fetchUsersByGroup>[0]);
-    setUsersLoading(false);
-    if (res.ok) {
-      setUsers(res.data?.users ?? []);
-    } else {
-      setError(`โหลดรายชื่อลูกค้าไม่สำเร็จ: ${res.error}`);
-      setUsers([]);
-    }
-  }
+  // ── Feedback ─────────────────────────────────────────────────
+  const [error, setError]     = useState<string | null>(null);
+  const [summary, setSummary] = useState<{ ok: number; failed: number; total: number } | null>(null);
 
-  // ── Universal customer search (debounced) ─────────────────
-  useEffect(() => {
-    if (group) return; // group-mode uses pre-loaded list
-    const q = userFilter.trim();
-    if (q.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    let cancelled = false;
-    setSearchLoading(true);
-    const t = setTimeout(async () => {
-      const res = await searchCustomers(q);
-      if (cancelled) return;
-      setSearchLoading(false);
-      if (res.ok) setSearchResults(res.data?.users ?? []);
-      else setSearchResults([]);
-    }, 300);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [userFilter, group]);
-
-  // ── Pick handler — adopts customer's own coID + loads addresses ──
-  async function onUserPick(picked: CustomerOption, pickedCoid?: string | null) {
-    setUserid(picked.userID);
-    setPickedCustomer(picked);
-    if (pickedCoid !== undefined) {
-      const c = (pickedCoid ?? "").trim().slice(0, 10) || "-";
-      setCoid(c);
-    }
-    setUserFilter("");
-    setUserPickerOpen(false);
-
-    setAddressesLoading(true);
-    const res = await fetchAddressesByUserid(picked.userID);
-    setAddressesLoading(false);
-    if (res.ok) {
-      const list = res.data?.addresses ?? [];
-      setAddresses(list);
-      setAddressId(list.find((a) => a.isMain)?.addressid ?? list[0]?.addressid ?? null);
-    } else {
-      setError(`โหลดที่อยู่ไม่สำเร็จ: ${res.error}`);
-      setAddresses([]);
-      setAddressId(null);
-    }
-  }
-
-  // ── filtered list for type-ahead within the group-loaded customers ──
-  const filteredGroupUsers = useMemo(() => {
-    const q = userFilter.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => {
-      const hay = `${u.userID} ${u.userName ?? ""} ${u.userLastName ?? ""} ${u.userTel ?? ""}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [userFilter, users]);
-
-  const selectedUser = useMemo(
-    () =>
-      (pickedCustomer && pickedCustomer.userID === userid ? pickedCustomer : null) ??
-      users.find((u) => u.userID === userid) ??
-      (presetUser?.userID === userid ? presetUser : null),
-    [userid, users, presetUser, pickedCustomer],
-  );
-
-  // ── Row helpers ─────────────────────────────────────────────
+  // ── Row helpers ──────────────────────────────────────────────
   function addRow() {
     setRows((prev) => [...prev, makeEmptyRow()]);
   }
@@ -291,30 +203,64 @@ export function AdminForwarderNewBulkForm({
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
-  // Rows ที่ "มีของจริง" (มี tracking+detail) = ตัวที่จะ submit
-  const submittableRows = useMemo(
-    () => rows.filter((r) => r.trackingChn.trim() && r.detail.trim()),
-    [rows],
-  );
-  const allRowsValid = submittableRows.length > 0 && submittableRows.every((r) => {
+  // ── On-pick — adopt customer's coID + load main address ──────
+  async function pickCustomer(rowKey: string, picked: CustomerSearchResult) {
+    const coid = (picked.coID ?? "").trim().slice(0, 10) || "-";
+    updateRow(rowKey, {
+      customer: { userID: picked.userID, userName: picked.userName, userLastName: picked.userLastName, userTel: picked.userTel },
+      coid,
+      addressLoading: true,
+      addressId: null,
+      search: "",
+      searchOpen: false,
+      searchResults: [],
+    });
+
+    const res = await fetchAddressesByUserid(picked.userID);
+    if (res.ok) {
+      const list = res.data?.addresses ?? [];
+      const mainId = list.find((a) => a.isMain)?.addressid ?? list[0]?.addressid ?? null;
+      updateRow(rowKey, { addressLoading: false, addressId: mainId });
+    } else {
+      updateRow(rowKey, { addressLoading: false, addressId: null });
+      setError(`โหลดที่อยู่ลูกค้า ${picked.userID} ไม่สำเร็จ: ${res.error}`);
+    }
+  }
+
+  function clearCustomer(rowKey: string) {
+    updateRow(rowKey, {
+      customer: null,
+      coid: "",
+      addressId: null,
+      search: "",
+      searchOpen: false,
+      searchResults: [],
+    });
+  }
+
+  // ── Submittable rows (customer + tracking + detail filled · amount 1-10000) ──
+  const submittableRows = rows.filter((r) => {
+    if (!r.customer || !r.trackingChn.trim() || !r.detail.trim()) return false;
     const n = parseInt(r.amount, 10);
-    return Number.isFinite(n) && n >= 1 && n <= 10000;
+    if (!Number.isFinite(n) || n < 1 || n > 10000) return false;
+    // Address requirement: if shipBy != PCS, row must have addressId
+    if (shipBy && shipBy !== "PCS" && !r.addressId) return false;
+    return true;
   });
 
-  // ── Submit · sequential per-row · update status live ────────
+  // ── Submit · sequential per-row ──────────────────────────────
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSummary(null);
 
-    // Validate global shared fields first
-    if (!coid || !userid) { setError("กรุณาเลือกลูกค้าก่อน"); return; }
     if (!shipBy) { setError("กรุณาเลือกบริษัทขนส่ง"); return; }
-    if (shipBy !== "PCS" && !addressId) { setError("กรุณาเลือกที่อยู่จัดส่ง"); return; }
-    if (submittableRows.length === 0) { setError("กรุณากรอกอย่างน้อย 1 รายการ (tracking + รายละเอียด)"); return; }
-    if (!allRowsValid) { setError("รายการบางแถวมีข้อมูลไม่ครบ — ตรวจ tracking · รายละเอียด · จำนวน (1-10000)"); return; }
+    if (submittableRows.length === 0) {
+      setError("กรุณากรอกอย่างน้อย 1 รายการ — ต้องมี ลูกค้า · tracking · รายละเอียด ครบทุกแถวที่จะส่ง");
+      return;
+    }
 
-    // Lock all submittable rows to pending state
+    // Lock submittable rows to pending state
     setRows((prev) =>
       prev.map((r) =>
         submittableRows.some((s) => s.key === r.key)
@@ -326,41 +272,39 @@ export function AdminForwarderNewBulkForm({
     startTransition(async () => {
       let ok = 0;
       let failed = 0;
-      // Sequential — each call has audit log + RBAC + INSERT · we keep them
-      // serial so admin can see progress + the action's audit_log entries stay
-      // in order. Network cost per row is small (no cover upload).
+      // Sequential — audit_log entries stay in order · admin sees progress
       for (const r of submittableRows) {
         const amountNum = parseInt(r.amount, 10) || 1;
         const res = await adminCreateForwarder({
-          coid,
-          customerUserid: userid,
+          coid:           r.coid,
+          customerUserid: r.customer!.userID,
           trackingChn:    r.trackingChn.trim(),
           detail:         r.detail.trim(),
           amount:         amountNum,
           shipBy,
-          addressId:      shipBy === "PCS" ? null : addressId,
+          addressId:      shipBy === "PCS" ? null : r.addressId,
           transportType,
-          warehouseName:  "", // server auto-detects from tracking
+          warehouseName:  "", // server auto-detects from tracking prefix
           taxDocPref,
         });
         if (res.ok) {
           ok++;
           setRows((prev) =>
             prev.map((x) =>
-              x.key === r.key ? { ...x, status: "success", resultId: res.data?.id } : x,
+              x.key === r.key ? { ...x, status: "success" as RowStatus, resultId: res.data?.id } : x,
             ),
           );
         } else {
           failed++;
           setRows((prev) =>
             prev.map((x) =>
-              x.key === r.key ? { ...x, status: "error", errorMsg: res.error } : x,
+              x.key === r.key ? { ...x, status: "error" as RowStatus, errorMsg: res.error } : x,
             ),
           );
         }
       }
       setSummary({ ok, failed, total: submittableRows.length });
-      // If every row succeeded → redirect after a brief celebration
+      // If every row succeeded → redirect after brief celebration
       if (failed === 0 && ok > 0) {
         setTimeout(() => {
           router.push("/admin/forwarders");
@@ -369,8 +313,6 @@ export function AdminForwarderNewBulkForm({
       }
     });
   }
-
-  const rowsDirty = rows.some((r) => r.trackingChn || r.detail);
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
@@ -392,119 +334,16 @@ export function AdminForwarderNewBulkForm({
         </div>
       )}
 
-      {/* ── SECTION 1: เลือกลูกค้า ────────────────────────────── */}
+      {/* ── SECTION 1: ตัวเลือกขนส่ง (shared) ────────────────── */}
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">1</span>
-          เลือกลูกค้า <span className="text-red-500">*</span>
-          <span className="text-[10px] font-normal text-muted">(ทุกรายการในใบนี้ใช้ลูกค้าเดียวกัน)</span>
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-12">
-          <div className="md:col-span-4">
-            <label className="block text-xs font-medium text-muted mb-1">
-              ประเภทสมาชิก <span className="text-muted">· ไม่บังคับ</span>
-            </label>
-            <select
-              value={group}
-              onChange={(e) => onGroupChange(e.target.value)}
-              disabled={pending}
-              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-            >
-              <option value="">— ทุกประเภท —</option>
-              {CUSTOMER_GROUP_OPTIONS.map((g) => (
-                <option key={g.value} value={g.value}>{g.label}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-muted">เลือกเพื่อกรอง — หรือพิมพ์ค้นหาด้านขวาได้เลย</p>
-          </div>
-
-          <div className="md:col-span-8" ref={userPickerRef}>
-            <label className="block text-xs font-medium text-muted mb-1">
-              รหัส / ชื่อ / เบอร์ <span className="text-red-500">*</span>
-            </label>
-            {selectedUser ? (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm">
-                <span className="text-emerald-700">✓</span>
-                <span className="flex-1 truncate">{customerLabel(selectedUser)}</span>
-                <button
-                  type="button"
-                  onClick={() => { setUserid(""); setPickedCustomer(null); setAddresses([]); setAddressId(null); }}
-                  className="text-xs text-muted hover:text-foreground underline"
-                >
-                  เปลี่ยน
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={userFilter}
-                  onChange={(e) => { setUserFilter(e.target.value); setUserPickerOpen(true); }}
-                  onFocus={() => setUserPickerOpen(true)}
-                  placeholder={group ? "พิมพ์ค้นหา PR1234 / ชื่อ / เบอร์ ในกลุ่มนี้" : "พิมพ์ PR1234 หรือ ชื่อ หรือ เบอร์"}
-                  className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                />
-                {userPickerOpen && (
-                  <div className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-xl border border-border bg-white shadow-lg">
-                    {/* Group-mode list */}
-                    {group ? (
-                      usersLoading ? (
-                        <p className="px-3 py-3 text-center text-xs text-muted">กำลังโหลด...</p>
-                      ) : filteredGroupUsers.length === 0 ? (
-                        <p className="px-3 py-3 text-center text-xs text-muted">ไม่พบลูกค้าในกลุ่มนี้</p>
-                      ) : (
-                        filteredGroupUsers.slice(0, 100).map((u) => (
-                          <button
-                            type="button"
-                            key={u.userID}
-                            onClick={() => onUserPick(u, u.coID)}
-                            className="block w-full px-3 py-2 text-left text-sm hover:bg-primary-50"
-                          >
-                            <span className="font-mono text-xs text-primary-700">{u.userID}</span>
-                            <span className="ml-2">{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                            {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
-                          </button>
-                        ))
-                      )
-                    ) : userFilter.trim().length < 2 ? (
-                      <p className="px-3 py-3 text-center text-xs text-muted">พิมพ์อย่างน้อย 2 ตัวอักษร เพื่อค้นหา</p>
-                    ) : searchLoading ? (
-                      <p className="px-3 py-3 text-center text-xs text-muted">กำลังค้นหา...</p>
-                    ) : searchResults.length === 0 ? (
-                      <p className="px-3 py-3 text-center text-xs text-muted">ไม่พบลูกค้าที่ตรงกับ &ldquo;{userFilter}&rdquo;</p>
-                    ) : (
-                      searchResults.slice(0, 50).map((u) => (
-                        <button
-                          type="button"
-                          key={u.userID}
-                          onClick={() => onUserPick(u, u.coID)}
-                          className="block w-full px-3 py-2 text-left text-sm hover:bg-primary-50"
-                        >
-                          <span className="font-mono text-xs text-primary-700">{u.userID}</span>
-                          <span className="ml-2">{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                          {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ── SECTION 2: ตัวเลือกขนส่ง (shared) ────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">2</span>
-          ตัวเลือกขนส่ง <span className="text-[10px] font-normal text-muted">(ใช้กับทุกรายการในใบนี้)</span>
+          ตัวเลือกขนส่ง <span className="text-[10px] font-normal text-muted">(ใช้กับทุกรายการในใบนี้ · ลูกค้าแยกตามแถว)</span>
         </h2>
 
         <div className="space-y-4">
-          {/* Carrier */}
           <div className="grid gap-3 md:grid-cols-2">
+            {/* Carrier */}
             <div>
               <label className="block text-xs font-medium text-muted mb-1">บริษัทขนส่ง <span className="text-red-500">*</span></label>
               <select
@@ -521,6 +360,9 @@ export function AdminForwarderNewBulkForm({
               </select>
               {shipBy === "PCS" && (
                 <p className="mt-1 text-[11px] text-emerald-700">ลูกค้ามารับเองที่โกดัง Pacred (สมุทรสาคร) · ไม่ต้องเลือกที่อยู่</p>
+              )}
+              {shipBy && shipBy !== "PCS" && (
+                <p className="mt-1 text-[11px] text-muted">ที่อยู่จัดส่งใช้ <strong>ที่อยู่หลัก</strong>ของลูกค้าแต่ละราย · ถ้าต้องการเปลี่ยน แก้ที่ /edit หลังสร้าง</p>
               )}
             </div>
             <div>
@@ -543,35 +385,6 @@ export function AdminForwarderNewBulkForm({
               </div>
             </div>
           </div>
-
-          {/* Address picker — hidden when PCS pickup */}
-          {shipBy !== "PCS" && shipBy !== "" && (
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">ที่อยู่จัดส่ง <span className="text-red-500">*</span></label>
-              {!userid ? (
-                <p className="text-xs text-muted italic px-3 py-2.5 rounded-xl bg-surface-alt/40">กรุณาเลือกลูกค้าก่อน เพื่อโหลดที่อยู่</p>
-              ) : addressesLoading ? (
-                <p className="text-xs text-muted px-3 py-2.5">กำลังโหลดที่อยู่...</p>
-              ) : addresses.length === 0 ? (
-                <p className="text-xs text-amber-700 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                  ลูกค้านี้ยังไม่มีที่อยู่บันทึกไว้ — ขอที่อยู่ลูกค้าแล้วเพิ่มที่ /admin/customers/{userid}
-                </p>
-              ) : (
-                <select
-                  value={addressId ?? ""}
-                  onChange={(e) => setAddressId(Number(e.target.value))}
-                  disabled={pending}
-                  className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                >
-                  {addresses.map((a) => (
-                    <option key={a.addressid} value={a.addressid}>
-                      {a.isMain ? "[ที่อยู่หลัก] " : ""}{addressFullLine(a)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
 
           {/* Tax-doc choice */}
           <div>
@@ -596,12 +409,12 @@ export function AdminForwarderNewBulkForm({
         </div>
       </section>
 
-      {/* ── SECTION 3: รายการ ─────────────────────────────────── */}
+      {/* ── SECTION 2: รายการ (per-row customer) ───────────────── */}
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-sm font-semibold flex items-center gap-2">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">3</span>
-            รายการ <span className="text-[10px] font-normal text-muted">(กรอกเฉพาะแถวที่จะใช้ — แถวว่างจะถูกข้าม)</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">2</span>
+            รายการ <span className="text-[10px] font-normal text-muted">(เลือกลูกค้า + tracking ต่อแถว · แถวว่างจะถูกข้าม)</span>
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -623,111 +436,28 @@ export function AdminForwarderNewBulkForm({
           </div>
         </div>
 
-        <div className="overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/60 text-xs font-medium text-muted">
-              <tr>
-                <th className="px-2 py-2 w-10 text-center">#</th>
-                <th className="px-3 py-2 text-left">เลข Tracking *</th>
-                <th className="px-3 py-2 text-left">รายละเอียดสินค้า *</th>
-                <th className="px-3 py-2 text-right w-24">จำนวน *</th>
-                <th className="px-2 py-2 w-24 text-center">สถานะ</th>
-                <th className="px-2 py-2 w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => {
-                const filledIn = !!(r.trackingChn.trim() || r.detail.trim());
-                return (
-                  <tr key={r.key} className={`border-t border-border align-top ${
-                    r.status === "success" ? "bg-emerald-50/40" :
-                    r.status === "error"   ? "bg-red-50/40" :
-                    r.status === "pending" ? "bg-amber-50/40" :
-                    filledIn               ? "bg-primary-50/20" : ""
-                  }`}>
-                    <td className="px-2 py-2 text-center text-xs text-muted">{idx + 1}</td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={r.trackingChn}
-                        onChange={(e) => updateRow(r.key, { trackingChn: e.target.value })}
-                        disabled={pending}
-                        placeholder="เช่น 1780629608"
-                        className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={r.detail}
-                        onChange={(e) => updateRow(r.key, { detail: e.target.value })}
-                        disabled={pending}
-                        placeholder="เช่น เสื้อยืดผู้หญิง · กล่อง 1"
-                        className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={10000}
-                        value={r.amount}
-                        onChange={(e) => updateRow(r.key, { amount: e.target.value })}
-                        disabled={pending}
-                        className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
-                      />
-                    </td>
-                    <td className="px-2 py-2 text-center text-xs">
-                      {r.status === "success" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                          ✓ #{r.resultId}
-                        </span>
-                      )}
-                      {r.status === "error" && (
-                        <span
-                          title={r.errorMsg ?? ""}
-                          className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700"
-                        >
-                          ✗ {r.errorMsg?.slice(0, 24) ?? "error"}
-                        </span>
-                      )}
-                      {r.status === "pending" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                          ⏳ กำลังบันทึก
-                        </span>
-                      )}
-                      {r.status === "idle" && (
-                        filledIn
-                          ? <span className="text-[10px] text-muted">พร้อมส่ง</span>
-                          : <span className="text-[10px] text-muted/50">—</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(r.key)}
-                        disabled={pending || rows.length <= 1}
-                        title="ลบแถวนี้"
-                        className="text-muted hover:text-red-600 disabled:opacity-30"
-                      >
-                        🗑
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-border bg-surface-alt/40">
-                <td colSpan={6} className="px-3 py-2 text-right text-xs text-muted">
-                  จะส่ง <strong className="text-foreground">{submittableRows.length}</strong> รายการ จากทั้งหมด {rows.length} แถว
-                  {rowsDirty && submittableRows.length === 0 && (
-                    <span className="ml-2 text-amber-700">⚠ ต้องกรอกทั้ง tracking + รายละเอียดให้ครบจึงจะส่งได้</span>
-                  )}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+        <div className="space-y-2">
+          {rows.map((r, idx) => (
+            <BulkRow
+              key={r.key}
+              row={r}
+              idx={idx}
+              pending={pending}
+              shipBy={shipBy}
+              onPatch={(patch) => updateRow(r.key, patch)}
+              onPick={(picked) => pickCustomer(r.key, picked)}
+              onClear={() => clearCustomer(r.key)}
+              onRemove={() => removeRow(r.key)}
+              canRemove={rows.length > 1}
+            />
+          ))}
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-border text-xs text-muted">
+          จะส่ง <strong className="text-foreground">{submittableRows.length}</strong> รายการ จากทั้งหมด {rows.length} แถว
+          {rows.some((r) => (r.customer || r.trackingChn || r.detail) && !submittableRows.some((s) => s.key === r.key)) && (
+            <span className="ml-2 text-amber-700">⚠ บางแถวข้อมูลไม่ครบ (ต้องมี ลูกค้า · tracking · รายละเอียด · จำนวน)</span>
+          )}
         </div>
       </section>
 
@@ -736,11 +466,16 @@ export function AdminForwarderNewBulkForm({
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-3 flex-wrap">
           <div className="flex flex-col text-xs leading-tight">
             <span className="text-muted">
-              ลูกค้า: <strong className="text-foreground">{customerLabel(selectedUser).slice(0, 40)}</strong> ·{" "}
-              ขนส่ง: <strong className="text-foreground">{shipBy ? (SHIP_BY_OPTIONS.find((s) => s.value === shipBy)?.label.slice(0, 16) ?? shipBy) : "—"}</strong>
+              ขนส่ง: <strong className="text-foreground">{shipBy ? (SHIP_BY_OPTIONS.find((s) => s.value === shipBy)?.label.slice(0, 24) ?? shipBy) : "—"}</strong>
+              {shipBy && <> · {TRANSPORT_OPTIONS.find((t) => t.value === transportType)?.label}</>}
             </span>
             <span className="text-base font-bold mt-0.5">
               จะส่ง <span className="text-primary-600">{submittableRows.length}</span> รายการพร้อมกัน
+              {submittableRows.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-muted">
+                  ({new Set(submittableRows.map((r) => r.customer!.userID)).size} ลูกค้า)
+                </span>
+              )}
             </span>
           </div>
           <div className="ml-auto flex gap-2">
@@ -754,15 +489,245 @@ export function AdminForwarderNewBulkForm({
             </button>
             <button
               type="submit"
-              disabled={pending || submittableRows.length === 0 || !userid || !shipBy}
+              disabled={pending || submittableRows.length === 0 || !shipBy}
               className="rounded-lg bg-primary-600 px-6 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
-              {pending ? `⏳ กำลังบันทึก... (${submittableRows.filter((r) => r.status === "success").length}/${submittableRows.length})`
+              {pending ? `⏳ กำลังบันทึก... (${rows.filter((r) => r.status === "success").length}/${submittableRows.length})`
                        : `📦 บันทึก ${submittableRows.length} รายการ`}
             </button>
           </div>
         </div>
       </div>
     </form>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// <BulkRow> — one row in the bulk editor · 5 cells stacked on mobile,
+// horizontal grid on desktop. Customer picker is inline (search input
+// → autocomplete dropdown → select chip with "เปลี่ยน" link).
+// ─────────────────────────────────────────────────────────────────────
+function BulkRow({
+  row,
+  idx,
+  pending,
+  shipBy,
+  onPatch,
+  onPick,
+  onClear,
+  onRemove,
+  canRemove,
+}: {
+  row: Row;
+  idx: number;
+  pending: boolean;
+  shipBy: string;
+  onPatch: (patch: Partial<Row>) => void;
+  onPick: (picked: CustomerSearchResult) => void;
+  onClear: () => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const searchRef = useRef<HTMLDivElement | null>(null);
+
+  // outside-click close
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        onPatch({ searchOpen: false });
+      }
+    }
+    if (row.searchOpen) {
+      document.addEventListener("mousedown", onClick);
+      return () => document.removeEventListener("mousedown", onClick);
+    }
+  }, [row.searchOpen, onPatch]);
+
+  // debounced search (uses universal searchCustomers action)
+  useEffect(() => {
+    const q = row.search.trim();
+    if (q.length < 2) {
+      // clear previous results if user emptied the field
+      if (row.searchResults.length > 0 || row.searchLoading) {
+        onPatch({ searchResults: [], searchLoading: false });
+      }
+      return;
+    }
+    let cancelled = false;
+    onPatch({ searchLoading: true });
+    const t = setTimeout(async () => {
+      const res = await searchCustomers(q);
+      if (cancelled) return;
+      if (res.ok) {
+        onPatch({ searchResults: res.data?.customers ?? [], searchLoading: false });
+      } else {
+        onPatch({ searchResults: [], searchLoading: false });
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.search]);
+
+  const filled = !!(row.customer || row.trackingChn || row.detail);
+  const rowBg =
+    row.status === "success" ? "bg-emerald-50/50 border-emerald-200" :
+    row.status === "error"   ? "bg-red-50/50 border-red-200" :
+    row.status === "pending" ? "bg-amber-50/50 border-amber-200" :
+    filled                   ? "bg-primary-50/20 border-border" :
+                               "bg-white border-border";
+
+  return (
+    <div className={`rounded-lg border p-3 ${rowBg}`}>
+      <div className="flex items-start gap-2">
+        {/* Row number */}
+        <div className="shrink-0 flex flex-col items-center gap-1 pt-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-alt text-xs font-semibold text-muted">
+            {idx + 1}
+          </span>
+        </div>
+
+        {/* Main content — 2x grid on mobile, 4-col on desktop */}
+        <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-2">
+          {/* Customer (4 cols desktop) */}
+          <div className="md:col-span-4 min-w-0" ref={searchRef}>
+            {row.customer ? (
+              <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs">
+                <span className="text-emerald-700">✓</span>
+                <span className="flex-1 truncate font-medium" title={customerShortLabel(row.customer)}>
+                  {customerShortLabel(row.customer)}
+                </span>
+                <button
+                  type="button"
+                  onClick={onClear}
+                  disabled={pending}
+                  className="text-[10px] text-muted hover:text-foreground underline shrink-0"
+                >
+                  เปลี่ยน
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={row.search}
+                  onChange={(e) => onPatch({ search: e.target.value, searchOpen: true })}
+                  onFocus={() => onPatch({ searchOpen: true })}
+                  disabled={pending}
+                  placeholder={`ลูกค้า — PR1234 / ชื่อ / เบอร์`}
+                  className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
+                />
+                {row.searchOpen && row.search.trim().length >= 2 && (
+                  <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-white shadow-lg">
+                    {row.searchLoading ? (
+                      <p className="px-2.5 py-2 text-center text-[11px] text-muted">กำลังค้นหา...</p>
+                    ) : row.searchResults.length === 0 ? (
+                      <p className="px-2.5 py-2 text-center text-[11px] text-muted">ไม่พบลูกค้า</p>
+                    ) : (
+                      row.searchResults.slice(0, 30).map((u) => (
+                        <button
+                          type="button"
+                          key={u.userID}
+                          onClick={() => onPick(u)}
+                          className="block w-full px-2.5 py-1.5 text-left text-xs hover:bg-primary-50"
+                        >
+                          <span className="font-mono text-[10px] text-primary-700">{u.userID}</span>
+                          <span className="ml-1.5">{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                          {u.userTel && <span className="ml-1.5 text-[10px] text-muted">{u.userTel}</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                {row.searchOpen && row.search.trim().length > 0 && row.search.trim().length < 2 && (
+                  <p className="absolute z-30 mt-1 w-full rounded-md border border-border bg-white px-2.5 py-2 text-center text-[11px] text-muted shadow-sm">
+                    พิมพ์อย่างน้อย 2 ตัวอักษร
+                  </p>
+                )}
+              </div>
+            )}
+            {row.addressLoading && (
+              <p className="mt-1 text-[10px] text-muted">กำลังโหลดที่อยู่...</p>
+            )}
+            {row.customer && shipBy && shipBy !== "PCS" && !row.addressLoading && !row.addressId && (
+              <p className="mt-1 text-[10px] text-amber-700">⚠ ลูกค้านี้ยังไม่มีที่อยู่ — เพิ่มที่ /admin/customers/{row.customer.userID}</p>
+            )}
+          </div>
+
+          {/* Tracking (4 cols) */}
+          <div className="md:col-span-4 min-w-0">
+            <input
+              type="text"
+              value={row.trackingChn}
+              onChange={(e) => onPatch({ trackingChn: e.target.value })}
+              disabled={pending}
+              placeholder="เลข Tracking · เช่น 1780629608"
+              className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
+            />
+          </div>
+
+          {/* Detail (3 cols) */}
+          <div className="md:col-span-3 min-w-0">
+            <input
+              type="text"
+              value={row.detail}
+              onChange={(e) => onPatch({ detail: e.target.value })}
+              disabled={pending}
+              placeholder="รายละเอียด · เช่น เสื้อยืด กล่อง 1"
+              className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
+            />
+          </div>
+
+          {/* Amount (1 col) */}
+          <div className="md:col-span-1 min-w-0">
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={row.amount}
+              onChange={(e) => onPatch({ amount: e.target.value })}
+              disabled={pending}
+              placeholder="จำนวน"
+              className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt"
+            />
+          </div>
+        </div>
+
+        {/* Status + remove */}
+        <div className="shrink-0 flex flex-col items-end gap-1 pt-0.5">
+          {/* Status chip */}
+          <div className="text-[10px]">
+            {row.status === "success" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">
+                ✓ #{row.resultId}
+              </span>
+            )}
+            {row.status === "error" && (
+              <span
+                title={row.errorMsg ?? ""}
+                className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700"
+              >
+                ✗ {(row.errorMsg ?? "error").slice(0, 16)}
+              </span>
+            )}
+            {row.status === "pending" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">
+                ⏳ กำลังบันทึก
+              </span>
+            )}
+          </div>
+          {canRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={pending}
+              title="ลบแถวนี้"
+              className="text-muted hover:text-red-600 disabled:opacity-30 text-sm leading-none"
+            >
+              🗑
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

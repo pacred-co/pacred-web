@@ -13,17 +13,20 @@
  * `adminCreateForwarder` action verbatim, fires it sequentially per row,
  * and stays 100% additive — the single-row form is untouched.
  *
- * **Shape:**
- *   1. Pick ONE customer (shared across all rows)
- *   2. Pick shared shipping options (carrier · transport · address · tax doc)
- *   3. Fill N rows of {tracking · detail · amount}
- *   4. Submit → call adminCreateForwarder N times sequentially · show progress
+ * **Shape (v2 — ภูม correction 2026-06-13: "bulk = ลูกค้าหลายคนในใบเดียว
+ * ไม่ใช่ลูกค้าคนเดียวกัน"):** bulk mode is for MANY DIFFERENT customers —
+ * one customer per row, not one shared customer across all rows.
+ *   1. Pick shared shipping options (carrier · transport · tax doc)
+ *   2. Fill N rows — EACH row has its OWN customer (inline search picker) +
+ *      auto-loaded main address + {tracking · detail · amount}
+ *   3. Submit → call adminCreateForwarder N times sequentially · per-row status
  *
  * **Limitations vs single mode (intentional · documented):**
  *   - No per-row cover image upload (admin uploads on /edit after create)
  *   - No per-row warehouse override (server auto-detects from tracking prefix)
  *   - No per-row tax-doc choice (shared · matches typical batch use case)
  *   - No per-row duplicate-tracking AJAX check (server validates on submit)
+ *   - Per-row address = the customer's main address (override on /edit)
  *
  * Auth/RBAC unchanged: requireAdmin(["ops","accounting","super"]).
  */
@@ -143,7 +146,7 @@ export default async function AdminForwarderNewBulkPage({
           </p>
           <h1 className="mt-1 text-2xl font-bold">สร้างฝากนำเข้าหลายรายการพร้อมกัน</h1>
           <p className="mt-1.5 text-sm text-muted">
-            ลูกค้า 1 ราย · ตัวเลือกขนส่งร่วม · กรอกรายการได้หลายแถวพร้อมกัน · ระบบจะสร้างทีละรายการ
+            หลายลูกค้าในใบเดียว · แต่ละแถวเลือกลูกค้าเอง · ตัวเลือกขนส่งร่วม · ระบบจะสร้างทีละรายการ
             แสดงผลรายแถว
           </p>
         </div>
