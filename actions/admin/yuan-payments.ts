@@ -156,11 +156,28 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     if (d.profit_thb != null) update.payprofitthb = d.profit_thb;
 
     // ── Single UPDATE on tb_payment.
-    const { error: updErr } = await admin
-      .from("tb_payment")
-      .update(update)
-      .eq("id", existing.id);
+    //
+    // 💰 OPTIMISTIC CONCURRENCY GUARD (double-refund lock · 2026-06-14).
+    //   The refund branch below credits the wallet (tb_wallet_hs type='5').
+    //   Its `!refundRow?.id` idempotency check is read-at-load — a TOCTOU:
+    //   two admins (or a double-click) that both read paystatus before
+    //   either writes would BOTH pass the check and BOTH credit the wallet =
+    //   double-refund. We close the window by making the status flip
+    //   conditional on the row STILL being in the paystatus we read; a
+    //   0-row result means a concurrent admin already processed it → abort
+    //   BEFORE the wallet write. Cost/profit-only edits (statusChanged
+    //   false) keep the unconditional update so a concurrent status flip
+    //   doesn't reject a harmless field edit.
+    let updateQ = admin.from("tb_payment").update(update).eq("id", existing.id);
+    if (statusChanged) updateQ = updateQ.eq("paystatus", existing.paystatus);
+    const { data: updatedRows, error: updErr } = await updateQ.select("id");
     if (updErr) return { ok: false, error: updErr.message };
+    if (statusChanged && (!updatedRows || updatedRows.length === 0)) {
+      return {
+        ok: false,
+        error: "รายการนี้ถูกดำเนินการไปแล้ว (สถานะถูกเปลี่ยนโดยแอดมินคนอื่นหรือกดซ้ำ) — โปรดรีเฟรชหน้าแล้วลองใหม่",
+      };
+    }
 
     // ── Wallet refund side-effect (paystatus → '3' refunded path).
     //
@@ -494,7 +511,14 @@ export async function adminMarkYuanPaymentRefunded(
     // ── Step 1: UPDATE tb_payment.paystatus → '3' + stamp slip ──────
     // Legacy: paystatus='3' covers both refund + failed; the wallet
     // refund row (type='5') is what distinguishes them.
-    const { error: updErr } = await admin
+    //
+    // 💰 OPTIMISTIC CONCURRENCY GUARD (double-refund lock · 2026-06-14).
+    //   Step 2 credits the wallet. Gate the flip on the row STILL being in
+    //   the paystatus we read so two concurrent refunds can't both reach
+    //   the wallet write: the loser matches 0 rows and aborts before any
+    //   money moves. Backstops the read-at-load `!existingRefund?.id`
+    //   idempotency check, which alone is a TOCTOU.
+    const { data: flippedRows, error: updErr } = await admin
       .from("tb_payment")
       .update({
         paystatus:       "3",
@@ -503,8 +527,16 @@ export async function adminMarkYuanPaymentRefunded(
         adminidupdate:   legacyAdminId,
         imagesslipadmin: d.refund_slip_path,
       })
-      .eq("id", existing.id);
+      .eq("id", existing.id)
+      .eq("paystatus", existing.paystatus)
+      .select("id");
     if (updErr) return { ok: false, error: updErr.message };
+    if (!flippedRows || flippedRows.length === 0) {
+      return {
+        ok: false,
+        error: "รายการนี้ถูกดำเนินการไปแล้ว (สถานะถูกเปลี่ยนโดยแอดมินคนอื่นหรือกดซ้ำ) — โปรดรีเฟรชหน้าแล้วลองใหม่",
+      };
+    }
 
     // ── Step 2: cascade refund to wallet (only if paid from wallet) ──
     // Idempotency: skip if a type='5' row already exists for this id.
