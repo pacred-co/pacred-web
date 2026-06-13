@@ -150,6 +150,36 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         update.adminid = legacyAdminId;
       }
     }
+
+    // ── Legacy cost/profit capture on APPROVE (payment.php L613-625, L644) ──
+    // Faithful port: when an admin approves a yuan transfer (→ paystatus '2'),
+    // legacy captures payRateCost — defaulting to tb_settings.hRateCostDefault
+    // when the row carries none (payment.php L864-871) — and computes
+    //   payTHBCost   = payYuan × payRateCost
+    //   payProfitTHB = payTHB  − payTHBCost
+    // The approve UI never collected a rate, so paythbcost/payprofitthb stayed
+    // 0 → every acc-payment + yuan-profit report showed cost 0 / overstated
+    // profit. Auto-fill ONLY when the caller passed no explicit cost_rate (the
+    // [id] edit form can still override via d.cost_rate). "ค่อยพัฒนาต่อ": this
+    // mirrors legacy exactly; a per-row cost override stays available.
+    if (statusChanged && update.paystatus === "2" && d.cost_rate == null) {
+      const { data: settingsRow, error: settingsErr } = await admin
+        .from("tb_settings")
+        .select("hratecostdefault")
+        .eq("id", 1)
+        .maybeSingle<{ hratecostdefault: number | string | null }>();
+      if (settingsErr) {
+        console.error(`[yuan approve cost] tb_settings.hratecostdefault read failed`, { code: settingsErr.code, message: settingsErr.message });
+      }
+      // Legacy fallback when the setting is unreadable/0 is $hRateCostDefault=0.
+      const payRateCost  = Number(settingsRow?.hratecostdefault ?? 0) || 0;
+      const payThbCost   = Math.round(Number(existing.payyuan) * payRateCost * 100) / 100;
+      const payProfitThb = Math.round((Number(existing.paythb) - payThbCost) * 100) / 100;
+      update.payratecost  = payRateCost;
+      update.paythbcost   = payThbCost;
+      update.payprofitthb = payProfitThb;
+    }
+
     // Cost/profit fields → legacy column names.
     if (d.cost_rate  != null) update.payratecost  = d.cost_rate;
     if (d.cost_thb   != null) update.paythbcost   = d.cost_thb;

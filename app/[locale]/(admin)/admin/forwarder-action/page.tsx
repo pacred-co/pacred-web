@@ -28,6 +28,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { FREE_SHIPPING_ZIPS } from "@/lib/forwarder/free-shipping-zips";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportForwarderActionAll } from "@/actions/admin/export/forwarder-action";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -100,21 +101,9 @@ const ACTION_CONDITION: Record<string, string> = {
  * Stored as strings because `tb_forwarder.faddresszipcode` is varchar(5)
  * and `.in()` requires matching types.
  */
-const FREE_SHIPPING_ZIPS = [
-  // Bangkok (26 unique)
-  "10100", "10110", "10120", "10140", "10150", "10160", "10170",
-  "10200", "10210", "10220", "10230", "10240", "10250", "10260",
-  "10300", "10310", "10330", "10400", "10500", "10510", "10520",
-  "10530", "10600", "10700", "10800", "10900",
-  // Nakhon Pathom
-  "73110", "73170",
-  // Nonthaburi
-  "11000", "11110", "11120", "11130", "11140", "11150",
-  // Samut Prakan
-  "10130", "10270", "10290", "10540", "10560",
-  // Samut Sakhon
-  "74000", "74110",
-];
+// FREE_SHIPPING_ZIPS is the single source of truth in
+// @/lib/forwarder/free-shipping-zips (imported above) — shared with the
+// CSV export + the top-menubar badge counts so the list can't drift.
 
 const NOTE_SHOP_TABS: { q: string | null; label: string }[] = [
   { q: null, label: "ทั้งหมด" },

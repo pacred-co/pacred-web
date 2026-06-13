@@ -405,7 +405,7 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       const { data: rows, error: readErr } = await admin
         .from("tb_payment")
-        .select("id, userid, payyuan, paystatus, tax_doc_pref")
+        .select("id, userid, payyuan, paythb, paystatus, tax_doc_pref")
         .in("id", ids)
         .eq("paystatus", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -415,19 +415,56 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       const nowIso = new Date().toISOString();
       const approvedRows = rows as unknown as Array<{
-        id: number; userid: string | null; tax_doc_pref: string | null;
+        id: number; userid: string | null;
+        payyuan: number | string | null; paythb: number | string | null;
+        tax_doc_pref: string | null;
       }>;
 
-      // Bulk UPDATE in one call (no per-row balance work needed).
-      const { error: updErr } = await admin
-        .from("tb_payment")
-        .update({ paystatus: "2", adminid: legacyAdminId, paydateadmin: nowIso })
-        .in("id", approvedRows.map((r) => r.id))
-        .eq("paystatus", "1");
-
-      if (updErr) {
-        return { ok: false, error: updErr.message };
+      // ── Legacy approve cost-capture (payment.php L613-625) ──────────────
+      // Default the cost rate from tb_settings.hRateCostDefault and stamp
+      // payTHBCost / payProfitTHB so the yuan-profit + acc-payment reports
+      // aren't left at cost 0 / overstated profit. Legacy's BULK path omitted
+      // this (only the single-row ?page=update captured it) — we extend the
+      // single-row legacy behaviour to bulk for report correctness: SAME
+      // default, no new formula ("legacy ก่อน แล้วค่อยพัฒนาต่อ").
+      const { data: settingsRow, error: settingsErr } = await admin
+        .from("tb_settings")
+        .select("hratecostdefault")
+        .eq("id", 1)
+        .maybeSingle<{ hratecostdefault: number | string | null }>();
+      if (settingsErr) {
+        logger.warn("tb-bulk", "yuan bulk approve: hratecostdefault read failed (cost defaults 0)", { code: settingsErr.code });
       }
+      const payRateCost = Number(settingsRow?.hratecostdefault ?? 0) || 0;
+
+      // Per-row conditional UPDATE — cost = payYuan × rate differs per row, and
+      // the folded .eq("paystatus","1") keeps each flip idempotent + TOCTOU-safe
+      // (a concurrent approve / double-click yields 0 rows → skipped, not
+      // double-counted). Sequential: this is an admin batch (≤200), not a
+      // customer hot path.
+      const errors: string[] = [];
+      const okIds: number[] = [];
+      for (const r of approvedRows) {
+        const payThbCost   = Math.round(Number(r.payyuan ?? 0) * payRateCost * 100) / 100;
+        const payProfitThb = Math.round((Number(r.paythb ?? 0) - payThbCost) * 100) / 100;
+        const { data: upRow, error: upErr } = await admin
+          .from("tb_payment")
+          .update({
+            paystatus:    "2",
+            adminid:      legacyAdminId,
+            paydateadmin: nowIso,
+            payratecost:  payRateCost,
+            paythbcost:   payThbCost,
+            payprofitthb: payProfitThb,
+          })
+          .eq("id", r.id)
+          .eq("paystatus", "1")
+          .select("id")
+          .maybeSingle<{ id: number }>();
+        if (upErr) { errors.push(`#${r.id}: ${upErr.message}`); continue; }
+        if (upRow) okIds.push(r.id);
+      }
+      const okSet = new Set(okIds);
 
       // ── TAX-DOCUMENT BRIDGE for ฝากโอน (bulk yuan-approve · migration 0152) ──
       //   Same contract as adminUpdateYuanPayment's single-row hook: for each
@@ -439,6 +476,7 @@ export async function adminBulkApproveYuanPaymentsTb(
       try {
         if (await isShopYuanTaxInvoiceEnabled()) {
           for (const r of approvedRows) {
+            if (!okSet.has(r.id)) continue;   // only docs for rows actually flipped
             const docMode = modeFromPref(r.tax_doc_pref);
             if (docMode === "none") continue;
             const taxRes = await issueYuanTaxInvoice(admin, {
@@ -460,11 +498,12 @@ export async function adminBulkApproveYuanPaymentsTb(
         });
       }
 
-      const processed = rows.length;
+      const processed = okIds.length;
       await logAdminAction(adminId, "tb_payment.bulk_approve", "tb_payment", ids.join(","), {
         requested_ids: ids,
-        approved_ids: rows.map((r) => (r as { id: number }).id),
+        approved_ids: okIds,
         processed,
+        failed: errors.length,
       });
 
       revalidatePath("/admin/yuan-payments");
@@ -473,7 +512,7 @@ export async function adminBulkApproveYuanPaymentsTb(
       // admin sidebar badge immediately.
       bustAdminChrome();
 
-      return { ok: true, data: { processed, failed: 0, errors: [] } };
+      return { ok: true, data: { processed, failed: errors.length, errors } };
     },
   );
 }

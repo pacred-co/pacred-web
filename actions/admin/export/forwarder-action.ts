@@ -27,26 +27,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import { FREE_SHIPPING_ZIPS } from "@/lib/forwarder/free-shipping-zips";
 
 // Safety cap for the "export all filtered" path.
 const EXPORT_CAP = 10000;
-
-// Free-shipping ZIP codes — MUST stay identical to the page's FREE_SHIPPING_ZIPS.
-const FREE_SHIPPING_ZIPS = [
-  // Bangkok (26 unique)
-  "10100", "10110", "10120", "10140", "10150", "10160", "10170",
-  "10200", "10210", "10220", "10230", "10240", "10250", "10260",
-  "10300", "10310", "10330", "10400", "10500", "10510", "10520",
-  "10530", "10600", "10700", "10800", "10900",
-  // Nakhon Pathom
-  "73110", "73170",
-  // Nonthaburi
-  "11000", "11110", "11120", "11130", "11140", "11150",
-  // Samut Prakan
-  "10130", "10270", "10290", "10540", "10560",
-  // Samut Sakhon
-  "74000", "74110",
-];
 
 /** Active filters the page passes through. */
 export type ForwarderActionExportFilter = {

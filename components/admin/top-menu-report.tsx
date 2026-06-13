@@ -30,6 +30,7 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { FREE_SHIPPING_ZIPS, FREE_SHIPPING_ZIPS_IN_CLAUSE } from "@/lib/forwarder/free-shipping-zips";
 
 type CountKey =
   | "waiting"
@@ -63,6 +64,18 @@ async function loadCounts(): Promise<Counts> {
     .select("id", { count: "exact", head: true })
     .then((r) => r.count ?? 0);
 
+  // 2026-06-14 forwarder-fidelity audit (§0f "อย่ามั่ว"): noteShop /
+  // notShipFree / notShipFreeError were hardcoded Promise.resolve(0), so the
+  // three error-queues silently showed no work. Wire the real COUNT queries
+  // mirroring each page's own filter.
+  //   noteShop → tb_header_order (hNote<>''), NOT tb_forwarder.
+  const noteShopCount = admin
+    .from("tb_header_order")
+    .select("id", { count: "exact", head: true })
+    .neq("hnote", "")
+    .not("hnote", "is", null)
+    .then((r) => r.count ?? 0);
+
   // Counts run in parallel. We tolerate count failures by defaulting to 0
   // so a single broken filter doesn't blank the entire menu.
   const settled = await Promise.allSettled([
@@ -70,8 +83,8 @@ async function loadCounts(): Promise<Counts> {
     c((q) =>
       q.lt("fstatus", "4").not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0"),
     ),
-    // 2) noteShop — sh.fNoteShop<>'' — defer: needs join into tb_shop; placeholder 0
-    Promise.resolve(0),
+    // 2) noteShop — tb_header_order hNote<>'' (real count · see above)
+    noteShopCount,
     // 3) note — fNote<>''
     c((q) => q.not("fnote", "is", null).neq("fnote", "")),
     // 4) notPhoto — fCover='' AND fStatus>1 AND fDate>cutoff
@@ -82,9 +95,10 @@ async function loadCounts(): Promise<Counts> {
     c((q) => q.eq("fcabinetnumber", "").gte("fdate", cutoff)),
     // 7) notDateContainerClose
     c((q) => q.is("fdatecontainerclose", null).gte("fdate", cutoff)),
-    // 8) notShipFree / NotShipFreeError — both need ZIP-code list join; defer
-    Promise.resolve(0),
-    Promise.resolve(0),
+    // 8) notShipFree — ZIP IN free-list AND fshipby NOT IN ('PCS','PCSF') AND fdate>cutoff
+    c((q) => q.in("faddresszipcode", FREE_SHIPPING_ZIPS).not("fshipby", "in", "(PCS,PCSF)").gte("fdate", cutoff)),
+    // 9) NotShipFreeError — ZIP NOT IN free-list AND fshipby='PCSF' AND fdate>cutoff
+    c((q) => q.not("faddresszipcode", "in", FREE_SHIPPING_ZIPS_IN_CLAUSE).eq("fshipby", "PCSF").gte("fdate", cutoff)),
     // 9) fCreditError — fCredit='1' AND fCreditDate<NOW()
     c((q) => q.eq("fcredit", "1").lt("fcreditdate", new Date().toISOString())),
     // 10) Wave 16 — bulk-bill queue (tb_check_forwarder rows = pending bills)
