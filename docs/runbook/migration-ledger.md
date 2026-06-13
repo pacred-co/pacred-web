@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0173**
+## 🔢 NEXT FREE NUMBER = **0183**
+
+> ✅ **APPLIED-PROD+DEV CORRECTION (2026-06-13 · เดฟ · machine-resume).** Migrations **0173–0182 ARE applied + live on BOTH prod (`yzljakczhwrpbxflnmco`) AND dev (`lozntlidlqqzzcaathnm`)** — verified this session by a direct two-env schema probe: `count_forwarder_by_owner` fn (0173) · `wht_cert_status` (0175) · `fimages` (0176) · `import_duty_pct` (0178) · `declared_fx_rate` (0179) · `form_e_duty_pct` (0180) · `hs_stat_code` (0181) cols all present · `peak%` business_config seed (0177) present · and **0182 coid PCS→PR DONE** (tb_users `coID`: prod PR=8,800 / dev PR=8,785 · **0 PCS** both · tb_rate_g_kg/_cbm PCS=0 PR=16 both). The header had stayed `0173` while 8 other-machine migrations landed without a ledger bump → corrected to **NEXT FREE = 0183**. No DDL was applied this session (everything already on both envs).
 
 > ✅ **2026-06-10 (เดฟ · accounting-period freeze extension): 0172** = `tax_invoice_period_freeze` — extends the V-E9 period-freeze (mig 0056) to the LIVE tb_* ใบกำกับ stores. `create or replace`s `accounting_period_freeze_check()` with two added branches (`tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`, effective date = `coalesce(issued_at, created_at)`) + attaches `*_period_freeze` BEFORE UPDATE/DELETE triggers to both. Closes the gap the snapshot forward-fix surfaced: real issued invoices were UPDATE/DELETE-able after a period closed (only the dead World-A `tax_invoices` was frozen). HEADER tables only (matches 0056 precedent — _wht_entry children stay mutable for the 50-ทวิ cert chase). ZERO blast radius (0 closed periods + 0 invoices on prod · trigger fires only on UPDATE/DELETE in a closed period). NO new tables/function · idempotent. ✅ **APPLIED + VERIFIED PROD 2026-06-10** (`yzljakczhwrpbxflnmco` · 154ms · dry-run→`--apply` via `scripts/apply-migration-dryrun.mjs` · both triggers confirmed via `pg_trigger` + function carries both branches).
 
