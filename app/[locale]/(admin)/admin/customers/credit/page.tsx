@@ -181,6 +181,33 @@ export default async function AdminCustomerCreditPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 2026-06-07 (พี่ป๊อปถาม "ตรวจสอบเครดิตได้ไหม") — quick-action
+                shortcuts ไปยัง 3 หน้าตรวจสอบ/ออกเอกสารที่อยู่กระจายในเมนูอื่น:
+                AR-aging cockpit (รายงานยอดค้าง 4 buckets) · เครดิตเกินกำหนด
+                queue (fcreditdate < NOW) · ทำใบวางบิล (Peak format · WHT 1%
+                นิติบุคคล ≥฿1,000). ไม่มี new action — แค่ navigate links. */}
+            <Link
+              href="/admin/accounting/ar-aging"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
+              title="ลูกหนี้ค้างชำระ — แบ่งช่วง 0-30 / 30-60 / 60-90 / เกิน 90 วัน · per-rep attribution"
+            >
+              📊 AR Aging
+            </Link>
+            <Link
+              href="/admin/qa/credit-overdue"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+              title="ลูกค้าเครดิตที่ครบกำหนดแล้วยังไม่จ่าย — เรียงจากค้างนานสุดก่อน · drill-in ดูรายการ"
+            >
+              🚨 เครดิตเกินกำหนด
+            </Link>
+            <Link
+              href="/admin/billing-run/add"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+              title="ทำใบวางบิลสำหรับลูกค้าเครดิต · Peak format · WHT 1% สำหรับนิติบุคคล ≥฿1,000"
+            >
+              🧾 ทำใบวางบิล
+            </Link>
+            <span className="mx-1 h-6 w-px bg-border" aria-hidden />
             <CsvButton
               rows={rows.map((r): CsvRow => ({
                 userID: r.userID,
