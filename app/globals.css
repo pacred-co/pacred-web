@@ -263,9 +263,10 @@ body {
   top: 0 !important;
 }
 
-/* ── Admin sidebar ICON-RAIL (page-scoped via `body.admin-sidebar-rail`, added by
-   <CollapseAdminSidebar> on wide pages — ปอน 2026-06-11 · owner "พับ sidebar เหลือ
-   ไอคอน · hover แล้วกางออก เหมือนหน้าบ้านลูกค้า"). Desktop (lg+) only — on mobile the
+/* ── Admin sidebar ICON-RAIL (via `body.admin-sidebar-rail`, added by
+   <CollapseAdminSidebar> mounted in the (admin) layout → applies to EVERY admin
+   page — ปอน 2026-06-11 / owner 2026-06-13 "พับ sidebar เหลือไอคอน · hover แล้วกางออก
+   เหมือนหน้าบ้านลูกค้า · ทุกหน้า"). Desktop (lg+) only — on mobile the
    admin sidebar is already an off-canvas drawer. Shrinks to a 64px icon rail
    (labels/badges/headers hidden, icons kept); on hover the full 16rem menu slides
    out AND the whole page content follows it (push, via :has) so the page "ขยับตาม"

@@ -3,10 +3,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
-// 2026-06-11 (ปอน · owner "พอมาหน้านี้พับ sidebar เหลือไอคอน · hover แล้วกางออก"):
-// this page is wide (the Excel-style item/price tables) → collapse the admin
-// sidebar to an icon rail while mounted (page-scoped via body class).
-import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -511,8 +507,6 @@ async function tryRenderTbForwarder(
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
-      {/* collapse the admin sidebar to an icon rail while this wide page is open */}
-      <CollapseAdminSidebar />
       {/* ── breadcrumb (outside the card · same as customer page) ── */}
       <nav className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>

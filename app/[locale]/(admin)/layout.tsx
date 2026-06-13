@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
+import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -70,6 +71,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           chrome bleeding into the page. Side-effect-free for screen rendering. */}
       <div className="print:hidden">
         <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
+        {/* 2026-06-13 (ปอน · owner "ทำให้ left sidebar responsive เหมือนหน้านำเข้าทุกหน้า"):
+            collapse the desktop sidebar to a hover-expand icon rail on EVERY admin
+            page (was page-scoped to /admin/forwarders/[fNo]). Lifted here so the
+            rail + push-content behaviour applies platform-wide. Mobile (<lg) is
+            unaffected — the sidebar stays an off-canvas drawer there. */}
+        <CollapseAdminSidebar />
       </div>
       <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
         {children}
