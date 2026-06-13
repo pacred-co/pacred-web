@@ -149,18 +149,40 @@ export default async function AdminForwarderNewPage({
       </nav>
 
       {/* Header */}
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · ฝากนำเข้า · สร้างออเดอร์ใหม่
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">สร้างออเดอร์ฝากนำเข้าสินค้า</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          ใช้เมื่อลูกค้าโทรมาขอให้แอดมินเพิ่มรายการให้ — รายการที่สร้างจะติด
-          <span className="mx-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-            ฝากนำเข้า · admin
-          </span>
-          ในรายการ
-        </p>
+      <header className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
+            ADMIN · ฝากนำเข้า · สร้างออเดอร์ใหม่
+          </p>
+          <h1 className="mt-1 text-2xl font-bold">สร้างออเดอร์ฝากนำเข้าสินค้า</h1>
+          <p className="mt-1.5 text-sm text-muted">
+            ใช้เมื่อลูกค้าโทรมาขอให้แอดมินเพิ่มรายการให้ — รายการที่สร้างจะติด
+            <span className="mx-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+              ฝากนำเข้า · admin
+            </span>
+            ในรายการ
+          </p>
+        </div>
+
+        {/* Mode tabs — switch between single / bulk · 2026-06-07 ภูม flag */}
+        <div className="flex flex-wrap items-center gap-1 border-b border-border">
+          <Link
+            href="/admin/forwarders/new"
+            className="px-4 py-2 text-sm rounded-t-md border-b-2 -mb-px border-primary-600 text-primary-600 font-semibold inline-flex items-center gap-2"
+          >
+            <span aria-hidden>📋</span>
+            <span>เพิ่มทีละรายการ</span>
+            <span className="text-[10px] text-muted">(มีอัปโหลดรูป · auto-detect โกดัง)</span>
+          </Link>
+          <Link
+            href="/admin/forwarders/new-bulk"
+            className="px-4 py-2 text-sm rounded-t-md border-b-2 -mb-px border-transparent text-muted hover:text-foreground inline-flex items-center gap-2"
+          >
+            <span aria-hidden>📦</span>
+            <span>เพิ่มหลายรายการพร้อมกัน</span>
+            <span className="rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">ใหม่</span>
+          </Link>
+        </div>
       </header>
 
       {/* Legacy-fidelity banner */}

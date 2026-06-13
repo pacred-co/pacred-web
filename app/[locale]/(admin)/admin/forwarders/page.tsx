@@ -441,12 +441,20 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           {/* Wave 11 — legacy "+ เพิ่มรายการให้ลูกค้า" (forwarder.php L758).
               Lands on the admin-initiated forwarder create flow ·
               currently /admin/forwarders/new = redirect to list ·
-              full form is Wave 12 backlog (similar to wallet/add). */}
+              full form is Wave 12 backlog (similar to wallet/add).
+              2026-06-07 ภูม flag: เพิ่มปุ่ม bulk-add คู่กัน. */}
           <Link
             href="/admin/forwarders/new"
             className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
           >
-            + เพิ่มรายการให้ลูกค้า
+            + เพิ่มรายการ (เดี่ยว)
+          </Link>
+          <Link
+            href="/admin/forwarders/new-bulk"
+            className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 inline-flex items-center gap-1"
+          >
+            📦 เพิ่มหลายรายการ
+            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-medium">ใหม่</span>
           </Link>
         </div>
       </div>
