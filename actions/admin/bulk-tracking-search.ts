@@ -13,10 +13,19 @@ import { withAdmin, type AdminActionResult } from "./common";
  * / WeChat batch ingest and want to know which Pacred forwarder each
  * belongs to.
  *
- * Search surfaces (all admin-readable via admin client):
- *   - forwarders.tracking_chn       (set by admin per forwarder)
- *   - forwarders.tracking_th        (TH last-mile tracking)
- *   - forwarder_items.product_tracking (per-item tracking)
+ * Search surfaces (LIVE legacy tb_* tables — admin-readable via admin client):
+ *   - tb_forwarder.ftrackingchn          (China-leg tracking)
+ *   - tb_forwarder.ftrackingth           (TH last-mile tracking)
+ *   - tb_forwarder_item.producttracking  (per-item tracking)
+ *
+ * 2026-06-14 §0e DEAD-READ fix (forwarder-fidelity audit): this action
+ * previously queried the rebuilt Pacred-native twins `forwarders` /
+ * `forwarder_items` (0 rows in prod) → every real parcel returned "ไม่พบ".
+ * Repointed to the live tb_* tables the legacy forwarder-search-muti.php
+ * itself searches. The forwarder display number IS its tb_forwarder.id
+ * (the route /admin/forwarders/[fNo] uses id as fNo); the recipient
+ * name/phone live on the forwarder row (faddress*), and `userid` IS the
+ * PR member code — so no extra join to tb_users is needed.
  *
  * Returns one row per input tracking + found-context. Multiple matches
  * for one tracking number → multiple result rows (rare; usually 1:1).
@@ -85,53 +94,61 @@ export async function adminBulkTrackingSearch(
     trackings.push(t);
     if (trackings.length >= MAX_TRACKING) break;
   }
+  // tb_forwarder.ftrackingth defaults to "-" for MOMO-committed rows; never
+  // let a stray "-" token fan out to every placeholder row.
+  const thTrackings = trackings.filter((t) => t !== "-");
 
   return withAdmin(["super", "ops", "accounting"], async () => {
     const admin = createAdminClient();
 
-    // Three queries in parallel — each returns matching rows with the
-    // tracking number string preserved so we can join client-side.
-    const [{ data: chnHits }, { data: thHits }, { data: itemHits }] = await Promise.all([
+    type FwdRow = {
+      id:               number;
+      userid:           string | null;
+      fstatus:          string | null;
+      ftrackingchn:     string | null;
+      ftrackingth:      string | null;
+      ftotalprice:      number | string | null;
+      faddressname:     string | null;
+      faddresslastname: string | null;
+      faddresstel:      string | null;
+    };
+    const FWD_COLS =
+      "id, userid, fstatus, ftrackingchn, ftrackingth, ftotalprice, faddressname, faddresslastname, faddresstel";
+
+    // Three parallel IN(...) queries over the live tb_* tables.
+    const [chnRes, thRes, itemRes] = await Promise.all([
+      admin.from("tb_forwarder").select(FWD_COLS).in("ftrackingchn", trackings),
+      thTrackings.length === 0
+        ? Promise.resolve({ data: [] as FwdRow[], error: null })
+        : admin.from("tb_forwarder").select(FWD_COLS).in("ftrackingth", thTrackings),
       admin
-        .from("forwarders")
-        .select(`
-          id, f_no, status, tracking_chn, total_price,
-          ship_first_name, ship_last_name, ship_phone,
-          profile:profiles!profile_id ( member_code )
-        `)
-        .in("tracking_chn", trackings),
-      admin
-        .from("forwarders")
-        .select(`
-          id, f_no, status, tracking_th, total_price,
-          ship_first_name, ship_last_name, ship_phone,
-          profile:profiles!profile_id ( member_code )
-        `)
-        .in("tracking_th", trackings),
-      admin
-        .from("forwarder_items")
-        .select(`
-          id, product_name, product_tracking,
-          forwarder:forwarders!forwarder_id (
-            id, f_no, status, total_price,
-            ship_first_name, ship_last_name, ship_phone,
-            profile:profiles!profile_id ( member_code )
-          )
-        `)
-        .in("product_tracking", trackings),
+        .from("tb_forwarder_item")
+        .select("fid, productname, producttracking")
+        .in("producttracking", trackings),
     ]);
 
-    type ProfileShape = { member_code: string | null };
-    type FwdShape = {
-      id: string; f_no: string; status: string;
-      total_price: number;
-      tracking_chn?: string | null;
-      tracking_th?:  string | null;
-      ship_first_name: string | null;
-      ship_last_name:  string | null;
-      ship_phone:      string | null;
-      profile: ProfileShape | ProfileShape[] | null;
-    };
+    if (chnRes.error) {
+      console.error(`[adminBulkTrackingSearch chn] failed`, { message: chnRes.error.message });
+      return { ok: false, error: `ค้นหาไม่สำเร็จ: ${chnRes.error.message}` };
+    }
+
+    const chnHits = (chnRes.data ?? []) as FwdRow[];
+    const thHits  = (thRes.data ?? []) as FwdRow[];
+    type ItemRow = { fid: number; productname: string | null; producttracking: string | null };
+    const itemHits = (itemRes.data ?? []) as ItemRow[];
+
+    // tb_forwarder_item has no declared PostgREST FK to embed — resolve each
+    // matched item's parent forwarder in one IN query.
+    const itemFids = Array.from(new Set(itemHits.map((it) => it.fid).filter((v): v is number => v != null)));
+    const fwdByFid = new Map<number, FwdRow>();
+    if (itemFids.length > 0) {
+      const { data: parents, error: parentsErr } = await admin.from("tb_forwarder").select(FWD_COLS).in("id", itemFids);
+      if (parentsErr) {
+        console.error(`[adminBulkTrackingSearch item-parents] failed`, { message: parentsErr.message });
+        return { ok: false, error: `ค้นหาไม่สำเร็จ: ${parentsErr.message}` };
+      }
+      for (const f of (parents ?? []) as FwdRow[]) fwdByFid.set(f.id, f);
+    }
 
     const matchesByTracking = new Map<string, TrackingMatch[]>();
     function add(t: string, m: TrackingMatch): void {
@@ -140,59 +157,30 @@ export async function adminBulkTrackingSearch(
       arr.push(m);
       matchesByTracking.set(key, arr);
     }
+    function recipient(f: FwdRow): string {
+      return `${f.faddressname ?? ""} ${f.faddresslastname ?? ""}`.trim() || "—";
+    }
+    function fwdMatch(f: FwdRow, tracking: string, found_in: TrackingMatch["found_in"], item_name: string | null): TrackingMatch {
+      return {
+        tracking,
+        found_in,
+        forwarder_id:    String(f.id),
+        f_no:            String(f.id),
+        status:          f.fstatus ?? "",
+        total_price:     Number(f.ftotalprice ?? 0),
+        customer_name:   recipient(f),
+        customer_phone:  f.faddresstel ?? null,
+        customer_member: f.userid ?? null,
+        item_name,
+      };
+    }
 
-    for (const r of (chnHits ?? []) as FwdShape[]) {
-      const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;
-      add(r.tracking_chn ?? "", {
-        tracking:        r.tracking_chn ?? "",
-        found_in:        "tracking_chn",
-        forwarder_id:    r.id,
-        f_no:            r.f_no,
-        status:          r.status,
-        total_price:     Number(r.total_price),
-        customer_name:   `${r.ship_first_name ?? ""} ${r.ship_last_name ?? ""}`.trim() || "—",
-        customer_phone:  r.ship_phone,
-        customer_member: p?.member_code ?? null,
-        item_name:       null,
-      });
-    }
-    for (const r of (thHits ?? []) as FwdShape[]) {
-      const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;
-      add(r.tracking_th ?? "", {
-        tracking:        r.tracking_th ?? "",
-        found_in:        "tracking_th",
-        forwarder_id:    r.id,
-        f_no:            r.f_no,
-        status:          r.status,
-        total_price:     Number(r.total_price),
-        customer_name:   `${r.ship_first_name ?? ""} ${r.ship_last_name ?? ""}`.trim() || "—",
-        customer_phone:  r.ship_phone,
-        customer_member: p?.member_code ?? null,
-        item_name:       null,
-      });
-    }
-    type ItemShape = {
-      id: string;
-      product_name: string;
-      product_tracking: string;
-      forwarder: FwdShape | FwdShape[] | null;
-    };
-    for (const it of (itemHits ?? []) as ItemShape[]) {
-      const fwd = Array.isArray(it.forwarder) ? it.forwarder[0] : it.forwarder;
+    for (const r of chnHits) add(r.ftrackingchn ?? "", fwdMatch(r, r.ftrackingchn ?? "", "tracking_chn", null));
+    for (const r of thHits)  add(r.ftrackingth  ?? "", fwdMatch(r, r.ftrackingth  ?? "", "tracking_th",  null));
+    for (const it of itemHits) {
+      const fwd = fwdByFid.get(it.fid);
       if (!fwd) continue;
-      const p = Array.isArray(fwd.profile) ? fwd.profile[0] : fwd.profile;
-      add(it.product_tracking, {
-        tracking:        it.product_tracking,
-        found_in:        "item_tracking",
-        forwarder_id:    fwd.id,
-        f_no:            fwd.f_no,
-        status:          fwd.status,
-        total_price:     Number(fwd.total_price),
-        customer_name:   `${fwd.ship_first_name ?? ""} ${fwd.ship_last_name ?? ""}`.trim() || "—",
-        customer_phone:  fwd.ship_phone,
-        customer_member: p?.member_code ?? null,
-        item_name:       it.product_name,
-      });
+      add(it.producttracking ?? "", fwdMatch(fwd, it.producttracking ?? "", "item_tracking", it.productname ?? null));
     }
 
     const rows = trackings.map((t) => ({

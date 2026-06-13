@@ -50,7 +50,7 @@ export default async function WarehouseIntakePage() {
       <section className="rounded-xl border border-gray-200 bg-white">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-medium text-gray-700">รอเข้าโกดังจีน ({queue.length})</h2>
-          <Link href="/admin/forwarders?q=1" className="text-xs text-blue-600 hover:underline">
+          <Link href="/admin/forwarders?status=1" className="text-xs text-blue-600 hover:underline">
             ดูทั้งหมด
           </Link>
         </div>

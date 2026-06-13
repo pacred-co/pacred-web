@@ -953,16 +953,31 @@ export async function adminMarkForwarderCredit(
     }
 
     // 6. Flip tb_forwarder to credit (legacy L1431).
-    const { error: updErr } = await admin
+    // 💰 Atomic guard (2026-06-14 forwarder-fidelity audit): the L904/L906
+    // prior-SELECT is read-at-load, so two concurrent credit-marks (or a
+    // double-click / stale resubmit) both pass it, both flip, and both add the
+    // order's pricePay to tb_credit → the SAME order double-credited + the AR
+    // mis-stated. Fold the creditable-status guard into the UPDATE WHERE: the
+    // flip moves fstatus 1..5 → "6" atomically with fcredit → "1", so a 0-row
+    // result means another op already credited / advanced this order. Abort
+    // BEFORE the tb_credit debt write. (fstatus is null-safe text "1".."6";
+    // fcredit itself is too messy — ""/"0"/null/"1" — to fold on directly.)
+    const { data: flipped, error: updErr } = await admin
       .from("tb_forwarder")
       .update({
         paydeposit: "2", fcredit: "1", fcreditdate: d.creditDueDate, fstatus: "6",
         fdateadminstatus: nowIso, fdatestatus5: nowIso, adminid: legacyAdminId, adminidupdate: legacyAdminId,
       })
-      .eq("id", d.fId);
+      .eq("id", d.fId)
+      .in("fstatus", ["1", "2", "3", "4", "5"])
+      .select("id")
+      .maybeSingle<{ id: number }>();
     if (updErr) {
       console.error(`[adminMarkForwarderCredit forwarder flip] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
       return { ok: false, error: `บันทึกเครดิตไม่สำเร็จ: ${updErr.message}` };
+    }
+    if (!flipped) {
+      return { ok: false, error: "รายการนี้ถูกให้เครดิตหรือเปลี่ยนสถานะไปแล้ว (มีผู้ทำรายการพร้อมกันหรือกดซ้ำ) — โปรดรีเฟรชหน้าแล้วลองใหม่" };
     }
 
     // 7. UPSERT tb_credit (legacy UPDATE-only silently dropped the debt for the

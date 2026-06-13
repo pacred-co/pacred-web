@@ -443,6 +443,35 @@ export async function commitMomoRowCore(
 
   const nowIso = new Date().toISOString();
 
+  // ── 4b. ATOMICALLY CLAIM the source row before the billable INSERT ──
+  // 💰 TOCTOU fix (2026-06-14 forwarder-fidelity audit): the L225 committed_at
+  // check is read-at-load, so two concurrent commits (double-click / stale
+  // resubmit / cron racing an admin) both pass it and both INSERT, producing
+  // TWO billable tb_forwarder rows for ONE parcel (there is no UNIQUE on
+  // ftrackingchn). Claim the row with a conditional UPDATE WHERE committed_at
+  // IS NULL — exactly one caller wins; a 0-row result means it is already
+  // claimed → abort BEFORE the INSERT. committed_forwarder_id is back-filled
+  // in step 6 after the row exists; if the INSERT fails we release the claim.
+  const { data: claimed, error: claimErr } = await admin
+    .from("momo_import_tracks")
+    .update({
+      committed_at:  nowIso,
+      committed_by:  ctx.committedBy,
+      commit_userid: customer.userID,
+      updated_at:    nowIso,
+    })
+    .eq("id", srcRow.id)
+    .is("committed_at", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (claimErr) {
+    console.error(`[momo_import_tracks claim] failed`, { code: claimErr.code, message: claimErr.message });
+    return { ok: false, error: `db_error:${claimErr.code ?? "unknown"}` };
+  }
+  if (!claimed) {
+    return { ok: false, error: "row นี้ถูก commit แล้ว (มีผู้ทำรายการพร้อมกันหรือกดซ้ำ)" };
+  }
+
   // ── 5. ATOMIC INSERT into tb_forwarder ────────────────────
   // Mirrors api-forwarder-manual.ts:429 — the canonical 51-column
   // INSERT. All status + cabinet + date fields written in ONE call.
@@ -565,6 +594,12 @@ export async function commitMomoRowCore(
 
   if (insErr || !row) {
     console.error(`[tb_forwarder insert] failed`, { code: insErr?.code, message: insErr?.message });
+    // Release the step-4b claim so the parcel can be re-committed after the
+    // failure (else it is stuck "committed" with no forwarder behind it).
+    await admin
+      .from("momo_import_tracks")
+      .update({ committed_at: null, committed_by: null, commit_userid: null, updated_at: nowIso })
+      .eq("id", srcRow.id);
     return { ok: false, error: insErr?.message ?? "insert failed" };
   }
 
@@ -592,14 +627,13 @@ export async function commitMomoRowCore(
     console.error(`[momo commit: auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
   }
 
-  // ── 6. Stamp committed_at on the source row ────────────────
+  // ── 6. Back-fill the forwarder id on the already-claimed source row ──
+  // committed_at / committed_by / commit_userid were set atomically in the
+  // step-4b claim; only committed_forwarder_id remains to record.
   const { error: stampErr } = await admin
     .from("momo_import_tracks")
     .update({
-      committed_at:           nowIso,
       committed_forwarder_id: row.id,
-      committed_by:           ctx.committedBy,
-      commit_userid:          customer.userID,
       updated_at:             nowIso,
     })
     .eq("id", srcRow.id);

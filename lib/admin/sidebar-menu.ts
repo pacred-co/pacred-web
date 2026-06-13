@@ -1440,7 +1440,7 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search",       icon: "Search" },
           { labelKey: "forwarder.listAll",     href: "/admin/forwarders",                   icon: "Package" },
           { labelKey: "forwarder.whHistory",   href: "/admin/forwarders/warehouse-history", icon: "PackageCheck", badge: "forwarderWhError" },
-          { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?q=6",               icon: "Truck", badge: "forwarderDelivery" },
+          { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?status=6",           icon: "Truck", badge: "forwarderDelivery" },
           // Phase 2 — driver-runs sales-only side not yet live.
           { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
           // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
