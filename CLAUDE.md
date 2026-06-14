@@ -3,6 +3,20 @@
 
 ---
 
+# 🚨 2026-06-14 (cont.2) — เดฟ: URGENT prod — juristic+credit loop (scan blocked · status stuck · customer blind · billing leak) → fixed W1-W3 + owner-gated W4-W5 · read FIRST
+
+> **State: dave-pacred = main = `8f4f1d4a`** (prod live). Owner escalation ("โดนด่ากันหมด"): a นิติบุคคล+เครดิต customer's goods arrived in TH but the container status didn't update, **workers couldn't scan**, the customer couldn't see their goods, + the whole loop needed sweeping. Ran a 6-segment source-grounded trace (`juristic-credit-loop-trace-2026-06-14` · 24 bugs). Full plan + owner decisions → **`docs/research/juristic-credit-loop-2026-06-14.md`**.
+>
+> **🎯 ROOT CAUSE:** `tb_forwarder.fstatus` overloads TWO axes on one column — physical journey (1-4) + money/dispatch (5-7). Credit-grant writes `fstatus='6'` onto the physical axis (faithful to legacy forwarder.php:1431). If credit is granted BEFORE arrival, the goods land and the warehouse scan needs `6→4` — but **Pacred ADDED a transition matrix + `.lt('fstatus','5')` scan filters legacy never had**, blocking it (legacy's 3 arrival writers were un-guarded + freely re-stamped 6→4). **Port-introduced regression on a faithful-but-fragile overloaded-axis design.**
+>
+> **✅ SHIPPED (prod · each gated typecheck/lint/test 0 · 3 via parallel "แยกร่าง" agents, integrated+money-diff-reviewed+re-gated):** **W1 `7c01b85e`** unblock the scan (matrix `6->4`→+warehouse/ops · ARRIVE accepts from=6 credit · import-scanner 5 lookups find credit-6 · relink lock exempts credit-6 · arrival stamps fdatestatus4). **W2 `c5023037`** customer timeline now date-driven (physical steps 2/3/4 done only when the real fdatestatusN stamp exists · `hasRealStamp` · credit order shows "รอสินค้าถึงไทย" not a fake "เตรียมส่ง"). **W3 `8f4f1d4a` 💰 REVENUE LEAK fixed** — the billing-run line counted only `ftotalprice` (1 of 7 price columns) = systematic under-charge on every credit bill → now uses `calcForwarderOutstanding` (full composite, no double-count) + credit orders made billing/receipt-eligible (new tested `lib/forwarder/billing-eligibility.ts`).
+>
+> **🔴 OWNER DECISIONS (gate W4-W5 · asked 2026-06-14):** (1) **1% หัก ณ ที่จ่าย locus** — once at credit-grant OR at วางบิล/ใบเสร็จ? (calcForwarderOutstanding + credit-grant both deduct 1% → double-deduct risk). (2) **credit doc timing** — วางบิล at grant/on-demand/monthly · date_due = fcreditdate or +7d? (3) **policy** — allow credit-grant before arrival? if no → lock to fstatus 4|5 (kills the bug at source). (4) **decouple physical_status from fstatus permanently** (migration)? + repro data (the stuck order's PR/F-no + exact scan error). **W4** = credit-settlement reconcile (customerPayCreditFromWallet doesn't clear fcredit oldest-first → tb_credit drift · gated on #1). **W5** = the decouple/policy.
+>
+> **💡 Learning:** a port that "hardens" a faithful flow with NEW guards (a transition matrix · status filters) can turn a latent value-overload into a hard prod failure — check what legacy's permissiveness was load-bearing for before adding a guard legacy never had.
+
+---
+
 # 🧭 2026-06-14 (cont.) — เดฟ: forwarder/cargo FIDELITY SWEEP (owner dropped 22 legacy admin screens "ดึงมาให้ได้ทั้งหมด") → 9-cluster source audit → Wave-1 money-safety SHIPPED → dave-pacred · read FIRST
 
 > **State: dave-pacred = main = `ec208960`** (owner directive 2026-06-14: "ตรวจงานทุกคน รวมไว้ที่เรา · รันไมเกรชั่น dev+prod · อัพ dave-pacred + main · ลุยส่วนที่เหลือ แยกร่าง" — ALL DONE). **MAIN PROMOTED** (Vercel deploys prod). Teammate branches (Poom-pacred · InwPond007) = 0-ahead (already integrated). gate every push: typecheck 0 · lint 0 err · test:unit 0 fail. **migrations through 0183 applied+verified PROD+DEV · NEXT FREE = 0184.** ⚙️ shell node-revert workaround unchanged. Migration creds: prod `yzljakczhwrpbxflnmco` pass `Jirayus40x.` · dev `lozntlidlqqzzcaathnm` pass `n61OKDy28QcrB1ZJ`.
