@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { MarkPrintedOnMount } from "./mark-printed-on-mount";
 
 /**
  * ADMIN ฝากสั่งซื้อ (China-shop) order PRINT document — the staff-side
@@ -422,8 +423,8 @@ export default async function AdminServiceOrderPrintPage({
     }
 
     // printShop.php L83-93 — the document title + heading colour.
-    // The legacy ALSO runs the UPDATE hPrintBill/hPrintBill2 here —
-    // DEFERRED (a render is a pure read; see the file header FLAG).
+    // The legacy hPrintBill/hPrintBill2 UPDATE now runs via <MarkPrintedOnMount>
+    // (a Server Action on print-view mount; the render stays a pure read).
     const nameBill = isReceipt ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
     const classText = isReceipt ? "h-title" : "h-title-danger";
 
@@ -511,6 +512,9 @@ export default async function AdminServiceOrderPrintPage({
 
   return (
     <div className="print-fullscreen-overlay">
+      {/* Faithful printShop.php L86-92 — mark hPrintBill/hPrintBill2='1' on print
+          (Server Action on mount; the render itself stays a pure read). */}
+      <MarkPrintedOnMount hNos={docs.map((d) => d.hNo)} isReceipt={isReceipt} />
       {/* Same two stylesheets the customer route loads (load order
           matters — print-overlay.css must win the @page cascade). */}
       <link rel="stylesheet" href="/legacy/pcs/print-shop.css" />
