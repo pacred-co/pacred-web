@@ -802,6 +802,49 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         modeLabel={MODE_LABEL}
         currentStatus={sp.status}
       />
+
+      {/* Wave 7 — per-page money-sum footer (faithful: legacy admin lists
+          render Σ totals at the bottom of the table). Page-scoped — sums
+          ONLY the rows fetched for the current page (`rows`), so it matches
+          exactly what's on screen above. We sum the SAME per-row values the
+          table renders: outstanding_thb (ยอดค้างชำระ · the table's money
+          column · via calcForwarderOutstanding) + total_price (ราคารวม) +
+          weight/boxes. Labeled "รวมหน้านี้" to be honest about the scope
+          (this is NOT a full-table aggregate). */}
+      {rows.length > 0 && (() => {
+        const sumOutstanding = rows.reduce((s, r) => s + (r.outstanding_thb || 0), 0);
+        const sumTotalPrice = rows.reduce((s, r) => s + (r.total_price || 0), 0);
+        const sumWeight = rows.reduce((s, r) => s + (r.weight_kg || 0), 0);
+        const sumBoxes = rows.reduce((s, r) => s + (r.amount_count || 0), 0);
+        return (
+          <div className="rounded-lg border border-border bg-surface-alt/60 px-4 py-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
+            <span className="font-medium text-muted">
+              รวมหน้านี้ · {rows.length.toLocaleString("th-TH")} รายการ
+              {sumBoxes > 0 && (
+                <> · {sumBoxes.toLocaleString("th-TH")} กล่อง</>
+              )}
+              {sumWeight > 0 && (
+                <> · {sumWeight.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+              )}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-6 gap-y-1">
+              <span className="text-muted">
+                ราคารวม{" "}
+                <strong className="text-foreground">
+                  ฿{sumTotalPrice.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
+              </span>
+              <span className="text-muted">
+                ยอดค้างชำระ{" "}
+                <strong className={sumOutstanding > 0 ? "text-red-600" : "text-foreground"}>
+                  ฿{sumOutstanding.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
+              </span>
+            </span>
+          </div>
+        );
+      })()}
+
       <Pagination
         page={page}
         pageSize={DEFAULT_PAGE_SIZE}

@@ -730,6 +730,38 @@ export default async function AdminServiceOrdersPage({
           sortHrefs={sortHrefs}
         />
 
+        {/* Wave 7 — per-page money-sum footer (faithful: legacy shops.php
+            renders Σ totals at the bottom of the list). Page-scoped — sums
+            ONLY the rows fetched for the current page (`rows`), so it matches
+            exactly what's on screen above. Per-row total uses the SAME legacy
+            formula the table column (ราคารวม) + the CSV export render:
+            (htotalpricechn + hshippingchn) * hrate + hshippingservice.
+            Labeled "รวมหน้านี้" to be honest about the scope (NOT a
+            full-table aggregate). */}
+        {rows.length > 0 && (() => {
+          const sumTotalThb = rows.reduce(
+            (s, r) => s + ((r.htotalpricechn + r.hshippingchn) * r.hrate + r.hshippingservice),
+            0,
+          );
+          const sumPieces = rows.reduce((s, r) => s + (r.hcount || 0), 0);
+          return (
+            <div className="rounded-lg border border-border bg-surface-alt/60 px-4 py-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
+              <span className="font-medium text-muted">
+                รวมหน้านี้ · {rows.length.toLocaleString("th-TH")} รายการ
+                {sumPieces > 0 && (
+                  <> · {sumPieces.toLocaleString("th-TH")} ชิ้น</>
+                )}
+              </span>
+              <span className="text-muted">
+                ราคารวม{" "}
+                <strong className="text-foreground">
+                  ฿{sumTotalThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
+              </span>
+            </div>
+          );
+        })()}
+
         <Pagination
           page={page}
           pageSize={pageSize}
