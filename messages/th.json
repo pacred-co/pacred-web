@@ -3315,7 +3315,10 @@
     "apiForwarderUpdate": {
       "title": "อัปเดตฝากนำเข้า",
       "momo": "MOMO",
-      "cn": "CargoCenter"
+      "cn": "CargoCenter",
+      "jmf": "JMF",
+      "ttp": "TTP",
+      "gogo": "GOGO (ยกเลิก)"
     },
     "apiSheets": {
       "adjustGroup": "ปรับรายการ Sheet",

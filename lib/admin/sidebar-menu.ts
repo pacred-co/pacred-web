@@ -458,6 +458,13 @@ const blockApiForwarderUpdate: MenuItem = {
   children: [
     { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
     { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
+    // 2026-06-14 (W6 · carrier-fidelity) — port the 3 remaining legacy
+    // carrier API pages: JMF (read-only history viewer over tb_forwarder_jmf_tmp) ·
+    // TTP (read-only · live cargothai.tech pull, no local table) · GOGO (owner
+    // confirmed DECOMMISSIONED "ไม่ได้ใช้ละ ใช้ momo" → retire banner).
+    { labelKey: "apiForwarderUpdate.jmf",  href: "/admin/api-forwarder-jmf",  icon: "Truck" },
+    { labelKey: "apiForwarderUpdate.ttp",  href: "/admin/api-forwarder-ttp",  icon: "Truck" },
+    { labelKey: "apiForwarderUpdate.gogo", href: "/admin/api-forwarder-gogo", icon: "Ban" },
     // 2026-05-25 (Wave 18-A · orphan wiring) — surface MOMO LCL sack tracking
     // (Gap #6) and CargoThai PO sync (Gap #4) under the legacy "อัปเดตฝากนำเข้า"
     // parent. Both pages existed since dave-pacred merge but had no sidebar

@@ -3315,7 +3315,10 @@
     "apiForwarderUpdate": {
       "title": "Update import entries",
       "momo": "MOMO",
-      "cn": "CargoCenter"
+      "cn": "CargoCenter",
+      "jmf": "JMF",
+      "ttp": "TTP",
+      "gogo": "GOGO (retired)"
     },
     "apiSheets": {
       "adjustGroup": "Adjust sheet entries",
