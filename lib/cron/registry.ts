@@ -189,6 +189,17 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "สแกน tb_wallet หายอดติดลบ / pending-debit เกินยอดจริง → แจ้งเตือน incident (ไม่แก้เงินอัตโนมัติ · อ่านอย่างเดียว)",
     scheduleLabel: "ทุกวัน 01:00 ICT",
   },
+  // 2026-06-14 (W4 part-b) — READ-ONLY credit-AR drift scan. Port of legacy
+  // reset-credit-forwarder.php (mode=view): compares tb_credit.creditvalue to
+  // Σ(per-order outstanding over fCredit='1') → incident on drift. NEVER writes
+  // tb_credit (legacy mode=update auto-reset is owner-gated, not implemented).
+  {
+    path:          "/api/cron/credit-reconcile",
+    schedule:      "10 18 * * *",
+    label:         "ตรวจสอบยอดเครดิต (read-only)",
+    description:   "เทียบ tb_credit.creditvalue กับ Σ ยอดค้างต่อ order (fCredit='1') → แจ้งเตือน incident เมื่อยอดเพี้ยน (port reset-credit-forwarder.php mode=view · ไม่แก้เงินอัตโนมัติ · อ่านอย่างเดียว)",
+    scheduleLabel: "ทุกวัน 01:10 ICT",
+  },
   // 2026-06-09 (Phase-B closeout) — daily container bulletin. Groups in-flight
   // tb_forwarder (fstatus<7) by fcabinetnumber → per-cabinet summary (count /
   // status breakdown / arriving / ready-to-ship) → concise Thai message →

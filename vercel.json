@@ -63,6 +63,10 @@
       "schedule": "0 18 * * *"
     },
     {
+      "path": "/api/cron/credit-reconcile",
+      "schedule": "10 18 * * *"
+    },
+    {
       "path": "/api/cron/container-bulletin",
       "schedule": "0 0 * * *"
     },
