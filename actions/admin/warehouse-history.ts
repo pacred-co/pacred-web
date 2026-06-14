@@ -121,13 +121,19 @@ export async function adminRelinkScan(
       // delivered — relinking after that breaks the money trail).
       const { data: f, error: fErr } = await admin
         .from("tb_forwarder")
-        .select("id, fstatus")
+        .select("id, fstatus, fcredit")
         .eq("id", fid)
-        .maybeSingle<{ id: number; fstatus: string }>();
+        .maybeSingle<{ id: number; fstatus: string; fcredit: string | null }>();
       if (fErr) return { ok: false, error: fErr.message };
       if (!f) return { ok: false, error: `ไม่พบเลขที่ออเดอร์ #${fid}` };
       const statusNum = Number(f.fstatus);
-      if (Number.isFinite(statusNum) && statusNum >= 5) {
+      const isCredit = (f.fcredit ?? "").trim() === "1";
+      // 5/6/7 = paid/ready/delivered → relink locked (breaks the money trail).
+      // EXCEPT a CREDIT order at 6: credit = pay-later (NOT paid), and its goods
+      // can physically arrive AFTER the credit-grant flipped it to 6, so the
+      // warehouse must still be able to record arrival (6→4). The 2026-06-14
+      // prod "คนงานแสกนไม่ได้" fix. (5=รอชำระเงิน + 7=ส่งแล้ว stay locked.)
+      if (Number.isFinite(statusNum) && statusNum >= 5 && !(statusNum === 6 && isCredit)) {
         return {
           ok: false,
           error: `เลขที่ออเดอร์ #${fid} อยู่ในสถานะที่ล็อกแล้ว (fStatus=${f.fstatus})`,

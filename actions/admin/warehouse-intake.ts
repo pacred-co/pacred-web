@@ -648,9 +648,9 @@ export async function warehouseAdvanceTransit(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, fwarehousename")
+      .select("id, fstatus, fwarehousename, fcredit")
       .eq("id", d.fid)
-      .maybeSingle<{ id: number; fstatus: string | null; fwarehousename: string | null }>();
+      .maybeSingle<{ id: number; fstatus: string | null; fwarehousename: string | null; fcredit: string | null }>();
     if (fwdErr) {
       console.error(`[tb_forwarder transit lookup] failed`, { code: fwdErr.code, message: fwdErr.message });
       return { ok: false, error: `db_error:${fwdErr.code ?? "unknown"}` };
@@ -658,10 +658,17 @@ export async function warehouseAdvanceTransit(
     if (!fwd) return { ok: false, error: "ไม่พบรายการ (fid ไม่ถูกต้อง)" };
 
     const from = (fwd.fstatus ?? "1").trim();
+    const isCredit = (fwd.fcredit ?? "").trim() === "1";
     const to = d.kind === "depart" ? "3" : "4";
     const expectedFrom = d.kind === "depart" ? "2" : "3";
 
-    if (from !== expectedFrom) {
+    // A CREDIT order is flipped to fstatus=6 at credit-grant (legacy
+    // forwarder.php:1431) but its goods can physically arrive in TH AFTER that.
+    // Allow the ARRIVE scan on a credit order at 6 (6→4) so the warehouse can
+    // record arrival — the 2026-06-14 prod "คนงานแสกนไม่ได้" fix. Legacy never
+    // guarded the arrival write (forwarder.php:2231). depart keeps its 2→3 gate.
+    const arriveOnCredit = d.kind === "arrive" && from === "6" && isCredit;
+    if (from !== expectedFrom && !arriveOnCredit) {
       return {
         ok: false,
         error: `สถานะปัจจุบัน (${from}) ไม่พร้อม${d.kind === "depart" ? "ออกจากจีน" : "เข้าไทย"} — ต้องเป็น ${expectedFrom} ก่อน`,

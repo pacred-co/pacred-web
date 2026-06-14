@@ -83,7 +83,15 @@ const TRANSITION_OWNERS: Record<string, readonly AdminRole[]> = {
   "6->1":   ["accounting"],
   "6->2":   ["accounting"],
   "6->3":   ["accounting"],
-  "6->4":   ["accounting"],
+  // 6->4: a CREDIT order is flipped to fstatus=6 at credit-grant (faithful to
+  // legacy forwarder.php:1431) — but its goods may still physically arrive in TH
+  // AFTER that. The warehouse MUST be able to record that arrival (6→4 · stamps
+  // fdatestatus4). Legacy's 3 arrival writers (forwarder.php:2231 ·
+  // forwarder-import-warehouse.php:29 · gateway.php type=4) had NO from-status
+  // guard and freely re-stamped 6→4; Pacred's matrix omitted warehouse/ops here,
+  // which BLOCKED the arrival scan on every credit order (the 2026-06-14 prod
+  // "คนงานแสกนไม่ได้"). Restore the legacy behavior.
+  "6->4":   ["accounting", "warehouse", "ops"],
   "6->5":   ["accounting"],                  // wallet rejection rolls 6 → 5 (legacy wallet.php:542)
   "7->1":   [],                              // terminal — manager-only via override
   "7->2":   [],

@@ -151,7 +151,7 @@ async function primaryLookup(
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
-    .lt("fstatus", "5")
+    .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)")
     .limit(50);
   if (error) {
     logger.error("barcode-import", "primaryLookup failed", error, { keysearch });
@@ -166,7 +166,7 @@ async function primaryLookup(
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
-    .lt("fstatus", "5")
+    .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)")
     .neq("reforder", "")
     .limit(2);
   if (refRowsErr) {
@@ -180,7 +180,7 @@ async function primaryLookup(
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
-    .lt("fstatus", "5")
+    .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)")
     .neq("adminidcreator", "")
     .limit(2);
   if (adminRowsErr) {
@@ -213,7 +213,7 @@ async function fallbackLookup(
       .from("tb_forwarder")
       .select(FORWARDER_SELECT)
       .eq("fidorco", head)
-      .lt("fstatus", "5")
+      .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)")
       .limit(2);
     if (error) {
       logger.error("barcode-import", "fallbackLookup dash-cut failed", error, {
@@ -239,7 +239,7 @@ async function fallbackLookup(
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .ilike("ftrackingchn", `__${digits}`)
-    .lt("fstatus", "5")
+    .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)")
     .limit(2);
   if (error) {
     logger.error("barcode-import", "fallbackLookup like failed", error, {
