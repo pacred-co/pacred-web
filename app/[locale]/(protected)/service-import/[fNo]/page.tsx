@@ -144,6 +144,16 @@ function dmy(ts: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
+// Is a stored date-stamp a REAL value (the warehouse scan actually set it),
+// not a null / empty / legacy MySQL zero-date sentinel? Drives the PHYSICAL
+// journey steps so a credit order flipped to fStatus=6 BEFORE the goods
+// arrive doesn't paint "สินค้าถึงไทย" as done.
+function hasRealStamp(ts: string | null): boolean {
+  if (!ts) return false;
+  const s = ts.trim();
+  if (s === "" || s.startsWith("0000-00-00")) return false;
+  return !isNaN(new Date(s.replace(" ", "T")).getTime());
+}
 // PHP DateTime modify on a d/m/Y string — used for the "จะถึงไทย" range.
 function modifyDmy(dmyStr: string, days: number): string {
   const m = dmyStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -302,26 +312,99 @@ function convertIMGCHN(url: string | null): string {
 // a per-`fStatus` `<li>` cluster — encoded here as a per-step state
 // machine to keep the markup identical.
 type StepState = "" | "visited" | "active";
-function computeSteps(fStatus: string | null, fidDriver: 0 | 1): StepState[] {
-  // index 0..6 → step 1..7 (รอเข้าโกดังจีน / ถึงโกดังจีน / กำลังส่งมาไทย /
-  //   สินค้าถึงไทย / รอชำระเงิน / เตรียมส่ง / ส่งแล้ว) PLUS a 6.1 sub-step
-  //   between 6 and 7 (กำลังจัดส่ง — driven by FID_driver2 flag).
-  // Modelled as 8 steps: indices 0..6 = step 1..6 / step 6.1 / step 7.
+type PhysicalStamps = {
+  s2: string | null; // fdatestatus2 — สินค้าถึงโกดังจีน
+  s3: string | null; // fdatestatus3 — กำลังส่งมาไทย
+  s4: string | null; // fdatestatus4 — สินค้าถึงไทย
+};
+/**
+ * The 8-step tracker state. Indices 0..7 → step 1..6 / step 6.1 / step 7
+ * (รอเข้าโกดังจีน / ถึงโกดังจีน / กำลังส่งมาไทย / สินค้าถึงไทย / รอชำระเงิน /
+ *  เตรียมส่ง / กำลังจัดส่ง / ส่งแล้ว).
+ *
+ * tb_forwarder.fstatus carries TWO dimensions on one column: a PHYSICAL
+ * journey (1-4) AND money/dispatch (5-7). A CREDIT order is flipped to
+ * fstatus=6 at credit-grant BEFORE the goods physically arrive — so driving
+ * the physical steps off the fstatus integer would paint steps 1-4
+ * (incl. "สินค้าถึงไทย") as done when nothing has physically arrived.
+ *
+ * FIX (2026-06-14): the PHYSICAL steps (2=ถึงโกดังจีน · 3=กำลังส่งมาไทย ·
+ * 4=สินค้าถึงไทย) are "done" ONLY when their fdatestatusN stamp is real (the
+ * warehouse scan set it) — NOT because fstatus advanced past them. The
+ * money/dispatch steps (5/6/6.1/7) still key off fstatus. Step 1 is the
+ * entry state, visited once the goods enter the China warehouse (step 2
+ * stamped) or any later milestone is reached.
+ */
+function computeSteps(
+  fStatus: string | null,
+  fidDriver: 0 | 1,
+  stamps: PhysicalStamps,
+): StepState[] {
   const s = Number(fStatus);
-  if (s === 1) return ["active", "", "", "", "", "", "", ""];
-  if (s === 2) return ["visited", "active", "", "", "", "", "", ""];
-  if (s === 3) return ["visited", "visited", "active", "", "", "", "", ""];
-  if (s === 4) return ["visited", "visited", "visited", "active", "", "", "", ""];
-  if (s === 5) return ["visited", "visited", "visited", "visited", "active", "", "", ""];
-  if (s === 6) {
-    return fidDriver === 1
-      ? ["visited", "visited", "visited", "visited", "visited", "visited", "active", ""]
-      : ["visited", "visited", "visited", "visited", "visited", "active", "", ""];
+  const p2 = hasRealStamp(stamps.s2);
+  const p3 = hasRealStamp(stamps.s3);
+  const p4 = hasRealStamp(stamps.s4);
+
+  // Physical journey (indices 0..3). Each physical milestone is "done" only
+  // with a real stamp; the next un-stamped physical step is the active one.
+  const out: StepState[] = ["", "", "", "", "", "", "", ""];
+  // Step 1 (รอเข้าโกดังจีน) — visited the moment any later milestone is
+  // reached (a stamp OR fstatus already past the physical phase), else active.
+  const reachedBeyondStep1 = p2 || p3 || p4 || s >= 5;
+  out[0] = reachedBeyondStep1 ? "visited" : "active";
+  out[1] = p2 ? "visited" : reachedBeyondStep1 && !p2 ? "active" : "";
+  // Once a physical step is "active", later physical steps stay blank.
+  if (out[1] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
+  out[2] = p3 ? "visited" : p2 && !p3 ? "active" : "";
+  if (out[2] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
+  out[3] = p4 ? "visited" : p3 && !p4 ? "active" : "";
+  if (out[3] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
+
+  return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
+}
+
+// Money/dispatch tail (indices 4..7 = step 5 / 6 / 6.1 / 7). These DO key off
+// fstatus — they're the dispatch dimension, not the physical journey. Only
+// runs once the physical phase has no active step (goods at TH, or fstatus
+// already in the money phase). A credit order at fstatus=6 with no
+// fdatestatus4 keeps step 4 NOT-done (handled in the caller) and the
+// dispatch chips reflect fstatus.
+function finalizeMoneySteps(
+  out: StepState[],
+  s: number,
+  fidDriver: 0 | 1,
+  p2: boolean,
+  p3: boolean,
+  p4: boolean,
+): StepState[] {
+  // If a physical step is the active one, don't light any money step.
+  if (out.includes("active")) return out;
+  // No money phase yet (still physically in transit, fstatus < 5) → the
+  // furthest physical milestone is the active head if nothing downstream.
+  if (s < 5) {
+    // Make the next un-reached physical step active (entry already handled).
+    if (!p2) out[1] = out[1] || "active";
+    else if (!p3) out[2] = out[2] || "active";
+    else if (!p4) out[3] = out[3] || "active";
+    return out;
   }
-  if (s === 7) {
-    return ["visited", "visited", "visited", "visited", "visited", "visited", "visited", "active"];
+  // Money/dispatch phase. Mark earlier money steps visited up to the current.
+  if (s === 5) out[4] = "active";
+  else if (s === 6) {
+    out[4] = "visited";
+    if (fidDriver === 1) {
+      out[5] = "visited";
+      out[6] = "active";
+    } else {
+      out[5] = "active";
+    }
+  } else if (s >= 7) {
+    out[4] = "visited";
+    out[5] = "visited";
+    out[6] = "visited";
+    out[7] = "active";
   }
-  return ["", "", "", "", "", "", "", ""];
+  return out;
 }
 
 const ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder/";
@@ -381,7 +464,8 @@ export default async function ServiceImportDetailPage({
       "pricecrate, ftransportpricechnthb, priceother, crate, ffreeshipping, " +
       "paymethod, faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
-      "fdatestatus7, reforder, fusercompany, userid, courier_tracking_url, " +
+      "fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus7, fcredit, fcreditdate, " +
+      "reforder, fusercompany, userid, courier_tracking_url, " +
       "fpriceupdate, customrate, customratekg, customratecbm",
     )
     .eq("id", idNum)
@@ -434,7 +518,12 @@ export default async function ServiceImportDetailPage({
       faddresszipcode: string | null;
       faddresstel: string | null;
       faddresstel2: string | null;
+      fdatestatus2: string | null;
+      fdatestatus3: string | null;
+      fdatestatus4: string | null;
       fdatestatus7: string | null;
+      fcredit: string | null;
+      fcreditdate: string | null;
       reforder: string | null;
       fusercompany: string | null;
       userid: string | null;
@@ -863,7 +952,34 @@ export default async function ServiceImportDetailPage({
     return convertIMGCHN(row.fcover);
   })();
 
-  const steps = computeSteps(fStatusValue, FID_driver2);
+  // Physical journey done-state is driven by the per-stage date stamps
+  // (set by the warehouse scan), NOT the fstatus integer — see computeSteps.
+  const steps = computeSteps(fStatusValue, FID_driver2, {
+    s2: row.fdatestatus2,
+    s3: row.fdatestatus3,
+    s4: row.fdatestatus4,
+  });
+
+  // A CREDIT order (fcredit='1') is flipped to fstatus=6 at credit-grant
+  // BEFORE the goods physically arrive. When the arrival stamp (fdatestatus4)
+  // is still empty, show a clear "ติดเครดิต · รอสินค้าถึงไทย" chip instead of
+  // a bare "เตรียมส่ง" that misleads the customer about where the goods are.
+  const isCreditAwaitingArrival =
+    row.fcredit === "1" && !hasRealStamp(row.fdatestatus4);
+
+  // Real per-stage dates for the 8-step timeline (index 0..7 → step 1..7).
+  // Only the physical milestones carry a stamp: index 1=ถึงโกดังจีน (fds2),
+  // 2=กำลังส่งมาไทย (fds3), 3=สินค้าถึงไทย (fds4). Empty otherwise.
+  const stepDates: (string | null)[] = [
+    null,
+    hasRealStamp(row.fdatestatus2) ? dmy(row.fdatestatus2) : null,
+    hasRealStamp(row.fdatestatus3) ? dmy(row.fdatestatus3) : null,
+    hasRealStamp(row.fdatestatus4) ? dmy(row.fdatestatus4) : null,
+    null,
+    null,
+    null,
+    hasRealStamp(row.fdatestatus7) ? dmy(row.fdatestatus7) : null,
+  ];
 
   const refOrderEl =
     row.reforder && row.reforder !== "" ? (
@@ -975,6 +1091,18 @@ export default async function ServiceImportDetailPage({
                 <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
                   <b className="font-bold">{t("statusLabel")} :</b>
                   {statusForwarderBadge(fStatusValue, t)}
+                </p>
+              )}
+              {/* Credit-before-arrival chip — a credit order is flipped to
+                  fStatus=6 ("เตรียมส่ง") at credit-grant before the goods
+                  physically arrive. Show where the goods REALLY are so the
+                  bare "เตรียมส่ง" badge doesn't mislead the customer. */}
+              {isCreditAwaitingArrival && (
+                <p className="mt-1.5 flex md:justify-end">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                    <i className="mdi mdi-truck-fast-outline" aria-hidden></i>
+                    ติดเครดิต · รอสินค้าถึงไทย
+                  </span>
                 </p>
               )}
               <div className="flex flex-col items-start gap-2 md:items-end">
@@ -1110,6 +1238,14 @@ export default async function ServiceImportDetailPage({
                       >
                         {t(step.labelKey)}
                       </p>
+                      {/* Real per-stage date (warehouse scan stamp). Shows
+                          WHEN a physical milestone actually happened, so the
+                          customer can see where the goods are + when. */}
+                      {stepDates[i] && (
+                        <span className="mt-0.5 block text-[10px] font-medium text-muted notranslate">
+                          {stepDates[i]}
+                        </span>
+                      )}
                     </span>
                   </li>
                 );

@@ -75,6 +75,17 @@ function fmtThaiDate(ts: string | null): string | null {
   });
 }
 
+// Is a stored date-stamp a REAL value (the warehouse scan set it), not a
+// null / empty / legacy MySQL zero-date sentinel? Drives the PHYSICAL journey
+// steps so a credit order flipped to fstatus=6 BEFORE arrival doesn't paint
+// "สินค้าถึงไทย" as done.
+function hasRealStamp(ts: string | null): boolean {
+  if (!ts) return false;
+  const s = ts.trim();
+  if (s === "" || s.startsWith("0000-00-00")) return false;
+  return !Number.isNaN(new Date(s.replace(" ", "T")).getTime());
+}
+
 export async function getPublicTrackStatus(
   rawCode: string,
 ): Promise<PublicTrackResult> {
@@ -133,27 +144,81 @@ export async function getPublicTrackStatus(
       7: fmtThaiDate(data.fdatestatus7),
     };
 
+    // ── done-state — the headline fix (2026-06-14) ─────────────────────
+    // tb_forwarder.fstatus carries TWO dimensions on one column: a PHYSICAL
+    // journey (1-4) AND money/dispatch (5-7). A CREDIT order is flipped to
+    // fstatus=6 at credit-grant BEFORE the goods physically arrive — so the
+    // old `done: status > step` painted physical steps 1-4 (incl. "สินค้าถึง
+    // ไทย") as done when nothing had physically arrived.
+    //
+    // PHYSICAL steps (2=ถึงโกดังจีน · 3=กำลังส่งมาไทย · 4=สินค้าถึงไทย) are
+    // "done" ONLY when their fdatestatusN stamp is real (warehouse scan set
+    // it). Step 1 is the entry state, done once step 2 is stamped or the
+    // order has reached the money phase. The money/dispatch steps (5/6/7)
+    // still key off fstatus.
+    const p2 = hasRealStamp(data.fdatestatus2);
+    const p3 = hasRealStamp(data.fdatestatus3);
+    const p4 = hasRealStamp(data.fdatestatus4);
+    const inMoneyPhase = status >= 5;
+    const doneByStep: Record<number, boolean> = {
+      1: p2 || p3 || p4 || inMoneyPhase,
+      2: p2,
+      3: p3,
+      4: p4,
+      5: status > 5,
+      6: status > 6,
+      7: status >= 7 && hasRealStamp(data.fdatestatus7),
+    };
+    // The current (in-progress) step is the first NOT-done step in order.
+    let currentStep = 0;
+    for (const step of [1, 2, 3, 4, 5, 6, 7]) {
+      if (!doneByStep[step]) {
+        currentStep = step;
+        break;
+      }
+    }
+
     const stages = [1, 2, 3, 4, 5, 6, 7].map((step) => ({
       step,
       label: STATUS_LABEL_PUBLIC[step],
       date: dateByStep[step],
-      done: status > step,
-      current: status === step,
+      done: doneByStep[step],
+      current: step === currentStep,
     }));
+
+    // An order can be in the money/dispatch phase (fstatus≥5) WHILE the goods
+    // are still physically in transit (no fdatestatus4) — the credit case.
+    // For the public (anonymous) view we keep money state hidden and instead
+    // report where the goods PHYSICALLY are, so the headline label + ETA stay
+    // honest about location ("ลูกค้าไม่เห็นว่าของอยู่ไหน").
+    const arrivedThailand = p4;
+    const physicallyInTransit = inMoneyPhase && !arrivedThailand;
 
     // Coarse, non-committal ETA — never a hard promise.
     const etaToThai = fmtThaiDate(data.fdatetothai);
     let etaText: string | null;
-    if (status >= 7) etaText = "จัดส่งสำเร็จแล้ว";
-    else if (status === 3 && etaToThai) etaText = `คาดว่าถึงไทยประมาณ ${etaToThai}`;
+    if (status >= 7 && arrivedThailand) etaText = "จัดส่งสำเร็จแล้ว";
+    else if (physicallyInTransit) {
+      etaText = etaToThai
+        ? `กำลังขนส่งมาไทย · คาดว่าถึงไทยประมาณ ${etaToThai}`
+        : "กำลังขนส่งมาประเทศไทย";
+    } else if (status === 3 && etaToThai) etaText = `คาดว่าถึงไทยประมาณ ${etaToThai}`;
     else if (status <= 2) etaText = "อยู่ระหว่างเตรียม/ขนส่งจากจีน";
     else etaText = "อยู่ระหว่างดำเนินการในไทย";
+
+    // Public headline label — report physical location, not the money state,
+    // when the goods haven't physically reached Thailand yet.
+    const statusLabel = physicallyInTransit
+      ? p3
+        ? STATUS_LABEL_PUBLIC[3] // กำลังส่งมาประเทศไทย
+        : STATUS_LABEL_PUBLIC[Math.min(Math.max(currentStep, 1), 4)] ?? "อยู่ระหว่างดำเนินการ"
+      : STATUS_LABEL_PUBLIC[status] ?? "อยู่ระหว่างดำเนินการ";
 
     return {
       found: true,
       tracking: data.ftrackingchn ?? code,
       statusCode: status,
-      statusLabel: STATUS_LABEL_PUBLIC[status] ?? "อยู่ระหว่างดำเนินการ",
+      statusLabel,
       warehouse: WAREHOUSE_CITY[data.fwarehousechina ?? ""] ?? null,
       etaText,
       stages,
