@@ -142,7 +142,15 @@ export async function exportForwarderActionAll(
   } else if (action === "notPhoto") {
     fq = fq.eq("fcover", "").gt("fstatus", "1").gte("fdate", cutoff);
   } else if (action === "notPortage") {
-    fq = fq.eq("ftransportprice", 0).gte("fdate", cutoff);
+    // Drift-free with page.tsx (legacy forwarder-action.php:171 + header-theme.php:40).
+    fq = fq
+      .or("ftransportprice.eq.0,fshipby.eq.PCSE")
+      .or("ftransportpricesum.is.null,ftransportpricesum.neq.1")
+      .neq("fshipby", "PCS")
+      .neq("fshipby", "PCSF")
+      .eq("paymethod", "1")
+      .gte("fdate", cutoff)
+      .in("fstatus", ["4", "5", "6"]);
   } else if (action === "notContainer") {
     fq = fq.eq("fcabinetnumber", "").gte("fdate", cutoff);
   } else if (action === "NotDateContainerClose") {

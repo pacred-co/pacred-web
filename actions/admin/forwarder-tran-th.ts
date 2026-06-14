@@ -15,17 +15,38 @@
  * Brief §6: "No Pacred writer. Customer-side display exists at
  * `(protected)/service-import/[fNo]/page.tsx`; admin has nothing."
  *
- * MVP scope here = READ-ONLY (list + detail) — surface the 296 historical
- * batches + the 643 included forwarders so accounting/dispatch staff can
- * see what's already been bundled. The CREATE-BATCH writer is intentionally
- * deferred to a separate sitting — though money-neutral (no debit), it
- * needs a multi-row selector UI + dedup-guard (a forwarder can be in only
- * one TH-transport batch).
+ * READ side (list + detail) surfaces the historical batches + included
+ * forwarders so accounting/dispatch staff can see what's already bundled.
+ * WRITE side (2026-06-14 · W3): `adminCombineForwarderTransport` ports the
+ * legacy notPortage "บันทึก และรวมค่าขนส่ง" POST — multi-row select →
+ * create batch + stamp the TH delivery charge, with the legacy dedup-guard
+ * (a forwarder can be in only one TH-transport batch). See §3 below.
  *
  * Per AGENTS.md §0c: every Supabase query destructures `error`.
  */
 
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+
+// Local resolveLegacyAdminId (same pattern as forwarders-field-edits.ts) —
+// uuid auth user → legacy tb_admin.adminID slug for the legacy *adminid* cols.
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) console.error(`[forwarder-tran-th.resolveLegacyAdminId] failed`, { code: error.code, message: error.message });
+  const email = user?.email ?? null;
+  if (!email) return "system";
+  const admin = createAdminClient();
+  const { data, error: aErr } = await admin
+    .from("tb_admin").select("adminID").eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
+  if (aErr) console.error(`[forwarder-tran-th tb_admin lookup] failed`, { code: aErr.code, message: aErr.message });
+  return data?.adminID ?? email.slice(0, 10);
+}
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -263,4 +284,112 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
       totalBoxes,
     },
   };
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 3. CREATE BATCH — "บันทึก และรวมค่าขนส่ง" (W3 · 2026-06-14)
+// ────────────────────────────────────────────────────────────────────────
+//
+// Faithful port of legacy forwarder-action.php:4-46 (the notPortage
+// updatefTransportPrice POST). Bundle N delivered-to-Thailand forwarders into
+// ONE TH-transport batch + stamp the per-batch TH delivery charge. Steps:
+//   1. Dup-guard — none of fIds already in tb_forwarder_tran_th_sub ('eRe').
+//   2. INSERT tb_forwarder_tran_th_h (date, adminidcreate) → new header id.
+//   3. INSERT tb_forwarder_tran_th_sub (fid, ftthhid) per fId.
+//   4. UPDATE tb_forwarder.ftransportprice = X on fIds[0] ONLY (legacy sets the
+//      batch charge on the first row — it feeds the invoice total via
+//      actions/forwarder.ts).
+//   5. UPDATE tb_forwarder.ftransportpricesum = '1' on ALL fIds (varchar(1) ·
+//      "1=คิดรวมรายการอื่น" · the marker the notPortage queue filters out).
+//
+// Money note: ftransportprice is an absolute SET (not additive), so a stray
+// re-run is not additive double-billing; the dup-guard + the '1' marker keep a
+// forwarder out of two batches. A DB UNIQUE on tb_forwarder_tran_th_sub.fid is
+// the proper backstop — queued for the W5 migration (0183) with the other
+// create-side UNIQUEs.
+
+const combineSchema = z.object({
+  fIds: z.array(z.number().int().positive()).min(1, "เลือกอย่างน้อย 1 รายการ").max(400, "เลือกได้สูงสุด 400 รายการต่อรอบ"),
+  fTransportPrice: z.number().min(0, "ค่าขนส่งต้องไม่ติดลบ").max(100_000, "ค่าขนส่งเกินเพดาน ฿100,000"),
+});
+export type AdminCombineForwarderTransportInput = z.infer<typeof combineSchema>;
+
+export async function adminCombineForwarderTransport(
+  input: AdminCombineForwarderTransportInput,
+): Promise<AdminActionResult<{ batchId: number; combined: number }>> {
+  const parsed = combineSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { fTransportPrice } = parsed.data;
+  const fIds = Array.from(new Set(parsed.data.fIds));
+
+  return withAdmin<{ batchId: number; combined: number }>(
+    ["super", "ops", "accounting", "warehouse"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 20);
+      const nowIso = new Date().toISOString();
+
+      // 1. Dup-guard (legacy 'eRe') — none already in a TH-transport batch.
+      const { data: already, error: dupErr } = await admin
+        .from("tb_forwarder_tran_th_sub")
+        .select("fid")
+        .in("fid", fIds);
+      if (dupErr) {
+        console.error("[combineForwarderTransport dup-check] failed", { code: dupErr.code, message: dupErr.message });
+        return { ok: false, error: `ตรวจสอบรายการซ้ำไม่สำเร็จ: ${dupErr.message}` };
+      }
+      if (already && already.length > 0) {
+        const dupIds = (already as { fid: number }[]).map((r) => r.fid);
+        return { ok: false, error: `มี ${dupIds.length} รายการที่รวมบิลขนส่งไปแล้ว (เช่น #${dupIds.slice(0, 5).join(", #")}) — เอาออกแล้วลองใหม่` };
+      }
+
+      // 2. Create the batch header.
+      const { data: header, error: hErr } = await admin
+        .from("tb_forwarder_tran_th_h")
+        .insert({ date: nowIso, adminidcreate: legacyAdminId })
+        .select("id")
+        .single<{ id: number }>();
+      if (hErr || !header) {
+        console.error("[combineForwarderTransport header insert] failed", { code: hErr?.code, message: hErr?.message });
+        return { ok: false, error: `สร้างบิลรวมไม่สำเร็จ: ${hErr?.message ?? "insert failed"}` };
+      }
+
+      // 3. Link rows.
+      const { error: subErr } = await admin
+        .from("tb_forwarder_tran_th_sub")
+        .insert(fIds.map((fid) => ({ fid, ftthhid: header.id })));
+      if (subErr) {
+        await admin.from("tb_forwarder_tran_th_h").delete().eq("id", header.id); // roll back orphan header
+        console.error("[combineForwarderTransport sub insert] failed", { code: subErr.code, message: subErr.message });
+        return { ok: false, error: `บันทึกรายการในบิลรวมไม่สำเร็จ: ${subErr.message}` };
+      }
+
+      // 4. Set the batch TH-delivery charge on the first row (legacy).
+      const { error: priceErr } = await admin
+        .from("tb_forwarder")
+        .update({ ftransportprice: fTransportPrice, adminidupdate: legacyAdminId })
+        .eq("id", fIds[0]);
+      if (priceErr) {
+        console.error("[combineForwarderTransport price set] failed", { code: priceErr.code, message: priceErr.message });
+        return { ok: false, error: `บันทึกค่าขนส่งไม่สำเร็จ: ${priceErr.message}` };
+      }
+
+      // 5. Mark every row combined (notPortage queue excludes ftransportpricesum='1').
+      const { error: sumErr } = await admin
+        .from("tb_forwarder")
+        .update({ ftransportpricesum: "1" })
+        .in("id", fIds);
+      if (sumErr) {
+        console.error("[combineForwarderTransport sum mark] failed", { code: sumErr.code, message: sumErr.message });
+        return { ok: false, error: `อัปเดตสถานะรวมบิลไม่สำเร็จ: ${sumErr.message}` };
+      }
+
+      await logAdminAction(adminId, "forwarder.combine_transport", "tb_forwarder_tran_th_h", String(header.id), {
+        batch_id: header.id, fids: fIds, ftransportprice: fTransportPrice,
+      });
+
+      revalidatePath("/admin/forwarder-action");
+      return { ok: true, data: { batchId: header.id, combined: fIds.length } };
+    },
+  );
 }

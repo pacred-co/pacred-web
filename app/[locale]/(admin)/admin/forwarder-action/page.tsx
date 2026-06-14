@@ -29,6 +29,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { FREE_SHIPPING_ZIPS } from "@/lib/forwarder/free-shipping-zips";
+import { NotPortageCombinePanel, type NotPortageRow } from "./notportage-combine-panel";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportForwarderActionAll } from "@/actions/admin/export/forwarder-action";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -84,7 +85,7 @@ const ACTION_CONDITION: Record<string, string> = {
   Note: "AND fnote <> '' AND fnote IS NOT NULL",
   NoteShop: "tb_header_order: hnote<>'' AND hstatus IN (1..6)",
   notPhoto: "AND fcover = '' AND fstatus > 1 AND fdate > 2022-01-15",
-  notPortage: "AND ftransportprice = 0 AND fdate > 2022-01-15",
+  notPortage: "(ftransportprice=0 OR fshipby=PCSE) AND ftransportpricesum≠1 AND fshipby∉(PCS,PCSF) AND paymethod=1 AND fstatus∈(4,5,6) AND fdate>2022-01-15",
   notContainer: "AND fcabinetnumber = '' AND fdate > 2022-01-15",
   NotDateContainerClose: "AND fdatecontainerclose IS NULL AND fdate > 2022-01-15",
   NotShipFree: "AND faddresszipcode IN (FREE_SHIPPING_ZIPS) AND fshipby NOT IN ('PCS','PCSF') AND fdate > 2022-01-15",
@@ -306,7 +307,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   // --- All other actions: read tb_forwarder ---
   let q = admin
     .from("tb_forwarder")
-    .select("id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode", { count: "exact" })
+    .select("id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode,faddressname,faddressprovince,faddresstel,famount,fweight,ftransportprice", { count: "exact" })
     .range(rowFrom, rowTo)
     .order("fdate", { ascending: false });
 
@@ -316,7 +317,20 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   } else if (action === "notPhoto") {
     q = q.eq("fcover", "").gt("fstatus", "1").gte("fdate", cutoff);
   } else if (action === "notPortage") {
-    q = q.eq("ftransportprice", 0).gte("fdate", cutoff);
+    // Legacy forwarder-action.php:171 + header-theme.php:40 — the full queue:
+    //   (fTransportPrice=0 OR fShipBy='PCSE')                — needs a TH charge
+    //   AND fTransportPriceSum not '1'                       — not already combined
+    //   AND fShipBy NOT IN ('PCS','PCSF')                    — exclude PCS pickup + free
+    //   AND payMethod='1'                                    — ต้นทาง (customer pays origin)
+    //   AND fDate>cutoff AND fStatus IN (4,5,6)              — recent, delivered-ish
+    q = q
+      .or("ftransportprice.eq.0,fshipby.eq.PCSE")
+      .or("ftransportpricesum.is.null,ftransportpricesum.neq.1")
+      .neq("fshipby", "PCS")
+      .neq("fshipby", "PCSF")
+      .eq("paymethod", "1")
+      .gte("fdate", cutoff)
+      .in("fstatus", ["4", "5", "6"]);
   } else if (action === "notContainer") {
     q = q.eq("fcabinetnumber", "").gte("fdate", cutoff);
   } else if (action === "NotDateContainerClose") {
@@ -421,6 +435,22 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
           </div>
         )}
 
+        {action === "notPortage" && rows && rows.length > 0 ? (
+          <NotPortageCombinePanel
+            rows={(rows as unknown as Array<Record<string, unknown>>).map((r): NotPortageRow => ({
+              id:               r.id as number,
+              fdate:            (r.fdate as string) ?? null,
+              ftrackingchn:     (r.ftrackingchn as string) ?? null,
+              faddressname:     (r.faddressname as string) ?? null,
+              faddressprovince: (r.faddressprovince as string) ?? null,
+              faddresstel:      (r.faddresstel as string) ?? null,
+              famount:          Number(r.famount ?? 0),
+              fweight:          Number(r.fweight ?? 0),
+              ftransportprice:  Number(r.ftransportprice ?? 0),
+              fstatus:          (r.fstatus as string) ?? null,
+            }))}
+          />
+        ) : (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           {!rows || rows.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">ไม่มีรายการในคิวนี้</p>
@@ -491,6 +521,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
             </div>
           )}
         </div>
+        )}
 
         <Pagination
           page={page}

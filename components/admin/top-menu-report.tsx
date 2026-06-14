@@ -89,8 +89,14 @@ async function loadCounts(): Promise<Counts> {
     c((q) => q.not("fnote", "is", null).neq("fnote", "")),
     // 4) notPhoto — fCover='' AND fStatus>1 AND fDate>cutoff
     c((q) => q.eq("fcover", "").gt("fstatus", "1").gte("fdate", cutoff)),
-    // 5) notPortage — partial: fTransportPrice=0
-    c((q) => q.eq("ftransportprice", 0).gte("fdate", cutoff)),
+    // 5) notPortage — full legacy queue (drift-free with forwarder-action/page.tsx)
+    c((q) =>
+      q.or("ftransportprice.eq.0,fshipby.eq.PCSE")
+       .or("ftransportpricesum.is.null,ftransportpricesum.neq.1")
+       .neq("fshipby", "PCS").neq("fshipby", "PCSF")
+       .eq("paymethod", "1").gte("fdate", cutoff)
+       .in("fstatus", ["4", "5", "6"]),
+    ),
     // 6) notContainer — fCabinetNumber=''
     c((q) => q.eq("fcabinetnumber", "").gte("fdate", cutoff)),
     // 7) notDateContainerClose
