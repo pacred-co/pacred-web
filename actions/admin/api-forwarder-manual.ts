@@ -30,6 +30,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -442,6 +443,24 @@ export async function adminApiForwarderManualInsert(
 
       const nowIso = new Date().toISOString();
 
+      // ── Dedup guard (W3.3 · 2026-06-14) ──────────────────────
+      // Legacy had none, but a fat-finger double-submit creates a duplicate
+      // billable order. fIDorCO (carrier prefix + productID) is the
+      // unique-per-carrier key — abort if it already exists.
+      const { data: dup, error: dupErr } = await admin
+        .from("tb_forwarder")
+        .select("id")
+        .eq("fidorco", fIDorCO)
+        .limit(1)
+        .maybeSingle<{ id: number }>();
+      if (dupErr) {
+        console.error(`[api-forwarder-manual dup-check] failed`, { code: dupErr.code, message: dupErr.message });
+        return { ok: false, error: `ตรวจสอบรายการซ้ำไม่สำเร็จ: ${dupErr.message}` };
+      }
+      if (dup) {
+        return { ok: false, error: `รายการนี้ถูกบันทึกไปแล้ว (productID ${d.productID} → #${dup.id}) — ตรวจสอบก่อนเพิ่มซ้ำ` };
+      }
+
       // ── INSERT ────────────────────────────────────────────────
       const { data: row, error: insErr } = await admin
         .from("tb_forwarder")
@@ -550,6 +569,20 @@ export async function adminApiForwarderManualInsert(
 
       if (insErr || !row) {
         return { ok: false, error: insErr?.message ?? "insert failed" };
+      }
+
+      // ── Auto-price (W3.3) ────────────────────────────────────
+      // Fill frefrate/frefprice/ftotalprice so the manual order isn't ฿0 (the
+      // INSERT lands them at 0). Same money-isolated helper the MOMO commit
+      // uses · BEST-EFFORT — a rate miss must never fail the create (the admin
+      // can still set the rate via the edit form).
+      try {
+        const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
+        if (!rateRes.ok) {
+          console.error(`[api-forwarder-manual auto-rate] unresolved (id=${row.id})`, { reason: rateRes.reason });
+        }
+      } catch (e) {
+        console.error(`[api-forwarder-manual auto-rate] threw AFTER insert (id=${row.id})`, e);
       }
 
       await logAdminAction(
