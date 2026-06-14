@@ -45,12 +45,12 @@ Held DOWN from a naive "95% of features exist" because a dead-read or a money-TO
 
 ## Owner flags
 
-1. **Wave-5 migration (0183)** — approve a prod dup-precheck + merge/keep policy BEFORE adding UNIQUE on `tb_cnt_item.fcabinetnumber` / `tb_user_sales.idf` / `tb_user_sales_pay.idus` (a pre-existing dup makes the migration fail). Carryover from the 2026-06-14 disbursement audit.
-2. **GOGO + JMF carrier creds/endpoints** (carryover) — JMF view+history buildable read-only now from `tb_forwarder_jmf_tmp`; live Auto-API pull + GOGO Google-Sheet ingest need creds. Confirm GOGO is still live vs decommissioned before porting its money-writer.
-3. **Yuan-payment approve cost source** — confirm `payRateCost` defaults from `tb_settings.hRateCostDefault` at approval (legacy behaviour) so the margin-capture fix can be wired; and whether admin-created yuan rows keep the legacy 2-step (pending→approve-with-cost) or stay pre-confirmed.
-4. **fProfit* container columns** — confirm whether `fProfitTransportCHN`/`fProfitPriceUpdate`/`fProfitTotal`/`fCompany1Per` are still read by any report (PEAK rollup?) — if derived-at-read everywhere, skip rewriting them.
-5. **moveStatusTo99 fTransportPriceSum pre-filter** — confirm whether the legacy "only un-combined rows" guard is load-bearing or a legacy quirk that can be dropped.
-6. **Orphan `acc-payment.php` port** (`/admin/accounting/payment`) — faithful 1:1 but zero inbound nav (§0d orphan); a near-equivalent `/admin/reports/yuan-profit` is reachable. Decide: add to a menubar or retire.
+1. **Wave-5 migration (0183)** — ✅ DONE (owner-approved · applied prod+dev 4/4 · dup-precheck first · the 1 dev dup deduped).
+2. **GOGO + JMF carrier creds** — ✅ RESOLVED: GOGO **decommissioned** (owner: "ไม่ได้ใช้ละ ใช้ momo") → retire banner shipped (W6); JMF/TTP read-only view+history shipped (W6). Live Auto-API pull still needs carrier creds (bannered as pending) — the only true carryover here.
+3. **Yuan-payment approve cost source** — ✅ RESOLVED: owner said legacy default → `payRateCost` defaults from `tb_settings.hRateCostDefault` (shipped W2a).
+4. **fProfit* container columns** — ✅ RESOLVED: only `fprofittotal` is read (reports.ts:523, prefers it when non-zero); ALL Pacred writes set it 0 → Pacred rows always derive live. Closed the legacy-migrated-row stale-profit edge by zeroing `fprofittotal` in both cost editors (`543c7ed0`). `fProfitTransportCHN`/`fProfitPriceUpdate`/`fCompany1Per` have NO readers → no action.
+5. **moveStatusTo99 / fTransportPriceSum pre-filter** — ✅ NON-ISSUE: no Pacred `moveStatusTo99` flow exists; `fstatus='99'` (cancelled) is consistently `.neq`-excluded across all reports. No action.
+6. **Orphan `acc-payment.php`** (`/admin/accounting/payment`) — ⏳ LOW-PRIORITY (the only open item): faithful 1:1 but no menu entry (reachable by URL); equivalents `/admin/yuan-payments` + `/admin/reports/yuan-profit` are reachable. Owner decision: add to the accounting menubar (§0d) or retire as redundant.
 
 ## Full P0/P1 gap detail
 
