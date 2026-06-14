@@ -1,0 +1,137 @@
+/**
+ * Unit tests for the 2026-06-14 money fixes on the วางบิล / ใบเสร็จ path:
+ *
+ *   BUG A — revenue leak: the billing-run line amount must be the FULL
+ *     composite (calcForwarderOutstanding = Σ 7 price columns − discount −
+ *     1% juristic), NOT ftotalprice alone. We assert the bill total ==
+ *     Σ calcForwarderOutstanding over the rows.
+ *
+ *   BUG B — credit orders invisible: isBillableForwarder must accept BOTH
+ *     the awaiting-payment cohort (fstatus='5') and the credit-unsettled
+ *     cohort (fstatus 5/6 · fcredit='1' · paydeposit<>'1' · fstatus<>'99').
+ *
+ * Pure, no IO. Run: pnpm tsx lib/forwarder/billing-eligibility.test.ts
+ * (wired into pnpm test:unit + pnpm test).
+ */
+
+import {
+  isAwaitingPaymentEligible,
+  isCreditUnsettledEligible,
+  isBillableForwarder,
+  type ForwarderBillingEligibilityFields,
+} from "./billing-eligibility";
+import {
+  calcForwarderOutstanding,
+  type ForwarderPriceFields,
+} from "./outstanding";
+
+let pass = 0;
+let fail = 0;
+function assertEq<T>(label: string, actual: T, expected: T) {
+  if (JSON.stringify(actual) === JSON.stringify(expected)) { pass++; console.log(`  ✓ ${label}`); }
+  else { fail++; console.error(`  ✗ ${label}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`); }
+}
+function section(name: string) { console.log(`\n${name}`); }
+
+// ── Builders ─────────────────────────────────────────────────────────
+function gate(o: Partial<ForwarderBillingEligibilityFields>): ForwarderBillingEligibilityFields {
+  return { fstatus: null, fcredit: null, paydeposit: null, ...o };
+}
+
+/** Full price row (all 0/null) + the eligibility flags, with overrides. */
+function fullRow(
+  o: Partial<ForwarderPriceFields & ForwarderBillingEligibilityFields>,
+): ForwarderPriceFields & ForwarderBillingEligibilityFields {
+  return {
+    ftotalprice: 0, ftransportprice: 0, fpriceupdate: 0, fshippingservice: 0,
+    pricecrate: 0, ftransportpricechnthb: 0, priceother: 0, fdiscount: 0,
+    fusercompany: null, fstatus: null, fcredit: null, paydeposit: null, ...o,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BUG B — eligibility predicate
+// ─────────────────────────────────────────────────────────────────────
+
+section("BUG B · isAwaitingPaymentEligible (cohort A)");
+assertEq("fstatus='5' → eligible", isAwaitingPaymentEligible(gate({ fstatus: "5" })), true);
+assertEq("fstatus='6' → NOT cohort A", isAwaitingPaymentEligible(gate({ fstatus: "6" })), false);
+assertEq("fstatus='5' with surrounding space → eligible (trim)", isAwaitingPaymentEligible(gate({ fstatus: " 5 " })), true);
+assertEq("fstatus=null → not eligible", isAwaitingPaymentEligible(gate({ fstatus: null })), false);
+
+section("BUG B · isCreditUnsettledEligible (cohort B)");
+assertEq("credit unsettled at fstatus='5' → eligible",
+  isCreditUnsettledEligible(gate({ fstatus: "5", fcredit: "1", paydeposit: "0" })), true);
+assertEq("credit unsettled at fstatus='6' → eligible (the key BUG B case)",
+  isCreditUnsettledEligible(gate({ fstatus: "6", fcredit: "1", paydeposit: "0" })), true);
+assertEq("credit but paydeposit='1' (settled) → NOT eligible",
+  isCreditUnsettledEligible(gate({ fstatus: "6", fcredit: "1", paydeposit: "1" })), false);
+assertEq("credit at fstatus='99' (cancelled) → NOT eligible",
+  isCreditUnsettledEligible(gate({ fstatus: "99", fcredit: "1", paydeposit: "0" })), false);
+assertEq("credit at fstatus='4' (pre-billable stage) → NOT eligible",
+  isCreditUnsettledEligible(gate({ fstatus: "4", fcredit: "1", paydeposit: "0" })), false);
+assertEq("not credit (fcredit='0') at fstatus='6' → NOT cohort B",
+  isCreditUnsettledEligible(gate({ fstatus: "6", fcredit: "0", paydeposit: "0" })), false);
+assertEq("paydeposit null treated as unsettled → eligible",
+  isCreditUnsettledEligible(gate({ fstatus: "6", fcredit: "1", paydeposit: null })), true);
+
+section("BUG B · isBillableForwarder (union)");
+assertEq("plain awaiting-payment fstatus='5' → billable",
+  isBillableForwarder(gate({ fstatus: "5" })), true);
+assertEq("credit unsettled fstatus='6' → billable (was INVISIBLE before fix)",
+  isBillableForwarder(gate({ fstatus: "6", fcredit: "1", paydeposit: "0" })), true);
+assertEq("non-credit fstatus='6' → NOT billable (no false-positive)",
+  isBillableForwarder(gate({ fstatus: "6", fcredit: "0" })), false);
+assertEq("settled credit fstatus='6' paydeposit='1' → NOT billable",
+  isBillableForwarder(gate({ fstatus: "6", fcredit: "1", paydeposit: "1" })), false);
+assertEq("cancelled fstatus='99' → NOT billable",
+  isBillableForwarder(gate({ fstatus: "99", fcredit: "1", paydeposit: "0" })), false);
+
+// ─────────────────────────────────────────────────────────────────────
+// BUG A — bill total == Σ calcForwarderOutstanding (the under-charge)
+// ─────────────────────────────────────────────────────────────────────
+//
+// This mirrors createBillingRunInvoice's (d) step: subtotal = Σ of the
+// per-line outstanding over the selected rows; each line's amount_thb =
+// that same per-line outstanding. So the bill subtotal MUST equal the sum.
+
+section("BUG A · bill subtotal == Σ calcForwarderOutstanding");
+
+// Three realistic rows where ftotalprice is only ONE of the 7 columns.
+const billRows: Array<ForwarderPriceFields & ForwarderBillingEligibilityFields> = [
+  fullRow({
+    fstatus: "5",
+    ftotalprice: 1000, ftransportprice: 200, fpriceupdate: 50,
+    fshippingservice: 30, pricecrate: 20, ftransportpricechnthb: 10,
+    priceother: 5, fdiscount: 15,
+  }), // outstanding = 1300
+  fullRow({
+    fstatus: "6", fcredit: "1", paydeposit: "0",
+    ftotalprice: 500, ftransportprice: 100, priceother: 25, fdiscount: 25,
+  }), // outstanding = 600 (credit order — only counted because BUG B fix)
+  fullRow({
+    fstatus: "5", fusercompany: "1",
+    ftotalprice: 2000, ftransportprice: 0, fdiscount: 0,
+  }), // juristic 1% → outstanding = 1980
+];
+
+// Per-line amounts the action writes (= what the customer is billed per line).
+const perLine = billRows.map((r) => calcForwarderOutstanding(r));
+assertEq("per-line outstanding values", perLine, [1300, 600, 1980]);
+
+// The header subtotal the action stores = Σ of the per-line amounts.
+const billSubtotal = perLine.reduce((s, n) => s + n, 0);
+assertEq("bill subtotal == Σ calcForwarderOutstanding", billSubtotal, 3880);
+
+// The OLD (buggy) subtotal that used ftotalprice alone — proves the leak size.
+const buggySubtotal = billRows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+assertEq("buggy ftotalprice-only subtotal was LOWER (the leak)", buggySubtotal, 3500);
+assertEq("leak amount the fix recovers", billSubtotal - buggySubtotal, 380);
+
+// Final total = subtotal + admin adjustments (additional, never inside the
+// composite → no double-count). e.g. +CHN 100, +TH 50, +other 0, −discount 80.
+const finalTotal = Math.max(0, billSubtotal + 100 + 50 + 0 - 80);
+assertEq("final total = subtotal + adjustments (no double-count)", finalTotal, 3950);
+
+console.log(`\n${fail === 0 ? "✅" : "❌"} forwarder/billing-eligibility: ${pass} pass / ${fail} fail`);
+if (fail > 0) process.exit(1);

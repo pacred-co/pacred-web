@@ -147,14 +147,16 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     setLoadingFwd(uid !== "");
   }
 
-  // Subtotal = Σ ftotalprice of selected forwarders (the customer-paying
-  // total · tb_forwarder.ftotalprice. Earlier draft used fpaytotal which
-  // doesn't exist · fixed 2026-06-03 ภูม flag.)
+  // Subtotal = Σ outstanding_thb of selected forwarders (BUG A fix 2026-06-14).
+  // outstanding_thb = the FULL composite the customer owes
+  // (calcForwarderOutstanding: Σ 7 price columns − discount − 1% juristic),
+  // NOT ftotalprice alone — which silently under-charged. Matches the server
+  // subtotal in createBillingRunInvoice exactly.
   const subtotal = useMemo(() => {
     if (!eligible) return 0;
     let sum = 0;
     for (const f of eligible) {
-      if (selectedIds.has(f.id)) sum += f.ftotalprice;
+      if (selectedIds.has(f.id)) sum += f.outstanding_thb;
     }
     return sum;
   }, [eligible, selectedIds]);
@@ -356,7 +358,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                   <th className="px-3 py-2 text-right">จำนวน</th>
                   <th className="px-3 py-2 text-right">น้ำหนัก (kg)</th>
                   <th className="px-3 py-2 text-right">ปริมาตร (CBM)</th>
-                  <th className="px-3 py-2 text-right">ค่าขนส่ง (฿)</th>
+                  <th className="px-3 py-2 text-right">ยอดค้างชำระ (฿)</th>
                   <th className="px-3 py-2 text-center">วันที่</th>
                 </tr>
               </thead>
@@ -373,12 +375,19 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                         onChange={(e) => toggleId(f.id, e.target.checked)}
                       />
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">#{f.id}</td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      #{f.id}
+                      {f.fcredit === "1" && (
+                        <span className="ml-1 inline-block rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700 align-middle">
+                          เครดิต
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-mono text-xs">{f.ftrackingchn}</td>
                     <td className="px-3 py-2 text-right">{f.famount ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fvolume ?? "—"}</td>
-                    <td className="px-3 py-2 text-right font-medium">{thbFmt(f.ftotalprice)}</td>
+                    <td className="px-3 py-2 text-right font-medium">{thbFmt(f.outstanding_thb)}</td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
                   </tr>
                 ))}

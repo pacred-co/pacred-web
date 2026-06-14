@@ -74,6 +74,7 @@ import { sendSms } from "@/lib/sms/gateway";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { isBillableForwarder } from "@/lib/forwarder/billing-eligibility";
 
 // ────────────────────────────────────────────────────────────
 // Schema — multi-row batch input
@@ -104,6 +105,10 @@ type ForwarderRowForReceipt = {
   id: number;
   userid: string;
   fstatus: string;
+  // BUG B (2026-06-14) — credit-eligibility flags so a juristic+credit order
+  // (fstatus 5/6 · fcredit='1' · paydeposit<>'1') can be put on a receipt.
+  fcredit: string | null;
+  paydeposit: string | null;
   ftrackingchn: string | null;
   // For per-row totals (matches grenrateReceiptF L548)
   ftotalprice: number | string | null;
@@ -230,25 +235,29 @@ export async function adminIssueForwarderInvoice(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // 1a. Read tb_forwarder rows — all must be fstatus='5'.
+      // 1a. Read tb_forwarder rows by id, then gate in-memory on the BILLABLE
+      // predicate (BUG B 2026-06-14): a row is eligible when it is รอชำระเงิน
+      // (fstatus='5') OR a credit-unsettled order (fstatus 5/6 · fcredit='1' ·
+      // paydeposit<>'1'). Dropping the SQL `.eq("fstatus","5")` lets credit
+      // orders onto a receipt; we then drop any non-billable row explicitly.
       const { data: fwRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, ftrackingchn, " +
+          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
-        .in("id", fids)
-        .eq("fstatus", "5");
+        .in("id", fids);
       if (readErr) {
         console.error(`[tb_forwarder read] failed`, { code: readErr.code, message: readErr.message });
         return { ok: false, error: readErr.message };
       }
-      const rows = ((fwRows ?? []) as unknown as ForwarderRowForReceipt[]);
+      const allRows = ((fwRows ?? []) as unknown as ForwarderRowForReceipt[]);
+      const rows = allRows.filter((r) => isBillableForwarder(r));
       if (rows.length === 0) {
         return {
           ok: false,
-          error: "ไม่พบรายการที่สถานะ 'รอชำระเงิน' (fstatus=5) — อาจถูกออกใบเสร็จไปแล้ว หรือยังไม่ได้แจ้งชำระ",
+          error: "ไม่พบรายการที่ออกใบเสร็จได้ (ต้องสถานะ 'รอชำระเงิน' fstatus=5 หรือเป็นออเดอร์เครดิตที่ยังไม่ชำระ) — อาจถูกออกใบเสร็จไปแล้ว หรือยังไม่ได้แจ้งชำระ",
         };
       }
       if (rows.length !== fids.length) {

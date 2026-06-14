@@ -31,6 +31,14 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { computeBillWht } from "@/lib/billing/wht";
+import {
+  calcForwarderOutstanding,
+  type ForwarderPriceFields,
+} from "@/lib/forwarder/outstanding";
+import {
+  isBillableForwarder,
+  type ForwarderBillingEligibilityFields,
+} from "@/lib/forwarder/billing-eligibility";
 import { sendNotification } from "@/lib/notifications";
 import {
   createBillingRunInvoiceSchema,
@@ -63,8 +71,18 @@ export type EligibleForwarderRow = {
   famount: number | null;
   fweight: number | null;
   fvolume: number | null;
+  /** Legacy single column — kept for the row display compat (ค่าขนส่งหลัก). */
   ftotalprice: number;
+  /**
+   * BUG A fix (2026-06-14) — the FULL composite the customer actually owes,
+   * via calcForwarderOutstanding (Σ 7 price columns − discount − 1% juristic).
+   * This is what the subtotal + the line amount_thb must use. `ftotalprice`
+   * alone silently under-charged (dropped freight/update/service/crate/
+   * chn-th/other + discount).
+   */
+  outstanding_thb: number;
   fstatus: string | null;
+  fcredit: string | null;
   already_billed: boolean;
 };
 
@@ -151,6 +169,32 @@ export type BillingRunInvoiceDetail = {
 };
 
 // ────────────────────────────────────────────────────────────────────────
+// Shared SELECT columns + the composite-outstanding helper
+// ────────────────────────────────────────────────────────────────────────
+//
+// BUG A (2026-06-14) — every eligibility query MUST pull the columns
+// calcForwarderOutstanding() reads, or the bill silently under-charges. The
+// canonical per-row outstanding = Σ 7 price columns − discount − 1% juristic
+// allowance (lib/forwarder/outstanding.ts). fcredit/paydeposit are pulled for
+// the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
+const FWD_BILLING_SELECT =
+  "id, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
+  "fcredit, paydeposit, fusercompany, " +
+  "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
+  "ftransportpricechnthb, priceother, fdiscount";
+
+/** Raw row shape the eligibility queries return (all price cols + flags). */
+type FwdBillingRaw = ForwarderPriceFields &
+  ForwarderBillingEligibilityFields & {
+    id: number;
+    ftrackingchn: string | null;
+    fdate: string | null;
+    famount: number | string | null;
+    fweight: number | string | null;
+    fvolume: number | string | null;
+  };
+
+// ────────────────────────────────────────────────────────────────────────
 // Helper — resolve legacy admin username (same shape as combine-bill.ts)
 // ────────────────────────────────────────────────────────────────────────
 
@@ -218,26 +262,59 @@ export async function listEligibleCustomers(): Promise<
     async () => {
       const admin = createAdminClient();
 
-      // (a) aggregate per userid from tb_forwarder
-      type AggRow = { userid: string; ftotalprice: number | string | null };
-      const { data: aggRaw, error: aggErr } = await admin
+      // (a) aggregate per userid from tb_forwarder.
+      // BUG A — sum the FULL composite (calcForwarderOutstanding), not just
+      // ftotalprice. BUG B — include the credit cohort (fstatus='5' OR a
+      // credit-unsettled row at fstatus 5/6), union by id like reports-ar.ts.
+      type AggRow = FwdBillingRaw & { userid: string | null };
+
+      // Set A — awaiting-payment (fstatus='5').
+      const qAwaiting = admin
         .from("tb_forwarder")
-        .select("userid, ftotalprice")
+        .select("userid, " + FWD_BILLING_SELECT)
         .eq("fstatus", "5")
         .limit(50_000); // generous cap — should not approach
-      if (aggErr) {
-        console.error("[listEligibleCustomers tb_forwarder] failed", {
-          code: aggErr.code, message: aggErr.message,
+      // Set B — credit, unsettled (matches reports-ar.ts:~121, narrowed to the
+      // billable stages 5/6 by the in-memory isBillableForwarder predicate).
+      const qCredit = admin
+        .from("tb_forwarder")
+        .select("userid, " + FWD_BILLING_SELECT)
+        .in("fstatus", ["5", "6"])
+        .eq("fcredit", "1")
+        .neq("paydeposit", "1")
+        .neq("fstatus", "99")
+        .limit(50_000);
+
+      const [
+        { data: aRaw, error: aErr },
+        { data: bRaw, error: bErr },
+      ] = await Promise.all([qAwaiting, qCredit]);
+      if (aErr) {
+        console.error("[listEligibleCustomers awaiting] failed", {
+          code: aErr.code, message: aErr.message,
         });
-        return { ok: false, error: aggErr.message };
+        return { ok: false, error: aErr.message };
+      }
+      if (bErr) {
+        console.error("[listEligibleCustomers credit] failed", {
+          code: bErr.code, message: bErr.message,
+        });
+        return { ok: false, error: bErr.message };
+      }
+
+      // Union by id (a row can satisfy both sets — fstatus=5 AND on credit).
+      const aggById = new Map<number, AggRow>();
+      for (const r of ([...(aRaw ?? []), ...(bRaw ?? [])] as unknown as AggRow[])) {
+        aggById.set(r.id, r);
       }
 
       const aggByUser = new Map<string, { count: number; total: number }>();
-      for (const r of ((aggRaw ?? []) as AggRow[])) {
+      for (const r of aggById.values()) {
         if (!r.userid) continue;
+        if (!isBillableForwarder(r)) continue; // defensive — Set B narrows to 5/6
         const cur = aggByUser.get(r.userid) ?? { count: 0, total: 0 };
         cur.count += 1;
-        cur.total += Number(r.ftotalprice ?? 0);
+        cur.total += calcForwarderOutstanding(r); // BUG A — full composite
         aggByUser.set(r.userid, cur);
       }
 
@@ -352,31 +429,54 @@ export async function listEligibleForwarders(
     async () => {
       const admin = createAdminClient();
 
-      // (a) tb_forwarder for this customer
-      type FwdRow = {
-        id: number;
-        ftrackingchn: string | null;
-        fdate: string | null;
-        famount: number | string | null;
-        fweight: number | string | null;
-        fvolume: number | string | null;
-        ftotalprice: number | string | null;
-        fstatus: string | null;
-      };
-      const { data: fwdRaw, error: fwdErr } = await admin
+      // (a) tb_forwarder for this customer.
+      // BUG A — pull the composite columns. BUG B — union the awaiting-payment
+      // (fstatus='5') and credit-unsettled (fstatus 5/6 · fcredit='1' ·
+      // paydeposit<>'1') cohorts so credit orders are pickable.
+      const qAwaiting = admin
         .from("tb_forwarder")
-        .select("id, ftrackingchn, fdate, famount, fweight, fvolume, ftotalprice, fstatus")
+        .select(FWD_BILLING_SELECT)
         .eq("userid", userid)
         .eq("fstatus", "5")
         .order("id", { ascending: false })
         .limit(2000);
-      if (fwdErr) {
-        console.error("[listEligibleForwarders tb_forwarder] failed", {
-          code: fwdErr.code, message: fwdErr.message,
+      const qCredit = admin
+        .from("tb_forwarder")
+        .select(FWD_BILLING_SELECT)
+        .eq("userid", userid)
+        .in("fstatus", ["5", "6"])
+        .eq("fcredit", "1")
+        .neq("paydeposit", "1")
+        .neq("fstatus", "99")
+        .order("id", { ascending: false })
+        .limit(2000);
+
+      const [
+        { data: aRaw, error: aErr },
+        { data: bRaw, error: bErr },
+      ] = await Promise.all([qAwaiting, qCredit]);
+      if (aErr) {
+        console.error("[listEligibleForwarders awaiting] failed", {
+          code: aErr.code, message: aErr.message,
         });
-        return { ok: false, error: fwdErr.message };
+        return { ok: false, error: aErr.message };
       }
-      const fwd = (fwdRaw ?? []) as FwdRow[];
+      if (bErr) {
+        console.error("[listEligibleForwarders credit] failed", {
+          code: bErr.code, message: bErr.message,
+        });
+        return { ok: false, error: bErr.message };
+      }
+
+      // Union by id (a row can be in both sets) — keep the deterministic
+      // newest-first order from Set A.
+      const fwdById = new Map<number, FwdBillingRaw>();
+      for (const r of ([...(aRaw ?? []), ...(bRaw ?? [])] as unknown as FwdBillingRaw[])) {
+        fwdById.set(r.id, r);
+      }
+      const fwd = Array.from(fwdById.values())
+        .filter((r) => isBillableForwarder(r)) // defensive — narrow Set B to 5/6
+        .sort((a, b) => b.id - a.id);
       if (fwd.length === 0) {
         return { ok: true, data: { rows: [] } };
       }
@@ -412,15 +512,18 @@ export async function listEligibleForwarders(
       }
 
       const rows: EligibleForwarderRow[] = fwd.map((f) => ({
-        id:            f.id,
-        ftrackingchn:  f.ftrackingchn ?? "",
-        fdate:         f.fdate,
-        famount:          f.famount != null ? Number(f.famount) : null,
-        fweight:       f.fweight != null ? Number(f.fweight) : null,
-        fvolume:          f.fvolume != null ? Number(f.fvolume) : null,
+        id:              f.id,
+        ftrackingchn:    f.ftrackingchn ?? "",
+        fdate:           f.fdate,
+        famount:         f.famount != null ? Number(f.famount) : null,
+        fweight:         f.fweight != null ? Number(f.fweight) : null,
+        fvolume:         f.fvolume != null ? Number(f.fvolume) : null,
         ftotalprice:     Number(f.ftotalprice ?? 0),
-        fstatus:       f.fstatus,
-        already_billed: alreadyBilledIds.has(f.id),
+        // BUG A — the FULL composite the customer owes (drives subtotal + bill).
+        outstanding_thb: calcForwarderOutstanding(f),
+        fstatus:         f.fstatus,
+        fcredit:         f.fcredit,
+        already_billed:  alreadyBilledIds.has(f.id),
       }));
 
       return { ok: true, data: { rows } };
@@ -796,16 +899,14 @@ export async function createBillingRunInvoice(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // (a) Verify all forwarders exist + belong to userid + fstatus=5
-      type FwdCheck = {
-        id: number;
-        userid: string | null;
-        fstatus: string | null;
-        ftotalprice: number | string | null;
-      };
+      // (a) Verify all forwarders exist + belong to userid + are BILLABLE.
+      // BUG A — pull the full composite columns so the line amount = what the
+      // customer owes. BUG B — eligibility = isBillableForwarder (awaiting OR
+      // credit-unsettled), NOT fstatus='5' only.
+      type FwdCheck = FwdBillingRaw & { userid: string | null };
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
-        .select("id, userid, fstatus, ftotalprice")
+        .select("userid, " + FWD_BILLING_SELECT)
         .in("id", v.forwarderIds);
       if (fwdErr) {
         console.error("[createBillingRunInvoice tb_forwarder check] failed", {
@@ -813,7 +914,7 @@ export async function createBillingRunInvoice(
         });
         return { ok: false, error: fwdErr.message };
       }
-      const fwd = (fwdRaw ?? []) as FwdCheck[];
+      const fwd = (fwdRaw ?? []) as unknown as FwdCheck[];
       const knownIds = new Set(fwd.map((f) => f.id));
       const missing = v.forwarderIds.filter((id) => !knownIds.has(id));
       if (missing.length > 0) {
@@ -826,11 +927,11 @@ export async function createBillingRunInvoice(
           error: `รายการเหล่านี้ไม่ใช่ของลูกค้านี้: ${wrongUser.map((f) => f.id).join(", ")}`,
         };
       }
-      const wrongStatus = fwd.filter((f) => f.fstatus !== "5");
+      const wrongStatus = fwd.filter((f) => !isBillableForwarder(f));
       if (wrongStatus.length > 0) {
         return {
           ok: false,
-          error: `รายการเหล่านี้ไม่ได้อยู่ในสถานะรอชำระเงิน: ${wrongStatus.map((f) => f.id).join(", ")}`,
+          error: `รายการเหล่านี้ยังออกใบวางบิลไม่ได้ (ต้องอยู่สถานะรอชำระเงิน หรือเป็นออเดอร์เครดิตที่ยังไม่ชำระ): ${wrongStatus.map((f) => f.id).join(", ")}`,
         };
       }
 
@@ -948,11 +1049,16 @@ export async function createBillingRunInvoice(
         }
       }
 
-      // (d) Compute subtotal + final total
-      const ftotalpriceByID = new Map<number, number>();
-      for (const f of fwd) ftotalpriceByID.set(f.id, Number(f.ftotalprice ?? 0));
+      // (d) Compute subtotal + final total.
+      // BUG A — the per-line amount = calcForwarderOutstanding (Σ 7 price
+      // columns − discount − 1% juristic), the canonical per-row outstanding,
+      // NOT ftotalprice alone. The 4 admin adjustment fields (deliveryChn/Th/
+      // other/discount) are ADDITIONAL on top of the composite subtotal — they
+      // are NOT inside calcForwarderOutstanding, so no double-count.
+      const outstandingByID = new Map<number, number>();
+      for (const f of fwd) outstandingByID.set(f.id, calcForwarderOutstanding(f));
       const subtotal = v.forwarderIds.reduce(
-        (sum, id) => sum + (ftotalpriceByID.get(id) ?? 0),
+        (sum, id) => sum + (outstandingByID.get(id) ?? 0),
         0,
       );
       const total = Math.max(
@@ -1012,11 +1118,13 @@ export async function createBillingRunInvoice(
         return { ok: false, error: `mint-doc-no collision (3 retries): ${lastErr}` };
       }
 
-      // (f) INSERT items (bulk · ON DELETE CASCADE protects rollback semantics)
+      // (f) INSERT items (bulk · ON DELETE CASCADE protects rollback semantics).
+      // BUG A — line amount = the composite outstanding (Σ subtotal of these
+      // lines == the header subtotal, both from calcForwarderOutstanding).
       const itemsToInsert = v.forwarderIds.map((fid) => ({
         invoice_id:   invoiceId!,
         forwarder_id: fid,
-        amount_thb:   ftotalpriceByID.get(fid) ?? 0,
+        amount_thb:   Math.round((outstandingByID.get(fid) ?? 0) * 100) / 100,
       }));
       const { error: itemErr } = await admin
         .from("tb_forwarder_invoice_item")
