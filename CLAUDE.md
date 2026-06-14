@@ -3,6 +3,16 @@
 
 ---
 
+# 🏁 2026-06-15 SESSION CLOSE — เดฟ: forwarder fidelity + juristic+credit loop SHIPPED · migrations prod+dev · pushed ALL branches · read FIRST
+
+> **🏁 CLOSE (owner: "รวมทุก branch · เลินนิ่ง · migration ครบ dev+prod · อัพเดท docs/skill/memory · push ทุก branch · ปิด session").** Resume next: `git fetch && git pull` — **everything on dave-pacred = main = Poom-pacred = InwPond007** (all pushed at close · teammates were 0-ahead = absorbed). gate every push: typecheck 0 · lint 0 err · test:unit 0. **migrations through 0183 applied+verified PROD (4/4) + DEV (4/4) · NEXT FREE = 0184.** Shell: `export PATH=…v24.16.0/bin` + `corepack pnpm` + run typecheck/lint/test individually; scope lint to changed files when concurrent gates deadlock. Needs `.env.local` (prod `yzljakczhwrpbxflnmco` `Jirayus40x.` · dev `lozntlidlqqzzcaathnm` `n61OKDy28QcrB1ZJ`).
+>
+> **Two bodies of work (details in the dated blocks below + the 2 research docs):** (1) **forwarder/cargo 22-screen fidelity sweep** (`docs/research/forwarder-fidelity-audit-2026-06-14.md` · W1-W7 + migration 0183 4 create-side UNIQUE backstops + JMF/TTP/GOGO carriers). (2) **URGENT juristic+credit prod loop** (`docs/research/juristic-credit-loop-2026-06-14.md` · scan-unblock + date-driven timeline + 💰 billing-leak + credit-settlement + reconcile-cron + 50-ทวิ receipt-unblock + dead-cargo-quote-label). **All 4 owner decisions resolved ตาม legacy (1% not double-deducted · NO migration needed).** Learnings → `php-port-patterns.md` (overloaded-column + port-added-guard trap) + `parallel-agent-sprints.md` (แยกร่าง agent-recovery + re-gate). ~10 worktree agents this session, all integrated+re-gated+pushed.
+>
+> **🔴 carryover:** repro data for the stuck order (PR/F-no) welcome to verify · legacy mode=update tb_credit auto-reset (owner-gated) · the standing go-live flips (commission.freight_enabled · tax_invoice.shop_yuan_enabled · roles · RECEIPT_TOKEN_SECRET in Vercel).
+
+---
+
 # 🚨 2026-06-14 (cont.2) — เดฟ: URGENT prod — juristic+credit loop (scan blocked · status stuck · customer blind · billing leak) → fixed W1-W3 + owner-gated W4-W5 · read FIRST
 
 > **State: dave-pacred = main = `e7f3c14f`** (prod live · LOOP COMPLETE incl. P3 + W4b reconcile cron · W1-W4 `7c01b85e`/`c5023037`/`8f4f1d4a`/`6d627d06` · W4b `04ade340` · P3#1 receipt-unblock `f7c411e8` · P3#2 dead-cargo-quote-label removed `e7f3c14f`). Owner escalation ("โดนด่ากันหมด"): a นิติบุคคล+เครดิต customer's goods arrived in TH but the container status didn't update, **workers couldn't scan**, the customer couldn't see their goods, + the whole loop needed sweeping. Ran a 6-segment source-grounded trace (`juristic-credit-loop-trace-2026-06-14` · 24 bugs) → fixed W1-W4 + resolved all 4 owner decisions ตาม legacy. Full plan → **`docs/research/juristic-credit-loop-2026-06-14.md`**.

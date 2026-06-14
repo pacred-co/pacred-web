@@ -570,3 +570,17 @@ here — the org is `department`/`section` instead: `dept3/sec6 = warehouse`
 **SET `adminStatus` 6/7 yourself** (from section) — don't trust the dump value.
 They log in with their legacy `adminID` + original password (the bridge verifies
 vs the preserved `adminPass` passTam hash + auto-provisions the role on first login).
+
+---
+
+## [2026-06-14] The value-overloaded column + the "port-added guard broke a faithful flow" trap
+
+**The headline prod bug this session** (juristic+credit · "คนงานแสกนไม่ได้"): `tb_forwarder.fstatus` carries TWO orthogonal dimensions on ONE column — the physical journey (1=รอเข้าโกดังจีน·2=ถึงโกดังจีน·3=กำลังส่งมาไทย·4=ถึงไทยแล้ว) AND the money/dispatch lifecycle (5=รอชำระเงิน·6=เตรียมส่ง·7=ส่งแล้ว). Granting credit is a MONEY event that writes `fstatus='6'` onto the PHYSICAL axis (faithful to legacy forwarder.php:1431), destroying the physical position. When the goods then physically arrived, the warehouse scan needed `6→4` (backwards on the overloaded axis).
+
+**The trap:** legacy TOLERATED the overload because its 3 arrival writers (forwarder.php:2231 · forwarder-import-warehouse.php:29 · gateway.php type=4) had **NO from-status guard** — they freely re-stamped 6→4 (the self-healing escape hatch). Pacred faithfully ported the credit-grant + the single-fstatus display, then **ADDED guards legacy never had** — a transition-owner matrix (`lib/auth/check-fstatus-transition.ts`: `6->4` was accounting-only) + `.lt('fstatus','5')` scan-lookup filters that HID the row. Together they turned a latent overload into a HARD production failure (scan refused / row not-found / status stuck / customer timeline wrong).
+
+**Rule:** before "hardening" a faithful-ported flow with a NEW guard the legacy never had (a transition matrix, a status filter, a lock), ask *what was legacy's permissiveness load-bearing for?* A guard that looks like an obvious safety win can amputate a self-healing escape hatch the whole workflow silently depended on. The fix here was to RESTORE the legacy permissiveness (allow warehouse/ops `6→4` + widen the scan filters to find credit-6 rows), not to re-architect.
+
+**Companion fix — the customer-visibility half:** because fstatus is overloaded, drive the CUSTOMER timeline's PHYSICAL steps off the real per-stage date stamps (`fdatestatus2/3/4`, `hasRealStamp` rejects null/''/0000-00-00), NOT the fstatus integer — so a credit order at fstatus=6 with null fdatestatus4 correctly shows "still in transit", not a fake "arrived". The date stamps already exist → no migration needed to decouple the DISPLAY (the owner's "ตาม legacy → single fstatus, no new column" call).
+
+**1%-WHT-locus discipline (owner: "ตาม legacy · อย่ามั่ว · หาไม่เจอก็บอก"):** when asked to match legacy, GREP every locus + cite exact lines before answering. The juristic 1% is the single canonical allowance in `calPriceForwarderMain()` (= Pacred `calcForwarderOutstanding`), applied at the outstanding-balance helper + credit-grant (forwarder.php:1427) + receipt (create-f-receipt.php `$Dis1per`) — NOT on the วางบิล. All loci compute 99% from gross INDEPENDENTLY → consistent, NOT a double-deduction (the feared double only happens if one locus's 99%-output feeds another locus that deducts 1% again — it doesn't). Cross-links: [[verify-deep-flow]] dead-write traps · the §0e overloaded-column family.
