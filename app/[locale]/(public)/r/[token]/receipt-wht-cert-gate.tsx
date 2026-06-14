@@ -1,10 +1,16 @@
 "use client";
 
 /**
- * ReceiptWhtCertGate (ภูม flag 2026-06-10) — the 50-ทวิ upload banner shown on
- * the public receipt page when the receipt is LOCKED (corporate + WHT, cert not
- * yet approved). The customer cannot print/download until they upload their
- * 50-ทวิ AND an admin approves it.
+ * ReceiptWhtCertGate (ภูม flag 2026-06-10 · un-blocked 2026-06-14) — the 50-ทวิ
+ * upload PROMPT shown on the public receipt page when the receipt withholds WHT
+ * and the cert isn't yet approved/waived (corporate + WHT).
+ *
+ * ❗ This is now a NON-BLOCKING nudge: the receipt is always viewable + printable
+ * (legacy PCS never gated the customer print on the cert — verified against the
+ * legacy PHP). We still OFFER the upload here so the customer can return their
+ * 50-ทวิ and the admin cert-chase status (AR signal) advances — but the print is
+ * no longer withheld. This resolves the chicken-and-egg (the customer needs the
+ * receipt in hand to *issue* their 50-ทวิ).
  *
  * Images are compressed client-side (canvas, ≤1600px, q0.82) BEFORE base64 so we
  * never hit the 1MB server-action body limit (the documented Wave-23 trap). PDFs
@@ -108,14 +114,14 @@ export default function ReceiptWhtCertGate({
   }
 
   return (
-    <div className="no-print print:hidden mx-auto max-w-2xl rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-red-900 mb-3">
+    <div className="no-print print:hidden mx-auto max-w-2xl rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 mb-3">
       <div className="flex items-start gap-3">
-        <ShieldCheck className="h-6 w-6 mt-0.5 shrink-0 text-red-600" />
+        <ShieldCheck className="h-6 w-6 mt-0.5 shrink-0 text-amber-600" />
         <div className="flex-1 text-sm">
-          <p className="font-bold text-red-800">กรุณาแนบใบ 50 ทวิ ก่อนพิมพ์ใบเสร็จ</p>
-          <p className="mt-0.5">
-            ใบเสร็จนี้มีการหักภาษี ณ ที่จ่าย 1% — ต้อง<b>แนบหนังสือรับรองการหักภาษี (50 ทวิ)</b> กลับมาให้บริษัท
-            และรอแอดมินอนุมัติก่อน จึงจะพิมพ์/ดาวน์โหลดได้
+          <p className="font-semibold text-amber-900">พิมพ์ใบเสร็จได้เลย · เมื่อออกใบ 50 ทวิ แล้วรบกวนแนบกลับมาด้วย</p>
+          <p className="mt-0.5 text-amber-800">
+            ใบเสร็จนี้มีการหักภาษี ณ ที่จ่าย 1% — เมื่อท่านออก<b>หนังสือรับรองการหักภาษี (50 ทวิ)</b> แล้ว
+            รบกวนแนบกลับมาให้บริษัทเพื่อใช้ยื่นภาษี (ไม่บังคับ · ไม่กระทบการพิมพ์ใบเสร็จ)
           </p>
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -124,13 +130,13 @@ export default function ReceiptWhtCertGate({
               value={certNo}
               onChange={(e) => setCertNo(e.target.value)}
               placeholder="เลขที่ 50 ทวิ (ถ้ามี)"
-              className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-300 sm:w-48"
+              className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-amber-300 sm:w-48"
             />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {busy ? "กำลังอัปโหลด…" : "แนบใบ 50 ทวิ (รูป/PDF)"}
