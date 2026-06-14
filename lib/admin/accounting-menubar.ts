@@ -153,7 +153,21 @@ export const CARGO_MENUBAR: MenubarItem[] = [
     children: [
       { label: "ดูภาพรวม",                              href: "/admin/accounting?view=overview" },
       { label: "ดูภาพรวม แบบตารางรายปี → เดือน",      href: "/admin/accounting?view=yearly" },
-      { label: "ใบเสนอราคา",                            children: quotationStatuses("quotation") },
+      // 2026-06-14 (เดฟ · dead-label removal · §0d no-dead-nav · §0b source-verified):
+      // CARGO has NO ใบเสนอราคา (quotation) stage. The PEAK menubar this is
+      // ported from (acc-system-cargo.php) renders ใบเสนอราคา as DECORATIVE
+      // chrome with href="" — a dead label in legacy itself (verified:
+      // include/pages/acc-system-cargo/pages/income/home.php:19 `href=""`;
+      // the income dispatcher home.php:55 switch($subP) only handles
+      // `receipt-forwarder-item`, so subP=quotation falls to the income
+      // landing — no quotation handler file exists). Cargo's first money doc
+      // is the ใบเสร็จ/ใบวางบิล (bill), NOT a quote (unlike FREIGHT, which
+      // DOES have a real quote flow at /admin/accounting/freight/quotes —
+      // kept untouched). In Pacred this leaf routed to the
+      // .../income/quotation/* "🚧 กำลังพัฒนา" stub that can never be made
+      // real → a dead end for staff. Removed (not stubbed) per §0d.
+      // NOTE: ใบรับเงินมัดจำ (deposit) below is likewise legacy-decorative for
+      // cargo, but kept this turn (the named scope was the quotation label).
       { label: "ใบรับเงินมัดจำ",                         children: quotationStatuses("deposit") },
       { label: "ใบแจ้งหนี้ (ใบส่งของ, บันทึกลูกหนี้)",     children: invoiceStatuses("invoice") },
       {

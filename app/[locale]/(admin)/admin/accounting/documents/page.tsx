@@ -111,9 +111,16 @@ export default async function AdminDocumentsLifecyclePage() {
   // Build the lifecycle stages (left → right).
   const stages: DocCardProps[] = [
     {
+      // 2026-06-14 (เดฟ · dead-label · §0b source-verified): CARGO has NO
+      // quotation stage (legacy acc-system-cargo income dropdown renders
+      // ใบเสนอราคา as href="" decorative chrome; no handler file exists).
+      // Cargo's first money doc is the bill/receipt, not a quote (only
+      // FREIGHT has a real quote flow). Kept in the lifecycle chain as an
+      // illustrative-only stage (empty href → renders as a non-link card,
+      // not a dead-end link to the .../income/quotation stub). §0d.
       title: "ใบเสนอราคา",
-      desc:  "Quote → ลูกค้ายืนยัน",
-      href:  "/admin/accounting/cargo/income/quotation/shop",
+      desc:  "เฉพาะ Freight · Cargo ไม่มีขั้นใบเสนอราคา (เริ่มที่ใบเสร็จ/ใบวางบิล)",
+      href:  "",
       badge: "comingSoon",
     },
     {
@@ -251,17 +258,16 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 function DocCard({ title, desc, href, badge, stat, arrow }: DocCardProps & { arrow?: boolean }) {
   const isLive = badge === "live";
-  return (
-    <div className="relative">
-      <Link
-        href={href}
-        className={`block rounded-2xl border p-4 h-full transition-colors ${
-          isLive
-            ? "border-primary-200 bg-white hover:bg-primary-50 dark:bg-surface"
-            : "border-border bg-surface-alt/30 hover:bg-surface-alt/50 cursor-not-allowed opacity-75"
-        }`}
-        title={isLive ? "เปิดได้เลย" : "🚧 Phase-C · ยังไม่เปิดใช้งาน · click ไปยังหน้า stub"}
-      >
+  // An empty href means this stage is illustrative-only (e.g. CARGO ใบเสนอราคา —
+  // a stage cargo never has) → render a non-link card so we never send staff to
+  // a dead end (§0d no-dead-nav).
+  const cardClass = `block rounded-2xl border p-4 h-full transition-colors ${
+    isLive
+      ? "border-primary-200 bg-white hover:bg-primary-50 dark:bg-surface"
+      : "border-border bg-surface-alt/30 hover:bg-surface-alt/50 cursor-not-allowed opacity-75"
+  }`;
+  const innerBody = (
+    <>
         <div className="flex items-center justify-between gap-2 mb-2">
           <h3 className="font-bold text-sm">{title}</h3>
           <span
@@ -286,7 +292,23 @@ function DocCard({ title, desc, href, badge, stat, arrow }: DocCardProps & { arr
         ) : (
           <p className="text-[10px] text-muted italic mt-3">backend ยังไม่พร้อม</p>
         )}
-      </Link>
+    </>
+  );
+  return (
+    <div className="relative">
+      {href ? (
+        <Link
+          href={href}
+          className={cardClass}
+          title={isLive ? "เปิดได้เลย" : "🚧 Phase-C · ยังไม่เปิดใช้งาน · click ไปยังหน้า stub"}
+        >
+          {innerBody}
+        </Link>
+      ) : (
+        <div className={cardClass} title="ขั้นตอนนี้ไม่มีสำหรับ Cargo (อ้างอิงเท่านั้น)">
+          {innerBody}
+        </div>
+      )}
       {arrow && (
         <span className="hidden lg:block absolute -right-2 top-1/2 -translate-y-1/2 text-primary-300 text-xl font-mono z-10">
           →
