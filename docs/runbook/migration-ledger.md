@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0183**
+## 🔢 NEXT FREE NUMBER = **0184**
+
+> ✅ **2026-06-14 (เดฟ · forwarder-fidelity W5): 0183** = `create_side_unique_constraints` — 4 partial-UNIQUE indexes closing the create-side double-pay/double-accrual TOCTOU holes: `ux_tb_cnt_item_fcabinetnumber` (container double-pay · on the quoted mixed-case `"fCabinetNumber"` · WHERE non-empty) · `ux_tb_user_sales_idf` (commission double-accrual · WHERE idf>0) · `ux_tb_user_sales_pay_idus` (withdraw double-request · WHERE idus>0) · `ux_tb_forwarder_tran_th_sub_fid` (combine-shipping · WHERE fid>0). All `CREATE UNIQUE INDEX IF NOT EXISTS` (idempotent). **✅ APPLIED + VERIFIED PROD + DEV 2026-06-14** (prod 4/4 · dev 4/4 via `pg_indexes`). Prod clean (0 rows in all 4 tables — early-stage). **Dev had 1 real dup** on `tb_cnt_item."fCabinetNumber"` (cabinet LEOU2022222 in cnt_item 4830→cnt39 + 4831→cnt40 = a genuine create-side double-registration) → the duplicate `4831`/cnt40 deleted on dev (kept 4830/cnt39 the original) before the reconcile (leaves cnt 40 an orphaned dev-only ค่าตู้ record · cosmetic). Precheck tool: `scripts/precheck-0183-dups.mjs`. Code follow-up (non-blocking · the UNIQUE already makes the double-pay impossible): `ON CONFLICT`/23505 graceful handling on the create-path INSERTs (UX polish).
 
 > ✅ **APPLIED-PROD+DEV CORRECTION (2026-06-13 · เดฟ · machine-resume).** Migrations **0173–0182 ARE applied + live on BOTH prod (`yzljakczhwrpbxflnmco`) AND dev (`lozntlidlqqzzcaathnm`)** — verified this session by a direct two-env schema probe: `count_forwarder_by_owner` fn (0173) · `wht_cert_status` (0175) · `fimages` (0176) · `import_duty_pct` (0178) · `declared_fx_rate` (0179) · `form_e_duty_pct` (0180) · `hs_stat_code` (0181) cols all present · `peak%` business_config seed (0177) present · and **0182 coid PCS→PR DONE** (tb_users `coID`: prod PR=8,800 / dev PR=8,785 · **0 PCS** both · tb_rate_g_kg/_cbm PCS=0 PR=16 both). The header had stayed `0173` while 8 other-machine migrations landed without a ledger bump → corrected to **NEXT FREE = 0183**. No DDL was applied this session (everything already on both envs).
 
