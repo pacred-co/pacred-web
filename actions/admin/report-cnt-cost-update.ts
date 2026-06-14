@@ -271,6 +271,110 @@ export async function adminApplyContainerCostFromSheet(
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// LANE C — adminUpdatePaidContainerCost (W4 · 2026-06-14)
+//
+// The cnt-hs (ค่าตู้ payment bill) counterpart of LANE A. report-cnt's
+// cost editor LOCKS a paid container ("ตู้นี้จ่ายค่าตู้แล้ว — แก้ไขต้นทุนจาก
+// บิลจ่ายเงินตู้แทน") and points staff to the bill — but the bill page had no
+// editor → dead-end. This is that editor: it edits fcosttotalprice for the
+// forwarders in a SPECIFIC paid ค่าตู้ bill (cntId), with NO paid-lock
+// (editing a paid container's cost is exactly the point · legacy edits it from
+// the bill page). Ownership scope = the cnt's own cabinets (tb_cnt_item) so a
+// crafted payload can't reach another bill's rows. MONEY-ISOLATED: writes ONLY
+// fcosttotalprice (never selling/status/wallet/commission).
+// ─────────────────────────────────────────────────────────────────────
+
+const paidCostRow = z.object({
+  fid:  z.number().int().positive(),
+  cost: z.number().min(0).max(99999999.99),
+});
+
+const updatePaidContainerCostSchema = z.object({
+  cntId:   z.number().int().positive(),
+  updates: z.array(paidCostRow).min(1, { message: "ไม่มีรายการให้บันทึก" }).max(5000),
+});
+
+export type UpdatePaidContainerCostInput = z.infer<typeof updatePaidContainerCostSchema>;
+export type UpdatePaidContainerCostResult = {
+  updated: number;
+  failed:  number;
+  errors:  Array<{ fid: number; error: string }>;
+};
+
+export async function adminUpdatePaidContainerCost(
+  input: UpdatePaidContainerCostInput,
+): Promise<AdminActionResult<UpdatePaidContainerCostResult>> {
+  const parsed = updatePaidContainerCostSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { cntId, updates } = parsed.data;
+
+  return withAdmin<UpdatePaidContainerCostResult>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin         = createAdminClient();
+      const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+      const nowIso        = new Date().toISOString();
+
+      // 1. This cnt's cabinets = the ownership scope (NO paid-lock — this IS
+      //    the paid-container editor).
+      const { data: cntItems, error: ciErr } = await admin
+        .from("tb_cnt_item")
+        .select("fCabinetNumber")
+        .eq("cntID", cntId);
+      if (ciErr) return { ok: false, error: ciErr.message };
+      const cabinets = new Set(
+        ((cntItems ?? []) as Array<{ fCabinetNumber: string | null }>)
+          .map((r) => r.fCabinetNumber)
+          .filter((v): v is string => !!v),
+      );
+      if (cabinets.size === 0) return { ok: false, error: "ไม่พบตู้ในบิลจ่ายเงินตู้นี้" };
+
+      // 2. Read targets for ownership guard + before/after audit.
+      const fids = updates.map((u) => u.fid);
+      const { data: existing, error: readErr } = await admin
+        .from("tb_forwarder")
+        .select("id, ftrackingchn, fcosttotalprice, fcabinetnumber")
+        .in("id", fids);
+      if (readErr) return { ok: false, error: readErr.message };
+      const existingMap = new Map<number, { ftrackingchn: string | null; fcosttotalprice: number; fcabinetnumber: string | null }>();
+      for (const r of (existing ?? []) as Array<{ id: number; ftrackingchn: string | null; fcosttotalprice: number | string; fcabinetnumber: string | null }>) {
+        existingMap.set(Number(r.id), { ftrackingchn: r.ftrackingchn, fcosttotalprice: Number(r.fcosttotalprice ?? 0), fcabinetnumber: r.fcabinetnumber });
+      }
+
+      const errors: Array<{ fid: number; error: string }> = [];
+      const changes: Array<{ fid: number; tracking: string | null; before: number; after: number }> = [];
+      let updated = 0;
+      for (const u of updates) {
+        const prior = existingMap.get(u.fid);
+        if (!prior) { errors.push({ fid: u.fid, error: "ไม่พบรายการ (fid ไม่ตรงกับ tb_forwarder)" }); continue; }
+        if (!prior.fcabinetnumber || !cabinets.has(prior.fcabinetnumber)) {
+          errors.push({ fid: u.fid, error: "รายการไม่อยู่ในบิลจ่ายเงินตู้นี้" });
+          continue;
+        }
+        if (Number(prior.fcosttotalprice) === u.cost) continue; // no-op skip
+        const { error: updErr } = await admin
+          .from("tb_forwarder")
+          .update({ fcosttotalprice: u.cost, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
+          .eq("id", u.fid);
+        if (updErr) { errors.push({ fid: u.fid, error: updErr.message }); continue; }
+        updated += 1;
+        changes.push({ fid: u.fid, tracking: prior.ftrackingchn, before: prior.fcosttotalprice, after: u.cost });
+      }
+
+      await logAdminAction(adminId, "tb_forwarder.update_paid_container_cost", "tb_cnt", String(cntId), {
+        bulk_action: "cnt_hs.cost.update_paid", cnt_id: cntId, updated_count: updated, failed_count: errors.length, changes, errors,
+      });
+
+      revalidatePath(`/admin/cnt-hs/${cntId}`);
+      revalidatePath("/admin/report-cnt");
+      revalidatePath("/admin/forwarders");
+      revalidatePath("/admin/accounting/forwarder");
+      return { ok: true, data: { updated, failed: errors.length, errors } };
+    },
+  );
+}
+
 export async function adminBulkUpdateForwarderCostSheet(
   input: BulkUpdateCostSheetInput,
 ): Promise<AdminActionResult<BulkUpdateCostSheetResult>> {

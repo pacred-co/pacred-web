@@ -39,6 +39,7 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { CntActionButtons } from "./action-buttons";
 import { CntSlipUploadForm } from "./slip-upload-form";
+import { CntCostEditor, type CntCostRow } from "./cnt-cost-editor";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ type FwRow = {
   fidorco: string | null;
   fstatus: string | null;
   ftotalprice: number | null;
+  fcosttotalprice: number | null;
   fweight: number | null;
   fvolume: number | null;
   userid: string | null;
@@ -181,7 +183,7 @@ export default async function CntHsDetailPage({
   if (cabinetNumbers.length > 0) {
     const { data: fwRaw, error: fwRawErr } = await admin
       .from("tb_forwarder")
-      .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fweight,fvolume,userid")
+      .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fcosttotalprice,fweight,fvolume,userid")
       .in("fcabinetnumber", cabinetNumbers)
       .order("fdate", { ascending: false })
       .limit(5000);
@@ -422,6 +424,22 @@ export default async function CntHsDetailPage({
           </div>
         )}
       </section>
+
+      {/* W4 — paid-container cost editor (report-cnt's paid-lock points here).
+          Edits fcosttotalprice for this bill's forwarders · money-isolated. */}
+      {forwarders.length > 0 && (
+        <CntCostEditor
+          cntId={cnt.ID}
+          cntAmount={Number(cnt.cntAmount ?? 0)}
+          rows={forwarders.map((f): CntCostRow => ({
+            id:              f.id,
+            fidorco:         f.fidorco,
+            fcabinetnumber:  f.fcabinetnumber,
+            ftotalprice:     Number(f.ftotalprice ?? 0),
+            fcosttotalprice: Number(f.fcosttotalprice ?? 0),
+          }))}
+        />
+      )}
 
       {/* Forwarders detail table (collapsed by default — too many to scroll
           for big cnts; show only first 50, hint to drill into forwarders page) */}
