@@ -36,8 +36,8 @@ oldest-first is the Pacred default (flagged to owner).
 3. **Credit before arrival** — ✅ legacy ALLOWS it (credit-grant has no fstatus precondition) → W1's "let arrival scan re-stamp 6→4" is the faithful fix. No lock.
 4. **Decouple physical_status / migration** — ✅ legacy uses a single fstatus (no separate physical_status column) → ตาม legacy = NO migration. W2's date-stamp-driven timeline already gives the physical truth. **No migration run** (owner: "ข้อ 4 ตามสมควร · ถ้าต้องรันก็รัน" → it doesn't need to run).
 
-## STATUS: LOOP COMPLETE
-W1 (scan) + W2 (timeline) + W3 (billing leak + eligibility) + W4 (settlement) all shipped to prod (dave=main). All 4 owner decisions resolved ตาม legacy. No migration needed. Residual P3 backlog only (50-ทวิ print-lock · ใบเสนอราคา cargo label — low priority, owner-direction).
+## STATUS: LOOP COMPLETE + P3 CLEARED
+Shipped to prod (dave=main): W1 (scan `7c01b85e`) · W2 (timeline `c5023037`) · W3 (billing leak `8f4f1d4a`) · W4 (settlement `6d627d06`) · W4b (read-only credit-AR reconcile cron `04ade340`) · P3#1 (50-ทวิ receipt unblock — print no longer cert-gated `f7c411e8`) · P3#2 (dead CARGO ใบเสนอราคา label removed — cargo has no quote stage; freight quote kept `e7f3c14f`). All 4 owner decisions resolved ตาม legacy. **No migration needed.** Nothing left in this loop. Owner repro data (stuck order PR/F-no) still welcome to verify against the real row.
 
 ## 🙏 Repro data still wanted
 The stuck order's PR/F-no (to verify fstatus/fcredit/fdatestatus4 on prod) + the exact scan screen + verbatim error the worker saw.
