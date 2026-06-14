@@ -225,6 +225,12 @@ export async function adminApplyContainerCostFromSheet(
           .from("tb_forwarder")
           .update({
             fcosttotalprice:  u.sheetCost,
+            // Flag-4 (2026-06-14): zero the precomputed profit so the P&L report
+            // (reports.ts forwarderRowProfit — prefers fprofittotal when non-zero)
+            // re-derives from the new cost. Pacred rows are already 0; this closes
+            // the stale-profit edge on legacy-migrated rows that carried a non-zero
+            // fprofittotal. = the legacy recompute-on-cost-edit behavior.
+            fprofittotal:     0,
             adminidupdate:    legacyAdminId,
             fdateadminstatus: nowIso,
           })
@@ -355,7 +361,9 @@ export async function adminUpdatePaidContainerCost(
         if (Number(prior.fcosttotalprice) === u.cost) continue; // no-op skip
         const { error: updErr } = await admin
           .from("tb_forwarder")
-          .update({ fcosttotalprice: u.cost, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
+          // fprofittotal:0 → P&L report re-derives from the new cost (Flag-4 ·
+          // closes stale-profit on legacy-migrated rows · see LANE A note).
+          .update({ fcosttotalprice: u.cost, fprofittotal: 0, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
           .eq("id", u.fid);
         if (updErr) { errors.push({ fid: u.fid, error: updErr.message }); continue; }
         updated += 1;
