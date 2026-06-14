@@ -31,6 +31,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -155,11 +156,16 @@ export async function getMyCredit(): Promise<ActionResult<CustomerCreditState>> 
 //   1. pending-aware available-balance pre-check (getWalletAvailableBalance)
 //   2. INSERT tb_wallet_hs settle row (wusercredit='1', debit type)
 //   3. UPDATE tb_wallet.wallettotal −= amount
-//   4. UPSERT tb_credit.creditvalue −= amount (clamp ≥0)
+//   4. CLEAR fcredit on the orders this paydown settles (oldest-first, fully-
+//      covered only) so Σ(per-order outstanding over fcredit='1') stays in
+//      lock-step with the running balance — the AR-drift fix (mirror of the
+//      admin pure-wallet settle pay-user.ts L584 / legacy pay-users.php L469)
+//   5. UPSERT tb_credit.creditvalue −= amount (clamp ≥0)
 // Rollback discipline (PostgREST has no real tx): if a later step fails we
-// undo the earlier ones so we never leave a half-state (balance debited but
-// creditvalue unchanged, or vice-versa). A half-state is worse than the dead
-// state we are closing.
+// undo the earlier ones — including re-setting any fcredit flips back to '1' —
+// so we never leave a half-state (balance debited but creditvalue/fcredit
+// unchanged, or vice-versa). A half-state is worse than the dead state we are
+// closing.
 //
 // amount_thb OPTIONAL — omitted = settle full outstanding; a positive value
 // lets a customer partial-pay (e.g. ฿1000 in wallet but ฿2000 owed). An
@@ -319,22 +325,104 @@ export async function customerPayCreditFromWallet(
     return { ok: false, error: `wallet_debit_failed (ยกเลิกรายการแล้ว): ${walletUpd.error.message}` };
   }
 
-  // 6) Decrement tb_credit.creditvalue (UPSERT · clamp ≥0). On failure, roll
-  //    back BOTH the wallet debit and the hs row — the customer keeps their
-  //    money and we keep the books consistent.
-  const newOutstanding = Math.max(0, Math.round((outstanding - amountToPay) * 100) / 100);
-  const creditUpd = creditRow
-    ? await admin.from("tb_credit").update({ creditvalue: newOutstanding }).eq("userid", memberCode)
-    : await admin.from("tb_credit").insert({ userid: memberCode, creditvalue: newOutstanding });
-  if (creditUpd.error) {
-    // rollback wallet debit + hs row
+  // 5b) Clear `fcredit` on the orders this paydown settles — OLDEST-FIRST,
+  //     fully-covered orders only. This is the AR-drift fix: previously the
+  //     wallet was debited + tb_credit.creditvalue decremented, but the settled
+  //     orders kept fcredit='1', so tb_credit.creditvalue (the running balance)
+  //     drifted from Σ(per-order outstanding over fcredit='1') — exactly what
+  //     reset-credit-forwarder.php (the legacy SOT) recomputes.
+  //
+  //     Mirror of the admin pure-wallet credit-settle path (pay-user.ts L584 ·
+  //     legacy pay-users.php L469): UPDATE tb_forwarder SET fCredit='',
+  //     fDateAdminStatus=NOW WHERE fCredit='1'. The eq("fcredit","1") guard
+  //     makes each flip idempotent + TOCTOU-safe (a concurrent admin settle of
+  //     the same order = 0 rows matched = harmless no-op, no double-effect).
+  //
+  //     ⚠️ No EXACT legacy precedent for the allocation: legacy credit settle is
+  //     order-SELECTED (admin/customer ticks specific fIDs in pay-users.php),
+  //     never amount-driven. This customer wallet→credit paydown is amount-driven
+  //     (the UI has no per-order picker), so oldest-first (fcreditdate ASC) is
+  //     the sensible default — the same ordering qa-credit-overdue.ts uses to
+  //     chase the oldest credit. Partial-pay leaves the uncovered remainder
+  //     fcredit='1' (never partially-clears an order).
+  const { data: creditOrders, error: creditOrdersErr } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+    )
+    .eq("userid", memberCode)
+    .eq("fcredit", "1")
+    .order("fcreditdate", { ascending: true })
+    .order("id", { ascending: true }); // stable tie-break for equal/null fcreditdate
+  if (creditOrdersErr) {
+    // Roll back wallet debit + hs row — the credit decrement hasn't run yet.
     if (walletBefore) {
       await admin.from("tb_wallet").update({ wallettotal: currentBalance }).eq("userid", memberCode);
     } else {
       await admin.from("tb_wallet").delete().eq("userid", memberCode);
     }
     await admin.from("tb_wallet_hs").delete().eq("id", hsId);
-    console.error(`[tb_credit decrement] failed — rolled back wallet + hs`, { code: creditUpd.error.code, message: creditUpd.error.message, userid: memberCode, hsId });
+    console.error(`[tb_forwarder credit-orders read] failed — rolled back wallet + hs`, { code: creditOrdersErr.code, message: creditOrdersErr.message, userid: memberCode, hsId });
+    return { ok: false, error: `credit_orders_read_failed (ยกเลิกรายการแล้ว): ${creditOrdersErr.message}` };
+  }
+
+  // Walk oldest→newest, accumulating each order's outstanding via the SAME
+  // canonical formula (incl. the juristic 1%). Clear an order only when it is
+  // fully covered by the remaining amount paid; stop at the first order that
+  // would overflow (partial settles leave the rest fcredit='1').
+  const clearedFids: number[] = [];
+  let remaining = amountToPay;
+  for (const ord of (creditOrders ?? []) as Array<
+    Parameters<typeof calcForwarderOutstanding>[0] & { id: number }
+  >) {
+    const due = calcForwarderOutstanding(ord);
+    if (due <= 0) continue;            // nothing owed (over-discounted) → skip
+    if (due > remaining + 1e-9) break; // can't fully cover this order → stop
+    const { error: flipErr } = await admin
+      .from("tb_forwarder")
+      .update({ fcredit: "", fdateadminstatus: nowIso })
+      .eq("id", ord.id)
+      .eq("userid", memberCode)
+      .eq("fcredit", "1");
+    if (flipErr) {
+      // Roll back EVERYTHING: the already-cleared fcredit flips, the wallet
+      // debit, and the hs row — no half-state.
+      for (const fid of clearedFids) {
+        await admin.from("tb_forwarder").update({ fcredit: "1", fdateadminstatus: nowIso }).eq("id", fid).eq("userid", memberCode);
+      }
+      if (walletBefore) {
+        await admin.from("tb_wallet").update({ wallettotal: currentBalance }).eq("userid", memberCode);
+      } else {
+        await admin.from("tb_wallet").delete().eq("userid", memberCode);
+      }
+      await admin.from("tb_wallet_hs").delete().eq("id", hsId);
+      console.error(`[tb_forwarder fcredit clear] failed — rolled back fcredit flips + wallet + hs`, { code: flipErr.code, message: flipErr.message, userid: memberCode, hsId, fid: ord.id, clearedFids });
+      return { ok: false, error: `fcredit_clear_failed (ยกเลิกรายการแล้ว): ${flipErr.message}` };
+    }
+    clearedFids.push(ord.id);
+    remaining = Math.round((remaining - due) * 100) / 100;
+    if (remaining <= 0) break;
+  }
+
+  // 6) Decrement tb_credit.creditvalue (UPSERT · clamp ≥0). On failure, roll
+  //    back the fcredit flips, the wallet debit, and the hs row — the customer
+  //    keeps their money and we keep the books consistent.
+  const newOutstanding = Math.max(0, Math.round((outstanding - amountToPay) * 100) / 100);
+  const creditUpd = creditRow
+    ? await admin.from("tb_credit").update({ creditvalue: newOutstanding }).eq("userid", memberCode)
+    : await admin.from("tb_credit").insert({ userid: memberCode, creditvalue: newOutstanding });
+  if (creditUpd.error) {
+    // rollback fcredit flips + wallet debit + hs row
+    for (const fid of clearedFids) {
+      await admin.from("tb_forwarder").update({ fcredit: "1", fdateadminstatus: nowIso }).eq("id", fid).eq("userid", memberCode);
+    }
+    if (walletBefore) {
+      await admin.from("tb_wallet").update({ wallettotal: currentBalance }).eq("userid", memberCode);
+    } else {
+      await admin.from("tb_wallet").delete().eq("userid", memberCode);
+    }
+    await admin.from("tb_wallet_hs").delete().eq("id", hsId);
+    console.error(`[tb_credit decrement] failed — rolled back fcredit flips + wallet + hs`, { code: creditUpd.error.code, message: creditUpd.error.message, userid: memberCode, hsId, clearedFids });
     return { ok: false, error: `credit_decrement_failed (ยกเลิกรายการแล้ว): ${creditUpd.error.message}` };
   }
 
@@ -347,7 +435,7 @@ export async function customerPayCreditFromWallet(
     txId:   String(hsId),
   }));
 
-  console.info(`[customerPayCreditFromWallet] userid=${memberCode} paid=${amountToPay} balance ${currentBalance} → ${newBalance} outstanding ${outstanding} → ${newOutstanding} hs=${hsId}`);
+  console.info(`[customerPayCreditFromWallet] userid=${memberCode} paid=${amountToPay} balance ${currentBalance} → ${newBalance} outstanding ${outstanding} → ${newOutstanding} hs=${hsId} clearedFcredit=[${clearedFids.join(",")}]`);
 
   revalidatePath("/wallet-credit");
   revalidatePath("/wallet/history");
