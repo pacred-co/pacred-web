@@ -16,17 +16,28 @@
 | **W2 — customer sees real location** (P1) | the customer timeline (`track.ts` + `service-import/[fNo]/page.tsx`) drives PHYSICAL steps (2/3/4) off the real `fdatestatusN` stamp (`hasRealStamp` rejects null/''/0000-00-00), not the fstatus integer; money steps 5/6/7 still key off fstatus; credit order w/ null fdatestatus4 shows "รอสินค้าถึงไทย" not a misleading "เตรียมส่ง". | `c5023037` |
 | **W3 — billing revenue leak + credit eligibility** (P0 money) | bill line + subtotal now use `calcForwarderOutstanding` (Σ 7 price cols − discount − 1% juristic) instead of `ftotalprice` alone (was under-charging by 6 columns); credit orders (fstatus 5/6 · fcredit='1') made eligible for billing/receipt via the new tested `lib/forwarder/billing-eligibility.ts`. | `8f4f1d4a` |
 
-## Remaining — OWNER-GATED (need the decisions below)
+## W4 — credit settlement (SHIPPED `6d627d06`)
 
-- **W4 — credit settlement reconcile** (P1): `customerPayCreditFromWallet` (actions/credit.ts) doesn't clear `fcredit` oldest-fcreditdate-first like the admin path → `tb_credit.creditvalue` can drift from Σ(fcredit='1'). Port `reset-credit-forwarder.php` as a reconcile cron. **Gated on:** the 1% locus decision (below).
-- **W5 — structural decouple / policy** (P1/P2): EITHER (a) add a dedicated `physical_status`/`arrived_at` column (migration) so credit never overwrites the physical axis, OR (b) policy: restrict credit-grant to fstatus 4|5 (after arrival) so the stuck state can't happen. Also: the 50-ทวิ print-lock chicken-and-egg + the `ใบเสนอราคา` dead-label for cargo.
+`customerPayCreditFromWallet` (actions/credit.ts) now clears `fcredit` on the
+orders a wallet→credit paydown settles — OLDEST-FIRST (fcreditdate ASC),
+fully-covered-only, per-order outstanding via `calcForwarderOutstanding`,
+`.eq("fcredit","1")`-guarded (idempotent/TOCTOU-safe), all inside the existing
+rollback envelope. Mirrors the admin pure-wallet settle (pay-user.ts L584 /
+legacy pay-users.php L469 · no paydeposit on the forwarder — the wallet-hs row
+carries paydeposit). Keeps `tb_credit.creditvalue` in lock-step with
+Σ(outstanding over fcredit='1'). **NOTE:** the customer amount-driven oldest-first
+allocation has no EXACT legacy precedent (legacy credit settle is order-SELECTED);
+oldest-first is the Pacred default (flagged to owner).
 
-## 🔴 Owner decisions (asked 2026-06-14)
+## Owner decisions — RESOLVED ตาม legacy (2026-06-14 · source-cited)
 
-1. **หัก ณ ที่จ่าย 1% (juristic):** taken ONCE at credit-grant OR at วางบิล/ใบเสร็จ? (must be exactly one — `calcForwarderOutstanding` already deducts 1%, and the credit-grant also deducts 1% on the tb_credit debt → double-deduction risk).
-2. **Credit doc timing:** issue วางบิล at credit-grant / on-demand / monthly? date_due = `fcreditdate` or +7d?
-3. **Policy:** allow credit-grant BEFORE goods arrive (fstatus<4)? If no → lock canOfferCredit + the grant to fstatus 4|5 (kills the bug at source · Wave 5b).
-4. **Long-term:** decouple physical_status from fstatus permanently (migration · Wave 5a)? Currently using the faithful 6→4 restoration.
+1. **1% juristic** — ✅ it's the single canonical allowance in `calPriceForwarderMain()` (function.php:1878 = Pacred `calcForwarderOutstanding` L59-66). Applied at the outstanding-balance helper + credit-grant (forwarder.php:1427) + receipt (create-f-receipt.php:353/689 `$Dis1per`); NOT on the วางบิล (forwarder-bill.php has no *0.01). All loci compute 99% from gross INDEPENDENTLY → consistent, **NOT a double-deduction**. W3 (bill = calcForwarderOutstanding) is correct. No change. (`fCompany1Per` in api-sheets = internal cost/profit; `*0.01` in report-sale = sales commission — different.)
+2. **Credit doc timing** — ✅ on-demand (legacy forwarder-bill.php:952 bills selected order IDs · Pacred billing-run/add already does this); date_due is an admin input on the create form (billing-run.ts:1089) → admin sets it (= fcreditdate for credit). No code change.
+3. **Credit before arrival** — ✅ legacy ALLOWS it (credit-grant has no fstatus precondition) → W1's "let arrival scan re-stamp 6→4" is the faithful fix. No lock.
+4. **Decouple physical_status / migration** — ✅ legacy uses a single fstatus (no separate physical_status column) → ตาม legacy = NO migration. W2's date-stamp-driven timeline already gives the physical truth. **No migration run** (owner: "ข้อ 4 ตามสมควร · ถ้าต้องรันก็รัน" → it doesn't need to run).
+
+## STATUS: LOOP COMPLETE
+W1 (scan) + W2 (timeline) + W3 (billing leak + eligibility) + W4 (settlement) all shipped to prod (dave=main). All 4 owner decisions resolved ตาม legacy. No migration needed. Residual P3 backlog only (50-ทวิ print-lock · ใบเสนอราคา cargo label — low priority, owner-direction).
 
 ## 🙏 Repro data still wanted
 The stuck order's PR/F-no (to verify fstatus/fcredit/fdatestatus4 on prod) + the exact scan screen + verbatim error the worker saw.
