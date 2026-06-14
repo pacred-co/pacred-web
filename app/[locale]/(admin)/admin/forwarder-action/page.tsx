@@ -116,6 +116,24 @@ const NOTE_SHOP_TABS: { q: string | null; label: string }[] = [
   { q: "6", label: "ออเดอร์ที่ยกเลิก" },
 ];
 
+/**
+ * tb_forwarder fStatus tab strip (?q=1..7) — faithful to legacy
+ * `forwarder-action.php:290-375`. Labels match the legacy <a> text exactly:
+ *   1=รอเข้าโกดังจีน · 2=ถึงโกดังจีนแล้ว · 3=กำลังส่งมาไทย · 4=ถึงไทยแล้ว ·
+ *   5=รอชำระเงิน · 6=เตรียมส่ง · 7=ส่งแล้ว.
+ * (The legacy q=6.1 "กำลังจัดส่ง" driver sub-status isn't a plain fStatus eq,
+ *  so it's omitted here.)
+ */
+const FWD_STATUS_TABS: { q: string; label: string }[] = [
+  { q: "1", label: "รอเข้าโกดังจีน" },
+  { q: "2", label: "ถึงโกดังจีนแล้ว" },
+  { q: "3", label: "กำลังส่งมาไทย" },
+  { q: "4", label: "ถึงไทยแล้ว" },
+  { q: "5", label: "รอชำระเงิน" },
+  { q: "6", label: "เตรียมส่ง" },
+  { q: "7", label: "ส่งแล้ว" },
+];
+
 export default async function AdminForwarderActionPage({ searchParams }: { searchParams: Promise<SP> }) {
   await requireAdmin(["super", "ops", "accounting", "warehouse"]);
   const sp = await searchParams;
@@ -305,56 +323,97 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
   }
 
   // --- All other actions: read tb_forwarder ---
-  let q = admin
-    .from("tb_forwarder")
-    .select("id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode,faddressname,faddressprovince,faddresstel,famount,fweight,ftransportprice", { count: "exact" })
-    .range(rowFrom, rowTo)
-    .order("fdate", { ascending: false });
-
   const cutoff = "2022-01-15 00:00:00";
-  if (action === "Note") {
-    q = q.not("fnote", "is", null).neq("fnote", "");
-  } else if (action === "notPhoto") {
-    q = q.eq("fcover", "").gt("fstatus", "1").gte("fdate", cutoff);
-  } else if (action === "notPortage") {
-    // Legacy forwarder-action.php:171 + header-theme.php:40 — the full queue:
-    //   (fTransportPrice=0 OR fShipBy='PCSE')                — needs a TH charge
-    //   AND fTransportPriceSum not '1'                       — not already combined
-    //   AND fShipBy NOT IN ('PCS','PCSF')                    — exclude PCS pickup + free
-    //   AND payMethod='1'                                    — ต้นทาง (customer pays origin)
-    //   AND fDate>cutoff AND fStatus IN (4,5,6)              — recent, delivered-ish
-    q = q
-      .or("ftransportprice.eq.0,fshipby.eq.PCSE")
-      .or("ftransportpricesum.is.null,ftransportpricesum.neq.1")
-      .neq("fshipby", "PCS")
-      .neq("fshipby", "PCSF")
-      .eq("paymethod", "1")
-      .gte("fdate", cutoff)
-      .in("fstatus", ["4", "5", "6"]);
-  } else if (action === "notContainer") {
-    q = q.eq("fcabinetnumber", "").gte("fdate", cutoff);
-  } else if (action === "NotDateContainerClose") {
-    q = q.is("fdatecontainerclose", null).gte("fdate", cutoff);
-  } else if (action === "fCreditError") {
-    q = q.eq("fcredit", "1").lt("fcreditdate", new Date().toISOString());
-  } else if (action === "NotShipFree") {
-    // ZIP in free-shipping list, but customer chose a non-free carrier
-    q = q
-      .in("faddresszipcode", FREE_SHIPPING_ZIPS)
-      .not("fshipby", "in", `(PCS,PCSF)`)
-      .gte("fdate", cutoff);
-  } else if (action === "NotShipFreeError") {
-    // ZIP NOT in free-shipping list, but customer chose free carrier (PCSF) — error case
-    q = q
-      .not("faddresszipcode", "in", `(${FREE_SHIPPING_ZIPS.join(",")})`)
-      .eq("fshipby", "PCSF")
-      .gte("fdate", cutoff);
+
+  // The action's base filter, shared by the paginated list query AND the
+  // per-fStatus tab-count queries (legacy `$sql_action`+`$sql_date`). Applying
+  // the SAME builder to both means the tab counts can't drift from the list.
+  function applyActionFilter<T>(base: T): T {
+    // PostgREST filter methods (.eq/.or/.in/.not/…) live on the post-.select()
+    // builder, not on base from(); type qb as any for the chain, cast back to T.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let qb = base as any;
+    if (action === "Note") {
+      qb = qb.not("fnote", "is", null).neq("fnote", "");
+    } else if (action === "notPhoto") {
+      qb = qb.eq("fcover", "").gt("fstatus", "1").gte("fdate", cutoff);
+    } else if (action === "notPortage") {
+      // Legacy forwarder-action.php:171 + header-theme.php:40 — the full queue:
+      //   (fTransportPrice=0 OR fShipBy='PCSE')                — needs a TH charge
+      //   AND fTransportPriceSum not '1'                       — not already combined
+      //   AND fShipBy NOT IN ('PCS','PCSF')                    — exclude PCS pickup + free
+      //   AND payMethod='1'                                    — ต้นทาง (customer pays origin)
+      //   AND fDate>cutoff AND fStatus IN (4,5,6)              — recent, delivered-ish
+      qb = qb
+        .or("ftransportprice.eq.0,fshipby.eq.PCSE")
+        .or("ftransportpricesum.is.null,ftransportpricesum.neq.1")
+        .neq("fshipby", "PCS")
+        .neq("fshipby", "PCSF")
+        .eq("paymethod", "1")
+        .gte("fdate", cutoff)
+        .in("fstatus", ["4", "5", "6"]);
+    } else if (action === "notContainer") {
+      qb = qb.eq("fcabinetnumber", "").gte("fdate", cutoff);
+    } else if (action === "NotDateContainerClose") {
+      qb = qb.is("fdatecontainerclose", null).gte("fdate", cutoff);
+    } else if (action === "fCreditError") {
+      qb = qb.eq("fcredit", "1").lt("fcreditdate", new Date().toISOString());
+    } else if (action === "NotShipFree") {
+      // ZIP in free-shipping list, but customer chose a non-free carrier
+      qb = qb
+        .in("faddresszipcode", FREE_SHIPPING_ZIPS)
+        .not("fshipby", "in", `(PCS,PCSF)`)
+        .gte("fdate", cutoff);
+    } else if (action === "NotShipFreeError") {
+      // ZIP NOT in free-shipping list, but customer chose free carrier (PCSF) — error case
+      qb = qb
+        .not("faddresszipcode", "in", `(${FREE_SHIPPING_ZIPS.join(",")})`)
+        .eq("fshipby", "PCSF")
+        .gte("fdate", cutoff);
+    }
+    return qb as T;
   }
+
+  let q = applyActionFilter(
+    admin
+      .from("tb_forwarder")
+      .select(
+        "id,fdate,fcabinetnumber,ftrackingchn,fstatus,fnote,fcover,fwarehousename,ftotalprice,fshipby,faddresszipcode,faddressname,faddressprovince,faddresstel,famount,fweight,ftransportprice",
+        { count: "exact" },
+      )
+      .range(rowFrom, rowTo)
+      .order("fdate", { ascending: false }),
+  );
 
   const fStatusQ = sp.q;
   if (fStatusQ) q = q.eq("fstatus", fStatusQ);
 
   const { data: rows, error, count: totalForwarderRows } = await q;
+
+  // Per-fStatus tab counts — one head-only COUNT per status (1..7) over the
+  // action's base filter, mirroring the legacy
+  //   SELECT COUNT(ID), fStatus FROM tb_forwarder WHERE 1=1 <sql_action> GROUP BY fStatus.
+  // A grouped count isn't expressible via the PostgREST builder, so we run a
+  // bounded per-status head-count loop (7 queries) — accepted per the W3.4
+  // spec. `Promise.allSettled` keeps one broken filter from blanking them all.
+  const tabCountResults = await Promise.allSettled(
+    FWD_STATUS_TABS.map((t) =>
+      applyActionFilter(
+        admin.from("tb_forwarder").select("id", { count: "exact", head: true }),
+      )
+        .eq("fstatus", t.q)
+        .then((r) => {
+          if (r.error) throw r.error;
+          return r.count ?? 0;
+        }),
+    ),
+  );
+  const tabCounts: Record<string, number> = {};
+  FWD_STATUS_TABS.forEach((t, i) => {
+    const res = tabCountResults[i];
+    tabCounts[t.q] = res.status === "fulfilled" ? res.value : 0;
+  });
+  const tabCountTotal = Object.values(tabCounts).reduce((a, b) => a + b, 0);
 
   // Wave 13: batch-resolve every forwarder-cover filename in parallel
   // so the row template can render the thumbnail next to the F-id.
@@ -427,6 +486,50 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
               return exportForwarderActionAll({ action, q: fStatusQ });
             }}
           />
+        </div>
+
+        {/* Per-fStatus tab strip (?q=1..7) — legacy forwarder-action.php:290-375.
+            Renders above WHATEVER body follows, including the notPortage panel. */}
+        <div className="flex flex-wrap gap-1 border-b border-border">
+          <Link
+            href={`/admin/forwarder-action?action=${action}`}
+            className={
+              "px-3 py-1.5 text-xs rounded-t-md border-b-2 -mb-px " +
+              (!fStatusQ
+                ? "border-primary-600 text-primary-600 font-semibold"
+                : "border-transparent text-muted hover:text-foreground")
+            }
+          >
+            ทั้งหมด
+            {tabCountTotal > 0 && (
+              <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[10px] font-semibold">
+                {tabCountTotal}
+              </span>
+            )}
+          </Link>
+          {FWD_STATUS_TABS.map((t) => {
+            const isActive = fStatusQ === t.q;
+            const n = tabCounts[t.q] ?? 0;
+            return (
+              <Link
+                key={t.q}
+                href={`/admin/forwarder-action?action=${action}&q=${t.q}`}
+                className={
+                  "px-3 py-1.5 text-xs rounded-t-md border-b-2 -mb-px " +
+                  (isActive
+                    ? "border-primary-600 text-primary-600 font-semibold"
+                    : "border-transparent text-muted hover:text-foreground")
+                }
+              >
+                {t.label}
+                {n > 0 && (
+                  <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[10px] font-semibold">
+                    {n}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </div>
 
         {error && (
