@@ -16,7 +16,7 @@ Held DOWN from a naive "95% of features exist" because a dead-read or a money-TO
 |---|---|---|---|---|---|
 | **1** | In-code money-safety: 2 TOCTOU + 2 dead-reads + nav drift | P0 | no | no | **✅ SHIPPED `d6f466b4`** (momo-lcl dead-read DEFERRED — needs prod probe) |
 | **2** | Money-correctness display + capture (yuan-approve cost, badge counts) | P1 | no | no (owner OK'd legacy default) | **✅ SHIPPED `88214472`** — yuan cost single+bulk + real error-queue badges + FREE_SHIPPING_ZIPS shared lib. **WHT-1% col = FALSE-POSITIVE** (legacy detail items table has NO WHT — confirmed via the dropped dump + forwarder.php; WHT applied at payment). notPortage **filter** → folded into W3 (same surface as the writer). |
-| **3** | Missing in-code writers | P0 | no | no | **PARTLY SHIPPED** — ✅ `9c2c0bf7` notPortage combine-shipping writer + multi-select UI + faithful filter (W3.1) · ✅ `4847222d` shop print-flag hPrintBill/2 (W3.2). **TODO:** per-fStatus tab strip (W3.4) · manual MOMO/CN dedup+auto-price + manualUpdate edit branch (W3.3). |
+| **3** | Missing in-code writers | P0 | no | no | **MOSTLY SHIPPED** — ✅ `9c2c0bf7` notPortage combine-shipping writer + multi-select UI + faithful filter (W3.1) · ✅ `4847222d` shop print-flag hPrintBill/2 (W3.2) · ✅ `ea6ad0a7` manual carrier dedup + auto-price (W3.3; manualUpdate edit = covered by /forwarders/[id] edit). **TODO:** per-fStatus tab strip (W3.4 · P1 nav). |
 | **4** | cnt-hs/report-cnt cost-correction (paid-container cost tab, financial summary, cntFile PDF, fProfit* recompute) | P0 | no | no | TODO |
 | **5** | DB UNIQUE constraints (create-side double-pay): `tb_cnt_item.fcabinetnumber` · `tb_user_sales.idf` · `tb_user_sales_pay.idus` · **+ `tb_forwarder_tran_th_sub.fid`** (combine-shipping backstop) | P0 | **yes (0183)** | **✅ owner-APPROVED** | TODO — run prod dup-precheck FIRST per table, then apply + reconcile dev + ON CONFLICT on the matching INSERTs |
 | **6** | Missing partner carriers JMF / TTP read-only (+ CN) | P1 | no | partly (creds) | TODO — **GOGO = DECOMMISSIONED** (owner: "ไม่ได้ใช้ละ ใช้ momo") → banner, do NOT build importer. JMF/TTP view+history buildable read-only now. |
@@ -39,7 +39,7 @@ Held DOWN from a naive "95% of features exist" because a dead-read or a money-TO
 7. **cnt-pay CREATE-side double-pay** — no UNIQUE on `tb_cnt_item.fcabinetnumber`. (Wave 5 · owner-gated migration 0183.)
 8. **Delivery-complete commission accrual idempotency UNVERIFIED** — `tb_user_sales.idf` UNIQUE (Wave 5 · verify one row per fid).
 9. **Juristic WHT-1% column on forwarder DETAIL items table** — ❌ FALSE POSITIVE (verified 2026-06-14): the dropped `forwarder:detail:3880` dump has ZERO WHT markers + legacy `forwarder.php` has no `price1Per`/`*0.01` on the items/update table. The legacy detail items table shows GROSS (ราคารวม); the juristic WHT-1% is applied downstream at payment/receipt, NOT on this table. `forwarder-import-items-table.tsx` is faithful as-is. The audit agent conflated it with the `/edit` FreightBreakdownTable. No change.
-10. **Manual MOMO/CN INSERT** — no dedup + ฿0 sell price (`api-forwarder-manual.ts:447/519`). (Wave 3.)
+10. **Manual MOMO/CN INSERT** — ✅ FIXED Wave 3.3 (`ea6ad0a7`): pre-INSERT dedup guard on fIDorCO + post-INSERT best-effort `computeAndFillForwarderImportRate` (no more ฿0 unpriced orders / fat-finger duplicates).
 11. **customRate/resetCustomRate** leave `fProfit*`/`fCompany1Per` stale. (Wave 4 — or confirm derive-at-read.)
 
 ## Owner flags
