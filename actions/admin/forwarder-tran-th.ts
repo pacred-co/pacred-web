@@ -361,6 +361,12 @@ export async function adminCombineForwarderTransport(
       if (subErr) {
         await admin.from("tb_forwarder_tran_th_h").delete().eq("id", header.id); // roll back orphan header
         console.error("[combineForwarderTransport sub insert] failed", { code: subErr.code, message: subErr.message });
+        // 0183 backstop — ux_tb_forwarder_tran_th_sub_fid rejects a concurrent
+        // combine / double-click that slipped past the dup-guard (333-344) with
+        // a raw Postgres 23505. Surface a friendly Thai message instead.
+        if (subErr.code === "23505") {
+          return { ok: false, error: "รายการนี้ถูกรวมบิลขนส่งไปแล้ว" };
+        }
         return { ok: false, error: `บันทึกรายการในบิลรวมไม่สำเร็จ: ${subErr.message}` };
       }
 

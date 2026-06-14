@@ -392,6 +392,12 @@ export async function submitSalesWithdrawal(
       code: linkErr.code,
       message: linkErr.message,
     });
+    // 0183 backstop — ux_tb_user_sales_pay_idus rejects a concurrent withdraw
+    // request / double-click that slipped past the dedup pre-check (300-315)
+    // with a raw Postgres 23505. Surface a friendly Thai message instead.
+    if (linkErr.code === "23505") {
+      return { ok: false, error: "คำขอเบิกรายการนี้ถูกบันทึกไปแล้ว" };
+    }
     return { ok: false, error: `withdrawal_link_failed: ${linkErr.message}` };
   }
 

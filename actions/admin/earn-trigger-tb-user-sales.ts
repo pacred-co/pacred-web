@@ -278,7 +278,15 @@ export async function fireUserSalesEarnTriggerOnDelivery(
     if (insErr) {
       // Don't double-count toInsert.length as skipped — leave the count
       // honest (they were eligible but the INSERT failed at the row level).
-      result.errors.push(`tb_user_sales insert failed: ${insErr.message}`);
+      // 0183 backstop — ux_tb_user_sales_idf rejects a concurrent earn-trigger
+      // (two flip-to-7 paths racing on the same forwarder) that slipped past
+      // the bulk idempotency pre-check (220-232) with a raw Postgres 23505.
+      // Record a friendly message instead of the raw error.
+      result.errors.push(
+        insErr.code === "23505"
+          ? "คอมมิชชั่นรายการนี้ถูกบันทึกไปแล้ว"
+          : `tb_user_sales insert failed: ${insErr.message}`,
+      );
       return result;
     }
     result.inserted = toInsert.length;

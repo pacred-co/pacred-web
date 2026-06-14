@@ -408,6 +408,15 @@ export async function adminCreateCntPayment(
         String(cntId),
         { error: itemErr.message, cabinet_numbers: cabinetNumbers },
       );
+      // 0183 backstop — ux_tb_cnt_item_fcabinetnumber rejects a concurrent
+      // create / double-click that slipped past the SELECT pre-check (213-226)
+      // with a raw Postgres 23505. Surface a friendly Thai message instead.
+      if (itemErr.code === "23505") {
+        return {
+          ok: false,
+          error: "ตู้นี้ถูกบันทึกจ่ายค่าตู้ไปแล้ว (กดซ้ำหรือมีผู้ทำรายการพร้อมกัน)",
+        };
+      }
       return { ok: false, error: itemErr.message };
     }
 
@@ -619,6 +628,15 @@ export async function adminCreateCntPaymentSingle(
         await logAdminAction(adminId, "cnt_payment.single.item_insert_failed", "tb_cnt", String(cntId), {
           cabinet: cabinetNumber, error: itemErr.message,
         });
+        // 0183 backstop — ux_tb_cnt_item_fcabinetnumber rejects a concurrent
+        // create / double-click that slipped past the dup-guard (521-529) with
+        // a raw Postgres 23505. Surface a friendly Thai message instead.
+        if (itemErr.code === "23505") {
+          return {
+            ok: false,
+            error: "ตู้นี้ถูกบันทึกจ่ายค่าตู้ไปแล้ว (กดซ้ำหรือมีผู้ทำรายการพร้อมกัน)",
+          };
+        }
         return { ok: false, error: itemErr.message };
       }
 
