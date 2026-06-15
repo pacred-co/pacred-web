@@ -44,6 +44,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 // ────────────────────────────────────────────────────────────────────────
 // Public types — shared between sale + interpreter UIs
@@ -137,6 +138,7 @@ export async function getBatchList(opts: {
   dateTo?:    string;       // ISO date (YYYY-MM-DD)
   limit?:     number;
 }): Promise<BatchListResult> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   const admin = createAdminClient();
   const t = TABLES[opts.kind];
 
@@ -218,6 +220,7 @@ export async function getBatchDetail(
   kind: BatchKind,
   id:   number,
 ): Promise<BatchDetail | null> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   if (!Number.isInteger(id) || id <= 0) return null;
   const admin = createAdminClient();
   const t = TABLES[kind];

@@ -22,6 +22,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getBusinessConfig } from "@/lib/business-config";
 import { cargoLineCostThb } from "@/lib/payment/cargo-cost-line";
 
@@ -454,6 +455,7 @@ async function loadTaxDocRollup(
 export async function getPeakExportBundle(
   range: PeakExportRange,
 ): Promise<PeakExportBundle> {
+  await requireAdmin(["super", "accounting"]);
   const admin = createAdminClient();
 
   // GL account map — config-driven; accountant supplies real chart-of-accounts

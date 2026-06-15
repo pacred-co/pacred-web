@@ -34,6 +34,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import {
   calcForwarderOutstanding,
@@ -103,6 +104,7 @@ function ageDays(iso: string | null, nowMs: number): number {
  * @param topN — how many top debtors to return (default 50, worst-first).
  */
 export async function getArAgingReport(topN = DEFAULT_TOP_N): Promise<Result<ArAgingReport>> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   try {
     const admin = createAdminClient();
 

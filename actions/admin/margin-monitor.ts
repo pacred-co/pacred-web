@@ -22,6 +22,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -95,6 +96,7 @@ function bucketForMargin(margin: number): MarginBucket {
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getMarginReport(range: MarginRange): Promise<MarginReport> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   const admin = createAdminClient();
   const gte = `${range.dateFrom}T00:00:00`;
   const lte = `${range.dateTo}T23:59:59`;

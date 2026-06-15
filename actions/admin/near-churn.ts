@@ -24,6 +24,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -61,6 +62,7 @@ export async function getNearChurnReport(opts: {
   daysIdle: number;
   limit?: number;
 }): Promise<NearChurnReport> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   const admin = createAdminClient();
   const daysIdle = Math.max(1, Math.min(opts.daysIdle, 365 * 5));
   const limit    = Math.max(1, Math.min(opts.limit ?? 200, 1000));
