@@ -398,6 +398,17 @@ export const ACCOUNTING_HUB_CARDS = [
     href: "/admin/accounting/shop",
     badge: "live",
   },
+  // 2026-06-15 (§0d · เดฟ) — the 3rd acc-*.php sibling. Was a faithful 1:1 port
+  // of acc-payment.php (ledger รายได้ฝากโอนหยวน · live tb_wallet_hs+tb_payment
+  // type=6 payStatus=2) but orphaned (URL-only, no menu). Wired next to its two
+  // siblings. Distinct from /admin/yuan-payments (ops queue) + reports/yuan-profit
+  // (reads the rebuilt yuan_payments twin) — this is the live-data accounting ledger.
+  {
+    title: "ฝากโอนหยวน (รายงานบัญชี)",
+    desc: "Report 1:1 ของ acc-payment.php — ledger รายได้ฝากโอนหยวนที่สำเร็จ (margin ต่อรายการ)",
+    href: "/admin/accounting/payment",
+    badge: "live",
+  },
   {
     title: "ใบลด/ใบจ่าย (Disbursements)",
     desc: "ใบเบิกจ่าย + เบิกเงิน",
