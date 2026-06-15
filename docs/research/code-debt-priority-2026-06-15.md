@@ -25,8 +25,13 @@
 ## ❌ False-positive (do NOT re-raise)
 - `wallet-trans.ts:490-501` reject re-credit — DEPRECATED dead code (zero live callers).
 
-## Waves (ไล่ตามความด่วน)
-1. **Wave 1 — security gate sweep** (P0 · mechanical · no schema)
-2. **Wave 2 — wallet TOCTOU hardening** (P1+P2 money · the proven .select().maybeSingle() fold)
-3. **Wave 3 — dead-twin §0e repoint-or-retire** (P1 · prefer retire/banner for the money-control dashboards; repoint needs the legacy column remap)
-4. **Wave 4 — reachability + lint guard + mobile + cleanup** (P2/P3)
+## Waves (ไล่ตามความด่วน) — progress 2026-06-15
+1. **Wave 1 — security gate sweep** (P0) — 🤖 แยกร่าง agent in flight (14 readers → requireAdmin).
+2. **Wave 2 — wallet TOCTOU hardening** (P1+P2 money) — ✅ DONE `1b315642` (bulk + single-row type='4' + type='1' folds).
+3. **Wave 3 — dead-twin §0e retire/banner** (P1) — 🤖 แยกร่าง agent in flight (CSV import retire + 2 reconcile banner + cost-adj guard).
+4. **Wave 4 — P2 money-safety + cleanup** — ✅ partial `a656b4a6` (pay-user restore-check + refundWallet recredit-check + shop-payout status guard).
+
+### Deferred (flagged · not blind-shipped)
+- **§0c lint rule statement-level-write detection** — valuable regression-guard, but at error-level it would flood `pnpm verify` with the many pre-existing bare money-table writes + break the gate. Needs a SCOPED rollout: warn-only on unchecked `.update/.insert/.delete/.upsert` to money tables (tb_wallet/tb_payment/tb_wallet_hs/tb_credit), measured before promoting to error. Own follow-up.
+- **Atomic balance folds** (service-order.ts:1149-1182 · payment-tb.ts:400 · wallet-tb.ts:252 · credit.ts) — `UPDATE wallettotal = wallettotal - x WHERE wallettotal >= x` can't be expressed via PostgREST (no column-relative update) → needs an RPC + migration. Bigger; flag for an owner-gated migration wave.
+- **Wave 4 reachability/mobile** (orphan /admin/accounting/payment menubar · /freight/receipts/history dup · 3 mobile freight table clips) — P3 polish, after the money/security waves land.
