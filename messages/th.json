@@ -1855,6 +1855,10 @@
       "button": "ทักเตยเลย",
       "role": "ฝ่ายขาย (Sales)"
     },
+    "genericRole": "ฝ่ายขาย (Sales)",
+    "genericSlogan": "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว",
+    "genericButton": "ทัก {name} เลย",
+    "genericAlt": "ฝ่ายขาย {name} Pacred",
     "lineCta": "ทักด่วน LINE"
   },
   "heroBanner": {

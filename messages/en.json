@@ -1855,6 +1855,10 @@
       "button": "Chat with Toey",
       "role": "Sales"
     },
+    "genericRole": "Sales",
+    "genericSlogan": "End-to-end import & export — free consult, one-stop deal",
+    "genericButton": "Chat with {name}",
+    "genericAlt": "Sales — {name} (Pacred)",
     "lineCta": "Quick chat on LINE"
   },
   "heroBanner": {
