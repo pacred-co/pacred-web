@@ -1016,11 +1016,24 @@ export async function adminPayOrdersWithTopUp(
       .single<{ id: number }>();
     if (topErr || !topup) {
       // rollback the wallet-zero so we don't lose the customer's balance.
+      // Capture the restore error — never tell the user "คืนยอดแล้ว" if the
+      // restore itself silently failed (balance would stay zeroed = money lost).
+      let restored = true;
       if (oldBalance !== 0) {
-        await admin.from("tb_wallet").update({ wallettotal: oldBalance }).eq("userid", userId);
+        const { error: rbErr } = await admin
+          .from("tb_wallet").update({ wallettotal: oldBalance }).eq("userid", userId);
+        if (rbErr) {
+          restored = false;
+          console.error(`[adminPayOrdersWithTopUp rollback restore] FAILED — balance left zeroed`, { code: rbErr.code, message: rbErr.message, userId, oldBalance });
+        }
       }
       console.error(`[adminPayOrdersWithTopUp insert topup] failed`, { code: topErr?.code, message: topErr?.message, userId });
-      return { ok: false, error: `บันทึกรายการชำระเงินล้มเหลว · คืนยอดกระเป๋าแล้ว: ${topErr?.message ?? "no row"}` };
+      return {
+        ok: false,
+        error: restored
+          ? `บันทึกรายการชำระเงินล้มเหลว · คืนยอดกระเป๋าแล้ว: ${topErr?.message ?? "no row"}`
+          : `บันทึกรายการชำระเงินล้มเหลว · ⚠️ คืนยอดกระเป๋าไม่สำเร็จ (ยอดเดิม=${oldBalance}) — แจ้งแอดมินด่วน: ${topErr?.message ?? "no row"}`,
+      };
     }
     const whID = topup.id;
 
