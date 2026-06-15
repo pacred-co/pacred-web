@@ -6,7 +6,7 @@
  * Wave 22 Phase 3 (2026-05-27) — provision a fresh Pacred admin in one
  * server-action call. Form sections:
  *
- *   1. Required (email · password · ชื่อ · นามสกุล · role)
+ *   1. Required (User ID → derives the login email · password · ชื่อ · นามสกุล · role)
  *   2. Recommended HR (phone · nickname · company · employee_type ·
  *      department · section · work email/phone · hired_at · avatar)
  *   3. Advanced (collapsible: birthday · sex · legacy_admin_id ·
@@ -95,7 +95,11 @@ export function AdminCreateNewForm({
   const [pending, startTransition] = useTransition();
 
   // ─── required ────────────────────────────────────────────────────
-  const [email, setEmail]         = useState<string>("");
+  // User ID = the staff login identifier (owner 2026-06-15: "ทำช่อง user id
+  // ให้กรอก แยกมาข้างบน"). It drives the system email via the proven
+  // `admin_*@pacred.co.th` convention that signIn already resolves — so staff
+  // log in by this User ID, never by typing an email.
+  const [userId, setUserId]       = useState<string>("");
   const [password, setPassword]   = useState<string>("");
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName]   = useState<string>("");
@@ -132,6 +136,17 @@ export function AdminCreateNewForm({
   const [phoneDupCode, setPhoneDupCode] = useState<string | null>(null);
   const [allowExistingPhone, setAllowExistingPhone] = useState<boolean>(false);
 
+  // ─── derived login identity ──────────────────────────────────────
+  // Sanitise to the safe `admin_*` namespace the signIn fast-path resolves
+  // (lib/auth/.../actions/auth.ts:112 → `<id>@pacred.co.th`). Auto-prefix
+  // `admin_` so a bare "pupu" still becomes a working login ("admin_pupu");
+  // a typed "admin_pupu" stays as-is. derivedEmail is what we actually POST.
+  const normalizedUserId = userId.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  const loginId = normalizedUserId
+    ? (normalizedUserId.startsWith("admin_") ? normalizedUserId : `admin_${normalizedUserId}`)
+    : "";
+  const derivedEmail = loginId ? `${loginId}@pacred.co.th` : "";
+
   function clearFieldError(key: string) {
     setFieldErrors((prev) => {
       if (!prev.has(key)) return prev;
@@ -147,7 +162,7 @@ export function AdminCreateNewForm({
   }
 
   function resetForm() {
-    setEmail("");
+    setUserId("");
     setPassword("");
     setFirstName("");
     setLastName("");
@@ -180,7 +195,7 @@ export function AdminCreateNewForm({
     setSuccess(null);
 
     const errs = new Set<string>();
-    if (!email.trim())     errs.add("email");
+    if (!loginId)          errs.add("userId");
     if (!password)         errs.add("password");
     if (password.length > 0 && password.length < 8) errs.add("password");
     if (!firstName.trim()) errs.add("firstName");
@@ -193,7 +208,7 @@ export function AdminCreateNewForm({
 
     startTransition(async () => {
       const result = await adminCreateNew({
-        email,
+        email: derivedEmail,
         password,
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
@@ -288,25 +303,50 @@ export function AdminCreateNewForm({
           🔑 ข้อมูลเข้าระบบ + ตัวตน <span className="text-red-500">*</span>
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {/* email */}
-          <div>
+          {/* User ID — the staff login identifier (owner 2026-06-15) */}
+          <div className="md:col-span-2">
             <label className="block text-xs font-medium text-muted mb-1">
-              อีเมล (ใช้ login) <span className="text-red-500">*</span>
+              User ID (ไอดีเข้าระบบ) <span className="text-red-500">*</span>
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
-              maxLength={254}
-              placeholder="sales01@pacred.co"
+              type="text"
+              value={userId}
+              onChange={(e) => { setUserId(e.target.value); clearFieldError("userId"); }}
+              maxLength={40}
+              placeholder="เช่น admin_pupu"
               disabled={pending}
               autoComplete="off"
-              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("email")}`}
+              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 ${errCls("userId")}`}
               required
             />
+            {loginId ? (
+              <p className="mt-1 text-[11px] text-green-700">
+                ✓ พนักงานจะเข้าระบบด้วย User ID: <code className="font-mono font-semibold">{loginId}</code>{" "}
+                + รหัสผ่านด้านล่าง
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted">
+                ตัวพิมพ์เล็ก / ตัวเลข / ขีดล่าง — ระบบเติม{" "}
+                <code className="font-mono">admin_</code> ให้อัตโนมัติถ้าไม่ได้พิมพ์
+              </p>
+            )}
+          </div>
+
+          {/* derived system email (read-only) */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              อีเมลระบบ (สร้างจาก User ID อัตโนมัติ)
+            </label>
+            <input
+              type="text"
+              value={derivedEmail}
+              readOnly
+              tabIndex={-1}
+              placeholder="— กรอก User ID ก่อน —"
+              className="w-full rounded-xl border border-border bg-surface-alt px-3 py-2.5 text-sm font-mono text-muted outline-none"
+            />
             <p className="mt-1 text-[11px] text-muted">
-              ใช้ลง <code className="font-mono">auth.users</code> + <code className="font-mono">profiles.email</code>.
-              ไม่มีการส่งอีเมลยืนยัน.
+              ลง <code className="font-mono">auth.users</code> ให้เอง — พนักงาน login ด้วย User ID ไม่ต้องพิมพ์อีเมลนี้.
             </p>
           </div>
 
@@ -664,7 +704,7 @@ export function AdminCreateNewForm({
             )}
             <button
               type="submit"
-              disabled={pending || !email || !password || !firstName || !lastName}
+              disabled={pending || !loginId || !password || !firstName || !lastName}
               className="rounded-xl bg-primary-500 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pending ? "กำลังสร้าง..." : "✓ สร้าง Admin"}
