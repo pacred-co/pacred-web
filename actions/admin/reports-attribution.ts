@@ -32,6 +32,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import type { DateRange } from "@/lib/admin/reports/types";
 import { dayStartIso, dayEndIso } from "@/lib/admin/reports/types";
@@ -76,6 +77,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export async function getAttributionReport(
   range: DateRange,
 ): Promise<Result<AttributionReport>> {
+  await requireAdmin(["super", "ops", "accounting", "sales_admin"]);
   try {
     const admin = createAdminClient();
     const fromTs = dayStartIso(range.from);

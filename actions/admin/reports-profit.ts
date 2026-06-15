@@ -31,6 +31,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import {
   type DateRange,
@@ -104,6 +105,7 @@ function finalize(
 export async function getForwarderProfitAnalytics(
   range: DateRange,
 ): Promise<Result<ForwarderProfitAnalytics>> {
+  await requireAdmin(["super", "accounting"]);
   try {
     const admin = createAdminClient();
 
@@ -191,6 +193,7 @@ export async function getForwarderProfitAnalytics(
 export async function getForwarderProfitSummary(
   range: DateRange,
 ): Promise<Result<ProfitSummary>> {
+  await requireAdmin(["super", "accounting"]);
   const res = await getForwarderProfitAnalytics(range);
   if (!res.ok) return res;
   return { ok: true, data: res.data.summary };

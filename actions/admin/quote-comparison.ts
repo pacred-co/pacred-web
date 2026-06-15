@@ -30,6 +30,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { CARRIERS, costColumn } from "@/app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model";
 
@@ -119,6 +120,7 @@ function generalTier(basis: QuoteBasis, value: number, tier1: number, tier2: num
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   const admin = createAdminClient();
   const asOf  = new Date().toISOString();
 

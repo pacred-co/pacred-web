@@ -19,6 +19,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -68,6 +69,7 @@ function bucketForMargin(margin: number): CustomerMarginBucket {
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getCustomerMarginSummary(userid: string): Promise<CustomerMarginSummary> {
+  await requireAdmin(["super", "ops", "sales_admin", "accounting"]);
   const admin = createAdminClient();
 
   type RawFwd = {
