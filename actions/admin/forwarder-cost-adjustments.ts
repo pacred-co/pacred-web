@@ -200,6 +200,19 @@ export async function adminAddForwarderCostAdjustment(
 
 // ────────────────────────────────────────────────────────────
 // Mark paid — debit wallet + link wallet_tx for traceability
+//
+// ⚠️ §0e DEAD-TWIN — DISABLED 2026-06-15 (latent money-loss).
+// The debit inserts into `wallet_transactions` (0-row twin on prod), NOT the
+// live `tb_wallet_hs` the real wallet engine reads + the lookups it depends on
+// hit the rebuilt `forwarders` twin instead of `tb_forwarder`. A "mark paid"
+// here would record a wallet debit the customer's real balance never sees +
+// flip the adjustment to 'paid' = money mis-stated / lost. The owning UI
+// (CostAdjustmentsPanel at app/.../forwarders/[fNo]/cost-adjustments-panel.tsx)
+// is currently NOT mounted anywhere, so this is dormant — the exported entry
+// below throws a hard guard so it can never silently move money if the panel
+// is ever mounted before the wallet write is repointed to tb_wallet_hs (+
+// tb_forwarder lookups). The real logic is preserved verbatim in
+// adminMarkCostAdjustmentPaidImpl. See docs/research/code-debt-priority-2026-06-15.md.
 // ────────────────────────────────────────────────────────────
 const markPaidSchema = z.object({
   id:             z.string().uuid(),
@@ -208,6 +221,21 @@ const markPaidSchema = z.object({
 export type MarkCostAdjustmentPaidInput = z.infer<typeof markPaidSchema>;
 
 export async function adminMarkCostAdjustmentPaid(
+  input: MarkCostAdjustmentPaidInput,
+): Promise<AdminActionResult<{ wallet_tx_id: string }>> {
+  void input; // §0e: input ignored — debit disabled (dead wallet_transactions twin)
+  // §0e DEAD-TWIN GUARD: the debit writes wallet_transactions (0-row twin),
+  // not tb_wallet_hs — disabled until repointed so it cannot silently lose
+  // money. The CostAdjustmentsPanel that calls this stays unmounted.
+  throw new Error(
+    "DEAD-TWIN GUARD: cost-adjustment debit writes wallet_transactions (0-row twin), not tb_wallet — disabled until repointed. See docs/research/code-debt-priority-2026-06-15.md",
+  );
+}
+
+// Preserved verbatim for the future repoint to tb_wallet_hs (+ tb_forwarder
+// lookups). NOT exported + intentionally unreferenced until then.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- §0e: kept for the future tb_wallet_hs repoint
+async function adminMarkCostAdjustmentPaidImpl(
   input: MarkCostAdjustmentPaidInput,
 ): Promise<AdminActionResult<{ wallet_tx_id: string }>> {
   const parsed = markPaidSchema.safeParse(input);
