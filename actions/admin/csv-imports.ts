@@ -188,8 +188,34 @@ export async function parsePreviewCsvImport(
 
 // ────────────────────────────────────────────────────────────
 // 3. CONFIRM IMPORT (parse full + insert to target table)
+//
+// ⚠️ §0e DEAD-TWIN — DISABLED 2026-06-15. Both target paths
+// (`forwarders` INSERT + `forwarders_update_by_tracking` UPDATE) write the
+// rebuilt `forwarders` twin (0-row on prod), NOT the live `tb_forwarder`
+// (47k+ rows the real consumers read). A confirm here would return a green
+// "imported N" while adding/updating ZERO real rows (silent data loss). The
+// sidebar entry is retired + the page/form bannered; the exported entry below
+// is a guard wrapper so a direct action call can never lose data. The real
+// import logic is preserved verbatim in confirmCsvImportImpl for the future
+// repoint to tb_forwarder (needs a non-trivial column remap — money data).
 // ────────────────────────────────────────────────────────────
 export async function confirmCsvImport(
+  input: z.infer<typeof idSchema>,
+): Promise<AdminActionResult<{ imported: number; skipped: number }>> {
+  void input; // §0e guard: input ignored — import disabled (dead `forwarders` twin)
+  // §0e guard: refuse to "import" into the dead `forwarders` twin.
+  return {
+    ok: false,
+    error:
+      "นำเข้า CSV forwarder ปิดชั่วคราว — ระบบเขียนลงตารางที่ระบบจริง (tb_forwarder) ไม่อ่าน ใช้ระบบ MOMO / forwarder โดยตรงแทน",
+  };
+}
+
+// Preserved verbatim for the future repoint to tb_forwarder. NOT exported
+// (a non-async-function export is illegal in a "use server" file anyway, but
+// this is also intentionally unreachable until the column remap is built).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- §0e: kept for the future tb_forwarder repoint
+async function confirmCsvImportImpl(
   input: z.infer<typeof idSchema>,
 ): Promise<AdminActionResult<{ imported: number; skipped: number }>> {
   const parsed = idSchema.safeParse(input);

@@ -593,7 +593,15 @@ const blockSettingsCargo: MenuItem = {
         // (one-shot launch-week backfill tool · super-only). Was orphan
         // (no inbound link · URL-only).
         { labelKey: "settingsCargo.pcsCustomerMigration", href: "/admin/migration/pcs-customers", icon: "DatabaseZap" },
-        { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
+        // 2026-06-15 (§0e dead-twin sweep) — "นำเข้าข้อมูล CSV" sidebar entry
+        // RETIRED. The importer at /admin/csv-imports writes to the rebuilt
+        // `forwarders` twin (0-row on prod) while the live system reads
+        // `tb_forwarder` (47k+ rows) → green toast, zero real rows imported
+        // (silent data loss). The page is bannered + the upload form disabled
+        // until the action is repointed to tb_forwarder (needs a non-trivial
+        // column remap — money data, not done here). Nav removed so no one
+        // reaches it + loses data. Page still exists by direct URL (bannered).
+        // { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
       ],
     },
     {
