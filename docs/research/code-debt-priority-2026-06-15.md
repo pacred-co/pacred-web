@@ -25,11 +25,11 @@
 ## ❌ False-positive (do NOT re-raise)
 - `wallet-trans.ts:490-501` reject re-credit — DEPRECATED dead code (zero live callers).
 
-## Waves (ไล่ตามความด่วน) — progress 2026-06-15
-1. **Wave 1 — security gate sweep** (P0) — 🤖 แยกร่าง agent in flight (14 readers → requireAdmin).
-2. **Wave 2 — wallet TOCTOU hardening** (P1+P2 money) — ✅ DONE `1b315642` (bulk + single-row type='4' + type='1' folds).
-3. **Wave 3 — dead-twin §0e retire/banner** (P1) — 🤖 แยกร่าง agent in flight (CSV import retire + 2 reconcile banner + cost-adj guard).
-4. **Wave 4 — P2 money-safety + cleanup** — ✅ partial `a656b4a6` (pay-user restore-check + refundWallet recredit-check + shop-payout status guard).
+## Waves (ไล่ตามความด่วน) — progress 2026-06-15 (ALL SHIPPED · gated typecheck 0 · lint 0 · test:unit 0)
+1. **Wave 1 — security gate sweep** (P0) — ✅ `e4588f10` (แยกร่าง agent · 18 exported readers across 14 files → `requireAdmin([roles])`, roles mirrored from each consuming page · diff-reviewed before integrate).
+2. **Wave 2 — wallet TOCTOU hardening** (P1+P2 money) — ✅ `1b315642` (bulk + single-row type='4' + type='1' folds).
+3. **Wave 3 — dead-twin §0e retire/banner** (P1) — ✅ `1f88f75c` (แยกร่าง agent · CSV importer retired-nav+bannered+inert · 2 reconcile dashboards bannered · cost-adj `adminMarkCostAdjustmentPaid` throw-guarded · real logic preserved in non-exported `*Impl` for the future tb_* repoint · diff-reviewed).
+4. **Wave 4 — P2 money-safety + cleanup** — ✅ partial `a656b4a6` (pay-user restore-check + refundWallet recredit-check + shop-payout status guard). Remaining P2/P3 (deferred below).
 
 ### Deferred (flagged · not blind-shipped)
 - **§0c lint rule statement-level-write detection** — valuable regression-guard, but at error-level it would flood `pnpm verify` with the many pre-existing bare money-table writes + break the gate. Needs a SCOPED rollout: warn-only on unchecked `.update/.insert/.delete/.upsert` to money tables (tb_wallet/tb_payment/tb_wallet_hs/tb_credit), measured before promoting to error. Own follow-up.
