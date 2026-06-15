@@ -21,9 +21,9 @@
  * never Bootstrap-4 · live errors · suggestion-password button.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminCreateNew } from "@/actions/admin/admins";
+import { adminCreateNew, getNextEmployeeCode } from "@/actions/admin/admins";
 import {
   ADMIN_ROLES,
   COMPANY_VALUES,
@@ -146,6 +146,23 @@ export function AdminCreateNewForm({
     ? (normalizedUserId.startsWith("admin_") ? normalizedUserId : `admin_${normalizedUserId}`)
     : "";
   const derivedEmail = loginId ? `${loginId}@pacred.co.th` : "";
+
+  // Auto-fill the running employee code (YYMMNO) on mount so the operator never
+  // types it (owner 2026-06-15: "ออโต้ไปเลย … รันไป"). Pre-fills only when the
+  // operator hasn't typed one + this isn't a legacy recreate (those keep their
+  // own code). Editable after.
+  useEffect(() => {
+    if (legacyPreset) return;
+    let alive = true;
+    getNextEmployeeCode()
+      .then((res) => {
+        if (alive && res.ok && res.data?.code) {
+          setEmployeeCode((cur) => (cur.trim() ? cur : res.data!.code));
+        }
+      })
+      .catch(() => { /* leave blank — adminCreateNew falls back server-side */ });
+    return () => { alive = false; };
+  }, [legacyPreset]);
 
   function clearFieldError(key: string) {
     setFieldErrors((prev) => {
@@ -436,6 +453,25 @@ export function AdminCreateNewForm({
               เปลี่ยน role ภายหลังได้ที่หน้า /edit.
             </p>
           </div>
+
+          {/* employee code — auto-running YYMMNO (owner 2026-06-15) */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted mb-1">
+              รหัสพนักงาน (ออโต้ · รันต่อจากเลขล่าสุด)
+            </label>
+            <input
+              type="text"
+              value={employeeCode}
+              onChange={(e) => setEmployeeCode(e.target.value)}
+              maxLength={20}
+              placeholder="กำลังสร้างอัตโนมัติ…"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              รูปแบบ YYMMNO (ปี-เดือน-เลขรัน) — ระบบเติมเลขถัดไปให้อัตโนมัติ เปลี่ยนเดือน/ปีก็รันต่อ · ใช้ login ได้ · แก้ได้ถ้าต้องการ.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -601,19 +637,7 @@ export function AdminCreateNewForm({
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">รหัสพนักงาน (YYMMNO)</label>
-              <input
-                type="text"
-                value={employeeCode}
-                onChange={(e) => setEmployeeCode(e.target.value)}
-                maxLength={20}
-                placeholder="เช่น 690601"
-                disabled={pending}
-                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              />
-              <p className="mt-1 text-[11px] text-muted">ใช้ login ได้ (เหมือน user id)</p>
-            </div>
+            {/* รหัสพนักงาน moved to section 1 (auto-filled) — owner 2026-06-15 */}
             <div>
               <label className="block text-xs font-medium text-muted mb-1">เพศ</label>
               <select

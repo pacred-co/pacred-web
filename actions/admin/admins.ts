@@ -801,6 +801,40 @@ export async function listStaffSalesFlags(): Promise<AdminActionResult<{ rows: S
   });
 }
 
+/**
+ * Next staff employee code — auto-running YYMMNO (owner 2026-06-15: "ออโต้ไปเลย
+ * มีกี่นัมเบอร์แล้วก็รันไป · เปลี่ยนปีเปลี่ยนเดือนก็รันไป"). Format = Buddhist-year
+ * last-2 + month + per-month running number (legacy: 690601…690619 for พ.ศ.2569
+ * เดือน 06). New month → the prefix rolls + the counter restarts at 01
+ * (690701). Super-only. Returns e.g. "690620". Best-effort: a read error
+ * returns the month prefix + "01" so the form still pre-fills something sane.
+ */
+export async function getNextEmployeeCode(): Promise<AdminActionResult<{ code: string }>> {
+  return withAdmin<{ code: string }>(["super"], async () => {
+    const admin = createAdminClient();
+    const now = new Date();
+    const yy = String((now.getFullYear() + 543) % 100).padStart(2, "0"); // Buddhist year last-2
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yymm = `${yy}${mm}`;
+    const { data, error } = await admin
+      .from("profiles")
+      .select("employee_code")
+      .like("employee_code", `${yymm}%`);
+    if (error) {
+      console.error("[getNextEmployeeCode] failed", { code: error.code, message: error.message });
+      return { ok: true, data: { code: `${yymm}01` } };
+    }
+    let max = 0;
+    for (const r of (data ?? []) as { employee_code: string | null }[]) {
+      const ec = r.employee_code?.trim() ?? "";
+      if (!ec.startsWith(yymm) || !/^\d{6,}$/.test(ec)) continue;
+      const n = parseInt(ec.slice(4), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return { ok: true, data: { code: `${yymm}${String(max + 1).padStart(2, "0")}` } };
+  });
+}
+
 const salesFlagSchema = z.object({
   adminID: z.string().trim().min(1),
   isSales: z.boolean(),
