@@ -257,6 +257,72 @@ export function reviewCanonicalSlug(r: Review): string {
   return reviewSlug(r, "th");
 }
 
+/**
+ * Natural-language heading built from the SAME pattern as the URL slug
+ * (country · mode · origin · dest · product) but SPACE-separated instead of
+ * dash-joined — reads as a normal title for breadcrumbs / page headings
+ * (ปอน: "แพทเทิร์นแบบ url แต่ไม่ต้องมี - แบบหัวข้อธรรมชาติ").
+ */
+export function reviewHeading(r: Review, locale: Loc): string {
+  const isTh = locale !== "en";
+  const c = bl(reviewCountry(r), locale);
+  const o = bl(reviewOrigin(r), locale);
+  const d = bl(reviewDest(r), locale);
+  const p = reviewProductLabel(r, locale);
+  const mode = containerModeLabel(r, locale);
+  const modeSeg = mode ? `${mode} ` : "";
+  const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
+
+  if (r.type === "clearance") {
+    return tidy(
+      isTh
+        ? `ชิปปิ้ง เคลียร์สินค้า พิธีการศุลกากร ${o} ${d} ${p}`
+        : `Shipping customs clearance ${o} ${d} ${p}`,
+    );
+  }
+  if (r.type === "export") {
+    return tidy(
+      isTh ? `ส่งออก${c} ${modeSeg}${o} ${d} ${p}` : `Export ${c} ${modeSeg}${o} ${d} ${p}`,
+    );
+  }
+  return tidy(
+    isTh
+      ? `นำเข้าสินค้าจาก${c} ${modeSeg}${o} ${d} ${p}`
+      : `Import ${c} ${modeSeg}${o} ${d} ${p}`,
+  );
+}
+
+// ───────────────────────── localized URL segment ───────────────────────────
+// The portfolio segment is localized: Thai shows /ผลงานของเรา/..., English
+// keeps /our-work/... . The Next route folder stays `our-work/[id]`; the
+// next-intl middleware (i18n/routing.ts `routingWithPathnames`) serves the
+// Thai segment from it and redirects the legacy /our-work (th) → /ผลงานของเรา.
+// `OUR_WORK_SEGMENT` is the single source of truth for both.
+export const OUR_WORK_SEGMENT: Record<Loc, string> = {
+  th: "ผลงานของเรา",
+  en: "our-work",
+};
+
+/** Localized path to the portfolio LIST (no locale prefix — for next-intl <Link>). */
+export function ourWorkPath(locale: Loc): string {
+  return `/${OUR_WORK_SEGMENT[locale]}`;
+}
+
+/** Localized path to a single case landing (no locale prefix — for next-intl <Link>). */
+export function reviewUrl(slug: string, locale: Loc): string {
+  return `/${OUR_WORK_SEGMENT[locale]}/${slug}`;
+}
+
+/** Locale-PREFIXED list path for <head> canonical / alternates (resolved vs metadataBase). */
+export function ourWorkMetaPath(locale: Loc): string {
+  return `${locale === "en" ? "/en" : ""}${ourWorkPath(locale)}`;
+}
+
+/** Locale-PREFIXED case path for <head> canonical / alternates / og:url. */
+export function reviewMetaPath(slug: string, locale: Loc): string {
+  return `${locale === "en" ? "/en" : ""}${reviewUrl(slug, locale)}`;
+}
+
 export function getReviewById(id: string): Review | undefined {
   return REVIEWS.find((r) => r.id === id);
 }

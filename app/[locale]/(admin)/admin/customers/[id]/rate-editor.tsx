@@ -13,7 +13,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, AlertTriangle, X, BadgeCheck } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import {
@@ -43,7 +43,7 @@ export function CustomerRateEditor({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<WarehouseId | "info">("1");
+  const [tab, setTab] = useState<WarehouseId | "info" | "quote">("1");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
@@ -159,7 +159,9 @@ export function CustomerRateEditor({
       {open && (
         // Modal overlay — click backdrop to close; the card stops propagation.
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          // z-[80] sits ABOVE the admin chrome — the sticky top bar is z-[60]
+          // and the sidebar logo z-[70]; at z-50 they covered the modal header.
+          className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/40 p-4"
           onClick={() => setOpen(false)}
           role="dialog"
           aria-modal="true"
@@ -213,6 +215,17 @@ export function CustomerRateEditor({
         ))}
         <button
           type="button"
+          onClick={() => setTab("quote")}
+          className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
+            tab === "quote"
+              ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
+              : "border-transparent text-muted hover:text-foreground"
+          }`}
+        >
+          ใบเสนอราคา
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("info")}
           className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
             tab === "info"
@@ -259,6 +272,9 @@ export function CustomerRateEditor({
             </div>
           ) : null,
         )}
+
+        {/* ใบเสนอราคา */}
+        {tab === "quote" && <QuoteTab />}
 
         {/* Info + cost floor */}
         {tab === "info" && <InfoTab />}
@@ -342,6 +358,21 @@ function RateGrid({
   );
 }
 
+// ── ใบเสนอราคา tab (โครง — รอสเปกเนื้อหาจาก owner) ─────────────────────────
+function QuoteTab() {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-gradient-to-br from-surface to-white dark:from-surface dark:to-background p-8 md:p-10 text-center">
+      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)]">
+        <FileText className="h-7 w-7" />
+      </div>
+      <h3 className="text-base font-black text-foreground">ใบเสนอราคา</h3>
+      <p className="mx-auto mt-1.5 max-w-[440px] text-[13px] leading-relaxed text-muted">
+        ส่วนสร้าง / แสดงใบเสนอราคาขนส่งจากเรทของลูกค้ารายนี้ — กำลังจัดทำ
+      </p>
+    </div>
+  );
+}
+
 // ── info + cost-floor tab (legacy tab 3) ──────────────────────────────────
 function InfoTab() {
   return (
@@ -409,7 +440,7 @@ function ConfirmSave({
 }) {
   const whLabel = WAREHOUSES.find((w) => w.id === wh)?.label;
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
       <div className="rounded-2xl bg-white dark:bg-surface shadow-2xl max-w-lg w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between">
           <h3 className="font-bold text-lg">ยืนยันบันทึกเรท {whLabel}?</h3>

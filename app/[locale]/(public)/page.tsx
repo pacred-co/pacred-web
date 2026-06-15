@@ -24,6 +24,7 @@ import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { Footer } from "@/components/sections/footer";
 import { JsonLd } from "@/components/seo/json-ld";
 import { serviceSchema } from "@/components/seo/schemas";
+import { ogImageUrl } from "@/components/seo/site";
 
 export async function generateMetadata({
   params,
@@ -45,35 +46,41 @@ export async function generateMetadata({
       description: t("description"),
       type: "website",
       url: canonical,
+      images: [{ url: ogImageUrl("home"), width: 1200, height: 630, alt: t("title") }],
     },
     twitter: {
       card: "summary_large_image",
       title: t("title"),
       description: t("description"),
+      images: [ogImageUrl("home")],
     },
   };
 }
 
-const HOME_SERVICES: Array<{ name: string; slug: string; description: string }> = [
+const HOME_SERVICES: Array<{ name: string; slug: string; description: string; image: string }> = [
   {
     name: "นำเข้าสินค้าจากจีน FCL/LCL",
     slug: "/services/import-china",
     description: "บริการนำเข้าสินค้าจากจีน FCL · LCL · Door to Door ทุก Term ทุก Port",
+    image: "/images/bannerdesktop/bannershipdesktop01.png",
   },
   {
     name: "ส่งออกสินค้าทั่วโลก",
     slug: "/services/export-worldwide",
     description: "ส่งออกสินค้าจากไทยทั่วโลก ทั้ง Air Freight · Sea Freight ครบเอกสาร",
+    image: "/images/hero-section/banner/airbanner.png",
   },
   {
     name: "เคลียร์ศุลกากร · สินค้าติดด่าน",
     slug: "/customs-clearance-shipping-suvarnabhumi",
     description: "ชิปปิ้งเคลียร์ภาษีและสินค้าติดด่าน รถ/เรือ/อากาศ",
+    image: "/images/bannerdesktop/clearancedesktop4.png",
   },
   {
     name: "ฝากสั่งซื้อสินค้าจีน",
     slug: "/services/china-shopping",
     description: "ฝากสั่ง 1688 · Taobao · Tmall · Alibaba พร้อมล่ามจีนปิดดีล",
+    image: "/images/bannerdesktop/shoppingbanner02.png",
   },
 ];
 
@@ -90,6 +97,7 @@ export default async function Home({
       name: s.name,
       description: s.description,
       slug: s.slug,
+      image: s.image,
       locale: localeTyped,
     }),
   );

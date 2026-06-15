@@ -2713,6 +2713,12 @@
       "title": "Delivery Coverage & Pricing",
       "description": "Check Pacred Shipping's delivery zones — nationwide Thailand, Bangkok, suburbs, and provincial coverage."
     },
+    "reviews": {
+      "index": {
+        "title": "Our Work · Real Import-Export Cases",
+        "description": "Real Pacred Shipping case studies — China-Thailand import & export, FCL/LCL, and customs clearance, with route, product, and HS-code detail."
+      }
+    },
     "holidays": {
       "title": "Service Calendar · Holidays",
       "description": "Pacred Shipping holiday calendar — annual holidays, customs closures, and service availability."

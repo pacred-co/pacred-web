@@ -97,6 +97,8 @@ export type ServiceSchemaInput = {
   slug: string;
   serviceType?: string;
   areaServed?: string[];
+  /** Representative image (absolute or root-relative). Falls back to the brand logo. */
+  image?: string;
   locale?: SiteLocale;
 };
 
@@ -106,8 +108,14 @@ export function serviceSchema({
   slug,
   serviceType,
   areaServed = ["TH"],
+  image,
   locale = "th",
 }: ServiceSchemaInput) {
+  const imageUrl = image
+    ? image.startsWith("http")
+      ? image
+      : `${SITE_URL}${image.startsWith("/") ? "" : "/"}${image}`
+    : LOGO_URL;
   return {
     "@context": "https://schema.org",
     "@type": "Service",
@@ -115,6 +123,7 @@ export function serviceSchema({
     description,
     serviceType: serviceType ?? name,
     url: absoluteUrl(slug, locale),
+    image: imageUrl,
     provider: { "@id": `${SITE_URL}#organization` },
     areaServed: areaServed.map((country) => ({ "@type": "Country", name: country })),
   };

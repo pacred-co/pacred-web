@@ -24,12 +24,14 @@ type Video = {
   title: string;
   sub: string;
   badge?: string;
+  /** Vertical (9:16) YouTube Short — renders the side card portrait instead of 16:9. */
+  vertical?: boolean;
 };
 
 const BIG_VIDEO: Video = {
-  id: "JVse9TQ2E6M",
-  title: "Pacred-นำเข้าสินค้าจากจีน",
-  sub: "นำเข้าสินค้าจากจีนกับ Pacred Shipping",
+  id: "0kK32T-6wHw",
+  title: "ชิปปิ้ง เคลียร์สินค้าติดด่าน เคลียร์ภาษี พิธีการศุลกากร",
+  sub: "เคลียร์สินค้าติดด่าน · พิธีการกรมศุลกากร Pacred Shipping",
   badge: "แนะนำ",
 };
 
@@ -47,10 +49,10 @@ const SIDE_VIDEOS: Video[] = [
     badge: "พาชม",
   },
   {
-    id: "B1Qk4E4uq00",
-    title: "How to สั่งซื้อสินค้าจากจีน กับ Pacred",
-    sub: "สั่งซื้อสินค้าจากจีน",
-    badge: "How to",
+    id: "oTVkgUuAzsk",
+    title: "เคลียร์สินค้าติดด่าน เคลียร์ภาษี พิธีการศุลกากร",
+    sub: "ชิปปิ้งเคลียร์ภาษี Pacred Shipping",
+    badge: "คลิปสั้น",
   },
   {
     id: "z6rcn18Wb-w",
@@ -285,9 +287,10 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
 
 // ─────────── Side card ───────────
 function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: boolean; onPlay: () => void }) {
+  const ratio = video.vertical ? "aspect-[9/16]" : "aspect-video";
   if (isActive) {
     return (
-      <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
+      <div className={`relative ${ratio} rounded-xl overflow-hidden bg-black shadow-[0_8px_20px_rgba(15,23,42,0.12)]`}>
         <iframe
           src={embed(video.id)}
           title={video.title}
@@ -303,7 +306,7 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
       type="button"
       onClick={onPlay}
       suppressHydrationWarning
-      className="group relative aspect-video rounded-xl overflow-hidden bg-primary-600 shadow-[0_8px_20px_rgba(15,23,42,0.10)] hover:shadow-[0_14px_28px_rgba(15,23,42,0.16)] hover:-translate-y-1 transition-all duration-300 text-left cursor-pointer"
+      className={`group relative ${ratio} rounded-xl overflow-hidden bg-primary-600 shadow-[0_8px_20px_rgba(15,23,42,0.10)] hover:shadow-[0_14px_28px_rgba(15,23,42,0.16)] hover:-translate-y-1 transition-all duration-300 text-left cursor-pointer`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
