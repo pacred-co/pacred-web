@@ -943,6 +943,7 @@
       "awaiting_payment": "Awaiting payment",
       "ordered": "Ordered",
       "awaiting_chn_dispatch": "Awaiting CN dispatch",
+      "arrived_china_warehouse": "Arrived at China warehouse",
       "completed": "Completed",
       "cancelled": "Cancelled"
     },

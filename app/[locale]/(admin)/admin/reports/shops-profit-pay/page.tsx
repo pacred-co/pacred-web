@@ -97,6 +97,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   "2": "รอชำระเงิน",
   "3": "สั่งสินค้า",
   "4": "รอร้านจีนจัดส่ง",
+  "40": "ถึงโกดังจีน", // owner 2026-06-16 · MOMO arrival
   "5": "สำเร็จ",
   "6": "ยกเลิกออเดอร์",
 };
@@ -105,6 +106,7 @@ const ORDER_STATUS_CLS: Record<string, string> = {
   "2": "bg-red-50 text-red-700 border-red-200",
   "3": "bg-blue-50 text-blue-700 border-blue-200",
   "4": "bg-amber-50 text-amber-700 border-amber-200",
+  "40": "bg-teal-50 text-teal-700 border-teal-200",
   "5": "bg-green-50 text-green-700 border-green-200",
   "6": "bg-red-50 text-red-700 border-red-200",
 };

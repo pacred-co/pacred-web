@@ -27,18 +27,20 @@ const STATUS_BADGE: Record<string, string> = {
   "2": "bg-amber-100 text-amber-700",    // รอชำระเงิน
   "3": "bg-blue-100 text-blue-700",      // สั่งสินค้า
   "4": "bg-indigo-100 text-indigo-700",  // รอร้านจีนจัดส่ง
+  "40": "bg-teal-100 text-teal-700",     // ถึงโกดังจีน (owner 2026-06-16)
   "5": "bg-emerald-100 text-emerald-700", // สำเร็จ
   "6": "bg-red-100 text-red-700",        // ยกเลิก
 };
 
-// Legacy hstatus code ('1'-'6') → i18n status key under `serviceOrder.status.*`.
-// The code is the canonical tb_header_order.hstatus value; only the display
-// label is resolved via next-intl.
+// Legacy hstatus code ('1'-'6' + '40') → i18n status key under
+// `serviceOrder.status.*`. The code is the canonical tb_header_order.hstatus
+// value; only the display label is resolved via next-intl.
 const STATUS_KEY: Record<string, string> = {
   "1": "pending",
   "2": "awaiting_payment",
   "3": "ordered",
   "4": "awaiting_chn_dispatch",
+  "40": "arrived_china_warehouse", // owner 2026-06-16 · MOMO arrival
   "5": "completed",
   "6": "cancelled",
 };
@@ -47,9 +49,9 @@ const STATUS_KEY: Record<string, string> = {
 //  - cancel  : hStatus <= 2  ('1' รอดำเนินการ | '2' รอชำระเงิน)
 //  - pay     : hStatus == 2  ('2' รอชำระเงิน)
 //  - receipt : hStatus == 5  ('5' สำเร็จ)
-//  - invoice : hStatus 2..5  ('2' .. '5')
+//  - invoice : hStatus 2..5  ('2' .. '5' + '40' ถึงโกดังจีน is post-payment)
 const CANCELLABLE: ServiceOrderSummary["status"][] = ["1", "2"];
-const INVOICEABLE: ServiceOrderSummary["status"][] = ["2", "3", "4", "5"];
+const INVOICEABLE: ServiceOrderSummary["status"][] = ["2", "3", "4", "40", "5"];
 
 export function ServiceOrderList({
   items,

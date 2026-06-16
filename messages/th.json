@@ -943,6 +943,7 @@
       "awaiting_payment": "รอชำระเงิน",
       "ordered": "สั่งสินค้าแล้ว",
       "awaiting_chn_dispatch": "รอร้านจีนจัดส่ง",
+      "arrived_china_warehouse": "ถึงโกดังจีน",
       "completed": "สำเร็จ",
       "cancelled": "ยกเลิก"
     },

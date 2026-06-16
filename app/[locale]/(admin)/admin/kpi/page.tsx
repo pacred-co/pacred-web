@@ -64,7 +64,7 @@ const THAI_MONTHS = [
 // and `tb_forwarder.fstatus` per service-import/table/page.tsx helper).
 const HSTATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ", "2": "รอชำระเงิน", "3": "สั่งสินค้า",
-  "4": "รอร้านจีนจัดส่ง", "5": "สำเร็จ", "6": "ยกเลิกออเดอร์",
+  "4": "รอร้านจีนจัดส่ง", "40": "ถึงโกดังจีน", "5": "สำเร็จ", "6": "ยกเลิกออเดอร์",
 };
 const FSTATUS_LABEL: Record<string, string> = {
   "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",

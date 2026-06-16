@@ -132,6 +132,8 @@ assertEq("status '3' (สั่งสินค้าแล้ว) → ok",
   lineEditStatusGate("3"), { ok: true });
 assertEq("status '4' (รอร้านจีนจัดส่ง) → ok",
   lineEditStatusGate("4"), { ok: true });
+assertEq("status '40' (ถึงโกดังจีน) → ok",
+  lineEditStatusGate("40"), { ok: true });
 assertEq("status '5' (สำเร็จ) → ok",
   lineEditStatusGate("5"), { ok: true });
 assertEq("status '6' (ยกเลิก) → reject (cancelled msg)",
@@ -161,6 +163,8 @@ assertEq("status '3' (สั่งสินค้าแล้ว) → reject (no
   trackingEditStatusGate("3").ok, false);
 assertEq("status '4' (รอร้านจีนจัดส่ง) → ok",
   trackingEditStatusGate("4"), { ok: true });
+assertEq("status '40' (ถึงโกดังจีน) → ok",
+  trackingEditStatusGate("40"), { ok: true });
 assertEq("status '5' (สำเร็จ) → ok",
   trackingEditStatusGate("5"), { ok: true });
 assertEq("status '6' (ยกเลิก) → reject (cancelled)",

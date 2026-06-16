@@ -24,22 +24,29 @@
 
 export type StatusGateResult = { ok: true } | { ok: false; error: string };
 
-/** Allow status IN {3,4,5}. Reject {1,2,6,null}. Used by E3.5 + E3.14. */
+/**
+ * Allow status IN {3,4,40,5}. Reject {1,2,6,null}. Used by E3.5 + E3.14.
+ * "40" = ถึงโกดังจีน (owner 2026-06-16) is post-arrival, between 4 and 5 — the
+ * line is still editable there.
+ */
 export function lineEditStatusGate(hstatus: string | null | undefined): StatusGateResult {
   const s = (hstatus ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — แก้ไม่ได้" };
-  if (s === "3" || s === "4" || s === "5") return { ok: true };
+  if (s === "3" || s === "4" || s === "40" || s === "5") return { ok: true };
   return {
     ok: false,
     error: `สถานะออเดอร์ปัจจุบัน (${s || "?"}) ยังไม่อนุญาตให้แก้ไขค่านี้ (ต้องอยู่ในสถานะ "สั่งสินค้าแล้ว" 3-5)`,
   };
 }
 
-/** Allow status IN {4,5}. Used by E3.17 ctracking typo-fix (after Mark-Ordered). */
+/**
+ * Allow status IN {4,40,5}. Used by E3.17 ctracking typo-fix (after Mark-Ordered).
+ * "40" = ถึงโกดังจีน is between 4 and 5 — tracking is still editable there.
+ */
 export function trackingEditStatusGate(hstatus: string | null | undefined): StatusGateResult {
   const s = (hstatus ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — แก้ไม่ได้" };
-  if (s === "4" || s === "5") return { ok: true };
+  if (s === "4" || s === "40" || s === "5") return { ok: true };
   return {
     ok: false,
     error: `สถานะออเดอร์ปัจจุบัน (${s || "?"}) ยังไม่อนุญาตให้แก้เลข tracking (ต้อง "รอร้านจีนจัดส่ง" 4-5)`,

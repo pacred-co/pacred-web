@@ -10,5 +10,6 @@
 // the const + type FROM HERE; only the async action stays in the "use server"
 // file.
 
-export const SHOP_STATUSES = ["1", "2", "3", "4", "5", "6"] as const;
+// "40" = ถึงโกดังจีน (owner 2026-06-16 · MOMO arrival) slots between 4 and 5.
+export const SHOP_STATUSES = ["1", "2", "3", "4", "40", "5", "6"] as const;
 export type ShopOrderStatus = (typeof SHOP_STATUSES)[number];

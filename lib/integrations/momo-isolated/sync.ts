@@ -226,12 +226,27 @@ export async function runMomoSync(
             if (typeof rt === "string" && rt.trim()) reTracks.push(rt.trim());
           }
           if (reTracks.length === 0) continue;
+          // ── ARRIVAL STAMP (LANE A · owner 2026-06-16) ────────────────
+          // When this container raw carries `is_arrival === true` (MOMO's
+          // "ของถึงไทยแล้ว" flag → AT_WAREHOUSE_TH in mapper.ts:286-289),
+          // stamp shipment_status onto the SAME matched import-track rows so
+          // the per-parcel propagator (propagateMomoToForwarders) can advance
+          // the matched tb_forwarder rows to fstatus='4' (ถึงไทยแล้ว · Option-B
+          // manual-review). Without this the arrival flag lived only on the
+          // container record (trackingNo:null → filtered out) and never
+          // reached a per-parcel propagatable row. `shipment_status` +
+          // `momo_updated_at` both exist on momo_import_tracks since 0116.
+          const arrivalUpdate: Record<string, unknown> = {
+            container_batch_no: cabinetNo,
+            updated_at:         new Date().toISOString(),
+          };
+          if (c.is_arrival === true) {
+            arrivalUpdate.shipment_status = "AT_WAREHOUSE_TH";
+            arrivalUpdate.momo_updated_at = new Date().toISOString();
+          }
           const { error: upErr } = await admin
             .from("momo_import_tracks")
-            .update({
-              container_batch_no: cabinetNo,
-              updated_at:         new Date().toISOString(),
-            })
+            .update(arrivalUpdate)
             .in("momo_tracking_no", reTracks);
           if (upErr) {
             console.error(
