@@ -37,6 +37,7 @@ const STATUS_LABEL: Record<string, string> = {
   ordered:       "สั่งสินค้า",
   processing:    "สั่งสินค้า",
   awaiting_chn_dispatch: "รอร้านจีนจัดส่ง",
+  arrived_china_warehouse: "ถึงโกดังจีน", // owner 2026-06-16 · MOMO arrival
   shipped_china: "จัดส่งแล้ว",
   completed:     "สำเร็จ",
 };

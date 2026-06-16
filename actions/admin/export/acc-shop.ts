@@ -64,6 +64,8 @@ function hStatusLabel(s: string | null): string {
       return "สั่งสินค้า";
     case "4":
       return "รอร้านจีนจัดส่ง";
+    case "40":
+      return "ถึงโกดังจีน"; // owner 2026-06-16 · MOMO arrival
     case "5":
       return "สำเร็จ";
     case "6":

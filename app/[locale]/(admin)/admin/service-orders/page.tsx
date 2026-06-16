@@ -93,12 +93,14 @@ function buildPurchasingMenubar(c: { s1: number; s2: number }): MenubarItem[] {
   ];
 }
 
-// Legacy STATUS_LABEL — hstatus is char(1) "1".."6" (no "7").
+// Legacy STATUS_LABEL — hstatus is now varchar(2): "1".."6" + "40" ถึงโกดังจีน
+// (owner 2026-06-16 · MOMO arrival · migration 0185).
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ",
   "2": "รอชำระเงิน",
   "3": "สั่งสินค้า",
   "4": "รอร้านจีนจัดส่ง",
+  "40": "ถึงโกดังจีน",
   "5": "สำเร็จ",
   "6": "ยกเลิก",
 };
@@ -108,6 +110,7 @@ const STATUS_BADGE_COLOR: Record<string, string> = {
   "2": "bg-red-100 text-red-700 border-red-200",
   "3": "bg-blue-100 text-blue-700 border-blue-200",
   "4": "bg-indigo-100 text-indigo-700 border-indigo-200",
+  "40": "bg-teal-100 text-teal-700 border-teal-200",
   "5": "bg-green-100 text-green-700 border-green-200",
   "6": "bg-gray-100 text-gray-600 border-gray-200",
 };
@@ -194,7 +197,9 @@ export default async function AdminServiceOrdersPage({
   // `?status=<rebuilt-key>` → resolve to legacy code via toLegacyOrderCode.
   // `?search=<text>` → keyword (preferred new convention).
   const qParam = sp.q ?? "";
-  const qIsStatus = /^[1-6]$/.test(qParam);
+  // "40" = ถึงโกดังจีน (owner 2026-06-16 · MOMO arrival) — a 2-char status code
+  // that slots between "4" and "5"; the rest are single digits 1-6.
+  const qIsStatus = /^([1-6]|40)$/.test(qParam);
   const statusFromQ = qIsStatus ? qParam : undefined;
   const statusFromRebuiltKey = sp.status ? toLegacyOrderCode(sp.status) : undefined;
   const statusFilter = statusFromQ ?? statusFromRebuiltKey;
@@ -432,6 +437,7 @@ export default async function AdminServiceOrdersPage({
     { v: "2", l: STATUS_LABEL["2"]!, n: counts.s2, cls: STATUS_BADGE_COLOR["2"]! },
     { v: "3", l: STATUS_LABEL["3"]!, n: counts.s3, cls: STATUS_BADGE_COLOR["3"]! },
     { v: "4", l: STATUS_LABEL["4"]!, n: counts.s4, cls: STATUS_BADGE_COLOR["4"]! },
+    { v: "40", l: STATUS_LABEL["40"]!, n: counts.s40, cls: STATUS_BADGE_COLOR["40"]! },
     { v: "5", l: STATUS_LABEL["5"]!, n: counts.s5, cls: STATUS_BADGE_COLOR["5"]! },
     { v: "6", l: STATUS_LABEL["6"]!, n: counts.s6, cls: STATUS_BADGE_COLOR["6"]! },
   ];
@@ -806,15 +812,16 @@ async function loadStatusCounts(admin: ReturnType<typeof createAdminClient>) {
     return r.count ?? 0;
   }
 
-  const [total, s1, s2, s3, s4, s5, s6] = await Promise.all([
+  const [total, s1, s2, s3, s4, s40, s5, s6] = await Promise.all([
     countTotal(),
     countStatus("1"),
     countStatus("2"),
     countStatus("3"),
     countStatus("4"),
+    countStatus("40"), // ถึงโกดังจีน (owner 2026-06-16 · MOMO arrival)
     countStatus("5"),
     countStatus("6"),
   ]);
 
-  return { total, s1, s2, s3, s4, s5, s6 };
+  return { total, s1, s2, s3, s4, s40, s5, s6 };
 }

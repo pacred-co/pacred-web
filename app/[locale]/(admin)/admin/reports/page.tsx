@@ -267,6 +267,7 @@ const ORDER_BADGE: Record<string, string> = {
   "2": "bg-yellow-50 text-yellow-700 border-yellow-200",  // รอชำระเงิน
   "3": "bg-blue-50 text-blue-700 border-blue-200",        // สั่งสินค้า
   "4": "bg-indigo-50 text-indigo-700 border-indigo-200",  // รอร้านจีนจัดส่ง
+  "40": "bg-teal-50 text-teal-700 border-teal-200",       // ถึงโกดังจีน
   "5": "bg-green-50 text-green-700 border-green-200",     // สำเร็จ
   "6": "bg-gray-50 text-gray-600 border-gray-200",        // ยกเลิก
 };

@@ -48,8 +48,11 @@ assertEq("'pending_payment' → forwarder code 5", toLegacyForwarderCode("pendin
 section("round-trip + tabs");
 assertEq("toLegacyOrderCode(key of '3') === '3'", toLegacyOrderCode(LEGACY_ORDER_STATUS["3"].key), "3");
 assertEq("toLegacyForwarderCode(key of '6') === '6'", toLegacyForwarderCode(LEGACY_FORWARDER_STATUS["6"].key), "6");
-assertEq("order tabs are 6 in legacy display order", LEGACY_ORDER_TABS.map((t) => t.code), ["1", "2", "3", "4", "5", "6"]);
+// "40" (ถึงโกดังจีน · owner 2026-06-16 MOMO arrival) slots between 4 and 5.
+assertEq("order tabs are 7 in legacy display order (incl. 40)", LEGACY_ORDER_TABS.map((t) => t.code), ["1", "2", "3", "4", "40", "5", "6"]);
 assertEq("first tab is รอดำเนินการ", LEGACY_ORDER_TABS[0].thai, "รอดำเนินการ");
+assertEq("'40' → ถึงโกดังจีน", LEGACY_ORDER_STATUS["40"].thai, "ถึงโกดังจีน");
+assertEq("'arrived_china_warehouse' → order code 40", toLegacyOrderCode("arrived_china_warehouse"), "40");
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} legacy-status-map: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

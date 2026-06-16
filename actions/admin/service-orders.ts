@@ -51,14 +51,16 @@ async function resolveLegacyAdminId(): Promise<string> {
   return email;
 }
 
+// "arrived_china_warehouse" (hstatus '40' · ถึงโกดังจีน · owner 2026-06-16
+// MOMO arrival) slots between awaiting_chn_dispatch (4) and completed (5).
 const STATUSES = [
-  "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed","cancelled",
+  "pending","awaiting_payment","ordered","awaiting_chn_dispatch","arrived_china_warehouse","completed","cancelled",
 ] as const;
 
 // V-A2: forward lifecycle. Going to a lower-index status = rollback.
 // 'cancelled' is its own path (excluded from rollback detection).
 const STATUS_ORDER: ReadonlyArray<string> = [
-  "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed",
+  "pending","awaiting_payment","ordered","awaiting_chn_dispatch","arrived_china_warehouse","completed",
 ];
 function isStatusRollback(fromStatus: string, toStatus: string): boolean {
   if (fromStatus === toStatus) return false;
@@ -104,6 +106,7 @@ const LEGACY_STATUS_DATE_COL: Record<string, string | null> = {
   awaiting_payment:       "hdate2",   // legacy hDate2 — รอชำระเงิน
   ordered:                "hdate3",   // legacy hDate3 — สั่งสินค้า
   awaiting_chn_dispatch:  "hdate4",   // legacy hDate4 — รอร้านจีนจัดส่ง
+  arrived_china_warehouse: null,      // ถึงโกดังจีน — no dedicated legacy date col
   completed:              "hdate5",   // legacy hDate5 — สำเร็จ
 };
 
@@ -120,6 +123,7 @@ const REBUILT_TO_LEGACY_HSTATUS: Record<string, string> = {
   awaiting_payment:      "2",
   ordered:               "3",
   awaiting_chn_dispatch: "4",   // legacy-map calls this "awaiting_china_ship"
+  arrived_china_warehouse: "40", // ถึงโกดังจีน (owner 2026-06-16 · MOMO arrival)
   completed:             "5",
   cancelled:             "6",
 };

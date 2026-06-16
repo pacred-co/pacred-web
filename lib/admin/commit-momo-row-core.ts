@@ -384,6 +384,13 @@ export async function commitMomoRowCore(
   const hasContainer = !!cabinetForDisplay;
   const fStatusNew = hasContainer ? "3" : "2";
 
+  // reforder links a forwarder back to its originating ฝากสั่งซื้อ order
+  // (tb_header_order.hno). MOMO-commit parcels aren't spawned from a shop
+  // order, so this stays "" here — but we name it so the order-advance
+  // best-effort below (LANE B step 3 · owner 2026-06-16) reads ONE source of
+  // truth, and stays correct if a future commit path ever carries a reforder.
+  const reforderValue = "";
+
   // Date fields. Legacy uses `manifest_date` from the SM payload —
   // MOMO Status Sync stores `momo_updated_at` (the latest status_date
   // timestamp from the raw). Use that as the manifest reference; if
@@ -571,7 +578,7 @@ export async function commitMomoRowCore(
       adminidkey:            "",
       adminidupdate:         legacyAdminId,
       session:               "admin-momo-review-commit",
-      reforder:              "",
+      reforder:              reforderValue,
       fcredit:               "0",
       fsendsms1day:          "0",
       fsendsms3day:          "0",
@@ -645,6 +652,42 @@ export async function commitMomoRowCore(
       `[momo_import_tracks stamp] failed AFTER tb_forwarder INSERT (id=${row.id})`,
       { code: stampErr.code, message: stampErr.message },
     );
+  }
+
+  // ── 6b. Advance the linked ฝากสั่งซื้อ order → "40 ถึงโกดังจีน" ──────
+  // LANE B step 3 (owner 2026-06-16): when a forwarder linked to a shop order
+  // (reforder → tb_header_order.hno) reaches the china warehouse (fStatusNew
+  // >= "2" = "ถึงโกดังจีน" or later), advance the order's hstatus 4→40 so the
+  // customer + admin see "ถึงโกดังจีน" instead of a stuck "รอร้านจีนจัดส่ง".
+  //
+  // FORWARD-ONLY + idempotent: the UPDATE WHERE folds `.eq("hstatus","4")`, so
+  // it only fires from "4 รอร้านจีนจัดส่ง"; it can NEVER regress "5 สำเร็จ" /
+  // "6 ยกเลิก" / an already-"40" row (0-row no-op). BEST-EFFORT: a miss here
+  // must NEVER fail the MOMO commit — the forwarder row + customer notify are
+  // already done. (No-op for MOMO-only parcels where reforderValue === "".)
+  // fStatusNew is always a single digit ("2" at-china-warehouse / "3"
+  // in-transit) — a numeric compare is correct for the >= "2" arrival gate.
+  if (reforderValue && Number(fStatusNew) >= 2) {
+    try {
+      const { data: advanced, error: advErr } = await admin
+        .from("tb_header_order")
+        .update({ hstatus: "40", hdateupdate: nowIso })
+        .eq("hno", reforderValue)
+        .eq("hstatus", "4")            // forward-only from รอร้านจีนจัดส่ง
+        .select("id");
+      if (advErr) {
+        console.error(
+          `[momo commit: order-advance] tb_header_order update failed (hno=${reforderValue})`,
+          { code: advErr.code, message: advErr.message },
+        );
+      } else if (advanced && advanced.length > 0) {
+        console.info(
+          `[momo commit: order-advance] hno=${reforderValue} → hstatus 4→40 (ถึงโกดังจีน)`,
+        );
+      }
+    } catch (e) {
+      console.error(`[momo commit: order-advance] threw (hno=${reforderValue})`, e);
+    }
   }
 
   // ── 7. Audit log + revalidate ──────────────────────────────

@@ -518,8 +518,15 @@ export function extractMetricsFromMomoRaw(raw: unknown): MomoMetrics {
     return 0;
   };
   return {
-    weight: num(r.kg),
-    cbm:    num(r.cbm),
+    // LANE A · ฿0-bill fix (owner 2026-06-16): at arrival, the per-parcel
+    // `kg`/`cbm` are often 0 while the container aggregate carries the real
+    // figure → fell through to ฿0. Fall back to the container aggregate
+    // (total_kg/total_cbm), mirroring the consumer pattern at line 167-168.
+    // The "never persist a silent ฿0" guard (live-rate.ts:311) still holds:
+    // if BOTH are 0 the row stays unpriced for the admin to fill — we never
+    // bill ฿0.
+    weight: num(r.kg)  || num(r.total_kg),
+    cbm:    num(r.cbm) || num(r.total_cbm),
     width:  num(r.width),
     length: num(r.length),
     height: num(r.height),

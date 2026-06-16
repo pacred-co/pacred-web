@@ -26,12 +26,13 @@ import { isGeneralCoid } from "@/lib/forwarder/coid";
 
 const EXPORT_CAP = 10000;
 
-// Legacy STATUS_LABEL — mirrors the page (hstatus is char(1) "1".."6").
+// Legacy STATUS_LABEL — mirrors the page (hstatus is varchar(2): "1".."6" + "40").
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ",
   "2": "รอชำระเงิน",
   "3": "สั่งสินค้า",
   "4": "รอร้านจีนจัดส่ง",
+  "40": "ถึงโกดังจีน", // owner 2026-06-16 · MOMO arrival
   "5": "สำเร็จ",
   "6": "ยกเลิก",
 };
