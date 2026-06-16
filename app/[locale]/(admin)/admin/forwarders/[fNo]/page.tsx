@@ -47,11 +47,20 @@ import {
 // 2026-06-11 (Lane B · doc-choice visibility) — show the customer's tax-doc
 // choice (ใบกำกับ/ใบขน/ไม่รับเอกสาร) + the juristic-WHT signal at a glance.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
+// 2026-06-16 (owner "การดึงเรทราคามาสรุป" Part 2) — surface a rateMissing warning
+// + inline manual-rate entry ON the detail page (was only discoverable at SAVE
+// time on /edit). The probe reuses the SAME resolver inputs the save uses so the
+// badge + the save never drift; the inline entry writes via the EXISTING
+// adminUpdateForwarderDimensions customRate path (no new pricing writer).
+import { previewForwarderRateMissing } from "@/lib/forwarder/live-rate";
+import { ForwarderRateMissingFallback } from "./forwarder-inline-rate-fallback";
+import { getTranslations } from "next-intl/server";
 import {
   User as UserIcon,
   Pencil,
   ArrowLeft,
   PackageCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
@@ -505,6 +514,23 @@ async function tryRenderTbForwarder(
     num(r.ftotalprice) + num(r.ftransportprice) + num(r.fpriceupdate) + num(r.fshippingservice) +
     num(r.pricecrate) + num(r.ftransportpricechnthb) + num(r.priceother) - num(r.fdiscount);
 
+  // 2026-06-16 (owner Part 2) — rateMissing probe. READ-ONLY, reuses the SAME
+  // resolver inputs adminUpdateForwarderDimensions uses (previewForwarderRate-
+  // Missing) so the on-page badge and the save can never drift. Best-effort —
+  // degrades to not-missing on any DB error so the page still renders.
+  const { missing: rateMissing } = await previewForwarderRateMissing(admin, r.id);
+  const tRate = await getTranslations("forwarderInlineRate");
+  const rateFallbackDims = {
+    fId: r.id,
+    weight: pricingInit.weight,
+    width: pricingInit.width,
+    length: pricingInit.length,
+    height: pricingInit.height,
+    volumeCbm: pricingInit.volume,
+    productType: pricingInit.productType,
+    refPrice: pricingInit.refPrice,
+  };
+
   return (
     <main className="p-4 lg:p-6 space-y-4">
       {/* ── breadcrumb (outside the card · same as customer page) ── */}
@@ -563,6 +589,14 @@ async function tryRenderTbForwarder(
                 isJuristic={u?.userCompany === "1" || r.fusercompany === "1"}
                 totalThb={Number(r.ftotalprice ?? 0)}
               />
+              {/* 2026-06-16 (owner Part 2) — at-a-glance "ยังไม่มีเรทขนส่ง" chip when
+                  the system can't resolve a rate for this row (same signal the save
+                  refuses on). The full warning + inline fix sit below the items. */}
+              {rateMissing && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-0.5 text-xs font-medium">
+                  <AlertTriangle className="h-3 w-3" /> {tRate("missingBadge")}
+                </span>
+              )}
             </div>
           </div>
           <div className="md:text-right shrink-0 space-y-1.5">
@@ -718,6 +752,16 @@ async function tryRenderTbForwarder(
             </div>
           </div>
         </div>
+
+        {/* ── เรทขนส่งหาย → คำเตือน + กรอกเรทกำหนดเอง (owner Part 2) — เมื่อ
+           ระบบหาเรทขนส่งของลูกค้าไม่พบ (rateMissing) แสดงกล่องเตือน + ช่องกรอก
+           เรท (ขาย=CBM · กิโล=KG) ที่บันทึกผ่าน adminUpdateForwarderDimensions
+           (customRate override) → คำนวณ "ค่านำเข้าจีน-ไทย" + ราคารวมด้านบนใหม่ทันที. ── */}
+        {rateMissing && (
+          <div className="mt-4">
+            <ForwarderRateMissingFallback customerId={r.userid} dims={rateFallbackDims} />
+          </div>
+        )}
 
         {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php). owner 2026-06-11:
            "ยกฟอร์มสถานะขึ้นบนรายการสินค้า · ฟอร์มราคา (pricing@4) ให้ต่อจากรายการสินค้า แยกกัน"

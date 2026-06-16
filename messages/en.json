@@ -7979,5 +7979,39 @@
   "yuanPaymentExtra": {
     "slipAttachLabel": "Attach transfer slip (image/PDF)",
     "idCardAttachLabel": "Attach ID copy (image/PDF)"
+  },
+  "customerRateComparison": {
+    "tabLabel": "Comparison (KG/CBM)",
+    "heading": "Comparison (CPS) — KG/CBM pricing threshold",
+    "intro": "Comparison = the density threshold (kg per CBM · 1 CBM = 250 kg) that decides whether to bill by weight or by volume. Set it together with the sell rate in one place.",
+    "currentOn": "Comparison pricing enabled",
+    "currentOff": "This customer is priced normally (max price)",
+    "valueLabel": "Comparison value (kg/CBM)",
+    "inputLabel": "Comparison value used for shipping price (default 150)",
+    "hint": "Lower value → bills by volume (CBM) more often (cheaper) · comparison customers are exempt from the \"max price\" rule",
+    "setBtn": "Set comparison",
+    "editBtn": "Edit comparison",
+    "removeBtn": "Remove comparison",
+    "saving": "Saving...",
+    "invalidValue": "Enter a comparison value ≥ 0",
+    "confirmSet": "Confirm setting this customer's comparison value to {value} (kg/CBM)? Applies to new-order pricing.",
+    "confirmRemove": "Remove this customer from comparison pricing? (back to normal pricing)",
+    "savedSet": "Comparison saved",
+    "savedRemove": "Comparison removed — back to normal pricing"
+  },
+  "forwarderInlineRate": {
+    "missingBadge": "No shipping rate yet",
+    "missingTitle": "No shipping rate yet — please set a rate",
+    "missingBody": "No shipping rate was found for this customer's (warehouse/transport/product) tuple, so the China→Thailand import price can't be computed. Set a per-customer rate on the customer profile, or enter a manual override below to price it now.",
+    "openProfile": "Set rate on customer profile",
+    "quickFillTitle": "Enter a manual rate (override)",
+    "quickFillHint": "A manual rate is used as-is (never doc-tier discounted) · on save the system recomputes the China→Thailand import price and the totals above refresh immediately.",
+    "kgLabel": "Rate/kg (฿)",
+    "cbmLabel": "Rate/CBM (฿)",
+    "saveBtn": "Save rate + compute price",
+    "saving": "Saving...",
+    "invalid": "Enter at least one rate (kg or CBM) as a number > 0",
+    "confirm": "Confirm manual rate — Rate/kg ฿{kg} · Rate/CBM ฿{cbm}? The system will recompute the China→Thailand import price and update the totals.",
+    "saved": "Rate set + price computed"
   }
 }
