@@ -22,19 +22,33 @@
  *      — a spike for one customer is usually MOMO mis-tagging a batch.
  *   7. Raw metrics are within plausibility caps (weight ≤ 10,000kg ·
  *      cbm ≤ 200) — anything beyond signals unit confusion in partner data.
- *   8. Sane defaults applied:
- *      - fShipBy = the customer's saved default carrier, resolved via the
- *        legacy cart chain (tb_users.userShipBy → most-recent
- *        tb_forwarder.fshipby → "PCS"). This makes the committed row reflect
- *        the delivery the customer actually chose ("ตามที่ลูกค้าเลือก")
- *        instead of forcing warehouse self-pickup on every order. Only a
- *        customer who genuinely defaults to self-pickup (or has no saved
- *        carrier AND no order history) lands on "PCS".
- *        See `resolveCustomerDefaultShipBy` below (ภูม Issue 4, 2026-06-16).
+ *   8. Delivery is RESOLVED from the customer's OWN set data — never guessed
+ *      (ภูม Issue 4 v2, 2026-06-16 · `resolveAutoCommitDelivery` below):
+ *      - carrier  = the customer's saved carrier (tb_users.userShipBy →
+ *        most-recent tb_forwarder.fshipby). No saved carrier → SKIP.
+ *      - address  = the customer's DEFAULT address (tb_address_main →
+ *        tb_address, addressstatus="1"). No default address → SKIP.
+ *      - validate = the saved carrier MUST be eligible for that address's
+ *        province (getShipByOptionsForAddress — the legacy cart rule:
+ *        BKK/ปริมณฑล → Flash/ต้นทาง only · ต่างจังหวัด → province carriers).
+ *        Carrier not eligible (incl. self-pickup "PCS") → SKIP.
+ *      - payMethod = derivePayMethod(carrier) → '1' ต้นทาง (BKK origin) /
+ *        '2' ปลายทาง COD (upcountry private carrier). The province rule is
+ *        EMERGENT from carrier-eligibility ∘ this map (no province switch).
  *      - fProductsType = "1" (ทั่วไป — same as legacy default)
  *
- * Rows that don't qualify stay at /review for admin to commit manually
- * via the existing `commitMomoRowToForwarder` action (Wave 26 G1).
+ *      Why no "PCS" fallback any more: the v1 chain ended in "PCS" on
+ *      no-signal, which the commit core maps to the warehouse self-pickup
+ *      address — so EVERY MOMO order without a clear carrier landed as
+ *      "รับเองหน้าโกดัง Pacred" and the driver had nowhere to deliver. ภูม's
+ *      rule (option ก): if delivery can't be resolved from the customer's
+ *      set data, DON'T GUESS — leave it for /review. Out-of-system MOMO jobs
+ *      are the only unresolvable ones; every in-system order already carries
+ *      a customer-set address, so this never silently mis-delivers.
+ *
+ * Rows that don't qualify (safety predicate OR unresolved delivery) stay at
+ * /review for admin to commit manually via the existing
+ * `commitMomoRowToForwarder` action (Wave 26 G1).
  *
  * Why this is safer than auto-committing everything:
  *   - MOMO's user_group / user_code can be incomplete or wrong (the new
@@ -96,6 +110,8 @@ import {
 } from "@/lib/admin/auto-commit-momo-safety";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { logger } from "@/lib/logger";
+import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 
 const SCOPE = "auto-commit-momo";
 
@@ -108,6 +124,7 @@ export type AutoCommitOutcome =
   | "skipped_daily_per_user_cap"
   | "skipped_implausible_weight"
   | "skipped_implausible_volume"
+  | "skipped_unresolved_delivery"
   | "failed";
 
 export type AutoCommitMomoResult = {
@@ -152,34 +169,27 @@ function outcomeForReason(reason: SafetyReason): AutoCommitOutcome {
 }
 
 /**
- * Resolve the carrier (fShipBy) an auto-committed row should use for a
- * customer — the legacy "what the customer chose" default chain.
- *
- * ภูม bug (Issue 4, 2026-06-16): the cron hardcoded fShipBy="PCS", which the
- * commit core (commit-momo-row-core.ts L252) short-circuits to the warehouse
- * self-pickup address — so EVERY auto-synced MOMO order landed as
- * "รับเองหน้าโกดัง Pacred" regardless of the customer's real delivery address,
- * and the driver had nowhere to deliver ("คนขับรถไม่รู้ต้องไปส่งของที่ไหน").
- *
- * Faithful to the legacy cart default chain (cart.php L146-161):
+ * Resolve the carrier (fShipBy) the customer has on file — the legacy
+ * "what the customer chose" default chain (cart.php L146-161):
  *   1. tb_users.userShipBy — the customer's saved last-used carrier.
  *   2. fallback → the customer's most-recent tb_forwarder.fshipby (ID DESC).
- *   3. fallback → "PCS"    — no signal at all → safe self-pickup (admin can
- *                            still correct at /review or the edit form).
+ *   3. no signal → null  (caller SKIPS the row to /review — NO "PCS" guess).
  *
- * When this returns a real carrier (non-"PCS"), the commit core resolves the
- * customer's DEFAULT delivery address (tb_address_main → tb_address) instead
- * of the pickup warehouse — which is exactly the fix ภูม asked for.
+ * ภูม Issue 4 v2 (2026-06-16): the v1 chain ended in "PCS" on no-signal, which
+ * the commit core maps to the warehouse self-pickup address — so EVERY synced
+ * MOMO order without a clear carrier landed as "รับเองหน้าโกดัง Pacred" and the
+ * driver had nowhere to deliver ("คนขับรถไม่รู้ต้องไปส่งของที่ไหน"). The rule:
+ * don't guess — return null so the row is left for manual /review.
  *
  * NOTE: tb_users uses camelCase columns on prod (the 2026-05-27 batch-1
  * rename) — querying lowercase "usershipby" throws "column does not exist".
  * A resolved value is only trusted when ≤10 chars (the fShipBy schema cap) so
  * a malformed migrated value falls through instead of failing the commit.
  */
-async function resolveCustomerDefaultShipBy(
+async function resolveSavedCarrier(
   admin: SupabaseClient,
   userID: string,
-): Promise<string> {
+): Promise<string | null> {
   // 1. The customer's saved default carrier ("ตามที่ลูกค้าเลือก").
   const { data: userRow, error: userErr } = await admin
     .from("tb_users")
@@ -187,7 +197,7 @@ async function resolveCustomerDefaultShipBy(
     .eq("userID", userID)
     .maybeSingle<{ userShipBy: string | null }>();
   if (userErr) {
-    console.error("[auto-commit-momo resolveShipBy user] failed", {
+    console.error("[auto-commit-momo resolveCarrier user] failed", {
       code: userErr.code, message: userErr.message, userID,
     });
   }
@@ -204,15 +214,120 @@ async function resolveCustomerDefaultShipBy(
     .limit(1)
     .maybeSingle<{ fshipby: string | null }>();
   if (lastErr) {
-    console.error("[auto-commit-momo resolveShipBy last-fwd] failed", {
+    console.error("[auto-commit-momo resolveCarrier last-fwd] failed", {
       code: lastErr.code, message: lastErr.message, userID,
     });
   }
   const last = (lastFwd?.fshipby ?? "").trim();
   if (last && last.length <= 10) return last;
 
-  // 3. No signal at all — safe self-pickup (admin resolves manually).
-  return "PCS";
+  // 3. No saved carrier → caller skips to /review (NO "PCS" guess).
+  return null;
+}
+
+type DefaultAddress = {
+  addressID: number;
+  zip:       string | null;
+  province:  string | null;
+  amphoe:    string | null;
+};
+
+/**
+ * Resolve the customer's DEFAULT delivery address (the source of truth ภูม's
+ * rule yields to). Mirrors the commit core's fallback lookup exactly
+ * (commit-momo-row-core.ts L294-343): tb_address_main → tb_address, only an
+ * active row (addressstatus="1"). Returns null when there's no default address
+ * → caller SKIPS to /review (no warehouse guess). Returning the addressID lets
+ * the commit land on the SAME row we validated (no TOCTOU drift).
+ */
+async function resolveDefaultAddress(
+  admin: SupabaseClient,
+  userID: string,
+): Promise<DefaultAddress | null> {
+  const { data: main, error: mainErr } = await admin
+    .from("tb_address_main")
+    .select("addressid")
+    .eq("userid", userID)
+    .maybeSingle<{ addressid: number }>();
+  if (mainErr) {
+    console.error("[auto-commit-momo resolveAddress main] failed", {
+      code: mainErr.code, message: mainErr.message, userID,
+    });
+  }
+  if (!main?.addressid) return null;
+
+  const { data: addr, error: addrErr } = await admin
+    .from("tb_address")
+    .select("addressid, addressprovince, addressdistrict, addresszipcode")
+    .eq("addressid", main.addressid)
+    .eq("userid", userID)
+    .eq("addressstatus", "1")
+    .maybeSingle<{
+      addressid:       number;
+      addressprovince: string | null;
+      addressdistrict: string | null;
+      addresszipcode:  string | null;
+    }>();
+  if (addrErr) {
+    console.error("[auto-commit-momo resolveAddress addr] failed", {
+      code: addrErr.code, message: addrErr.message, userID,
+    });
+  }
+  if (!addr?.addressid) return null;
+
+  return {
+    addressID: addr.addressid,
+    zip:       addr.addresszipcode,
+    province:  addr.addressprovince,
+    amphoe:    addr.addressdistrict,
+  };
+}
+
+type AutoCommitDelivery = {
+  fShipBy:   string;
+  addressID: number;
+  payMethod: "1" | "2";
+};
+
+/**
+ * Resolve the full delivery (carrier + address + payMethod) for an
+ * auto-committed MOMO row from the customer's OWN set data — ภูม Issue 4 v2.
+ *
+ * Returns null (→ SKIP to /review) when ANY part can't be resolved:
+ *   - no saved carrier, OR
+ *   - no default address, OR
+ *   - the saved carrier isn't eligible for that address's province
+ *     (getShipByOptionsForAddress — the legacy cart rule; self-pickup "PCS"
+ *     is never in that list, so a self-pickup default also skips here).
+ *
+ * On success the committed row honours the province rule: the eligibility
+ * check guarantees the carrier matches the address (BKK/ปริมณฑล → Flash/origin ·
+ * ต่างจังหวัด → province carrier), and derivePayMethod gives '1' ต้นทาง for a
+ * BKK origin carrier / '2' ปลายทาง COD for an upcountry private carrier.
+ */
+async function resolveAutoCommitDelivery(
+  admin: SupabaseClient,
+  userID: string,
+): Promise<AutoCommitDelivery | null> {
+  const carrier = await resolveSavedCarrier(admin, userID);
+  if (!carrier) return null;
+
+  const address = await resolveDefaultAddress(admin, userID);
+  if (!address) return null;
+
+  const eligible = getShipByOptionsForAddress({
+    zip:      address.zip,
+    province: address.province,
+    amphoe:   address.amphoe,
+    userID,
+  });
+  if (!eligible.some((o) => o.id === carrier)) return null;
+
+  return {
+    fShipBy:   carrier,
+    addressID: address.addressID,
+    payMethod: derivePayMethod(carrier),
+  };
 }
 
 /**
@@ -420,6 +535,30 @@ export async function autoCommitEligibleMomoRows(
       continue;
     }
 
+    // Resolve delivery (carrier + address + payMethod) from the customer's
+    // OWN set data BEFORE attempting commit — ภูม Issue 4 v2 (2026-06-16).
+    // If it can't be resolved (no saved carrier / no default address /
+    // carrier not eligible for the address province, incl. self-pickup
+    // "PCS"), DON'T GUESS — skip the row to /review for manual handling.
+    // This is what stops the v1 bug where a "PCS" fallback forced every
+    // unresolved order onto the warehouse self-pickup address, so the driver
+    // had no delivery target. guessedUserId is non-null here (the
+    // no_guessed_userid / unknown_user predicates skipped those above).
+    const delivery = await resolveAutoCommitDelivery(
+      admin,
+      c.guessedUserId as string,
+    );
+    if (!delivery) {
+      result.skipped++;
+      result.perRow.push({
+        rowId:          c.rowId,
+        momoTrackingNo: c.momoTrackingNo,
+        guessedUserId:  c.guessedUserId,
+        outcome:        "skipped_unresolved_delivery",
+      });
+      continue;
+    }
+
     // Eligible — attempt commit. We call `commitMomoRowSystem` (the
     // auth-agnostic core's cron entry point — Wave 30.5), so the EXACT
     // same write path runs whether an admin clicks "สร้างใหม่" manually
@@ -430,22 +569,13 @@ export async function autoCommitEligibleMomoRows(
     // they're identifiable as system-committed in tb_forwarder.
     result.attempted++;
     try {
-      // Issue 4 fix (ภูม 2026-06-16): resolve the customer's real default
-      // carrier instead of forcing "PCS" — which the commit core maps to
-      // warehouse self-pickup (PCS_PICKUP_ADDRESS), making EVERY synced order
-      // "รับเองหน้าโกดัง Pacred" so the driver has no delivery address. A
-      // non-"PCS" carrier lets the core resolve the customer's chosen
-      // tb_address_main → tb_address default address. guessedUserId is
-      // non-null here (checkUnknownUser skipped no-userid rows above).
-      const fShipBy = await resolveCustomerDefaultShipBy(
-        admin,
-        c.guessedUserId as string,
-      );
       const res = await commitMomoRowSystem({
         rowId:         c.rowId,
         userID:        c.guessedUserId as string,
-        fShipBy,
+        fShipBy:       delivery.fShipBy,
         fProductsType: "1",
+        addressID:     delivery.addressID,
+        payMethod:     delivery.payMethod,
       });
       if (res.ok) {
         result.succeeded++;
