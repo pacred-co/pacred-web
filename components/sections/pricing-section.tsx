@@ -385,15 +385,18 @@ export function PricingSection({
             <div className="flex flex-col gap-7 md:gap-10">
               {/* ═════ Cargo LCL Section — โกดังรับสินค้า (full-card graphic) ═════ */}
               <WarehouseRateGroup />
-              {/* ═════ Cargo FCL Section ═════ */}
-              <CargoGroupRow
-                eyebrow={t("cargoFclSectionEyebrow")}
-                title={t("cargoFclSectionTitle")}
-                sub={t("cargoFclSectionSub")}
-                cards={CARGO_FCL_CARDS}
-                cols={2}
-                t={t}
-              />
+              {/* ═════ Freight Import-Export Section (heading only — cards TBD) ═════ */}
+              <section>
+                <header>
+                  <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
+                    <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
+                    {t("cargoFclSectionEyebrow")}
+                  </div>
+                  <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
+                    {t("cargoFclSectionTitle")}
+                  </h3>
+                </header>
+              </section>
             </div>
           ) : (
             <div className="flex flex-col gap-7 md:gap-10">
