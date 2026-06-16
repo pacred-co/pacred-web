@@ -104,6 +104,13 @@ const editForwarderSchema = z.object({
   widthCm:       z.number().min(0).max(9999.99),
   lengthCm:      z.number().min(0).max(9999.99),
   heightCm:      z.number().min(0).max(9999.99),
+  /** CBM override — Issue 3 (ภูม 2026-06-16 "ช่อง …(ถึงไทยแล้ว) แก้ให้สามารถ
+   *  แก้ไข CBM ได้ด้วย"). When present it WINS over the (W×L×H)/1e6 auto-
+   *  derivation (the legacy computeCbm); when omitted (old callers) we fall
+   *  back to computeCbm so the change is non-breaking. A manual CBM is
+   *  authoritative — it drives fvolume AND the by-volume price leg
+   *  (cbmProduct below), so the billed volume matches what the admin typed. */
+  volumeCbm:     z.number().min(0).max(99999.99).optional(),
   // fproductstype char(1) — legacy enum
   productType:   z.enum(["1", "2", "3", "4"] as const),
   // frefprice char(1) — '1' น้ำหนัก · '2' ปริมาตร
@@ -220,7 +227,11 @@ export async function adminUpdateForwarderDimensions(
     async ({ adminId }) => {
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
-      const cbm           = computeCbm(d.widthCm, d.lengthCm, d.heightCm);
+      // Issue 3: a typed CBM overrides the W×L×H derivation (rounded to the
+      // legacy numeric(10,5) shape); omitted → fall back to computeCbm.
+      const cbm           = d.volumeCbm != null
+        ? Math.round(d.volumeCbm * 100_000) / 100_000
+        : computeCbm(d.widthCm, d.lengthCm, d.heightCm);
 
       // ─── Resolve target row ─────────────────────────────────────
       const asNumber = Number(d.fNo);

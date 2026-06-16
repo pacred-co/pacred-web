@@ -77,6 +77,17 @@ function Summary({ label, value, negative }: { label: string; value: number; neg
   );
 }
 
+// (W × L × H) / 1,000,000 (cm³ → m³) · 5-dp — the legacy CBM formula. Used to
+// AUTO-FILL the now-editable CBM field as the admin types dimensions (Issue 3).
+// Returns a string so it can seed the CBM <input> state directly.
+function cbmFromDims(w: string, l: string, h: string): string {
+  const wn = parseFloat(w) || 0;
+  const ln = parseFloat(l) || 0;
+  const hn = parseFloat(h) || 0;
+  const v = (wn * ln * hn) / 1_000_000;
+  return (Math.round(v * 100_000) / 100_000).toFixed(5);
+}
+
 export function AdminForwarderEditForm({
   fNo,
   idNumeric,
@@ -131,6 +142,12 @@ export function AdminForwarderEditForm({
   const [width,       setWidth]       = useState<string>(widthInit  ? String(widthInit)  : "0");
   const [length,      setLength]      = useState<string>(lengthInit ? String(lengthInit) : "0");
   const [height,      setHeight]      = useState<string>(heightInit ? String(heightInit) : "0");
+  // Issue 3 (ภูม 2026-06-16 "แก้ให้สามารถแก้ไข CBM ได้ด้วย") — CBM is now an
+  // EDITABLE field, not a read-only W×L×H derivation. Seed from the stored
+  // fvolume; typing W/L/H auto-recomputes it (the convenience is kept), but
+  // typing CBM directly overrides — last-edit-wins. It drives the by-volume
+  // price leg, so a manual CBM is authoritative for billing too.
+  const [cbm,         setCbm]         = useState<string>(volumeInit ? String(volumeInit) : "0");
   const [productType, setProductType] = useState<ProductType>(productTypeInit);
   const [refPrice,    setRefPrice]    = useState<RefPrice>(refPriceInit);
   const [note,        setNote]        = useState<string>(noteInit);
@@ -157,18 +174,21 @@ export function AdminForwarderEditForm({
   // Numeric parse + CBM preview — same formula legacy uses:
   // (W × L × H) / 1,000,000 (cm³ → m³).
   const parsed = useMemo(() => {
-    const w = parseFloat(width)  || 0;
-    const l = parseFloat(length) || 0;
-    const h = parseFloat(height) || 0;
-    const cbm = (w * l * h) / 1_000_000;
     return {
-      width:  w,
-      length: l,
-      height: h,
+      width:  parseFloat(width)  || 0,
+      length: parseFloat(length) || 0,
+      height: parseFloat(height) || 0,
       weight: parseFloat(weight) || 0,
-      cbm:    Math.round(cbm * 100_000) / 100_000,
     };
   }, [weight, width, length, height]);
+
+  // CBM as a number (from the editable `cbm` state · 5-dp) — replaces the old
+  // parsed.cbm. CBM is no longer a pure W×L×H derivation (Issue 3): it can be
+  // typed directly, so the authoritative numeric reads off the `cbm` state.
+  const cbmNum = useMemo(() => {
+    const v = parseFloat(cbm) || 0;
+    return Math.round(v * 100_000) / 100_000;
+  }, [cbm]);
 
   // Per-item crate UI is intentionally dropped in this PCS-style one-card
   // layout (state preserved via `items` for future re-introduction). The
@@ -187,7 +207,7 @@ export function AdminForwarderEditForm({
   // rate (waterfall) — this is just a visual sanity-check for the admin.
   const preview = useMemo(() => {
     const w  = parseFloat(weight)                || 0;
-    const v  = (parsed.width * parsed.length * parsed.height) / 1_000_000;
+    const v  = cbmNum;   // Issue 3 — by-volume leg uses the editable CBM
     const cr = customRate === "1";
     const rateKg  = parseFloat(customRateKg)  || 0;
     const rateCbm = parseFloat(customRateCbm) || 0;
@@ -215,7 +235,7 @@ export function AdminForwarderEditForm({
       grand,
     };
   }, [
-    weight, parsed.width, parsed.length, parsed.height, customRate,
+    weight, cbmNum, customRate,
     customRateKg, customRateCbm, fShippingService, fTransportPriceChnThb,
     crateSummary.totalFee, priceOther, fTransportPrice, fDiscount,
   ]);
@@ -238,6 +258,7 @@ export function AdminForwarderEditForm({
         widthCm:      parsed.width,
         lengthCm:     parsed.length,
         heightCm:     parsed.height,
+        volumeCbm:    cbmNum,      // Issue 3 — send the (possibly hand-typed) CBM
         productType,
         refPrice,
         note:         note.trim() || undefined,
@@ -375,7 +396,7 @@ export function AdminForwarderEditForm({
                 <th className={CELL_TH}>กว้าง (cm)</th>
                 <th className={CELL_TH}>ยาว (cm)</th>
                 <th className={CELL_TH}>สูง (cm)</th>
-                <th className={`${CELL_TH} text-red-600`}>CBM (auto)</th>
+                <th className={`${CELL_TH} text-red-600`}>CBM (แก้ได้)</th>
                 {customRate === "1" && <th className={CELL_TH}>เรท/CBM (฿)</th>}
                 <th className={`${CELL_TH} text-red-600`}>ค่าขนส่งในไทย</th>
                 <th className={CELL_TH}>ส่วนลด</th>
@@ -416,16 +437,18 @@ export function AdminForwarderEditForm({
                   <input type="number" min={0} step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
                 <td>
-                  <input type="number" min={0} step="0.01" value={width} onChange={(e) => setWidth(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  <input type="number" min={0} step="0.01" value={width} onChange={(e) => { const v = e.target.value; setWidth(v); setCbm(cbmFromDims(v, length, height)); }} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
                 <td>
-                  <input type="number" min={0} step="0.01" value={length} onChange={(e) => setLength(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  <input type="number" min={0} step="0.01" value={length} onChange={(e) => { const v = e.target.value; setLength(v); setCbm(cbmFromDims(width, v, height)); }} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
                 <td>
-                  <input type="number" min={0} step="0.01" value={height} onChange={(e) => setHeight(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  <input type="number" min={0} step="0.01" value={height} onChange={(e) => { const v = e.target.value; setHeight(v); setCbm(cbmFromDims(width, length, v)); }} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
                 <td>
-                  <input type="text" readOnly value={parsed.cbm.toFixed(5)} className={CELL_RO} />
+                  {/* Issue 3 — CBM editable: type W/L/H to auto-fill, or type
+                      CBM directly to override (last edit wins). */}
+                  <input type="number" min={0} step="0.00001" value={cbm} onChange={(e) => setCbm(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00000" />
                 </td>
                 {customRate === "1" && (
                   <td>
@@ -466,7 +489,7 @@ export function AdminForwarderEditForm({
           <div className="space-y-1 text-xs font-mono tabular-nums">
             <p className="font-semibold text-foreground mb-1 font-sans not-italic">ราคานำเข้าจีน-ไทย:</p>
             <p>คิดตามน้ำหนัก {parsed.weight.toFixed(2)} × {(parseFloat(customRateKg) || 0).toFixed(2)} = <strong>฿{preview.priceByKg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
-            <p>คิดตามปริมาตร {parsed.cbm.toFixed(5)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+            <p>คิดตามปริมาตร {cbmNum.toFixed(5)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
             <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
               ระบบเลือก คิดตามราคามากสุด → ฿{preview.transport.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
@@ -528,7 +551,7 @@ export function AdminForwarderEditForm({
 
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline text-[11px] text-muted font-mono tabular-nums">
-              #{idNumeric} · {parsed.weight.toFixed(2)} kg · {parsed.cbm.toFixed(5)} cbm
+              #{idNumeric} · {parsed.weight.toFixed(2)} kg · {cbmNum.toFixed(5)} cbm
             </span>
             <button
               type="submit"

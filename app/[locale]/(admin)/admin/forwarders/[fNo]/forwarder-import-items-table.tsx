@@ -13,44 +13,71 @@
  *   ค่านำเข้าจีน-ไทย · ค่าสินค้า เพิ่ม/ลด · ค่าตีลัง · ค่าขนส่งจีน+ · ค่าขนส่งไทย ·
  *   ค่าบริการ · ค่าอื่นๆ · ส่วนลด · ราคารวม
  *
- * One row = the order (legacy renders the header aggregate as a single row —
- * per-item cost columns are header-level in our schema). The รายละเอียด cell
- * lists the real item names (tb_order if shop-spawned · else tb_forwarder_item)
- * + ประเภทสินค้า, so a multi-item order still shows every product. ราคารวม is the
- * gross the customer owes (no WHT column — the legacy 16-col table has none; the
- * juristic WHT deduction is applied at payment, shown on the receipt/invoice).
+ * 2026-06-16 (ภูม · owner live-test of ฝากนำเข้า — 2 detail bugs):
+ *   ① ONE row per SIBLING TRACKING, not one. A split parcel = several
+ *      tb_forwarder rows sharing (baseTracking, userid) (MOMO `-N/M` boxes, or
+ *      a manually-split order). The legacy detail page rendered only the landed
+ *      row, so an order with many trackings showed a single line. We now fetch
+ *      the siblings + drop the MOMO หัวบิล placeholder, MIRRORING the list page
+ *      (forwarders-table.tsx · countableGroupMembers / buildDisplayUnits) so the
+ *      detail page and the list page agree row-for-row.
+ *   ② ปริมาตรรวม CBM = fvolume × กล่อง (boxes), not raw per-box fvolume. The
+ *      header says "ปริมาตรรวม" (total); fvolume is stored PER BOX, so a 2-box
+ *      row was showing half its real volume. This is the EXACT formula the list
+ *      page uses for its CBM cell + group Σ (`volume_cbm × (amount_count || 1)`),
+ *      which the owner confirmed is the correct reference.
+ *
+ * Each row lists its real item names (tb_order if shop-spawned · else
+ * tb_forwarder_item) + ประเภทสินค้า, so a multi-item tracking still shows every
+ * product; a totals row sums boxes / weight / CBM / money across siblings.
+ * ราคารวม is the gross the customer owes (no WHT column — the legacy 16-col table
+ * has none; the juristic WHT deduction is applied at payment, on the receipt).
  *
  * Money math mirrors edit/freight-breakdown-table.tsx (legacy detail.php
  * L372-377): priceAllUser = ค่านำเข้า + ขนส่งไทย + สินค้าเพิ่ม/ลด + บริการ +
  * ขนส่งจีน+ + ตีลัง + อื่นๆ − ส่วนลด.
  *
- * Async server component — fetches the item names inline.
+ * Async server component — fetches the sibling rows + item names inline.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  baseTracking,
+  trackingSuffix,
+  filterCountableForwarderRows,
+} from "@/lib/admin/momo-bill-header";
 
-type Props = {
-  r: {
-    id: number;
-    ftrackingchn?: string | null;
-    reforder: string | null;
-    fdetail: string | null;
-    fproductstype: string | null;
-    famount: number | null;
-    fweight: number | string | null;
-    fvolume: number | string | null;
-    frefprice: string | null;
-    frefrate: number | string | null;
-    ftotalprice: number | string | null;
-    fpriceupdate: number | string | null;
-    pricecrate: number | string | null;
-    ftransportpricechnthb: number | string | null;
-    ftransportprice: number | string | null;
-    fshippingservice: number | string | null;
-    priceother: number | string | null;
-    fdiscount: number | string | null;
-  };
+type ItemRow = {
+  id: number;
+  ftrackingchn?: string | null;
+  reforder: string | null;
+  fdetail: string | null;
+  fproductstype: string | null;
+  famount: number | null;
+  fweight: number | string | null;
+  fvolume: number | string | null;
+  frefprice: string | null;
+  frefrate: number | string | null;
+  ftotalprice: number | string | null;
+  fpriceupdate: number | string | null;
+  pricecrate: number | string | null;
+  ftransportpricechnthb: number | string | null;
+  ftransportprice: number | string | null;
+  fshippingservice: number | string | null;
+  priceother: number | string | null;
+  fdiscount: number | string | null;
+  // userid drives the sibling lookup. The detail page's `r` always carries it;
+  // it's optional here only so older callers still type-check.
+  userid?: string | null;
 };
+
+type Props = { r: ItemRow };
+
+// The columns we need to re-render any sibling row, kept in sync with ItemRow.
+const SIBLING_SELECT =
+  "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, fweight, fvolume, " +
+  "frefprice, frefrate, ftotalprice, fpriceupdate, pricecrate, ftransportpricechnthb, " +
+  "ftransportprice, fshippingservice, priceother, fdiscount";
 
 // legacy nameProductsType — function.php L1196-1208
 const PRODUCT_TYPE_LABEL: Record<string, string> = {
@@ -68,68 +95,189 @@ function fmtNum(n: number, digits: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+// Per-box fvolume × box count = the TOTAL CBM for the row. Mirrors the list
+// page (forwarders-table.tsx) `volume_cbm × (amount_count || 1)` so the two
+// surfaces never drift. `|| 1` guards a 0/null box count (legacy `-N` rows that
+// carry famount=1 each), exactly as the list page does.
+function totalCbm(fvolume: number | string | null, famount: number | null): number {
+  const boxes = Number(famount ?? 0);
+  return Number(fvolume ?? 0) * (boxes || 1);
+}
+
 export async function ForwarderImportItemsTable({ r }: Props) {
   const admin = createAdminClient();
 
-  // ── Real item names for the รายละเอียด cell (shop-spawned preferred) ──
-  let itemNames: string[] = [];
-  if (r.reforder && r.reforder.trim() !== "") {
+  // ── Gather the sibling tracking rows (Issue ① · ภูม 2026-06-16) ──
+  // A split parcel = multiple tb_forwarder rows sharing (baseTracking, userid).
+  // Narrow by a prefix ILIKE, then keep only EXACT baseTracking matches (a
+  // prefix like "178055573" must not absorb "1780555731"). On any DB error or
+  // an empty result, fall back to the single landed row `r` — never lose it.
+  const base = baseTracking(r.ftrackingchn);
+  let rows: ItemRow[] = [r];
+  if (base && r.userid) {
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select(SIBLING_SELECT)
+      .eq("userid", r.userid)
+      .ilike("ftrackingchn", `${base}%`)
+      .limit(200);
+    if (error) {
+      console.error(`[ForwarderImportItemsTable siblings]`, {
+        code: error.code, message: error.message, base, userid: r.userid,
+      });
+    } else {
+      const exact = ((data ?? []) as unknown as ItemRow[]).filter(
+        (row) => baseTracking(row.ftrackingchn) === base,
+      );
+      if (exact.length > 0) rows = exact;
+    }
+  }
+
+  // Drop the MOMO หัวบิล (bare zero-weight bill-header that sits beside the
+  // real -N/M boxes) — the exact filter the list-page box/CBM Σ runs through,
+  // so the detail rows match the list. Then order siblings by box number.
+  const countable = filterCountableForwarderRows(rows, {
+    tracking: (row) => row.ftrackingchn,
+    weight: (row) => Number(row.fweight ?? 0),
+    userid: (row) => row.userid ?? "",
+  });
+  const display = (countable.length > 0 ? countable : rows)
+    .slice()
+    .sort(
+      (a, b) =>
+        trackingSuffix(a.ftrackingchn) - trackingSuffix(b.ftrackingchn) || a.id - b.id,
+    );
+
+  // ── Item names for the รายละเอียด cell, batched across all siblings ──
+  // shop-spawned (tb_order by reforder→hno) preferred, else tb_forwarder_item
+  // by fid. Two queries total instead of N×2.
+  const reforders = Array.from(
+    new Set(display.map((row) => (row.reforder ?? "").trim()).filter((s) => s !== "")),
+  );
+  const fids = display.map((row) => row.id);
+
+  const namesByHno = new Map<string, string[]>();
+  if (reforders.length > 0) {
     const { data, error } = await admin
       .from("tb_order")
-      .select("ctitle")
-      .eq("hno", r.reforder.trim())
+      .select("hno, ctitle")
+      .in("hno", reforders)
       .order("id", { ascending: true })
-      .limit(200);
+      .limit(1000);
     if (error) {
-      console.error(`[ForwarderImportItemsTable tb_order]`, { code: error.code, message: error.message, hno: r.reforder });
+      console.error(`[ForwarderImportItemsTable tb_order]`, { code: error.code, message: error.message });
     } else {
-      itemNames = ((data ?? []) as { ctitle: string | null }[])
-        .map((it) => (it.ctitle ?? "").trim())
-        .filter((s) => s !== "");
+      for (const it of (data ?? []) as { hno: string | null; ctitle: string | null }[]) {
+        const hno = (it.hno ?? "").trim();
+        const name = (it.ctitle ?? "").trim();
+        if (hno === "" || name === "") continue;
+        const list = namesByHno.get(hno);
+        if (list) list.push(name);
+        else namesByHno.set(hno, [name]);
+      }
     }
   }
-  if (itemNames.length === 0) {
+
+  const namesByFid = new Map<number, string[]>();
+  if (fids.length > 0) {
     const { data, error } = await admin
       .from("tb_forwarder_item")
-      .select("productname")
-      .eq("fid", r.id)
+      .select("fid, productname")
+      .in("fid", fids)
       .order("id", { ascending: true })
-      .limit(200);
+      .limit(1000);
     if (error) {
-      console.error(`[ForwarderImportItemsTable tb_forwarder_item]`, { code: error.code, message: error.message, fid: r.id });
+      console.error(`[ForwarderImportItemsTable tb_forwarder_item]`, { code: error.code, message: error.message });
     } else {
-      itemNames = ((data ?? []) as { productname: string | null }[])
-        .map((it) => (it.productname ?? "").trim())
-        .filter((s) => s !== "");
+      for (const it of (data ?? []) as { fid: number | null; productname: string | null }[]) {
+        if (it.fid == null) continue;
+        const name = (it.productname ?? "").trim();
+        if (name === "") continue;
+        const list = namesByFid.get(it.fid);
+        if (list) list.push(name);
+        else namesByFid.set(it.fid, [name]);
+      }
     }
   }
-  // legacy uses fdetail as the row label; fall back to the joined item names,
-  // then to the China tracking number. MOMO/auto imports carry no product name
-  // (only a tracking), so showing the tracking beats "ไม่พบข้อมูล" when there IS
-  // an identifier. (ภูม flag 2026-06-12.)
-  const detailText =
-    r.fdetail && r.fdetail.trim() !== "" && r.fdetail.trim() !== "..."
-      ? r.fdetail.trim()
-      : itemNames.length > 0
-        ? itemNames[0]
-        : (r.ftrackingchn ?? "").trim();
 
-  // ── Header money (legacy detail.php L372-377) ──
-  const frefRate              = Number(r.frefrate ?? 0);
-  const fTotalPrice           = Number(r.ftotalprice ?? 0);
-  const fPriceUpdate          = Number(r.fpriceupdate ?? 0);
-  const priceCrate            = Number(r.pricecrate ?? 0);
-  const fTransportPriceCHNTHB = Number(r.ftransportpricechnthb ?? 0);
-  const fTransportPrice       = Number(r.ftransportprice ?? 0);
-  const fShippingService      = Number(r.fshippingservice ?? 0);
-  const priceOther            = Number(r.priceother ?? 0);
-  const fDiscount             = Number(r.fdiscount ?? 0);
-  const priceAllUser =
-    fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
-    fTransportPriceCHNTHB + priceCrate + priceOther - fDiscount;
+  // ── Derive per-row display values + totals (legacy detail.php L372-377) ──
+  const rendered = display.map((row) => {
+    const reforder = (row.reforder ?? "").trim();
+    const itemNames =
+      reforder !== "" && namesByHno.has(reforder)
+        ? namesByHno.get(reforder)!
+        : (namesByFid.get(row.id) ?? []);
+    // legacy uses fdetail as the row label; fall back to the joined item names,
+    // then to the China tracking number (MOMO/auto imports carry only a
+    // tracking, so it beats "ไม่พบข้อมูล" when there IS an identifier).
+    const detailText =
+      row.fdetail && row.fdetail.trim() !== "" && row.fdetail.trim() !== "..."
+        ? row.fdetail.trim()
+        : itemNames.length > 0
+          ? itemNames[0]
+          : (row.ftrackingchn ?? "").trim();
 
-  const refPriceLabel  = REF_PRICE_LABEL[r.frefprice ?? ""] ?? "ไม่พบข้อมูล";
-  const productTypeLbl = PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "ไม่พบข้อมูล";
+    const boxes                 = Number(row.famount ?? 0);
+    const weight                = Number(row.fweight ?? 0);
+    const cbm                   = totalCbm(row.fvolume, row.famount); // Issue ②
+    const frefRate              = Number(row.frefrate ?? 0);
+    const fTotalPrice           = Number(row.ftotalprice ?? 0);
+    const fPriceUpdate          = Number(row.fpriceupdate ?? 0);
+    const priceCrate            = Number(row.pricecrate ?? 0);
+    const fTransportPriceCHNTHB = Number(row.ftransportpricechnthb ?? 0);
+    const fTransportPrice       = Number(row.ftransportprice ?? 0);
+    const fShippingService      = Number(row.fshippingservice ?? 0);
+    const priceOther            = Number(row.priceother ?? 0);
+    const fDiscount             = Number(row.fdiscount ?? 0);
+    const priceAllUser =
+      fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
+      fTransportPriceCHNTHB + priceCrate + priceOther - fDiscount;
+
+    return {
+      id: row.id,
+      tracking: (row.ftrackingchn ?? "").trim(),
+      itemNames,
+      detailText,
+      boxes,
+      weight,
+      cbm,
+      frefRate,
+      fTotalPrice,
+      fPriceUpdate,
+      priceCrate,
+      fTransportPriceCHNTHB,
+      fTransportPrice,
+      fShippingService,
+      priceOther,
+      fDiscount,
+      priceAllUser,
+      refPriceLabel: REF_PRICE_LABEL[row.frefprice ?? ""] ?? "ไม่พบข้อมูล",
+      productTypeLbl: PRODUCT_TYPE_LABEL[row.fproductstype ?? ""] ?? "ไม่พบข้อมูล",
+    };
+  });
+
+  const multi = rendered.length > 1;
+  const totals = rendered.reduce(
+    (s, x) => ({
+      boxes: s.boxes + x.boxes,
+      weight: s.weight + x.weight,
+      cbm: s.cbm + x.cbm,
+      fTotalPrice: s.fTotalPrice + x.fTotalPrice,
+      fPriceUpdate: s.fPriceUpdate + x.fPriceUpdate,
+      priceCrate: s.priceCrate + x.priceCrate,
+      fTransportPriceCHNTHB: s.fTransportPriceCHNTHB + x.fTransportPriceCHNTHB,
+      fTransportPrice: s.fTransportPrice + x.fTransportPrice,
+      fShippingService: s.fShippingService + x.fShippingService,
+      priceOther: s.priceOther + x.priceOther,
+      fDiscount: s.fDiscount + x.fDiscount,
+      priceAllUser: s.priceAllUser + x.priceAllUser,
+    }),
+    {
+      boxes: 0, weight: 0, cbm: 0, fTotalPrice: 0, fPriceUpdate: 0, priceCrate: 0,
+      fTransportPriceCHNTHB: 0, fTransportPrice: 0, fShippingService: 0,
+      priceOther: 0, fDiscount: 0, priceAllUser: 0,
+    },
+  );
 
   const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap";
   const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap";
@@ -158,39 +306,74 @@ export async function ForwarderImportItemsTable({ r }: Props) {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-t border-border odd:bg-surface-alt/20 align-top">
-            <td className="px-2 py-2 text-center font-mono text-muted">1</td>
-            <td className="px-2 py-2 min-w-[220px] max-w-[360px] text-left">
-              {detailText ? (
-                <span className="break-words">{detailText}</span>
-              ) : (
-                <span className="text-muted">ไม่พบข้อมูล</span>
-              )}
-              {itemNames.length > 1 && (
-                <ul className="mt-0.5 list-disc pl-4 text-[11px] text-muted">
-                  {itemNames.slice(1).map((name, i) => (
-                    <li key={i} className="break-words">{name}</li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-0.5 text-[11px] text-muted">ประเภทสินค้า : {productTypeLbl}</div>
-            </td>
-            <td className={TD}>{r.famount ?? 0}</td>
-            <td className={TD}>{fmtNum(Number(r.fweight ?? 0), 2)}</td>
-            <td className={TD}>{fmtNum(Number(r.fvolume ?? 0), 5)}</td>
-            <td className="px-2 py-2 text-center whitespace-nowrap">{refPriceLabel}</td>
-            <td className={TD}>{fmtMoney(frefRate)}</td>
-            <td className={TD}>{fmtMoney(fTotalPrice)}</td>
-            <td className={TD}>{fmtMoney(fPriceUpdate)}</td>
-            <td className={TD}>{fmtMoney(priceCrate)}</td>
-            <td className={TD}>{fmtMoney(fTransportPriceCHNTHB)}</td>
-            <td className={TD}>{fmtMoney(fTransportPrice)}</td>
-            <td className={TD}>{fmtMoney(fShippingService)}</td>
-            <td className={TD}>{fmtMoney(priceOther)}</td>
-            <td className={`${TD} text-amber-700`}>{fDiscount > 0 ? `−${fmtMoney(fDiscount)}` : fmtMoney(0)}</td>
-            <td className={`${TD} font-bold text-red-600`}>{fmtMoney(priceAllUser)}</td>
-          </tr>
+          {rendered.map((x, idx) => (
+            <tr key={x.id} className="border-t border-border odd:bg-surface-alt/20 align-top">
+              <td className="px-2 py-2 text-center font-mono text-muted">{idx + 1}</td>
+              <td className="px-2 py-2 min-w-[220px] max-w-[360px] text-left">
+                {x.detailText ? (
+                  <span className="break-words">{x.detailText}</span>
+                ) : (
+                  <span className="text-muted">ไม่พบข้อมูล</span>
+                )}
+                {x.itemNames.length > 1 && (
+                  <ul className="mt-0.5 list-disc pl-4 text-[11px] text-muted">
+                    {x.itemNames.slice(1).map((name, i) => (
+                      <li key={i} className="break-words">{name}</li>
+                    ))}
+                  </ul>
+                )}
+                {/* Always surface the row's own China tracking (unless it's
+                    already the รายละเอียด label) so a SINGLE self-created import
+                    — and every split-parcel sibling — is identified by its
+                    แทรคกิง, never left bare. Issue 2a (ภูม 2026-06-16): a lone
+                    self-created row used to hide its tracking because this line
+                    was `multi`-gated, so the รายการ read as just its detail (the
+                    tracking lived only in the header/cabinet field) — Poom's
+                    "รายการมันไม่แสดงเป็นแทคกิง แต่มันจะแสดงเป็นเลขตู้". */}
+                {x.tracking !== "" && x.tracking !== x.detailText && (
+                  <div className="mt-0.5 text-[11px] text-muted">แทรคกิง : {x.tracking}</div>
+                )}
+                <div className="mt-0.5 text-[11px] text-muted">ประเภทสินค้า : {x.productTypeLbl}</div>
+              </td>
+              <td className={TD}>{x.boxes}</td>
+              <td className={TD}>{fmtNum(x.weight, 2)}</td>
+              <td className={TD}>{fmtNum(x.cbm, 5)}</td>
+              <td className="px-2 py-2 text-center whitespace-nowrap">{x.refPriceLabel}</td>
+              <td className={TD}>{fmtMoney(x.frefRate)}</td>
+              <td className={TD}>{fmtMoney(x.fTotalPrice)}</td>
+              <td className={TD}>{fmtMoney(x.fPriceUpdate)}</td>
+              <td className={TD}>{fmtMoney(x.priceCrate)}</td>
+              <td className={TD}>{fmtMoney(x.fTransportPriceCHNTHB)}</td>
+              <td className={TD}>{fmtMoney(x.fTransportPrice)}</td>
+              <td className={TD}>{fmtMoney(x.fShippingService)}</td>
+              <td className={TD}>{fmtMoney(x.priceOther)}</td>
+              <td className={`${TD} text-amber-700`}>{x.fDiscount > 0 ? `−${fmtMoney(x.fDiscount)}` : fmtMoney(0)}</td>
+              <td className={`${TD} font-bold text-red-600`}>{fmtMoney(x.priceAllUser)}</td>
+            </tr>
+          ))}
         </tbody>
+        {multi && (
+          <tfoot>
+            <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
+              <td className="px-2 py-2 text-center text-muted">รวม</td>
+              <td className="px-2 py-2 text-left text-muted">{rendered.length} แทรคกิง</td>
+              <td className={TD}>{totals.boxes}</td>
+              <td className={TD}>{fmtNum(totals.weight, 2)}</td>
+              <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
+              <td className="px-2 py-2" />
+              <td className="px-2 py-2" />
+              <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>
+              <td className={TD}>{fmtMoney(totals.fPriceUpdate)}</td>
+              <td className={TD}>{fmtMoney(totals.priceCrate)}</td>
+              <td className={TD}>{fmtMoney(totals.fTransportPriceCHNTHB)}</td>
+              <td className={TD}>{fmtMoney(totals.fTransportPrice)}</td>
+              <td className={TD}>{fmtMoney(totals.fShippingService)}</td>
+              <td className={TD}>{fmtMoney(totals.priceOther)}</td>
+              <td className={`${TD} text-amber-700`}>{totals.fDiscount > 0 ? `−${fmtMoney(totals.fDiscount)}` : fmtMoney(0)}</td>
+              <td className={`${TD} font-bold text-red-600`}>{fmtMoney(totals.priceAllUser)}</td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
