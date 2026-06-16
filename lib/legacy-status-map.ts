@@ -12,7 +12,11 @@
  * bundled with the B-0 data re-point).
  */
 
-export type LegacyOrderCode = "1" | "2" | "3" | "4" | "5" | "6";
+// "40" = "ถึงโกดังจีน" — added 2026-06-16 (owner · MOMO arrival P0). It slots
+// AFTER "4 รอร้านจีนจัดส่ง" and BEFORE "5 สำเร็จ" in the displayed order, and
+// in string order ('4' < '40' < '5'). The column was widened varchar(1)→(2)
+// in migration 0185 to hold it.
+export type LegacyOrderCode = "1" | "2" | "3" | "4" | "40" | "5" | "6";
 export type LegacyForwarderCode = "1" | "2" | "3" | "4" | "5" | "6" | "7";
 
 export interface LegacyStatusEntry {
@@ -28,6 +32,7 @@ export const LEGACY_ORDER_STATUS: Record<LegacyOrderCode, LegacyStatusEntry> = {
   "2": { key: "awaiting_payment", thai: "รอชำระเงิน" },
   "3": { key: "ordered", thai: "สั่งสินค้า" },
   "4": { key: "awaiting_china_ship", thai: "รอร้านจีนจัดส่ง" },
+  "40": { key: "arrived_china_warehouse", thai: "ถึงโกดังจีน" },
   "5": { key: "completed", thai: "สำเร็จ" },
   "6": { key: "cancelled", thai: "ยกเลิก" },
 };
@@ -69,7 +74,17 @@ export function toLegacyForwarderCode(rebuiltKey: string): LegacyForwarderCode |
   );
 }
 
-/** The 6 order-status tabs in legacy display order — for the customer order-list tab strip. */
-export const LEGACY_ORDER_TABS: { code: LegacyOrderCode; key: string; thai: string }[] = (
-  Object.keys(LEGACY_ORDER_STATUS) as LegacyOrderCode[]
-).map((code) => ({ code, key: LEGACY_ORDER_STATUS[code].key, thai: LEGACY_ORDER_STATUS[code].thai }));
+/**
+ * Order-status tabs in legacy display order — for the customer order-list tab
+ * strip. Order is EXPLICIT (not Object.keys) because "40" (ถึงโกดังจีน) is an
+ * integer-like key: JS would sort it numerically to the END (1,2,3,4,5,6,40),
+ * which is wrong — it must render between "4 รอร้านจีนจัดส่ง" and "5 สำเร็จ".
+ */
+export const LEGACY_ORDER_DISPLAY_ORDER: LegacyOrderCode[] = ["1", "2", "3", "4", "40", "5", "6"];
+
+export const LEGACY_ORDER_TABS: { code: LegacyOrderCode; key: string; thai: string }[] =
+  LEGACY_ORDER_DISPLAY_ORDER.map((code) => ({
+    code,
+    key: LEGACY_ORDER_STATUS[code].key,
+    thai: LEGACY_ORDER_STATUS[code].thai,
+  }));

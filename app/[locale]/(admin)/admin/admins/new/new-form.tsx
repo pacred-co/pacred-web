@@ -6,7 +6,7 @@
  * Wave 22 Phase 3 (2026-05-27) — provision a fresh Pacred admin in one
  * server-action call. Form sections:
  *
- *   1. Required (email · password · ชื่อ · นามสกุล · role)
+ *   1. Required (User ID → derives the login email · password · ชื่อ · นามสกุล · role)
  *   2. Recommended HR (phone · nickname · company · employee_type ·
  *      department · section · work email/phone · hired_at · avatar)
  *   3. Advanced (collapsible: birthday · sex · legacy_admin_id ·
@@ -21,49 +21,19 @@
  * never Bootstrap-4 · live errors · suggestion-password button.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminCreateNew } from "@/actions/admin/admins";
+import { adminCreateNew, getNextEmployeeCode } from "@/actions/admin/admins";
 import {
   ADMIN_ROLES,
   COMPANY_VALUES,
   EMPLOYEE_TYPES,
   SEX_VALUES,
   suggestAdminPassword,
+  ROLE_LABELS,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
 import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
-
-// ─── role label map ────────────────────────────────────────────────────
-// Human-readable Thai labels keyed by the AdminRoleEnum values. Same
-// content as the legacy doc role list (lib/auth/require-admin.ts §"doc role").
-const ROLE_LABELS: Record<AdminRoleEnum, string> = {
-  super:                     "Super Admin (CEO/Manager/Tech)",
-  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
-  manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
-  ops:                       "Ops (forwarder/บริการคลังจีน)",
-  accounting:                "Accounting (กระเป๋าเงิน/หยวน/payouts)",
-  sales_admin:               "Cargo Sales Manager (#29)",
-  sales:                     "Cargo Sales Staff (#30)",
-  qa:                        "QA & QC (#5)",
-  warehouse:                 "Warehouse staff",
-  driver:                    "Driver / รถส่งของ",
-  interpreter:               "Interpreter / ล่ามจีน",
-  pricing:                   "Cargo Pricing (ต้นทุน / PEAK stock-in)",
-  freight_sales_manager:     "Freight Sales Manager (#16)",
-  freight_sales:             "Freight Sales (#17)",
-  freight_export_manager:    "Freight Export Manager (#18)",
-  freight_export_cs:         "Freight Export CS / Doc (#19)",
-  freight_export_doc:        "Freight Export Doc (#20)",
-  freight_export_clearance:  "Freight Export Clearance (#21)",
-  freight_clearance_both:    "Freight Clearance Import+Export (#22)",
-  freight_export_messenger:  "Freight Export Messenger (#23)",
-  freight_import_manager:    "Freight Import Manager (#24)",
-  freight_import_cs:         "Freight Import CS / Doc (#25)",
-  freight_import_doc:        "Freight Import Doc (#26)",
-  freight_import_clearance:  "Freight Import Clearance (#27)",
-  freight_import_messenger:  "Freight Import Messenger (#28)",
-};
 
 const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
   "pacred":         "Pacred (รวม)",
@@ -95,7 +65,11 @@ export function AdminCreateNewForm({
   const [pending, startTransition] = useTransition();
 
   // ─── required ────────────────────────────────────────────────────
-  const [email, setEmail]         = useState<string>("");
+  // User ID = the staff login identifier (owner 2026-06-15: "ทำช่อง user id
+  // ให้กรอก แยกมาข้างบน"). It drives the system email via the proven
+  // `admin_*@pacred.co.th` convention that signIn already resolves — so staff
+  // log in by this User ID, never by typing an email.
+  const [userId, setUserId]       = useState<string>("");
   const [password, setPassword]   = useState<string>("");
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName]   = useState<string>("");
@@ -132,6 +106,34 @@ export function AdminCreateNewForm({
   const [phoneDupCode, setPhoneDupCode] = useState<string | null>(null);
   const [allowExistingPhone, setAllowExistingPhone] = useState<boolean>(false);
 
+  // ─── derived login identity ──────────────────────────────────────
+  // Sanitise to the safe `admin_*` namespace the signIn fast-path resolves
+  // (lib/auth/.../actions/auth.ts:112 → `<id>@pacred.co.th`). Auto-prefix
+  // `admin_` so a bare "pupu" still becomes a working login ("admin_pupu");
+  // a typed "admin_pupu" stays as-is. derivedEmail is what we actually POST.
+  const normalizedUserId = userId.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+  const loginId = normalizedUserId
+    ? (normalizedUserId.startsWith("admin_") ? normalizedUserId : `admin_${normalizedUserId}`)
+    : "";
+  const derivedEmail = loginId ? `${loginId}@pacred.co.th` : "";
+
+  // Auto-fill the running employee code (YYMMNO) on mount so the operator never
+  // types it (owner 2026-06-15: "ออโต้ไปเลย … รันไป"). Pre-fills only when the
+  // operator hasn't typed one + this isn't a legacy recreate (those keep their
+  // own code). Editable after.
+  useEffect(() => {
+    if (legacyPreset) return;
+    let alive = true;
+    getNextEmployeeCode()
+      .then((res) => {
+        if (alive && res.ok && res.data?.code) {
+          setEmployeeCode((cur) => (cur.trim() ? cur : res.data!.code));
+        }
+      })
+      .catch(() => { /* leave blank — adminCreateNew falls back server-side */ });
+    return () => { alive = false; };
+  }, [legacyPreset]);
+
   function clearFieldError(key: string) {
     setFieldErrors((prev) => {
       if (!prev.has(key)) return prev;
@@ -147,7 +149,7 @@ export function AdminCreateNewForm({
   }
 
   function resetForm() {
-    setEmail("");
+    setUserId("");
     setPassword("");
     setFirstName("");
     setLastName("");
@@ -180,7 +182,7 @@ export function AdminCreateNewForm({
     setSuccess(null);
 
     const errs = new Set<string>();
-    if (!email.trim())     errs.add("email");
+    if (!loginId)          errs.add("userId");
     if (!password)         errs.add("password");
     if (password.length > 0 && password.length < 8) errs.add("password");
     if (!firstName.trim()) errs.add("firstName");
@@ -193,7 +195,7 @@ export function AdminCreateNewForm({
 
     startTransition(async () => {
       const result = await adminCreateNew({
-        email,
+        email: derivedEmail,
         password,
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
@@ -288,25 +290,50 @@ export function AdminCreateNewForm({
           🔑 ข้อมูลเข้าระบบ + ตัวตน <span className="text-red-500">*</span>
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {/* email */}
-          <div>
+          {/* User ID — the staff login identifier (owner 2026-06-15) */}
+          <div className="md:col-span-2">
             <label className="block text-xs font-medium text-muted mb-1">
-              อีเมล (ใช้ login) <span className="text-red-500">*</span>
+              User ID (ไอดีเข้าระบบ) <span className="text-red-500">*</span>
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
-              maxLength={254}
-              placeholder="sales01@pacred.co"
+              type="text"
+              value={userId}
+              onChange={(e) => { setUserId(e.target.value); clearFieldError("userId"); }}
+              maxLength={40}
+              placeholder="เช่น admin_pupu"
               disabled={pending}
               autoComplete="off"
-              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("email")}`}
+              className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 ${errCls("userId")}`}
               required
             />
+            {loginId ? (
+              <p className="mt-1 text-[11px] text-green-700">
+                ✓ พนักงานจะเข้าระบบด้วย User ID: <code className="font-mono font-semibold">{loginId}</code>{" "}
+                + รหัสผ่านด้านล่าง
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted">
+                ตัวพิมพ์เล็ก / ตัวเลข / ขีดล่าง — ระบบเติม{" "}
+                <code className="font-mono">admin_</code> ให้อัตโนมัติถ้าไม่ได้พิมพ์
+              </p>
+            )}
+          </div>
+
+          {/* derived system email (read-only) */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              อีเมลระบบ (สร้างจาก User ID อัตโนมัติ)
+            </label>
+            <input
+              type="text"
+              value={derivedEmail}
+              readOnly
+              tabIndex={-1}
+              placeholder="— กรอก User ID ก่อน —"
+              className="w-full rounded-xl border border-border bg-surface-alt px-3 py-2.5 text-sm font-mono text-muted outline-none"
+            />
             <p className="mt-1 text-[11px] text-muted">
-              ใช้ลง <code className="font-mono">auth.users</code> + <code className="font-mono">profiles.email</code>.
-              ไม่มีการส่งอีเมลยืนยัน.
+              ลง <code className="font-mono">auth.users</code> ให้เอง — พนักงาน login ด้วย User ID ไม่ต้องพิมพ์อีเมลนี้.
             </p>
           </div>
 
@@ -394,6 +421,25 @@ export function AdminCreateNewForm({
             <p className="mt-1 text-[11px] text-muted">
               ดูคำแนะนำการเลือก role ที่ <code className="font-mono">docs/research/tb-admin-13-row-reference.md</code> §&ldquo;Suggested-role mapping logic&rdquo;.
               เปลี่ยน role ภายหลังได้ที่หน้า /edit.
+            </p>
+          </div>
+
+          {/* employee code — auto-running YYMMNO (owner 2026-06-15) */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted mb-1">
+              รหัสพนักงาน (ออโต้ · รันต่อจากเลขล่าสุด)
+            </label>
+            <input
+              type="text"
+              value={employeeCode}
+              onChange={(e) => setEmployeeCode(e.target.value)}
+              maxLength={20}
+              placeholder="กำลังสร้างอัตโนมัติ…"
+              disabled={pending}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              รูปแบบ YYMMNO (ปี-เดือน-เลขรัน) — ระบบเติมเลขถัดไปให้อัตโนมัติ เปลี่ยนเดือน/ปีก็รันต่อ · ใช้ login ได้ · แก้ได้ถ้าต้องการ.
             </p>
           </div>
         </div>
@@ -561,19 +607,7 @@ export function AdminCreateNewForm({
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">รหัสพนักงาน (YYMMNO)</label>
-              <input
-                type="text"
-                value={employeeCode}
-                onChange={(e) => setEmployeeCode(e.target.value)}
-                maxLength={20}
-                placeholder="เช่น 690601"
-                disabled={pending}
-                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              />
-              <p className="mt-1 text-[11px] text-muted">ใช้ login ได้ (เหมือน user id)</p>
-            </div>
+            {/* รหัสพนักงาน moved to section 1 (auto-filled) — owner 2026-06-15 */}
             <div>
               <label className="block text-xs font-medium text-muted mb-1">เพศ</label>
               <select
@@ -664,7 +698,7 @@ export function AdminCreateNewForm({
             )}
             <button
               type="submit"
-              disabled={pending || !email || !password || !firstName || !lastName}
+              disabled={pending || !loginId || !password || !firstName || !lastName}
               className="rounded-xl bg-primary-500 px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pending ? "กำลังสร้าง..." : "✓ สร้าง Admin"}

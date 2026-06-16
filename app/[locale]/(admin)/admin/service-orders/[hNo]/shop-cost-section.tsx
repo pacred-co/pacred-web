@@ -47,6 +47,14 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
   const roles = await getAdminRoles();
   const canEdit = roles != null && hasRole(roles, ["accounting", "pricing"]);
 
+  // 2026-06-15 (owner: "พนักงานเข้ามาใช้จริงแล้ว ไม่ควรเห็นต้นทุน") — ต้นทุน is
+  // visible ONLY to the cost-capable roles (super/accounting/pricing · hasRole
+  // treats super as always-allowed). EVERY other staff role (sales/sales_admin/
+  // ops/qa/warehouse/driver/interpreter/freight_*) must NOT see cost → hide the
+  // WHOLE section. (Was: it fell through to a read-only CargoCostLineSummary
+  // that still PRINTED the cost number to everyone = the live leak.)
+  if (!canEdit) return null;
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_order")

@@ -31,6 +31,7 @@ import {
   type ResolvedRate,
 } from "@/lib/forwarder/resolve-rate";
 import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 
 // ────────────────────────────────────────────────────────────
 // numeric coercion (legacy stores some price/measure cols as varchar).
@@ -74,6 +75,17 @@ export interface PricingRowContext {
   customRateCbm: number;
   userComparison: boolean;
   userComparisonValue: number;
+  /**
+   * Owner-locked doc-tier discount (owner 2026-06-16). When true AND a positive
+   * docTierDiscountCbm is supplied, the resolver subtracts the per-CBM discount
+   * from the resolved CBM rate. Optional + defaults to no discount → back-compat
+   * for any caller that doesn't set it. Eligibility = tax_doc_pref ∈
+   * {tax_invoice,customs} AND the row is a cargo-import-service row (see
+   * lib/forwarder/doc-tier-discount.ts).
+   */
+  docTierEligible?: boolean;
+  /** THB/CBM discount amount (config-driven, default 800). */
+  docTierDiscountCbm?: number;
 }
 
 export async function resolveLiveForwarderRate(
@@ -192,6 +204,9 @@ export async function resolveLiveForwarderRate(
     // customComparison (per-order comparison override) is not part of the
     // dimensions form; legacy reads it from the calPrice POST. For the
     // dimension-edit save we follow the customer's stored userComparison.
+    // Owner-locked doc-tier discount (no-op when the caller leaves these unset).
+    docTierEligible: ctx.docTierEligible === true,
+    docTierDiscountCbm: ctx.docTierDiscountCbm ?? 0,
   });
 
   return { resolved, coID };
@@ -228,7 +243,9 @@ export async function computeAndFillForwarderImportRate(
     .from("tb_forwarder")
     .select(
       "id, userid, fweight, fvolume, famount, famountcount, " +
-      "fwarehousechina, ftransporttype, fproductstype, frefrate",
+      "fwarehousechina, ftransporttype, fproductstype, frefrate, " +
+      // doc-tier discount inputs (owner 2026-06-16)
+      "tax_doc_pref, reforder, adminidcreator",
     )
     .eq("id", fid)
     .maybeSingle<{
@@ -242,6 +259,9 @@ export async function computeAndFillForwarderImportRate(
       ftransporttype: string | null;
       fproductstype: string | null;
       frefrate: number | string | null;
+      tax_doc_pref: string | null;
+      reforder: string | null;
+      adminidcreator: string | null;
     }>();
   if (rowErr) {
     console.error(`[computeAndFillForwarderImportRate: tb_forwarder read] failed`, {
@@ -278,6 +298,17 @@ export async function computeAndFillForwarderImportRate(
   const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
   const userComparisonValue = num(cmpRow?.userComparisonValue);
 
+  // ── owner-locked doc-tier discount eligibility (owner 2026-06-16) ──
+  // BOTH conditions: tax-doc ∈ {ใบกำกับ,ใบขน} AND a cargo-import-service row.
+  // This is the auto-pricing path for MOMO commit + manual create — both write
+  // tb_forwarder rows, so the import-service signal is read from the row itself.
+  const docTierEligible = isDocTierEligible({
+    taxDocPref:     row.tax_doc_pref,
+    reforder:       row.reforder,
+    adminidcreator: row.adminidcreator,
+  });
+  const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
+
   // fproductstype default '1' (= ทั่วไป) — same default the MOMO commit used
   // for fProductsType. fwarehousechina / ftransporttype: read whatever the row
   // has (the MOMO commit sets fwarehousechina='1' กวางโจว + ftransporttype
@@ -298,6 +329,8 @@ export async function computeAndFillForwarderImportRate(
     customRateCbm:       0,
     userComparison,
     userComparisonValue,
+    docTierEligible,
+    docTierDiscountCbm,
   };
 
   // ── 3. Resolve the rate ──

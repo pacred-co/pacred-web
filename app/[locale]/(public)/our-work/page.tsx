@@ -10,7 +10,12 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { SITE_URL } from "@/components/seo/site";
-import { REVIEWS, reviewSlug } from "@/lib/reviews/catalog";
+import {
+  REVIEWS,
+  reviewSlug,
+  reviewMetaPath,
+  ourWorkMetaPath,
+} from "@/lib/reviews/catalog";
 
 // Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
 // static prerender would throw DYNAMIC_SERVER_USAGE in production.
@@ -24,11 +29,25 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  return buildPageMetadata({
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const base = await buildPageMetadata({
     locale,
     path: PATH,
     namespace: "seo.reviews.index",
   });
+  // Localized canonical/alternates: th = /ผลงานของเรา, en = /en/our-work.
+  return {
+    ...base,
+    alternates: {
+      canonical: ourWorkMetaPath(typedLocale),
+      languages: {
+        "th-TH": ourWorkMetaPath("th"),
+        "en-US": ourWorkMetaPath("en"),
+        "x-default": ourWorkMetaPath("th"),
+      },
+    },
+    openGraph: { ...base.openGraph, url: ourWorkMetaPath(typedLocale) },
+  };
 }
 
 export default async function ReviewsListingPage({
@@ -50,7 +69,7 @@ export default async function ReviewsListingPage({
     itemListElement: REVIEWS.map((r, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/our-work/${reviewSlug(r, typedLocale)}`,
+      url: `${SITE_URL}${reviewMetaPath(reviewSlug(r, typedLocale), typedLocale)}`,
       name: t(r.titleKey),
     })),
   };

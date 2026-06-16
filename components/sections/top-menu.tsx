@@ -83,7 +83,6 @@ function buildMenu(t: Translator): Item[] {
             { label: t("news"),        href: "/news" },
             { label: t("knowledge"),   href: "/knowledge" },
             { label: t("faq"),         href: "/faq" },
-            { label: t("join"),        href: "/register" },
             { label: t("terms"),       href: "/terms" },
             { label: t("privacy"),     href: "/privacy" },
             { label: t("delivery"),    href: "/delivery-areas" },

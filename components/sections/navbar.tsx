@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ChevronDown, LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LayoutGrid, LogOut, User as UserIcon } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { trackSignOut } from "@/lib/analytics";
@@ -74,6 +74,7 @@ function useProtectedLinkPrefetch(): false | undefined {
 
 export function NavBar() {
   const t = useTranslations("nav");
+  const tTabs = useTranslations("floatingTabs");
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(true);
   const [user, setUser] = useState<User | null>(null);
@@ -221,8 +222,19 @@ export function NavBar() {
             <ThemeToggle variant="on-primary" />
           </div>
 
-          {/* Mobile: controls only — hamburger moved to FloatingTabs "เมนู" */}
+          {/* Mobile: บริการ menu trigger + controls. "บริการ" ย้ายมาจาก bottom-nav
+              (ช่องนั้นเป็นปุ่ม booking แทนแล้ว · ปอน) → เปิด bottom-sheet เมนูบริการ
+              ผ่าน event เดิมที่ header ฟังอยู่ (toggle-mobile-menu). */}
           <div className="flex xl:hidden items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("toggle-mobile-menu"))}
+              aria-label={tTabs("services")}
+              className="flex items-center gap-1.5 h-9 px-2.5 rounded-lg border border-white/30 text-white text-[13px] font-bold hover:bg-white/15 transition-colors"
+            >
+              <LayoutGrid className="w-4 h-4" strokeWidth={2.4} />
+              <span>{tTabs("services")}</span>
+            </button>
             <LocaleSwitcher variant="on-primary" />
             <ThemeToggle variant="on-primary" />
             <button

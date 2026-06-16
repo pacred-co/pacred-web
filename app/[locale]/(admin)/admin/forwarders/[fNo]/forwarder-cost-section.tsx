@@ -75,9 +75,14 @@ export async function ForwarderCostSection({
   /** tb_forwarder.reforder — when set, the lines live in tb_order (shop-spawn). */
   reforder: string | null;
 }) {
-  // Only super / accounting / pricing may capture cost; others see read-only.
+  // 2026-06-15 (owner: "พนักงานไม่ควรเห็นต้นทุน") — only super/accounting/pricing
+  // may SEE ต้นทุน at all (hasRole grants super). Every other role that reaches
+  // this page (ops/warehouse for scan/tracking) must NOT see cost → hide the
+  // whole section. (Was: non-edit roles fell through to CargoCostLineSummary,
+  // which PRINTED the cost number — the warehouse leak.)
   const roles = await getAdminRoles();
   const canEdit = roles != null && hasRole(roles, ["accounting", "pricing"]);
+  if (!canEdit) return null;
 
   const admin = createAdminClient();
 

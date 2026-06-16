@@ -46,7 +46,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Eye, CheckCircle2,
-  ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck,
+  ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck, Warehouse,
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { buildSpawnRows } from "../spawn-utils";
@@ -110,21 +110,28 @@ const STATUS_STEPS: {
   label: string;
   Icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { code: "1", label: "รอดำเนินการ",     Icon: ClipboardList },
-  { code: "2", label: "รอชำระเงิน",       Icon: CircleDollarSign },
-  { code: "3", label: "สั่งสินค้า",         Icon: ShoppingCart },
-  { code: "4", label: "รอร้านจีนจัดส่ง", Icon: Clock },
-  { code: "5", label: "สำเร็จ",            Icon: PackageCheck },
+  { code: "1",  label: "รอดำเนินการ",     Icon: ClipboardList },
+  { code: "2",  label: "รอชำระเงิน",       Icon: CircleDollarSign },
+  { code: "3",  label: "สั่งสินค้า",         Icon: ShoppingCart },
+  { code: "4",  label: "รอร้านจีนจัดส่ง", Icon: Clock },
+  { code: "40", label: "ถึงโกดังจีน",      Icon: Warehouse }, // owner 2026-06-16 · MOMO arrival
+  { code: "5",  label: "สำเร็จ",            Icon: PackageCheck },
 ];
+// Display-order rank for the step strip — "40" (ถึงโกดังจีน) slots between
+// 4 and 5. Using Number() would rank "40" as 40 (after สำเร็จ) → wrong.
+const STATUS_ORDER_RANK: Record<string, number> = {
+  "1": 1, "2": 2, "3": 3, "4": 4, "40": 5, "5": 6, "6": 99,
+};
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ", "2": "รอชำระเงิน", "3": "สั่งสินค้าแล้ว",
-  "4": "รอร้านจีนจัดส่ง", "5": "สำเร็จ", "6": "ยกเลิก",
+  "4": "รอร้านจีนจัดส่ง", "40": "ถึงโกดังจีน", "5": "สำเร็จ", "6": "ยกเลิก",
 };
 const STATUS_CLS: Record<string, string> = {
   "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
   "2": "bg-orange-100 text-orange-700 border-orange-200",
   "3": "bg-blue-100 text-blue-700 border-blue-200",
   "4": "bg-indigo-100 text-indigo-700 border-indigo-200",
+  "40": "bg-teal-100 text-teal-700 border-teal-200",
   "5": "bg-green-100 text-green-700 border-green-200",
   "6": "bg-gray-100 text-gray-600 border-gray-200",
 };
@@ -404,10 +411,13 @@ export default async function AdminServiceOrderEditPage({
           /admin/forwarders/[fNo]/edit · current = ring-2 + primary fill,
           visited = emerald-50 + emerald icon, pending = surface-alt + muted */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm">
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-6 gap-2">
           {STATUS_STEPS.map((step) => {
             const cur = step.code === status;
-            const visited = Number(status) > Number(step.code) && status !== "6";
+            // Rank-based (not Number()) so "40" ถึงโกดังจีน ranks between 4 and 5.
+            const curRank = STATUS_ORDER_RANK[status] ?? 0;
+            const stepRank = STATUS_ORDER_RANK[step.code] ?? 0;
+            const visited = curRank > stepRank && status !== "6";
             return (
               <div
                 key={step.code}

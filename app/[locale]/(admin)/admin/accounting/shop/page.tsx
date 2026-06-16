@@ -577,6 +577,8 @@ export default async function AdminAccountingShopPage({
         return { className: "badge badge-info badge-pill", label: "สั่งสินค้า" };
       case "4":
         return { className: "badge badge-warning badge-pill", label: "รอร้านจีนจัดส่ง" };
+      case "40":
+        return { className: "badge badge-info badge-pill", label: "ถึงโกดังจีน" };
       case "5":
         return { className: "badge badge-success badge-pill", label: "สำเร็จ" };
       case "6":

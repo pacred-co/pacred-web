@@ -1,11 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import createIntlMiddleware from "next-intl/middleware";
 import { createServerClient } from "@supabase/ssr";
-import { routing } from "./i18n/routing";
+import { routing, routingWithPathnames } from "./i18n/routing";
 import { VISITOR_COOKIE, newVisitorId } from "./lib/experiments";
 import { isPhase2PlusRoute } from "./lib/admin/phase-access";
 
-const handleI18n = createIntlMiddleware(routing);
+// Use the pathnames-aware routing so /ผลงานของเรา/<slug> (th) serves the
+// our-work route and the legacy /our-work (th) redirects to it. All other
+// routes pass through identically (pathnames only affects the listed ones),
+// so the auth/locale behaviour below is unchanged.
+const handleI18n = createIntlMiddleware(routingWithPathnames);
 
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 

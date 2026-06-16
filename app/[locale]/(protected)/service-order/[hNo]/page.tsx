@@ -11,12 +11,14 @@ import { ShopOrderPayButton } from "./shop-order-pay-modal";
 import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
 import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
 
-// Badge colours keyed by the legacy tb_header_order.hstatus code ('1'-'6').
+// Badge colours keyed by the legacy tb_header_order.hstatus code
+// ('1'-'6' + '40' ถึงโกดังจีน · owner 2026-06-16 MOMO arrival).
 const STATUS_BADGE: Record<string, string> = {
   "1": "bg-gray-50 text-gray-700 border-gray-200",     // รอดำเนินการ
   "2": "bg-yellow-50 text-yellow-700 border-yellow-200", // รอชำระเงิน
   "3": "bg-blue-50 text-blue-700 border-blue-200",     // สั่งสินค้า
   "4": "bg-indigo-50 text-indigo-700 border-indigo-200", // รอร้านจีนจัดส่ง
+  "40": "bg-teal-50 text-teal-700 border-teal-200",    // ถึงโกดังจีน
   "5": "bg-green-50 text-green-700 border-green-200",   // สำเร็จ
   "6": "bg-red-50 text-red-700 border-red-200",        // ยกเลิก
 };

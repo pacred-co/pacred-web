@@ -60,6 +60,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import {
   type DateRange,
@@ -213,6 +214,7 @@ export async function getForwarderSlaReport(
   range: DateRange,
   stuckThresholdDays = 7,
 ): Promise<Result<ForwarderSlaReport>> {
+  await requireAdmin(["super", "accounting"]);
   try {
     const admin = createAdminClient();
 

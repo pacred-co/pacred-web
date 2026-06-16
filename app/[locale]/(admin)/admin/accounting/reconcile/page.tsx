@@ -199,6 +199,25 @@ export default async function ReconcilePage() {
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
+      {/* 2026-06-15 (§0e dead-twin sweep) — this dashboard reads the rebuilt
+          `forwarders` + `wallet_transactions` twins (0-row on prod), NOT the
+          live `tb_forwarder` (47k+ rows) / `tb_wallet_hs`. It therefore shows
+          empty buckets = a false "all reconciled". Bannered so staff don't
+          trust a structurally-blind money-control screen. Repoint (read →
+          tb_*) needs a careful column remap + prod verification — not done
+          here. Queries left as-is (they safely return empty). */}
+      <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-sm text-amber-900 space-y-1">
+        <p className="font-bold">⚠️ หน้านี้ยังไม่ได้เชื่อมข้อมูลกับระบบจริง</p>
+        <p>
+          ดึงข้อมูลจากตาราง <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">forwarders</code>{" "}
+          / <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">wallet_transactions</code>{" "}
+          (ว่างบน prod) — ตารางจริงคือ{" "}
+          <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">tb_forwarder</code>{" "}
+          / <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">tb_wallet_hs</code>.
+          ตัวเลข<strong>ยังไม่ครบ</strong> — <strong>อย่าใช้ยืนยันการกระทบยอด</strong>.
+        </p>
+      </div>
+
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี</p>
         <h1 className="mt-1 text-2xl font-bold">Payment ↔ Order Reconciliation</h1>

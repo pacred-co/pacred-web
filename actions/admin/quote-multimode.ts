@@ -41,6 +41,7 @@ import {
   type MinSellWarehouse,
 } from "@/lib/pricing/min-sell";
 import { getMarginAdvisory, type MarginAdvisory } from "@/lib/pricing/margin-advisory";
+import { getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -66,6 +67,12 @@ export type MultiModeInput = {
   };
   /** Pacred internal cost basis for the margin advisory (optional · per-container). */
   estimatedCostThb?: number;
+  /**
+   * Owner-locked doc-tier discount (owner 2026-06-16): the customer will open
+   * ใบกำกับ/ใบขน. Condition 2 (โอนหยวน/ฝากนำเข้า) is implicit for a cargo-import
+   * quote. When true → −฿X/CBM off the CBM rate. Optional → defaults false.
+   */
+  docTier?: boolean;
 };
 
 export type ModeLine = {
@@ -86,6 +93,8 @@ export type ModeLine = {
   margin: MarginAdvisory | null;
   /** Projected profit (grandTotal − estimatedCost) when cost given. */
   projectedProfit: number | null;
+  /** Owner-locked doc-tier discount applied to this mode (THB/CBM · 0 when none). */
+  docDiscountApplied: number;
 };
 
 export type MultiModeReport = {
@@ -244,6 +253,11 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
 
   const floors = await getMinSellFloors();
 
+  // Owner-locked doc-tier discount (condition 2 implicit for a cargo-import
+  // quote; condition 1 = the rep's docTier toggle).
+  const docDiscountCbm = await getDocTierDiscountCbm();
+  const docTierApplied = input.docTier === true && docDiscountCbm > 0;
+
   // ── Compute each transport mode ──
   const modes: ModeLine[] = [];
   for (const T of TRANSPORTS) {
@@ -255,6 +269,8 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
       volumeCbm: input.volumeCbm,
       comparisonEnabled,
       comparisonValue,
+      docTierEligible: docTierApplied,
+      docTierDiscountCbm: docDiscountCbm,
     });
 
     const transportSubtotal = resolved.transportSubtotal;
@@ -289,6 +305,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
       minSell,
       margin,
       projectedProfit,
+      docDiscountApplied: resolved.docDiscountApplied,
     });
   }
 

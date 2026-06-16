@@ -21,6 +21,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import { LEGACY_FORWARDER_STATUS, type LegacyForwarderCode } from "@/lib/legacy-status-map";
 import {
@@ -118,6 +119,7 @@ function topProfit(
 }
 
 export async function getCockpitReport(): Promise<Result<CockpitReport>> {
+  await requireAdmin(["super", "accounting"]);
   try {
     const admin = createAdminClient();
     const now = new Date();

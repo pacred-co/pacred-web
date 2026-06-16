@@ -112,6 +112,7 @@ const NOTE_SHOP_TABS: { q: string | null; label: string }[] = [
   { q: "2", label: "รอชำระเงิน" },
   { q: "3", label: "สั่งสินค้า" },
   { q: "4", label: "รอร้านจีนจัดส่ง" },
+  { q: "40", label: "ถึงโกดังจีน" },
   { q: "5", label: "สำเร็จ" },
   { q: "6", label: "ออเดอร์ที่ยกเลิก" },
 ];

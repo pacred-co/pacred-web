@@ -165,15 +165,30 @@ export async function adminBulkApproveWalletHs(
                     : (r.type === "4" || r.type === "7") ? -amt
                     : 0;
 
-        // Approve the wallet_hs row first.
-        const { error: updHsErr } = await admin
+        // Approve the wallet_hs row first — ATOMIC CLAIM. Folding the
+        // `.eq("status","1")` into the UPDATE + checking the affected row makes
+        // this TOCTOU-safe: a 0-row result means a concurrent path (the
+        // /admin/wallet/[id] single-row approve, or a second bulk click on the
+        // same id) already flipped this row → we MUST skip the balance mutation
+        // below, else tb_wallet is double-credited. PostgREST returns NO error
+        // on a 0-row match, so the error check alone is insufficient — we need
+        // the affected-row count. (Mirrors the 2026-06-14 cnt-hs / forwarder-
+        // credit / yuan-payment optimistic-concurrency fold.)
+        const { data: claimed, error: updHsErr } = await admin
           .from("tb_wallet_hs")
           .update({ status: "2", adminid: legacyAdminId })
           .eq("id", r.id)
-          .eq("status", "1");  // re-guard against race
+          .eq("status", "1")  // re-guard against race
+          .select("id")
+          .maybeSingle();
         if (updHsErr) {
           failed++;
           errors.push(`id=${r.id}: ${updHsErr.message}`);
+          continue;
+        }
+        if (!claimed) {
+          // 0-row claim — another path already approved this id. NOT a failure
+          // (it got processed, just not by us) → skip the balance write silently.
           continue;
         }
 

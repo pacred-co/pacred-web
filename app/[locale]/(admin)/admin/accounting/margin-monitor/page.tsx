@@ -69,7 +69,9 @@ export default async function AdminMarginMonitorPage({
 }: {
   searchParams: Promise<{ date_from?: string; date_to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting", "sales_admin"]);
+  // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — margin/profit IS cost data;
+  // dropped sales_admin → accounting-only dashboard.
+  await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
   const defaults = defaultDateRange();
   const dateFrom = sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from) ? sp.date_from : defaults.from;

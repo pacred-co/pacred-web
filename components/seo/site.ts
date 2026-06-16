@@ -236,3 +236,14 @@ export function localizedUrls(path: string): Record<SiteLocale, string> {
     {} as Record<SiteLocale, string>,
   );
 }
+
+/**
+ * Absolute URL of the dynamic branded OG card for a given registry key.
+ * Served from `/api/og` (outside the i18n proxy's reach — see `app/api/og`).
+ * Referenced via explicit `openGraph.images` in page metadata because the
+ * Next file-convention `opengraph-image.tsx` does not attach under the
+ * `[locale]` dynamic root segment.
+ */
+export function ogImageUrl(key = "default"): string {
+  return `${SITE_URL}/api/og?key=${encodeURIComponent(key)}`;
+}

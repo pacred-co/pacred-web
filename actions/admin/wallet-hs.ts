@@ -769,15 +769,33 @@ export async function adminApproveWalletDeposit(
         const userid = rowRaw.userid;
         const cascadedRows: CascadedRow[] = [];
 
-        // (i) Flip the slip row 1→2.
-        const { error: updHsErr } = await admin
+        // (i) Flip the slip row 1→2 — ATOMIC CLAIM. The `.eq("status","1")` is
+        //     folded into the UPDATE and we check the affected row: a 0-row
+        //     result means a CONCURRENT path already approved this slip (the
+        //     upfront idempotency check at L719 only catches the SEQUENTIAL
+        //     re-approve; two requests can both pass it and both reach here).
+        //     Without this, the wallet debit below fires twice → double-debit.
+        const { data: claimed, error: updHsErr } = await admin
           .from("tb_wallet_hs")
           .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
           .eq("id", id)
-          .eq("status", "1");
+          .eq("status", "1")
+          .select("id")
+          .maybeSingle();
         if (updHsErr) {
           console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
           return { ok: false, error: updHsErr.message };
+        }
+        if (!claimed) {
+          // Concurrent approve won the claim — return idempotent OK (no debit).
+          return {
+            ok: true,
+            data: {
+              ok: true, walletHsId: id, alreadyDone: true,
+              customer: { userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+              cascadedRows: [], hadPaydepositLinks: false,
+            },
+          };
         }
         cascadedRows.push({ table: "tb_wallet_hs", id: String(id), fromStatus: "1", toStatus: "2", note: "direct forwarder-pay (type=4)" });
 
@@ -1039,16 +1057,32 @@ export async function adminApproveWalletDeposit(
       const cascadedRows: CascadedRow[] = [];
 
       // ──────────────────────────────────────────────
-      // 3. Flip the topup row to status='2'.
+      // 3. Flip the topup row to status='2' — ATOMIC CLAIM. Fold the
+      //    `.eq("status","1")` into the UPDATE + check the affected row: 0 rows
+      //    means a concurrent path already approved this topup → return
+      //    idempotent OK WITHOUT crediting the wallet again (the upfront check
+      //    at L719 only catches sequential re-approve, not a true race).
       // ──────────────────────────────────────────────
-      const { error: updHsErr } = await admin
+      const { data: claimed, error: updHsErr } = await admin
         .from("tb_wallet_hs")
         .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
         .eq("id", id)
-        .eq("status", "1");
+        .eq("status", "1")
+        .select("id")
+        .maybeSingle();
       if (updHsErr) {
         console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
         return { ok: false, error: updHsErr.message };
+      }
+      if (!claimed) {
+        return {
+          ok: true,
+          data: {
+            ok: true, walletHsId: id, alreadyDone: true,
+            customer: { userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+            cascadedRows: [], hadPaydepositLinks: hasLinks,
+          },
+        };
       }
       cascadedRows.push({
         table: "tb_wallet_hs",

@@ -262,14 +262,16 @@ export function FloatingTabs({
               <span className={`text-[11px] leading-tight font-medium ${active === 0 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("homeMain")}</span>
             </Link>
 
-            {/* 2 — บริการ (toggle bottom sheet เมนู) */}
-            <button type="button" onClick={() => { setActive(1); window.dispatchEvent(new CustomEvent("toggle-mobile-menu")); }}
-              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60 cursor-pointer">
+            {/* 2 — บุ๊กกิ้ง → LINE OA (booking page ยังไม่เปิด public · mirror
+                เดสก์ท็อป tab). เดิมช่องนี้คือ "บริการ" ที่เปิด bottom-sheet เมนู —
+                ปอน ย้าย trigger บริการไปไว้บน NavBar (มือถือ) แล้ว */}
+            <a href="/line" target="_blank" rel="noopener noreferrer" onClick={() => setActive(1)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home/iconfloating/services.png" alt={t("services")}
+              <img src="/images/hero-section/icon-draf/bookingPacred.png" alt={t("booking")}
                 className={`w-8 h-8 object-contain transition-all duration-300 ${active === 1 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
-              <span className={`text-[11px] leading-tight font-medium ${active === 1 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("services")}</span>
-            </button>
+              <span className={`text-[11px] leading-tight font-medium ${active === 1 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("booking")}</span>
+            </a>
 
             {/* 3 — ออเดอร์ → customer dashboard */}
             <Link href="/dashboard" onClick={() => setActive(2)}

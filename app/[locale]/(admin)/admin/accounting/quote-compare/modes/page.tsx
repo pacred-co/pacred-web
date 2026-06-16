@@ -51,6 +51,8 @@ function parseQuery(sp: RawSp) {
     },
     estimatedCostThb:
       sp.cost != null && sp.cost !== "" ? Math.max(0, Number(sp.cost) || 0) : undefined,
+    // Owner-locked doc-tier discount (ใบกำกับ/ใบขน → −฿X/CBM).
+    docTier: sp.docTier === "1",
   };
 }
 
@@ -114,6 +116,13 @@ export default async function AdminQuoteCompareModesPage({
               <input type="text" name="userid" defaultValue={input.customerUserid ?? ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="PR1234 (ว่าง = general)" />
             </Field>
           </div>
+
+          {/* Owner-locked doc-tier discount toggle (owner 2026-06-16) */}
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="docTier" value="1" defaultChecked={input.docTier} className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500" />
+            <span className="font-medium">เปิดใบกำกับ/ใบขน + โอนหยวน/ฝากนำเข้า</span>
+            <span className="text-[11px] text-emerald-700">→ ลดค่าขนส่ง ฿800/คิว (เรือ 2,900 · รถ 4,900)</span>
+          </label>
 
           <div className="grid sm:grid-cols-3 gap-3">
             <Field label="น้ำหนัก (กก.)">
@@ -200,7 +209,10 @@ export default async function AdminQuoteCompareModesPage({
                           {!m.hasRate && <span className="ml-2 text-[10px] text-muted">(no rate)</span>}
                         </td>
                         <td className="px-3 py-2 text-xs text-muted">{m.basisUsed === "cbm" ? "CBM" : "KG"} · {m.rateSource}</td>
-                        <td className="px-3 py-2 text-right font-mono text-xs">{m.unitRate > 0 ? `฿${thb(m.unitRate)}` : "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs">
+                          {m.unitRate > 0 ? `฿${thb(m.unitRate)}` : "—"}
+                          {m.docDiscountApplied > 0 && <span className="ml-1 rounded bg-emerald-100 px-1 py-0.5 text-[10px] font-bold text-emerald-700">−฿{thb(m.docDiscountApplied)}/คิว</span>}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-muted">{m.hasRate ? `฿${thb(m.transportSubtotal)}` : "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(m.addonsTotal)}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs font-bold">{m.hasRate ? `฿${thb(m.grandTotal)}` : "—"}</td>

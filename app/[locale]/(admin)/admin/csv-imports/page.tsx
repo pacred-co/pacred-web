@@ -102,6 +102,23 @@ export default async function AdminCsvImportsPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
+      {/* 2026-06-15 (§0e dead-twin sweep) — this importer writes the rebuilt
+          `forwarders` twin (0-row on prod), NOT the live `tb_forwarder`
+          (47k+ rows). An import here returns a green toast but adds ZERO
+          real rows (silent data loss). Disabled until repointed. */}
+      <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-5 text-sm text-red-900 space-y-1">
+        <p className="font-bold">⚠️ นำเข้า CSV forwarder ปิดชั่วคราว</p>
+        <p>
+          ระบบนี้เขียนลงตาราง <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">forwarders</code>{" "}
+          ที่ระบบจริง<strong>ไม่อ่าน</strong> (ตารางจริงคือ{" "}
+          <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">tb_forwarder</code>) —
+          กดนำเข้าจะขึ้นว่าสำเร็จแต่ข้อมูล<strong>ไม่เข้าจริง</strong> (เสี่ยงข้อมูลหาย).
+        </p>
+        <p className="text-xs text-red-700">
+          ใช้ระบบ MOMO / forwarder โดยตรงแทน. รายการเก่าด้านล่างแสดงเพื่อดูประวัติเท่านั้น.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
@@ -121,12 +138,13 @@ export default async function AdminCsvImportsPage({
               return exportCsvImportsAll();
             }}
           />
-          <Link
-            href="/admin/csv-imports/upload"
-            className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
+          <span
+            aria-disabled="true"
+            title="ปิดชั่วคราว — เขียนลงตารางที่ระบบจริงไม่อ่าน (ดู banner ด้านบน)"
+            className="cursor-not-allowed rounded-lg bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-500"
           >
-            + อัปโหลด CSV ใหม่
-          </Link>
+            + อัปโหลด CSV ใหม่ (ปิดชั่วคราว)
+          </span>
         </div>
       </div>
 

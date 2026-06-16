@@ -62,6 +62,7 @@ const LEGACY_STATUS_DATE_COL: Record<string, string | null> = {
   awaiting_payment:       "hdate2",
   ordered:                "hdate3",
   awaiting_chn_dispatch:  "hdate4",
+  arrived_china_warehouse: null,     // ถึงโกดังจีน (owner 2026-06-16) — no dedicated date col
   completed:              "hdate5",
 };
 const REBUILT_TO_LEGACY_HSTATUS: Record<string, string> = {
@@ -69,6 +70,7 @@ const REBUILT_TO_LEGACY_HSTATUS: Record<string, string> = {
   awaiting_payment:      "2",
   ordered:               "3",
   awaiting_chn_dispatch: "4",
+  arrived_china_warehouse: "40",     // ถึงโกดังจีน (owner 2026-06-16 · MOMO arrival)
   completed:             "5",
   cancelled:             "6",
 };
@@ -79,6 +81,7 @@ const REBUILT_STATUSES = [
   "awaiting_payment",
   "ordered",
   "awaiting_chn_dispatch",
+  "arrived_china_warehouse",
   "completed",
   "cancelled",
 ] as const;
@@ -89,10 +92,12 @@ const REBUILT_STATUSES = [
 group("(a) Every rebuilt status maps to a legacy hstatus code", () => {
   for (const status of REBUILT_STATUSES) {
     const code = REBUILT_TO_LEGACY_HSTATUS[status];
+    // hstatus is now varchar(2): codes are 1 char ('1'..'6') EXCEPT the new
+    // '40' (ถึงโกดังจีน) which is 2 chars (slots between 4 and 5).
     assertEq(
-      typeof code === "string" && code.length === 1,
+      typeof code === "string" && code.length >= 1 && code.length <= 2,
       true,
-      `REBUILT_TO_LEGACY_HSTATUS["${status}"] is a single-char legacy code (got ${JSON.stringify(code)})`,
+      `REBUILT_TO_LEGACY_HSTATUS["${status}"] is a 1-2 char legacy code (got ${JSON.stringify(code)})`,
     );
   }
 });
@@ -149,6 +154,7 @@ group("(d) hstatus → Thai label matches shops.php wording", () => {
   assertEq(legacyOrderStatusThai("2"), "รอชำระเงิน",       "code '2' → รอชำระเงิน");
   assertEq(legacyOrderStatusThai("3"), "สั่งสินค้า",        "code '3' → สั่งสินค้า");
   assertEq(legacyOrderStatusThai("4"), "รอร้านจีนจัดส่ง",   "code '4' → รอร้านจีนจัดส่ง");
+  assertEq(legacyOrderStatusThai("40"), "ถึงโกดังจีน",      "code '40' → ถึงโกดังจีน");
   assertEq(legacyOrderStatusThai("5"), "สำเร็จ",            "code '5' → สำเร็จ");
   assertEq(legacyOrderStatusThai("6"), "ยกเลิก",            "code '6' → ยกเลิก");
 
@@ -160,7 +166,7 @@ group("(d) hstatus → Thai label matches shops.php wording", () => {
 // (e) LEGACY_ORDER_STATUS reverse-lookup is total over its 6 codes
 // ────────────────────────────────────────────────────────────
 group("(e) LEGACY_ORDER_STATUS reverse-lookup is total", () => {
-  const codes: LegacyOrderCode[] = ["1", "2", "3", "4", "5", "6"];
+  const codes: LegacyOrderCode[] = ["1", "2", "3", "4", "40", "5", "6"];
   for (const code of codes) {
     const entry = LEGACY_ORDER_STATUS[code];
     assertEq(

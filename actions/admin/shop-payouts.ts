@@ -101,11 +101,18 @@ export async function adminUpdateShopPayout(
     if (input.slip_url) updatePatch.slip_url = input.slip_url;
   }
 
-  const { error: updErr } = await admin
+  // TOCTOU guard: fold the read-state into the UPDATE so a concurrent
+  // complete/cancel (both passing the L87 "already final" check) can't both
+  // win — the 0-row claim means another transition got there first.
+  const { data: flipped, error: updErr } = await admin
     .from("tb_shop_transactions")
     .update(updatePatch)
-    .eq("id", input.id);
+    .eq("id", input.id)
+    .eq("status", current.status)
+    .select("id")
+    .maybeSingle();
   if (updErr) return { ok: false, error: updErr.message };
+  if (!flipped) return { ok: false, error: "already_processed" };
 
   revalidatePath("/admin/shop-payouts");
   revalidatePath("/wallet-shop");

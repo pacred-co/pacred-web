@@ -277,12 +277,12 @@ async function ensureLegacyStaff(
 ): Promise<void> {
   const admin = createAdminClient();
 
-  // profiles. Staff must NOT get a customer PR member_code: the trigger
-  // `generate_member_code` (migration 0174) skips PR assignment when
-  // employee_code is non-empty, so we set a legacy-staff employee_code here
-  // (the LGCY- prefix keeps it distinct from office 690xxx codes and unique per
-  // legacy adminID → satisfies profiles.employee_code's partial unique index).
-  // → staff keep member_code NULL, out of the customer numbering range.
+  // profiles. We set a legacy-staff employee_code here (the LGCY- prefix keeps
+  // it distinct from office 690xxx codes and unique per legacy adminID →
+  // satisfies profiles.employee_code's partial unique index). member_code is
+  // omitted → the trigger `generate_member_code` mints a PR from the SHARED
+  // customer pool (migration 0184, owner 2026-06-15 — collision-proof via the
+  // lock + cross-table lowest-vacant + UNIQUE). (Was: 0174 left staff NULL.)
   // Phone omitted to dodge the customer-phone-collision trap; the real number
   // stays on tb_admin.adminTel.
   const { data: existingProfile, error: existingErr } = await admin

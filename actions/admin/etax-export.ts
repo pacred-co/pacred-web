@@ -27,6 +27,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getBusinessConfig } from "@/lib/business-config";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export type ShopEtaxBundle = {
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const admin = createAdminClient();
   const gte = `${range.dateFrom}T00:00:00`;
   const lte = `${range.dateTo}T23:59:59`;
@@ -220,6 +222,7 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getShopEtaxBundle(range: EtaxRange): Promise<ShopEtaxBundle> {
+  await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
   const admin = createAdminClient();
   const gte = `${range.dateFrom}T00:00:00`;
   const lte = `${range.dateTo}T23:59:59`;

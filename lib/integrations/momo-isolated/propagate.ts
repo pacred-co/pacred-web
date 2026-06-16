@@ -138,6 +138,10 @@ export type PropagationResult = {
    *  have had a cabinet write but we skipped because fcabinet_locked=true.
    *  Surfaced so staff can audit that the lock is doing its job. */
   cabinetLocked:        number;
+  /** 2026-06-16: how many LINKED ฝากสั่งซื้อ orders (reforder→hno) were
+   *  advanced 4 (รอร้านจีนจัดส่ง) → 40 (ถึงโกดังจีน) when their forwarder
+   *  reached the china warehouse. Gate-controlled (same statusGate). */
+  shopOrdersAdvanced:   number;
   /** Per-row errors. Best-effort: a row error doesn't fail the whole batch. */
   errors:               Array<{ trackingNo: string; message: string }>;
 };
@@ -153,6 +157,7 @@ function emptyResult(): PropagationResult {
     statusAdvanceWrites: 0,
     statusAdvanceSkippedByGate: 0,
     cabinetLocked: 0,
+    shopOrdersAdvanced: 0,
     errors: [],
   };
 }
@@ -182,7 +187,7 @@ export async function propagateMomoToForwarders(
   // has manually locked against partner-sync overwrites.
   const { data: matchedRows, error: lookupErr } = await admin
     .from("tb_forwarder")
-    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai, fcabinet_locked")
+    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai, fcabinet_locked, reforder")
     .in("ftrackingchn", trackings);
   if (lookupErr) {
     console.error("[propagateMomoToForwarders] tb_forwarder lookup failed", {
@@ -203,6 +208,7 @@ export async function propagateMomoToForwarders(
     fcabinetnumber:  string | null;
     fdatetothai:     string | null;
     fcabinet_locked: boolean | null;
+    reforder:        string | null;
   };
   const forwardersByTracking = new Map<string, ForwarderHit[]>();
   for (const row of (matchedRows ?? []) as unknown as ForwarderHit[]) {
@@ -341,6 +347,33 @@ export async function propagateMomoToForwarders(
         continue;
       }
       result.updated += 1;
+
+      // 4. Shop-order advance (2026-06-16 · the fix that unsticks ฝากสั่งซื้อ).
+      //    When a forwarder LINKED to a ฝากสั่งซื้อ order (reforder=hno) reaches
+      //    the china warehouse or beyond (fstatus >= 2), advance the linked
+      //    tb_header_order 4 (รอร้านจีนจัดส่ง) → 40 (ถึงโกดังจีน). FORWARD-ONLY +
+      //    idempotent (the .eq("hstatus","4") fold → 0-row no-op on 40/5/6),
+      //    best-effort (never fails the propagation). Gated with the SAME
+      //    statusGate (Option B — dormant until the owner flips the env after a
+      //    dry-run). The commit-momo-row-core advance only fires for NEW rows
+      //    where reforder="" — THIS path covers existing spawn-from-order rows.
+      const refNo = f.reforder?.trim();
+      const newFstatus = updates.fstatus ?? f.fstatus;
+      if (statusGate && refNo && fstatusRank(newFstatus) >= fstatusRank("2")) {
+        const { data: advRows, error: advErr } = await admin
+          .from("tb_header_order")
+          .update({ hstatus: "40", hdateupdate: today })
+          .eq("hno", refNo)
+          .eq("hstatus", "4")
+          .select("hno");
+        if (advErr) {
+          console.error("[propagateMomoToForwarders] shop-order advance failed", {
+            hno: refNo, forwarderId: f.id, code: advErr.code, message: advErr.message,
+          });
+        } else if (advRows && advRows.length > 0) {
+          result.shopOrdersAdvanced += 1;
+        }
+      }
     }
   }
 

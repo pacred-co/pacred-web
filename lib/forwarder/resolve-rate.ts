@@ -140,6 +140,32 @@ export interface ResolveRateInput {
   customComparison?: boolean;
   /** Whether this order is linked to a refOrder (drives the 200 vs 150 default). */
   hasRefOrder?: boolean;
+
+  /**
+   * ── OWNER-LOCKED DOC-TIER DISCOUNT (owner 2026-06-16) ──────────────────
+   * Pacred-NATIVE conditional discount (NOT in legacy PCS). When true, after
+   * the per-basis CBM rate is resolved, subtract a fixed THB/CBM discount
+   * (default ฿800/CBM → เรือ 3,700→2,900 · รถ 5,700→4,900) BEFORE the CBM
+   * subtotal + the max(cbm,kg)/comparison decision are computed.
+   *
+   * Eligibility (computed by the CALLER, both conditions required):
+   *   1. tax-doc = ใบกำกับ OR ใบขน  (tb_forwarder.tax_doc_pref ∈
+   *      {'tax_invoice','customs'} — migration 0127), AND
+   *   2. order came via โอนหยวน OR ฝากนำเข้า (the full-loop cargo-import
+   *      service — i.e. it is a tb_forwarder import row; see live-rate.ts
+   *      `isCargoImportServiceRow`).
+   *
+   * Applies to the CBM basis ONLY (owner specified CBM). The kg path is left
+   * unchanged. When falsy → behaviour is byte-identical to before (back-compat).
+   */
+  docTierEligible?: boolean;
+  /**
+   * The fixed THB-per-CBM discount to subtract when docTierEligible. Default 0
+   * so the discount is a strict no-op unless BOTH the eligibility flag AND a
+   * positive amount are supplied — the caller passes the config-driven value
+   * (business_config `cargo.doc_tier_discount.cbm_thb`, default 800).
+   */
+  docTierDiscountCbm?: number | string | null;
 }
 
 export interface ResolvedRate {
@@ -163,6 +189,13 @@ export interface ResolvedRate {
    * a silent ฿0 transport price. Legacy returned 0 and surfaced an error msg.
    */
   rateMissing: boolean;
+  /**
+   * The owner-locked doc-tier discount (THB/CBM) actually subtracted from the
+   * resolved CBM rate. 0 unless the order was docTierEligible AND won on the CBM
+   * basis. Surfaced for transparency (UI "−฿800/คิว" note · audit). When the kg
+   * basis wins, the discount does not apply → this is 0 even if eligible.
+   */
+  docDiscountApplied: number;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -198,6 +231,24 @@ function generalTierRate(
   if (value <= 2) return n(tiers.tier1);
   if (value > 2 && value < 5) return n(tiers.tier2);
   return n(tiers.tier3);
+}
+
+/**
+ * Apply the owner-locked doc-tier discount to a CBM unit rate (owner 2026-06-16).
+ * Fixed THB/CBM subtraction, floored at 0. Pure + side-effect-free. Returns the
+ * discounted rate AND the discount amount actually applied (for transparency).
+ * No-op when not eligible or the discount is non-positive.
+ */
+function applyDocTierCbmDiscount(
+  cbmRate: number,
+  eligible: boolean,
+  discountCbm: number,
+): { rate: number; applied: number } {
+  if (!eligible || discountCbm <= 0 || cbmRate <= 0) {
+    return { rate: cbmRate, applied: 0 };
+  }
+  const discounted = Math.max(0, cbmRate - discountCbm);
+  return { rate: discounted, applied: round2(cbmRate - discounted) };
 }
 
 /**
@@ -263,6 +314,14 @@ export function resolveForwarderRate(
   // KGPerCBM (forwarder.php L1942-1944) — guard /0 exactly like legacy.
   const kgPerCbm = cbm !== 0 ? weight / cbm : 0;
 
+  // ── owner-locked doc-tier discount inputs (owner 2026-06-16) ──
+  // Eligibility + amount come from the CALLER (tax_doc_pref + yuan/import signal
+  // + config). Both must be present for the discount to fire; otherwise this is
+  // a strict no-op (back-compat). Applies to the CBM rate ONLY, and NEVER to a
+  // manual admin-typed override (the admin already chose that exact rate).
+  const docEligible = input.docTierEligible === true && !candidates.manualOverride;
+  const docDiscountCbm = Math.max(0, n(input.docTierDiscountCbm));
+
   // Comparison threshold. customComparison forces 200 (fresh) / 150 (refOrder)
   // per calPriceForwarder L2098-2106; otherwise use the user's stored value.
   const comparisonOn = input.comparisonEnabled || input.customComparison === true;
@@ -282,7 +341,11 @@ export function resolveForwarderRate(
       if (probe.compare2) value = cbm;
       const finalBasis: RateBasis = probe.compare2 ? "cbm" : "kg";
       const r = finalBasis === "kg" ? probe : rateForBasis("cbm", candidates, value);
-      const rate = r.rate;
+      // Doc-tier discount applies only when the chosen basis is CBM. The legacy
+      // VIP KG→CBM fallback (compare2) bills the KG quantity at the CBM rate →
+      // its final basis IS cbm, so it qualifies for the per-CBM-rate discount.
+      const disc = applyDocTierCbmDiscount(r.rate, docEligible && finalBasis === "cbm", docDiscountCbm);
+      const rate = disc.rate;
       return {
         rate,
         basis: finalBasis,
@@ -290,35 +353,44 @@ export function resolveForwarderRate(
         transportSubtotal: round2(value * rate),
         refPrice: 1, // legacy keeps refPrice=1 in the comparison-KG branch
         rateMissing: rate === 0,
+        docDiscountApplied: disc.applied,
       };
     }
     // bill by CBM (compare=2, value=CBMProduct, refPrice=2)
     const value = cbm;
     const r = rateForBasis("cbm", candidates, value);
+    const disc = applyDocTierCbmDiscount(r.rate, docEligible, docDiscountCbm);
     return {
-      rate: r.rate,
+      rate: disc.rate,
       basis: "cbm",
       source: r.source,
-      transportSubtotal: round2(value * r.rate),
+      transportSubtotal: round2(value * disc.rate),
       refPrice: 2,
-      rateMissing: r.rate === 0,
+      rateMissing: disc.rate === 0,
+      docDiscountApplied: disc.applied,
     };
   }
 
   // ── "ราคามากสุด" — no comparison (forwarder.php L1983-2010) ──
   // Compute BOTH totals; legacy `priceCBM >= priceKg` → CBM (ties favour CBM).
+  // The doc-tier discount is applied to the CBM unit rate BEFORE the subtotal
+  // AND the priceCBM>=priceKg decision (owner spec) — so a discounted CBM that
+  // dips below the KG total can flip the winner to KG, exactly as a hand-typed
+  // lower CBM rate would.
   const kgProbe = rateForBasis("kg", candidates, weight);
   const cbmProbe = rateForBasis("cbm", candidates, cbm);
+  const cbmDisc = applyDocTierCbmDiscount(cbmProbe.rate, docEligible, docDiscountCbm);
   const priceKg = round2(weight * kgProbe.rate);
-  const priceCbm = round2(cbm * cbmProbe.rate);
+  const priceCbm = round2(cbm * cbmDisc.rate);
 
   if (priceCbm >= priceKg) {
     return {
-      rate: cbmProbe.rate,
+      rate: cbmDisc.rate,
       basis: "cbm",
       source: cbmProbe.source,
       transportSubtotal: priceCbm,
       refPrice: 2,
+      docDiscountApplied: cbmDisc.applied,
       // Both legs 0 → genuinely no rate. (If only one leg is 0, the larger
       // non-zero leg wins above; here priceCbm>=priceKg with priceCbm 0 means
       // both are 0.)
@@ -332,5 +404,7 @@ export function resolveForwarderRate(
     transportSubtotal: priceKg,
     refPrice: 1,
     rateMissing: kgProbe.rate === 0 && cbmProbe.rate === 0,
+    // KG basis won → the CBM-only doc-tier discount does not apply here.
+    docDiscountApplied: 0,
   };
 }

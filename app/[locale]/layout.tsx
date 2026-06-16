@@ -11,7 +11,7 @@ import {
   organizationSchema,
   websiteSchema,
 } from "@/components/seo/schemas";
-import { SITE_NAME, SITE_URL } from "@/components/seo/site";
+import { SITE_NAME, SITE_URL, ogImageUrl } from "@/components/seo/site";
 
 /**
  * Server-only message namespaces — NOT shipped to the client provider.
@@ -84,11 +84,13 @@ export async function generateMetadata({
       locale: ogLocale,
       alternateLocale: [altLocale],
       type: "website",
+      images: [{ url: ogImageUrl("home"), width: 1200, height: 630, alt: title }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [ogImageUrl("home")],
     },
   };
 }
