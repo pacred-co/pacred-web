@@ -29,37 +29,10 @@ import {
   COMPANY_VALUES,
   EMPLOYEE_TYPES,
   SEX_VALUES,
+  ROLE_LABELS,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
 import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
-
-const ROLE_LABELS: Record<AdminRoleEnum, string> = {
-  super:                     "Super Admin",
-  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
-  manager:                   "Cargo Manager",
-  ops:                       "Ops",
-  accounting:                "Accounting",
-  sales_admin:               "Cargo Sales Manager (#29)",
-  sales:                     "Cargo Sales Staff (#30)",
-  qa:                        "QA & QC (#5)",
-  warehouse:                 "Warehouse",
-  driver:                    "Driver",
-  interpreter:               "Interpreter (ล่ามจีน)",
-  pricing:                   "Cargo Pricing (ต้นทุน)",
-  freight_sales_manager:     "Freight Sales Manager",
-  freight_sales:             "Freight Sales",
-  freight_export_manager:    "Freight Export Manager",
-  freight_export_cs:         "Freight Export CS/Doc",
-  freight_export_doc:        "Freight Export Doc",
-  freight_export_clearance:  "Freight Export Clearance",
-  freight_clearance_both:    "Freight Clearance Import+Export",
-  freight_export_messenger:  "Freight Export Messenger",
-  freight_import_manager:    "Freight Import Manager",
-  freight_import_cs:         "Freight Import CS/Doc",
-  freight_import_doc:        "Freight Import Doc",
-  freight_import_clearance:  "Freight Import Clearance",
-  freight_import_messenger:  "Freight Import Messenger",
-};
 
 const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
   "pacred":         "Pacred (รวม)",

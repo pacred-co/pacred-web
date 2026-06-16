@@ -13,6 +13,7 @@ import {
   AdminUpdateSchema,
   AdminToggleActiveSchema,
   AdminChangeRoleSchema,
+  adminRoleSchema,
   hasAnyHRField,
 } from "@/lib/validators/admin-form";
 import type {
@@ -22,11 +23,15 @@ import type {
   AdminChangeRoleInput,
 } from "@/lib/validators/admin-form";
 
-// U4-1 RBAC console upgrade — full 7-role enum matching the
-// `admins.role` CHECK constraint (extended by migrations 0033 +
-// 0054). Older code constrained this to 4 values; the wider set
-// lets super-admins grant warehouse / driver / interpreter via UI.
-const ROLE = z.enum(["super", "ops", "accounting", "sales_admin", "warehouse", "driver", "interpreter"]);
+// 2026-06-16 — consolidated onto the FULL 24-role `adminRoleSchema`
+// (lib/validators/admin-form.ts · ADMIN_ROLES). Previously this was a
+// STALE 7-value enum (super/ops/accounting/sales_admin/warehouse/driver/
+// interpreter) that silently rejected grants of manager/sales/qa/pricing +
+// the 13 freight roles — so adminGrantRole/adminToggleRole below could not
+// grant any newer role. The grid + /edit form route through
+// adminChangeRole/adminToggleActive (already full-24); this keeps the older
+// grant/toggle actions consistent so NO role is ungrantable from any path.
+const ROLE = adminRoleSchema;
 
 // ────────────────────────────────────────────────────────────
 // Grant role to an existing profile

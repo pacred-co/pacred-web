@@ -30,40 +30,10 @@ import {
   EMPLOYEE_TYPES,
   SEX_VALUES,
   suggestAdminPassword,
+  ROLE_LABELS,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
 import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
-
-// ─── role label map ────────────────────────────────────────────────────
-// Human-readable Thai labels keyed by the AdminRoleEnum values. Same
-// content as the legacy doc role list (lib/auth/require-admin.ts §"doc role").
-const ROLE_LABELS: Record<AdminRoleEnum, string> = {
-  super:                     "Super Admin (CEO/Manager/Tech)",
-  // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
-  manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
-  ops:                       "Ops (forwarder/บริการคลังจีน)",
-  accounting:                "Accounting (กระเป๋าเงิน/หยวน/payouts)",
-  sales_admin:               "Cargo Sales Manager (#29)",
-  sales:                     "Cargo Sales Staff (#30)",
-  qa:                        "QA & QC (#5)",
-  warehouse:                 "Warehouse staff",
-  driver:                    "Driver / รถส่งของ",
-  interpreter:               "Interpreter / ล่ามจีน",
-  pricing:                   "Cargo Pricing (ต้นทุน / PEAK stock-in)",
-  freight_sales_manager:     "Freight Sales Manager (#16)",
-  freight_sales:             "Freight Sales (#17)",
-  freight_export_manager:    "Freight Export Manager (#18)",
-  freight_export_cs:         "Freight Export CS / Doc (#19)",
-  freight_export_doc:        "Freight Export Doc (#20)",
-  freight_export_clearance:  "Freight Export Clearance (#21)",
-  freight_clearance_both:    "Freight Clearance Import+Export (#22)",
-  freight_export_messenger:  "Freight Export Messenger (#23)",
-  freight_import_manager:    "Freight Import Manager (#24)",
-  freight_import_cs:         "Freight Import CS / Doc (#25)",
-  freight_import_doc:        "Freight Import Doc (#26)",
-  freight_import_clearance:  "Freight Import Clearance (#27)",
-  freight_import_messenger:  "Freight Import Messenger (#28)",
-};
 
 const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
   "pacred":         "Pacred (รวม)",

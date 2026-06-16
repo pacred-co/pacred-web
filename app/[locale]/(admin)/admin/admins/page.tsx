@@ -46,6 +46,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAdminsAll } from "@/actions/admin/export/admins";
+import { AdminRowManage } from "./admins-row-manage-client";
 
 export const dynamic = "force-dynamic";
 
@@ -624,6 +625,7 @@ export default async function AdminTablePage({
                   <Th>อีเมลบริษัท</Th>
                   <Th>โทรบริษัท</Th>
                   <SortTh label="สถานะ"          field="is_active"  activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
+                  {canMutate && <Th>จัดการ (role/สิทธิ์)</Th>}
                   <Th>ตัวเลือก</Th>
                 </tr>
               </thead>
@@ -748,6 +750,16 @@ export default async function AdminTablePage({
                           )}
                         </div>
                       </Td>
+                      {canMutate && (
+                        <Td>
+                          <AdminRowManage
+                            profileId={row.profile_id}
+                            role={row.role}
+                            isActive={row.is_active}
+                            staffName={nickname ?? fullName}
+                          />
+                        </Td>
+                      )}
                       <Td>
                         <div className="flex flex-wrap items-center gap-1">
                           <Link
