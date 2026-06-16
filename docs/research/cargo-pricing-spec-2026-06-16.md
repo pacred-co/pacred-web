@@ -2,11 +2,14 @@
 
 > Owner-stated pricing rules for the cargo (China→Thailand import) line. Load-bearing for the rate engine + MOMO billing + sales quoting + tax-invoice. "ทุกอย่างต้องเชื่อมโยง ลิงค์ กันได้ทั้งหมด · ทำงานได้ทุกแผนก · ใช้งานได้จริง."
 
-## ⭐ FINAL RULE (owner-locked 2026-06-16) — TWO-TIER via a fixed doc-discount
-The general/default rate is CORRECT as-is on prod (เรือ 3,700 / รถ 5,700 — do NOT change). The "spec" rate (เรือ 2,900 / รถ 4,900) is a **conditional preferential tier = the default rate MINUS a fixed ฿800/CBM discount**, granted ONLY when BOTH conditions hold:
-1. **tax-doc = ใบกำกับ (tax_invoice) OR ใบขน (customs)** (NOT receipt/none), AND
-2. **the order came via โอนหยวน (yuan-transfer through us) OR ฝากนำเข้า (our import service)** — full-loop.
-- **Mechanism: a FIXED ฿800/CBM discount** off the resolved CBM rate (3700−800=2900 · 5700−800=4900). Stored in config (adjustable), applied in the ONE resolver (`lib/forwarder/resolve-rate.ts`) so MOMO-billing + sales-quote + customer + วางบิล all honour it. kg basis: owner specified the CBM discount only (apply to CBM; leave kg unless owner extends).
+## ⭐ FINAL RULE (owner-locked 2026-06-16, TIGHTENED) — TWO-TIER via a fixed doc-discount · ALL THREE conditions (AND)
+The general/default rate is CORRECT as-is on prod (เรือ 3,700 / รถ 5,700 — do NOT change). The "spec" rate (เรือ 2,900 / รถ 4,900 / kg ฿11) is a **conditional preferential tier = the default rate MINUS a fixed ฿800/CBM discount**, granted ONLY when **ALL THREE** conditions hold (owner verbatim 2026-06-16: "ต้อง ฝากโอน ฝากนำเข้า และ เปิดใบกำกับ หรือใบขน ต้องตรงสามเงื่อนไขนี้ ถึงจะได้ราคาที่ถูกที่สุด"):
+1. **ฝากโอน** = customer used OUR yuan-transfer (โอนหยวน/Alipay) service, **AND**
+2. **ฝากนำเข้า** = OUR import service, **AND**
+3. **tax-doc = ใบกำกับ (tax_invoice) OR ใบขน (customs)** (NOT receipt/none).
+- ⚠️ This **TIGHTENS** the earlier draft (which had condition-2 as "yuan OR import" — that was too loose). It is now yuan **AND** import **AND** taxdoc.
+- **kg-over-คิว switch:** when **kg > คิว (kg/250 > cbm)** the sell basis may switch to **฿11/kg** ("แต่ถ้ากิโลเยอะกว่าคิว ให้สามารถเปลี่ยนขายเป็นกิโลได้ เน้นว่าต้องโลเยอะกว่าคิว"). Only when kg dominates.
+- **Mechanism: a FIXED ฿800/CBM discount** off the resolved CBM rate (3700−800=2900 · 5700−800=4900). `DEFAULT_DOC_TIER_DISCOUNT.cbm_thb=800` (ACTIVE by default), overridable via business_config `cargo.doc_tier_discount`, applied in the ONE resolver (`lib/forwarder/resolve-rate.ts`) so MOMO-billing + sales-quote + customer + วางบิล all honour it. kg basis: CBM discount only (apply to CBM; leave kg unless owner extends).
 - The rate-ENGINE logic (max(cbm, kg/threshold), unified resolver) is already correct — only the doc-tier discount + the eligibility threading are NEW. Base rate cards (tb_rate_g 3700/5700) stay untouched.
 
 ## The rules (raw owner statements)
