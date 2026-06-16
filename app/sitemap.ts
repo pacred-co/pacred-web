@@ -42,18 +42,49 @@ const STATIC_ROUTES: Route[] = [
   { path: "/privacy",                     priority: 0.3, changeFrequency: "yearly"  },
 ];
 
-function entry(path: string, opts: Omit<Route, "path">): MetadataRoute.Sitemap[number] {
+/** Absolute-ize a root-relative image path for the sitemap `<image:loc>`. */
+function abs(img: string): string {
+  return img.startsWith("http")
+    ? img
+    : `${SITE_URL}${img.startsWith("/") ? "" : "/"}${img}`;
+}
+
+/**
+ * Representative image per static route — surfaces a Google-Images
+ * discovery signal (`<image:image>`) for the marketing pages. Detail
+ * pages (knowledge/news/ports) supply their own hero image from data.
+ */
+const ROUTE_IMAGE: Record<string, string> = {
+  "/": "/images/bannerdesktop/maindesktop01.png",
+  "/services": "/images/bannerdesktop/maindesktop01.png",
+  "/services/import-china": "/images/bannerdesktop/bannershipdesktop01.png",
+  "/services/import-china-fcl": "/images/bannerdesktop/bannershipdesktop01.png",
+  "/services/import-china-lcl": "/images/bannerdesktop/lclbannercom.png",
+  "/customs-clearance-shipping-suvarnabhumi": "/images/bannerdesktop/clearancedesktop4.png",
+  "/services/export-worldwide": "/images/hero-section/banner/airbanner.png",
+  "/services/china-shopping": "/images/bannerdesktop/shoppingbanner02.png",
+  "/about": "/images/companyofficethai.png",
+};
+
+function entry(
+  path: string,
+  opts: Omit<Route, "path">,
+  images?: string[],
+): MetadataRoute.Sitemap[number] {
   const languages = SITE_LOCALES.reduce(
     (acc, l) => ({ ...acc, [l]: absoluteUrl(path, l as SiteLocale) }),
     {} as Record<string, string>,
   );
-  return {
+  const e: MetadataRoute.Sitemap[number] = {
     url: absoluteUrl(path, "th"),
     lastModified: new Date(),
     priority: opts.priority,
     changeFrequency: opts.changeFrequency,
     alternates: { languages },
   };
+  const imgs = (images ?? []).filter(Boolean).map(abs);
+  if (imgs.length) e.images = imgs;
+  return e;
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -62,24 +93,29 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }
 
   const staticEntries = STATIC_ROUTES.map((r) =>
-    entry(r.path, { priority: r.priority, changeFrequency: r.changeFrequency }),
+    entry(
+      r.path,
+      { priority: r.priority, changeFrequency: r.changeFrequency },
+      ROUTE_IMAGE[r.path] ? [ROUTE_IMAGE[r.path]] : undefined,
+    ),
   );
 
   const articleEntries = KNOWLEDGE_ARTICLES.map((a) =>
-    entry(`/knowledge/${a.slug}`, { priority: 0.7, changeFrequency: "monthly" }),
+    entry(`/knowledge/${a.slug}`, { priority: 0.7, changeFrequency: "monthly" }, [a.image]),
   );
 
   // Per-port customs detail pages — one per CUSTOMS_PORTS slug
   const portEntries = CUSTOMS_PORTS.map((p) =>
-    entry(`/customs-clearance-shipping-suvarnabhumi/${p.slug}`, {
-      priority: 0.85,
-      changeFrequency: "monthly",
-    }),
+    entry(
+      `/customs-clearance-shipping-suvarnabhumi/${p.slug}`,
+      { priority: 0.85, changeFrequency: "monthly" },
+      [p.heroImage ?? p.image],
+    ),
   );
 
   // Pacred News detail pages — one per PACRED_NEWS slug
   const newsEntries = PACRED_NEWS.map((n) =>
-    entry(`/news/${n.slug}`, { priority: 0.7, changeFrequency: "monthly" }),
+    entry(`/news/${n.slug}`, { priority: 0.7, changeFrequency: "monthly" }, [n.heroImage ?? n.image]),
   );
 
   return [...staticEntries, ...articleEntries, ...portEntries, ...newsEntries];

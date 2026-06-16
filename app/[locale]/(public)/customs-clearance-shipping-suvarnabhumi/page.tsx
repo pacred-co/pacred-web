@@ -53,7 +53,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const base = await buildPageMetadata({ locale, path: PATH, namespace: NS });
+  const base = await buildPageMetadata({ locale, path: PATH, namespace: NS, ogKey: "customs-suvarnabhumi" });
   // Per ปอน 2026-05-22 — page title updated to include import duties
   // (overrides the root `%s | Pacred` template). Keep the i18n
   // `seo.services.customsClearance.title` string as-is for JSON-LD

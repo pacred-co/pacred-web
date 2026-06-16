@@ -3,7 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter, usePathname } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { getReviewBySlugOrId, reviewSlug } from "@/lib/reviews/catalog";
+import {
+  getReviewBySlugOrId,
+  reviewSlug,
+  reviewUrl,
+  ourWorkPath,
+} from "@/lib/reviews/catalog";
 
 /**
  * Translate a localized-slug path to the target locale's slug so switching
@@ -12,10 +17,24 @@ import { getReviewBySlugOrId, reviewSlug } from "@/lib/reviews/catalog";
  * Other routes share one slug across locales → returned unchanged.
  */
 function localizePath(pathname: string, nextLocale: "th" | "en"): string {
-  const m = pathname.match(/^\/our-work\/(.+)$/);
+  // usePathname() returns the path percent-encoded (the Thai segment/slug come
+  // back as %E0%B8…), so decode before matching the localized segment.
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    /* keep raw on malformed input */
+  }
+  // A case landing — /ผลงานของเรา/<slug> (th) OR /our-work/<slug> (en) — swaps
+  // BOTH the segment and the slug to the target locale.
+  const m = decoded.match(/^\/(?:our-work|ผลงานของเรา)\/(.+)$/);
   if (m) {
     const review = getReviewBySlugOrId(m[1]);
-    if (review) return `/our-work/${reviewSlug(review, nextLocale)}`;
+    if (review) return reviewUrl(reviewSlug(review, nextLocale), nextLocale);
+  }
+  // The portfolio list — /our-work (en) ⇆ /ผลงานของเรา (th).
+  if (decoded === "/our-work" || decoded === ourWorkPath("th")) {
+    return ourWorkPath(nextLocale);
   }
   return pathname;
 }

@@ -71,12 +71,10 @@ export function Footer() {
     { label: t("aboutPacred"),    href: "/about" },
     { label: t("aboutKnowledge"), href: "/knowledge" },
     { label: t("aboutFaq"),       href: "/faq" },
-    { label: t("aboutJoin"),      href: "/register" },
     { label: t("aboutTerms"),     href: "/terms" },
     { label: t("aboutPrivacy"),   href: "/privacy" },
     { label: t("aboutDelivery"),  href: "/delivery-areas" },
     { label: t("aboutHolidays"),  href: "/holidays" },
-    { label: t("aboutStatus"),    href: "/status" },
   ];
 
   const serviceLinks = [

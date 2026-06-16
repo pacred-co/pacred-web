@@ -13,6 +13,7 @@ import { Link } from "@/i18n/navigation";
 import {
   REVIEWS,
   reviewSlug,
+  reviewUrl,
   reviewProductLabel,
   reviewHsCode,
   type ServiceType,
@@ -282,7 +283,8 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
 
   return (
     <Link
-      href={`/our-work/${slug}`}
+      href={reviewUrl(slug, locale)}
+      prefetch={false}
       data-review-card
       aria-label={`${title} · ${productLabel} · HS ${hsCode}`}
       style={{ contain: "layout paint" }}

@@ -67,7 +67,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  return buildPageMetadata({ locale, path: PATH, namespace: NS });
+  return buildPageMetadata({ locale, path: PATH, namespace: NS, ogKey: "import-china" });
 }
 
 const LINE_URL = "/line";

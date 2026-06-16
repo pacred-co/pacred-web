@@ -33,7 +33,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  return buildPageMetadata({ locale, path: PATH, namespace: "seo.about" });
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.about", ogKey: "about" });
 }
 
 const STAT_ICONS = [Award, Boxes, Clock, ShieldCheck];
