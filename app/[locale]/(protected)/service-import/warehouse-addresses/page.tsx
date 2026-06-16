@@ -27,8 +27,8 @@ export default async function WarehouseAddressesPage() {
       fields: [
         { key: "shipping-mark", label: "Shipping Mark", value: `${memberCode} by EK`,                       hint: "วางข้างกล่อง" },
         { key: "receiver",      label: "收件人 (ผู้รับ)",  value: `${memberCode} (รถ EK / เรือ SEA)` },
-        { key: "address",       label: "ที่อยู่ (中文)",   value: "浙江省金华市义乌市荷叶塘工业区龙岗路一街2号1栋102" },
-        { key: "phone",         label: "电话 (โทร)",      value: "19817984258 谢小姐" },
+        { key: "address",       label: "ที่อยู่ (中文)",   value: "义乌市江东街道山口小区69栋3单元1楼YY仓322000" },
+        { key: "phone",         label: "电话 (โทร)",      value: "孙先生19213995519" },
       ],
     },
     {

@@ -8,7 +8,6 @@ import {
   Plane,
   ArrowRight,
   FileText,
-  Warehouse,
   Phone,
   Clock,
   Package,
@@ -71,11 +70,11 @@ function useActiveCard(initialIdx: number) {
 
 // Shared cover (photo + accent + black gradient + badge pill + title/sub overlay).
 function CardCover({
-  image, imageAlt, accent, badge, badgeIcon: BadgeIcon, title, sub, h, isFeatured, soon = false, subNowrap = false,
+  image, imageAlt, accent, badge, badgeIcon: BadgeIcon, term, title, sub, h, isFeatured, soon = false, subNowrap = false, cleanImage = false,
 }: {
   image: string; imageAlt: string; accent: string;
-  badge: string; badgeIcon: typeof Truck; title: string; sub: string;
-  h: string; isFeatured: boolean; soon?: boolean; subNowrap?: boolean;
+  badge: string; badgeIcon: typeof Truck; term?: string; title: string; sub: string;
+  h: string; isFeatured: boolean; soon?: boolean; subNowrap?: boolean; cleanImage?: boolean;
 }) {
   return (
     <div className={`relative ${h} overflow-hidden`}>
@@ -84,10 +83,14 @@ function CardCover({
         alt={imageAlt}
         fill
         sizes="(max-width: 768px) 88vw, 440px"
-        className={`object-cover transition-transform duration-500 ${soon ? "grayscale" : "group-hover:scale-[1.08]"}`}
+        className={`object-cover ${soon ? "grayscale" : ""}`}
       />
-      <div aria-hidden className={`absolute inset-0 ${soon ? "bg-slate-600/45 mix-blend-multiply" : `bg-gradient-to-br ${accent} mix-blend-multiply`}`} />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+      {soon ? (
+        <div aria-hidden className="absolute inset-0 bg-slate-600/45 mix-blend-multiply" />
+      ) : cleanImage ? null : (
+        <div aria-hidden className={`absolute inset-0 bg-gradient-to-br ${accent} mix-blend-multiply`} />
+      )}
+      <div aria-hidden className={`absolute inset-0 bg-gradient-to-t to-transparent ${cleanImage ? "from-black/65 via-black/5" : "from-black/80 via-black/30"}`} />
       <div className="absolute top-3 left-3 z-[2]">
         <span className={[
           "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-sm text-[10.5px] md:text-[11.5px] font-black tracking-[0.08em] shadow-md",
@@ -97,6 +100,13 @@ function CardCover({
           {badge}
         </span>
       </div>
+      {term && (
+        <div className="absolute top-3 right-3 z-[2]">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full backdrop-blur-sm text-[10.5px] md:text-[11.5px] font-black tracking-[0.08em] shadow-md bg-white/95 text-primary-700">
+            {term}
+          </span>
+        </div>
+      )}
       <div className="absolute bottom-3 left-3 right-3 z-[2]">
         <h4 className="text-[20px] md:text-[24px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
           {title}
@@ -110,7 +120,7 @@ function CardCover({
 }
 
 // Shared CTA footer (primary ขอราคา + LINE secondary).
-function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false, t }: { isFeatured: boolean; surface: string; id: string; ctaLabel: string; soon?: boolean; t: Translator }) {
+function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false, hideHotline = false, t }: { isFeatured: boolean; surface: string; id: string; ctaLabel: string; soon?: boolean; hideHotline?: boolean; t: Translator }) {
   if (soon) {
     return (
       <div className="relative z-10 px-3.5 md:px-4 py-2.5 md:py-3 border-t border-border bg-surface/60 dark:bg-background/60">
@@ -141,177 +151,173 @@ function CardFooter({ isFeatured, surface, id, ctaLabel, soon = false, t }: { is
         {ctaLabel}
         <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
       </TrackedExternalLink>
-      <a
-        href={`tel:${HOTLINE.replace(/-/g, "")}`}
-        className={[
-          "inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-lg font-bold text-[12px] md:text-[12.5px] transition-colors",
-          isFeatured
-            ? "bg-white/15 text-white border border-white/25 hover:bg-white/25"
-            : "bg-white border border-primary-200 text-primary-700 hover:bg-primary-50 hover:border-primary-300 dark:bg-surface dark:border-primary-800 dark:text-primary-200",
-        ].join(" ")}
-      >
-        <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-        {t("hotlineLine", { phone: HOTLINE })}
-      </a>
+      {!hideHotline && (
+        <a
+          href={`tel:${HOTLINE.replace(/-/g, "")}`}
+          className={[
+            "inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-lg font-bold text-[12px] md:text-[12.5px] transition-colors",
+            isFeatured
+              ? "bg-white/15 text-white border border-white/25 hover:bg-white/25"
+              : "bg-white border border-primary-200 text-primary-700 hover:bg-primary-50 hover:border-primary-300 dark:bg-surface dark:border-primary-800 dark:text-primary-200",
+          ].join(" ")}
+        >
+          <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
+          {t("hotlineLine", { phone: HOTLINE })}
+        </a>
+      )}
     </div>
   );
 }
 
 const FEATURED_CLASS =
-  "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white border-2 border-primary-700 shadow-[0_18px_42px_rgba(179,0,0,0.32)] hover:shadow-[0_28px_60px_rgba(179,0,0,0.45)] md:scale-[1.03] md:-translate-y-1 hover:md:-translate-y-2";
+  "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white border-2 border-primary-700 shadow-[0_18px_42px_rgba(179,0,0,0.32)] md:scale-[1.03] md:-translate-y-1";
 const SIDE_CLASS =
-  "bg-white dark:bg-surface text-foreground border border-border shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_18px_42px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1";
-const COMING_SOON_CLASS =
-  "bg-white dark:bg-surface text-foreground border border-dashed border-border shadow-[0_8px_22px_rgba(15,23,42,0.05)] opacity-95";
+  "bg-white dark:bg-surface text-foreground border border-border shadow-[0_8px_22px_rgba(15,23,42,0.06)]";
 
 // ════════════════════════════════════════════════════════════════════
-//  GROUP 1 — ส่งเข้าโกดังจีน (ชื่อชิปปิ้ง) · clearance-style warehouse cards
+//  GROUP 1 — โกดังรับสินค้า Cargo / LCL · destination-warehouse rate cards
+//  Full-bleed photo + overlaid rates, modelled on the owner's mockup
+//  (/images/mainpage/cargo/china/*PacredF.png) but built clean in the
+//  Pacred theme over the plain cover photos. Shenzhen = coming soon.
 // ════════════════════════════════════════════════════════════════════
 
-type WarehouseRate = { mode: RateMode; label: string; code: string; price: string; unit: string; kgRate?: string };
-type WarehouseCard = {
-  id: string; city: string; originName: string; image: string; accent: string;
-  rates: WarehouseRate[]; recommended?: boolean; comingSoon?: boolean;
-};
+type WarehouseRate = { mode: RateMode; cbm?: string; kg?: string; inquire?: boolean };
+type WarehouseCard = { id: string; image: string; accent: string; rates: WarehouseRate[]; soon?: boolean };
+
+// rate-row mode → short i18n label key (รถ/เรือ/แอร์ · Road/Sea/Air)
+const WH_MODE_KEY: Record<RateMode, string> = { road: "whMode_road", sea: "whMode_sea", air: "whMode_air" };
 
 const WAREHOUSE_CARDS: WarehouseCard[] = [
   {
-    id: "yiwu", city: "อี้อู", originName: "โกดังอี้อู",
-    image: "/images/main/importcard/wiwu.png", accent: "from-amber-400/30 to-orange-700/40",
+    id: "guangzhou",
+    image: "/images/mainpage/cargo/china/gwangzhou.png",
+    accent: "from-red-600/25 to-orange-700/25",
     rates: [
-      { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "฿5,300", unit: "/CBM", kgRate: "฿18/kg" },
-      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿2,900", unit: "/CBM", kgRate: "฿11/kg" },
-      { mode: "air",  label: "ทางแอร์", code: "LCL · AIR",   price: "สอบถาม", unit: "/kg" },
+      { mode: "road", cbm: "4,900", kg: "17" },
+      { mode: "sea", cbm: "2,900", kg: "10" },
+      { mode: "air", inquire: true },
     ],
   },
   {
-    id: "guangzhou", city: "กวางโจว", originName: "โกดังกวางโจว",
-    image: "/images/main/importcard/gwangzhou.png", accent: "from-primary-500/30 to-primary-800/40",
-    recommended: true,
+    id: "yiwu",
+    image: "/images/mainpage/cargo/china/yiwu.png",
+    accent: "from-sky-600/25 to-blue-700/25",
     rates: [
-      { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "฿4,900", unit: "/CBM", kgRate: "฿17/kg" },
-      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "฿2,900", unit: "/CBM", kgRate: "฿10/kg" },
-      { mode: "air",  label: "ทางแอร์", code: "LCL · AIR",   price: "สอบถาม", unit: "/kg" },
+      { mode: "road", cbm: "5,500", kg: "18" },
+      { mode: "sea", cbm: "2,900", kg: "11" },
+      { mode: "air", inquire: true },
     ],
   },
   {
-    id: "shenzhen", city: "เซินเจิ้น", originName: "โกดังเซินเจิ้น",
-    image: "/images/main/importcard/senzhen.png", accent: "from-slate-400/30 to-slate-700/40",
-    comingSoon: true,
-    rates: [
-      { mode: "road", label: "ทางรถ",  code: "LCL · TRUCK", price: "—", unit: "" },
-      { mode: "sea",  label: "ทางเรือ", code: "LCL · SEA",   price: "—", unit: "" },
-      { mode: "air",  label: "ทางแอร์", code: "LCL · AIR",   price: "—", unit: "" },
-    ],
+    id: "shenzhen",
+    image: "/images/mainpage/cargo/china/zenshen.png",
+    accent: "from-slate-700/35 to-slate-900/35", rates: [], soon: true,
   },
 ];
 
-// Extra terms revealed on hover (desktop) / tap (mobile) over the "Term : EXW" line.
-const TERM_NOTES = ["termNote1", "termNote2"];
-
-function TermInfo({ feat, t }: { feat: boolean; t: Translator }) {
-  return (
-    <div className="mt-auto">
-      <div className={`text-[10.5px] font-bold leading-snug ${feat ? "text-white/75" : "text-muted"}`}>
-        Term : <span className={feat ? "text-white" : "text-foreground"}>EXW</span>
-      </div>
-      <ul className={`mt-1.5 space-y-1 rounded-lg border p-2 ${feat ? "bg-white/10 border-white/20" : "bg-surface/60 dark:bg-background/60 border-border"}`}>
-        {TERM_NOTES.map((note) => (
-          <li key={note} className={`flex items-start gap-1.5 text-[10.5px] font-semibold leading-snug ${feat ? "text-white" : "text-foreground"}`}>
-            <span aria-hidden className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${feat ? "bg-yellow-300" : "bg-primary-500"}`} />
-            <span>{t(note)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function WarehouseCardView({ card, isFeatured, isRecommended, onHover, t }: {
-  card: WarehouseCard; isFeatured: boolean; isRecommended: boolean; onHover: () => void; t: Translator;
-}) {
-  const soon = !!card.comingSoon;
-  const feat = isFeatured && !soon;
+function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; active: boolean; onHover: () => void; t: Translator }) {
+  const city = t(`warehouseOrigin_${card.id}`);
   return (
     <article
       onMouseEnter={onHover}
       className={[
-        "group relative flex flex-col shrink-0 w-[85%] sm:w-[400px] md:w-auto snap-center md:snap-none rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
-        soon ? COMING_SOON_CLASS : feat ? FEATURED_CLASS : SIDE_CLASS,
+        "group relative flex-col rounded-2xl md:rounded-3xl overflow-hidden border border-border transition-all duration-400 min-h-[300px] md:min-h-[460px] shadow-[0_8px_22px_rgba(15,23,42,0.10)]",
+        card.soon ? "hidden md:flex" : "flex", // Shenzhen (coming soon) is hidden on mobile
+        active ? "md:scale-[1.03] md:z-10 md:shadow-[0_18px_42px_rgba(15,23,42,0.18)]" : "",
       ].join(" ")}
     >
-      {isRecommended && !soon && (
-        <div className="absolute top-3 right-3 z-20">
-          <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
-            <Sparkles className="w-3 h-3" strokeWidth={2.8} />
-            {t("recommendedBadge")}
-            <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
+      {/* full-bleed cover photo */}
+      <Image src={card.image} alt={city} fill sizes="(max-width: 768px) 80vw, 380px" className={`object-cover ${card.soon ? "grayscale" : ""}`} />
+      {!card.soon && <div aria-hidden className={`absolute inset-0 bg-gradient-to-br ${card.accent} mix-blend-multiply`} />}
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/55 to-black/15" />
+
+      {/* tag row — WAREHOUSE type + Term: EXW / coming-soon, grouped top-left */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-wrap items-center gap-1.5">
+        {card.soon ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/90 text-slate-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+            <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
+            {t("badgeSoon")}
           </span>
-        </div>
-      )}
-      {feat && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08]"
-          style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "18px 18px" }} />
-      )}
-
-      <CardCover
-        image={card.image} imageAlt={t(`warehouseOrigin_${card.id}`)} accent={card.accent}
-        badge={soon ? t("badgeSoon") : "WAREHOUSE RATE"} badgeIcon={soon ? Lock : Warehouse}
-        title={t(`warehouseOrigin_${card.id}`)} sub={soon ? t("comingSoon") : t("warehouseRouteSub", { city: t(`warehouseCity_${card.id}`), dest: t("destWarehouse") })}
-        h="h-32 md:h-40" isFeatured={feat} soon={soon}
-      />
-
-      <div className="relative z-10 flex-1 flex flex-col gap-2.5 p-3.5 md:p-4">
-        {/* 3 rate rows */}
-        <div className="flex flex-col gap-1.5">
-          {card.rates.map((r) => {
-            const Icon = MODE_ICON[r.mode];
-            const quote = soon || r.price === "สอบถาม";
-            return (
-              <div key={r.mode} className={[
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 border",
-                feat ? "bg-white/10 border-white/15" : "bg-surface/60 dark:bg-background/60 border-border",
-              ].join(" ")}>
-                <div className={[
-                  "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                  feat ? "bg-white/15 text-yellow-300" : soon ? "bg-border text-muted" : "bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.22)]",
-                ].join(" ")}>
-                  <Icon className="w-[18px] h-[18px]" strokeWidth={2.4} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-[13px] font-black leading-none ${feat ? "text-white" : "text-foreground"}`}>{t(`mode_${r.mode}`)}</div>
-                  <div className={`text-[10px] font-bold uppercase tracking-[0.06em] mt-1 ${feat ? "text-white/65" : "text-muted"}`}>{r.code}</div>
-                </div>
-                <div className="shrink-0 flex items-baseline justify-end gap-1 text-right">
-                  <span className={[
-                    "text-[14px] md:text-[18px] font-black leading-none tabular-nums",
-                    quote ? (feat ? "text-white/80" : "text-muted") : (feat ? "text-yellow-300" : "text-primary-600"),
-                  ].join(" ")}>
-                    {r.price === "สอบถาม" ? t("priceInquire") : r.price}
-                    {r.unit && <span className={`text-[8px] font-bold ${feat ? "text-white/65" : "text-muted"}`}>{r.unit}</span>}
-                  </span>
-                  {r.kgRate && (
-                    <span className={`text-[12px] md:text-[14px] font-black tabular-nums ${feat ? "text-yellow-300" : "text-primary-600"}`}>{r.kgRate}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Term + info tooltip (hover desktop · tap mobile) */}
-        <TermInfo feat={feat} t={t} />
+        ) : (
+          <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+            Term: EXW
+          </span>
+        )}
       </div>
 
-      <CardFooter isFeatured={feat} surface="lcl_warehouse_rate" id={card.id} ctaLabel={t("ctaQuoteFree")} soon={soon} t={t} />
+      {/* content (anchored to the bottom over the photo) */}
+      <div className="relative z-10 mt-auto p-3 md:p-4 flex flex-col gap-2 md:gap-2.5">
+        <div>
+          <h4 className="text-[16px] md:text-[24px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.75)]">{city}</h4>
+        </div>
+
+        {card.soon ? (
+          <p className="text-[12.5px] md:text-[13px] font-semibold text-white/85 leading-snug drop-shadow-[0_1px_6px_rgba(0,0,0,0.75)]">
+            {t("warehouseSoonNote")}
+          </p>
+        ) : (
+          <>
+            <div className="rounded-xl bg-black/35 backdrop-blur-[2px] border border-white/12 divide-y divide-white/10 overflow-hidden">
+              {card.rates.map((r) => {
+                const RIcon = MODE_ICON[r.mode];
+                return (
+                  <div key={r.mode} className="flex items-center gap-1 px-1.5 py-1.5 md:gap-2 md:px-2.5">
+                    <RIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-400 shrink-0" strokeWidth={2.6} />
+                    <span className="text-[11px] md:text-[12.5px] font-bold text-white/85 min-w-[1.6rem] md:min-w-[2.25rem] shrink-0">{t(WH_MODE_KEY[r.mode])}</span>
+                    {r.inquire ? (
+                      <span className="text-[10.5px] md:text-[13px] font-bold text-white/80">{t("priceInquire")}</span>
+                    ) : (
+                      <span className="ml-auto flex items-baseline gap-1.5 md:gap-3">
+                        <span className="flex items-baseline gap-0.5">
+                          <span className="text-[12px] md:text-[18px] font-black text-white leading-none tabular-nums">{r.cbm}</span>
+                          <span className="text-[8px] md:text-[9.5px] font-bold text-white/55">CBM</span>
+                        </span>
+                        <span className="flex items-baseline gap-0.5">
+                          <span className="text-[12px] md:text-[18px] font-black text-white leading-none tabular-nums">{r.kg}</span>
+                          <span className="text-[8px] md:text-[9.5px] font-bold text-white/55">KG</span>
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div>
+              <div className="text-[10px] font-black tracking-[0.10em] uppercase text-primary-300 mb-1">{t("termsLabel")}</div>
+              <ul className="flex flex-col gap-0.5">
+                {[t("termNote1"), t("termNote2")].map((term) => (
+                  <li key={term} className="flex items-start gap-1.5 text-[11px] md:text-[11.5px] leading-snug text-white/85 drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)]">
+                    <span className="mt-1.5 inline-block w-1 h-1 rounded-full bg-primary-400 shrink-0" />
+                    <span>{term}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* whole card → LINE quote (active cards only) */}
+      {!card.soon && (
+        <TrackedExternalLink
+          href={LINE_URL}
+          cta="line_consult"
+          surface="lcl_warehouse_rate"
+          ctaProps={{ card: card.id }}
+          aria-label={`${t("ctaQuoteFree")} · ${city}`}
+          className="absolute inset-0 z-20"
+        >
+          <span className="sr-only">{t("ctaQuoteFree")} · {city}</span>
+        </TrackedExternalLink>
+      )}
     </article>
   );
 }
 
 export function WarehouseRateGroup() {
   const t = useTranslations("lclPriceCards");
-  const recommendedIdx = Math.max(0, WAREHOUSE_CARDS.findIndex((c) => c.recommended));
-  const { scrollRef, activeIdx, setActiveIdx } = useActiveCard(recommendedIdx);
+  const { scrollRef, activeIdx, setActiveIdx } = useActiveCard(0);
   return (
     <section aria-label={t("warehouseSectionAria")}>
       <header className="mb-3 md:mb-4">
@@ -323,12 +329,15 @@ export function WarehouseRateGroup() {
           {t("warehouseHeading")}
         </h3>
       </header>
-      <div ref={scrollRef}
-        className="flex overflow-x-auto gap-3 -mx-4 px-[8%] pt-2 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pt-3 md:pb-2 md:snap-none md:items-stretch">
+      <div
+        ref={scrollRef}
+        className="grid grid-cols-2 gap-2.5 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch"
+      >
         {WAREHOUSE_CARDS.map((card, i) => (
           <WarehouseCardView
-            key={card.id} card={card}
-            isFeatured={i === activeIdx && !card.comingSoon} isRecommended={!!card.recommended}
+            key={card.id}
+            card={card}
+            active={i === activeIdx}
             onHover={() => { if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) setActiveIdx(i); }}
             t={t}
           />

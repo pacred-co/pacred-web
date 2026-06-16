@@ -8,7 +8,6 @@ import {
   Phone,
   Check,
   Ship,
-  Warehouse,
   Star,
   Sparkles,
   Truck,
@@ -210,24 +209,12 @@ export function PricingSection({
   lclExpanded?: boolean;
 } = {}) {
   const t = useTranslations("pricing");
-  const MODES: Record<Mode, { id: Mode; title: string; badge: string; icon: typeof Ship }> = {
-    cargo:   { id: "cargo",   title: t("modeCargoTitle"),   badge: t("modeCargoBadge"),   icon: Warehouse },
-    freight: { id: "freight", title: t("modeFreightTitle"), badge: t("modeFreightBadge"), icon: Ship      },
-  };
-  const [mode, setMode] = useState<Mode>("cargo");
+  const [mode] = useState<Mode>("cargo");
   const [term, setTerm] = useState<Term>("DDP");
   const [country, setCountry] = useState<string>("cn");
   const [port, setPort] = useState<string>("ningbo");
 
   const visibleTerms = TERMS.filter((t) => t.modes.includes(mode));
-
-  const changeMode = (m: Mode) => {
-    setMode(m);
-    const valid = TERMS.filter((t) => t.modes.includes(m));
-    if (!valid.some((t) => t.id === term)) {
-      setTerm(valid[0].id);
-    }
-  };
 
   return (
     <section id="pricing" className="relative pt-2 md:pt-4 pb-10 md:pb-14">
@@ -291,41 +278,10 @@ export function PricingSection({
         </div>
         )}
 
-        {/* ─── Mode toggle (Cargo / Freight) — hidden in the lclExpanded variant ─── */}
-        {!lclExpanded && (
-        <div className="mx-auto mt-6 w-full max-w-[1120px]">
-          <div className="inline-flex p-1.5 rounded-2xl bg-gradient-to-br from-surface to-surface-alt dark:from-surface dark:to-background border border-border w-full md:w-auto shadow-[inset_0_2px_6px_rgba(0,0,0,0.04)]">
-            {(Object.keys(MODES) as Mode[]).map((m) => {
-              const data = MODES[m];
-              const Icon = data.icon;
-              const active = mode === m;
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => changeMode(m)}
-                  suppressHydrationWarning
-                  className={[
-                    "relative flex-1 md:flex-initial inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl text-[14px] font-black transition-all duration-300 overflow-hidden",
-                    active
-                      ? "bg-gradient-to-br from-white to-white dark:from-background dark:to-surface text-primary-600 shadow-[0_6px_14px_rgba(179,0,0,0.10)] scale-[1.02]"
-                      : "text-muted hover:text-primary-600 dark:hover:text-white",
-                  ].join(" ")}
-                >
-                  {active && (
-                    <span aria-hidden className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-primary-200/30 to-transparent dark:via-primary-700/20 animate-[shimmer_3.5s_infinite]" />
-                  )}
-                  <Icon className={`w-[18px] h-[18px] relative transition-transform ${active ? "scale-110" : ""}`} strokeWidth={2.5} />
-                  <span className="relative">{data.title}</span>
-                  <span className={`hidden md:inline relative text-[11px] font-bold ${active ? "text-primary-600/70" : "text-muted/70"}`}>
-                    {data.badge}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        )}
+        {/* Cargo / Freight mode toggle removed (owner 2026-06-16) — the homepage
+            pricing now shows Cargo (Warehouse-to-Warehouse) only. `mode` is pinned
+            to "cargo", so the Freight (Port-to-Port) port picker + render branch
+            below stay in the file but are intentionally unreachable here. */}
 
         {/* ─── Port picker (Freight only) — hidden in the lclExpanded variant ─── */}
         {mode === "freight" && !lclExpanded && (
@@ -427,8 +383,7 @@ export function PricingSection({
             </div>
           ) : mode === "cargo" ? (
             <div className="flex flex-col gap-7 md:gap-10">
-              {/* ═════ Cargo LCL Section — โกดัง 3 การ์ด · ปอน 2026-06-06:
-                      ใช้ดีไซน์การ์ดเดียวกับหน้านำเข้า (WarehouseRateGroup) ═════ */}
+              {/* ═════ Cargo LCL Section — โกดังรับสินค้า (full-card graphic) ═════ */}
               <WarehouseRateGroup />
               {/* ═════ Cargo FCL Section ═════ */}
               <CargoGroupRow
