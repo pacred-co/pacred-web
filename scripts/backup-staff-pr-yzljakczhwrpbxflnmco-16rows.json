@@ -1,0 +1,120 @@
+{
+  "ref": "yzljakczhwrpbxflnmco",
+  "revert": "UPDATE profiles SET member_code=NULL WHERE id = ANY($ids)",
+  "ids": [
+    "9dd16768-3b6b-46e3-a358-2d194834e7c6",
+    "1b6a11bf-1561-4f4f-a12a-25644f94f11b",
+    "6da69cc0-a6f8-45a4-b4db-8d4564dbc5f8",
+    "36f91817-7522-4e06-866c-ffddb0dafa2b",
+    "a2ea6454-2278-46b9-ab48-f2b593f32a1d",
+    "8ab3ed9e-a704-4c95-8496-4dd6efc608d1",
+    "e0cf0f6c-aec8-4e8f-b7a0-5066cbf397c3",
+    "49de4eb9-59fe-4764-be44-a3d464d01856",
+    "7b40c923-9168-4a31-a859-c1858d11e417",
+    "d924c603-a9b4-4408-a000-6e758c31b724",
+    "0565f758-dd96-4b80-9f78-1df03977266b",
+    "a16b2d6d-616e-4807-8218-a8dd610a536f",
+    "63408ffa-310e-4bbd-b3bf-e56c59da5eb7",
+    "33fdc84b-54d9-4200-bdca-4144c6283a3d",
+    "e803f396-e5cc-4265-b120-a459609c4011",
+    "ae3893b3-9053-4f37-ae2b-c799fa87c27c"
+  ],
+  "plan": [
+    {
+      "id": "9dd16768-3b6b-46e3-a358-2d194834e7c6",
+      "employee_code": "690601",
+      "name": "วิสิฐ ศิลปเลิศลักษณ์",
+      "assigned": "PR034"
+    },
+    {
+      "id": "1b6a11bf-1561-4f4f-a12a-25644f94f11b",
+      "employee_code": "690607",
+      "name": "ชูเกียรติ ศรีเพ็ชร",
+      "assigned": "PR055"
+    },
+    {
+      "id": "6da69cc0-a6f8-45a4-b4db-8d4564dbc5f8",
+      "employee_code": "690608",
+      "name": "วัธนพงษ์ จันทเพชร",
+      "assigned": "PR062"
+    },
+    {
+      "id": "36f91817-7522-4e06-866c-ffddb0dafa2b",
+      "employee_code": "690602",
+      "name": "วันดี พริกใย",
+      "assigned": "PR063"
+    },
+    {
+      "id": "a2ea6454-2278-46b9-ab48-f2b593f32a1d",
+      "employee_code": "690612",
+      "name": "แวม Pacred",
+      "assigned": "PR078"
+    },
+    {
+      "id": "8ab3ed9e-a704-4c95-8496-4dd6efc608d1",
+      "employee_code": "690605",
+      "name": "จตุพร ปานพลอย",
+      "assigned": "PR079"
+    },
+    {
+      "id": "e0cf0f6c-aec8-4e8f-b7a0-5066cbf397c3",
+      "employee_code": "690610",
+      "name": "จุฑามณี จุดอน",
+      "assigned": "PR081"
+    },
+    {
+      "id": "49de4eb9-59fe-4764-be44-a3d464d01856",
+      "employee_code": "690613",
+      "name": "สรวิชญ์ กัวศรีนนท์",
+      "assigned": "PR082"
+    },
+    {
+      "id": "7b40c923-9168-4a31-a859-c1858d11e417",
+      "employee_code": "690611",
+      "name": "เมย์ Pacred",
+      "assigned": "PR083"
+    },
+    {
+      "id": "d924c603-a9b4-4408-a000-6e758c31b724",
+      "employee_code": "690616",
+      "name": "พีรชัย ชื่นเปรื่อง",
+      "assigned": "PR084"
+    },
+    {
+      "id": "0565f758-dd96-4b80-9f78-1df03977266b",
+      "employee_code": "690614",
+      "name": "ขวัญเรือน บัวหลาง",
+      "assigned": "PR085"
+    },
+    {
+      "id": "a16b2d6d-616e-4807-8218-a8dd610a536f",
+      "employee_code": "690606",
+      "name": "อมินตรา ไกรกิตติวุฒิ",
+      "assigned": "PR086"
+    },
+    {
+      "id": "63408ffa-310e-4bbd-b3bf-e56c59da5eb7",
+      "employee_code": "690615",
+      "name": "Wave Pacred",
+      "assigned": "PR091"
+    },
+    {
+      "id": "33fdc84b-54d9-4200-bdca-4144c6283a3d",
+      "employee_code": "690617",
+      "name": "Toey Pacred",
+      "assigned": "PR094"
+    },
+    {
+      "id": "e803f396-e5cc-4265-b120-a459609c4011",
+      "employee_code": "690618",
+      "name": "ศรสวรรค์ เครื่องสินธุ์",
+      "assigned": "PR095"
+    },
+    {
+      "id": "ae3893b3-9053-4f37-ae2b-c799fa87c27c",
+      "employee_code": "690619",
+      "name": "พรรณวรินทร์ คชสูงเนิน",
+      "assigned": "PR096"
+    }
+  ]
+}

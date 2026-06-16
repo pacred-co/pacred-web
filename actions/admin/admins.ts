@@ -944,12 +944,13 @@ export async function adminCreateNew(
       // ── 2-4. Profile + admins + extras (rollback on failure) ──
       try {
         // 2. profiles row.
-        // - member_code: omitted. The trigger `generate_member_code` skips
-        //   customer-PR assignment for staff because employee_code is set
-        //   (migration 0174) → staff keep member_code NULL, out of the customer
-        //   numbering range. employee_code MUST be non-empty for that gate to
-        //   fire, so we fall back to a STAFF- placeholder when the operator
-        //   left it blank (an empty employee_code would re-trigger the old bug).
+        // - member_code: omitted → the trigger `generate_member_code` now mints
+        //   a PR from the SHARED customer pool (migration 0184, owner 2026-06-15:
+        //   "พนักงานมีรหัส PR ด้วย · ใช้เลขร่วมกับลูกค้า · ห้ามชน"). The lock +
+        //   cross-table lowest-vacant + UNIQUE make it collision-proof. (Was:
+        //   0174 left staff member_code NULL.) employee_code is the staff's
+        //   running code (auto-filled by the create form); we keep a STAFF-
+        //   placeholder fallback when the operator left it blank.
         // - status: 'active' so the admin can sign in immediately
         // - is_active: true (gates the customer-side `active` filter)
         // - account_type: 'personal' (admins are individuals — juristic
