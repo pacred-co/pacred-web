@@ -33,6 +33,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -108,6 +109,7 @@ function daysBetween(asOfMs: number, isoDate: string | null | undefined): number
  * Pure-read; no side effects.
  */
 export async function getForwarderAgingReport(): Promise<AgingReport> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   const admin = createAdminClient();
   const asOfMs = Date.now();
   const asOf = new Date(asOfMs).toISOString();

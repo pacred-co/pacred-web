@@ -1393,7 +1393,10 @@ export async function submitShopOrderSlipPayment(
     if (walletApplied <= 0) return;
     const { data: w2, error: w2Err } = await admin.from("tb_wallet").select("wallettotal").eq("userid", memberCode).maybeSingle<{ wallettotal: number | string | null }>();
     if (w2Err) console.error(`[submitShopOrderSlipPayment refundWallet read] failed`, { message: w2Err.message });
-    await admin.from("tb_wallet").update({ wallettotal: Math.round((Number(w2?.wallettotal ?? 0) + walletApplied) * 100) / 100 }).eq("userid", memberCode);
+    const { error: rcErr } = await admin.from("tb_wallet").update({ wallettotal: Math.round((Number(w2?.wallettotal ?? 0) + walletApplied) * 100) / 100 }).eq("userid", memberCode);
+    // A silent re-credit failure leaves the customer debited with no slip row +
+    // no audit trail — must be loud so it can be reconciled manually.
+    if (rcErr) console.error(`[submitShopOrderSlipPayment refundWallet recredit] FAILED — customer left debited`, { code: rcErr.code, message: rcErr.message, memberCode, walletApplied });
   };
   if (!(slipAmount > 0)) {
     await refundWallet();

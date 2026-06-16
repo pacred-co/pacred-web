@@ -108,21 +108,35 @@ export async function adminCheckMomoSack(
 
     type Row = { productid: string; producttracking: string; productcbmall: string | number; productweightall: string | number };
 
+    // §0e dead-read fix (2026-06-15 · prod-probe-confirmed): the legacy staging
+    // table `tb_tmp_forwarder_item_momo` is EMPTY on prod (0 rows) — Pacred's MOMO
+    // sync lands per-track CBM/weight in `momo_import_tracks` (77 rows) instead. So
+    // this lookup returned 0 for EVERY sack (the LCL verify tool was dead). Repoint
+    // to the live table, aliasing columns back to the Row shape so downstream is
+    // unchanged: productid←momo_cg_no (CG* tracks) · producttracking←momo_tracking_no
+    // · productcbmall←cbm · productweightall←weight_kg (data-verified mapping).
+    // NOTE: a few rows carry a COMPOUND momo_cg_no ("CGa-CGb"); exact .in() won't
+    // match those — they stay unmatched (same as the prior all-empty behaviour · no
+    // regression). Display-only tool (no money write).
+    const sel = "productid:momo_cg_no, producttracking:momo_tracking_no, productcbmall:cbm, productweightall:weight_kg";
+
     const cgPromise = cgInputs.length === 0
-      ? Promise.resolve({ data: [] as Row[] })
+      ? Promise.resolve({ data: [] as Row[], error: null })
       : admin
-          .from("tb_tmp_forwarder_item_momo")
-          .select("productid, producttracking, productcbmall, productweightall")
-          .in("productid", cgInputs);
+          .from("momo_import_tracks")
+          .select(sel)
+          .in("momo_cg_no", cgInputs);
 
     const otherPromise = otherInputs.length === 0
-      ? Promise.resolve({ data: [] as Row[] })
+      ? Promise.resolve({ data: [] as Row[], error: null })
       : admin
-          .from("tb_tmp_forwarder_item_momo")
-          .select("productid, producttracking, productcbmall, productweightall")
-          .in("producttracking", otherInputs);
+          .from("momo_import_tracks")
+          .select(sel)
+          .in("momo_tracking_no", otherInputs);
 
     const [cgRes, otherRes] = await Promise.all([cgPromise, otherPromise]);
+    if (cgRes.error)    logger.warn("momo-lcl", "CG lookup failed", { error: cgRes.error });
+    if (otherRes.error) logger.warn("momo-lcl", "tracking lookup failed", { error: otherRes.error });
 
     // Index for O(1) lookup. The legacy script trusts the first DB hit so we
     // do the same (`fetch()` returns one row — if there are dupes we keep the

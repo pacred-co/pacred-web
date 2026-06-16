@@ -1855,6 +1855,10 @@
       "button": "ทักเตยเลย",
       "role": "ฝ่ายขาย (Sales)"
     },
+    "genericRole": "ฝ่ายขาย (Sales)",
+    "genericSlogan": "นำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว",
+    "genericButton": "ทัก {name} เลย",
+    "genericAlt": "ฝ่ายขาย {name} Pacred",
     "lineCta": "ทักด่วน LINE"
   },
   "heroBanner": {
@@ -6388,6 +6392,8 @@
     "taglineToey": "นำเข้า-ส่งออก สั่งซื้อจีน ปรึกษาฟรี ปิดดีลไว",
     "taglineWin": "ดูแลทุกขั้นตอน ตอบทุกคำถาม ตลอดการใช้บริการ",
     "taglinePloy": "พร้อมช่วยเหลือ ดูแลคุณทุกเรื่องนำเข้า-ส่งออก เร็ว ใส่ใจ",
+    "taglineGeneric": "ดูแลนำเข้า-ส่งออก ครบวงจร ปรึกษาฟรี ปิดดีลให้จบในที่เดียว",
+    "altGeneric": "ฝ่ายขาย Pacred",
     "altMay": "ฝ่ายขายเมย์ Pacred",
     "altNat": "ฝ่ายขายแนท Pacred",
     "altPee": "ฝ่ายขายพี Pacred",

@@ -511,6 +511,15 @@ export default async function AdminTablePage({
           />
           {canMutate && (
             <Link
+              href="/admin/admins/sales-team"
+              className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+              title="เปิด/ปิด ใครเป็นเซล — สุ่มลูกค้า + การ์ดทีมเซลอัปเดตอัตโนมัติ"
+            >
+              👥 จัดการทีมเซล
+            </Link>
+          )}
+          {canMutate && (
+            <Link
               href="/admin/admins/new"
               className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
             >

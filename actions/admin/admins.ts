@@ -746,6 +746,131 @@ export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: Tb
 // the server action and the client form).
 // ════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════
+// Sales-rep roster self-service (owner 2026-06-15: "ให้มันผูกกันหมดออโต้")
+// ════════════════════════════════════════════════════════════════════════
+// The sales pool that the round-robin (lib/admin/assign-sales-rep.ts) + the
+// customer-facing team carousel + admin rep filters all read is the LEGACY
+// flag `tb_admin.adminStatusSale='1'` (active staff). These two functions let
+// a super-admin manage that flag from the UI — so adding a 4th/5th sales rep
+// is a toggle, never a code change or a DB edit. SOT reader: lib/admin/sales-roster.ts.
+
+export type StaffSalesFlagRow = {
+  adminID:   string;
+  name:      string;   // nickname || first name || adminID
+  fullName:  string;
+  tel:       string;
+  isSales:   boolean;  // adminStatusSale === '1'
+};
+
+/** List ACTIVE legacy staff (adminStatusA='1') with their current sales-rep
+ *  flag, so the management UI can show a per-row toggle. Super-only. */
+export async function listStaffSalesFlags(): Promise<AdminActionResult<{ rows: StaffSalesFlagRow[] }>> {
+  return withAdmin<{ rows: StaffSalesFlagRow[] }>(["super"], async () => {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname, adminTel, adminStatusSale")
+      .eq("adminStatusA", "1")
+      .order("adminStatusSale", { ascending: false }) // sales reps first
+      .order("adminID", { ascending: true });
+    if (error) {
+      console.error("[listStaffSalesFlags] failed", { code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+    type Raw = {
+      adminID: string | null; adminName: string | null; adminLastName: string | null;
+      adminNickname: string | null; adminTel: string | null; adminStatusSale: string | null;
+    };
+    const rows: StaffSalesFlagRow[] = [];
+    for (const r of (data ?? []) as Raw[]) {
+      const id = r.adminID?.trim();
+      if (!id) continue;
+      const first = r.adminName?.trim() ?? "";
+      const last = r.adminLastName?.trim() ?? "";
+      const nick = r.adminNickname?.trim();
+      rows.push({
+        adminID:  id,
+        name:     nick || first || id,
+        fullName: `${first} ${last}`.trim() || nick || id,
+        tel:      (r.adminTel ?? "").trim(),
+        isSales:  (r.adminStatusSale ?? "").trim() === "1",
+      });
+    }
+    return { ok: true, data: { rows } };
+  });
+}
+
+/**
+ * Next staff employee code — auto-running YYMMNO (owner 2026-06-15: "ออโต้ไปเลย
+ * มีกี่นัมเบอร์แล้วก็รันไป · เปลี่ยนปีเปลี่ยนเดือนก็รันไป"). Format = Buddhist-year
+ * last-2 + month + per-month running number (legacy: 690601…690619 for พ.ศ.2569
+ * เดือน 06). New month → the prefix rolls + the counter restarts at 01
+ * (690701). Super-only. Returns e.g. "690620". Best-effort: a read error
+ * returns the month prefix + "01" so the form still pre-fills something sane.
+ */
+export async function getNextEmployeeCode(): Promise<AdminActionResult<{ code: string }>> {
+  return withAdmin<{ code: string }>(["super"], async () => {
+    const admin = createAdminClient();
+    const now = new Date();
+    const yy = String((now.getFullYear() + 543) % 100).padStart(2, "0"); // Buddhist year last-2
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yymm = `${yy}${mm}`;
+    const { data, error } = await admin
+      .from("profiles")
+      .select("employee_code")
+      .like("employee_code", `${yymm}%`);
+    if (error) {
+      console.error("[getNextEmployeeCode] failed", { code: error.code, message: error.message });
+      return { ok: true, data: { code: `${yymm}01` } };
+    }
+    let max = 0;
+    for (const r of (data ?? []) as { employee_code: string | null }[]) {
+      const ec = r.employee_code?.trim() ?? "";
+      if (!ec.startsWith(yymm) || !/^\d{6,}$/.test(ec)) continue;
+      const n = parseInt(ec.slice(4), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return { ok: true, data: { code: `${yymm}${String(max + 1).padStart(2, "0")}` } };
+  });
+}
+
+const salesFlagSchema = z.object({
+  adminID: z.string().trim().min(1),
+  isSales: z.boolean(),
+});
+
+/** Toggle a staffer's sales-rep flag (`tb_admin.adminStatusSale`). Super-only,
+ *  audit-logged. Only flips ACTIVE staff (adminStatusA='1') — a 0-row result
+ *  means the id isn't an active staffer. Everything that reads the roster
+ *  (round-robin · carousel · rep filters) picks the change up automatically. */
+export async function adminSetSalesRepFlag(
+  input: z.infer<typeof salesFlagSchema>,
+): Promise<AdminActionResult> {
+  const parsed = salesFlagSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { adminID, isSales } = parsed.data;
+  return withAdmin(["super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: updated, error } = await admin
+      .from("tb_admin")
+      .update({ adminStatusSale: isSales ? "1" : "0" })
+      .eq("adminID", adminID)
+      .eq("adminStatusA", "1")
+      .select("adminID")
+      .maybeSingle();
+    if (error) {
+      console.error("[adminSetSalesRepFlag] failed", { code: error.code, message: error.message, adminID });
+      return { ok: false, error: error.message };
+    }
+    if (!updated) return { ok: false, error: "ไม่พบพนักงาน (สถานะ active) รหัสนี้" };
+    await logAdminAction(adminId, "admin.set_sales_flag", "tb_admin", adminID, { isSales });
+    revalidatePath("/admin/admins");
+    revalidatePath("/admin/admins/sales-team");
+    return { ok: true };
+  });
+}
+
 // ────────────────────────────────────────────────────────────
 // adminCreateNew — provision auth + profile + admin grant + HR extras
 // ────────────────────────────────────────────────────────────

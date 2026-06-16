@@ -50,6 +50,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { logger } from "@/lib/logger";
 import { dayStartIso, dayEndIso, type DateRange } from "@/lib/admin/reports/types";
 import {
@@ -157,6 +158,7 @@ function memberCodeForTeam(teamCode: string): string {
 export async function getAgentPayoutReport(
   range: DateRange,
 ): Promise<Result<AgentPayoutReport>> {
+  await requireAdmin(["super", "accounting", "sales_admin"]);
   try {
     const admin = createAdminClient();
 

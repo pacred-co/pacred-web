@@ -6,6 +6,7 @@ import { Phone, Sparkles, Award, MessageCircle, ChevronLeft, ChevronRight, Truck
 import { useTranslations } from "next-intl";
 import { trackCtaClick } from "@/lib/analytics";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { getPublicSalesRoster } from "@/actions/sales-roster";
 
 const LINE_URL = "/line";
 
@@ -22,7 +23,11 @@ type SalesPerson = {
   altKey: string;
 };
 
-const SALES: SalesPerson[] = [
+// Curated cards — the nice art + marketing copy per known rep. The DISPLAYED
+// set is the LIVE flagged roster (fetched on mount); a flagged rep keeps its
+// curated card when matched, else gets a default card. So adding a rep (toggle
+// adminStatusSale) shows them here automatically — owner 2026-06-15.
+const CURATED_SALES: SalesPerson[] = [
   {
     id: "may",
     name: "เมย์",
@@ -98,15 +103,50 @@ interface ContactSalesProps {
 
 export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
   const t = useTranslations("contactSales");
+
+  // Live roster (owner 2026-06-15: "ลูกค้าด้วย … ผูกกันออโต้") — the displayed
+  // team = the REAL flagged sales reps. Start from the curated cards (SSR/SEO +
+  // instant paint), then on mount swap to the live flagged set: each flagged rep
+  // keeps its curated card when one matches (art + copy), else a default card.
+  // Read failure / empty roster → keep the curated list (never empty).
+  const [displaySales, setDisplaySales] = useState<SalesPerson[]>(CURATED_SALES);
+  useEffect(() => {
+    let alive = true;
+    getPublicSalesRoster()
+      .then((reps) => {
+        if (!alive || reps.length === 0) return;
+        const list: SalesPerson[] = reps.map((r) => {
+          const shortId = r.adminID.replace(/^admin_/, "");
+          const curated = CURATED_SALES.find((c) => c.name === r.name || c.id === shortId);
+          if (curated) return curated;
+          return {
+            id: r.adminID,
+            name: r.name,
+            roleKey: "roleSales",
+            taglineKey: "taglineGeneric",
+            phone: r.phone,
+            image: r.photo ?? "/images/pacred-logo-red.png",
+            useContain: !r.photo,
+            badge: "Sales",
+            badgeIcon: Award,
+            altKey: "altGeneric",
+          };
+        });
+        setDisplaySales(list);
+      })
+      .catch(() => { /* keep the curated fallback — never break the page */ });
+    return () => { alive = false; };
+  }, []);
+
   // Reorder so the requested person lands at the visual middle position of the row.
-  const featuredIdx = SALES.findIndex((s) => s.name === featuredName);
-  const middleIdx = Math.floor(SALES.length / 2);
+  const featuredIdx = displaySales.findIndex((s) => s.name === featuredName);
+  const middleIdx = Math.floor(displaySales.length / 2);
   const orderedSales: SalesPerson[] =
     featuredIdx < 0 || featuredIdx === middleIdx
-      ? SALES
+      ? displaySales
       : (() => {
-          const featured = SALES[featuredIdx];
-          const rest = SALES.filter((s) => s.name !== featuredName);
+          const featured = displaySales[featuredIdx];
+          const rest = displaySales.filter((s) => s.name !== featuredName);
           return [...rest.slice(0, middleIdx), featured, ...rest.slice(middleIdx)];
         })();
 

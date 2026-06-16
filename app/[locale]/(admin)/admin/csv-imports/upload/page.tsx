@@ -25,6 +25,21 @@ export default async function CsvImportUploadPage() {
         </p>
       </div>
 
+      {/* 2026-06-15 (§0e dead-twin sweep) — importer writes the rebuilt
+          `forwarders` twin (0-row on prod), NOT live `tb_forwarder`. Import =
+          green toast, zero real rows (silent data loss). Form hard-disabled
+          until the action is repointed to tb_forwarder (column remap needed). */}
+      <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-5 text-sm text-red-900 space-y-1">
+        <p className="font-bold">⚠️ นำเข้า CSV forwarder ปิดชั่วคราว</p>
+        <p>
+          ระบบนี้เขียนลงตาราง <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">forwarders</code>{" "}
+          ที่ระบบจริง<strong>ไม่อ่าน</strong> (ตารางจริงคือ{" "}
+          <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">tb_forwarder</code>) —
+          กดนำเข้าจะขึ้นว่าสำเร็จแต่ข้อมูล<strong>ไม่เข้าจริง</strong> (เสี่ยงข้อมูลหาย).
+          ใช้ระบบ MOMO / forwarder โดยตรงแทน.
+        </p>
+      </div>
+
       {!bucketReady && (
         <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-5 text-sm text-red-900 space-y-2">
           <p className="font-bold">⚠ ฟีเจอร์ยังใช้งานไม่ได้ — ต้องรัน migration ก่อน</p>
@@ -77,7 +92,9 @@ export default async function CsvImportUploadPage() {
         </p>
       </div>
 
-      <UploadCsvForm disabled={!bucketReady} />
+      {/* Hard-disabled (§0e): the importer targets a dead twin. The
+          bucket-readiness check is kept for the future repoint. */}
+      <UploadCsvForm disabled />
     </main>
   );
 }
