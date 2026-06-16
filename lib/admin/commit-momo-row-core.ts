@@ -88,6 +88,7 @@ export const PCS_PICKUP_ADDRESS: ResolvedAddress = {
 // ────────────────────────────────────────────────────────────
 const PRODUCT_TYPE_OPTIONS = ["1", "2", "3", "4"] as const;
 const TRANSPORT_OPTIONS    = ["1", "2"] as const; // 1=EK truck, 2=SEA — legacy code values
+const PAYMETHOD_OPTIONS    = ["1", "2"] as const; // 1=ต้นทาง (pay-at-origin) · 2=ปลายทาง (COD)
 
 export const commitMomoRowSchema = z.object({
   rowId:        z.string().uuid("rowId ต้องเป็น uuid"),
@@ -98,6 +99,11 @@ export const commitMomoRowSchema = z.object({
   fTransportType: z.enum(TRANSPORT_OPTIONS).optional(),
   fAmount:      z.number().int().min(1).max(10000).optional().default(1),
   addressID:    z.number().int().positive().nullable().optional(),
+  // payMethod — '1'=ต้นทาง · '2'=ปลายทาง (COD). OPTIONAL: the admin /review
+  // path OMITS it → defaults to '1' (legacy behaviour, unchanged). The MOMO
+  // cron path derives it from the carrier (derivePayMethod) so an upcountry
+  // order gets '2' (เก็บเงินปลายทาง) per ภูม's province rule (Issue 4 v2).
+  payMethod:    z.enum(PAYMETHOD_OPTIONS).optional(),
 });
 
 /**
@@ -497,7 +503,10 @@ export async function commitMomoRowCore(
       ftransporttype:        fTransportType,
       adminidcreator:        legacyAdminId,
       subuserid:             d.subUserID ?? "",
-      paymethod:             "1",
+      // paymethod — '1'=ต้นทาง (pay-at-origin) · '2'=ปลายทาง (เก็บเงินปลายทาง / COD).
+      // Admin /review path omits d.payMethod → '1' (unchanged legacy default).
+      // MOMO cron supplies derivePayMethod(carrier) → '2' for upcountry COD.
+      paymethod:             d.payMethod ?? "1",
       fusercompany:          fUserCompany,
       priceother:            0,
       // fwarehousename: "8" = MOMO (per WAREHOUSE_LABEL in /admin/report-cnt/

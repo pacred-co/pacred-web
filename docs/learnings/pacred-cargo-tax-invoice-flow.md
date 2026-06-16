@@ -48,7 +48,7 @@ The original template's bug: its ใบขน section pulled the **ex-duty SELLI
 
 - **FX:** เรทหยวน (THB/¥) — selling vs cost can differ (cost = the actual China-pay rate). Customs duty uses the **monthly customs USD rate** (customs.go.th), separate from both.
 - **Markup tiers:** เฟรท + ขนส่ง **30 / 25 / 20 / 15 / 10 %** by customer size (big customer → lower tier). PROFIT = SELL − COST per line; pass-throughs (VAT/duty/RENT/overtime) carry **no margin** (`วางบิลตามใบเสร็จ`).
-- **Volumetric:** 1 CBM = 300 KG (cargo) / 167 (air). **Form E / RCEP** under ACFTA zero-rates MFN duty.
+- **Volumetric:** 1 CBM = 300 KG (cargo) / 167 (air). **Form E / RCEP** under ACFTA zero-rates MFN duty. ⚠️ **SUPERSEDED for Pacred's billing decision:** the KG-vs-CBM break-even Pacred actually bills on is **ค่าเทียบ = 250** kg/CBM (`tb_users.userComparisonValue`, per-customer · per-order override 200/150), NOT 300 — see `pacred-domain-knowledge.md` [2026-06-16] "ค่าเทียบ = 250". 300 here is the older generic dim-weight note.
 - **Shipment codes:** `GZE######-#` (Guangzhou-truck/EK), `GZS######-#` (Guangzhou-sea). One container holds many invoices; `ตั๋วหลัก / ตั๋วพ่วง` for truck consolidations.
 - **Service cost floors:** individual-name job ฿800, company-name ฿1500, ใบขน-check ฿650.
 - **Gaps that need a human (not in any source):** PEAK account/chart-of-accounts codes → fill from accounting (NAT); NETBAY field list → from Docs (Win/Gring). Do NOT fabricate these.
