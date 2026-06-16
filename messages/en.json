@@ -4817,7 +4817,13 @@
     "unitKg": "kg",
     "unitCbm": "CBM",
     "notYetAvailable": "Not yet available",
-    "noRate": "No rate for this route yet — please contact our team"
+    "noRate": "No rate for this route yet — please contact our team",
+    "docTierLabel": "Tax document",
+    "docTierOn": "Tax invoice / customs form",
+    "docTierOff": "No document",
+    "docTierHintOff": "Choose tax invoice/customs + yuan-transfer/import → save ฿{amount}/CBM on freight",
+    "docTierHintOn": "Document discount −฿{amount}/CBM applied (off the CBM rate)",
+    "docDiscountBadge": "−฿{amount}/CBM"
   },
   "serviceImportDetailPage": {
     "status1": "Awaiting arrival at China warehouse",

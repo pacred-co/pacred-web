@@ -4817,7 +4817,13 @@
     "unitKg": "กก.",
     "unitCbm": "คิว",
     "notYetAvailable": "ยังไม่เปิดให้บริการ",
-    "noRate": "ยังไม่มีเรทสำหรับเส้นทางนี้ — สอบถามทีมงาน"
+    "noRate": "ยังไม่มีเรทสำหรับเส้นทางนี้ — สอบถามทีมงาน",
+    "docTierLabel": "เอกสารภาษี",
+    "docTierOn": "เปิดใบกำกับ/ใบขน",
+    "docTierOff": "ไม่รับเอกสาร",
+    "docTierHintOff": "เปิดใบกำกับ/ใบขน + โอนหยวน/ฝากนำเข้า → ลดค่าขนส่ง ฿{amount}/คิว",
+    "docTierHintOn": "ได้ส่วนลดเอกสาร −฿{amount}/คิว แล้ว (คิดจากเรทคิว)",
+    "docDiscountBadge": "−฿{amount}/คิว"
   },
   "serviceImportDetailPage": {
     "status1": "รอสินค้าเข้าโกดังจีน",
