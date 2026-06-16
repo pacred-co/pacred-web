@@ -96,7 +96,8 @@ function bucketForMargin(margin: number): MarginBucket {
 // ────────────────────────────────────────────────────────────────────────
 
 export async function getMarginReport(range: MarginRange): Promise<MarginReport> {
-  await requireAdmin(["super", "accounting", "sales_admin"]);
+  // 2026-06-15 (owner "ไม่ควรเห็นต้นทุน") — margin = cost data; sales_admin dropped.
+  await requireAdmin(["super", "accounting"]);
   const admin = createAdminClient();
   const gte = `${range.dateFrom}T00:00:00`;
   const lte = `${range.dateTo}T23:59:59`;

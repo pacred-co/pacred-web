@@ -87,11 +87,12 @@ export default async function FreightShipmentPnlPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — P&L = cost/margin. Restricted
+  // to cost-owners + freight MANAGERS (who close on margin). Dropped the line
+  // freight roles (freight_sales · freight_*_clearance) + sales_admin.
   await requireAdmin([
     "super", "accounting", "ops", "pricing",
-    "sales_admin", "freight_sales_manager", "freight_sales",
-    "freight_import_manager", "freight_export_manager",
-    "freight_import_clearance", "freight_export_clearance", "freight_clearance_both",
+    "freight_sales_manager", "freight_import_manager", "freight_export_manager",
   ]);
   const { id } = await params;
   const admin = createAdminClient();

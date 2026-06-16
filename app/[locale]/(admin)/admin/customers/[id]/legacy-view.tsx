@@ -473,6 +473,12 @@ export async function renderLegacyCustomerView(
     adminRoles.includes("super") ||
     ["manager", "accounting", "qa"].some((r) => adminRoles.includes(r as never));
 
+  // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — per-customer margin/profit IS
+  // cost data → super/accounting/ops only (dropped sales_admin).
+  const canSeeMargin =
+    adminRoles.includes("super") ||
+    ["accounting", "ops"].some((r) => adminRoles.includes(r as never));
+
   // Hard-delete is super-only (staff-CRUD gap · §PM-6 #3.3). Exact activity
   // counts feed the danger-zone panel's safety gate (count reads are best-
   // effort — a transient miss degrades to 0, but the action re-checks
@@ -994,8 +1000,9 @@ export async function renderLegacyCustomerView(
 
       {/* Per-customer Margin Profile (2026-06-05 ภูม · CEO CRM-activation) —
           surfaces this customer's margin history (avg margin vs ฿15k cap).
-          Pairs with /admin/accounting/margin-monitor. */}
-      <CustomerMarginPanel summary={marginSummary} />
+          Pairs with /admin/accounting/margin-monitor. Cost data → cost-view
+          roles only (owner 2026-06-15 "ไม่ควรเห็นต้นทุน"). */}
+      {canSeeMargin && <CustomerMarginPanel summary={marginSummary} />}
 
       {/* Pricing segments (money · 2026-06-05) — legacy users/comparison (ค่าเทียบ/
           CPS) + users/credit (เครดิต). The price + credit engines already read

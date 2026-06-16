@@ -1,5 +1,5 @@
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { adminListFreightOpsCockpit, type CockpitCard } from "@/actions/admin/freight-ops-cockpit";
 import {
   FREIGHT_OPS_BOARD_COLUMNS, FREIGHT_OPS_BOARD_COLUMN_LABEL,
@@ -53,12 +53,19 @@ export default async function FreightOperationsBoardPage({
 }: {
   searchParams: Promise<{ column?: string; urgent?: string; q?: string }>;
 }) {
-  await requireAdmin([
+  const { roles } = await requireAdmin([
     "super", "ops", "sales_admin", "accounting", "pricing",
     "freight_sales_manager", "freight_sales",
     "freight_export_manager", "freight_export_cs", "freight_export_doc", "freight_export_clearance",
     "freight_clearance_both",
     "freight_import_manager", "freight_import_cs", "freight_import_doc", "freight_import_clearance",
+  ]);
+  // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — the board stays open to all
+  // freight roles, but the ต้นทุน/กำไร snapshots are hidden from line staff:
+  // only cost-owners + freight MANAGERS see cost. (รายได้/selling stays visible.)
+  const canSeeCost = hasRole(roles, [
+    "accounting", "pricing", "ops",
+    "freight_sales_manager", "freight_import_manager", "freight_export_manager",
   ]);
 
   const sp = await searchParams;
@@ -132,13 +139,17 @@ export default async function FreightOperationsBoardPage({
         <StatCard label="ด่วน 🔴" value={String(stats.urgentCount)} tone="urgent" />
         <StatCard label="เสร็จสิ้น" value={String(stats.byColumn.done)} tone="ok" />
         <StatCard label="รายได้ (snapshot)" value={thb(stats.totalRevenue)} small />
-        <StatCard label="ต้นทุน (snapshot)" value={thb(stats.totalCost)} small />
-        <StatCard
-          label="กำไร (snapshot)"
-          value={thb(stats.totalProfit)}
-          small
-          tone={stats.totalProfit >= 0 ? "ok" : "urgent"}
-        />
+        {canSeeCost && (
+          <>
+            <StatCard label="ต้นทุน (snapshot)" value={thb(stats.totalCost)} small />
+            <StatCard
+              label="กำไร (snapshot)"
+              value={thb(stats.totalProfit)}
+              small
+              tone={stats.totalProfit >= 0 ? "ok" : "urgent"}
+            />
+          </>
+        )}
       </section>
       <p className="text-[11px] text-muted -mt-2">
         ⚠️ ตัวเลข P&amp;L = snapshot ที่เจ้าหน้าที่กรอกในแต่ละงาน (แสดงผลเท่านั้น · ไม่ใช่ยอดเงินจริงในระบบบิล/ภาษี)
@@ -226,7 +237,7 @@ export default async function FreightOperationsBoardPage({
                 {grouped[col].length === 0 ? (
                   <p className="px-1 py-3 text-center text-[11px] text-muted">— ว่าง —</p>
                 ) : (
-                  grouped[col].map((c) => <JobCard key={c.shipmentId} card={c} />)
+                  grouped[col].map((c) => <JobCard key={c.shipmentId} card={c} canSeeCost={canSeeCost} />)
                 )}
               </div>
             </div>
@@ -255,7 +266,7 @@ function StatCard({
   );
 }
 
-function JobCard({ card }: { card: CockpitCard }) {
+function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean }) {
   return (
     <Link
       href={`/admin/freight/operations/${card.shipmentId}`}
@@ -284,8 +295,9 @@ function JobCard({ card }: { card: CockpitCard }) {
         </span>
       </div>
 
-      {/* P&L snapshot mini-line (display-only) */}
-      {(card.revenueSnapshot != null || card.costSnapshot != null) && (
+      {/* P&L snapshot mini-line (display-only) — cost/profit hidden from line
+          staff (owner 2026-06-15 "ไม่ควรเห็นต้นทุน"). */}
+      {canSeeCost && (card.revenueSnapshot != null || card.costSnapshot != null) && (
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted tabular-nums">
           <span>กำไร snap:</span>
           <span className={card.profitSnapshot != null && card.profitSnapshot < 0 ? "text-red-600 font-semibold" : "text-green-700 font-semibold"}>
