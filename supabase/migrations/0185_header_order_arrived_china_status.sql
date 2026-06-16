@@ -1,33 +1,82 @@
--- 0185 — ฝากสั่งซื้อ: add a real "ถึงโกดังจีน" status to tb_header_order.hstatus
--- (owner 2026-06-16 · MOMO arrival P0).
---
--- Problem: tb_header_order.hstatus is character varying(1), DEFAULT '1', NOT NULL,
--- and the legacy vocabulary fills every single digit:
---   1 รอดำเนินการ · 2 รอชำระเงิน · 3 สั่งสินค้า · 4 รอร้านจีนจัดส่ง · 5 สำเร็จ · 6 ยกเลิก
--- There is NO value for "the goods reached the China warehouse" and no code advanced
--- the order when a linked forwarder (reforder → hno) arrived at the china warehouse.
---
--- There is NO CHECK constraint on hstatus (verified across all migrations) — but the
--- column is varchar(1), so a new value that slots BETWEEN '4' and '5' in string order
--- (we use '40': '4' < '40' < '5') cannot be stored until the column is widened.
---
--- This migration widens hstatus to varchar(2) so the new value '40' = "ถึงโกดังจีน"
--- fits. It is non-destructive: existing single-char values ('1'..'6') are unchanged,
--- and varchar(2) is a strict superset of varchar(1). DEFAULT '1' + NOT NULL preserved.
---
--- String ordering is preserved for the one ordering query that exists
--- (actions/admin/shop-disbursement.ts:286 `.gt("hstatus","2").neq("hstatus","6")`):
---   '40' > '2'  → true  (correct: post-payment, disbursement-eligible)
---   '40' ≠ '6'  → true  (correct: not cancelled)
--- The customer/admin DISPLAY order is array-controlled (lib/legacy-status-map.ts +
--- the admin tab strip), so '40' renders right after "4 รอร้านจีนจัดส่ง" regardless
--- of the digit chosen.
---
--- Idempotent. No data backfill (the app advances rows forward-only on MOMO arrival).
--- INTEGRATOR: apply prod + dev (NOT applied by the build agent). NEXT FREE = 0186.
-
-alter table public.tb_header_order
-  alter column hstatus type character varying(2);
-
-comment on column public.tb_header_order.hstatus is
-  '1=รอดำเนินการ 2=รอชำระเงิน 3=สั่งสินค้า 4=รอร้านจีนจัดส่ง 40=ถึงโกดังจีน 5=สำเร็จ 6=ยกเลิกออเดอร์';
+-- 0185 — ฝากสั่งซื้อ: widen tb_header_order.hstatus varchar(1)->(2) for the new
+-- "ถึงโกดังจีน" status value '40' (slots between '4' and '5' in array-controlled order).
+-- tb_header_order.hstatus is referenced by view vw_sales_by_rep, so the column type
+-- cannot be altered while the view exists. This migration drops + recreates that view
+-- around the ALTER. Idempotent: no-op once hstatus is already varchar(2)+.
+-- Applied prod+dev 2026-06-16 via scripts/apply-0185-view-safe.mjs (live def capture).
+DO $$
+BEGIN
+  IF (SELECT character_maximum_length FROM information_schema.columns
+      WHERE table_name='tb_header_order' AND column_name='hstatus') < 2 THEN
+    DROP VIEW IF EXISTS vw_sales_by_rep;
+    ALTER TABLE tb_header_order ALTER COLUMN hstatus TYPE character varying(2);
+    CREATE VIEW vw_sales_by_rep AS
+WITH forwarder_per_rep AS (
+         SELECT u."adminIDSale" AS admin_userid,
+            date_trunc('month'::text, f_1.fdate) AS activity_month,
+            count(DISTINCT f_1.id) AS forwarder_count,
+            COALESCE(sum(f_1.ftotalprice), 0::numeric)::numeric(14,2) AS forwarder_revenue_thb,
+            count(DISTINCT u."userID") AS forwarder_customer_count
+           FROM tb_users u
+             JOIN tb_forwarder f_1 ON f_1.userid::text = u."userID"::text
+          WHERE u."adminIDSale" IS NOT NULL AND u."adminIDSale"::text <> ''::text AND (f_1.fstatus::text = ANY (ARRAY['6'::character varying::text, '7'::character varying::text])) AND f_1.fdate IS NOT NULL
+          GROUP BY u."adminIDSale", (date_trunc('month'::text, f_1.fdate))
+        ), shop_per_rep AS (
+         SELECT u."adminIDSale" AS admin_userid,
+            date_trunc('month'::text, h.hdate) AS activity_month,
+            count(DISTINCT h.id) AS shop_count,
+            COALESCE(sum(h.htotalpriceuser), 0::numeric)::numeric(14,2) AS shop_revenue_thb,
+            count(DISTINCT u."userID") AS shop_customer_count
+           FROM tb_users u
+             JOIN tb_header_order h ON h.userid::text = u."userID"::text
+          WHERE u."adminIDSale" IS NOT NULL AND u."adminIDSale"::text <> ''::text AND (h.hstatus::text = ANY (ARRAY['5'::character varying::text, '6'::character varying::text])) AND h.hdate IS NOT NULL
+          GROUP BY u."adminIDSale", (date_trunc('month'::text, h.hdate))
+        ), payment_per_rep AS (
+         SELECT u."adminIDSale" AS admin_userid,
+            date_trunc('month'::text, p_1.paydate) AS activity_month,
+            count(DISTINCT p_1.id) AS payment_count,
+            COALESCE(sum(p_1.paythb), 0::numeric)::numeric(14,2) AS payment_revenue_thb,
+            count(DISTINCT u."userID") AS payment_customer_count
+           FROM tb_users u
+             JOIN tb_payment p_1 ON p_1.userid::text = u."userID"::text
+          WHERE u."adminIDSale" IS NOT NULL AND u."adminIDSale"::text <> ''::text AND p_1.paystatus::text = '3'::text AND p_1.paydate IS NOT NULL
+          GROUP BY u."adminIDSale", (date_trunc('month'::text, p_1.paydate))
+        ), customers_per_rep AS (
+         SELECT u."adminIDSale" AS admin_userid,
+            count(DISTINCT u."userID") AS customer_count
+           FROM tb_users u
+          WHERE u."adminIDSale" IS NOT NULL AND u."adminIDSale"::text <> ''::text AND (u."userStatus" IS NULL OR u."userStatus"::text <> '0'::text)
+          GROUP BY u."adminIDSale"
+        ), months AS (
+         SELECT forwarder_per_rep.admin_userid,
+            forwarder_per_rep.activity_month
+           FROM forwarder_per_rep
+        UNION
+         SELECT shop_per_rep.admin_userid,
+            shop_per_rep.activity_month
+           FROM shop_per_rep
+        UNION
+         SELECT payment_per_rep.admin_userid,
+            payment_per_rep.activity_month
+           FROM payment_per_rep
+        )
+ SELECT m.admin_userid,
+    a."adminNickname" AS adminnickname,
+    TRIM(BOTH FROM concat(a."adminName", ' ', a."adminLastName")) AS admin_fullname,
+    c.customer_count,
+    m.activity_month,
+    COALESCE(f.forwarder_revenue_thb, 0::numeric) AS forwarder_revenue_thb,
+    COALESCE(f.forwarder_count, 0::bigint) AS forwarder_count,
+    COALESCE(s.shop_revenue_thb, 0::numeric) AS shop_revenue_thb,
+    COALESCE(s.shop_count, 0::bigint) AS shop_count,
+    COALESCE(p.payment_revenue_thb, 0::numeric) AS payment_revenue_thb,
+    COALESCE(p.payment_count, 0::bigint) AS payment_count,
+    (COALESCE(f.forwarder_revenue_thb, 0::numeric) + COALESCE(s.shop_revenue_thb, 0::numeric) + COALESCE(p.payment_revenue_thb, 0::numeric))::numeric(14,2) AS total_revenue_thb
+   FROM months m
+     LEFT JOIN tb_admin a ON a."adminID"::text = m.admin_userid::text
+     LEFT JOIN customers_per_rep c ON c.admin_userid::text = m.admin_userid::text
+     LEFT JOIN forwarder_per_rep f ON f.admin_userid::text = m.admin_userid::text AND f.activity_month = m.activity_month
+     LEFT JOIN shop_per_rep s ON s.admin_userid::text = m.admin_userid::text AND s.activity_month = m.activity_month
+     LEFT JOIN payment_per_rep p ON p.admin_userid::text = m.admin_userid::text AND p.activity_month = m.activity_month;;
+  END IF;
+END $$;
