@@ -36,6 +36,9 @@ import {
 // 7%-on-margin staff figure · legacy function.php) into the GAP 9 profit panel.
 import { computeMarginVat } from "@/lib/tax/tax-doc-mode";
 import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน by default; the eye
+// in the header opens a PIN dialog to reveal.
+import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 type DeclaredFxCols = {
   declared_currency: string | null;
@@ -244,7 +247,8 @@ export async function ForwarderCostSection({
         {lineCount > 0 && (
           <span className="text-[11px] font-medium opacity-90">({lineCount} รายการ)</span>
         )}
-        <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+        <CostRevealToggle className="ml-auto" />
+        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
           {canEdit ? "super / accounting / pricing" : "อ่านอย่างเดียว"}
         </span>
         <svg className="w-4 h-4 shrink-0 transition-transform duration-200 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -255,6 +259,10 @@ export async function ForwarderCostSection({
           ข้อมูล <b>ภายในบริษัท</b> สำหรับ PEAK (ต้นทุน) + ใบขน (มูลค่าสำแดง) — 1 ใน 3 ตัวเลขของโมเดล
           ใบกำกับภาษี (ขาย · ต้นทุน · สำแดง). <b>ไม่กระทบราคาขายลูกค้า · ไม่เปลี่ยนสถานะ · ไม่แจ้งเตือนลูกค้า.</b>
         </p>
+
+        {/* Blur gate (owner ภูม 2026-06-16) — all cost data below is blurred
+            until the PIN is entered via the eye in the header. */}
+        <CostRevealRegion className="space-y-3">
 
         {/* GAP 9 (2026-06-12) — รายรับ/รายจ่าย/กำไร at a glance. ขาย = the
             forwarder NET grand-total (pre-WHT) · ต้นทุน = fcosttotalprice (was a
@@ -354,6 +362,7 @@ export async function ForwarderCostSection({
                 )}
               </CostLineCard>
             ))}
+        </CostRevealRegion>
       </div>
       </details>
     </section>

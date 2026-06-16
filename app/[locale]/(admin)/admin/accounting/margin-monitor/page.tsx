@@ -7,6 +7,8 @@ import {
   getMarginReport,
   type MarginBucket,
 } from "@/actions/admin/margin-monitor";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน/กำไร until the PIN.
+import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 /**
  * /admin/accounting/margin-monitor — Profit/margin retrospective.
@@ -131,6 +133,12 @@ export default async function AdminMarginMonitorPage({
             ช่วงปัจจุบัน {dateFrom} → {dateTo} · default = 90 วันล่าสุด
           </p>
         </form>
+
+        {/* Blur gate (owner ภูม 2026-06-16) — กดดูต้นทุน + ใส่รหัสเพื่อแสดงรายงานกำไร/ต้นทุนทั้งหมด */}
+        <div className="flex justify-end -mb-2">
+          <CostRevealToggle />
+        </div>
+        <CostRevealRegion className="space-y-6">
 
         {/* Headline summary */}
         <section className="grid sm:grid-cols-3 gap-3">
@@ -291,6 +299,8 @@ export default async function AdminMarginMonitorPage({
             </div>
           </section>
         )}
+
+        </CostRevealRegion>
 
         <section className="rounded-2xl border border-border bg-amber-50 dark:bg-amber-950/20 p-4 text-xs space-y-2">
           <p className="font-medium">📌 CEO directive ที่เกี่ยวข้อง (Phase-C):</p>

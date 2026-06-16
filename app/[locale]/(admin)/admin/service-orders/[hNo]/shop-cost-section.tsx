@@ -26,6 +26,8 @@ import {
 } from "@/components/admin/cargo-cost-line-editor";
 import { autoOrNull, shopAutoDeclaredThb } from "@/lib/forwarder/cargo-cost-autofill";
 import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน until the PIN.
+import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 type ShopCostItem = {
   id: number;
@@ -121,7 +123,8 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
         {items.length > 0 && (
           <span className="text-[11px] font-medium opacity-90">({items.length} รายการ)</span>
         )}
-        <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+        <CostRevealToggle className="ml-auto" />
+        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
           {canEdit ? "super / accounting / pricing" : "อ่านอย่างเดียว"}
         </span>
       </header>
@@ -132,6 +135,9 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
           1 ใน 3 ตัวเลขของโมเดลใบกำกับภาษี (ขาย · ต้นทุน · สำแดง). <b>ไม่กระทบราคาขายลูกค้า ·
           ไม่เปลี่ยนสถานะ · ไม่แจ้งเตือนลูกค้า.</b>
         </p>
+
+        {/* Blur gate (owner ภูม 2026-06-16) — cost data below blurred until PIN. */}
+        <CostRevealRegion className="space-y-3">
 
         {items.length === 0 && (
           <p className="rounded-lg border border-dashed border-border bg-surface-alt/30 px-3 py-6 text-center text-[11px] text-muted">
@@ -190,6 +196,7 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
             )}
           </div>
         ))}
+        </CostRevealRegion>
       </div>
     </section>
   );
