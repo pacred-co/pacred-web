@@ -235,5 +235,91 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("coerce: subtotal = 200*12.5 = 2500", r.transportSubtotal, 2500);
 }
 
+// ── 10. OWNER-LOCKED doc-tier discount (owner 2026-06-16) ──
+// Base CBM rate 3,700 (เรือ). Eligible → −800/CBM → 2,900. kg path untouched.
+{
+  // General CBM tier1 = 3700, cbm=1 → priceCbm=3700. No KG rate → CBM wins.
+  const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 3700, tier2: 3700, tier3: 3700 } as const };
+
+  // (a) NOT eligible (flag off) → rate stays 3700, no discount.
+  let r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1 }));
+  near("doctier OFF: rate=3700 (base unchanged)", r.rate, 3700);
+  near("doctier OFF: subtotal=3700", r.transportSubtotal, 3700);
+  near("doctier OFF: discountApplied=0", r.docDiscountApplied, 0);
+
+  // (b) eligible → −800/CBM → 2900.
+  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
+  eq("doctier ON: basis=cbm", r.basis, "cbm");
+  near("doctier ON: rate=2900 (3700−800)", r.rate, 2900);
+  near("doctier ON: subtotal=2900 (cbm 1)", r.transportSubtotal, 2900);
+  near("doctier ON: discountApplied=800", r.docDiscountApplied, 800);
+
+  // (c) eligible but flag set with 0 amount → no-op.
+  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 0 }));
+  near("doctier ON amount=0: rate=3700 (no-op)", r.rate, 3700);
+  near("doctier ON amount=0: discountApplied=0", r.docDiscountApplied, 0);
+}
+
+// ── 10b. รถ rate 5700 → 4900, cbm=2 → subtotal 9800 ──
+{
+  const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 5700, tier2: 5700, tier3: 5700 } as const };
+  const r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 2, docTierEligible: true, docTierDiscountCbm: 800 }));
+  near("รถ doctier: rate=4900 (5700−800)", r.rate, 4900);
+  near("รถ doctier: subtotal=9800 (4900×2)", r.transportSubtotal, 9800);
+  near("รถ doctier: discountApplied=800", r.docDiscountApplied, 800);
+}
+
+// ── 10c. kg path UNCHANGED when discount eligible (discount is CBM-only) ──
+{
+  // KG rate 50, cbm rate 0 → comparison forces KG. weight 200, cbm 1 → KG wins.
+  const r = resolveForwarderRate(
+    cand({ isGeneral: true, generalKg: { tier1: 50, tier2: 50, tier3: 50 }, generalCbm: { tier1: 0, tier2: 0, tier3: 0 } }),
+    inp({ weightKg: 200, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 0, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  eq("kg-path doctier: basis=kg", r.basis, "kg");
+  near("kg-path doctier: rate=50 (kg rate untouched)", r.rate, 50);
+  near("kg-path doctier: subtotal=10000 (200×50)", r.transportSubtotal, 10000);
+  near("kg-path doctier: discountApplied=0 (CBM-only)", r.docDiscountApplied, 0);
+}
+
+// ── 10d. floor at 0 — discount larger than rate clamps to 0 ──
+{
+  const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 500, tier2: 500, tier3: 500 } as const };
+  const r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
+  near("floor: rate=0 (500−800 floored)", r.rate, 0);
+  near("floor: subtotal=0", r.transportSubtotal, 0);
+  near("floor: discountApplied=500 (only what could be subtracted)", r.docDiscountApplied, 500);
+}
+
+// ── 10e. manual override NEVER discounted (admin typed the rate) ──
+{
+  const r = resolveForwarderRate(
+    cand({ manualOverride: true, manualKg: 0, manualCbm: 3700 }),
+    inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  eq("manual+doctier: source=manual", r.source, "manual");
+  near("manual+doctier: rate=3700 (NOT discounted)", r.rate, 3700);
+  near("manual+doctier: discountApplied=0", r.docDiscountApplied, 0);
+}
+
+// ── 10f. discount can FLIP the winner CBM→KG in ราคามากสุด ──
+{
+  // KG: 60×100=6000. CBM base 6500×1=6500 → CBM would win (6500>6000). With
+  // −800 → 5700×1=5700 < 6000 → KG now wins.
+  const r = resolveForwarderRate(
+    cand({ isGeneral: true, generalKg: { tier1: 60, tier2: 60, tier3: 60 }, generalCbm: { tier1: 6500, tier2: 6500, tier3: 6500 } }),
+    inp({ weightKg: 100, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  eq("flip: basis=kg (discounted CBM 5700 < KG 6000)", r.basis, "kg");
+  near("flip: subtotal=6000 (KG wins)", r.transportSubtotal, 6000);
+  near("flip: discountApplied=0 (KG won → no CBM discount)", r.docDiscountApplied, 0);
+}
+
+// ── 10g. back-compat — every existing result now carries docDiscountApplied=0 ──
+{
+  const r = resolveForwarderRate(cand({ isSvip: true, svipKg: 15, svipCbm: 4000 }), inp({ weightKg: 100, volumeCbm: 1 }));
+  near("backcompat: docDiscountApplied present + 0", r.docDiscountApplied, 0);
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

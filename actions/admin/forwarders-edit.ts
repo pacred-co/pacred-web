@@ -41,6 +41,7 @@ import {
   resolveLiveForwarderRate,
   type PricingRowContext,
 } from "@/lib/forwarder/live-rate";
+import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -246,7 +247,9 @@ export async function adminUpdateForwarderDimensions(
           "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
           "customrate, customratekg, customratecbm, fdiscount, " +
           "ftotalprice, ftransportprice, fshippingservice, ftransportpricechnthb, " +
-          "pricecrate, priceother, fpriceupdate, frefrate",
+          "pricecrate, priceother, fpriceupdate, frefrate, " +
+          // ── doc-tier discount inputs (owner 2026-06-16) ──
+          "tax_doc_pref, adminidcreator",
         )
         .limit(1);
       q = isId ? q.eq("id", asNumber) : q.eq("fidorco", d.fNo);
@@ -289,6 +292,8 @@ export async function adminUpdateForwarderDimensions(
         priceother: number | string | null;
         fpriceupdate: number | string | null;
         frefrate: number | string | null;
+        tax_doc_pref: string | null;
+        adminidcreator: string | null;
       };
 
       const nowIso = new Date().toISOString();
@@ -338,6 +343,18 @@ export async function adminUpdateForwarderDimensions(
       const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
       const userComparisonValue = num(cmpRow?.userComparisonValue);
 
+      // ── owner-locked doc-tier discount eligibility (owner 2026-06-16) ──
+      // BOTH conditions: tax-doc ∈ {ใบกำกับ,ใบขน} AND a cargo-import-service row
+      // (reforder set = ฝากสั่งซื้อ/โอนหยวน · adminidcreator set = ฝากนำเข้า).
+      // The manual customrate override path keeps the admin-typed rate as-is
+      // (the resolver only discounts the SYSTEM CBM rate, never the manual one).
+      const docTierEligible = isDocTierEligible({
+        taxDocPref:     before.tax_doc_pref,
+        reforder:       before.reforder,
+        adminidcreator: before.adminidcreator,
+      });
+      const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
+
       const priceCtx: PricingRowContext = {
         userid:            before.userid,
         fwarehousechina:   effectiveWarehouseChina,
@@ -353,6 +370,8 @@ export async function adminUpdateForwarderDimensions(
         customRateCbm:     effectiveCustomRateCbm,
         userComparison,
         userComparisonValue,
+        docTierEligible,
+        docTierDiscountCbm,
       };
       const priceResult = await resolveLiveForwarderRate(admin, priceCtx);
       if ("error" in priceResult) {

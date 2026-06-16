@@ -30,6 +30,7 @@ import {
   type ResolveRateCandidates,
 } from "@/lib/forwarder/resolve-rate";
 import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+import { getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 
 export type CustomerEstimateInput = {
   warehouse: "1" | "2";          // 1 = กวางโจว · 2 = อี้อู
@@ -39,6 +40,13 @@ export type CustomerEstimateInput = {
   volumeCbm: number;
   crate: boolean;                // ตีลังไม้
   crateThb: number;              // ค่าตีลัง (THB) — 0 when crate=false
+  /**
+   * Owner-locked doc-tier discount (owner 2026-06-16): the customer intends to
+   * open ใบกำกับ/ใบขน. Condition 2 (โอนหยวน/ฝากนำเข้า) is inherently satisfied
+   * here — this IS the ฝากนำเข้า import estimator. When true → −฿X/CBM off the
+   * CBM rate. Optional → defaults false (un-discounted estimate).
+   */
+  docTier?: boolean;
 };
 
 /** Per-mode line — CUSTOMER-SAFE (no tier naming, no margin, no floor). */
@@ -53,11 +61,22 @@ export type CustomerEstimateMode = {
   transportSubtotal: number;     // unitRate × billable (China→TH transport)
   crateThb: number;
   grandTotal: number;            // transportSubtotal + crate
+  /** Owner-locked doc-tier discount actually applied to this mode (THB/CBM). */
+  docDiscountApplied: number;
 };
 
 export type CustomerEstimateResult =
   | { ok: false; error: string }
-  | { ok: true; asOf: string; modes: CustomerEstimateMode[]; cheapest: CustomerEstimateMode | null };
+  | {
+      ok: true;
+      asOf: string;
+      modes: CustomerEstimateMode[];
+      cheapest: CustomerEstimateMode | null;
+      /** The eligible doc-tier discount amount (THB/CBM) — for the UI note. */
+      docDiscountCbm: number;
+      /** Whether the doc-tier discount is currently applied to the estimate. */
+      docTierApplied: boolean;
+    };
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 function num(v: number | string | null | undefined): number {
@@ -152,10 +171,21 @@ export async function getCustomerImportEstimate(
   const comparisonEnabled = pinKg || pinCbm;
   const comparisonValue = pinKg ? 0 : pinCbm ? 1e9 : 0;
 
+  // Owner-locked doc-tier discount. Condition 2 (โอนหยวน/ฝากนำเข้า) is implicit
+  // (this IS the import estimator); condition 1 (ใบกำกับ/ใบขน) is the customer's
+  // `docTier` toggle. We always read the config amount so the UI can show the
+  // incentive ("เปิดใบกำกับ → ลด ฿X/คิว") even before the toggle is on.
+  const docDiscountCbm = await getDocTierDiscountCbm();
+  const docTierApplied = input.docTier === true && docDiscountCbm > 0;
+
   const modes: CustomerEstimateMode[] = [];
   for (const T of TRANSPORTS) {
     const candidates = await readCandidates(admin, { userid, coID, isSvip, isGeneral, wh, tt: T.id, pt });
-    const r = resolveForwarderRate(candidates, { weightKg, volumeCbm, comparisonEnabled, comparisonValue });
+    const r = resolveForwarderRate(candidates, {
+      weightKg, volumeCbm, comparisonEnabled, comparisonValue,
+      docTierEligible: docTierApplied,
+      docTierDiscountCbm: docDiscountCbm,
+    });
     const transportSubtotal = r.transportSubtotal;
     const grandTotal = round2(transportSubtotal + crateThb);
     modes.push({
@@ -169,6 +199,7 @@ export async function getCustomerImportEstimate(
       transportSubtotal,
       crateThb,
       grandTotal,
+      docDiscountApplied: r.docDiscountApplied,
     });
   }
 
@@ -177,5 +208,5 @@ export async function getCustomerImportEstimate(
     ? withRate.reduce((a, b) => (b.grandTotal < a.grandTotal ? b : a))
     : null;
 
-  return { ok: true, asOf: new Date().toISOString(), modes, cheapest };
+  return { ok: true, asOf: new Date().toISOString(), modes, cheapest, docDiscountCbm, docTierApplied };
 }
