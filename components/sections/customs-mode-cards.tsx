@@ -11,15 +11,12 @@ import {
   Headphones,
   Sparkles,
   ArrowRight,
-  Phone,
   Lock,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const PATH = "/customs-clearance-shipping-suvarnabhumi";
-const LINE_URL = "/line";
 
 type Stat = { icon: typeof Clock; label: string; value: string };
 
@@ -212,7 +209,10 @@ export function CustomsModeCards() {
           // `isFeatured` = the card the user is currently looking at (active)
           // — controls the red gradient styling. Updates on swipe / hover.
           const isRecommended = c.featured;
-          const isFeatured    = i === activeIdx;
+          // Cards stay white — the active card (hover desktop · scroll-centre mobile)
+          // gets a slight zoom instead of turning red (owner 2026-06-16).
+          const active        = i === activeIdx;
+          const isFeatured    = false;
           return (
             <article
               key={c.mode}
@@ -225,11 +225,9 @@ export function CustomsModeCards() {
               }}
               className={[
                 "group relative flex flex-col shrink-0 w-[84%] sm:w-[400px] md:w-auto snap-center md:snap-none rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
-                isFeatured
-                  ? // Featured (active): dark-red gradient bg, white text, slight scale-up
-                    "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white border-2 border-primary-700 shadow-[0_18px_42px_rgba(179,0,0,0.32)] hover:shadow-[0_28px_60px_rgba(179,0,0,0.45)] md:scale-[1.03] md:-translate-y-1 hover:md:-translate-y-2"
-                  : // Side cards: light bg, red accents
-                    "bg-white dark:bg-surface text-foreground border border-border shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_18px_42px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1",
+                "bg-white dark:bg-surface text-foreground border border-border shadow-[0_8px_22px_rgba(15,23,42,0.06)]",
+                // active card (scroll-centred mobile · hover desktop) zooms — no red
+                active ? "scale-[1.02] md:scale-[1.03] z-10" : "",
               ].join(" ")}
             >
               {/* "แนะนำ" tag — content-meaningful, stays only on the AIR card.
@@ -263,7 +261,7 @@ export function CustomsModeCards() {
                   alt={c.imageAlt}
                   fill
                   sizes="(max-width: 768px) 88vw, 440px"
-                  className="object-cover transition-transform duration-500 group-hover:scale-[1.08]"
+                  className="object-cover"
                 />
                 <div className={`absolute inset-0 bg-gradient-to-br ${c.accent} mix-blend-multiply`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -436,7 +434,7 @@ export function CustomsModeCards() {
               {/* CTA footer — featured gets yellow CTA, side cards get red */}
               <div
                 className={[
-                  "relative z-10 px-3.5 md:px-4 py-2.5 md:py-3 space-y-1.5 border-t",
+                  "relative z-10 px-3.5 md:px-4 py-2.5 md:py-3 border-t",
                   isFeatured ? "border-white/15 bg-black/15 backdrop-blur-sm" : "border-border bg-surface/60 dark:bg-background/60",
                 ].join(" ")}
               >
@@ -453,21 +451,6 @@ export function CustomsModeCards() {
                   {t("requestPrice", { mode: t(`mode_${c.slug}`) })}
                   <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                 </Link>
-                <TrackedExternalLink
-                  href={LINE_URL}
-                  cta="line_consult"
-                  surface="customs_mode_cards"
-                  ctaProps={{ mode: c.slug }}
-                  className={[
-                    "inline-flex w-full items-center justify-center gap-1.5 h-9 md:h-10 rounded-lg font-bold text-[12px] md:text-[12.5px] transition-colors",
-                    isFeatured
-                      ? "bg-white/15 text-white border border-white/25 hover:bg-white/25"
-                      : "bg-white border border-primary-200 text-primary-700 hover:bg-primary-50 hover:border-primary-300 dark:bg-surface dark:border-primary-800 dark:text-primary-200",
-                  ].join(" ")}
-                >
-                  <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                  {t("ctaLineConsult")}
-                </TrackedExternalLink>
               </div>
             </article>
           );

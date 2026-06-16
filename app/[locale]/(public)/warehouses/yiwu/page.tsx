@@ -61,8 +61,8 @@ export default async function YiwuWarehousePage({
           shippingMark={[
             { label: "Shipping Mark", value: "PR***** by EK" },
             { label: "收件人 (ผู้รับ)", value: "PR (รถ EK / เรือ SEA)" },
-            { label: "ที่อยู่ (中文)", value: "浙江省金华市义乌市荷叶塘工业区龙岗路一街2号1栋102" },
-            { label: "电话 (โทร)", value: "19817984258 谢小姐" },
+            { label: "ที่อยู่ (中文)", value: "义乌市江东街道山口小区69栋3单元1楼YY仓322000" },
+            { label: "电话 (โทร)", value: "孙先生19213995519" },
           ]}
           shippingMarkNote="กรุณานำรหัส PR สมาชิกของท่านไปแทนที่ตำแหน่ง PR***** ก่อนแจ้งให้ร้านค้าจีน เพื่อให้ทีมโกดังจับคู่กับออเดอร์ของท่านได้แม่นยำ"
           photo="/images/pacredyiwu.png"
