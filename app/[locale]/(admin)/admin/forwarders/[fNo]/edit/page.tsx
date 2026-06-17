@@ -134,6 +134,9 @@ type RawForwarderRow = {
   customrate:           string | null;
   customratekg:         number | string | null;
   customratecbm:        number | string | null;
+  // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+  custom_comparison:       string | null;
+  custom_comparison_value: number | string | null;
   ftransportprice:      number | string | null;
   ftransportpricechnthb: number | string | null;
   fshippingservice:     number | string | null;
@@ -210,6 +213,8 @@ export default async function AdminForwarderEditPage({
       // 2026-06-05 (ภูม flag · faithful-port edit-form wiring) — legacy
       // update.php override columns.
       "customrate, customratekg, customratecbm, " +
+      // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+      "custom_comparison, custom_comparison_value, " +
       "ftransportprice, ftransportpricechnthb, fshippingservice, fusercompany, " +
       // B4 · backlog #259 (migration 0150 · 2026-06-08) — cabinet-lock flag
       // for the TbForwarderActionPanel checkbox.
@@ -837,7 +842,6 @@ export default async function AdminForwarderEditPage({
             heightInit={Number(r.fheight ?? 0)}
             volumeInit={Number(r.fvolume ?? 0)}
             productTypeInit={((r.fproductstype ?? "1") as "1" | "2" | "3" | "4")}
-            refPriceInit={((r.frefprice ?? "1") as "1" | "2")}
             noteInit={r.fnote ?? ""}
             itemsInit={[]}
             customRateInit={((r.customrate ?? "0") as "0" | "1")}
@@ -850,8 +854,18 @@ export default async function AdminForwarderEditPage({
             fShippingServiceInit={Number(r.fshippingservice ?? 0)}
             fWarehouseChinaInit={((r.fwarehousechina ?? "1") as "1" | "2")}
             fWarehouseNameInit={((r.fwarehousename ?? "1") as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8")}
-            userComparisonInit={(String(u?.userComparison ?? "0").trim() === "1" ? "1" : "0")}
-            userComparisonValueInit={Number(u?.userComparisonValue ?? 0)}
+            /* 2026-06-17 (mig 0187 · ภูม "ให้สวิตซ์ค้างถาวร") — the
+               "คิดค่าเทียบแบบกำหนดเอง" toggle now reflects THIS ORDER's persisted
+               per-order override (custom_comparison), not the customer's general
+               default. So once saved ON it stays ON on reload. The VALUE shows
+               the persisted ค่าเทียบ when overridden, else the customer's default
+               as a sensible starting hint. */
+            userComparisonInit={(String(r.custom_comparison ?? "0").trim() === "1" ? "1" : "0")}
+            userComparisonValueInit={Number(
+              String(r.custom_comparison ?? "0").trim() === "1"
+                ? (r.custom_comparison_value ?? 0)
+                : (u?.userComparisonValue ?? 0),
+            )}
           />
         </div>
       </section>

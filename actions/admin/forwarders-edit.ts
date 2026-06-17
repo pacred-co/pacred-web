@@ -114,8 +114,14 @@ const editForwarderSchema = z.object({
   volumeCbm:     z.number().min(0).max(99999.99).optional(),
   // fproductstype char(1) — legacy enum
   productType:   z.enum(["1", "2", "3", "4"] as const),
-  // frefprice char(1) — '1' น้ำหนัก · '2' ปริมาตร
-  refPrice:      z.enum(["1", "2"] as const),
+  // frefprice char(1) — '1' น้ำหนัก · '2' ปริมาตร.
+  // 2026-06-17 (ภูม flag · "คิดเรทตาม dropdown ลบออก") — the rate engine
+  // COMPUTES frefprice itself (resolved.refPrice overwrites whatever the form
+  // sent · see the UPDATE below), so this input is unused in the money calc.
+  // The "คิดเรทตาม" dropdown was removed from the edit form (the 2 toggles
+  // คิดราคา/ค่าเทียบ decide kg-vs-cbm now). Kept OPTIONAL so legacy callers
+  // (e.g. ForwarderRateMissingFallback) that still send it don't break.
+  refPrice:      z.enum(["1", "2"] as const).optional(),
   // admin-facing note (tb_forwarder.fnote — TEXT, no length cap in schema; we cap at 2000)
   note:          z.string().trim().max(2000).optional(),
 
@@ -259,6 +265,8 @@ export async function adminUpdateForwarderDimensions(
           "customrate, customratekg, customratecbm, fdiscount, " +
           "ftotalprice, ftransportprice, fshippingservice, ftransportpricechnthb, " +
           "pricecrate, priceother, fpriceupdate, frefrate, " +
+          // ── per-order ค่าเทียบ override (0187 · durable persistence) ──
+          "custom_comparison, custom_comparison_value, " +
           // ── doc-tier discount inputs (owner 2026-06-16) ──
           "tax_doc_pref, adminidcreator",
         )
@@ -303,6 +311,8 @@ export async function adminUpdateForwarderDimensions(
         priceother: number | string | null;
         fpriceupdate: number | string | null;
         frefrate: number | string | null;
+        custom_comparison: string | null;
+        custom_comparison_value: number | string | null;
         tax_doc_pref: string | null;
         adminidcreator: string | null;
       };
@@ -358,16 +368,21 @@ export async function adminUpdateForwarderDimensions(
       // When the admin ticks "คิดค่าเทียบแบบกำหนดเอง", the typed ค่าเทียบ wins
       // over the customer's stored userComparisonValue for THIS save (mirrors the
       // customRate override). The resolver applies it through its existing
-      // comparison inputs (no rate-math change). When the field is omitted (old
-      // callers), this is off → the comparison follows tb_users as before.
-      // ⚠️ PERSISTENCE: tb_forwarder has NO per-order comparison column (verified
-      //    against 0081 + all later migrations) → this override is COMPUTE-ONLY:
-      //    it recomputes ftotalprice/frefrate/frefprice on THIS save but does not
-      //    survive a reload (the toggle re-seeds from tb_users next time). Durable
-      //    persistence needs a new column = owner decision (see report).
-      const customComparisonSwitch = d.customComparison === "1";
+      // comparison inputs (no rate-math change).
+      // 2026-06-17 (ภูม · owner "ให้สวิตซ์ค้างถาวร") — NOW DURABLE (mig 0187):
+      //   tb_forwarder.custom_comparison / custom_comparison_value persist the
+      //   per-order override. When the caller sends customComparison we use +
+      //   write it; when omitted (old callers e.g. ForwarderRateMissingFallback
+      //   re-pricing) we SEED from the persisted row value so a re-price keeps
+      //   the override (never silently drops it back to the tb_users default).
+      const customComparisonSwitch =
+        d.customComparison !== undefined
+          ? d.customComparison === "1"
+          : String(before.custom_comparison ?? "0").trim() === "1";
       const customComparisonValue =
-        d.userComparisonValue !== undefined ? d.userComparisonValue : 0;
+        d.customComparison !== undefined
+          ? (d.userComparisonValue !== undefined ? d.userComparisonValue : 0)
+          : num(before.custom_comparison_value);
 
       // ── owner-locked doc-tier discount eligibility (owner 2026-06-16) ──
       // BOTH conditions: tax-doc ∈ {ใบกำกับ,ใบขน} AND a cargo-import-service row
@@ -518,6 +533,14 @@ export async function adminUpdateForwarderDimensions(
       if (d.fShippingService !== undefined)      update.fshippingservice      = d.fShippingService;
       if (d.fWarehouseChina !== undefined)       update.fwarehousechina       = d.fWarehouseChina;
       if (d.fWarehouseName !== undefined)        update.fwarehousename        = d.fWarehouseName;
+      // 2026-06-17 (mig 0187 · ภูม "ให้สวิตซ์ค้างถาวร") — persist the per-order
+      // ค่าเทียบ override so the "คิดค่าเทียบแบบกำหนดเอง" toggle stays ON (with its
+      // value) after reload. Written only when the form actually sends it; when
+      // OFF we reset the value to 0 so a stale threshold can't linger.
+      if (d.customComparison !== undefined) {
+        update.custom_comparison       = d.customComparison;
+        update.custom_comparison_value = d.customComparison === "1" ? customComparisonValue : 0;
+      }
 
       const { error: updErr } = await admin
         .from("tb_forwarder")

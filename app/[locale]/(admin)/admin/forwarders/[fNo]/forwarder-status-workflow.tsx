@@ -65,11 +65,13 @@ export type ForwarderPricingInit = {
   height: number;
   volume: number;
   productType: "1" | "2" | "3" | "4";
-  refPrice: "1" | "2";
   note: string;
   customRate: "0" | "1";
   customRateKg: number;
   customRateCbm: number;
+  // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+  customComparison: "0" | "1";
+  customComparisonValue: number;
   fDiscount: number;
   fTransportPriceChnThb: number;
   priceOther: number;
@@ -290,7 +292,6 @@ export function ForwarderStatusWorkflow(p: Props) {
                   heightInit={p.pricing.height}
                   volumeInit={p.pricing.volume}
                   productTypeInit={p.pricing.productType}
-                  refPriceInit={p.pricing.refPrice}
                   noteInit={p.pricing.note}
                   itemsInit={[]}
                   customRateInit={p.pricing.customRate}
@@ -303,6 +304,10 @@ export function ForwarderStatusWorkflow(p: Props) {
                   fShippingServiceInit={p.pricing.fShippingService}
                   fWarehouseChinaInit={p.pricing.fWarehouseChina}
                   fWarehouseNameInit={p.pricing.fWarehouseName}
+                  /* 2026-06-17 (mig 0187) — seed the ค่าเทียบ toggle from the
+                     order's persisted override so it stays ON after reload. */
+                  userComparisonInit={p.pricing.customComparison}
+                  userComparisonValueInit={p.pricing.customComparisonValue}
                 />
               </div>
             </section>

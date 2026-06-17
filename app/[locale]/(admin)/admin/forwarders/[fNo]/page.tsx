@@ -267,6 +267,8 @@ async function tryRenderTbForwarder(
       "ftotalprice, fcosttotalprice, ftransportprice, fpriceupdate, fdiscount, " +
       "pricecrate, fqcprice, ftransportpricechnthb, priceother, fproductstype, " +
       "frefprice, frefrate, customrate, customratekg, customratecbm, " +
+      // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+      "custom_comparison, custom_comparison_value, " +
       "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
@@ -311,6 +313,7 @@ async function tryRenderTbForwarder(
     fproductstype: string | null;
     frefprice: string | null; frefrate: number | null;
     customrate: string | null; customratekg: number | null; customratecbm: number | null;
+    custom_comparison: string | null; custom_comparison_value: number | string | null;
     faddressname: string | null; faddresslastname: string | null;
     faddressno: string | null; faddresssubdistrict: string | null;
     faddressdistrict: string | null; faddressprovince: string | null;
@@ -500,6 +503,10 @@ async function tryRenderTbForwarder(
     customRate: (r.customrate === "1" ? "1" : "0") as "0" | "1",
     customRateKg: num(r.customratekg) || 40,
     customRateCbm: num(r.customratecbm) || 7500,
+    // 2026-06-17 (mig 0187) — seed the per-order ค่าเทียบ override toggle from
+    // the persisted row so it stays ON (with its value) after reload.
+    customComparison: (String(r.custom_comparison ?? "0").trim() === "1" ? "1" : "0") as "0" | "1",
+    customComparisonValue: num(r.custom_comparison_value),
     fDiscount: num(r.fdiscount),
     fTransportPriceChnThb: num(r.ftransportpricechnthb),
     priceOther: num(r.priceother),
