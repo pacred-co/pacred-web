@@ -307,11 +307,13 @@ export async function ForwarderImportItemsTable({ r }: Props) {
     },
   );
 
-  const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap";
-  const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap";
+  // border-r on every cell → vertical column dividers (owner ภูม 2026-06-18:
+  // "ฝั่งขวาใส่เส้นขั้นแนวตั้งเหมือนฝั่งซ้าย — อ่านง่ายขึ้น").
+  const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap border-r border-border";
+  const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap border-r border-border";
 
   const shipmentId = base || (rendered[0]?.tracking ?? "—");
-  const TDc = "px-2 py-1.5 text-center whitespace-nowrap";
+  const TDc = "px-2 py-1.5 text-center whitespace-nowrap border-r border-border";
   // Shipment-summary cells (left group) — tinted, rowspan'd over every แทค.
   const SH = "px-2.5 py-2 align-middle border-r-2 border-border bg-primary-50/40 dark:bg-primary-950/10 whitespace-nowrap font-mono text-right";
 
@@ -374,7 +376,7 @@ export async function ForwarderImportItemsTable({ r }: Props) {
                 </>
               )}
               {/* ── RIGHT · per-tracking detail ── */}
-              <td className="px-2 py-1.5 min-w-[190px] max-w-[300px] text-left">
+              <td className="px-2 py-1.5 min-w-[190px] max-w-[300px] text-left border-r border-border">
                 <span className="break-words font-medium">{x.tracking || x.detailText || "—"}</span>
                 {x.detailText && x.detailText !== x.tracking && (
                   <div className="text-[11px] text-muted break-words">{x.detailText}</div>
