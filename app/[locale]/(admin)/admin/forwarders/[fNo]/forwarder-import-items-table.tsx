@@ -42,7 +42,6 @@
  * Async server component — fetches the sibling rows + item names inline.
  */
 
-import { ChevronDown } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   baseTracking,
@@ -70,6 +69,12 @@ type ItemRow = {
   fshippingservice: number | string | null;
   priceother: number | string | null;
   fdiscount: number | string | null;
+  // 2026-06-18 (ภูม · image-3 layout) — per-tracking dims + รับ-warehouse so the
+  // detail row shows กว้าง/ยาว/สูง (different dims per แทค → different price).
+  fwidth?: number | string | null;
+  flength?: number | string | null;
+  fheight?: number | string | null;
+  fwarehousename?: string | null;
   // userid drives the sibling lookup. The detail page's `r` always carries it;
   // it's optional here only so older callers still type-check.
   userid?: string | null;
@@ -80,6 +85,7 @@ type Props = { r: ItemRow };
 // The columns we need to re-render any sibling row, kept in sync with ItemRow.
 const SIBLING_SELECT =
   "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, fweight, fvolume, " +
+  "fwidth, flength, fheight, fwarehousename, " +
   "frefprice, frefrate, ftotalprice, fpriceupdate, pricecrate, ftransportpricechnthb, " +
   "ftransportprice, fshippingservice, priceother, fdiscount";
 
@@ -90,6 +96,11 @@ const PRODUCT_TYPE_LABEL: Record<string, string> = {
 // legacy nameRefPrice — the "คิดราคาตาม" basis
 const REF_PRICE_LABEL: Record<string, string> = {
   "1": "น้ำหนัก", "2": "ปริมาตร", "3": "เปรียบเทียบ",
+};
+// legacy optionWarehouse() (function.php L1823-1833) — โกดังที่รับ (ไทย)
+const WAREHOUSE_TH_LABEL: Record<string, string> = {
+  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
 };
 
 function fmtMoney(n: number): string {
@@ -265,12 +276,15 @@ export async function ForwarderImportItemsTable({ r }: Props) {
       priceOther,
       fDiscount,
       priceAllUser,
+      width: Number(row.fwidth ?? 0),
+      length: Number(row.flength ?? 0),
+      height: Number(row.fheight ?? 0),
+      warehouseLbl: WAREHOUSE_TH_LABEL[row.fwarehousename ?? ""] ?? "—",
       refPriceLabel: REF_PRICE_LABEL[row.frefprice ?? ""] ?? "ไม่พบข้อมูล",
       productTypeLbl: PRODUCT_TYPE_LABEL[row.fproductstype ?? ""] ?? "ไม่พบข้อมูล",
     };
   });
 
-  const multi = rendered.length > 1;
   const totals = rendered.reduce(
     (s, x) => ({
       boxes: s.boxes + x.boxes,
@@ -296,22 +310,49 @@ export async function ForwarderImportItemsTable({ r }: Props) {
   const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap";
   const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap";
 
-  const tableEl = (
+  const shipmentId = base || (rendered[0]?.tracking ?? "—");
+  const TDc = "px-2 py-1.5 text-center whitespace-nowrap";
+  // Shipment-summary cells (left group) — tinted, rowspan'd over every แทค.
+  const SH = "px-2.5 py-2 align-middle border-r-2 border-border bg-primary-50/40 dark:bg-primary-950/10 whitespace-nowrap font-mono text-right";
+
+  // image-3 layout (owner ภูม 2026-06-18): ONE table — a left "📦 Shipment" group
+  // shown ONCE (rowspan over all แทค) + a right "รายละเอียดแต่ละแทรคกิง" group with
+  // one row per แทค INCLUDING กว้าง/ยาว/สูง (different dims per แทค → different
+  // price, so they must be visible). Replaces the 2026-06-17 <details> collapsible.
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
       <table className="w-full text-xs md:text-sm">
-        <thead className="bg-surface-alt/50 text-[10px] md:text-[11px] uppercase tracking-wide">
-          <tr className="text-center">
-            <th className={TH}>#</th>
+        <thead className="text-[10px] md:text-[11px] uppercase tracking-wide">
+          {/* group headers */}
+          <tr className="bg-surface-alt/60 text-center">
+            <th className="px-2 py-1.5 font-bold text-primary-700 border-r-2 border-border" colSpan={6}>📦 Shipment</th>
+            <th className="px-2 py-1.5 font-bold text-muted" colSpan={19}>รายละเอียดแต่ละแทรคกิง</th>
+          </tr>
+          {/* column headers */}
+          <tr className="bg-surface-alt/40 text-center">
+            {/* Shipment group */}
+            <th className={`${TH} text-left`}>เลขบิล</th>
+            <th className={TH}>แทรคกิง</th>
+            <th className={TH}>กล่องรวม</th>
+            <th className={TH}>น้ำหนักรวม</th>
+            <th className={TH}>CBM รวม</th>
+            <th className={`${TH} border-r-2 border-border`}>ราคารวม</th>
+            {/* Tracking-detail group */}
             <th className={`${TH} text-left`}>รายละเอียด</th>
+            <th className={TH}>โกดัง</th>
             <th className={TH}>กล่อง</th>
-            <th className={TH}>ปริมาตรรวม CBM</th>
             <th className={TH}>น้ำหนัก Kg.</th>
+            <th className={TH}>กว้าง</th>
+            <th className={TH}>ยาว</th>
+            <th className={TH}>สูง</th>
+            <th className={TH}>CBM</th>
             <th className={TH}>คิดราคาตาม</th>
             <th className={TH}>เรทนำเข้า</th>
             <th className={TH}>ค่านำเข้าจีน-ไทย</th>
-            <th className={TH}>ค่าสินค้า เพิ่ม/ลด</th>
+            <th className={TH}>เพิ่ม/ลด</th>
             <th className={TH}>ค่าตีลัง</th>
-            <th className={TH}>ค่าขนส่งจีน+</th>
-            <th className={TH}>ค่าขนส่งไทย</th>
+            <th className={TH}>ขนส่งจีน+</th>
+            <th className={TH}>ขนส่งไทย</th>
             <th className={TH}>ค่าบริการ</th>
             <th className={TH}>ค่าอื่นๆ</th>
             <th className={TH}>ส่วนลด</th>
@@ -320,13 +361,23 @@ export async function ForwarderImportItemsTable({ r }: Props) {
         </thead>
         <tbody>
           {rendered.map((x, idx) => (
-            <tr key={x.id} className="border-t border-border odd:bg-surface-alt/20 align-top">
-              <td className="px-2 py-2 text-center font-mono text-muted">{idx + 1}</td>
-              <td className="px-2 py-2 min-w-[220px] max-w-[360px] text-left">
-                {x.detailText ? (
-                  <span className="break-words">{x.detailText}</span>
-                ) : (
-                  <span className="text-muted">ไม่พบข้อมูล</span>
+            <tr key={x.id} className="border-t border-border align-top">
+              {/* ── LEFT · 📦 Shipment summary (first row only, rowspan over all แทค) ── */}
+              {idx === 0 && (
+                <>
+                  <td className={`${SH} text-left font-semibold text-primary-700`} rowSpan={rendered.length}>{shipmentId}</td>
+                  <td className={SH} rowSpan={rendered.length}>{rendered.length}</td>
+                  <td className={SH} rowSpan={rendered.length}>{totals.boxes}</td>
+                  <td className={SH} rowSpan={rendered.length}>{fmtNum(totals.weight, 2)}</td>
+                  <td className={SH} rowSpan={rendered.length}>{fmtNum(totals.cbm, 5)}</td>
+                  <td className={`${SH} font-bold text-red-600`} rowSpan={rendered.length}>{fmtMoney(totals.priceAllUser)}</td>
+                </>
+              )}
+              {/* ── RIGHT · per-tracking detail ── */}
+              <td className="px-2 py-1.5 min-w-[190px] max-w-[300px] text-left">
+                <span className="break-words font-medium">{x.tracking || x.detailText || "—"}</span>
+                {x.detailText && x.detailText !== x.tracking && (
+                  <div className="text-[11px] text-muted break-words">{x.detailText}</div>
                 )}
                 {x.itemNames.length > 1 && (
                   <ul className="mt-0.5 list-disc pl-4 text-[11px] text-muted">
@@ -335,23 +386,16 @@ export async function ForwarderImportItemsTable({ r }: Props) {
                     ))}
                   </ul>
                 )}
-                {/* Always surface the row's own China tracking (unless it's
-                    already the รายละเอียด label) so a SINGLE self-created import
-                    — and every split-parcel sibling — is identified by its
-                    แทรคกิง, never left bare. Issue 2a (ภูม 2026-06-16): a lone
-                    self-created row used to hide its tracking because this line
-                    was `multi`-gated, so the รายการ read as just its detail (the
-                    tracking lived only in the header/cabinet field) — Poom's
-                    "รายการมันไม่แสดงเป็นแทคกิง แต่มันจะแสดงเป็นเลขตู้". */}
-                {x.tracking !== "" && x.tracking !== x.detailText && (
-                  <div className="mt-0.5 text-[11px] text-muted">แทรคกิง : {x.tracking}</div>
-                )}
-                <div className="mt-0.5 text-[11px] text-muted">ประเภทสินค้า : {x.productTypeLbl}</div>
+                <div className="mt-0.5 text-[11px] text-muted">ประเภท : {x.productTypeLbl}</div>
               </td>
+              <td className={TDc}>{x.warehouseLbl}</td>
               <td className={TD}>{x.boxes}</td>
-              <td className={TD}>{fmtNum(x.cbm, 5)}</td>
               <td className={TD}>{fmtNum(x.weight, 2)}</td>
-              <td className="px-2 py-2 text-center whitespace-nowrap">{x.refPriceLabel}</td>
+              <td className={TD}>{fmtNum(x.width, 2)}</td>
+              <td className={TD}>{fmtNum(x.length, 2)}</td>
+              <td className={TD}>{fmtNum(x.height, 2)}</td>
+              <td className={TD}>{fmtNum(x.cbm, 5)}</td>
+              <td className={TDc}>{x.refPriceLabel}</td>
               <td className={TD}>{fmtMoney(x.frefRate)}</td>
               <td className={TD}>{fmtMoney(x.fTotalPrice)}</td>
               <td className={TD}>{fmtMoney(x.fPriceUpdate)}</td>
@@ -365,65 +409,7 @@ export async function ForwarderImportItemsTable({ r }: Props) {
             </tr>
           ))}
         </tbody>
-        {multi && (
-          <tfoot>
-            <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
-              <td className="px-2 py-2 text-center text-muted">รวม</td>
-              <td className="px-2 py-2 text-left text-muted">{rendered.length} แทรคกิง</td>
-              <td className={TD}>{totals.boxes}</td>
-              <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
-              <td className={TD}>{fmtNum(totals.weight, 2)}</td>
-              <td className="px-2 py-2" />
-              <td className="px-2 py-2" />
-              <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>
-              <td className={TD}>{fmtMoney(totals.fPriceUpdate)}</td>
-              <td className={TD}>{fmtMoney(totals.priceCrate)}</td>
-              <td className={TD}>{fmtMoney(totals.fTransportPriceCHNTHB)}</td>
-              <td className={TD}>{fmtMoney(totals.fTransportPrice)}</td>
-              <td className={TD}>{fmtMoney(totals.fShippingService)}</td>
-              <td className={TD}>{fmtMoney(totals.priceOther)}</td>
-              <td className={`${TD} text-amber-700`}>{totals.fDiscount > 0 ? `−${fmtMoney(totals.fDiscount)}` : fmtMoney(0)}</td>
-              <td className={`${TD} font-bold text-red-600`}>{fmtMoney(totals.priceAllUser)}</td>
-            </tr>
-          </tfoot>
-        )}
       </table>
-  );
-
-  const shipmentId = base || (rendered[0]?.tracking ?? "—");
-
-  // Single tracking → show the table directly (no shipment wrapper needed).
-  if (!multi) {
-    return (
-      <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
-        {tableEl}
-      </div>
-    );
-  }
-
-  // Multi-tracking → "shipment ครอบแทคกิงย่อย" master-detail (owner ภูม
-  // 2026-06-17 · CargoHub-style): a collapsible shipment-summary header on top,
-  // expandable to the full per-tracking detail table. Native <details> so it
-  // works in this server component with no client JS.
-  return (
-    <details open className="group rounded-xl border border-border overflow-hidden">
-      <summary className="cursor-pointer list-none select-none bg-surface-alt/50 px-3 py-2.5 hover:bg-surface-alt/70">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs md:text-sm">
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
-            📦 Shipment
-          </span>
-          <span className="font-mono text-primary-700">{shipmentId}</span>
-          <span className="text-muted">{rendered.length} แทรคกิง</span>
-          <span>รวม <b>{totals.boxes}</b> กล่อง</span>
-          <span><b>{fmtNum(totals.cbm, 5)}</b> คิว</span>
-          <span><b>{fmtNum(totals.weight, 2)}</b> กก.</span>
-          <span className="ml-auto font-bold text-red-600">{fmtMoney(totals.priceAllUser)}</span>
-        </div>
-      </summary>
-      <div className="overflow-x-auto scrollbar-x-visible border-t border-border">
-        {tableEl}
-      </div>
-    </details>
+    </div>
   );
 }
