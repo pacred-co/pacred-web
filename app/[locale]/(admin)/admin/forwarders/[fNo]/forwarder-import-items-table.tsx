@@ -42,6 +42,7 @@
  * Async server component — fetches the sibling rows + item names inline.
  */
 
+import { ChevronDown } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   baseTracking,
@@ -295,8 +296,7 @@ export async function ForwarderImportItemsTable({ r }: Props) {
   const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap";
   const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap";
 
-  return (
-    <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
+  const tableEl = (
       <table className="w-full text-xs md:text-sm">
         <thead className="bg-surface-alt/50 text-[10px] md:text-[11px] uppercase tracking-wide">
           <tr className="text-center">
@@ -388,6 +388,42 @@ export async function ForwarderImportItemsTable({ r }: Props) {
           </tfoot>
         )}
       </table>
-    </div>
+  );
+
+  const shipmentId = base || (rendered[0]?.tracking ?? "—");
+
+  // Single tracking → show the table directly (no shipment wrapper needed).
+  if (!multi) {
+    return (
+      <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
+        {tableEl}
+      </div>
+    );
+  }
+
+  // Multi-tracking → "shipment ครอบแทคกิงย่อย" master-detail (owner ภูม
+  // 2026-06-17 · CargoHub-style): a collapsible shipment-summary header on top,
+  // expandable to the full per-tracking detail table. Native <details> so it
+  // works in this server component with no client JS.
+  return (
+    <details open className="group rounded-xl border border-border overflow-hidden">
+      <summary className="cursor-pointer list-none select-none bg-surface-alt/50 px-3 py-2.5 hover:bg-surface-alt/70">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs md:text-sm">
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+            📦 Shipment
+          </span>
+          <span className="font-mono text-primary-700">{shipmentId}</span>
+          <span className="text-muted">{rendered.length} แทรคกิง</span>
+          <span>รวม <b>{totals.boxes}</b> กล่อง</span>
+          <span><b>{fmtNum(totals.cbm, 5)}</b> คิว</span>
+          <span><b>{fmtNum(totals.weight, 2)}</b> กก.</span>
+          <span className="ml-auto font-bold text-red-600">{fmtMoney(totals.priceAllUser)}</span>
+        </div>
+      </summary>
+      <div className="overflow-x-auto scrollbar-x-visible border-t border-border">
+        {tableEl}
+      </div>
+    </details>
   );
 }
