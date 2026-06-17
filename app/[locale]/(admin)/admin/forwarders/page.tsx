@@ -204,6 +204,7 @@ type RawForwarderRow = {
   flength: number | null;
   fheight: number | null;
   famount: number | null;
+  famountcount: string | null;   // CBM-multiplier mode flag ('1' = fvolume is already total · ≠1 = per-box, ×boxes)
   ftotalprice: number | null;
   fcosttotalprice: number | null;
   faddressname: string | null;
@@ -264,6 +265,7 @@ export type Row = {
   partner_warehouse: string;   // fwarehousename
   transport_type: string;      // ftransporttype
   amount_count: number;        // famount (number of boxes)
+  amount_count_flag: string | null; // famountcount — CBM ×boxes mode ('1' = fvolume already total · DISPLAY ONLY, mirrors cbmTotal())
   weight_kg: number;
   volume_cbm: number;
   total_price: number;
@@ -912,7 +914,7 @@ export async function fetchForwarderList(
     .select(
       "id,fdate,fstatus,ftransporttype,fwarehousechina,fwarehousename," +
       "fcabinetnumber,ftrackingchn,ftrackingth,fidorco,userid,fnote,fcover," +
-      "fweight,fvolume,famount,ftotalprice,fcosttotalprice," +
+      "fweight,fvolume,famount,famountcount,ftotalprice,fcosttotalprice," +
       // 2026-06-12 (พี่ป๊อป) — physical dimensions for the group breakdown (ก×ย×ส)
       "fwidth,flength,fheight," +
       "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
@@ -1162,6 +1164,7 @@ export async function fetchForwarderList(
       partner_warehouse: r.fwarehousename,
       transport_type: r.ftransporttype,
       amount_count: Number(r.famount ?? 0),
+      amount_count_flag: r.famountcount ?? null,
       weight_kg: Number(r.fweight ?? 0),
       volume_cbm: Number(r.fvolume ?? 0),
       total_price: Number(r.ftotalprice ?? 0),

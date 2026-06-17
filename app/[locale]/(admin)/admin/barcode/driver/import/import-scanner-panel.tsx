@@ -259,7 +259,10 @@ export function ImportScannerPanel() {
 
   function submit() {
     setError(null);
-    const keysearch = search.trim();
+    // Read the LIVE DOM value, not the `search` state. A fast USB scanner fills
+    // the <input> before React's controlled re-render commits `search`, so the
+    // ref is the authoritative latest value (never behind state) at Enter time.
+    const keysearch = (inputRef.current?.value ?? search).trim();
 
     // Legacy L200-205 — if the scanned code is a LOCATION code,
     // store it as fPallet + cookie + reset the input. Don't fire
@@ -325,8 +328,22 @@ export function ImportScannerPanel() {
   }
 
   function onKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Legacy L179-184 — Enter (13) OR IME composition end (229) = submit.
-    if (e.key === "Enter" || e.keyCode === 13 || e.keyCode === 229) {
+    // Submit ONLY on a real Enter — a USB barcode scanner emits the full code
+    // then an Enter (CR) terminator. We must NOT submit on keyCode 229.
+    //
+    // ⚠️ ภูม 2026-06-16 bug: scanning "60527103087" showed only "6". Root cause:
+    // the legacy port (barcode-d-import.php L179-184) also fired submit on
+    // `e.keyCode === 229`. keyCode 229 = "the key is being handled by the IME".
+    // On Windows Chrome with a Thai keyboard layout active (every TH warehouse
+    // PC) + a fast HID scanner, an intermediate character key-up reports 229 →
+    // submit() fired after the FIRST digit → this CONTROLLED input cleared
+    // (setSearch("")) AND disabled (disabled={isPending}) mid-scan → the rest of
+    // the code was eaten, leaving just "6". Legacy got away with 229 because its
+    // input was UNCONTROLLED (the DOM kept every typed char until after submit);
+    // the React controlled+disabled port turned the faithful 229-trigger into a
+    // regression. The Enter terminator is the correct + sufficient trigger.
+    if (e.nativeEvent.isComposing) return; // never submit mid IME-composition
+    if (e.key === "Enter" || e.keyCode === 13) {
       submit();
     }
   }

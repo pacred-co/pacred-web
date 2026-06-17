@@ -1173,3 +1173,30 @@ grep -rhoE '"/[A-Za-z0-9_./ -]+\.(png|jpg|jpeg|svg|webp|gif|ico)"' app/ componen
   | while read -r p; do [ -f "public$p" ] || echo "MISSING: $p"; done
 ```
 This found 7 more (besides the QR): 5 unuploaded hero banners (`hero-client.tsx` `TAB_IMAGES` — repointed to existing Pacred service banners) + 2 admin default placeholders (`/legacy/pcs/admin/images/shops/default.png` — code referenced an `/admin/` path the file didn't live at; + `forwarder-default.png` — no placeholder existed → copied an existing default). **Rules:** (a) when a static asset is "wired but blank," suspect a missing `public/` file BEFORE suspecting code; (b) run the grep-vs-`public/` audit periodically — `pnpm build`/`verify` do NOT catch a missing static image (Next serves `/public` at request time, no build check); (c) for a referenced-but-not-yet-supplied marketing asset, point at an EXISTING image now + note the intended path so the owner can drop the real file later (Next serves it instantly, no rebuild).
+
+## 2026-06-16 — barcode scanner shows only the FIRST char in a React input = `keyCode === 229` firing submit mid-scan (the IME sentinel)
+
+ภูม: scanning tracking `60527103087` into `/admin/barcode/driver/import` showed only **`6`** ("ขึ้นแค่เลขตัวเดียว") — yet the same USB scanner worked fine on other systems. **Root cause:** the scanner forms (`import-scanner-panel.tsx` + the shared `components/admin/scanner-input.tsx`) submitted on `e.keyCode === 229` (carried verbatim from legacy `barcode-d-import.php` L179-184, which treated `13 || 229` as "Enter"). **`keyCode 229` = "this key is being handled by the IME"** — and on **Windows Chrome with a Thai keyboard layout active** (every TH warehouse PC) plus a **fast USB HID scanner** (it "types" the code far faster than a human), an *intermediate* character key-up reports **229**. That fired `submit()` after the first digit → the **controlled** input cleared (`setSearch("")`) **and disabled** (`disabled={isPending}`) mid-scan → the remaining keystrokes were eaten → only `6` survived. Scanners work elsewhere because those systems only wait for the scanner's **Enter (CR) terminator** and never treat 229 as submit.
+
+**Why legacy got away with it but the React port didn't:** legacy's input was **uncontrolled** — the DOM `<input>` kept every typed char until `$('#search').val()` read it at submit, so a stray-229 submit still read the full code. The React port combined the faithful 229-trigger with a **controlled + disabled** input, turning a latent legacy quirk into a hard regression. (Same family as the `php-port-patterns.md` "port-added guard on a faithful-but-fragile design" trap.)
+
+**Fix (both scanner files):**
+```ts
+function onKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
+  if (e.nativeEvent.isComposing) return;                 // never submit mid IME-composition
+  if (e.key === "Enter" || e.keyCode === 13) submit();   // ⛔ no 229
+}
+// + read the LIVE DOM value at submit, not React state — a fast HID scanner fills
+//   the <input> before React commits state, so the ref is never behind:
+const keysearch = (inputRef.current?.value ?? search).trim();
+```
+
+**Rules for ANY barcode/scanner text input in this codebase:**
+- **Never** submit on `keyCode === 229`. It is the IME-processing sentinel, NOT Enter. The scanner's CR terminator (`Enter`/`keyCode 13`) is the only correct + sufficient trigger.
+- Guard `e.nativeEvent.isComposing` so a Thai/CJK IME composition never auto-submits.
+- For a **controlled** input read by a fast scanner, read `inputRef.current?.value` at submit (authoritative latest), not the `value`/`search` state.
+- Don't `disabled={isPending}` + clear a scanner input on a per-keystroke submit path — a premature submit then eats the rest of the burst.
+
+## 2026-06-16 — "Cannot access refs during render" lint error = mutating `ref.current` in the render body (use a dep, not a synced ref)
+
+Building the cost-reveal provider I wrote `const r = useRef(x); r.current = x;` at the top level of a component to keep a `useCallback` reading the latest value with `[]` deps. ESLint (react-hooks/react-compiler) **errors**: `Cannot access refs during render`. Mutating a ref during render is the anti-pattern it guards. **Fix:** don't sync a ref — just put the value in the callback's dep array (`useCallback(fn, [revealed])`). The callback is re-created when the value flips, which is harmless here (the context value object is re-created each render anyway, so memoizing the callback never prevented consumer re-renders). If you genuinely need a render-independent latest-value ref, sync it inside `useEffect(() => { r.current = x }, [x])` (post-commit), never in the render body.

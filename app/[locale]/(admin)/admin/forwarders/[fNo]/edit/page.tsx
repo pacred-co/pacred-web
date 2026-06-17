@@ -260,7 +260,13 @@ export default async function AdminForwarderEditPage({
   // ─── Customer profile (extended: email + picture + salesrep) ──────
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany")
+    .select(
+      "userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany, " +
+      // 2026-06-16 (FLAG 2) — the customer's stored ค่าเทียบ, so the edit form's
+      // "คิดค่าเทียบแบบกำหนดเอง" toggle can SEED from the real threshold the
+      // pricing waterfall uses (adminUpdateForwarderDimensions reads these too).
+      "userComparison, userComparisonValue",
+    )
     .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
@@ -275,6 +281,8 @@ export default async function AdminForwarderEditPage({
     userPicture: string | null;
     adminIDSale: string | null;
     userCompany: string | null;
+    userComparison: string | number | null;
+    userComparisonValue: number | string | null;
   } | null;
 
   // Wallet balance for the payment panel (display only — action re-reads).
@@ -842,6 +850,8 @@ export default async function AdminForwarderEditPage({
             fShippingServiceInit={Number(r.fshippingservice ?? 0)}
             fWarehouseChinaInit={((r.fwarehousechina ?? "1") as "1" | "2")}
             fWarehouseNameInit={((r.fwarehousename ?? "1") as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8")}
+            userComparisonInit={(String(u?.userComparison ?? "0").trim() === "1" ? "1" : "0")}
+            userComparisonValueInit={Number(u?.userComparisonValue ?? 0)}
           />
         </div>
       </section>

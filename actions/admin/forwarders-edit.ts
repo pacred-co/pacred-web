@@ -125,6 +125,17 @@ const editForwarderSchema = z.object({
   customRateKg:  z.number().min(0).max(99999.99).optional(),
   customRateCbm: z.number().min(0).max(99999.99).optional(),
 
+  // ── Per-order ค่าเทียบ override (legacy `customComparison` toggle) ──
+  // The edit-form "คิดค่าเทียบแบบกำหนดเอง" toggle + ค่าเทียบ input. When ON, the
+  // KG-vs-CBM comparison threshold for THIS order is the admin-typed value (winning
+  // over the customer's stored tb_users.userComparisonValue) — mirrors how
+  // customRate overrides the system rate. Both optional → non-breaking for any
+  // caller that still sends the old payload (the comparison then follows tb_users).
+  /** '0' = use the customer's stored ค่าเทียบ · '1' = per-order override */
+  customComparison:      z.enum(["0", "1"] as const).optional(),
+  /** ค่าเทียบ threshold (1 คิว = N kg) — used only when customComparison === '1'. */
+  userComparisonValue:   z.number().min(0).max(99999.99).optional(),
+
   // ── Money-side adders / discount (legacy L1217-1241) ──
   fDiscount:              z.number().min(0).max(9999999.99).optional(),
   fTransportPriceChnThb:  z.number().min(0).max(9999999.99).optional(),
@@ -343,6 +354,21 @@ export async function adminUpdateForwarderDimensions(
       const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
       const userComparisonValue = num(cmpRow?.userComparisonValue);
 
+      // ── per-order ค่าเทียบ override (legacy customComparison toggle) ──
+      // When the admin ticks "คิดค่าเทียบแบบกำหนดเอง", the typed ค่าเทียบ wins
+      // over the customer's stored userComparisonValue for THIS save (mirrors the
+      // customRate override). The resolver applies it through its existing
+      // comparison inputs (no rate-math change). When the field is omitted (old
+      // callers), this is off → the comparison follows tb_users as before.
+      // ⚠️ PERSISTENCE: tb_forwarder has NO per-order comparison column (verified
+      //    against 0081 + all later migrations) → this override is COMPUTE-ONLY:
+      //    it recomputes ftotalprice/frefrate/frefprice on THIS save but does not
+      //    survive a reload (the toggle re-seeds from tb_users next time). Durable
+      //    persistence needs a new column = owner decision (see report).
+      const customComparisonSwitch = d.customComparison === "1";
+      const customComparisonValue =
+        d.userComparisonValue !== undefined ? d.userComparisonValue : 0;
+
       // ── owner-locked doc-tier discount eligibility (owner 2026-06-16) ──
       // BOTH conditions: tax-doc ∈ {ใบกำกับ,ใบขน} AND a cargo-import-service row
       // (reforder set = ฝากสั่งซื้อ/โอนหยวน · adminidcreator set = ฝากนำเข้า).
@@ -370,6 +396,9 @@ export async function adminUpdateForwarderDimensions(
         customRateCbm:     effectiveCustomRateCbm,
         userComparison,
         userComparisonValue,
+        // per-order ค่าเทียบ override — wins over the tb_users value when ON.
+        customComparisonSwitch,
+        customComparisonValue,
         docTierEligible,
         docTierDiscountCbm,
       };
@@ -599,6 +628,9 @@ export async function adminUpdateForwarderDimensions(
             basis:           resolved.basis,
             rate_source:     resolved.source,   // manual | svip | vip | general
             custom_rate:     customRateSwitch,
+            // per-order ค่าเทียบ override (compute-only · no tb_forwarder column)
+            custom_comparison:       customComparisonSwitch,
+            custom_comparison_value: customComparisonSwitch ? customComparisonValue : undefined,
             cbm_product:     cbmProduct,
             grand_total:     newGrandTotal,
             // Lane C — record when the resolved price landed below the sales

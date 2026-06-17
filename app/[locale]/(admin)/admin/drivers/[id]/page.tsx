@@ -117,13 +117,18 @@ export default async function AdminDriverBatchDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { user, roles } = await requireAdmin(["ops", "super", "driver"]);
+  // warehouse included — warehouse staff issue/print the delivery note on-site
+  // (ภูม 2026-06-17 · owner confirmed).
+  const { user, roles } = await requireAdmin(["ops", "super", "driver", "warehouse"]);
   const { id } = await params;
   const batchId = Number.parseInt(id, 10);
   if (!Number.isFinite(batchId) || batchId <= 0) notFound();
 
   const admin = createAdminClient();
-  const isOpsOverride = roles.includes("ops") || roles.includes("super");
+  // ops/super/warehouse = staff who see ALL runs (bypass the driver-own-run check);
+  // a bare driver sees only their own run.
+  const isOpsOverride =
+    roles.includes("ops") || roles.includes("super") || roles.includes("warehouse");
 
   // 1. Batch header
   const { data: batchData, error: batchErr } = await admin

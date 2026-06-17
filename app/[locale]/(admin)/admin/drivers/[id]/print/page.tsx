@@ -115,13 +115,17 @@ export default async function DriverPickingSlipPrintPage({
 }) {
   // Same gate as the batch detail page — ops/super see all; driver
   // sees only their own run (enforced below).
-  const { user, roles } = await requireAdmin(["ops", "super", "driver"]);
+  // warehouse included — warehouse staff print the delivery note on-site
+  // (ภูม 2026-06-17 · owner confirmed).
+  const { user, roles } = await requireAdmin(["ops", "super", "driver", "warehouse"]);
   const { id } = await params;
   const batchId = Number.parseInt(id, 10);
   if (!Number.isFinite(batchId) || batchId <= 0) notFound();
 
   const admin = createAdminClient();
-  const isOpsOverride = roles.includes("ops") || roles.includes("super");
+  // ops/super/warehouse = staff who may print ANY run; a bare driver only their own.
+  const isOpsOverride =
+    roles.includes("ops") || roles.includes("super") || roles.includes("warehouse");
 
   // 1. Batch header — printDriver.php L25-29.
   const { data: batchData, error: batchErr } = await admin

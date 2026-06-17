@@ -12,6 +12,8 @@ import {
   type FreightTransportMode,
 } from "@/lib/validators/freight-shipment";
 import { FREIGHT_COMMISSION } from "@/lib/freight/rate-model";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน/กำไร until the PIN.
+import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 /**
  * W5 — /admin/freight/shipments/[id]/p-and-l
@@ -231,8 +233,11 @@ export default async function FreightShipmentPnlPage({
         <p className="text-[11px] text-amber-700">
           🔒 ข้อมูลภายใน — แสดงต้นทุน/กำไรเพื่อการบริหารเท่านั้น ไม่ใช่ยอดที่ลูกค้าเห็นและไม่ใช่มูลค่าสำแดง (declared)
         </p>
+        {/* Blur gate (owner ภูม 2026-06-16) — กดดูต้นทุน + ใส่รหัสเพื่อแสดงทั้งหน้า */}
+        <div className="flex pt-0.5"><CostRevealToggle /></div>
       </div>
 
+      <CostRevealRegion className="space-y-5">
       {!hasCostData && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           ยังไม่มีข้อมูลต้นทุน/กำไรของงานนี้ — ใบเสนอราคาต้นทางยังไม่ได้คำนวณราคาจาก rate card
@@ -319,6 +324,7 @@ export default async function FreightShipmentPnlPage({
           </dl>
         )}
       </section>
+      </CostRevealRegion>
 
       {/* Cross-links */}
       <div className="flex flex-wrap gap-3 text-xs">

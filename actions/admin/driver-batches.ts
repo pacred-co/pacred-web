@@ -80,7 +80,9 @@ export async function createDriverBatch(
   }
   const { forwarderIds, driverMemberCode, endTimeHours, stopCount } = parsed.data;
 
-  return withAdmin<{ batchId: number }>(["ops", "super"], async ({ adminId }) => {
+  // warehouse included — warehouse staff create the delivery run on-site
+  // (ภูม 2026-06-17 · owner confirmed · writes only tb_forwarder_driver* — no money).
+  return withAdmin<{ batchId: number }>(["ops", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // Resolve the ops staff's own member_code for fdadmincreator (legacy
@@ -337,7 +339,7 @@ export async function deleteDriverBatch(
   }
   const { batchId } = parsed.data;
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     const { data: deliveredItems, error: chkErr } = await admin
@@ -422,7 +424,7 @@ export async function setForwarderCourierUrl(
   const { forwarderId, url } = parsed.data;
   const value = url === "" ? null : url;
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // Verify the forwarder exists (clear error vs a silent no-op update).

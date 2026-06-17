@@ -73,8 +73,30 @@ export interface PricingRowContext {
   customRateSwitch: boolean;
   customRateKg: number;
   customRateCbm: number;
+  /**
+   * The customer's STORED ค่าเทียบ (tb_users.userComparison / userComparisonValue).
+   * `userComparison` = is comparison-pricing enabled for this customer; when true,
+   * `userComparisonValue` is the KG/CBM threshold (legacy update_data L1764-1798).
+   */
   userComparison: boolean;
   userComparisonValue: number;
+  /**
+   * Per-ORDER ค่าเทียบ override (the edit-form "คิดค่าเทียบแบบกำหนดเอง" toggle).
+   * Mirrors how customRateSwitch overrides the system rate: when this switch is
+   * ON, the order is priced by the admin-typed threshold for THIS order, winning
+   * over the customer's stored userComparison/userComparisonValue. Optional +
+   * defaults to off → byte-identical behaviour for every existing caller (MOMO
+   * import / preview) that doesn't set it.
+   *
+   * NB: semantically this is "force comparison ON with a specific threshold" — it
+   * is threaded into resolveForwarderRate via its EXISTING comparisonEnabled /
+   * comparisonValue inputs (NOT its `customComparison` flag, which forces the
+   * legacy 200/150 default rather than honouring the admin-typed value). No rate
+   * math changes — the resolver already supports an arbitrary comparison value.
+   */
+  customComparisonSwitch?: boolean;
+  /** The admin-typed ค่าเทียบ threshold (1 คิว = N kg) — used only when the switch is ON. */
+  customComparisonValue?: number;
   /**
    * Owner-locked doc-tier discount (owner 2026-06-16). When true AND a positive
    * docTierDiscountCbm is supplied, the resolver subtracts the per-CBM discount
@@ -196,14 +218,28 @@ export async function resolveLiveForwarderRate(
     }
   }
 
+  // Per-order ค่าเทียบ override (edit-form toggle). When ON it WINS over the
+  // customer's stored userComparison/userComparisonValue — exactly the way the
+  // customRate switch wins over the system rate. We express it through the
+  // resolver's EXISTING comparisonEnabled/comparisonValue inputs (force ON +
+  // the admin-typed threshold), so NO rate math changes. When OFF (the default
+  // for MOMO import / preview), the stored values flow through unchanged.
+  const comparisonEnabled = ctx.customComparisonSwitch === true ? true : ctx.userComparison;
+  const comparisonValue =
+    ctx.customComparisonSwitch === true
+      ? (ctx.customComparisonValue ?? 0)
+      : ctx.userComparisonValue;
+
   const resolved = resolveForwarderRate(candidates, {
     weightKg: ctx.weightKg,
     volumeCbm: ctx.cbmProduct,
-    comparisonEnabled: ctx.userComparison,
-    comparisonValue: ctx.userComparisonValue,
-    // customComparison (per-order comparison override) is not part of the
-    // dimensions form; legacy reads it from the calPrice POST. For the
-    // dimension-edit save we follow the customer's stored userComparison.
+    comparisonEnabled,
+    comparisonValue,
+    // NB: we deliberately DON'T set resolveForwarderRate's `customComparison`
+    // flag — that flag FORCES the legacy 200/150 threshold, whereas the edit
+    // form lets the admin type an arbitrary ค่าเทียบ (e.g. 250). Threading the
+    // typed value through comparisonEnabled/comparisonValue (above) honours it
+    // without touching the math.
     // Owner-locked doc-tier discount (no-op when the caller leaves these unset).
     docTierEligible: ctx.docTierEligible === true,
     docTierDiscountCbm: ctx.docTierDiscountCbm ?? 0,

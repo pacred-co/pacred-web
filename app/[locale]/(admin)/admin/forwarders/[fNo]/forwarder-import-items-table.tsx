@@ -21,11 +21,13 @@
  *      the siblings + drop the MOMO หัวบิล placeholder, MIRRORING the list page
  *      (forwarders-table.tsx · countableGroupMembers / buildDisplayUnits) so the
  *      detail page and the list page agree row-for-row.
- *   ② ปริมาตรรวม CBM = fvolume × กล่อง (boxes), not raw per-box fvolume. The
- *      header says "ปริมาตรรวม" (total); fvolume is stored PER BOX, so a 2-box
- *      row was showing half its real volume. This is the EXACT formula the list
- *      page uses for its CBM cell + group Σ (`volume_cbm × (amount_count || 1)`),
- *      which the owner confirmed is the correct reference.
+ *   ② ปริมาตรรวม CBM — match the COST calc (lib/forwarder/live-rate.ts L284):
+ *      fvolume is the TOTAL when famountcount==='1' (every MOMO commit writes
+ *      famountcount=1, so 1.728 for a 48-box parcel is already whole → NEVER
+ *      ×boxes again) and PER-BOX otherwise (manual multi-box). The 2026-06-16
+ *      always-×boxes formula double-counted MOMO (1.728 → 82.944); fixed
+ *      2026-06-17 (ภูม owner flag) to the famountcount rule in `rowCbm` so the
+ *      display equals the cost the engine actually charged.
  *
  * Each row lists its real item names (tb_order if shop-spawned · else
  * tb_forwarder_item) + ประเภทสินค้า, so a multi-item tracking still shows every
@@ -54,6 +56,7 @@ type ItemRow = {
   fdetail: string | null;
   fproductstype: string | null;
   famount: number | null;
+  famountcount: number | string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   frefprice: string | null;
@@ -75,7 +78,7 @@ type Props = { r: ItemRow };
 
 // The columns we need to re-render any sibling row, kept in sync with ItemRow.
 const SIBLING_SELECT =
-  "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, fweight, fvolume, " +
+  "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, fweight, fvolume, " +
   "frefprice, frefrate, ftotalprice, fpriceupdate, pricecrate, ftransportpricechnthb, " +
   "ftransportprice, fshippingservice, priceother, fdiscount";
 
@@ -95,13 +98,23 @@ function fmtNum(n: number, digits: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
-// Per-box fvolume × box count = the TOTAL CBM for the row. Mirrors the list
-// page (forwarders-table.tsx) `volume_cbm × (amount_count || 1)` so the two
-// surfaces never drift. `|| 1` guards a 0/null box count (legacy `-N` rows that
-// carry famount=1 each), exactly as the list page does.
-function totalCbm(fvolume: number | string | null, famount: number | null): number {
-  const boxes = Number(famount ?? 0);
-  return Number(fvolume ?? 0) * (boxes || 1);
+// CBM display — MUST match the COST calc (lib/forwarder/live-rate.ts L284 +
+// legacy calPriceForwarder L1935-1941): cbmProduct = famountcount==='1'
+// ? fvolume : fvolume*famount. So fvolume is the TOTAL when famountcount==='1'
+// (every MOMO commit writes famountcount=1 → fvolume is already the whole-parcel
+// CBM, e.g. 1.728 for a 48-box MOMO parcel — NEVER ×boxes again) and PER-BOX
+// otherwise (manual multi-box entries). Replaces the 2026-06-16 always-×boxes
+// formula that double-counted MOMO (1.728 → 82.944). ภูม 2026-06-17 owner flag:
+// "fvolume = total, ไม่คำนวณ CBM ซ้ำ" — exactly true for MOMO/famountcount=1;
+// the famountcount branch keeps the display == the cost the engine used.
+function rowCbm(
+  fvolume: number | string | null,
+  famount: number | null,
+  famountcount: number | string | null,
+): number {
+  const vol = Number(fvolume ?? 0);
+  if (String(famountcount ?? "").trim() === "1") return vol; // total (MOMO)
+  return vol * (Number(famount ?? 0) || 1); // per-box × boxes (manual multi-box)
 }
 
 export async function ForwarderImportItemsTable({ r }: Props) {
@@ -219,7 +232,7 @@ export async function ForwarderImportItemsTable({ r }: Props) {
 
     const boxes                 = Number(row.famount ?? 0);
     const weight                = Number(row.fweight ?? 0);
-    const cbm                   = totalCbm(row.fvolume, row.famount); // Issue ②
+    const cbm                   = rowCbm(row.fvolume, row.famount, row.famountcount);
     const frefRate              = Number(row.frefrate ?? 0);
     const fTotalPrice           = Number(row.ftotalprice ?? 0);
     const fPriceUpdate          = Number(row.fpriceupdate ?? 0);
@@ -290,8 +303,8 @@ export async function ForwarderImportItemsTable({ r }: Props) {
             <th className={TH}>#</th>
             <th className={`${TH} text-left`}>รายละเอียด</th>
             <th className={TH}>กล่อง</th>
-            <th className={TH}>น้ำหนัก Kg.</th>
             <th className={TH}>ปริมาตรรวม CBM</th>
+            <th className={TH}>น้ำหนัก Kg.</th>
             <th className={TH}>คิดราคาตาม</th>
             <th className={TH}>เรทนำเข้า</th>
             <th className={TH}>ค่านำเข้าจีน-ไทย</th>
@@ -336,8 +349,8 @@ export async function ForwarderImportItemsTable({ r }: Props) {
                 <div className="mt-0.5 text-[11px] text-muted">ประเภทสินค้า : {x.productTypeLbl}</div>
               </td>
               <td className={TD}>{x.boxes}</td>
-              <td className={TD}>{fmtNum(x.weight, 2)}</td>
               <td className={TD}>{fmtNum(x.cbm, 5)}</td>
+              <td className={TD}>{fmtNum(x.weight, 2)}</td>
               <td className="px-2 py-2 text-center whitespace-nowrap">{x.refPriceLabel}</td>
               <td className={TD}>{fmtMoney(x.frefRate)}</td>
               <td className={TD}>{fmtMoney(x.fTotalPrice)}</td>
@@ -358,8 +371,8 @@ export async function ForwarderImportItemsTable({ r }: Props) {
               <td className="px-2 py-2 text-center text-muted">รวม</td>
               <td className="px-2 py-2 text-left text-muted">{rendered.length} แทรคกิง</td>
               <td className={TD}>{totals.boxes}</td>
-              <td className={TD}>{fmtNum(totals.weight, 2)}</td>
               <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
+              <td className={TD}>{fmtNum(totals.weight, 2)}</td>
               <td className="px-2 py-2" />
               <td className="px-2 py-2" />
               <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>

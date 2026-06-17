@@ -61,6 +61,9 @@ export type DetailRow = {
   fproductstype: string | null;
   /** Secondary product-type enum used for cost calc (Wave 16 P0-3 modal target) */
   fproductstype2: string | null;
+  /** FLAG 5 — resolved SELL rate per CBM (or per KG when small) — shown as a
+   *  badge under the product-type word in the "ประเภท" column (legacy col 9). */
+  frefrate: number | null;
   /** rate per product type (legacy `nameColumn` lookup or tb_cost_container) */
   rate: number;
   /** "นำเข้าสุทธิ" — fTotalPrice */
@@ -522,7 +525,19 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   </td>
                   <td className="px-2 py-2 text-right">{fmt(r.fvolume, 2)}</td>
                   <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
-                  <td className="px-2 py-2">{productTypeLabel(r.fproductstype)}</td>
+                  <td className="px-2 py-2">
+                    {productTypeLabel(r.fproductstype)}
+                    {/* FLAG 5 — resolved SELL rate badge under the type word
+                        (legacy report-cnt col 9: "ทั่วไป" + "3,700" / "15"). */}
+                    {r.frefrate != null && Number.isFinite(r.frefrate) && r.frefrate > 0 && (
+                      <div
+                        className="mt-0.5 text-[10px] text-muted"
+                        title="เรทขาย (SELL) ต่อคิว/กิโล"
+                      >
+                        {r.frefrate.toLocaleString("en-US")}
+                      </div>
+                    )}
+                  </td>
                   {showMoney && <td className="px-2 py-2 text-right">{fmt(r.rate, 0)}</td>}
                   <td className="px-2 py-2 text-right">
                     {fmt(r.ftotalprice, 2)}

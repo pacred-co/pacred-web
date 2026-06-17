@@ -74,7 +74,9 @@ export default async function AdminDriversPage({
 }: {
   searchParams: Promise<{ status?: string; range?: string; page?: string }>;
 }) {
-  await requireAdmin(["ops", "super"]);
+  // warehouse included — warehouse staff assemble truck loads + issue the
+  // delivery note (ใบส่งสินค้า) on-site (ภูม 2026-06-17 · owner confirmed).
+  await requireAdmin(["ops", "super", "warehouse"]);
 
   const sp     = await searchParams;
   const status = (sp.status === "1" || sp.status === "2" || sp.status === "3") ? sp.status : null;

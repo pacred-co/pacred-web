@@ -1,7 +1,12 @@
 -- ════════════════════════════════════════════════════════════════════════
--- ⚠️  0184 — DRAFT · FOR พี่เดฟ (P'Dev) REVIEW · DO NOT APPLY UNTIL REVIEWED
+-- ⚠️  0186 — DRAFT · FOR พี่เดฟ (P'Dev) REVIEW · DO NOT APPLY UNTIL REVIEWED
 -- ════════════════════════════════════════════════════════════════════════
 -- Owner: ภูม (Poom-pacred) · 2026-06-16 · "เขียน migration ส่งให้พี่เดฟตรวจ"
+-- (renumbered 0184→0186 on merge: dave took 0184 staff_share_pr_pool + 0185)
+-- ⓘ PARTLY SUPERSEDED — เดฟ already shipped `lib/forwarder/doc-tier-discount.ts`
+--   (commit 7ad76526) wiring the doc-tier 2900/4900 CBM price. This file stays a
+--   REFERENCE/QUESTIONS artifact: confirm whether the 0139 floor still conflicts
+--   with the now-live doc-tier price, then keep-as-doc or drop.
 --
 -- PURPOSE — this is a REVIEW ARTIFACT, not a ship-ready change. It does two
 -- things, both SAFE whether or not it is ever applied:
