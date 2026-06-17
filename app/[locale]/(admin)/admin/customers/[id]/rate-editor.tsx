@@ -13,9 +13,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Save, AlertTriangle, X, BadgeCheck, FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, FileText, Scale, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
+import { adminSetUserComparison, adminRemoveUserComparison } from "@/actions/admin/users-pricing";
 import {
   COST_FLOOR,
   DEFAULT_START,
@@ -36,14 +39,23 @@ export function CustomerRateEditor({
   userid,
   customerName,
   matrix,
+  comparisonEnabled = false,
+  comparisonValue = 0,
 }: {
   userid: string;
   customerName: string;
   matrix: CustomerRateMatrix;
+  /** tb_users.userComparison==1 — ค่าเทียบ (CPS) is currently ON. */
+  comparisonEnabled?: boolean;
+  /** tb_users.userComparisonValue — the kg-per-CBM density threshold. */
+  comparisonValue?: number;
 }) {
   const router = useRouter();
+  const tCmp = useTranslations("customerRateComparison");
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<WarehouseId | "info" | "quote">("1");
+  // "cmp" = the ค่าเทียบ (CPS) tab — set the kg-over-คิว threshold in the SAME
+  // flow as the cbm/kg sell rate (owner "การดึงเรทราคามาสรุป" · set together).
+  const [tab, setTab] = useState<WarehouseId | "info" | "quote" | "cmp">("1");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
@@ -213,6 +225,20 @@ export function CustomerRateEditor({
             {whHasCustom(w.id) ? <span className="ml-1 text-primary-500">●</span> : null}
           </button>
         ))}
+        {/* ค่าเทียบ (CPS) — owner "การดึงเรทราคามาสรุป": set the kg-over-คิว
+            threshold in the SAME flow as the cbm/kg sell rate. */}
+        <button
+          type="button"
+          onClick={() => setTab("cmp")}
+          className={`inline-flex items-center gap-1 px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
+            tab === "cmp"
+              ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
+              : "border-transparent text-muted hover:text-foreground"
+          }`}
+        >
+          <Scale className="w-3.5 h-3.5" /> {tCmp("tabLabel")}
+          {comparisonEnabled ? <span className="ml-0.5 text-primary-500">●</span> : null}
+        </button>
         <button
           type="button"
           onClick={() => setTab("quote")}
@@ -271,6 +297,22 @@ export function CustomerRateEditor({
               </div>
             </div>
           ) : null,
+        )}
+
+        {/* ค่าเทียบ (CPS) — set/clear in the same modal as the sell rate */}
+        {tab === "cmp" && (
+          <ComparisonTab
+            userid={userid}
+            enabled={comparisonEnabled}
+            value={comparisonValue}
+            onDone={(msg) => {
+              setError(null);
+              setSuccess(msg);
+              router.refresh();
+              setTimeout(() => setSuccess(null), 6000);
+            }}
+            onError={(msg) => setError(msg)}
+          />
         )}
 
         {/* ใบเสนอราคา */}
@@ -354,6 +396,119 @@ function RateGrid({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── ค่าเทียบ (CPS) tab ─────────────────────────────────────────────────────
+// Set / clear the kg-per-CBM density threshold (1 คิว = 250 kg) in the SAME
+// modal as the cbm + kg sell rate (owner "การดึงเรทราคามาสรุป" — set together).
+// REUSES the existing money writers adminSetUserComparison / adminRemoveUser-
+// Comparison (NO new write path · they update tb_users.userComparison/Value).
+// confirm-before-mutate via useConfirmDialogs (§0f).
+function ComparisonTab({
+  userid,
+  enabled,
+  value,
+  onDone,
+  onError,
+}: {
+  userid: string;
+  enabled: boolean;
+  value: number;
+  onDone: (msg: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const t = useTranslations("customerRateComparison");
+  const { confirm, dialogs } = useConfirmDialogs();
+  const [pending, start] = useTransition();
+  const [draft, setDraft] = useState(value > 0 ? String(value) : "150");
+
+  function save() {
+    const v = Number(draft.replace(/,/g, "").trim());
+    if (!Number.isFinite(v) || v < 0) {
+      onError(t("invalidValue"));
+      return;
+    }
+    start(async () => {
+      if (!(await confirm(t("confirmSet", { value: v.toLocaleString() })))) return;
+      const res = await adminSetUserComparison({ userid, value: v });
+      if (!res.ok) {
+        onError(res.error);
+        return;
+      }
+      onDone(t("savedSet"));
+    });
+  }
+
+  function remove() {
+    start(async () => {
+      if (!(await confirm(t("confirmRemove")))) return;
+      const res = await adminRemoveUserComparison({ userid });
+      if (!res.ok) {
+        onError(res.error);
+        return;
+      }
+      onDone(t("savedRemove"));
+    });
+  }
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div>
+        <h3 className="font-semibold text-foreground mb-1">{t("heading")}</h3>
+        <p className="text-[12px] leading-relaxed text-muted">{t("intro")}</p>
+      </div>
+
+      <div
+        className={`rounded-xl border px-4 py-3 ${
+          enabled
+            ? "border-primary-200 bg-primary-50/50 dark:bg-surface-alt/40"
+            : "border-border bg-surface-alt/30"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[11px] text-muted">{enabled ? t("currentOn") : t("currentOff")}</p>
+            {enabled && (
+              <p className="text-xl font-bold font-mono tabular-nums text-primary-600">
+                {value.toLocaleString()}
+                <span className="ml-1 text-[11px] font-normal text-muted">({t("valueLabel")})</span>
+              </p>
+            )}
+          </div>
+          {enabled && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={remove}
+              className="inline-flex items-center gap-1 rounded-md border border-red-200 text-red-600 px-2.5 py-1 text-xs hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> {t("removeBtn")}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-[12px] font-medium text-foreground">{t("inputLabel")}</label>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          disabled={pending}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="150"
+          className="w-40 rounded-md border border-border px-3 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+        />
+        <p className="text-[11px] text-muted">{t("hint")}</p>
+        <div className="flex justify-end pt-1">
+          <Button type="button" size="sm" disabled={pending} onClick={save}>
+            <Save className="size-4" /> {pending ? t("saving") : enabled ? t("editBtn") : t("setBtn")}
+          </Button>
+        </div>
+      </div>
+      {dialogs}
     </div>
   );
 }

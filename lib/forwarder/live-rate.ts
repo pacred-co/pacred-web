@@ -372,3 +372,121 @@ export async function computeAndFillForwarderImportRate(
     total: resolved.transportSubtotal,
   };
 }
+
+// ════════════════════════════════════════════════════════════
+// previewForwarderRateMissing — READ-ONLY rate-missing probe for the detail page.
+//
+// WHY: the admin dimension-edit save (adminUpdateForwarderDimensions) only
+// DISCOVERS a missing rate at SAVE time (it returns "ไม่พบเรทราคาขนส่ง…"). The
+// read-only detail page showed no warning + no quick entry — staff didn't know a
+// row was un-priced until they tried to save. This computes the SAME
+// `rateMissing` signal the save uses, from the SAME tb_forwarder row + the SAME
+// resolveLiveForwarderRate engine, so the on-page badge and the save can NEVER
+// drift. PURE READ — no write, never throws (degrades to {missing:false} on a DB
+// error so the detail page still renders).
+//
+// It deliberately mirrors the SYSTEM-pricing waterfall (customRateSwitch=false):
+// the badge means "the system can't find a rate card for this tuple", which is
+// exactly when the inline manual-override fallback is useful. A row that already
+// carries a manual override (customrate='1') is reported NOT missing (the admin
+// already supplied the rate). Money-isolation: zero writes here.
+// ════════════════════════════════════════════════════════════
+export async function previewForwarderRateMissing(
+  admin: ReturnType<typeof createAdminClient>,
+  fid: number,
+): Promise<{ missing: boolean }> {
+  if (!Number.isInteger(fid) || fid <= 0) return { missing: false };
+
+  const { data: row, error: rowErr } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, userid, fweight, fvolume, famount, famountcount, " +
+      "fwarehousechina, ftransporttype, fproductstype, " +
+      "customrate, customratekg, customratecbm, " +
+      "tax_doc_pref, reforder, adminidcreator",
+    )
+    .eq("id", fid)
+    .maybeSingle<{
+      id: number;
+      userid: string;
+      fweight: number | string | null;
+      fvolume: number | string | null;
+      famount: number | string | null;
+      famountcount: string | number | null;
+      fwarehousechina: string | null;
+      ftransporttype: string | null;
+      fproductstype: string | null;
+      customrate: string | null;
+      customratekg: number | string | null;
+      customratecbm: number | string | null;
+      tax_doc_pref: string | null;
+      reforder: string | null;
+      adminidcreator: string | null;
+    }>();
+  if (rowErr) {
+    console.error(`[previewForwarderRateMissing: tb_forwarder read] failed`, {
+      code: rowErr.code, message: rowErr.message, fid,
+    });
+    return { missing: false }; // never block the page render on a transient read
+  }
+  if (!row) return { missing: false };
+
+  // A row that already has a manual override is not "missing" — the admin typed it.
+  const customRateSwitch = String(row.customrate ?? "0").trim() === "1";
+  if (customRateSwitch) return { missing: false };
+
+  // Same CBMProduct derivation the save + import paths use.
+  const famountCount = row.famountcount == null ? null : String(row.famountcount);
+  const famount = num(row.famount);
+  const fvolume = num(row.fvolume);
+  const cbmProduct = String(famountCount ?? "").trim() === "1" ? fvolume : fvolume * famount;
+
+  const { data: cmpRow, error: cmpErr } = await admin
+    .from("tb_users")
+    .select("userComparison, userComparisonValue")
+    .eq("userID", row.userid)
+    .maybeSingle<{ userComparison: string | number | null; userComparisonValue: number | string | null }>();
+  if (cmpErr) {
+    console.error(`[previewForwarderRateMissing: tb_users comparison] failed`, {
+      code: cmpErr.code, message: cmpErr.message, userid: row.userid,
+    });
+  }
+  const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
+  const userComparisonValue = num(cmpRow?.userComparisonValue);
+
+  // Doc-tier discount inputs — same eligibility the save reads. (Irrelevant to
+  // rateMissing, which keys off the resolved rate being 0, but kept identical so
+  // the resolver runs the exact same way as the save.)
+  const docTierEligible = isDocTierEligible({
+    taxDocPref:     row.tax_doc_pref,
+    reforder:       row.reforder,
+    adminidcreator: row.adminidcreator,
+  });
+  const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
+
+  const ctx: PricingRowContext = {
+    userid:              row.userid,
+    fwarehousechina:     String(row.fwarehousechina ?? "").trim(),
+    ftransporttype:      String(row.ftransporttype ?? "").trim(),
+    fproductstype:       String(row.fproductstype ?? "").trim() || "1",
+    weightKg:            num(row.fweight),
+    cbmProduct,
+    famountcount:        famountCount,
+    famount,
+    reforder:            row.reforder,
+    customRateSwitch:    false,
+    customRateKg:        0,
+    customRateCbm:       0,
+    userComparison,
+    userComparisonValue,
+    docTierEligible,
+    docTierDiscountCbm,
+  };
+
+  const priceResult = await resolveLiveForwarderRate(admin, ctx);
+  if ("error" in priceResult) {
+    console.error(`[previewForwarderRateMissing: resolve] failed`, { fid, error: priceResult.error });
+    return { missing: false };
+  }
+  return { missing: priceResult.resolved.rateMissing || priceResult.resolved.rate <= 0 };
+}

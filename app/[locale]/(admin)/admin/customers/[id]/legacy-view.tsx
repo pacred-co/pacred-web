@@ -565,7 +565,13 @@ export async function renderLegacyCustomerView(
           {/* Action buttons — moved into the name row (right-aligned · FB-style)
               instead of a separate top bar above the cover. */}
           <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-3 pt-2">
-            <CustomerRateEditor userid={u.userID} customerName={fullName} matrix={rateMatrix} />
+            <CustomerRateEditor
+              userid={u.userID}
+              customerName={fullName}
+              matrix={rateMatrix}
+              comparisonEnabled={comparisonEnabled}
+              comparisonValue={comparisonValue}
+            />
             <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
               ← รายการลูกค้า
             </Link>
