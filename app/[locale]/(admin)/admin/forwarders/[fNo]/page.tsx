@@ -11,6 +11,11 @@ import { code128SvgDataUrl } from "@/lib/barcode";
 // combo that /edit's FreightBreakdownTable shows). New Pacred component renders
 // that 1:1 from the real tb_forwarder header values.
 import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
+// 2026-06-18 (ภูม · A2) — per-แทรคกิง dimension/price editor (server fetcher). A
+// split parcel has many tb_forwarder rows; the legacy single-row form only ever
+// saved one. This fetches every sibling tracking + renders one editable row each,
+// persisting all via the existing audited adminUpdateForwarderDimensions (per row).
+import { ForwarderPerTrackingEditor } from "./forwarder-per-tracking-editor";
 // 2026-06-11 (Lane A · §0d reachability) — per-line COST + DECLARED capture
 // (P2 tax-invoice platform · `pricing` role). The component was built but never
 // mounted (the SHOP equivalent ShopOrderCostSection already is, on legacy-view).
@@ -789,6 +794,16 @@ async function tryRenderTbForwarder(
           pricing={pricingInit}
           reforder={r.reforder}
           itemsTable={<ForwarderImportItemsTable r={r} />}
+          pricingEditor={
+            <ForwarderPerTrackingEditor
+              r={r}
+              customRateInit={pricingInit.customRate}
+              customRateKgInit={pricingInit.customRateKg}
+              customRateCbmInit={pricingInit.customRateCbm}
+              customComparisonInit={pricingInit.customComparison}
+              customComparisonValueInit={pricingInit.customComparisonValue}
+            />
+          }
         >
 
           {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
