@@ -232,6 +232,16 @@ export function ImportScannerPanel() {
     inputRef.current?.focus();
   }, []);
 
+  // ⌨️ Continuous-scan lock (ภูม 2026-06-17): a USB scanner can't click the
+  // field between parcels — the operator must be able to keep firing. The input
+  // is disabled during the scan write (`disabled={isPending}`), so the
+  // focusInput() call inside the transition hits a still-disabled element
+  // (no-op). Re-focus the instant isPending flips back to false — i.e. right
+  // after each scan finishes + the input re-enables — so focus is never lost.
+  useEffect(() => {
+    if (!isPending) inputRef.current?.focus();
+  }, [isPending]);
+
   // Play one of the two sounds. The audio element is mounted once;
   // we swap .src + .play() per call. Legacy did `<audio autoplay>`
   // inside a <div class="music"> with `controls style="display:none"`.
