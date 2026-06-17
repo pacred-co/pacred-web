@@ -452,7 +452,7 @@ export function AdminForwarderEditForm({
              ช่องเงินที่เหลือไม่ต้องกรอก. ── */}
         <div className="mb-3 grid gap-3 sm:grid-cols-2">
           {/* Toggle 1 — คิดราคาแบบกำหนดเอง (customRate) */}
-          <div className={`rounded-lg border p-3 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+          <div className={`rounded-lg border p-2.5 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -466,7 +466,7 @@ export function AdminForwarderEditForm({
               </span>
             </label>
             {customRate === "1" ? (
-              <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <label className="space-y-0.5">
                   <span className="block text-[11px] text-muted">เรทคิดตามน้ำหนัก (฿/กก.)</span>
                   <input
@@ -491,14 +491,12 @@ export function AdminForwarderEditForm({
                 </label>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-muted">
-                ปิด = ใช้เรทระบบ (โปรไฟล์ลูกค้า / เรททั่วไป). เปิดเพื่อกำหนดเรท ขาย/กก. + ขาย/CBM เอง
-              </p>
+              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = เรทระบบ · เปิด = กำหนดเรท กก./CBM เอง</p>
             )}
           </div>
 
           {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · persists (mig 0187) */}
-          <div className={`rounded-lg border p-3 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
+          <div className={`rounded-lg border p-2.5 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -512,7 +510,7 @@ export function AdminForwarderEditForm({
               </span>
             </label>
             {customComparison === "1" ? (
-              <div className="mt-2.5">
+              <div className="mt-2">
                 <label className="space-y-0.5 block max-w-[180px]">
                   <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
                   <input
@@ -524,16 +522,11 @@ export function AdminForwarderEditForm({
                     className={CELL_NUM}
                   />
                 </label>
-                {/* 2026-06-16 — now wired: the save recomputes the price with this
-                    ค่าเทียบ (wins over the customer's stored value for this order). */}
-                <p className="mt-1.5 text-[10px] text-amber-700">
-                  ค่าเทียบนี้จะใช้คำนวณราคาตอนกดบันทึก (แทนค่าเทียบของลูกค้าสำหรับออเดอร์นี้)
-                </p>
+                {/* 2026-06-16 — wired: the save recomputes the price with this ค่าเทียบ. */}
+                <p className="mt-1 text-[10px] text-amber-700 leading-snug">ใช้คำนวณราคาตอนบันทึก (แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้)</p>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-muted">
-                ปิด = ใช้ค่าเทียบของลูกค้า. เปิดเพื่อกำหนดเกณฑ์ KG/CBM เอง (KG/คิว &gt; ค่าเทียบ → คิดตามน้ำหนัก)
-              </p>
+              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
             )}
           </div>
         </div>
