@@ -268,7 +268,8 @@ export async function adminUpdateForwarderDimensions(
           // ── per-order ค่าเทียบ override (0187 · durable persistence) ──
           "custom_comparison, custom_comparison_value, " +
           // ── doc-tier discount inputs (owner 2026-06-16) ──
-          "tax_doc_pref, adminidcreator",
+          // doc_tier_confirmed = the per-order admin ติ๊กยืนยัน (C1 ฝากโอน · mig 0188).
+          "tax_doc_pref, adminidcreator, doc_tier_confirmed",
         )
         .limit(1);
       q = isId ? q.eq("id", asNumber) : q.eq("fidorco", d.fNo);
@@ -315,6 +316,7 @@ export async function adminUpdateForwarderDimensions(
         custom_comparison_value: number | string | null;
         tax_doc_pref: string | null;
         adminidcreator: string | null;
+        doc_tier_confirmed: boolean | null;
       };
 
       const nowIso = new Date().toISOString();
@@ -390,9 +392,12 @@ export async function adminUpdateForwarderDimensions(
       // The manual customrate override path keeps the admin-typed rate as-is
       // (the resolver only discounts the SYSTEM CBM rate, never the manual one).
       const docTierEligible = isDocTierEligible({
-        taxDocPref:     before.tax_doc_pref,
-        reforder:       before.reforder,
-        adminidcreator: before.adminidcreator,
+        taxDocPref:       before.tax_doc_pref,
+        reforder:         before.reforder,
+        adminidcreator:   before.adminidcreator,
+        // C1 (ฝากโอน) = the per-order admin ติ๊กยืนยัน (mig 0188). Defaults FALSE,
+        // so no order is eligible until a role-gated admin confirms it.
+        docTierConfirmed: before.doc_tier_confirmed === true,
       });
       const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
 

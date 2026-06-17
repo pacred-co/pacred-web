@@ -728,6 +728,66 @@ export async function adminUpdateForwarderAmountCount(
   });
 }
 
+// ── doc-tier discount confirm (ภูม 2026-06-18 · C · mig 0188) ────────────────
+// Per-order admin ติ๊กยืนยัน = the C1 (ฝากโอน) signal for the owner-locked cargo
+// doc-tier discount (lib/forwarder/doc-tier-discount.ts). Writes ONLY
+// tb_forwarder.doc_tier_confirmed — ISOLATED from the money path (§0e): it does
+// NOT recompute the price here. The discount is DOUBLE dormant-safe (the column
+// defaults false AND the discount is gated by business_config
+// cargo.doc_tier_discount.enabled=false); when the owner enables it, the flag
+// feeds the next dimension re-save's resolveLiveForwarderRate. Gated to the
+// money-doc authority roles (super/accounting/pricing — same as the cost editor),
+// NOT the warehouse/ops set, because granting a ฿800/CBM discount is a pricing call.
+const docTierConfirmSchema = z.object({
+  fId:       z.number().int().positive(),
+  confirmed: z.boolean(),
+});
+export type AdminSetForwarderDocTierConfirmedInput = z.infer<typeof docTierConfirmSchema>;
+
+export async function adminSetForwarderDocTierConfirmed(
+  rawInput: AdminSetForwarderDocTierConfirmedInput,
+): Promise<AdminActionResult> {
+  const parsed = docTierConfirmSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["super", "accounting", "pricing"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, doc_tier_confirmed")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; doc_tier_confirmed: boolean | null }>();
+    if (fwdErr) {
+      console.error(`[adminSetForwarderDocTierConfirmed read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const before = fwd.doc_tier_confirmed === true;
+    if (before === d.confirmed) return { ok: true }; // idempotent — already in the requested state
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ doc_tier_confirmed: d.confirmed, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminSetForwarderDocTierConfirmed update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกการยืนยันไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.set_doc_tier_confirmed", "tb_forwarder", String(d.fId), {
+      before, after: d.confirmed,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── update_crate — toggle ตีลังไม้ on the forwarder header ────────────────────
 // Header-level flag mirroring per-item chinawoodencratefeetype (see
 // forwarders-edit.ts §"Mirror crate flag onto tb_forwarder"). This per-field

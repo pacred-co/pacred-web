@@ -23,6 +23,11 @@ import { ForwarderPerTrackingEditor } from "./forwarder-per-tracking-editor";
 // from the selling-price/status/notify flow (AGENTS.md §0e). It self-gates:
 // super/accounting/pricing get editors, everyone else a read-only summary.
 import { ForwarderCostSection } from "./forwarder-cost-section";
+// 2026-06-18 (ภูม · C · mig 0188) — per-order doc-tier-discount ติ๊กยืนยัน (the C1
+// ฝากโอน confirmation). Self-gates super/accounting/pricing · writes ONLY
+// tb_forwarder.doc_tier_confirmed · the discount stays dormant until the owner
+// flips business_config cargo.doc_tier_discount.enabled (§0e isolated).
+import { ForwarderDocTierConfirm } from "./forwarder-doc-tier-confirm";
 // 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
 import { ForwarderDeleteButton } from "./forwarder-delete-button";
 // 2026-06-11 (ปอน · owner "ฟอร์มแก้ไขต้อง status-driven · แต่ละสถานะมีให้แก้ไม่
@@ -813,6 +818,14 @@ async function tryRenderTbForwarder(
              it annotates, inside ปอน's status-workflow restructure. ── */}
           <div className="mt-4">
             <ForwarderCostSection fId={r.id} reforder={r.reforder} />
+          </div>
+
+          {/* ── ส่วนลดเอกสาร (doc-tier) ยืนยันเงื่อนไข — owner-locked · dormant-safe
+             (ภูม 2026-06-18 · C · mig 0188). Self-gates super/accounting/pricing.
+             Writes ONLY doc_tier_confirmed; the discount stays ฿0 until the owner
+             flips cargo.doc_tier_discount.enabled. ── */}
+          <div className="mt-4">
+            <ForwarderDocTierConfirm fId={r.id} />
           </div>
         </ForwarderStatusWorkflow>
 
