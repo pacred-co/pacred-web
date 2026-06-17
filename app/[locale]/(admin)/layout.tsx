@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
@@ -79,11 +79,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             unaffected — the sidebar stays an off-canvas drawer there. */}
         <CollapseAdminSidebar />
       </div>
-      {/* Cost-reveal blur gate (owner ภูม 2026-06-16) — provider in memory so
-          ต้นทุน is blurred by default + revealed only after the PIN, resetting
-          on a hard refresh / re-login (layout unmount). */}
+      {/* Cost-reveal blur gate (owner ภูม 2026-06-16/17) — ต้นทุน blurred by
+          default + revealed only after the PIN, resetting on a hard refresh /
+          re-login (layout unmount). `bypass` = super/accounting/pricing (the
+          cost-owner roles · hasRole treats super as always-allowed): they see
+          cost PLAIN (no blur, no eye). Every other cost-seeing role gets the
+          blur + PIN gate. */}
       <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
-        <CostRevealProvider>{children}</CostRevealProvider>
+        <CostRevealProvider bypass={hasRole(roles, ["accounting", "pricing"])}>
+          {children}
+        </CostRevealProvider>
       </div>
     </div>
   );
