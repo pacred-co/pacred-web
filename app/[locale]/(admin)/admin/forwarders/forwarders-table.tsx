@@ -24,6 +24,24 @@ import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 
 /**
+ * 2026-06-17 (ภูม flag · "fvolume = total, ไม่ ×กล่อง") — total parcel CBM for
+ * display. The famountcount flag decides whether `volume_cbm` is the already-
+ * totalled parcel CBM (flag==='1', as every MOMO commit writes) or a per-box
+ * value that must be ×boxes (manual multi-box rows, flag≠'1'). Mirrors the
+ * authoritative cost calc in lib/forwarder/live-rate.ts L284 (legacy
+ * calPriceForwarder L1935-1941). DISPLAY ONLY — never feed cost/sell.
+ */
+function cbmTotal(
+  volume_cbm: number,
+  amount_count: number,
+  flag: string | null,
+): number {
+  return String(flag ?? "").trim() === "1"
+    ? volume_cbm
+    : volume_cbm * (amount_count || 1);
+}
+
+/**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
  * L508-707 (the 12-column list layout).
  *
@@ -52,6 +70,15 @@ export type Row = {
   partner_warehouse: string;
   transport_type: string;
   amount_count: number;
+  /**
+   * 2026-06-17 — famountcount flag (the per-row box-count multiplier mode).
+   * MOMO commits write famountcount='1' → `volume_cbm` is ALREADY the TOTAL
+   * parcel CBM, so it must NEVER be ×boxes again. Manual multi-box rows have
+   * famountcount≠'1' and `volume_cbm` is per-box → ×boxes. Mirrors the
+   * authoritative cost rule in lib/forwarder/live-rate.ts L284 (legacy
+   * calPriceForwarder L1935-1941). DISPLAY ONLY — see cbmTotal().
+   */
+  amount_count_flag: string | null;
   weight_kg: number;
   volume_cbm: number;
   total_price: number;
@@ -783,9 +810,11 @@ export function ForwardersTable({
                         boxes: aggMembers.reduce((s, m) => s + (m.amount_count || 0), 0),
                         weight: aggMembers.reduce((s, m) => s + (m.weight_kg || 0), 0),
                         // mirror the single-row display semantics: CBM cell
-                        // shows volume_cbm × box count per row.
+                        // shows the per-row TOTAL CBM (famountcount rule —
+                        // flag==='1' MOMO rows are already-totalled, never
+                        // ×boxes again).
                         cbm: aggMembers.reduce(
-                          (s, m) => s + (m.volume_cbm || 0) * (m.amount_count || 1),
+                          (s, m) => s + cbmTotal(m.volume_cbm || 0, m.amount_count, m.amount_count_flag),
                           0,
                         ),
                         outstanding: aggMembers.reduce(
@@ -1093,7 +1122,7 @@ export function ForwardersTable({
                             </div>
                             {r.volume_cbm > 0 && (
                               <div className="text-muted text-[10px]">
-                                {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                                {cbmTotal(r.volume_cbm, r.amount_count, r.amount_count_flag).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
                               </div>
                             )}
                           </>
@@ -1392,7 +1421,7 @@ export function ForwardersTable({
                                       </td>
                                       <td className="px-2 py-1.5 text-right">
                                         {m.volume_cbm > 0
-                                          ? (m.volume_cbm * (m.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })
+                                          ? cbmTotal(m.volume_cbm, m.amount_count, m.amount_count_flag).toLocaleString("th-TH", { maximumFractionDigits: 4 })
                                           : "—"}
                                       </td>
                                       <td className="px-2 py-1.5">
