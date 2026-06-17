@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { PurchaseBanner } from "@/components/sections/purchase-banner";
 
 const CATEGORY_IMAGES = [
   "/images/catagory/beaty.png",
@@ -39,7 +40,7 @@ export function ProductCategories() {
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}
-        <div className="mx-auto w-full max-w-[1120px] mb-5">
+        <div className="mx-auto w-full max-w-[1120px]">
           <div className="flex items-center gap-2 mb-1 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             {tPc("eyebrow")}
@@ -55,7 +56,12 @@ export function ProductCategories() {
             {tPc("subtitleSuffix")}
           </p>
         </div>
+      </div>
 
+      {/* Purchase banner — sits right under the intro copy, above the category grid */}
+      <PurchaseBanner />
+
+      <div className="mx-auto w-full max-w-[1140px] px-[10px]">
         {/* Desktop grid — md+ */}
         <div className="mx-auto w-full max-w-[1120px] hidden md:grid grid-cols-5 xl:grid-cols-10 gap-3">
           {categories.map((item, i) => (
