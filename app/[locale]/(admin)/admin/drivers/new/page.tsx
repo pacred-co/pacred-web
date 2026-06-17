@@ -72,7 +72,9 @@ function nameShipBy(code: string | null): string {
 }
 
 export default async function CreateDriverBatchPage() {
-  await requireAdmin(["ops", "super"]);
+  // warehouse included — warehouse staff create the delivery run on-site
+  // (ภูม 2026-06-17 · owner confirmed · logistics-only, no money write).
+  await requireAdmin(["ops", "super", "warehouse"]);
   const admin = createAdminClient();
 
   // 1. Forwarders already in an open assignment (fdistatus '' or '1') — these
