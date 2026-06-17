@@ -141,7 +141,7 @@ export default async function AdminReportCntDetailPage({
   const { data: cntRows, error: cntErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice",
+      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice",
     )
     .eq("fcabinetnumber", fCabinetNumber)
     .order("id", { ascending: true })
@@ -406,6 +406,9 @@ export default async function AdminReportCntDetailPage({
         (r as Record<string, unknown>).fproductstype2 == null
           ? null
           : String((r as Record<string, unknown>).fproductstype2),
+      // FLAG 5 — the resolved SELL rate per CBM/KG (legacy report-cnt col 9
+      // "ประเภท" badge under the product-type word).
+      frefrate: r.frefrate == null ? null : Number(r.frefrate),
       rate,
       ftotalprice: fTotalPrice,
       frefprice: r.frefprice == null ? null : String(r.frefprice),

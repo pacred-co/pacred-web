@@ -111,6 +111,17 @@ export function AdminForwarderEditForm({
   fShippingServiceInit   = 0,
   fWarehouseChinaInit    = "1",
   fWarehouseNameInit     = "1",
+  // 2026-06-16 (FLAG 2 · owner/ภูม "ค่าเทียบ" toggle) — the legacy PCS
+  // customComparison block (update.php · the "คิดค่าเทียบแบบกำหนดเอง" checkbox
+  // → userComparisonValue input). These prefill the toggle from the customer's
+  // CURRENT stored ค่าเทียบ (tb_users.userComparison/userComparisonValue) so
+  // the pricer sees what threshold the system is using. The toggle now also
+  // RECOMPUTES the price on save: when ON, the typed ค่าเทียบ wins over the
+  // customer's stored value for this order (see onSubmit + forwarders-edit.ts).
+  // ⚠️ compute-only — tb_forwarder has no per-order comparison column, so the
+  // override is NOT durably persisted (re-seeds from tb_users on reload).
+  userComparisonInit      = "0",
+  userComparisonValueInit = 0,
 }: {
   fNo:              string;
   idNumeric:        number;
@@ -134,6 +145,9 @@ export function AdminForwarderEditForm({
   fShippingServiceInit?:     number;
   fWarehouseChinaInit?:      WarehouseChina;
   fWarehouseNameInit?:       WarehouseTh;
+  // 2026-06-16 (FLAG 2) — customer's stored ค่าเทียบ (display/seed only)
+  userComparisonInit?:       "0" | "1";
+  userComparisonValueInit?:  number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -153,10 +167,46 @@ export function AdminForwarderEditForm({
   const [note,        setNote]        = useState<string>(noteInit);
   const [items,       setItems]       = useState<EditItemRow[]>(itemsInit);
 
+  // 2026-06-16 (FLAG 4 · owner "เพิ่มแถว / ลบแถว") — extra DRAFT item rows.
+  // The legacy PCS update.php item table is multi-line; this form's row #1 is
+  // the persistable row (the one adminUpdateForwarderDimensions writes). Extra
+  // rows are CLIENT-SIDE drafts for visual parity — they do NOT persist yet
+  // (the save action takes ONE dimension set, not an array). They are blank
+  // draft entry rows so staff can lay out multiple boxes; the lead must add an
+  // items[] param to the action to make them save. See the report flag.
+  type DraftRow = {
+    key: number;
+    weight: string; width: string; length: string; height: string; cbm: string;
+  };
+  const newDraftRow = (): DraftRow => ({
+    key: Date.now() + Math.floor(Math.random() * 1_000_000),
+    weight: "0", width: "0", length: "0", height: "0", cbm: "0",
+  });
+  const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
+  function addDraftRow() {
+    setDraftRows((rows) => [...rows, newDraftRow()]);
+  }
+  function removeDraftRow(key: number) {
+    setDraftRows((rows) => rows.filter((r) => r.key !== key));
+  }
+  function patchDraftRow(key: number, patch: Partial<DraftRow>) {
+    setDraftRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
   // 2026-06-05 — legacy override block + warehouses + cost adders
   const [customRate,    setCustomRate]    = useState<"0" | "1">(customRateInit);
   const [customRateKg,  setCustomRateKg]  = useState<string>(String(customRateKgInit));
   const [customRateCbm, setCustomRateCbm] = useState<string>(String(customRateCbmInit));
+  // 2026-06-16 (FLAG 2) — legacy PCS customComparison block (update.php
+  // "คิดค่าเทียบแบบกำหนดเอง" → userComparisonValue). The per-order ค่าเทียบ
+  // override (1 คิว = N kg threshold · e.g. 150). Now WIRED: onSubmit sends
+  // customComparison + userComparisonValue to adminUpdateForwarderDimensions,
+  // which recomputes the price with this threshold (winning over tb_users) on
+  // save. ⚠️ compute-only — no tb_forwarder column, so it re-seeds from the
+  // customer's stored value on reload. Seed from that stored value so the
+  // threshold shown is real.
+  const [customComparison, setCustomComparison] = useState<"0" | "1">(userComparisonInit);
+  const [comparisonValue,  setComparisonValue]  = useState<string>(String(userComparisonValueInit));
   const [fDiscount,             setFDiscount]             = useState<string>(String(fDiscountInit));
   const [fTransportPriceChnThb, setFTransportPriceChnThb] = useState<string>(String(fTransportPriceChnThbInit));
   const [priceOther,            setPriceOther]            = useState<string>(String(priceOtherInit));
@@ -205,6 +255,12 @@ export function AdminForwarderEditForm({
   // ── Live calc preview (mirrors legacy calPrice.php L210-269) ───────────
   // Numbers parsed for the preview. Server still resolves the authoritative
   // rate (waterfall) — this is just a visual sanity-check for the admin.
+  //
+  // 2026-06-16 (FLAG 2): the basis decision now mirrors resolve-rate.ts —
+  //   • customComparison ON  → ค่าเทียบ threshold: KGPerCBM > ค่าเทียบ → คิดตาม
+  //     น้ำหนัก (KG) · else → คิดตามปริมาตร (CBM). (legacy forwarder.php
+  //     L1947-1980 · the per-order ค่าเทียบ override)
+  //   • customComparison OFF → "ราคามากสุด" = max(KG, CBM). (legacy L1983-2010)
   const preview = useMemo(() => {
     const w  = parseFloat(weight)                || 0;
     const v  = cbmNum;   // Issue 3 — by-volume leg uses the editable CBM
@@ -215,9 +271,19 @@ export function AdminForwarderEditForm({
     const showRates = cr;
     const priceByKg  = showRates ? w * rateKg     : 0;
     const priceByCbm = showRates ? v * rateCbm    : 0;
-    // Legacy preview chooses the higher of the two when "ราคามากสุด" mode
-    // is active (no comparison override per the user's submitted fields).
-    const transport = showRates ? Math.max(priceByKg, priceByCbm) : 0;
+    // KGPerCBM (legacy L1942-1944, /0-guarded) — drives the ค่าเทียบ decision.
+    const kgPerCbm = v !== 0 ? w / v : 0;
+    const comparisonOn = customComparison === "1";
+    const threshold = parseFloat(comparisonValue) || 0;
+    // ค่าเทียบ basis: > threshold → KG ("1") · else → CBM ("2"). When the
+    // override is OFF, fall back to "ราคามากสุด" (legacy general "คิดตามราคาสูง").
+    const basis: RefPrice =
+      comparisonOn ? (kgPerCbm > threshold ? "1" : "2")
+        : (priceByCbm >= priceByKg ? "2" : "1");
+    const transport = showRates
+      ? (comparisonOn ? (basis === "1" ? priceByKg : priceByCbm)
+                      : Math.max(priceByKg, priceByCbm))
+      : 0;
     const adders =
       transport +
       (parseFloat(fShippingService)        || 0) +
@@ -230,13 +296,18 @@ export function AdminForwarderEditForm({
       showRates,
       priceByKg,
       priceByCbm,
+      kgPerCbm,
+      comparisonOn,
+      threshold,
+      basis,
       transport,
       adders,
       grand,
     };
   }, [
     weight, cbmNum, customRate,
-    customRateKg, customRateCbm, fShippingService, fTransportPriceChnThb,
+    customRateKg, customRateCbm, customComparison, comparisonValue,
+    fShippingService, fTransportPriceChnThb,
     crateSummary.totalFee, priceOther, fTransportPrice, fDiscount,
   ]);
 
@@ -271,6 +342,11 @@ export function AdminForwarderEditForm({
         customRate,
         customRateKg:          parseFloat(customRateKg)        || 0,
         customRateCbm:         parseFloat(customRateCbm)       || 0,
+        // 2026-06-16 — per-order ค่าเทียบ override (now persists/recomputes).
+        // When the toggle is ON the typed ค่าเทียบ wins over the customer's
+        // stored value for THIS order's price (server recomputes ftotalprice).
+        customComparison,
+        userComparisonValue:   parseFloat(comparisonValue)     || 0,
         fDiscount:             parseFloat(fDiscount)           || 0,
         fTransportPriceChnThb: parseFloat(fTransportPriceChnThb) || 0,
         priceOther:            parseFloat(priceOther)          || 0,
@@ -360,23 +436,105 @@ export function AdminForwarderEditForm({
             REF PRICE / per-item-crate" sections + 4 more agent-port sections.
             Per-item crate UI deferred (state preserved through `items`). */}
       <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
-        {/* Header row: title left · 2 toggles right */}
+        {/* Header row: title left · item badge right */}
         <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
           <h2 className="text-sm font-bold text-foreground">📦 กรอกรายละเอียดสินค้า</h2>
-          <div className="flex items-center gap-4 text-[11px]">
-            <label className="flex cursor-pointer items-center gap-1.5 select-none">
+          <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] text-primary-700 border border-primary-200 font-medium">item #1</span>
+        </div>
+
+        {/* ── 💰 RATE-CONTROL CARD (FLAG 2 · faithful PCS update.php "รูป2") ──
+             The legacy two-toggle SELL-rate block:
+               • คิดราคาแบบกำหนดเอง (customRate) → เรทคิดตามน้ำหนัก (customRateKG)
+                 + เรทคิดตามปริมาตร (customRateCBM)
+               • คิดค่าเทียบแบบกำหนดเอง (customComparison) → ค่าเทียบ
+                 (userComparisonValue · 1 คิว = N kg threshold)
+             พอใส่เรท/ค่าเทียบ → ราคาคำนวณให้อัตโนมัติ (live preview ด้านล่าง),
+             ช่องเงินที่เหลือไม่ต้องกรอก. ── */}
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          {/* Toggle 1 — คิดราคาแบบกำหนดเอง (customRate) */}
+          <div className={`rounded-lg border p-3 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+            <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
                 checked={customRate === "1"}
                 onChange={(e) => setCustomRate(e.target.checked ? "1" : "0")}
                 disabled={pending}
-                className="h-3.5 w-3.5 rounded border-border text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
               />
-              <span className={customRate === "1" ? "font-medium text-red-700" : "text-muted"}>
+              <span className={`text-sm font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>
                 คิดราคาแบบกำหนดเอง
               </span>
             </label>
-            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-primary-700 border border-primary-200 font-medium">item #1</span>
+            {customRate === "1" ? (
+              <div className="mt-2.5 grid grid-cols-2 gap-2">
+                <label className="space-y-0.5">
+                  <span className="block text-[11px] text-muted">เรทคิดตามน้ำหนัก (฿/กก.)</span>
+                  <input
+                    type="number" min={0} step="0.01"
+                    value={customRateKg}
+                    onChange={(e) => setCustomRateKg(e.target.value)}
+                    disabled={pending}
+                    placeholder="40"
+                    className={CELL_NUM}
+                  />
+                </label>
+                <label className="space-y-0.5">
+                  <span className="block text-[11px] text-muted">เรทคิดตามปริมาตร (฿/CBM)</span>
+                  <input
+                    type="number" min={0} step="0.01"
+                    value={customRateCbm}
+                    onChange={(e) => setCustomRateCbm(e.target.value)}
+                    disabled={pending}
+                    placeholder="7500"
+                    className={CELL_NUM}
+                  />
+                </label>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-muted">
+                ปิด = ใช้เรทระบบ (โปรไฟล์ลูกค้า / เรททั่วไป). เปิดเพื่อกำหนดเรท ขาย/กก. + ขาย/CBM เอง
+              </p>
+            )}
+          </div>
+
+          {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · ⚠️ preview-only */}
+          <div className={`rounded-lg border p-3 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
+            <label className="flex cursor-pointer items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                checked={customComparison === "1"}
+                onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")}
+                disabled={pending}
+                className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
+              />
+              <span className={`text-sm font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
+                คิดค่าเทียบแบบกำหนดเอง
+              </span>
+            </label>
+            {customComparison === "1" ? (
+              <div className="mt-2.5">
+                <label className="space-y-0.5 block max-w-[180px]">
+                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+                  <input
+                    type="number" min={0} step="1"
+                    value={comparisonValue}
+                    onChange={(e) => setComparisonValue(e.target.value)}
+                    disabled={pending}
+                    placeholder="150"
+                    className={CELL_NUM}
+                  />
+                </label>
+                {/* 2026-06-16 — now wired: the save recomputes the price with this
+                    ค่าเทียบ (wins over the customer's stored value for this order). */}
+                <p className="mt-1.5 text-[10px] text-amber-700">
+                  ค่าเทียบนี้จะใช้คำนวณราคาตอนกดบันทึก (แทนค่าเทียบของลูกค้าสำหรับออเดอร์นี้)
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-muted">
+                ปิด = ใช้ค่าเทียบของลูกค้า. เปิดเพื่อกำหนดเกณฑ์ KG/CBM เอง (KG/คิว &gt; ค่าเทียบ → คิดตามน้ำหนัก)
+              </p>
+            )}
           </div>
         </div>
 
@@ -391,13 +549,11 @@ export function AdminForwarderEditForm({
                 <th className={CELL_TH}>โกดังที่รับ (ไทย)</th>
                 <th className={CELL_TH}>ประเภทสินค้า</th>
                 <th className={CELL_TH}>คิดเรทตาม</th>
-                {customRate === "1" && <th className={CELL_TH}>เรท/กก. (฿)</th>}
                 <th className={CELL_TH}>น้ำหนัก (Kg)</th>
                 <th className={CELL_TH}>กว้าง (cm)</th>
                 <th className={CELL_TH}>ยาว (cm)</th>
                 <th className={CELL_TH}>สูง (cm)</th>
                 <th className={`${CELL_TH} text-red-600`}>CBM (แก้ได้)</th>
-                {customRate === "1" && <th className={CELL_TH}>เรท/CBM (฿)</th>}
                 <th className={`${CELL_TH} text-red-600`}>ค่าขนส่งในไทย</th>
                 <th className={CELL_TH}>ส่วนลด</th>
                 <th className={CELL_TH}>ค่าจีน+ ภายหลัง</th>
@@ -428,11 +584,6 @@ export function AdminForwarderEditForm({
                     {REF_PRICE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </td>
-                {customRate === "1" && (
-                  <td>
-                    <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="40" />
-                  </td>
-                )}
                 <td>
                   <input type="number" min={0} step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
@@ -450,11 +601,6 @@ export function AdminForwarderEditForm({
                       CBM directly to override (last edit wins). */}
                   <input type="number" min={0} step="0.00001" value={cbm} onChange={(e) => setCbm(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00000" />
                 </td>
-                {customRate === "1" && (
-                  <td>
-                    <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="7500" />
-                  </td>
-                )}
                 <td>
                   <input type="number" min={0} step="0.01" value={fTransportPrice} onChange={(e) => setFTransportPrice(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
@@ -474,8 +620,75 @@ export function AdminForwarderEditForm({
                   <input type="number" min={0} step="0.01" value={fShippingService} onChange={(e) => setFShippingService(e.target.value)} disabled={pending} className={CELL_NUM} placeholder="0.00" />
                 </td>
               </tr>
+
+              {/* ── FLAG 4 — extra DRAFT rows (client-side · not persisted yet) ── */}
+              {draftRows.map((dr, i) => (
+                <tr key={dr.key} className="border-t border-dashed border-amber-300 align-top bg-amber-50/30 [&>td]:px-1.5 [&>td]:py-1.5">
+                  {/* warehouse / type / basis — draft placeholders (header row owns these) */}
+                  <td colSpan={4} className="text-[10px] text-amber-700 whitespace-nowrap">
+                    item #{i + 2} <span className="text-amber-500">(ร่าง · ยังไม่บันทึก)</span>
+                  </td>
+                  <td>
+                    <input type="number" min={0} step="0.01" value={dr.weight} onChange={(e) => patchDraftRow(dr.key, { weight: e.target.value })} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  </td>
+                  <td>
+                    <input type="number" min={0} step="0.01" value={dr.width} onChange={(e) => patchDraftRow(dr.key, { width: e.target.value, cbm: cbmFromDims(e.target.value, dr.length, dr.height) })} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  </td>
+                  <td>
+                    <input type="number" min={0} step="0.01" value={dr.length} onChange={(e) => patchDraftRow(dr.key, { length: e.target.value, cbm: cbmFromDims(dr.width, e.target.value, dr.height) })} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  </td>
+                  <td>
+                    <input type="number" min={0} step="0.01" value={dr.height} onChange={(e) => patchDraftRow(dr.key, { height: e.target.value, cbm: cbmFromDims(dr.width, dr.length, e.target.value) })} disabled={pending} className={CELL_NUM} placeholder="0.00" />
+                  </td>
+                  <td>
+                    <input type="number" min={0} step="0.00001" value={dr.cbm} onChange={(e) => patchDraftRow(dr.key, { cbm: e.target.value })} disabled={pending} className={CELL_NUM} placeholder="0.00000" />
+                  </td>
+                  {/* money cells span + the row-delete button */}
+                  <td colSpan={6} className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => removeDraftRow(dr.key)}
+                      disabled={pending}
+                      className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      ✕ ลบแถว
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </div>
+
+        {/* ── FLAG 4 — เพิ่มแถว / ลบแถว (item-entry rows) ──
+             owner "เพิ่มแถว (add row) + ลบแถว (delete row) ท้ายตาราง". ⚠️ row #1
+             = the persistable row (saved by this form). Extra rows are drafts
+             for layout parity with PCS — they need an items[] param on the
+             action to persist (flagged for the lead). */}
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={addDraftRow}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+          >
+            ＋ เพิ่มแถว
+          </button>
+          {draftRows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDraftRows((rows) => rows.slice(0, -1))}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt disabled:opacity-50"
+            >
+              − ลบแถวสุดท้าย
+            </button>
+          )}
+          {draftRows.length > 0 && (
+            <span className="text-[10px] text-amber-700">
+              {draftRows.length} แถวร่าง — ยังไม่บันทึก (ต้องต่อ backend items[] · ดูหมายเหตุ)
+            </span>
+          )}
         </div>
 
         {/* ── Info text (1 บรรทัด) ── */}
@@ -490,8 +703,15 @@ export function AdminForwarderEditForm({
             <p className="font-semibold text-foreground mb-1 font-sans not-italic">ราคานำเข้าจีน-ไทย:</p>
             <p>คิดตามน้ำหนัก {parsed.weight.toFixed(2)} × {(parseFloat(customRateKg) || 0).toFixed(2)} = <strong>฿{preview.priceByKg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
             <p>คิดตามปริมาตร {cbmNum.toFixed(5)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+            {preview.comparisonOn && (
+              <p className="text-[10px] text-amber-700 font-sans not-italic">
+                ค่าเทียบ {preview.threshold.toLocaleString("th-TH")} · KG/คิว = {preview.kgPerCbm.toFixed(2)} → {preview.kgPerCbm > preview.threshold ? "เกินค่าเทียบ คิดตามน้ำหนัก" : "ไม่เกิน คิดตามปริมาตร"}
+              </p>
+            )}
             <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
-              ระบบเลือก คิดตามราคามากสุด → ฿{preview.transport.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              {preview.comparisonOn
+                ? `ค่าเทียบ → คิดตาม${preview.basis === "1" ? "น้ำหนัก" : "ปริมาตร"}`
+                : "ระบบเลือก คิดตามราคามากสุด"} → ฿{preview.transport.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
             <div className="border-t border-border mt-2 pt-2 space-y-0.5">
               <p>รวมค่าใช้จ่าย: <strong className="text-foreground">฿{preview.adders.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
