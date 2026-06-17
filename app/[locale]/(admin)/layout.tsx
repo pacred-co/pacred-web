@@ -5,6 +5,7 @@ import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CostRevealProvider } from "@/components/admin/cost-reveal";
 
 /**
  * Layout for /admin/* routes. Gates access to admin profiles; non-admins
@@ -78,8 +79,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             unaffected — the sidebar stays an off-canvas drawer there. */}
         <CollapseAdminSidebar />
       </div>
+      {/* Cost-reveal blur gate (owner ภูม 2026-06-16) — provider in memory so
+          ต้นทุน is blurred by default + revealed only after the PIN, resetting
+          on a hard refresh / re-login (layout unmount). */}
       <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
-        {children}
+        <CostRevealProvider>{children}</CostRevealProvider>
       </div>
     </div>
   );

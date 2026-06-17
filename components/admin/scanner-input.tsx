@@ -57,8 +57,10 @@ export function ScannerInput({
     inputRef.current?.focus();
   }, []);
 
-  function submit(raw: string) {
-    const v = raw.trim();
+  function submit(raw?: string) {
+    // Read the LIVE DOM value (a fast USB scanner fills the <input> before
+    // React commits `value` state, so the ref is the authoritative latest).
+    const v = (raw ?? inputRef.current?.value ?? value).trim();
     if (!v) return;
     // Legacy GET → /pcs-admin/gateway.php?type=<t>&device=scanner&
     //                                   tracking=<v>
@@ -73,10 +75,15 @@ export function ScannerInput({
   }
 
   function onKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Legacy: key === 13 (Enter) OR 229 (IME). Either submits when
-    // auto-search is ON, or when the user explicitly pressed Enter.
-    if (e.key === "Enter" || e.keyCode === 13 || e.keyCode === 229) {
-      submit(value);
+    // Submit ONLY on a real Enter (the USB scanner's CR terminator).
+    // ⚠️ Do NOT submit on keyCode 229 — see import-scanner-panel.tsx for the
+    // full bug story (ภูม 2026-06-16: scanning "60527103087" navigated with
+    // tracking="6"). 229 = "key handled by IME"; on Windows Chrome + Thai
+    // layout + a fast HID scanner an intermediate char key-up reports 229,
+    // firing submit mid-scan → the GET redirect ran with just the first digit.
+    if (e.nativeEvent.isComposing) return; // never submit mid IME-composition
+    if (e.key === "Enter" || e.keyCode === 13) {
+      submit();
       return;
     }
     if (autoSearch && value.length >= 1) {
@@ -93,7 +100,7 @@ export function ScannerInput({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    submit(value);
+    submit();
   }
 
   return (

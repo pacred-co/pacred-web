@@ -5,6 +5,9 @@ import {
   FREIGHT_OPS_BOARD_COLUMNS, FREIGHT_OPS_BOARD_COLUMN_LABEL,
   type FreightOpsBoardColumn, type FreightOpsStageStatus,
 } from "@/lib/validators/freight-ops";
+import type { ReactNode } from "react";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน/กำไร until the PIN.
+import { CostValue, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 /**
  * W4 — Freight Ops Cockpit (AX JOB) Kanban board.
@@ -134,6 +137,11 @@ export default async function FreightOperationsBoardPage({
       </header>
 
       {/* Stat bar — counts + operator P&L snapshot totals (NOT authoritative). */}
+      {canSeeCost && (
+        <div className="flex justify-end -mb-1">
+          <CostRevealToggle />
+        </div>
+      )}
       <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <StatCard label="งานทั้งหมด" value={String(stats.total)} />
         <StatCard label="ด่วน 🔴" value={String(stats.urgentCount)} tone="urgent" />
@@ -141,10 +149,11 @@ export default async function FreightOperationsBoardPage({
         <StatCard label="รายได้ (snapshot)" value={thb(stats.totalRevenue)} small />
         {canSeeCost && (
           <>
-            <StatCard label="ต้นทุน (snapshot)" value={thb(stats.totalCost)} small />
+            {/* Blur gate (owner ภูม 2026-06-16) — ต้นทุน/กำไร blurred until PIN. */}
+            <StatCard label="ต้นทุน (snapshot)" value={<CostValue>{thb(stats.totalCost)}</CostValue>} small />
             <StatCard
               label="กำไร (snapshot)"
-              value={thb(stats.totalProfit)}
+              value={<CostValue>{thb(stats.totalProfit)}</CostValue>}
               small
               tone={stats.totalProfit >= 0 ? "ok" : "urgent"}
             />
@@ -252,7 +261,7 @@ function StatCard({
   label, value, small, tone,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   small?: boolean;
   tone?: "ok" | "urgent";
 }) {
@@ -301,7 +310,7 @@ function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean 
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted tabular-nums">
           <span>กำไร snap:</span>
           <span className={card.profitSnapshot != null && card.profitSnapshot < 0 ? "text-red-600 font-semibold" : "text-green-700 font-semibold"}>
-            {thb(card.profitSnapshot)}
+            <CostValue>{thb(card.profitSnapshot)}</CostValue>
           </span>
         </div>
       )}

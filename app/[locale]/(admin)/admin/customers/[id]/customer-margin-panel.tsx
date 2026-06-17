@@ -19,6 +19,8 @@ import type {
   CustomerMarginBucket,
 } from "@/actions/admin/customer-margin";
 import { TrendingUp, AlertTriangle, CircleAlert, BarChart3 } from "lucide-react";
+// Cost-reveal blur gate (owner ภูม 2026-06-16) — blur margin/ต้นทุน until the PIN.
+import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 
 const BUCKET_LABEL: Record<CustomerMarginBucket, string> = {
   "negative": "ขาดทุน",
@@ -80,6 +82,7 @@ export function CustomerMarginPanel({
           </span>
         </h3>
         <div className="flex items-center gap-2">
+          <CostRevealToggle />
           <Link
             href={`/admin/forwarders?q=${encodeURIComponent(userid)}`}
             className="text-[10px] text-primary-600 hover:underline"
@@ -95,6 +98,8 @@ export function CustomerMarginPanel({
         </div>
       </div>
 
+      {/* Blur gate (owner ภูม 2026-06-16) — margin/ต้นทุน blurred until PIN. */}
+      <CostRevealRegion className="space-y-4">
       {totalDelivered === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs text-muted">
           ยังไม่เคยมีตู้ส่งสำเร็จ (fstatus=7) ของลูกค้านี้
@@ -213,6 +218,7 @@ export function CustomerMarginPanel({
           </div>
         </>
       )}
+      </CostRevealRegion>
     </section>
   );
 }
