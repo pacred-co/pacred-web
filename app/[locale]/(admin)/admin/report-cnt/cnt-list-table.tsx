@@ -77,6 +77,7 @@ type SortKey =
   | "diffDay"          // = waitDays (waiting tab) or transitDays (succeed tab)
   | "fdatestatus4"
   | "trackCount"
+  | "completenessExpected" // CTNS — total cartons in the container (Σ famount)
   | "volumeSum"
   | "weightSum"
   | "costSum"
@@ -257,6 +258,7 @@ export function CntListTable({
   // (audit 2026-06-18 defensive decoupling; sort doesn't change membership).
   const totals = useMemo(() => {
     let trackCount = 0;
+    let ctnsSum = 0;
     let volumeSum = 0;
     let weightSum = 0;
     let costSum = 0;
@@ -266,6 +268,7 @@ export function CntListTable({
     let dayCount = 0;
     for (const r of rowsWithDiff) {
       trackCount += r.trackCount;
+      ctnsSum    += r.completenessExpected; // CTNS — total cartons (Σ famount)
       volumeSum  += r.volumeSum;
       weightSum  += r.weightSum;
       costSum    += r.costSum;
@@ -277,7 +280,7 @@ export function CntListTable({
       }
     }
     const avgDay = dayCount > 0 ? Math.round(dayTotal / dayCount) : 0;
-    return { trackCount, volumeSum, weightSum, costSum, priceSum, profitSum, avgDay };
+    return { trackCount, ctnsSum, volumeSum, weightSum, costSum, priceSum, profitSum, avgDay };
   }, [rowsWithDiff]);
 
   function toggle(code: string) {
@@ -342,6 +345,7 @@ export function CntListTable({
               <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนแทรคกิ้ง</SortableTH>
+              <SortableTH sortKeyValue="completenessExpected" align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนกล่อง (CTNS)</SortableTH>
               <SortableTH sortKeyValue="volumeSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ปริมาตร</SortableTH>
               <SortableTH sortKeyValue="weightSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>น้ำหนัก</SortableTH>
               <SortableTH sortKeyValue="completenessPct"     align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ยิงครบ</SortableTH>
@@ -362,6 +366,7 @@ export function CntListTable({
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
+              <td className="px-2 py-2 text-right">{totals.ctnsSum.toLocaleString()}</td>
               <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(2)}</td>
               <td className="px-2 py-2 text-right">{totals.weightSum.toFixed(2)}</td>
               <td className="px-2 py-2"></td>
@@ -416,6 +421,7 @@ export function CntListTable({
                   </td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatestatus4)}</td>
                   <td className="px-2 py-2 text-right">{r.trackCount.toLocaleString()}</td>
+                  <td className="px-2 py-2 text-right">{r.completenessExpected.toLocaleString()}</td>
                   <td className="px-2 py-2 text-right">{r.volumeSum.toFixed(2)}</td>
                   <td className="px-2 py-2 text-right">{r.weightSum.toFixed(2)}</td>
                   <td className="px-2 py-2 text-center">
