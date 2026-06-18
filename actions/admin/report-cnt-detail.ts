@@ -32,6 +32,11 @@ import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
+import { costBasisMode } from "@/lib/forwarder/resolve-cost";
+
+// Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
+// cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
+const VALID_WH = new Set<string>(["1", "2", "3", "4", "5", "6", "7", "8"]);
 import {
   evaluateReportCntAddCheckStatus,
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
@@ -208,26 +213,20 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
       if (insErr) return { ok: false, error: insErr.message };
     }
 
-    // ── (b) Normalise fRefPrice across every row in the container ──
-    // Wave 16 Follow-up C: container-wide mode is stored implicitly by
-    // forcing each row's fRefPrice to match. Legacy comment from migration
-    // 0081: fRefPrice '1' = น้ำหนัก, '2' = ปริมาตร (badge code treats
-    // '' / null same as '2'). We always write the explicit value here.
-    const refPriceValue = mode === "weight" ? "1" : "2";
-    const { error: refErr } = await admin
-      .from("tb_forwarder")
-      .update({ frefprice: refPriceValue })
-      .eq("fcabinetnumber", fCabinetNumber);
-    if (refErr) return { ok: false, error: refErr.message };
-
-    // ── (c) Bulk-update fcosttotalprice per row ──
-    // Legacy looped every tb_forwarder row and called calPriceForwarderCost();
-    // for the CBM warehouses this simplifies to rate × CBM. Pacred extends:
-    // when mode="weight", cost = rate × fWeight (admin's chosen dimension
-    // applies to the whole container).
+    // ── (b)+(c) Bulk-update fcosttotalprice + frefprice per row, by CARRIER basis ──
+    // 🔴 Cost basis is determined by the CARRIER, NOT the admin's modal toggle
+    //    (owner 2026-06-18: "MOMO เก็บเราเป็นคิว" — MOMO + every CBM-charged carrier
+    //    MUST cost by CBM; only Sang(1)/MX(4) cost by weight — costBasisMode()).
+    //    Bug it fixes: using the modal `mode` let a MOMO container be weight-rated
+    //    → cost = weight × rate (e.g. 4.10 kg × 2,500 = ฿10,250 for a 0.0022-คิว
+    //    parcel that should cost ฿5.5). We force the carrier basis per row so this
+    //    can't recur; frefprice ('1'=น้ำหนัก '2'=ปริมาตร) follows the same basis.
+    //    The modal `mode` is honoured ONLY when the warehouse digit is unknown
+    //    (no carrier signal). Mirrors the reset path (b) which already uses
+    //    costBasisMode — so the two recompute paths can no longer diverge.
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fweight, fproductstype")
+      .select("id, fvolume, fweight, fproductstype, fwarehousename")
       .eq("fcabinetnumber", fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -239,13 +238,15 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     };
 
     let updated = 0;
-    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null }>) {
+    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null; fwarehousename: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
-      const dim = mode === "weight" ? r.fweight : r.fvolume;
+      const wh = r.fwarehousename ?? "";
+      const basis = VALID_WH.has(wh) ? costBasisMode(wh as WarehouseDigit) : mode; // carrier wins; unknown wh → modal default
+      const dim = basis === "weight" ? r.fweight : r.fvolume;
       const cost = calcRowCost(dim, rate);
       const { error: updErr } = await admin
         .from("tb_forwarder")
-        .update({ fcosttotalprice: cost })
+        .update({ fcosttotalprice: cost, frefprice: basis === "weight" ? "1" : "2" })
         .eq("id", r.id);
       if (!updErr) updated += 1;
     }
