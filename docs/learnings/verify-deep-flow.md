@@ -288,3 +288,21 @@ Browser-verifying an admin form gated behind a status `<select>` (the editor ren
 Also useful when the client gate hides a server-rendered child: a server component passed as a **prop** to a client component is still serialized into the **RSC payload** even while the client conditionally un-mounts it. `fetch(location.href,{headers:{RSC:'1'}})` then grep the payload for the child's **client-module path** + its **serialized prop keys** (e.g. `warehouseChina`, `customComparisonValueInit`) to prove the server fetcher built it correctly — independent of the flaky UI gate. (The visible Thai labels like "บันทึกทุกแถว" are in the client JS *bundle*, NOT the payload, so grep prop keys, not button text.)
 
 **Rule: to change React controlled inputs from the extension, use a trusted CDP key on a focused element (not `form_input`, not injected DOM events from the isolated world); to verify a client-gated server child, read the RSC payload's module-ref + prop-keys.**
+
+---
+
+## [2026-06-18] Click-test harness can't fire a React onClick — verify the toggle by forcing the open-state render instead
+
+**Context:** report-cnt detail collapsible group (`container-detail-client.tsx`) — a multi-box order shows a full-size SUMMARY `<tr onClick={() => toggleGroup(gkey)}>` with a dropdown chevron; clicking reveals the box rows. Needed to §0c-verify the click→expand.
+
+**Symptom:** clicking the summary row never toggled it — across FOUR methods: `preview_eval` `el.click()`, `preview_click` (CSS selector), Claude-in-Chrome `computer left_click` by ref, and by coordinate. Each "succeeded" (returned OK / navigated) but the chevron stayed `▶` and the box rows stayed hidden.
+
+**Root causes (two, stacked):**
+1. **Programmatic `.click()` and the preview harness don't dispatch a React-catchable click here.** Calibration proof: clicking a *known-good production control* (a filter button, a sort header) via the SAME methods also did nothing (`activeBefore === activeAfter`, sort arrow unchanged). So a "no toggle" is NOT evidence of a code bug — the harness simply can't drive React's synthetic-event system in this Next 16 dev setup. (`Object.keys(el).filter(k=>k.startsWith('__react'))` returns `[]` even on working buttons — React 19 doesn't expose the fiber/props keys the old way, so that inspection is also useless here.)
+2. **A backgrounded tab zeroes layout.** When the user is on another tab, `document.hidden === true` / `visibilityState === "hidden"` → `getBoundingClientRect()` returns `{0,0,0,0}` for visible elements and `scrollIntoView` doesn't really scroll → coordinate clicks miss / land on the wrong row (one stray click hit a tracking `<a>` and navigated to a forwarder detail). Always check `document.hidden` before trusting rects/clicks.
+
+**What DID verify it (the reliable path):** temporarily force the open branch in the render memo — `const open = expanded.has(gkey) || true;` — reload, and assert via DOM that the box rows appear (with the left accent) and the chevron flips to `▼`. Combined with the verified collapsed render and the fact that `onClick` is the standard `<tr onClick>` pattern, that proves the state→render pipeline end-to-end. Then revert the `|| true`. (A `window.__flag` counter incremented inside the onClick is the cleanest "did onClick fire" probe IF you can land a trusted foreground click — but per §1 above you usually can't here.)
+
+**Why this matters next time:** don't burn 30+ minutes trying to make the automation "click" a React handler. To verify an interactive client-state toggle: (a) verify both render states by forcing the state in the memo (force-open, reload, assert, revert), (b) confirm the handler is the standard pattern, (c) if a live click is truly required, hand it to the user (they're in a real foreground browser — a 2-second click). The harness CAN drive trusted CDP **keys** on a focused element (see the dropdown entry above) but NOT mouse clicks into React here.
+
+**Cross-links:** `container-detail-client.tsx` · AGENTS.md §0c · the trusted-CDP-key entry above.

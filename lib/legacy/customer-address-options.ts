@@ -189,3 +189,32 @@ export async function loadCustomerPrimaryAddress(
     note:        pick.addressnote ?? "",
   };
 }
+
+/**
+ * A นิติบุคคล (juristic) member's registered COMPANY address — a single free-form
+ * string (`tb_corporate.corporateaddress`), NOT the structured tb_address fields.
+ * Returned only when the address line is non-empty. Used as the LAST delivery
+ * fallback (ภูม 2026-06-18): a juristic customer who never saved a tb_address row
+ * still entered a company address at signup — show that instead of the warehouse.
+ */
+export type CustomerCorporateAddress = { name: string; addressLine: string };
+
+export async function loadJuristicCorporateAddress(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: SupabaseClient<any, any, any>,
+  memberCode: string,
+): Promise<CustomerCorporateAddress | null> {
+  if (!memberCode) return null;
+  const { data, error } = await admin
+    .from("tb_corporate")
+    .select("corporatename, corporateaddress")
+    .eq("userid", memberCode)
+    .maybeSingle<{ corporatename: string | null; corporateaddress: string | null }>();
+  if (error) {
+    console.error(`[customer-corporate-address tb_corporate] memberCode=${memberCode}`, { code: error.code, message: error.message });
+    return null;
+  }
+  const addressLine = (data?.corporateaddress ?? "").trim();
+  if (!addressLine) return null;
+  return { name: (data?.corporatename ?? "").trim(), addressLine };
+}
