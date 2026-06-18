@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
@@ -625,6 +626,13 @@ export async function adminBulkUpdateForwarderTbStatus(
       // Empty-string from the form means "explicitly clear" (legacy NOT NULL
       // varchar columns default to "" / "-"); undefined means "don't touch".
       ...(cabinet_number !== undefined ? { fcabinetnumber: cabinet_number } : {}),
+      // Auto-derive transport mode from the cabinet NAME when assigning one
+      // (GZS=เรือ · GZE/EK=รถ · GZA=อากาศ · owner 2026-06-19) so ftransporttype —
+      // which the cost-basis (car vs ship) + the list filter read — is always
+      // correct without hand-entry. Only when the name carries a mode token.
+      ...(cabinet_number !== undefined && transportModeFromCabinetName(cabinet_number)
+        ? { ftransporttype: transportModeFromCabinetName(cabinet_number) }
+        : {}),
       ...(tracking_th    !== undefined ? { ftrackingth: tracking_th || "-" } : {}),
       ...(fnote          !== undefined ? { fnote: fnote || null }            : {}),
       // B4 · backlog #259 (migration 0150 · 2026-06-08): only persist the

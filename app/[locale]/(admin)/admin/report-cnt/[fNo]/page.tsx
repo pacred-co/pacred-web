@@ -35,6 +35,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
@@ -184,7 +185,11 @@ export default async function AdminReportCntDetailPage({
   const firstRow = cntRows[0] as CntRow;
   const fWarehouseName = String(firstRow.fwarehousename ?? "");
   const fWarehouseChina = String(firstRow.fwarehousechina ?? "");
-  const fTransportType = String(firstRow.ftransporttype ?? "1");
+  // Transport mode is decoded from the cabinet NAME (GZS=เรือ · GZE/EK=รถ · GZA=อากาศ),
+  // which is authoritative — the stored ftransporttype can be wrong (owner
+  // 2026-06-19 "อย่าหลงเชื่อข้อมูลผิดๆ"). Falls back to the stored value when the
+  // name has no mode token.
+  const fTransportType = resolveTransportMode(fNo, firstRow.ftransporttype);
 
   // ── 1b) V-D3 — carrier physical container number ──
   // The Pacred cabinet code (fcabinetnumber = GZS260525-2) is what staff and

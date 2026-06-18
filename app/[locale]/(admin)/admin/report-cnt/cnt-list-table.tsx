@@ -28,6 +28,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
 import { fstatusBadge, listRowTint } from "@/lib/admin/forwarder-status";
+import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { ContainerCompleteness } from "@/lib/warehouse/container-completeness";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -422,7 +423,7 @@ export function CntListTable({
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
-                  <td className="px-2 py-2 text-center">{transportLabel[r.ftransporttype] ?? r.ftransporttype}</td>
+                  <td className="px-2 py-2 text-center">{transportLabel[resolveTransportMode(r.fcabinetnumber, r.ftransporttype)] ?? r.ftransporttype}</td>
                   <td className="px-2 py-2 text-right">
                     {r.diffDay == null ? "-" : `${r.diffDay} วัน`}
                   </td>

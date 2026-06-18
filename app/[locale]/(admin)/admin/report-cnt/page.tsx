@@ -46,6 +46,7 @@ import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
+import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import {
   getContainerCompletenessBatch,
   type ContainerCompleteness,
@@ -345,7 +346,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     return {
       "หมายเลขตู้":        g.fcabinetnumber,
       "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
-      "ขนส่ง":             TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype,
+      "ขนส่ง":             TRANSPORT_LABEL[resolveTransportMode(g.fcabinetnumber, g.ftransporttype)] ?? g.ftransporttype,
       "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
       "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
       "จำนวนแทร็คกิ้ง":    g.trackCount,

@@ -22,8 +22,8 @@ const q = (s, p) => c.query(s, p).then((r) => r.rows);
 function expected(name) {
   const n = (name ?? "").toUpperCase();
   if (n.includes("GZS") || n.includes("SEA")) return "2";
-  if (n.includes("GZE")) return "1";
-  if (n.includes("EK") || n.includes("AIR")) return "3";
+  if (n.includes("GZA") || n.includes("AIR")) return "3";
+  if (n.includes("GZE") || n.includes("EK")) return "1";
   return null;
 }
 const rows = await q(
