@@ -6,7 +6,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
 // the customer's saved ที่อยู่หลัก (profile) instead of showing "รับที่โกดัง".
-import { loadCustomerPrimaryAddress } from "@/lib/legacy/customer-address-options";
+import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress } from "@/lib/legacy/customer-address-options";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -385,6 +385,11 @@ async function tryRenderTbForwarder(
     note:        r.faddressnote ?? "",
   };
   let deliveryAddrFromProfile = false;
+  // นิติบุคคล fallback (ภูม 2026-06-18): a juristic customer who never saved a
+  // structured tb_address still has a company address in tb_corporate (a single
+  // string). When the tb_address fallback finds nothing, show that. Holds
+  // {name, addressLine} so the render switches to the free-form layout.
+  let deliveryAddrCorp: { name: string; addressLine: string } | null = null;
   if (!isSelfPickup && faddrIsWarehouseDefault) {
     const primary = await loadCustomerPrimaryAddress(admin, r.userid);
     if (primary && (primary.no.trim() || primary.province.trim())) {
@@ -401,6 +406,9 @@ async function tryRenderTbForwarder(
         note:        primary.note,
       };
       deliveryAddrFromProfile = true;
+    } else {
+      // No saved tb_address → try the registered company address (juristic).
+      deliveryAddrCorp = await loadJuristicCorporateAddress(admin, r.userid);
     }
   }
 
@@ -784,15 +792,33 @@ async function tryRenderTbForwarder(
                   ที่อยู่หลักของลูกค้า
                 </span>
               )}
+              {deliveryAddrCorp && (
+                <span className="ml-1 inline-block rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300 text-[10px] px-1.5 py-0.5 align-middle">
+                  ที่อยู่บริษัท (นิติบุคคล)
+                </span>
+              )}
               <div className="mt-1 leading-relaxed">
-                {deliveryAddr.name} {deliveryAddr.lastname}<br />
-                {deliveryAddr.no} {deliveryAddr.subdistrict ? `ต.${deliveryAddr.subdistrict}` : ""} {deliveryAddr.district ? `อ.${deliveryAddr.district}` : ""} {deliveryAddr.province ? `จ.${deliveryAddr.province}` : ""} {deliveryAddr.zipcode}
-                {(deliveryAddr.tel || deliveryAddr.tel2) && (<><br />โทร. {deliveryAddr.tel || "—"}{deliveryAddr.tel2 ? `, ${deliveryAddr.tel2}` : ""}</>)}
-                {deliveryAddr.note && (<><br /><span className="text-muted">📝 {deliveryAddr.note}</span></>)}
-                {deliveryAddrFromProfile && (
-                  <><br /><span className="text-[10px] text-amber-600">
-                    ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ดึงที่อยู่หลักจากโปรไฟล์ลูกค้ามาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
-                  </span></>
+                {deliveryAddrCorp ? (
+                  <>
+                    {deliveryAddrCorp.name}<br />
+                    {deliveryAddrCorp.addressLine}
+                    {u?.userTel && (<><br />โทร. {u.userTel}</>)}
+                    <br /><span className="text-[10px] text-amber-600">
+                      ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ลูกค้าเป็นนิติบุคคลและยังไม่ได้บันทึกที่อยู่จัดส่ง จึงดึงที่อยู่บริษัทมาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {deliveryAddr.name} {deliveryAddr.lastname}<br />
+                    {deliveryAddr.no} {deliveryAddr.subdistrict ? `ต.${deliveryAddr.subdistrict}` : ""} {deliveryAddr.district ? `อ.${deliveryAddr.district}` : ""} {deliveryAddr.province ? `จ.${deliveryAddr.province}` : ""} {deliveryAddr.zipcode}
+                    {(deliveryAddr.tel || deliveryAddr.tel2) && (<><br />โทร. {deliveryAddr.tel || "—"}{deliveryAddr.tel2 ? `, ${deliveryAddr.tel2}` : ""}</>)}
+                    {deliveryAddr.note && (<><br /><span className="text-muted">📝 {deliveryAddr.note}</span></>)}
+                    {deliveryAddrFromProfile && (
+                      <><br /><span className="text-[10px] text-amber-600">
+                        ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ดึงที่อยู่หลักจากโปรไฟล์ลูกค้ามาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
+                      </span></>
+                    )}
+                  </>
                 )}
               </div>
             </div>

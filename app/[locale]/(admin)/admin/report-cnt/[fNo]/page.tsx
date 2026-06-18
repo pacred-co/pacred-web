@@ -354,6 +354,34 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
+  // ── 9b) tb_forwarder_item.productname — per-box product detail (FIX 2) ──
+  // tb_forwarder.fdetail is "" for MOMO-committed rows (commit-momo-row-core.ts
+  // writes fdetail:"" — MOMO's import_track raw carries a product CATEGORY
+  // `type` [→ fproductstype] but NO free-text product name). Manual/shop-spawned
+  // forwarders DO get item rows whose `productname` is the real description. So
+  // when fdetail is empty we surface the item productname(s) as the detail. We
+  // NEVER fabricate detail — if neither exists the cell falls back to
+  // tracking + product-type (resolved in the row map below), §0e-safe (read-only).
+  const itemNameByFid = new Map<number, string>();
+  if (fIds.length > 0) {
+    const { data: items, error: itemsErr } = await admin
+      .from("tb_forwarder_item")
+      .select("fid, productname")
+      .in("fid", fIds);
+    if (itemsErr) {
+      console.error(`[tb_forwarder_item productname] failed`, { code: itemsErr.code, message: itemsErr.message });
+    }
+    for (const it of (items ?? []) as Array<{ fid: number; productname: string | null }>) {
+      const name = (it.productname ?? "").trim();
+      if (!name) continue;
+      const fid = Number(it.fid);
+      const prev = itemNameByFid.get(fid);
+      // Multiple item rows under one forwarder → join unique names (deduped).
+      if (!prev) itemNameByFid.set(fid, name);
+      else if (!prev.split(" · ").includes(name)) itemNameByFid.set(fid, `${prev} · ${name}`);
+    }
+  }
+
   // ── 10) Build the rows + totals ──
   const detailRows: DetailRow[] = cntRows.map((r) => {
     const u = userMap.get(String(r.userid));
@@ -386,6 +414,14 @@ export default async function AdminReportCntDetailPage({
       (fCostTotalPrice + fShippingService + priceCrate + fTransportPriceCHNTHB + fTransportPrice + fUserCompany1Per);
 
     const check = checkMap.get(Number(r.id));
+    // FIX 2 — resolve the product-detail to show. Priority:
+    //   1. fdetail (the admin-keyed/legacy detail)            ← preferred
+    //   2. tb_forwarder_item.productname(s) for this fid       ← manual/shop rows
+    //   3. null → the cell falls back to tracking + ประเภท     ← MOMO rows (no name)
+    // We never fabricate a name; (3) shows real identifiers so staff aren't left
+    // with a bare "-".
+    const fdetailTrim = (r.fdetail ?? "").trim();
+    const detailDisplay = fdetailTrim || itemNameByFid.get(Number(r.id)) || null;
     return {
       id: Number(r.id),
       fidorco: r.fidorco,
@@ -394,6 +430,7 @@ export default async function AdminReportCntDetailPage({
       username: u?.username ?? null,
       usercompany: typeof r.fusercompany === "string" ? r.fusercompany : r.fusercompany == null ? null : String(r.fusercompany),
       fdetail: r.fdetail,
+      detailDisplay,
       fcover: r.fcover,
       famount: Number(r.famount ?? 0) || null,
       // V-D4 — boxes actually received at TH warehouse (sum of fi2amount).

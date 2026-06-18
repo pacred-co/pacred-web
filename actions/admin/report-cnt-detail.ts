@@ -32,6 +32,11 @@ import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
+import { costBasisMode } from "@/lib/forwarder/resolve-cost";
+
+// Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
+// cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
+const VALID_WH = new Set<string>(["1", "2", "3", "4", "5", "6", "7", "8"]);
 import {
   evaluateReportCntAddCheckStatus,
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
@@ -208,26 +213,20 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
       if (insErr) return { ok: false, error: insErr.message };
     }
 
-    // ── (b) Normalise fRefPrice across every row in the container ──
-    // Wave 16 Follow-up C: container-wide mode is stored implicitly by
-    // forcing each row's fRefPrice to match. Legacy comment from migration
-    // 0081: fRefPrice '1' = น้ำหนัก, '2' = ปริมาตร (badge code treats
-    // '' / null same as '2'). We always write the explicit value here.
-    const refPriceValue = mode === "weight" ? "1" : "2";
-    const { error: refErr } = await admin
-      .from("tb_forwarder")
-      .update({ frefprice: refPriceValue })
-      .eq("fcabinetnumber", fCabinetNumber);
-    if (refErr) return { ok: false, error: refErr.message };
-
-    // ── (c) Bulk-update fcosttotalprice per row ──
-    // Legacy looped every tb_forwarder row and called calPriceForwarderCost();
-    // for the CBM warehouses this simplifies to rate × CBM. Pacred extends:
-    // when mode="weight", cost = rate × fWeight (admin's chosen dimension
-    // applies to the whole container).
+    // ── (b)+(c) Bulk-update fcosttotalprice + frefprice per row, by CARRIER basis ──
+    // 🔴 Cost basis is determined by the CARRIER, NOT the admin's modal toggle
+    //    (owner 2026-06-18: "MOMO เก็บเราเป็นคิว" — MOMO + every CBM-charged carrier
+    //    MUST cost by CBM; only Sang(1)/MX(4) cost by weight — costBasisMode()).
+    //    Bug it fixes: using the modal `mode` let a MOMO container be weight-rated
+    //    → cost = weight × rate (e.g. 4.10 kg × 2,500 = ฿10,250 for a 0.0022-คิว
+    //    parcel that should cost ฿5.5). We force the carrier basis per row so this
+    //    can't recur; frefprice ('1'=น้ำหนัก '2'=ปริมาตร) follows the same basis.
+    //    The modal `mode` is honoured ONLY when the warehouse digit is unknown
+    //    (no carrier signal). Mirrors the reset path (b) which already uses
+    //    costBasisMode — so the two recompute paths can no longer diverge.
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fweight, fproductstype")
+      .select("id, fvolume, fweight, fproductstype, fwarehousename")
       .eq("fcabinetnumber", fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -239,13 +238,15 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     };
 
     let updated = 0;
-    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null }>) {
+    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null; fwarehousename: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
-      const dim = mode === "weight" ? r.fweight : r.fvolume;
+      const wh = r.fwarehousename ?? "";
+      const basis = VALID_WH.has(wh) ? costBasisMode(wh as WarehouseDigit) : mode; // carrier wins; unknown wh → modal default
+      const dim = basis === "weight" ? r.fweight : r.fvolume;
       const cost = calcRowCost(dim, rate);
       const { error: updErr } = await admin
         .from("tb_forwarder")
-        .update({ fcosttotalprice: cost })
+        .update({ fcosttotalprice: cost, frefprice: basis === "weight" ? "1" : "2" })
         .eq("id", r.id);
       if (!updErr) updated += 1;
     }
@@ -726,4 +727,104 @@ export async function adminReportCntBillToCustomer(
       return { ok: true, data: { fID, pricePay, alreadyBilled: false } };
     },
   );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// adminReportCntBillGroupToCustomer — group bill (FIX 3 · 2026-06-18 owner)
+//   Bill an ENTIRE -N sibling group ("ซอยตู้") in ONE motion. A MOMO carrier
+//   splits one customer shipment into -N/-N/M sub-tracking rows, each a
+//   separate tb_forwarder row; billing them per-row makes the customer owe
+//   per-box. This action loops the PROVEN per-row money writer
+//   `adminReportCntBillToCustomer` over every member fID — there is NO new
+//   money path; each member runs through the same 4→5 flip + promo recompute
+//   + idempotency guard + status-log + notify.
+//
+// Customer-side aggregation: after every member flips to fstatus 5 (รอชำระเงิน)
+// they ALL surface in the customer's forwarder list, and the existing multi-bill
+// pay modal (`ForwarderPayModal` · legacy payForwarder([ids])) lets the customer
+// tick + pay the whole group in one payment that sums by user. So the customer
+// owes ONE combined amount for the group with no further change needed.
+//
+// Validation + auth + reachability mirror the per-row action. The fIDs are
+// pre-resolved client-side from the group's billable members (fstatus 4); the
+// server re-runs the per-row gate on each, so an ineligible/stale row is a safe
+// no-op or refusal, never a wrong bill.
+// ═════════════════════════════════════════════════════════════════════
+
+const billGroupSchema = z.object({
+  fIDs: z
+    .array(z.union([z.string(), z.number()]).transform((v) => Number(v)))
+    .min(1, { message: "กรุณาเลือกอย่างน้อย 1 รายการ" })
+    .max(500, { message: "เลือกได้สูงสุด 500 รายการต่อกลุ่ม" })
+    .refine((arr) => arr.every((n) => Number.isFinite(n) && n > 0), {
+      message: "fID ไม่ถูกต้อง",
+    }),
+});
+export type BillGroupInput = z.input<typeof billGroupSchema>;
+
+export async function adminReportCntBillGroupToCustomer(
+  input: BillGroupInput,
+): Promise<
+  AdminActionResult<{
+    billed: number;
+    alreadyBilled: number;
+    failed: number;
+    totalPricePay: number;
+    errors: Array<{ fID: number; error: string }>;
+  }>
+> {
+  const parsed = billGroupSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  // De-dup defensively (a double-tick shouldn't bill the same row twice — though
+  // the per-row idempotency below already no-ops fstatus≥5).
+  const fIDs = Array.from(new Set(parsed.data.fIDs));
+
+  // Role-gate ONCE here (the per-row action also gates, but gating up front means
+  // a non-money role is refused before any row is touched). The loop then reuses
+  // the per-row writer — the single money writer for this transition.
+  return withAdmin<{
+    billed: number;
+    alreadyBilled: number;
+    failed: number;
+    totalPricePay: number;
+    errors: Array<{ fID: number; error: string }>;
+  }>(["super", "ops", "accounting"], async ({ adminId }) => {
+    let billed = 0;
+    let alreadyBilled = 0;
+    let failed = 0;
+    let totalPricePay = 0;
+    const errors: Array<{ fID: number; error: string }> = [];
+
+    // Sequential (not Promise.all): each member is an independent 4→5 flip with
+    // its own idempotency guard; serial keeps the writes ordered + avoids
+    // hammering the DB with N concurrent updates for a large split.
+    for (const fID of fIDs) {
+      const res = await adminReportCntBillToCustomer({ fID });
+      if (!res.ok) {
+        failed += 1;
+        errors.push({ fID, error: res.error });
+        continue;
+      }
+      if (res.data?.alreadyBilled) {
+        alreadyBilled += 1;
+      } else {
+        billed += 1;
+      }
+      totalPricePay += res.data?.pricePay ?? 0;
+    }
+
+    await logAdminAction(adminId, "report_cnt.bill_group_to_customer", "tb_forwarder", fIDs.join(","), {
+      requested:      fIDs.length,
+      billed,
+      already_billed: alreadyBilled,
+      failed,
+      total_price_pay: totalPricePay,
+    });
+
+    revalidatePath("/admin/report-cnt", "layout");
+    revalidatePath("/admin/forwarders");
+    return { ok: true, data: { billed, alreadyBilled, failed, totalPricePay, errors } };
+  });
 }

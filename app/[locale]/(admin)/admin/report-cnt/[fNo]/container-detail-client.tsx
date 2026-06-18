@@ -24,7 +24,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
@@ -157,6 +157,9 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // ภูม 2026-06-18 — which multi-tracking orders are expanded (collapsed by
+  // default; the summary row carries a dropdown chevron to reveal the boxes).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   const filtered = useMemo(() => {
@@ -183,13 +186,12 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
   }
 
   // ── ภูม 2026-06-18: group sibling trackings (a split parcel shares
-  // (baseTracking, userid) — e.g. 1779955936 / -2 / -3 …) so an order's boxes
-  // cluster together for easy verification, MIRRORING the รายการสินค้า items
-  // table. We KEEP every box row (ภูม chose "จัดกลุ่ม ยังเห็นทุกกล่อง"): a
-  // multi-box group gets a header strip + a left accent on each member; a
-  // single-box order renders plain (no clutter). Grouping is stable over the
-  // current sort — buckets appear in first-appearance order of `filtered`, so
-  // a column sort still orders the groups by their best-sorted member.
+  // (baseTracking, userid) — e.g. 1779955936 / -2 / -3 …) into ONE collapsible
+  // order. A multi-box order shows a full-size SUMMARY row (the order rolled up
+  // — Σ box/CBM/weight/money, one status/carrier when uniform) with a dropdown
+  // chevron; clicking it reveals the individual box rows. A single-box order
+  // renders plain. Grouping is stable over the active column sort (buckets keep
+  // the first-appearance order of `filtered`).
   const groups = useMemo(() => {
     const map = new Map<string, DetailRow[]>();
     const order: string[] = [];
@@ -203,28 +205,54 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
     return order.map((k) => map.get(k)!);
   }, [filtered]);
 
-  // Total column count — for the group-header colSpan (matches the empty-state
-  // colSpan: 22 base cols + the select col + the 3 money cols).
+  function toggleGroup(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Tick / untick every add-check-ELIGIBLE box of one order in one go (the
+  // summary-row checkbox) — mirrors the per-row gate so a collapsed order is
+  // still selectable without expanding it.
+  function toggleGroupSelect(ids: number[]) {
+    if (ids.length === 0) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allOn = ids.every((id) => next.has(id));
+      if (allOn) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  // Total column count — for the empty-state colSpan (22 base cols + the select
+  // col + the 3 money cols).
   const totalCols = 22 + (canBulkCheck && !cabinetIsPaid ? 1 : 0) + (showMoney ? 3 : 0);
 
-  // Flatten groups → a render list that interleaves a group-header strip
-  // before each multi-box order, then its member rows. A single-box order
-  // renders plain (no header, no accent) to keep non-split orders uncluttered.
+  // Render list: a multi-box order emits a SUMMARY row (always) + its box rows
+  // ONLY when expanded; a single-box order emits one plain row. Recomputes when
+  // a group is toggled (depends on `expanded`).
   const renderItems = useMemo(() => {
     const items: Array<
-      | { kind: "header"; group: DetailRow[] }
+      | { kind: "summary"; group: DetailRow[]; gkey: string; open: boolean }
       | { kind: "row"; r: DetailRow; member: boolean }
     > = [];
     for (const g of groups) {
       if (g.length > 1) {
-        items.push({ kind: "header", group: g });
-        for (const r of g) items.push({ kind: "row", r, member: true });
+        const base = baseTracking(g[0].ftrackingchn);
+        const gkey = base ? `${base}|${g[0].userid}` : `__solo_${g[0].id}`;
+        const open = expanded.has(gkey);
+        items.push({ kind: "summary", group: g, gkey, open });
+        if (open) for (const r of g) items.push({ kind: "row", r, member: true });
       } else {
         items.push({ kind: "row", r: g[0], member: false });
       }
     }
     return items;
-  }, [groups]);
+  }, [groups, expanded]);
 
   // Summary totals for the orange-red gradient band (legacy report-cnt.php L1653-1684 + L1888 totals).
   const summary = useMemo(() => {
@@ -307,6 +335,140 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
       setSelected(new Set());
       router.refresh();
     });
+  }
+
+  // ── ภูม 2026-06-18: the SUMMARY row of a multi-box order — a normal full-size
+  // table row showing the order rolled up (Σ box/CBM/weight/all money columns;
+  // one status/carrier/type when uniform, else a "หลาย…" marker) with a dropdown
+  // chevron to reveal the box rows. The whole row toggles expand on click; the
+  // checkbox + customer link stop-propagate so they don't also toggle.
+  function renderSummaryRow(g: DetailRow[], gkey: string, isOpen: boolean) {
+    const a = aggregateGroup(g);
+    const base = baseTracking(g[0].ftrackingchn) ?? g[0].ftrackingchn ?? "-";
+    const eligibleIds = g
+      .filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus))
+      .map((r) => r.id);
+    const groupSel = eligibleIds.length > 0 && eligibleIds.every((id) => selected.has(id));
+    const statusBadge = a.status != null ? fstatusBadge(a.status) : null;
+    return (
+      <tr
+        key={`sum-${gkey}-${g[0].id}`}
+        onClick={() => toggleGroup(gkey)}
+        className="border-t-2 border-primary-200 bg-primary-50/60 dark:bg-primary-900/15 font-medium cursor-pointer hover:bg-primary-100/70 dark:hover:bg-primary-900/25"
+      >
+        {canBulkCheck && !cabinetIsPaid && (
+          <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+            {eligibleIds.length > 0 && (
+              <input
+                type="checkbox"
+                checked={groupSel}
+                onChange={() => toggleGroupSelect(eligibleIds)}
+                title={`เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`}
+                aria-label={`เลือกออเดอร์ ${base}`}
+              />
+            )}
+          </td>
+        )}
+        {/* ID — group marker */}
+        <td className="px-2 py-2 text-center text-muted">📦</td>
+        {/* ID/CO */}
+        <td className="px-2 py-2 font-mono text-[11px]">{a.fidorco || "—"}</td>
+        {/* เลขแทรคกิ้ง — chevron toggle + base + count */}
+        <td className="px-2 py-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 font-semibold text-primary-700 dark:text-primary-300">
+            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {base}
+          </span>
+          <span className="ml-1.5 inline-block rounded-full bg-primary-200 text-primary-800 dark:bg-primary-800 dark:text-primary-100 text-[9px] font-bold px-1.5 py-0.5">
+            {g.length} แทรค
+          </span>
+        </td>
+        {/* รหัส */}
+        <td className="px-2 py-2 text-[11px]">
+          <Link
+            href={`/admin/customers/${encodeURIComponent(a.userid)}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-primary-600 hover:underline"
+          >
+            {a.userid}
+          </Link>
+        </td>
+        {/* รายละเอียด */}
+        <td className="px-2 py-2 max-w-[200px]">
+          <div className="truncate" title={a.detail ?? ""}>
+            {a.detail ?? `${g.length} รายการ`}
+          </div>
+        </td>
+        {/* ลัง (รับ/คาด) */}
+        <td className="px-2 py-2 text-right">{fmtN(a.boxGot)}/{fmtN(a.boxExp)}</td>
+        {/* ปริมาตร */}
+        <td className="px-2 py-2 text-right">{fmt(a.volume, 5)}</td>
+        {/* หนัก */}
+        <td className="px-2 py-2 text-right">{fmt(a.weight, 2)}</td>
+        {/* ประเภท */}
+        <td className="px-2 py-2">{a.productType != null ? productTypeLabel(a.productType) : "หลายประเภท"}</td>
+        {/* เรทต้นทุน — rate is not summable */}
+        {showMoney && <td className="px-2 py-2 text-right text-muted">—</td>}
+        {/* ค่านำเข้า */}
+        <td className="px-2 py-2 text-right">{fmt(a.ftotalprice, 2)}</td>
+        {/* ค่าอัปเดต */}
+        <td className="px-2 py-2 text-right">{fmt(a.fpriceupdate, 2)}</td>
+        {/* ค่าตีลัง */}
+        <td className="px-2 py-2 text-right">{fmt(a.pricecrate, 2)}</td>
+        {/* ค่าขนส่งจีน+ */}
+        <td className="px-2 py-2 text-right">{fmt(a.ftransportpricechnthb, 2)}</td>
+        {/* ค่าอื่นๆ */}
+        <td className="px-2 py-2 text-right">{fmt(a.priceother, 2)}</td>
+        {/* การขนส่ง */}
+        <td className="px-2 py-2 text-[11px]">{a.shipBy != null ? shipByLabel(a.shipBy) : "—"}</td>
+        {/* ค่าขนส่งไทย */}
+        <td className="px-2 py-2 text-right">{fmt(a.ftransportprice, 2)}</td>
+        {/* ส่วนลด */}
+        <td className="px-2 py-2 text-right">{fmt(a.fdiscount, 2)}</td>
+        {/* รวมขาย */}
+        <td className="px-2 py-2 text-right font-semibold">{fmt(a.priceGetUser, 2)}</td>
+        {/* 1% */}
+        <td className="px-2 py-2 text-right">{a.onePer > 0 ? fmt(a.onePer, 2) : ""}</td>
+        {/* ต้นทุน — showMoney only (no per-row edit buttons on the rollup) */}
+        {showMoney && (
+          <td className="px-2 py-2 text-right">
+            <span title="ต้นทุน PCS รวม">P: {fmt(a.fcosttotalprice, 2)}</span>
+            <br />
+            <span title="ต้นทุน แสง รวม" className="text-muted text-[10px]">S: {fmt(a.fcosttotalpricesheet, 2)}</span>
+          </td>
+        )}
+        {/* กำไร — showMoney only */}
+        {showMoney && (
+          <td className="px-2 py-2 text-right">
+            <span className={a.profit >= 0 ? "text-green-600" : "text-red-600"}>
+              {a.profit >= 0 ? "+" : ""}{fmt(a.profit, 2)}
+            </span>
+          </td>
+        )}
+        {/* สถานะสินค้า */}
+        <td className="px-2 py-2 text-center">
+          {statusBadge ? (
+            <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${statusBadge.chip}`}>
+              {statusBadge.label}
+            </span>
+          ) : (
+            <span className="inline-block rounded-full text-[10px] px-2 py-0.5 font-medium bg-gray-200 text-gray-700">หลายสถานะ</span>
+          )}
+        </td>
+        {/* สถานะตู้ */}
+        <td className="px-2 py-2 text-center">
+          <span
+            className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
+              a.allPaid ? CNTSTATUS_CFG.paid.chip : a.nonePaid ? CNTSTATUS_CFG.unpaid.chip : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {a.allPaid ? CNTSTATUS_CFG.paid.label : a.nonePaid ? CNTSTATUS_CFG.unpaid.label : "บางส่วน"}
+          </span>
+        </td>
+        {/* หมายเหตุ */}
+        <td className="px-2 py-2"></td>
+      </tr>
+    );
   }
 
   // Wave 16 integration (post-P0-3): cost-edit modal is now `<ForwarderCostEditButton>`
@@ -422,7 +584,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               {/* ลัง */}
               <td className="px-2 py-1.5"></td>
               {/* ปริมาตร (CBM) */}
-              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 2)}</td>
+              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 5)}</td>
               {/* หนัก (Kg) */}
               <td className="px-2 py-1.5 text-right">{fmt(summary.weight, 2)}</td>
               {/* ประเภท */}
@@ -469,11 +631,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={
-                    22 +
-                    (canBulkCheck && !cabinetIsPaid ? 1 : 0) +
-                    (showMoney ? 3 : 0)
-                  }
+                  colSpan={totalCols}
                   className="px-4 py-12 text-center text-sm text-muted"
                 >
                   ไม่มีรายการที่ตรงกับ filter
@@ -481,28 +639,8 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               </tr>
             ) : (
               renderItems.map((it) => {
-                if (it.kind === "header") {
-                  const g = it.group;
-                  const base = baseTracking(g[0].ftrackingchn) ?? g[0].ftrackingchn ?? "-";
-                  const boxGot = g.reduce((s, x) => s + (x.famountfi ?? 0), 0);
-                  const boxExp = g.reduce((s, x) => s + (x.famount ?? 0), 0);
-                  const cbm = g.reduce((s, x) => s + (x.fvolume ?? 0), 0);
-                  const wt = g.reduce((s, x) => s + (x.fweight ?? 0), 0);
-                  return (
-                    <tr
-                      key={`grp-${base}-${g[0].userid}-${g[0].id}`}
-                      className="border-t-2 border-primary-300 bg-primary-50/70 dark:bg-primary-900/15"
-                    >
-                      <td colSpan={totalCols} className="px-3 py-1.5 text-[11px]">
-                        <span className="font-semibold text-primary-700 dark:text-primary-300">
-                          📦 ออเดอร์ {base}
-                        </span>
-                        <span className="ml-2 text-muted">
-                          · {g.length} แทรค · {fmtN(boxGot)}/{fmtN(boxExp)} ลัง · {fmt(cbm, 2)} คิว · {fmt(wt, 2)} กก. · รหัส {g[0].userid}
-                        </span>
-                      </td>
-                    </tr>
-                  );
+                if (it.kind === "summary") {
+                  return renderSummaryRow(it.group, it.gkey, it.open);
                 }
                 const r = it.r;
                 return (
@@ -593,7 +731,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       );
                     })()}
                   </td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fvolume, 2)}</td>
+                  <td className="px-2 py-2 text-right">{fmt(r.fvolume, 5)}</td>
                   <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
                   <td className="px-2 py-2">
                     {productTypeLabel(r.fproductstype)}
@@ -834,6 +972,45 @@ function BillToCustomerButton({ fID }: { fID: number }) {
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
+
+// Roll a multi-box order up into one summary: Σ the numeric columns; a text/
+// enum column collapses to its single value when uniform across the boxes, else
+// null (the summary renders a "หลาย…" marker). Mirrors the same money columns
+// the per-row table + the bottom totals band already sum (display-only · no
+// money is written here).
+function aggregateGroup(g: DetailRow[]) {
+  const sum = (f: (r: DetailRow) => number) => g.reduce((s, r) => s + (Number(f(r)) || 0), 0);
+  function uniq<T>(f: (r: DetailRow) => T): T | null {
+    const first = f(g[0]);
+    return g.every((r) => f(r) === first) ? first : null;
+  }
+  return {
+    userid:                g[0].userid,
+    boxGot:                sum((r) => r.famountfi ?? 0),
+    boxExp:                sum((r) => r.famount ?? 0),
+    volume:                sum((r) => r.fvolume ?? 0),
+    weight:                sum((r) => r.fweight ?? 0),
+    ftotalprice:           sum((r) => r.ftotalprice),
+    fpriceupdate:          sum((r) => r.fpriceupdate),
+    pricecrate:            sum((r) => r.pricecrate),
+    ftransportpricechnthb: sum((r) => r.ftransportpricechnthb),
+    priceother:            sum((r) => r.priceother),
+    ftransportprice:       sum((r) => r.ftransportprice),
+    fdiscount:             sum((r) => r.fdiscount),
+    priceGetUser:          sum((r) => r.priceGetUser),
+    onePer:                sum((r) => (r.usercompany === "1" ? r.fusercompany1per : 0)),
+    fcosttotalprice:       sum((r) => r.fcosttotalprice),
+    fcosttotalpricesheet:  sum((r) => r.fcosttotalpricesheet),
+    profit:                sum((r) => r.profitItem),
+    productType:           uniq((r) => (r.fproductstype ?? "").trim()),
+    shipBy:                uniq((r) => (r.fshipby ?? "").trim()),
+    status:                uniq((r) => r.fstatus),
+    fidorco:               uniq((r) => r.fidorco ?? "") ?? "",
+    detail:                uniq((r) => (r.fdetail ?? "").trim() || null),
+    allPaid:               g.every((r) => r.cntPaid),
+    nonePaid:              g.every((r) => !r.cntPaid),
+  };
+}
 
 function filterRows(rows: DetailRow[], filter: FilterKey): DetailRow[] {
   switch (filter) {
