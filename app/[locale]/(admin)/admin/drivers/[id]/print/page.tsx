@@ -48,7 +48,7 @@
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
@@ -123,9 +123,10 @@ export default async function DriverPickingSlipPrintPage({
   if (!Number.isFinite(batchId) || batchId <= 0) notFound();
 
   const admin = createAdminClient();
-  // ops/super/warehouse = staff who may print ANY run; a bare driver only their own.
+  // god/ops/warehouse = staff who may print ANY run; a bare driver only their own.
+  // isGodRole covers ultra+super (mirrors the sibling detail page drivers/[id]/page.tsx).
   const isOpsOverride =
-    roles.includes("ops") || roles.includes("super") || roles.includes("warehouse");
+    isGodRole(roles) || roles.includes("ops") || roles.includes("warehouse");
 
   // 1. Batch header — printDriver.php L25-29.
   const { data: batchData, error: batchErr } = await admin

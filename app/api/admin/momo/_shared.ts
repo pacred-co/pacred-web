@@ -10,10 +10,10 @@
 
 import "server-only";
 import { NextResponse } from "next/server";
-import { getAdminRoles } from "@/lib/auth/require-admin";
+import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import type { MomoErrorCode } from "@/lib/integrations/momo-isolated";
 
-/** Roles allowed to use MOMO admin tools. */
+/** Roles allowed to use MOMO admin tools (god roles always pass — see below). */
 const ALLOWED_ROLES = new Set(["super", "ops", "warehouse", "accounting"]);
 
 /**
@@ -28,7 +28,10 @@ export async function guardAdmin(): Promise<NextResponse | null> {
       { status: 401 },
     );
   }
-  const hit = roles.some((r) => ALLOWED_ROLES.has(r));
+  // god roles (ultra/super) always pass — mirrors requireAdmin's gate so the
+  // page (gated via requireAdmin, honors ultra) and this API agree. Without
+  // this, an `ultra` admin sees the page+data but every sync button → 403.
+  const hit = isGodRole(roles) || roles.some((r) => ALLOWED_ROLES.has(r));
   if (!hit) {
     return NextResponse.json(
       {

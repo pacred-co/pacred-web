@@ -43,6 +43,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
 import type { AdminRole } from "@/lib/auth/require-admin";
+import { isGodRole } from "@/lib/admin/god-role";
 
 // fdistatus values are CHAR(1) strings per the legacy schema
 // (`tb_forwarder_driver_item.fdistatus character varying(1) NOT NULL`).
@@ -126,7 +127,8 @@ async function loadItemAndAuthorise(
   }
   if (!batchRow) return { ok: false, error: "ไม่พบรอบจัดส่ง" };
 
-  const isAdminOverride = callerRoles.includes("super") || callerRoles.includes("ops");
+  const isAdminOverride =
+    isGodRole(callerRoles as AdminRole[]) || callerRoles.includes("ops");
   if (!isAdminOverride) {
     // Driver role — must own this batch.
     const legacyUserid = await getCallerLegacyUserid(callerProfileId);

@@ -122,7 +122,7 @@ export async function customerAcceptQuote(
     const { data: targetAdmins, error: targetAdminsErr } = await admin
       .from("admins")
       .select("profile_id")
-      .in("role", ["sales_admin", "ops", "super"])
+      .in("role", ["sales_admin", "ops", "super", "ultra"])
       .eq("is_active", true);
     if (targetAdminsErr) {
       console.error(`[admins list] failed`, { code: targetAdminsErr.code, message: targetAdminsErr.message });

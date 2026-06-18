@@ -239,7 +239,7 @@ async function fireSeedAlert(
     const { data: supers, error: supersErr } = await admin
       .from("admins")
       .select("profile_id")
-      .eq("role", "super")
+      .in("role", ["super", "ultra"])
       .eq("is_active", true);
     if (supersErr) {
       console.error(`[admins list] failed`, { code: supersErr.code, message: supersErr.message });

@@ -141,7 +141,7 @@ export async function GET(request: Request) {
       const { data: targetAdmins, error: adminErr } = await supabase
         .from("admins")
         .select("profile_id, profile:profiles!profile_id ( notify_channels )")
-        .in("role", ["super", "sales_admin"])
+        .in("role", ["super", "sales_admin", "ultra"])
         .eq("is_active", true);
 
       if (adminErr) {

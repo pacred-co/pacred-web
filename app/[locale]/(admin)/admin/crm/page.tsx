@@ -1,5 +1,5 @@
 import { Link } from "@/i18n/navigation";
-import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
+import { requireAdmin, getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { relativeTimeTh } from "@/lib/utils/relative-time";
 import {
   getCrmConversations,
@@ -80,7 +80,7 @@ export default async function AdminCrmPage({
 }) {
   await requireAdmin(["super", "manager", "sales_admin", "sales", "ops"]);
   const roles = (await getAdminRoles()) ?? [];
-  const canRoute = roles.some((r) => SENIOR_ROUTING_ROLES.includes(r));
+  const canRoute = isGodRole(roles) || roles.some((r) => SENIOR_ROUTING_ROLES.includes(r));
 
   const sp = await searchParams;
   const channel: CrmChannel = isChannel(sp.channel) ? sp.channel : "line";

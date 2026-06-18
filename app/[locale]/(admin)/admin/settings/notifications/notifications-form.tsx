@@ -31,7 +31,7 @@ export function NotificationsForm({
   const [state, setState] = useState<Initial>(initial);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const eligibleForDigest = adminRoles.some((r) => r === "super" || r === "sales_admin");
+  const eligibleForDigest = adminRoles.some((r) => r === "ultra" || r === "super" || r === "sales_admin");
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });

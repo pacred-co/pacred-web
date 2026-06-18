@@ -57,7 +57,7 @@ const CRM_ROLES = ["super", "manager", "sales_admin", "sales", "ops"] as const;
 // CEO/Manager/Sales-manager/Accounting reassign adminIDSale).
 const ROUTING_ROLES = ["super", "manager", "sales_admin"] as const;
 
-const REP_ROLES = ["sales", "sales_admin", "super"] as const;
+const REP_ROLES = ["sales", "sales_admin", "super", "ultra"] as const;
 
 // ════════════════════════════════════════════════════════════════════════
 // getCrmReps — the assignable sales-rep list (+ how many customers each owns)

@@ -378,7 +378,7 @@ export async function searchAdminsByQuery(
         profile_id, role,
         profile:profiles!profile_id ( member_code, first_name, last_name, phone, company_name )
       `)
-      .in("role", ["sales_admin", "super"])
+      .in("role", ["sales_admin", "super", "ultra"])
       .eq("is_active", true)
       .or(
         [

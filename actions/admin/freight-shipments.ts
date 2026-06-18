@@ -24,7 +24,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminRoles } from "@/lib/auth/require-admin";
+import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { adminCreateFreightInvoice } from "./freight-invoices";
 import {
@@ -163,7 +163,10 @@ export async function adminUpdateFreightShipment(
     // ADR-0016 Q3: declared_customs_value_thb edit requires super OR accounting.
     if (d.declared_customs_value_thb !== undefined && d.declared_customs_value_thb !== null) {
       const callerRoles = (await getAdminRoles()) ?? [];
-      const hasDeclaredRole = ROLES_DECLARED_VALUE.some((r) => callerRoles.includes(r));
+      // god roles (ultra/super) always pass — ultra is the money-internal god;
+      // super retains its ADR-0016 Q3 declared-value right.
+      const hasDeclaredRole =
+        isGodRole(callerRoles) || ROLES_DECLARED_VALUE.some((r) => callerRoles.includes(r));
       if (!hasDeclaredRole) {
         return { ok: false, error: "declared_value_requires_super_or_accounting" };
       }

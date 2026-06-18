@@ -31,7 +31,7 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminRoles } from "@/lib/auth/require-admin";
+import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,7 @@ type CheckResult = {
 
 export async function GET(req: Request) {
   const roles = await getAdminRoles();
-  if (!roles || !roles.some((r) => ALLOWED_ROLES.has(r))) {
+  if (!roles || (!isGodRole(roles) && !roles.some((r) => ALLOWED_ROLES.has(r)))) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

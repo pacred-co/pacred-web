@@ -82,7 +82,7 @@ export async function submitContactMessage(
     const { data: targetAdmins, error: targetAdminsErr } = await admin
       .from("admins")
       .select("profile_id")
-      .in("role", ["ops", "super"])
+      .in("role", ["ops", "super", "ultra"])
       .eq("is_active", true);
     if (targetAdminsErr) {
       console.error(`[admins list] failed`, { code: targetAdminsErr.code, message: targetAdminsErr.message });

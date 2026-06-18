@@ -116,7 +116,7 @@ export default async function TransferRepPage({
            profile:profiles!profile_id ( member_code, first_name, last_name, phone )`,
         )
         .eq("profile_id", p.sales_admin_id)
-        .in("role", ["sales_admin", "super"])
+        .in("role", ["sales_admin", "super", "ultra"])
         .eq("is_active", true)
         .limit(1)
         .maybeSingle<{
