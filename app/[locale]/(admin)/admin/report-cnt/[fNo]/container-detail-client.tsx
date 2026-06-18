@@ -24,8 +24,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
+import { ArrowUpDown, ArrowUp, ArrowDown, Layers } from "lucide-react";
+import {
+  adminReportCntAddCheck,
+  adminReportCntBillToCustomer,
+  adminReportCntBillGroupToCustomer,
+} from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
@@ -40,6 +44,7 @@ import {
   FSTATUS_LABEL,
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
 } from "@/lib/admin/report-cnt-add-check-gate";
+import { groupRowsBySibling, type RowGroup } from "@/lib/admin/report-cnt-grouping";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape
@@ -53,6 +58,8 @@ export type DetailRow = {
   username: string | null;
   usercompany: string | null;
   fdetail: string | null;
+  /** FIX 2 — resolved detail to show: fdetail → item productname → null (fallback). */
+  detailDisplay: string | null;
   fcover: string | null;
   famount: number | null;
   famountfi: number | null;
@@ -172,6 +179,19 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
       return String(av).localeCompare(String(bv), "th") * dir;
     });
   }, [rows, filter, sortKey, sortDir]);
+
+  // FIX 3 — group the (filtered + sorted) rows by (userid, baseTracking) so a
+  // MOMO -N split shipment renders as ONE group: a combined-total header row +
+  // the per-row breakdown beneath, with a single group-collect action. A
+  // non-split row is its own 1-member group (renders exactly as before — no
+  // header). Grouping runs over the post-sort list so a sort still orders the
+  // groups (by each group's first member's sorted position).
+  const groups = useMemo(() => groupRowsBySibling(filtered), [filtered]);
+
+  // Total column count for full-width cells (empty-state + group header).
+  // Mirrors the header: 22 base cols + 1 checkbox (when shown) + 3 money cols.
+  const fullColSpan =
+    22 + (canBulkCheck && !cabinetIsPaid ? 1 : 0) + (showMoney ? 3 : 0);
 
   function toggleSort(k: NonNullable<SortKey>) {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -376,8 +396,8 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               <td className="px-2 py-1.5 text-right">รวม</td>
               {/* ลัง */}
               <td className="px-2 py-1.5"></td>
-              {/* ปริมาตร (CBM) */}
-              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 2)}</td>
+              {/* ปริมาตร (CBM) — FIX 1: 5 dp so tiny คิว don't read as 0.00 */}
+              <td className="px-2 py-1.5 text-right">{fmtCbm(summary.volume)}</td>
               {/* หนัก (Kg) */}
               <td className="px-2 py-1.5 text-right">{fmt(summary.weight, 2)}</td>
               {/* ประเภท */}
@@ -424,261 +444,23 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={
-                    22 +
-                    (canBulkCheck && !cabinetIsPaid ? 1 : 0) +
-                    (showMoney ? 3 : 0)
-                  }
+                  colSpan={fullColSpan}
                   className="px-4 py-12 text-center text-sm text-muted"
                 >
                   ไม่มีรายการที่ตรงกับ filter
                 </td>
               </tr>
             ) : (
-              filtered.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`border-t border-border ${detailRowTint({
-                    inCheckQueue: r.inCheckQueue,
-                    notYetWarehouse: r.notYetWarehouse,
-                    trackingDup: r.trackingDup,
-                    selected: selected.has(r.id),
-                  })}`}
-                >
-                  {canBulkCheck && !cabinetIsPaid && (
-                    <td className="px-2 py-2 text-center">
-                      {!r.inCheckQueue && (() => {
-                        const eligible = isRowEligibleForAddCheck(r.fstatus);
-                        const currentLabel =
-                          FSTATUS_LABEL[r.fstatus] ??
-                          (r.fstatus ? r.fstatus : "(ว่าง)");
-                        return (
-                          <input
-                            type="checkbox"
-                            checked={selected.has(r.id)}
-                            onChange={() => toggleRow(r.id)}
-                            disabled={!eligible}
-                            title={
-                              eligible
-                                ? `เลือก ${r.fidorco ?? `#${r.id}`}`
-                                : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
-                            }
-                            aria-label={`เลือก ${r.id}`}
-                          />
-                        );
-                      })()}
-                    </td>
-                  )}
-                  <td className="px-2 py-2 font-mono" title={r.inCheckQueue ? `เพิ่มแล้วโดย ${r.checkAdminId} เวลา: ${r.checkDate}` : undefined}>
-                    {r.id}
-                  </td>
-                  <td className="px-2 py-2 font-mono text-[11px]">{r.fidorco ?? "-"}</td>
-                  <td className="px-2 py-2 text-[11px]">
-                    {/* ภูม #5 2026-05-29: legacy PHP linked to
-                        `forwarder/update/<ID>` (singular) which does not exist
-                        in Next.js. The Pacred forwarder detail lives at
-                        `/admin/forwarders/[fNo]` (plural) and accepts either
-                        `fidorco` or numeric `id` via legacy-fallback lookup. */}
-                    <Link
-                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      {r.ftrackingchn ?? "-"}
-                    </Link>
-                    <br />
-                    <span className="text-muted text-[10px]">เลขที่ #{r.id}</span>
-                  </td>
-                  <td className="px-2 py-2 text-[11px]">
-                    {/* ภูม #5 2026-05-29: legacy PHP linked to
-                        `users/profile/<userID>` which does not exist in
-                        Next.js. Pacred customer detail = `/admin/customers/[id]`
-                        (Wave 20 P0-1, `tb_users.userID` backed). */}
-                    <Link
-                      href={`/admin/customers/${encodeURIComponent(r.userid)}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      {r.userid}
-                    </Link>
-                  </td>
-                  <td className="px-2 py-2 max-w-[200px]">
-                    <div className="truncate" title={r.fdetail ?? ""}>
-                      {r.fdetail ?? "-"}
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    {/* V-D4 split-receipt: received / expected. Amber when a
-                        scan exists but is short of expected (partial receipt);
-                        red has no extra state — over-receipt is informational. */}
-                    {(() => {
-                      const exp = r.famount ?? 0;
-                      const got = r.famountfi;
-                      const isShort = got != null && exp > 0 && got < exp;
-                      return (
-                        <span
-                          className={isShort ? "text-amber-600 font-semibold" : ""}
-                          title={isShort ? `รับเข้าไม่ครบ: ${got}/${exp} ลัง (ขาด ${exp - got})` : "จำนวนลังที่รับเข้าโกดังไทย / จำนวนที่คาดไว้"}
-                        >
-                          {fmtN(r.famountfi)}/{fmtN(r.famount)}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fvolume, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
-                  <td className="px-2 py-2">
-                    {productTypeLabel(r.fproductstype)}
-                    {/* FLAG 5 — resolved SELL rate badge under the type word
-                        (legacy report-cnt col 9: "ทั่วไป" + "3,700" / "15"). */}
-                    {r.frefrate != null && Number.isFinite(r.frefrate) && r.frefrate > 0 && (
-                      <div
-                        className="mt-0.5 text-[10px] text-muted"
-                        title="เรทขาย (SELL) ต่อคิว/กิโล"
-                      >
-                        {r.frefrate.toLocaleString("en-US")}
-                      </div>
-                    )}
-                  </td>
-                  {showMoney && <td className="px-2 py-2 text-right">{fmt(r.rate, 0)}</td>}
-                  <td className="px-2 py-2 text-right">
-                    {fmt(r.ftotalprice, 2)}
-                    <br />
-                    <span className={`inline-block rounded-full text-[9px] px-1.5 py-0.5 ${r.frefprice === "1" ? "bg-sky-100 text-sky-700" : "bg-primary-100 text-primary-700"}`}>
-                      {r.frefprice === "1" ? "น้ำหนัก" : "ปริมาตร"}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fpriceupdate, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.pricecrate, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.ftransportpricechnthb, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.priceother, 2)}</td>
-                  <td className="px-2 py-2 text-[11px]">
-                    {shipByLabel(r.fshipby)}
-                    {r.paymethod === "2" && (
-                      <span className="ml-1 inline-block bg-red-500 text-white text-[9px] px-1 rounded">ปลายทาง</span>
-                    )}
-                    {r.fshipby !== "PCS" && (r.faddressdistrict || r.faddressprovince) && (
-                      <div className="text-muted text-[10px]">
-                        {r.faddressdistrict ?? ""}
-                        {r.faddressprovince ? ` · จ.${r.faddressprovince}` : ""}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-right">{fmt(r.ftransportprice, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fdiscount, 2)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(r.priceGetUser, 2)}</td>
-                  <td className="px-2 py-2 text-right">
-                    {r.usercompany === "1" ? fmt(r.fusercompany1per, 2) : ""}
-                  </td>
-                  {showMoney && (
-                    <td className="px-2 py-2 text-right">
-                      <span title="ต้นทุน PCS">P: {fmt(r.fcosttotalprice, 2)}</span>
-                      <br />
-                      <span title="ต้นทุน แสง" className="text-muted text-[10px]">S: {fmt(r.fcosttotalpricesheet, 2)}</span>
-                      <br />
-                      <div className="flex gap-2 mt-0.5">
-                        <ForwarderCostEditButton
-                          mode="editCost"
-                          forwarder={{
-                            fid: r.id,
-                            fNo: r.fidorco || String(r.id),
-                            fCostTotalPrice: r.fcosttotalprice,
-                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
-                            fProductsType2: r.fproductstype2,
-                            fVolume: r.fvolume ?? 0,
-                            fWeight: r.fweight ?? 0,
-                            fTrackingCHN: r.ftrackingchn,
-                          }}
-                        />
-                        <ForwarderCostEditButton
-                          mode="editCost2"
-                          forwarder={{
-                            fid: r.id,
-                            fNo: r.fidorco || String(r.id),
-                            fCostTotalPrice: r.fcosttotalprice,
-                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
-                            fProductsType2: r.fproductstype2,
-                            fVolume: r.fvolume ?? 0,
-                            fWeight: r.fweight ?? 0,
-                            fTrackingCHN: r.ftrackingchn,
-                          }}
-                        />
-                        <ForwarderCostEditButton
-                          mode="editCostSheet"
-                          forwarder={{
-                            fid: r.id,
-                            fNo: r.fidorco || String(r.id),
-                            fCostTotalPrice: r.fcosttotalprice,
-                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
-                            fProductsType2: r.fproductstype2,
-                            fVolume: r.fvolume ?? 0,
-                            fWeight: r.fweight ?? 0,
-                            fTrackingCHN: r.ftrackingchn,
-                          }}
-                        />
-                      </div>
-                    </td>
-                  )}
-                  {showMoney && (
-                    <td className="px-2 py-2 text-right">
-                      <span className={r.profitItem >= 0 ? "text-green-600" : "text-red-600"}>
-                        {r.profitItem >= 0 ? "+" : ""}{fmt(r.profitItem, 2)}
-                      </span>
-                    </td>
-                  )}
-                  <td className="px-2 py-2 text-center">
-                    {(() => {
-                      const b = fstatusBadge(r.fstatus);
-                      return (
-                        <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${b.chip}`}>
-                          {b.label}
-                        </span>
-                      );
-                    })()}
-                    {/* 2026-06-09 ภูม: badge "ยังถึงไม่ได้" removed — row tint
-                        (pink/rose for notYetWarehouse) + status pill already
-                        signal it visually; the extra chip was redundant clutter.
-                        Checkbox disable + tooltip still active (sufficient). */}
-                    {r.fcredit && r.fcredit !== "" && (
-                      <div className="mt-1">
-                        {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
-                        <Link
-                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
-                          className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5"
-                        >
-                          เครดิตได้
-                        </Link>
-                      </div>
-                    )}
-                    {/* re-sweep A2 #6 — per-row bill-to-customer (4→5). Money-tier
-                        only, and ONLY when the goods have arrived (fstatus 4 =
-                        ถึงไทยแล้ว). Audit 2026-06-18: was `< 5` (showed on 1/2/3
-                        too → could bill goods still in China). 5/6/7 = already
-                        billed (the action no-ops those). */}
-                    {showMoney && Number(r.fstatus) === 4 && (
-                      <div className="mt-1">
-                        <BillToCustomerButton fID={r.id} />
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-center">
-                    <span
-                      className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
-                        r.cntPaid ? CNTSTATUS_CFG.paid.chip : CNTSTATUS_CFG.unpaid.chip
-                      }`}
-                    >
-                      {r.cntPaid ? CNTSTATUS_CFG.paid.label : CNTSTATUS_CFG.unpaid.label}
-                    </span>
-                    {r.trackingDup && (
-                      <div className="mt-1">
-                        <span className="inline-block rounded-full bg-orange-400 text-orange-950 border border-orange-600 text-[9px] px-1.5 py-0.5">
-                          {r.cntPaid ? "จ่ายซ้ำแล้ว" : "กำลังจะจ่ายซ้ำ"}
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 max-w-[140px] text-[11px]">
-                    <div className="truncate" title={r.fnote ?? ""}>{r.fnote ?? ""}</div>
-                  </td>
-                </tr>
+              groups.map((g) => (
+                <GroupBlock
+                  key={g.key}
+                  group={g}
+                  showMoney={showMoney}
+                  showCheckbox={canBulkCheck && !cabinetIsPaid}
+                  fullColSpan={fullColSpan}
+                  selected={selected}
+                  toggleRow={toggleRow}
+                />
               ))
             )}
           </tbody>
@@ -761,6 +543,458 @@ function BillToCustomerButton({ fID }: { fID: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// FIX 3 — grouped rendering: a group block = an optional combined-total
+// header row (only when the shipment was -N split) + the member rows.
+// A non-split group renders just its single member row (unchanged look).
+// ─────────────────────────────────────────────────────────────────────
+
+function GroupBlock({
+  group,
+  showMoney,
+  showCheckbox,
+  fullColSpan,
+  selected,
+  toggleRow,
+}: {
+  group: RowGroup<DetailRow>;
+  showMoney: boolean;
+  showCheckbox: boolean;
+  fullColSpan: number;
+  selected: Set<number>;
+  toggleRow: (id: number) => void;
+}) {
+  return (
+    <>
+      {group.isSplit && (
+        <GroupHeaderRow
+          group={group}
+          showMoney={showMoney}
+          fullColSpan={fullColSpan}
+        />
+      )}
+      {group.members.map((r) => (
+        <MemberRow
+          key={r.id}
+          r={r}
+          showMoney={showMoney}
+          showCheckbox={showCheckbox}
+          indented={group.isSplit}
+          selected={selected}
+          toggleRow={toggleRow}
+        />
+      ))}
+    </>
+  );
+}
+
+// The combined-total header for a split shipment: user + base tracking + the
+// summed kg / CBM / pieces / sell / cost / profit, and ONE group-collect button.
+function GroupHeaderRow({
+  group,
+  showMoney,
+  fullColSpan,
+}: {
+  group: RowGroup<DetailRow>;
+  showMoney: boolean;
+  fullColSpan: number;
+}) {
+  const c = group.combined;
+  return (
+    <tr className="border-t-2 border-primary-300 bg-primary-50/60 dark:bg-primary-900/15 text-[11px] font-semibold">
+      <td className="px-2 py-1.5" colSpan={fullColSpan}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="inline-flex items-center gap-1 text-primary-700">
+            <Layers className="h-3.5 w-3.5" />
+            กลุ่มแทรคกิ้ง <span className="font-mono">{group.baseTracking}</span>
+          </span>
+          <span className="text-muted">
+            ลูกค้า{" "}
+            <Link
+              href={`/admin/customers/${encodeURIComponent(group.userid)}`}
+              className="text-primary-600 hover:underline font-mono"
+            >
+              {group.userid}
+            </Link>
+            {group.username ? ` · ${group.username}` : ""}
+          </span>
+          <span className="text-muted">รวม {c.count} ซอย</span>
+          <span>กล่อง {c.famount.toLocaleString()}</span>
+          <span>คิว {fmtCbm(c.fvolume)}</span>
+          <span>นน. {fmt(c.fweight, 2)} กก.</span>
+          <span className="text-foreground">รวมขาย {fmt(c.priceGetUser, 2)} บ.</span>
+          {showMoney && <span className="text-red-600">ต้นทุน {fmt(c.fcosttotalprice, 2)}</span>}
+          {showMoney && (
+            <span className={c.profitItem >= 0 ? "text-green-600" : "text-red-600"}>
+              กำไร {c.profitItem >= 0 ? "+" : ""}{fmt(c.profitItem, 2)}
+            </span>
+          )}
+          {/* Single group-collect — bills every fstatus-4 member at once via the
+              EXISTING per-row writer. Money-tier only (showMoney) + there must
+              be ≥1 arrived member to bill. */}
+          {showMoney && group.billableIds.length > 0 && (
+            <GroupCollectButton
+              billableIds={group.billableIds}
+              baseTracking={group.baseTracking}
+              userid={group.userid}
+            />
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// Group-collect: one click → bill the whole split shipment. Confirms first
+// (§0f · money action), then calls adminReportCntBillGroupToCustomer which
+// loops the proven per-row 4→5 writer over each billable member.
+function GroupCollectButton({
+  billableIds,
+  baseTracking,
+  userid,
+}: {
+  billableIds: number[];
+  baseTracking: string;
+  userid: string;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [done, setDone] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function collect() {
+    if (
+      !(await confirm(
+        `เรียกเก็บเงินลูกค้า ${userid} ทั้งกลุ่มแทรคกิ้ง ${baseTracking} (${billableIds.length} ซอย) พร้อมกัน?`,
+      ))
+    ) {
+      return;
+    }
+    setMsg(null);
+    start(async () => {
+      const res = await adminReportCntBillGroupToCustomer({ fIDs: billableIds });
+      if (!res.ok) {
+        setMsg(res.error);
+        return;
+      }
+      const d = res.data;
+      setDone(true);
+      const parts: string[] = [];
+      if (d) {
+        if (d.billed > 0) parts.push(`แจ้งหนี้ ${d.billed} ซอย`);
+        if (d.alreadyBilled > 0) parts.push(`แจ้งแล้ว ${d.alreadyBilled}`);
+        if (d.failed > 0) parts.push(`พลาด ${d.failed}`);
+        parts.push(
+          `รวม ${d.totalPricePay.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.`,
+        );
+      }
+      setMsg(parts.join(" · "));
+      router.refresh();
+    });
+  }
+
+  if (done) {
+    return <span className="text-[10px] text-amber-700">{msg}</span>;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={collect}
+        disabled={pending}
+        className="inline-flex items-center gap-1 rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[10px] px-2.5 py-1 font-medium hover:bg-amber-600 disabled:opacity-50"
+      >
+        {pending ? "กำลังเรียกเก็บ…" : `เรียกเก็บเงินลูกค้า (ทั้งกลุ่ม ${billableIds.length} ซอย)`}
+      </button>
+      {msg && <span className="ml-1 text-[10px] text-red-600">{msg}</span>}
+    </>
+  );
+}
+
+// One member row — the per-parcel `<tr>` (extracted verbatim from the old flat
+// render, now reused under a group). `indented` adds a left rule + slight indent
+// on the first cell when the row is part of a split group (visual nesting).
+function MemberRow({
+  r,
+  showMoney,
+  showCheckbox,
+  indented,
+  selected,
+  toggleRow,
+}: {
+  r: DetailRow;
+  showMoney: boolean;
+  showCheckbox: boolean;
+  indented: boolean;
+  selected: Set<number>;
+  toggleRow: (id: number) => void;
+}) {
+  return (
+    <tr
+      className={`border-t border-border ${detailRowTint({
+        inCheckQueue: r.inCheckQueue,
+        notYetWarehouse: r.notYetWarehouse,
+        trackingDup: r.trackingDup,
+        selected: selected.has(r.id),
+      })}`}
+    >
+      {showCheckbox && (
+        <td className="px-2 py-2 text-center">
+          {!r.inCheckQueue && (() => {
+            const eligible = isRowEligibleForAddCheck(r.fstatus);
+            const currentLabel =
+              FSTATUS_LABEL[r.fstatus] ??
+              (r.fstatus ? r.fstatus : "(ว่าง)");
+            return (
+              <input
+                type="checkbox"
+                checked={selected.has(r.id)}
+                onChange={() => toggleRow(r.id)}
+                disabled={!eligible}
+                title={
+                  eligible
+                    ? `เลือก ${r.fidorco ?? `#${r.id}`}`
+                    : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                }
+                aria-label={`เลือก ${r.id}`}
+              />
+            );
+          })()}
+        </td>
+      )}
+      <td className={`px-2 py-2 font-mono ${indented ? "border-l-2 border-primary-200 pl-3" : ""}`} title={r.inCheckQueue ? `เพิ่มแล้วโดย ${r.checkAdminId} เวลา: ${r.checkDate}` : undefined}>
+        {r.id}
+      </td>
+      <td className="px-2 py-2 font-mono text-[11px]">{r.fidorco ?? "-"}</td>
+      <td className="px-2 py-2 text-[11px]">
+        {/* ภูม #5 2026-05-29: legacy PHP linked to
+            `forwarder/update/<ID>` (singular) which does not exist
+            in Next.js. The Pacred forwarder detail lives at
+            `/admin/forwarders/[fNo]` (plural) and accepts either
+            `fidorco` or numeric `id` via legacy-fallback lookup. */}
+        <Link
+          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+          className="text-primary-600 hover:underline"
+        >
+          {r.ftrackingchn ?? "-"}
+        </Link>
+        <br />
+        <span className="text-muted text-[10px]">เลขที่ #{r.id}</span>
+      </td>
+      <td className="px-2 py-2 text-[11px]">
+        {/* ภูม #5 2026-05-29: legacy PHP linked to
+            `users/profile/<userID>` which does not exist in
+            Next.js. Pacred customer detail = `/admin/customers/[id]`
+            (Wave 20 P0-1, `tb_users.userID` backed). */}
+        <Link
+          href={`/admin/customers/${encodeURIComponent(r.userid)}`}
+          className="text-primary-600 hover:underline"
+        >
+          {r.userid}
+        </Link>
+      </td>
+      <td className="px-2 py-2 max-w-[200px]">
+        {/* FIX 2 — fdetail → item productname → fallback (tracking + ประเภท).
+            fdetail is "" for MOMO rows (no product name in the MOMO payload);
+            the fallback shows real identifiers instead of a bare "-". */}
+        {(() => {
+          if (r.detailDisplay) {
+            return (
+              <div className="truncate" title={r.detailDisplay}>
+                {r.detailDisplay}
+              </div>
+            );
+          }
+          const fallback = `${r.ftrackingchn ?? `#${r.id}`} · ${productTypeLabel(r.fproductstype)}`;
+          return (
+            <div
+              className="truncate text-muted italic"
+              title={`ไม่มีรายละเอียดสินค้า (MOMO ไม่ได้ส่งชื่อสินค้า) — แสดงเลขแทรคกิ้ง + ประเภทแทน`}
+            >
+              {fallback}
+            </div>
+          );
+        })()}
+      </td>
+      <td className="px-2 py-2 text-right">
+        {/* V-D4 split-receipt: received / expected. Amber when a
+            scan exists but is short of expected (partial receipt);
+            red has no extra state — over-receipt is informational. */}
+        {(() => {
+          const exp = r.famount ?? 0;
+          const got = r.famountfi;
+          const isShort = got != null && exp > 0 && got < exp;
+          return (
+            <span
+              className={isShort ? "text-amber-600 font-semibold" : ""}
+              title={isShort ? `รับเข้าไม่ครบ: ${got}/${exp} ลัง (ขาด ${exp - got})` : "จำนวนลังที่รับเข้าโกดังไทย / จำนวนที่คาดไว้"}
+            >
+              {fmtN(r.famountfi)}/{fmtN(r.famount)}
+            </span>
+          );
+        })()}
+      </td>
+      <td className="px-2 py-2 text-right">{fmtCbm(r.fvolume)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
+      <td className="px-2 py-2">
+        {productTypeLabel(r.fproductstype)}
+        {/* FLAG 5 — resolved SELL rate badge under the type word
+            (legacy report-cnt col 9: "ทั่วไป" + "3,700" / "15"). */}
+        {r.frefrate != null && Number.isFinite(r.frefrate) && r.frefrate > 0 && (
+          <div
+            className="mt-0.5 text-[10px] text-muted"
+            title="เรทขาย (SELL) ต่อคิว/กิโล"
+          >
+            {r.frefrate.toLocaleString("en-US")}
+          </div>
+        )}
+      </td>
+      {showMoney && <td className="px-2 py-2 text-right">{fmt(r.rate, 0)}</td>}
+      <td className="px-2 py-2 text-right">
+        {fmt(r.ftotalprice, 2)}
+        <br />
+        <span className={`inline-block rounded-full text-[9px] px-1.5 py-0.5 ${r.frefprice === "1" ? "bg-sky-100 text-sky-700" : "bg-primary-100 text-primary-700"}`}>
+          {r.frefprice === "1" ? "น้ำหนัก" : "ปริมาตร"}
+        </span>
+      </td>
+      <td className="px-2 py-2 text-right">{fmt(r.fpriceupdate, 2)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.pricecrate, 2)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.ftransportpricechnthb, 2)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.priceother, 2)}</td>
+      <td className="px-2 py-2 text-[11px]">
+        {shipByLabel(r.fshipby)}
+        {r.paymethod === "2" && (
+          <span className="ml-1 inline-block bg-red-500 text-white text-[9px] px-1 rounded">ปลายทาง</span>
+        )}
+        {r.fshipby !== "PCS" && (r.faddressdistrict || r.faddressprovince) && (
+          <div className="text-muted text-[10px]">
+            {r.faddressdistrict ?? ""}
+            {r.faddressprovince ? ` · จ.${r.faddressprovince}` : ""}
+          </div>
+        )}
+      </td>
+      <td className="px-2 py-2 text-right">{fmt(r.ftransportprice, 2)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.fdiscount, 2)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.priceGetUser, 2)}</td>
+      <td className="px-2 py-2 text-right">
+        {r.usercompany === "1" ? fmt(r.fusercompany1per, 2) : ""}
+      </td>
+      {showMoney && (
+        <td className="px-2 py-2 text-right">
+          <span title="ต้นทุน PCS">P: {fmt(r.fcosttotalprice, 2)}</span>
+          <br />
+          <span title="ต้นทุน แสง" className="text-muted text-[10px]">S: {fmt(r.fcosttotalpricesheet, 2)}</span>
+          <br />
+          <div className="flex gap-2 mt-0.5">
+            <ForwarderCostEditButton
+              mode="editCost"
+              forwarder={{
+                fid: r.id,
+                fNo: r.fidorco || String(r.id),
+                fCostTotalPrice: r.fcosttotalprice,
+                fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                fProductsType2: r.fproductstype2,
+                fVolume: r.fvolume ?? 0,
+                fWeight: r.fweight ?? 0,
+                fTrackingCHN: r.ftrackingchn,
+              }}
+            />
+            <ForwarderCostEditButton
+              mode="editCost2"
+              forwarder={{
+                fid: r.id,
+                fNo: r.fidorco || String(r.id),
+                fCostTotalPrice: r.fcosttotalprice,
+                fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                fProductsType2: r.fproductstype2,
+                fVolume: r.fvolume ?? 0,
+                fWeight: r.fweight ?? 0,
+                fTrackingCHN: r.ftrackingchn,
+              }}
+            />
+            <ForwarderCostEditButton
+              mode="editCostSheet"
+              forwarder={{
+                fid: r.id,
+                fNo: r.fidorco || String(r.id),
+                fCostTotalPrice: r.fcosttotalprice,
+                fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                fProductsType2: r.fproductstype2,
+                fVolume: r.fvolume ?? 0,
+                fWeight: r.fweight ?? 0,
+                fTrackingCHN: r.ftrackingchn,
+              }}
+            />
+          </div>
+        </td>
+      )}
+      {showMoney && (
+        <td className="px-2 py-2 text-right">
+          <span className={r.profitItem >= 0 ? "text-green-600" : "text-red-600"}>
+            {r.profitItem >= 0 ? "+" : ""}{fmt(r.profitItem, 2)}
+          </span>
+        </td>
+      )}
+      <td className="px-2 py-2 text-center">
+        {(() => {
+          const b = fstatusBadge(r.fstatus);
+          return (
+            <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${b.chip}`}>
+              {b.label}
+            </span>
+          );
+        })()}
+        {/* 2026-06-09 ภูม: badge "ยังถึงไม่ได้" removed — row tint
+            (pink/rose for notYetWarehouse) + status pill already
+            signal it visually; the extra chip was redundant clutter.
+            Checkbox disable + tooltip still active (sufficient). */}
+        {r.fcredit && r.fcredit !== "" && (
+          <div className="mt-1">
+            {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
+            <Link
+              href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+              className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5"
+            >
+              เครดิตได้
+            </Link>
+          </div>
+        )}
+        {/* re-sweep A2 #6 — per-row bill-to-customer (4→5). Money-tier
+            only, and ONLY when the goods have arrived (fstatus 4 =
+            ถึงไทยแล้ว). Audit 2026-06-18: was `< 5` (showed on 1/2/3
+            too → could bill goods still in China). 5/6/7 = already
+            billed (the action no-ops those). The group-collect header
+            above bills the whole split at once; this per-row button
+            still bills one ซอย (e.g. a single-parcel non-split row). */}
+        {showMoney && Number(r.fstatus) === 4 && (
+          <div className="mt-1">
+            <BillToCustomerButton fID={r.id} />
+          </div>
+        )}
+      </td>
+      <td className="px-2 py-2 text-center">
+        <span
+          className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
+            r.cntPaid ? CNTSTATUS_CFG.paid.chip : CNTSTATUS_CFG.unpaid.chip
+          }`}
+        >
+          {r.cntPaid ? CNTSTATUS_CFG.paid.label : CNTSTATUS_CFG.unpaid.label}
+        </span>
+        {r.trackingDup && (
+          <div className="mt-1">
+            <span className="inline-block rounded-full bg-orange-400 text-orange-950 border border-orange-600 text-[9px] px-1.5 py-0.5">
+              {r.cntPaid ? "จ่ายซ้ำแล้ว" : "กำลังจะจ่ายซ้ำ"}
+            </span>
+          </div>
+        )}
+      </td>
+      <td className="px-2 py-2 max-w-[140px] text-[11px]">
+        <div className="truncate" title={r.fnote ?? ""}>{r.fnote ?? ""}</div>
+      </td>
+    </tr>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
 
@@ -779,6 +1013,15 @@ function filterRows(rows: DetailRow[], filter: FilterKey): DetailRow[] {
 function fmt(n: number | null | undefined, digits: number): string {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return "-";
   return Number(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+// FIX 1 — CBM precision. fvolume can be tiny (e.g. 0.00220 คิว for a MOMO parcel)
+// and rounds to "0.00" at 2 dp. Legacy + the forwarder detail show 5 dp, so the
+// คิว reads as a real value. Money/price precision is UNCHANGED — this is the
+// CBM column only.
+function fmtCbm(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return "-";
+  return Number(n).toLocaleString("en-US", { minimumFractionDigits: 5, maximumFractionDigits: 5 });
 }
 
 function fmtN(n: number | null | undefined): string {

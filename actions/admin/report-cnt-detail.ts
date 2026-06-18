@@ -727,3 +727,103 @@ export async function adminReportCntBillToCustomer(
     },
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════
+// adminReportCntBillGroupToCustomer — group bill (FIX 3 · 2026-06-18 owner)
+//   Bill an ENTIRE -N sibling group ("ซอยตู้") in ONE motion. A MOMO carrier
+//   splits one customer shipment into -N/-N/M sub-tracking rows, each a
+//   separate tb_forwarder row; billing them per-row makes the customer owe
+//   per-box. This action loops the PROVEN per-row money writer
+//   `adminReportCntBillToCustomer` over every member fID — there is NO new
+//   money path; each member runs through the same 4→5 flip + promo recompute
+//   + idempotency guard + status-log + notify.
+//
+// Customer-side aggregation: after every member flips to fstatus 5 (รอชำระเงิน)
+// they ALL surface in the customer's forwarder list, and the existing multi-bill
+// pay modal (`ForwarderPayModal` · legacy payForwarder([ids])) lets the customer
+// tick + pay the whole group in one payment that sums by user. So the customer
+// owes ONE combined amount for the group with no further change needed.
+//
+// Validation + auth + reachability mirror the per-row action. The fIDs are
+// pre-resolved client-side from the group's billable members (fstatus 4); the
+// server re-runs the per-row gate on each, so an ineligible/stale row is a safe
+// no-op or refusal, never a wrong bill.
+// ═════════════════════════════════════════════════════════════════════
+
+const billGroupSchema = z.object({
+  fIDs: z
+    .array(z.union([z.string(), z.number()]).transform((v) => Number(v)))
+    .min(1, { message: "กรุณาเลือกอย่างน้อย 1 รายการ" })
+    .max(500, { message: "เลือกได้สูงสุด 500 รายการต่อกลุ่ม" })
+    .refine((arr) => arr.every((n) => Number.isFinite(n) && n > 0), {
+      message: "fID ไม่ถูกต้อง",
+    }),
+});
+export type BillGroupInput = z.input<typeof billGroupSchema>;
+
+export async function adminReportCntBillGroupToCustomer(
+  input: BillGroupInput,
+): Promise<
+  AdminActionResult<{
+    billed: number;
+    alreadyBilled: number;
+    failed: number;
+    totalPricePay: number;
+    errors: Array<{ fID: number; error: string }>;
+  }>
+> {
+  const parsed = billGroupSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  // De-dup defensively (a double-tick shouldn't bill the same row twice — though
+  // the per-row idempotency below already no-ops fstatus≥5).
+  const fIDs = Array.from(new Set(parsed.data.fIDs));
+
+  // Role-gate ONCE here (the per-row action also gates, but gating up front means
+  // a non-money role is refused before any row is touched). The loop then reuses
+  // the per-row writer — the single money writer for this transition.
+  return withAdmin<{
+    billed: number;
+    alreadyBilled: number;
+    failed: number;
+    totalPricePay: number;
+    errors: Array<{ fID: number; error: string }>;
+  }>(["super", "ops", "accounting"], async ({ adminId }) => {
+    let billed = 0;
+    let alreadyBilled = 0;
+    let failed = 0;
+    let totalPricePay = 0;
+    const errors: Array<{ fID: number; error: string }> = [];
+
+    // Sequential (not Promise.all): each member is an independent 4→5 flip with
+    // its own idempotency guard; serial keeps the writes ordered + avoids
+    // hammering the DB with N concurrent updates for a large split.
+    for (const fID of fIDs) {
+      const res = await adminReportCntBillToCustomer({ fID });
+      if (!res.ok) {
+        failed += 1;
+        errors.push({ fID, error: res.error });
+        continue;
+      }
+      if (res.data?.alreadyBilled) {
+        alreadyBilled += 1;
+      } else {
+        billed += 1;
+      }
+      totalPricePay += res.data?.pricePay ?? 0;
+    }
+
+    await logAdminAction(adminId, "report_cnt.bill_group_to_customer", "tb_forwarder", fIDs.join(","), {
+      requested:      fIDs.length,
+      billed,
+      already_billed: alreadyBilled,
+      failed,
+      total_price_pay: totalPricePay,
+    });
+
+    revalidatePath("/admin/report-cnt", "layout");
+    revalidatePath("/admin/forwarders");
+    return { ok: true, data: { billed, alreadyBilled, failed, totalPricePay, errors } };
+  });
+}
