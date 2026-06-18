@@ -649,8 +649,11 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       </div>
                     )}
                     {/* re-sweep A2 #6 — per-row bill-to-customer (4→5). Money-tier
-                        only, and only when the row hasn't been billed yet. */}
-                    {showMoney && Number(r.fstatus) < 5 && (
+                        only, and ONLY when the goods have arrived (fstatus 4 =
+                        ถึงไทยแล้ว). Audit 2026-06-18: was `< 5` (showed on 1/2/3
+                        too → could bill goods still in China). 5/6/7 = already
+                        billed (the action no-ops those). */}
+                    {showMoney && Number(r.fstatus) === 4 && (
                       <div className="mt-1">
                         <BillToCustomerButton fID={r.id} />
                       </div>

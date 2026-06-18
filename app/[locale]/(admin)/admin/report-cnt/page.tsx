@@ -117,6 +117,11 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       existing.weightSum += Number(r.fweight ?? 0);
       existing.costSum   += Number(r.fcosttotalprice ?? 0);
       existing.priceSum  += Number(r.ftotalprice ?? 0);
+      // 0189 fix: container status = MIN(fstatus) across its trackings (the
+      // least-advanced = the true overall stage), matching the RPC path. Was:
+      // kept the FIRST row's fstatus → arbitrary/wrong. Ignore empty/null on
+      // BOTH sides so a blank first row can't pin the MIN (true SQL MIN).
+      if (r.fstatus && (!existing.fstatus || r.fstatus < existing.fstatus)) existing.fstatus = r.fstatus;
       // Keep the most recent fdatestatus4 / fdatecontainerclose (legacy emits any)
       if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
         existing.fdatestatus4 = r.fdatestatus4;
@@ -207,6 +212,12 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     sum_volume:           number | string;
     sum_cost:             number | string;
     sum_price:            number | string;
+    // 0189 (2026-06-18): the real per-cabinet status. min_fstatus = the
+    // least-advanced tracking = the container's true overall stage. Optional
+    // because prod runs the OLD 0146 RPC until เดฟ applies 0189 (the page
+    // falls back to a safe physical-milestone default below).
+    min_fstatus?:         string | null;
+    max_fstatus?:         string | null;
   };
 
   let groupedNoPaid: Omit<Grouped, "isPaid">[] = [];
@@ -233,6 +244,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled containers (parity with the RPC)
       .limit(50_000);
     if (isWaiting) q = q.lt("fstatus", "4");
     else            q = q.gt("fstatus", "3");
@@ -259,10 +271,15 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       fdatecontainerclose: r.fdatecontainerclose,
       fdatestatus4:        r.latest_fdatestatus4,
       ftransporttype:      r.ftransporttype ?? "",
-      // fstatus is a per-row attribute · with aggregation we surface the
-      // bucket label as a stand-in for the table renderer (it only uses
-      // fstatus to determine the bucket).
-      fstatus:             isWaiting ? "1" : "7",
+      // 0189 fix (2026-06-18 · ภูม/พี่ป๊อป "สถานะตู้มั่ว"): show the REAL
+      // representative status — MIN(fstatus) across the cabinet's trackings
+      // (the least-advanced one = the container's true stage). The old code
+      // HARDCODED `isWaiting ? '1' : '7'`, so a freshly scan-arrived container
+      // (fstatus 4 = ถึงไทยแล้ว) wrongly read "ส่งแล้ว" (7). Fallback when the
+      // RPC predates 0189 (prod, until เดฟ applies): the safe physical
+      // milestone — waiting → 1 (รอเข้าโกดังจีน), succeed → 4 (ถึงไทยแล้ว) —
+      // which ALREADY fixes the headline complaint (never a false "ส่งแล้ว").
+      fstatus:             r.min_fstatus ?? (isWaiting ? "1" : "4"),
       trackCount:          Number(r.row_count ?? 0),
       volumeSum:           Number(r.sum_volume ?? 0),
       weightSum:           Number(r.sum_weight ?? 0),
@@ -584,6 +601,7 @@ async function loadHeaderCounts(
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled
       .lt("fstatus", "4");
     if (transportType) q = q.eq("ftransporttype", transportType);
     const r = await q;
@@ -596,6 +614,7 @@ async function loadHeaderCounts(
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled
       .gt("fstatus", "3");
     if (transportType) q = q.eq("ftransporttype", transportType);
     if (startDate && endDate) {

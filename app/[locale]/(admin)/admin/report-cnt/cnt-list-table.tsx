@@ -244,6 +244,10 @@ export function CntListTable({
   // Aggregates for the orange summary band (matches legacy L532-538 jQuery
   // .t7..t12 + .t16). avgDay = สูตรเฉลี่ย วันที่รอเข้าโกดัง — averaged across
   // all containers with non-null diffDay.
+  // Footer sums iterate `rowsWithDiff` (same membership the body renders, with
+  // diffDay already computed) — NOT the raw `rows` prop — so the footer can
+  // never drift from the visible body if a client-side filter is ever added
+  // (audit 2026-06-18 defensive decoupling; sort doesn't change membership).
   const totals = useMemo(() => {
     let trackCount = 0;
     let volumeSum = 0;
@@ -253,24 +257,21 @@ export function CntListTable({
     let profitSum = 0;
     let dayTotal = 0;
     let dayCount = 0;
-    for (const r of rows) {
+    for (const r of rowsWithDiff) {
       trackCount += r.trackCount;
       volumeSum  += r.volumeSum;
       weightSum  += r.weightSum;
       costSum    += r.costSum;
       priceSum   += r.priceSum;
-      profitSum  += r.priceSum - r.costSum;
-      const d = isWaiting
-        ? diffDateNow(r.fdatecontainerclose)
-        : diffDateCNT(r.fdatecontainerclose, r.fdatestatus4);
-      if (d != null) {
-        dayTotal += d;
+      profitSum  += r.profitSum;
+      if (r.diffDay != null) {
+        dayTotal += r.diffDay;
         dayCount += 1;
       }
     }
     const avgDay = dayCount > 0 ? Math.round(dayTotal / dayCount) : 0;
     return { trackCount, volumeSum, weightSum, costSum, priceSum, profitSum, avgDay };
-  }, [rows, isWaiting]);
+  }, [rowsWithDiff]);
 
   function toggle(code: string) {
     setSelected((prev) => {

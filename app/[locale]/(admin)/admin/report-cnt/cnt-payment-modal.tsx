@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, useTransition, type FormEvent } from "reac
 import { useRouter } from "next/navigation";
 import { adminCreateCntPayment } from "@/actions/admin/cnt-payment";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { confirm } from "@/components/ui/confirm";
 
 export type SelectedSummary = {
   fcabinetnumber: string;
@@ -66,7 +67,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
 
   const totalSelectedAmount = selected.reduce((s, c) => s + c.costSum, 0);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSuccessFlash(null);
@@ -84,6 +85,13 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
       nameAccount:    String(fd.get("nameAccount") ?? "").trim(),
     };
     const file = (fd.get("cntFile") as File | null) ?? null;
+
+    // §0f confirm-before-mutate (audit 2026-06-18) — this files a tb_cnt
+    // withdrawal request (money path) for the ticked containers.
+    const ok = await confirm(
+      `ยืนยันส่งคำขอจ่ายเงินตู้ ${selected.length} ตู้ · จำนวนเงิน ฿${input.cntAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ?`,
+    );
+    if (!ok) return;
 
     startTransition(async () => {
       const result = await adminCreateCntPayment(input, file && file.size > 0 ? file : null);

@@ -141,6 +141,13 @@ const editForwarderSchema = z.object({
   customComparison:      z.enum(["0", "1"] as const).optional(),
   /** ค่าเทียบ threshold (1 คิว = N kg) — used only when customComparison === '1'. */
   userComparisonValue:   z.number().min(0).max(99999.99).optional(),
+  /**
+   * ค่าเทียบ on the ORDER TOTAL (ภูม 2026-06-18) — Σweight÷Σcbm of every sibling
+   * tracking. The per-tracking editor sends this so the KG-vs-CBM basis decision
+   * is made on the whole order, not this single row. Optional → undefined keeps
+   * the legacy per-row decision (single-row edit form / other callers).
+   */
+  comparisonKgPerCbm:    z.number().min(0).max(9999999).optional(),
 
   // ── Money-side adders / discount (legacy L1217-1241) ──
   fDiscount:              z.number().min(0).max(9999999.99).optional(),
@@ -419,6 +426,10 @@ export async function adminUpdateForwarderDimensions(
         // per-order ค่าเทียบ override — wins over the tb_users value when ON.
         customComparisonSwitch,
         customComparisonValue,
+        // ค่าเทียบ decision on the order total (ภูม 2026-06-18) — when the
+        // per-tracking editor supplies Σweight÷Σcbm, the KG-vs-CBM basis is
+        // decided on the whole order; undefined → this row's own ratio.
+        comparisonKgPerCbm: d.comparisonKgPerCbm,
         docTierEligible,
         docTierDiscountCbm,
       };

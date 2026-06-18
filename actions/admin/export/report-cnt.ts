@@ -97,6 +97,8 @@ type RpcSummary = {
   sum_volume:           number | string;
   sum_cost:             number | string;
   sum_price:            number | string;
+  min_fstatus?:         string | null; // 0189 — real per-cabinet status
+  max_fstatus?:         string | null;
 };
 
 // Mirror of the page's groupByContainer() (used only on the fallback path).
@@ -111,6 +113,9 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       existing.weightSum += Number(r.fweight ?? 0);
       existing.costSum   += Number(r.fcosttotalprice ?? 0);
       existing.priceSum  += Number(r.ftotalprice ?? 0);
+      // 0189 parity: container status = MIN(fstatus) across trackings (ignore
+      // empty/null on both sides — true SQL MIN semantics).
+      if (r.fstatus && (!existing.fstatus || r.fstatus < existing.fstatus)) existing.fstatus = r.fstatus;
       if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
         existing.fdatestatus4 = r.fdatestatus4;
       }
@@ -186,6 +191,7 @@ export async function exportReportCntAll(
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled (parity with the RPC)
       .limit(50_000);
     if (isWaiting) q = q.lt("fstatus", "4");
     else            q = q.gt("fstatus", "3");
@@ -213,7 +219,8 @@ export async function exportReportCntAll(
       fdatecontainerclose: r.fdatecontainerclose,
       fdatestatus4:        r.latest_fdatestatus4,
       ftransporttype:      r.ftransporttype ?? "",
-      fstatus:             isWaiting ? "1" : "7",
+      // 0189 parity with page.tsx — real MIN(fstatus), not the old hardcode.
+      fstatus:             r.min_fstatus ?? (isWaiting ? "1" : "4"),
       trackCount:          Number(r.row_count ?? 0),
       volumeSum:           Number(r.sum_volume ?? 0),
       weightSum:           Number(r.sum_weight ?? 0),

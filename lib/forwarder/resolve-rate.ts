@@ -133,6 +133,19 @@ export interface ResolveRateInput {
   /** userComparisonValue — the KG/CBM ratio threshold (only used when enabled). */
   comparisonValue: number | string | null;
   /**
+   * ค่าเทียบ ON THE ORDER TOTAL (ภูม/พี่ป๊อป 2026-06-18: "ค่าเทียบเราไม่เทียบ
+   * ต่อแทรค เราเทียบต่อ จำนวนรวม กิโล/คิว ด้านบน"). When a multi-tracking order
+   * is repriced, the KG-vs-CBM BASIS decision (kgPerCbm > threshold) must be made
+   * on the AGGREGATE Σweight÷Σcbm of the whole order — NOT this single row's
+   * weight/cbm. The per-row PRICE still uses this row's own weight/cbm × the
+   * chosen rate; only the basis DECISION switches to the order total.
+   *
+   * Optional + back-compat: when undefined (single-row edit / non-tracking
+   * callers) the decision falls back to this row's own kgPerCbm (legacy
+   * behaviour). Only consulted when comparison pricing is ON.
+   */
+  comparisonKgPerCbm?: number;
+  /**
    * customComparisonSwitch — per-order comparison override. When ON the legacy
    * (calPriceForwarder L2098-2106) forces the threshold to 200 (fresh order) /
    * 150 (linked refOrder). When ON, comparisonEnabled is treated as true.
@@ -330,9 +343,22 @@ export function resolveForwarderRate(
     threshold = input.hasRefOrder ? 150 : 200;
   }
 
+  // ค่าเทียบ basis decision uses the ORDER-TOTAL ratio when the caller supplies
+  // it (multi-tracking save · ภูม 2026-06-18); else this row's own (back-compat).
+  // Require > 0 (not just finite): a degenerate 0 aggregate falls back to the
+  // row's own ratio — which for a zero-weight order is also 0 → same CBM result,
+  // but makes the resolver self-defending against a caller that sends 0 to mean
+  // "no aggregate" (review 2026-06-18 nit).
+  const decisionKgPerCbm =
+    input.comparisonKgPerCbm != null &&
+    Number.isFinite(input.comparisonKgPerCbm) &&
+    input.comparisonKgPerCbm > 0
+      ? input.comparisonKgPerCbm
+      : kgPerCbm;
+
   if (comparisonOn) {
     // ── comparison-priced (forwarder.php L1947-1980) ──
-    if (kgPerCbm > threshold) {
+    if (decisionKgPerCbm > threshold) {
       // bill by KG (compare=1, value=fWeight, refPrice=1)
       let value = weight;
       const probe = rateForBasis("kg", candidates, value);
