@@ -42,7 +42,7 @@
 import type React from "react";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Eye, CheckCircle2,
@@ -163,7 +163,7 @@ export default async function AdminServiceOrderEditPage({
 }) {
   const { hNo } = await params;
   const { roles } = await requireAdmin();
-  const superAdmin = roles.includes("super");
+  const superAdmin = isGodRole(roles);
   const admin = createAdminClient();
 
   const { data: rowRaw, error: rowErr } = await admin

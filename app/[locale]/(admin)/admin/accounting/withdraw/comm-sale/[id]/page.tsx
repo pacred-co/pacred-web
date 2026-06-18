@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
@@ -41,7 +42,11 @@ export default async function AdminWithdrawCommSaleDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Commission amounts (ก่อน WHT / WHT / รับสุทธิ / ค่าคอม 1%) = money-internal
+  // (owner 2026-06-18): only ultra/accounting/pricing. Selling-price item columns
+  // (ยอดขาย CHN / ส่วนลด / หลังหักลด) stay visible to all.
+  const showMoney = canViewCostProfit(roles);
   const { id: idStr } = await params;
   const id = Number.parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -74,12 +79,12 @@ export default async function AdminWithdrawCommSaleDetailPage({
           </span>
         </header>
 
-        {/* Money card */}
-        <section className="grid sm:grid-cols-4 gap-3">
+        {/* Money card — commission amounts only for cost-allowed viewers */}
+        <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-1"}`}>
           <Stat label="ผู้รับเงิน (rep)" value={header.adminid} mono />
-          <Stat label="ค่าคอม (ก่อน WHT)" value={thb(header.commbefore)} small />
-          <Stat label="หัก WHT" value={thb(header.withholding)} small />
-          <Stat label="รับสุทธิ" value={thb(header.amount)} />
+          {showMoney && <Stat label="ค่าคอม (ก่อน WHT)" value={thb(header.commbefore)} small />}
+          {showMoney && <Stat label="หัก WHT" value={thb(header.withholding)} small />}
+          {showMoney && <Stat label="รับสุทธิ" value={thb(header.amount)} />}
         </section>
 
         {/* Bank info */}
@@ -113,7 +118,10 @@ export default async function AdminWithdrawCommSaleDetailPage({
           <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
             <h2 className="font-bold text-sm">📦 รายการ forwarder ({totals.itemCount.toLocaleString("th-TH")})</h2>
             <p className="text-xs text-muted">
-              Σ ยอดขาย CHN <span className="font-mono font-bold text-primary-700">{thb(totals.salePriceCHN)}</span> · ค่าคอม 1% = <span className="font-mono font-bold">{thb(totals.salePriceCHN * 0.01)}</span>
+              Σ ยอดขาย CHN <span className="font-mono font-bold text-primary-700">{thb(totals.salePriceCHN)}</span>
+              {showMoney && (
+                <> · ค่าคอม 1% = <span className="font-mono font-bold">{thb(totals.salePriceCHN * 0.01)}</span></>
+              )}
             </p>
           </div>
           {items.length === 0 ? (

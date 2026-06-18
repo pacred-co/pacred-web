@@ -25,6 +25,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 
@@ -55,8 +56,11 @@ type PayoutRow = {
 export async function exportCommissionsAll(
   status: string | null,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
-  // Money page → super | accounting — same gate as the page.
-  await requireAdmin(["super", "accounting"]);
+  // Money page → super | accounting — same gate as the page (reachability).
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Commission amount (รับสุทธิ) = money-internal — omit it from the export for
+  // viewers without cost/profit clearance (super included) per owner 2026-06-18.
+  const showMoney = canViewCostProfit(roles);
 
   // Defensively normalise the status (mirror the page: only '2'/'3' filter, else all).
   const statusFilter = status === "2" || status === "3" ? status : null;
@@ -90,7 +94,7 @@ export async function exportCommissionsAll(
     id: p.id,
     useridmain: p.useridmain ?? "",
     admincreate: p.admincreate ?? "",
-    amount: Number(p.amount ?? 0).toFixed(2),
+    ...(showMoney ? { amount: Number(p.amount ?? 0).toFixed(2) } : {}),
     status: STATUS_LABEL[p.status ?? ""] ?? p.status ?? "",
     requested_at: p.date ? p.date.slice(0, 10) : "",
     paid_at: p.dateslip ? p.dateslip.slice(0, 10) : "",

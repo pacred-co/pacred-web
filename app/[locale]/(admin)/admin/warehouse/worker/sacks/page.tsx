@@ -9,7 +9,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { loadSacks } from "@/lib/warehouse/worker-queries";
 import { SacksPanel } from "./sacks-panel";
 
@@ -19,7 +19,7 @@ export default async function WarehouseSacksPage() {
   const { roles } = await requireAdmin(["super", "warehouse", "ops", "manager"]);
   const sacks = await loadSacks({ limit: 100 });
 
-  const isSupervisor = roles.includes("super") || roles.includes("manager");
+  const isSupervisor = isGodRole(roles) || roles.includes("manager");
 
   const rows = sacks.map((s) => ({
     id: s.id,

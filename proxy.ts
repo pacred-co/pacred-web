@@ -157,7 +157,7 @@ export default async function middleware(request: NextRequest) {
       .select("role")
       .eq("profile_id", user.id)
       .eq("is_active", true);
-    const isSuper = (rows ?? []).some((r) => r.role === "super");
+    const isSuper = (rows ?? []).some((r) => r.role === "super" || r.role === "ultra");
     if (!isSuper) {
       const bounce = NextResponse.redirect(new URL("/admin", request.url));
       response.cookies.getAll().forEach((c) => bounce.cookies.set(c));

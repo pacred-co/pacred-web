@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import {
   FREIGHT_SHIPMENT_STATUS_LABEL,
   FREIGHT_TRANSPORT_MODE_LABEL,
@@ -363,13 +364,18 @@ export default async function AdminFreightShipmentDetailPage({
     admin: Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
 
-  const isSuperOrAccounting = roles.includes("super") || roles.includes("accounting");
+  // SPLIT (owner 2026-06-18): the P&L dashboard is MONEY-internal (cost/profit) →
+  // ultra/accounting/pricing only (super excluded · canViewCostProfit). The
+  // create-ใบขน / declaration ACTION gate stays a god-role||accounting privilege
+  // gate (super retains the operational action, just not the cost/profit view).
+  const canViewPnl = canViewCostProfit(roles);
+  const canCreateDeclaration = isGodRole(roles) || roles.includes("accounting");
 
   const detailData: ShipmentDetailData = {
     id:                         header.id,
     job_no:                     header.job_no,
     status:                     header.status,
-    isSuperOrAccounting,
+    isSuperOrAccounting:        canCreateDeclaration,
     commercial_value_usd:       header.commercial_value_usd,
     exchange_rate:              header.exchange_rate,
     declared_customs_value_thb: header.declared_customs_value_thb,
@@ -401,8 +407,8 @@ export default async function AdminFreightShipmentDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* W5 — internal P&L dashboard (super/accounting/freight only · advisory) */}
-          {isSuperOrAccounting && (
+          {/* W5 — internal P&L dashboard (MONEY-internal · ultra/accounting/pricing only) */}
+          {canViewPnl && (
             <Link
               href={`/admin/freight/shipments/${header.id}/p-and-l`}
               className="rounded-lg border border-border px-3 py-1 text-xs font-medium hover:bg-surface-alt"
@@ -503,14 +509,14 @@ export default async function AdminFreightShipmentDetailPage({
             {!activeCd && header.status !== "cancelled" && (
               <DeclarationCreateButton
                 shipmentId={header.id}
-                allowedToCreate={isSuperOrAccounting}
+                allowedToCreate={canCreateDeclaration}
               />
             )}
           </div>
         </div>
         {cdRows.length === 0 ? (
           <p className="text-xs text-muted">
-            ยังไม่มีใบขนสินค้าสำหรับงานนี้{!isSuperOrAccounting && " — ต้องเป็น super หรือ accounting จึงจะสร้างได้"}
+            ยังไม่มีใบขนสินค้าสำหรับงานนี้{!canCreateDeclaration && " — ต้องเป็น super หรือ accounting จึงจะสร้างได้"}
           </p>
         ) : (
           <ul className="space-y-1.5 text-xs">

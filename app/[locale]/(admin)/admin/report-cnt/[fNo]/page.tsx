@@ -34,6 +34,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
@@ -126,10 +127,10 @@ export default async function AdminReportCntDetailPage({
   const fCabinetNumber = decodeURIComponent(fNo);
   if (!fCabinetNumber) notFound();
 
-  const showMoney =
-    roles.includes("super") ||
-    roles.includes("ops") ||
-    roles.includes("accounting");
+  // Money-internal visibility (owner · mig 0189: super loses cost/profit). Only
+  // ultra/accounting/pricing see ราคาต้นทุน/กำไร/เรทต้นทุน + the cost-update tab;
+  // super/ops/warehouse see the container detail without money internals.
+  const showMoney = canViewCostProfit(roles);
 
   const isCostUpdate = sp.action === "cost-update";
 
@@ -665,14 +666,29 @@ export default async function AdminReportCntDetailPage({
             <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
               <p className="font-semibold">ไม่มีสิทธิ์เข้าถึง</p>
               <p className="mt-2 text-xs">
-                การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ super / ops / accounting (บัญชี
-                warehouse ดูได้แต่แก้ต้นทุนไม่ได้).
+                การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ ultra / accounting / pricing
+                (บัญชีอื่นดูตู้ได้แต่ไม่เห็นต้นทุน/กำไร).
               </p>
             </div>
           )
         ) : (
           <ContainerDetailClient
-            rows={detailRows}
+            rows={
+              // DATA-LAYER hide (security · mig 0189): when the viewer may NOT
+              // see money internals, strip the per-row cost/profit/cost-rate
+              // fields BEFORE they serialize to the client — never ship a
+              // hidden-but-present cost. profitItem is derived (sell − cost), so
+              // it's zeroed alongside cost to close the derived-value leak.
+              showMoney
+                ? detailRows
+                : detailRows.map((r) => ({
+                    ...r,
+                    rate: 0,
+                    fcosttotalprice: 0,
+                    fcosttotalpricesheet: 0,
+                    profitItem: 0,
+                  }))
+            }
             showMoney={showMoney}
             canBulkCheck={showMoney}
             cabinetIsPaid={cabinetIsPaid}

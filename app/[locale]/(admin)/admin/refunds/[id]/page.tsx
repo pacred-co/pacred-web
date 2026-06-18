@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   REFUND_STATUS_LABEL,
   REFUND_SOURCE_LABEL,
@@ -197,7 +197,7 @@ export default async function AdminRefundDetailPage({
     admin:      Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
 
-  const canMutate = roles.includes("super") || roles.includes("accounting");
+  const canMutate = isGodRole(roles) || roles.includes("accounting");
 
   // Resolve the paid ledger row's amount/note for transparency when paid.
   // New refunds credit the LIVE legacy ledger (tb_wallet_hs, linked via

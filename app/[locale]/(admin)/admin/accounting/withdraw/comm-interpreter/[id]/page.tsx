@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
@@ -40,7 +41,11 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Commission amounts (ก่อน WHT / WHT / รับสุทธิ) + ส่วนต่างหยวน (yuan margin
+  // the commission derives from) = money-internal (owner 2026-06-18): only
+  // ultra/accounting/pricing.
+  const showMoney = canViewCostProfit(roles);
   const { id: idStr } = await params;
   const id = Number.parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -73,11 +78,11 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
           </span>
         </header>
 
-        <section className="grid sm:grid-cols-4 gap-3">
+        <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-1"}`}>
           <Stat label="ผู้รับเงิน (ล่าม)" value={header.adminid} mono />
-          <Stat label="ค่าคอม (ก่อน WHT)" value={thb(header.commbefore)} small />
-          <Stat label="หัก WHT" value={thb(header.withholding)} small />
-          <Stat label="รับสุทธิ" value={thb(header.amount)} />
+          {showMoney && <Stat label="ค่าคอม (ก่อน WHT)" value={thb(header.commbefore)} small />}
+          {showMoney && <Stat label="หัก WHT" value={thb(header.withholding)} small />}
+          {showMoney && <Stat label="รับสุทธิ" value={thb(header.amount)} />}
         </section>
 
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
@@ -108,9 +113,11 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-baseline justify-between gap-3">
             <h2 className="font-bold text-sm">📦 รายการ ฝากโอนหยวน ({totals.itemCount.toLocaleString("th-TH")})</h2>
-            <p className="text-xs text-muted">
-              Σ ส่วนต่างหยวน <span className="font-mono font-bold text-primary-700">¥{totals.yuanMargin.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-            </p>
+            {showMoney && (
+              <p className="text-xs text-muted">
+                Σ ส่วนต่างหยวน <span className="font-mono font-bold text-primary-700">¥{totals.yuanMargin.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              </p>
+            )}
           </div>
           {items.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
@@ -122,7 +129,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
                     <th className="px-3 py-2">hno</th>
                     <th className="px-3 py-2">วันที่สั่งจ่าย</th>
                     <th className="px-3 py-2">ลูกค้า</th>
-                    <th className="px-3 py-2 text-right">ส่วนต่างหยวน</th>
+                    {showMoney && <th className="px-3 py-2 text-right">ส่วนต่างหยวน</th>}
                     <th className="px-3 py-2">hStatus</th>
                   </tr>
                 </thead>
@@ -139,9 +146,11 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
                       </td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(it.order?.hdate ?? null)}</td>
                       <td className="px-3 py-2 font-mono text-xs">{it.order?.userid ?? "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs font-bold">
-                        ¥{it.diffyaun.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
+                      {showMoney && (
+                        <td className="px-3 py-2 text-right font-mono text-xs font-bold">
+                          ¥{it.diffyaun.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </td>
+                      )}
                       <td className="px-3 py-2">
                         <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
                           {it.order?.hstatus ?? "—"}

@@ -40,6 +40,7 @@ import {
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
+import { isGodRole } from "@/lib/admin/god-role";
 import {
   menuForRoles, menuShowAll, primaryRole,
   type BadgeCounts, type MenuItem, type MenuSection,
@@ -61,7 +62,7 @@ import {
 // which the (admin) layout / per-page guards consume.
 // ──────────────────────────────────────────────────────────────
 function filterByPhase(items: MenuItem[], role: AdminRole | null): MenuItem[] {
-  if (role === "super") return items; // super sees everything
+  if (role && isGodRole([role])) return items; // ultra + super see everything
   return items
     .map((item): MenuItem | null => {
       const hasOriginalChildren = !!item.children?.length;
@@ -165,6 +166,7 @@ function Icon({ name, active }: { name?: string; active: boolean }) {
 // 0091 (sales + qa + 13 freight_*). i18n keys under `role.*` are added
 // in messages/th.json + en.json by Agent ZZ in the same wave.
 const ROLE_LABEL_KEY: Record<AdminRole, string> = {
+  ultra:       "role.ultra",   // Ultra Admin Z (mig 0189)
   super:       "role.super",
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // G4 (synthesis §3) added a dedicated role.manager i18n key + the
@@ -466,7 +468,7 @@ export function AdminSidebar({
   // can flip this to expose the full CEO toolbox even when their role
   // would normally show a narrower menu (e.g. when super wears a
   // sales/warehouse hat for a day). Non-super never sees the toggle.
-  const isSuper = roles.includes("super");
+  const isSuper = isGodRole(roles);
   const [showAll, setShowAll] = useState(false);
 
   // Per-role purpose-built menu — faithful to the legacy per-role .php.

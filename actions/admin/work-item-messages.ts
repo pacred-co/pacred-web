@@ -34,6 +34,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isGodRole, type AdminRole } from "@/lib/auth/require-admin";
 import { sendNotification } from "@/lib/notifications";
 import { logger, redactId } from "@/lib/logger";
 import {
@@ -624,9 +625,9 @@ export async function clearWaiting(
       return { ok: false, error: "not_blocked" };
     }
 
-    // ACL: caller must be in the blocking role, OR super.
+    // ACL: caller must be in the blocking role, OR a god role (ultra/super).
     const callerRoles = await loadAdminRoles(admin, adminId);
-    const isSuper = callerRoles.includes("super");
+    const isSuper = isGodRole(callerRoles as AdminRole[]);
     const blockingRole = workItem.blocked_on_role;
     if (!isSuper && (!blockingRole || !callerRoles.includes(blockingRole))) {
       return { ok: false, error: "forbidden:not_blocking_role" };
@@ -778,7 +779,7 @@ export async function softDeleteMessage(
     let isSuper = false;
     if (!isAuthor) {
       const roles = await loadAdminRoles(admin, adminId);
-      isSuper = roles.includes("super");
+      isSuper = isGodRole(roles as AdminRole[]);
       if (!isSuper) return { ok: false, error: "forbidden:not_author" };
     }
 

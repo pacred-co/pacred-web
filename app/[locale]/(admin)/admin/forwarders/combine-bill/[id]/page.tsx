@@ -31,7 +31,7 @@
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCombineBillPrintHref } from "@/lib/admin/combine-bill-urls";
 import { SITE_NAME } from "@/components/seo/site";
@@ -104,7 +104,7 @@ export default async function CombineBillDetailPage({
     "super", "ops", "warehouse", "accounting",
   ]);
   const canMutate =
-    roles.includes("super") ||
+    isGodRole(roles) ||
     roles.includes("ops") ||
     roles.includes("warehouse") ||
     roles.includes("accounting");

@@ -21,6 +21,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 
 // Safety cap for the "export all filtered" path. 10,000 comfortably covers a
 // single month's cleared forwarder revenue in one file while bounding the
@@ -85,7 +86,12 @@ export async function exportAccForwarderAll(
   filter: AccForwarderExportFilter,
 ): Promise<{ rows: AccForwarderExportRow[]; truncated: boolean }> {
   // RBAC — same roles the page gates on.
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // MONEY: `cost` + `service_fee` (profit = customerPay − cost) are money-internal.
+  // The action MUST self-validate — a direct/crafted call by a `super` user must
+  // NOT be able to export cost/profit. Omit those keys server-side when the
+  // caller is not ultra/accounting/pricing (owner 2026-06-18, mig 0189).
+  const showMoney = canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -274,13 +280,13 @@ export async function exportAccForwarderAll(
       order_id: f.id,
       tracking: f.ftrackingchn ?? "",
       cabinet: f.fcabinetnumber ?? "",
-      cost: numberFormat2(fCostTotalPrice),
+      ...(showMoney ? { cost: numberFormat2(fCostTotalPrice) } : {}),
       real_price: numberFormat2(fTotalPriceNotDis),
       discount: numberFormat2(fdiscount),
       goods_value: numberFormat2(fTotalPrice),
       customer_pay: numberFormat2(walletPayUser),
       wht: isCompany ? numberFormat2(fTotalPrice * 0.01) : "-",
-      service_fee: numberFormat2(walletPayUser - fCostTotalPrice),
+      ...(showMoney ? { service_fee: numberFormat2(walletPayUser - fCostTotalPrice) } : {}),
       member_code: f.userid,
       tax_id: corpNumber || "-",
       name: corpNumber ? cp?.corporatename ?? "" : `${u.username} ${u.userlastname}`.trim(),

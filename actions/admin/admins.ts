@@ -493,7 +493,7 @@ export async function adminBulkTransferSalesRep(
         .from("admins")
         .select("profile_id, role, is_active")
         .eq("profile_id", d.new_sales_admin_id)
-        .in("role", ["sales_admin", "super"])
+        .in("role", ["sales_admin", "super", "ultra"])
         .eq("is_active", true)
         .maybeSingle();
       if (targetErr) {

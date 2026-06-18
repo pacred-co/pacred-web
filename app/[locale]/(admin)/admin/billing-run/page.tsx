@@ -26,6 +26,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getInvoiceList } from "@/actions/admin/billing-run";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
@@ -256,10 +257,10 @@ export default async function BillingRunListPage({
   // so accounting can browse arrived containers + jump to billing in one
   // place. Mirrors /admin/report-cnt?page=succeed.
   const eligibleCabinets = await loadEligibleCabinets();
-  const showMoney =
-    roles.includes("super") ||
-    roles.includes("ops") ||
-    roles.includes("accounting");
+  // Money-internal: showMoney gates the fcosttotalprice (ต้นทุน) column. Owner
+  // 2026-06-18 — super + ops no longer see cost internals; only ultra/
+  // accounting/pricing do. (Previously super/ops/accounting.)
+  const showMoney = canViewCostProfit(roles);
 
   const requestedTab = (sp.tab ?? "recent") as TabKey;
   const tab = TABS.find((t) => t.key === requestedTab)?.key ?? "recent";

@@ -32,6 +32,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logger } from "@/lib/logger";
 import {
   type DateRange,
@@ -105,7 +106,13 @@ function finalize(
 export async function getForwarderProfitAnalytics(
   range: DateRange,
 ): Promise<Result<ForwarderProfitAnalytics>> {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: cost/profit/margin are visible only to ultra/accounting/
+  // pricing (NOT super). Refuse to run the cost query for anyone else so the
+  // data never leaves the server.
+  if (!canViewCostProfit(roles)) {
+    return { ok: false, error: "ไม่มีสิทธิ์ดูข้อมูลต้นทุน/กำไร" };
+  }
   try {
     const admin = createAdminClient();
 
@@ -193,7 +200,10 @@ export async function getForwarderProfitAnalytics(
 export async function getForwarderProfitSummary(
   range: DateRange,
 ): Promise<Result<ProfitSummary>> {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  if (!canViewCostProfit(roles)) {
+    return { ok: false, error: "ไม่มีสิทธิ์ดูข้อมูลต้นทุน/กำไร" };
+  }
   const res = await getForwarderProfitAnalytics(range);
   if (!res.ok) return res;
   return { ok: true, data: res.data.summary };

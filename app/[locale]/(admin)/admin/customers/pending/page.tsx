@@ -15,7 +15,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { Clock } from "lucide-react";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 // Senior roles allowed to (re)assign the owning sales/CS rep — mirrors
 // ROUTING_ROLES in actions/admin/crm.ts (the actions enforce this server-side;
 // we gate the UI to match so non-senior roles see a read-only hint).
-const ASSIGN_ROLES = ["super", "manager", "sales_admin"];
+const ASSIGN_ROLES = ["manager", "sales_admin"];
 
 type Row = {
   userID: string;
@@ -57,7 +57,7 @@ export default async function AdminCustomersPendingPage({
   const { roles } = await requireAdmin(["ops", "sales_admin", "accounting"]);
   // super is implicit in requireAdmin (bypasses the role list) but won't
   // appear in `roles`; treat it as always-allowed to assign.
-  const canAssign = roles.includes("super") || roles.some((r) => ASSIGN_ROLES.includes(r));
+  const canAssign = isGodRole(roles) || roles.some((r) => ASSIGN_ROLES.includes(r));
 
   const sp = await searchParams;
   const page = parsePage(sp.page);

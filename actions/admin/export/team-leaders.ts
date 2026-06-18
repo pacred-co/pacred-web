@@ -25,6 +25,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 
@@ -56,7 +57,10 @@ export async function exportTeamLeadersAll(): Promise<{
   rows: CsvRow[];
   truncated: boolean;
 }> {
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Commission % = money-internal — omit from the export for non-cost viewers
+  // (super + sales_admin included) per owner 2026-06-18.
+  const showMoney = canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -91,7 +95,7 @@ export async function exportTeamLeadersAll(): Promise<{
       member_code: p?.member_code ?? "",
       name: fullName,
       phone: p?.phone ?? "",
-      commission_pct: `${(pct * 100).toFixed(2)}%`,
+      ...(showMoney ? { commission_pct: `${(pct * 100).toFixed(2)}%` } : {}),
       status: r.is_active ? "ใช้งาน" : "ปิดใช้งาน",
       created_at: (r.created_at ?? "").slice(0, 10),
     };

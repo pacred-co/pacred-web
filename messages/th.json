@@ -3187,6 +3187,7 @@
     "showAll": "แสดงเมนูทั้งหมด (super)",
     "showRole": "แสดงเฉพาะเมนูของฉัน",
     "role": {
+      "ultra": "Ultra Admin Z",
       "super": "ผู้ดูแลระบบสูงสุด",
       "manager": "ผู้จัดการ Cargo",
       "ops": "ฝ่ายปฏิบัติการ Cargo",

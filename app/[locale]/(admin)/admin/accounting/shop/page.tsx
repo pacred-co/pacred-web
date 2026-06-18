@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -272,7 +273,14 @@ export default async function AdminAccountingShopPage({
   // Legacy gate (acc-shop.php L46): CEO / Manager / QAAndQC /
   // Accounting / ITDT. Closest V3 RBAC = super + accounting; super
   // is always universal via requireAdmin.
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: ต้นทุน (cost) + ค่าบริการ (profit = sell − cost) are
+  // visible only to ultra/accounting/pricing (NOT super · owner 2026-06-18).
+  // When false we OMIT those two columns + their totals + CSV keys at the DATA
+  // layer. Revenue-side columns (ลูกค้าจ่ายมา · คืนเงิน · ราคาขาย) stay visible
+  // to all admins (selling, not money-internal). DERIVED-VALUE GUARD: ค่าบริการ
+  // = ราคาขาย − ต้นทุน, so it is hidden together with ต้นทุน.
+  const showMoney = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -525,8 +533,12 @@ export default async function AdminAccountingShopPage({
     { key: "pay_user", label: "ลูกค้าจ่ายมา (บาท)" },
     { key: "return_wallet", label: "คืนเงินลูกค้า (บาท)" },
     { key: "price_sell", label: "ราคาขาย (บาท)" },
-    { key: "cost", label: "ต้นทุน (บาท)" },
-    { key: "service_fee", label: "ค่าบริการ (บาท)" },
+    ...(showMoney
+      ? [
+          { key: "cost", label: "ต้นทุน (บาท)" },
+          { key: "service_fee", label: "ค่าบริการ (บาท)" },
+        ]
+      : []),
     { key: "member_code", label: "รหัสสมาชิก" },
     { key: "customer_name", label: "ชื่อ-นามสกุล" },
   ];
@@ -543,8 +555,12 @@ export default async function AdminAccountingShopPage({
       pay_user: numberFormat2(row.amount),
       return_wallet: numberFormat2(returnWallet),
       price_sell: numberFormat2(priceUser),
-      cost: numberFormat2(pricePCS),
-      service_fee: numberFormat2(profit),
+      ...(showMoney
+        ? {
+            cost: numberFormat2(pricePCS),
+            service_fee: numberFormat2(profit),
+          }
+        : {}),
       member_code: row.userid,
       customer_name: `${row.username} ${row.userlastname}`.trim(),
     };
@@ -792,12 +808,16 @@ export default async function AdminAccountingShopPage({
                                     <th title="เป็นยอดที่หักรายการคืนเงินแล้ว">
                                       ราคาขาย (บาท)
                                     </th>
-                                    <th title="เป็นยอดที่หักรายการคืนเงินแล้ว">
-                                      ต้นทุน (บาท)
-                                    </th>
-                                    <th title="ส่วนต่างคงเหลือนำยอดราคาขาย-ต้นทุน ที่มีการหักรายการคืนเงินไปแล้ว">
-                                      ค่าบริการ (บาท)
-                                    </th>
+                                    {showMoney && (
+                                      <th title="เป็นยอดที่หักรายการคืนเงินแล้ว">
+                                        ต้นทุน (บาท)
+                                      </th>
+                                    )}
+                                    {showMoney && (
+                                      <th title="ส่วนต่างคงเหลือนำยอดราคาขาย-ต้นทุน ที่มีการหักรายการคืนเงินไปแล้ว">
+                                        ค่าบริการ (บาท)
+                                      </th>
+                                    )}
                                     <th>รหัสสมาชิก</th>
                                     <th>ชื่อ-นามสกุล</th>
                                   </tr>
@@ -827,12 +847,16 @@ export default async function AdminAccountingShopPage({
                                     <td className="text-right priceUserAll">
                                       {numberFormat2(priceUserAll)}
                                     </td>
-                                    <td className="text-right pricePCSAll">
-                                      {numberFormat2(pricePCSAll)}
-                                    </td>
-                                    <td className="text-right profitAll">
-                                      {numberFormat2(profitAll)}
-                                    </td>
+                                    {showMoney && (
+                                      <td className="text-right pricePCSAll">
+                                        {numberFormat2(pricePCSAll)}
+                                      </td>
+                                    )}
+                                    {showMoney && (
+                                      <td className="text-right profitAll">
+                                        {numberFormat2(profitAll)}
+                                      </td>
+                                    )}
                                     <td className="text-right"></td>
                                     <td></td>
                                   </tr>
@@ -895,16 +919,20 @@ export default async function AdminAccountingShopPage({
                                         <td className="text-right">
                                           {numberFormat2(priceUser)}
                                         </td>
-                                        {/* 8 — ต้นทุน
+                                        {/* 8 — ต้นทุน (money-internal · hidden from non-cost roles)
                                             acc-shop.php L256 */}
-                                        <td className="text-right">
-                                          {numberFormat2(pricePCS)}
-                                        </td>
-                                        {/* 9 — ค่าบริการ
+                                        {showMoney && (
+                                          <td className="text-right">
+                                            {numberFormat2(pricePCS)}
+                                          </td>
+                                        )}
+                                        {/* 9 — ค่าบริการ (profit · money-internal)
                                             acc-shop.php L257 */}
-                                        <td className="text-right">
-                                          {numberFormat2(profit)}
-                                        </td>
+                                        {showMoney && (
+                                          <td className="text-right">
+                                            {numberFormat2(profit)}
+                                          </td>
+                                        )}
                                         {/* 10 — รหัสสมาชิก → link to legacy
                                             users/profile/<userID>/ which maps
                                             to /admin/customers/<id>

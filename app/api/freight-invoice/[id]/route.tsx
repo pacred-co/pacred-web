@@ -32,6 +32,8 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
 import { FreightCommercialInvoice, type FreightCommercialInvoiceData } from "@/components/pdf/freight-commercial-invoice";
 
@@ -168,6 +170,15 @@ export async function GET(
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
   }
 
+  // Dual-audience money gate (owner 2026-06-18). The DECLARED customs value /
+  // duty / VAT-base are MONEY-internal (มูลค่าสำแดง). A CUSTOMER sees their OWN
+  // invoice (RLS-scoped above) incl. its declared value; only ADMIN viewers who
+  // lack cost/profit access (super, freight_*_doc) get the declared block masked.
+  // The COMMERCIAL value (the amount the customer pays) is NOT masked.
+  // getAdminRoles() returns null for non-admins → customers never masked.
+  const viewerRoles = await getAdminRoles();
+  const adminMustHideMoney = viewerRoles != null && !canViewCostProfit(viewerRoles);
+
   // For drafts, supplement from parent shipment + parties (no snapshots yet).
   const admin = createAdminClient();
   const { data: shipment, error: shipmentErr } = await admin
@@ -254,14 +265,17 @@ export async function GET(
     exchange_rate:        Number(isIssued ? (invoice.exchange_rate        ?? 0) : (shipment.exchange_rate        ?? 0)),
     rate_date:            isIssued ? invoice.rate_date : shipment.rate_date,
     commercial_value_thb: Number(isIssued ? (invoice.commercial_value_thb ?? 0) : (shipment.commercial_value_thb ?? 0)),
-    declared_customs_value_thb: isIssued ? invoice.declared_customs_value_thb : shipment.declared_customs_value_thb,
-    declared_value_basis:       isIssued ? invoice.declared_value_basis       : shipment.declared_value_basis,
+    // DECLARED customs value / duty / VAT-base = MONEY-internal → nulled for
+    // non-cost admin viewers (the PDF omits each block when null). HS code +
+    // form-E flag are operational (kept).
+    declared_customs_value_thb: adminMustHideMoney ? null : (isIssued ? invoice.declared_customs_value_thb : shipment.declared_customs_value_thb),
+    declared_value_basis:       adminMustHideMoney ? null : (isIssued ? invoice.declared_value_basis       : shipment.declared_value_basis),
     hs_code:                    isIssued ? invoice.hs_code                    : shipment.hs_code,
-    duty_rate_pct:              isIssued ? invoice.duty_rate_pct              : shipment.duty_rate_pct,
-    duty_thb:                   isIssued ? invoice.duty_thb                   : shipment.duty_thb,
-    vat_base_thb:               isIssued ? invoice.vat_base_thb               : shipment.vat_base_thb,
-    vat_thb:                    isIssued ? invoice.vat_thb                    : shipment.vat_thb,
-    vat_plan_label:             isIssued ? invoice.vat_plan_label             : shipment.vat_plan_label,
+    duty_rate_pct:              adminMustHideMoney ? null : (isIssued ? invoice.duty_rate_pct              : shipment.duty_rate_pct),
+    duty_thb:                   adminMustHideMoney ? null : (isIssued ? invoice.duty_thb                   : shipment.duty_thb),
+    vat_base_thb:               adminMustHideMoney ? null : (isIssued ? invoice.vat_base_thb               : shipment.vat_base_thb),
+    vat_thb:                    adminMustHideMoney ? null : (isIssued ? invoice.vat_thb                    : shipment.vat_thb),
+    vat_plan_label:             adminMustHideMoney ? null : (isIssued ? invoice.vat_plan_label             : shipment.vat_plan_label),
     form_e_applied:             isIssued ? invoice.form_e_applied             : shipment.form_e_applied,
 
     notes: invoice.notes,

@@ -33,7 +33,7 @@
 
 import type React from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
   Pencil,
@@ -144,7 +144,7 @@ type ORow = {
 
 export async function renderLegacyServiceOrderView(hno: string) {
   const { roles } = await requireAdmin();
-  const superAdmin = roles.includes("super");
+  const superAdmin = isGodRole(roles);
   const admin = createAdminClient();
 
   const { data: rowRaw, error: rowErr } = await admin

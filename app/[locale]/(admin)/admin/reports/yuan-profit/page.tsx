@@ -21,6 +21,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { getYuanProfitReport, getYuanProfitDailySeries } from "@/actions/admin/reports";
 import { DailyProfitChart } from "../_components/daily-profit-chart";
@@ -53,7 +54,15 @@ export default async function YuanProfitReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal visibility (owner 2026-06-18): เรทต้นทุน (cost_rate),
+  // ราคาต้นทุน (cost_thb) + the derived กำไร (profit = sale - cost) are money
+  // internals — visible ONLY to ultra/accounting/pricing, NOT super. When
+  // false we drop those columns from `data.columns` AND those keys from
+  // `data.rows`/`data.totals` so they never reach the DOM or the
+  // ReportShell-built CSV (CSV is built from `data`, no re-fetch).
+  // DERIVED-VALUE TRAP: profit reveals cost, so it is hidden together.
+  const showCostProfit = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);
@@ -80,10 +89,18 @@ export default async function YuanProfitReportPage({
       { key: "channel",      label: "ช่องทาง", format: (v) => CHANNEL_LABEL[String(v)] ?? String(v) },
       { key: "yuan_amount",  label: "หยวน",          align: "right", format: (v) => "¥" + decTh(v as number, 2) },
       { key: "exchange_rate", label: "เรทขาย",        align: "right", format: (v) => decTh(v as number, 4) },
-      { key: "cost_rate",    label: "เรทต้นทุน",     align: "right", format: (v) => v != null ? decTh(v as number, 4) : "—" },
-      { key: "cost_thb",     label: "ราคาต้นทุน (บาท)", align: "right", format: (v) => Number(v) > 0 ? thb(v as number) : "—" },
+      // Money-internal cost columns — ultra/accounting/pricing only.
+      ...(showCostProfit
+        ? [
+            { key: "cost_rate", label: "เรทต้นทุน", align: "right" as const, format: (v: unknown) => v != null ? decTh(v as number, 4) : "—" },
+            { key: "cost_thb",  label: "ราคาต้นทุน (บาท)", align: "right" as const, format: (v: unknown) => Number(v) > 0 ? thb(v as number) : "—" },
+          ]
+        : []),
       { key: "sale_thb",     label: "ราคาขาย (บาท)",  align: "right", format: (v) => thb(v as number) },
-      { key: "profit",       label: "กำไร (บาท)",     align: "right", format: (v) => Number(v) > 0 ? thb(v as number) : "—" },
+      // Derived profit reveals cost → hidden together.
+      ...(showCostProfit
+        ? [{ key: "profit", label: "กำไร (บาท)", align: "right" as const, format: (v: unknown) => Number(v) > 0 ? thb(v as number) : "—" }]
+        : []),
       { key: "status",       label: "สถานะ",         format: (v) => STATUS_LABEL[String(v)] ?? String(v) },
     ],
     rows: rows.map((r) => ({
@@ -93,37 +110,51 @@ export default async function YuanProfitReportPage({
       channel:       r.channel,
       yuan_amount:   r.yuan_amount,
       exchange_rate: r.exchange_rate,
-      cost_rate:     r.cost_rate,
-      cost_thb:      r.cost_thb,
+      // Omit the cost/profit keys from the serialized row when not allowed —
+      // the value must never reach the client payload (CSV is built from this).
+      ...(showCostProfit
+        ? { cost_rate: r.cost_rate, cost_thb: r.cost_thb, profit: r.profit }
+        : {}),
       sale_thb:      r.sale_thb,
-      profit:        r.profit,
       status:        r.status,
     })),
     totals: {
       created_at: "รวมทั้งสิ้น",
       yuan_amount: "¥" + decTh(totalYuan, 2),
-      cost_thb:   thb(totalCost),
+      ...(showCostProfit ? { cost_thb: thb(totalCost) } : {}),
       sale_thb:   thb(totalSale),
-      profit:     thb(totalProfit),
+      ...(showCostProfit ? { profit: thb(totalProfit) } : {}),
     },
   };
 
+  // Summary cards — the cost/profit cards are money-internal and only render
+  // for ultra/accounting/pricing (the chart below plots daily profit, so it is
+  // hidden together).
+  const summary = showCostProfit
+    ? [
+        { label: "รายการทั้งหมด",        value: intTh(rows.length) },
+        { label: "กรอกต้นทุนแล้ว",       value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
+        { label: "ราคาขายรวม",           value: thb(totalSale) },
+        { label: "กำไรรวม",              value: thb(totalProfit), tone: "primary" as const },
+      ]
+    : [
+        { label: "รายการทั้งหมด",        value: intTh(rows.length) },
+        { label: "ราคาขายรวม",           value: thb(totalSale) },
+      ];
+
   return (
     <>
-      <div className="px-6 pt-6 lg:px-8 lg:pt-8">
-        <DailyProfitChart points={series} label="กราฟกำไรรายวัน (ฝากโอน · เฉพาะรายการที่อนุมัติแล้ว)" />
-      </div>
+      {showCostProfit ? (
+        <div className="px-6 pt-6 lg:px-8 lg:pt-8">
+          <DailyProfitChart points={series} label="กราฟกำไรรายวัน (ฝากโอน · เฉพาะรายการที่อนุมัติแล้ว)" />
+        </div>
+      ) : null}
       <ReportShell
         title="กำไรฝากโอน/ชำระเงิน (หยวน)"
         subtitle="ราคาขายและราคาต้นทุนหยวนของรายการฝากโอน (ไม่นับสถานะยกเลิก / ปฏิเสธ / ล้มเหลว)"
         range={range}
         pathname="/admin/reports/yuan-profit"
-        summary={[
-          { label: "รายการทั้งหมด",        value: intTh(rows.length) },
-          { label: "กรอกต้นทุนแล้ว",       value: `${intTh(rowsWithCost)} / ${intTh(rows.length)}` },
-          { label: "ราคาขายรวม",           value: thb(totalSale) },
-          { label: "กำไรรวม",              value: thb(totalProfit), tone: "primary" },
-        ]}
+        summary={summary}
         data={data}
         csvSlug="yuan-profit"
         sourceNote={

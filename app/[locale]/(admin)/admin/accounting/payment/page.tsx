@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -245,9 +246,17 @@ export default async function AdminAccountingPaymentPage({
   searchParams: Promise<SP>;
 }) {
   // Legacy gate (acc-payment.php L46): CEO / Manager / QAAndQC /
-  // Accounting / ITDT. Closest V3 RBAC = super + accounting; super
-  // covers the rest via requireAdmin's universal-master semantics.
-  await requireAdmin(["super", "accounting"]);
+  // Accounting / ITDT. Closest V3 RBAC = super + accounting; god roles
+  // cover the rest via requireAdmin's universal-master semantics.
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal visibility (owner 2026-06-18): the cost columns —
+  // เรทต้นทุน (payratecost), ต้นทุน PCS (payyuan*payratecost), and the
+  // derived ค่าบริการ/profit (sumUser - sumCost) — are money internals,
+  // visible ONLY to ultra/accounting/pricing, NOT super. When false we
+  // skip those cells/columns/totals so the value never reaches the DOM.
+  // DERIVED-VALUE TRAP: ค่าบริการ = charge - cost reveals cost, so it is
+  // hidden together with the cost column.
+  const showCost = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -560,11 +569,21 @@ export default async function AdminAccountingPaymentPage({
                                     order_no: row.reforder,
                                     status: payStatusName(row.paystatus),
                                     yuan: numberFormat2(row.payyuan),
-                                    rate_cost: numberFormat2(row.payratecost),
+                                    // Money-internal cost / derived ค่าบริการ —
+                                    // omitted entirely unless allowed.
+                                    ...(showCost
+                                      ? {
+                                          rate_cost: numberFormat2(row.payratecost),
+                                        }
+                                      : {}),
                                     rate_customer: numberFormat2(row.payrate),
                                     charge_customer: numberFormat2(sumUser),
-                                    cost_pcs: numberFormat2(sumCost),
-                                    service_fee: numberFormat2(sumUser - sumCost),
+                                    ...(showCost
+                                      ? {
+                                          cost_pcs: numberFormat2(sumCost),
+                                          service_fee: numberFormat2(sumUser - sumCost),
+                                        }
+                                      : {}),
                                     member_code: row.userid,
                                     customer_name:
                                       `${row.username} ${row.userlastname}`.trim(),
@@ -574,7 +593,8 @@ export default async function AdminAccountingPaymentPage({
                                   "use server";
                                   // Export the FULL date-filtered ledger (all
                                   // pages) — audited via admin_export_log
-                                  // (customer names · owner directive).
+                                  // (customer names · owner directive). The
+                                  // action re-resolves roles + omits cost keys.
                                   return exportAccPaymentAll({ startDate, endDate });
                                 }}
                                 cols={[
@@ -583,11 +603,17 @@ export default async function AdminAccountingPaymentPage({
                                   { key: "order_no",        label: "เลขออเดอร์" },
                                   { key: "status",          label: "สถานะรายการ" },
                                   { key: "yuan",            label: "จำนวนหยวน" },
-                                  { key: "rate_cost",       label: "เรทต้นทุน" },
+                                  ...(showCost
+                                    ? [{ key: "rate_cost", label: "เรทต้นทุน" }]
+                                    : []),
                                   { key: "rate_customer",   label: "เรทลูกค้า" },
                                   { key: "charge_customer", label: "เรียกเก็บเงิน ลูกค้า (บาท)" },
-                                  { key: "cost_pcs",        label: "ต้นทุน PCS (บาท)" },
-                                  { key: "service_fee",     label: "ค่าบริการ" },
+                                  ...(showCost
+                                    ? [
+                                        { key: "cost_pcs",    label: "ต้นทุน PCS (บาท)" },
+                                        { key: "service_fee", label: "ค่าบริการ" },
+                                      ]
+                                    : []),
                                   { key: "member_code",     label: "รหัสสมาชิก" },
                                   { key: "customer_name",   label: "ชื่อ-นามสกุล" },
                                 ]}
@@ -657,11 +683,12 @@ export default async function AdminAccountingPaymentPage({
                                     <th>เลขออเดอร์</th>
                                     <th>สถานะรายการ</th>
                                     <th>จำนวนหยวน</th>
-                                    <th>เรทต้นทุน</th>
+                                    {/* Money-internal cost columns — ultra/accounting/pricing only */}
+                                    {showCost ? <th>เรทต้นทุน</th> : null}
                                     <th>เรทลูกค้า</th>
                                     <th>เรียกเก็บเงิน ลูกค้า (บาท)</th>
-                                    <th>ต้นทุน PCS (บาท)</th>
-                                    <th>ค่าบริการ</th>
+                                    {showCost ? <th>ต้นทุน PCS (บาท)</th> : null}
+                                    {showCost ? <th>ค่าบริการ</th> : null}
                                     <th>รหัสสมาชิก</th>
                                     <th>ชื่อ-นามสกุล</th>
                                   </tr>
@@ -685,17 +712,24 @@ export default async function AdminAccountingPaymentPage({
                                     <td className="text-right payYuanAll">
                                       {numberFormat2(payYuanAll)}
                                     </td>
-                                    <td></td>
+                                    {/* เรทต้นทุน placeholder — money column */}
+                                    {showCost ? <td></td> : null}
                                     <td></td>
                                     <td className="text-right sumUserAll">
                                       {numberFormat2(sumUserAll)}
                                     </td>
-                                    <td className="text-right sumCostAll">
-                                      {numberFormat2(sumCostAll)}
-                                    </td>
-                                    <td className="text-right profitAll">
-                                      {numberFormat2(profitAll)}
-                                    </td>
+                                    {/* ต้นทุน PCS total — money-internal */}
+                                    {showCost ? (
+                                      <td className="text-right sumCostAll">
+                                        {numberFormat2(sumCostAll)}
+                                      </td>
+                                    ) : null}
+                                    {/* ค่าบริการ/profit total — derived from cost */}
+                                    {showCost ? (
+                                      <td className="text-right profitAll">
+                                        {numberFormat2(profitAll)}
+                                      </td>
+                                    ) : null}
                                     <td></td>
                                     <td></td>
                                   </tr>
@@ -737,11 +771,13 @@ export default async function AdminAccountingPaymentPage({
                                         <td className="text-right">
                                           {numberFormat2(row.payyuan)}
                                         </td>
-                                        {/* 6 — เรทต้นทุน
+                                        {/* 6 — เรทต้นทุน (money-internal — hidden from super)
                                             acc-payment.php L225 */}
-                                        <td className="text-right">
-                                          {numberFormat2(row.payratecost)}
-                                        </td>
+                                        {showCost ? (
+                                          <td className="text-right">
+                                            {numberFormat2(row.payratecost)}
+                                          </td>
+                                        ) : null}
                                         {/* 7 — เรทลูกค้า
                                             acc-payment.php L226 */}
                                         <td className="text-right">
@@ -752,16 +788,20 @@ export default async function AdminAccountingPaymentPage({
                                         <td className="text-right">
                                           {numberFormat2(sumUser)}
                                         </td>
-                                        {/* 9 — ต้นทุน PCS (บาท)
+                                        {/* 9 — ต้นทุน PCS (บาท) — money-internal
                                             acc-payment.php L228 */}
-                                        <td className="text-right">
-                                          {numberFormat2(sumCost)}
-                                        </td>
-                                        {/* 10 — ค่าบริการ
+                                        {showCost ? (
+                                          <td className="text-right">
+                                            {numberFormat2(sumCost)}
+                                          </td>
+                                        ) : null}
+                                        {/* 10 — ค่าบริการ — derived from cost, hidden together
                                             acc-payment.php L229 */}
-                                        <td className="text-right">
-                                          {numberFormat2(profit)}
-                                        </td>
+                                        {showCost ? (
+                                          <td className="text-right">
+                                            {numberFormat2(profit)}
+                                          </td>
+                                        ) : null}
                                         {/* 11 — รหัสสมาชิก — link to legacy
                                             users/profile/<userID>/ which maps
                                             to /admin/users/<id>

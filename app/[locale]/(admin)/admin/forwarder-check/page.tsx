@@ -43,6 +43,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
@@ -159,14 +160,11 @@ export default async function AdminForwarderCheckPage({
   if (defaultRedirect) redirect(defaultRedirect);
 
   const tab: "all" | "c" | "n" = sp.q === "c" ? "c" : sp.q === "n" ? "n" : "all";
-  // Money cols visible to the same role union — `super` always sees;
-  // others are already gated by requireAdmin above. Adding the explicit
-  // check here for clarity (mirrors legacy departmentKey check at
-  // forwarder-check.php L294 / L467).
-  const showMoneyColumns =
-    roles.includes("super") ||
-    roles.includes("ops") ||
-    roles.includes("accounting");
+  // Money-internal: ต้นทุน · กำไร · 1% columns are visible only to ultra/
+  // accounting/pricing (owner 2026-06-18 — super + ops lose cost/profit
+  // visibility). The flag drives the DATA-layer omission of cost/profit
+  // fields from BOTH the CSV rows+cols and the table rows below.
+  const showMoneyColumns = canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -377,6 +375,22 @@ export default async function AdminForwarderCheckPage({
     rows = rows.filter((r) => r.user_credit === "1");
   } else if (tab === "n") {
     rows = rows.filter((r) => r.user_credit !== "1");
+  }
+
+  // DATA-LAYER money hide: ForwarderCheckTable is a Client Component, so the
+  // cost/profit fields are serialized into the browser payload even though the
+  // cells are only rendered inside {showMoneyColumns && …}. When the viewer
+  // can't see money internals, zero the cost/profit fields BEFORE serializing
+  // so the real ต้นทุน/กำไร value never reaches the client (owner 2026-06-18).
+  // (one_percent is a customer-side % of the selling price and renders
+  // unconditionally — left intact.)
+  if (!showMoneyColumns) {
+    rows = rows.map((r) => ({
+      ...r,
+      cost_total_price: 0,
+      cost_total_price_sheet: 0,
+      profit_item: 0,
+    }));
   }
 
   return (

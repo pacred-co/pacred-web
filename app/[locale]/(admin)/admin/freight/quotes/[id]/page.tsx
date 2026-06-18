@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   QUOTE_STATUS_LABEL, TRANSPORT_MODE_LABEL,
   type QuoteStatus, type TransportMode, type Incoterm,
@@ -133,7 +133,7 @@ export default async function AdminFreightQuoteDetailPage({
     admin:   Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
 
-  const isSuper       = roles.includes("super");
+  const isSuper       = isGodRole(roles);
 
   const detailData: QuoteDetailData = {
     id:                       header.id,

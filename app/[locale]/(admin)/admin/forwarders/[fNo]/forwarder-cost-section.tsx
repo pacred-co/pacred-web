@@ -19,7 +19,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminRoles, hasRole } from "@/lib/auth/require-admin";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import {
   ForwarderItemCostEditor,
@@ -90,13 +91,12 @@ export async function ForwarderCostSection({
   /** tb_forwarder.reforder — when set, the lines live in tb_order (shop-spawn). */
   reforder: string | null;
 }) {
-  // 2026-06-15 (owner: "พนักงานไม่ควรเห็นต้นทุน") — only super/accounting/pricing
-  // may SEE ต้นทุน at all (hasRole grants super). Every other role that reaches
-  // this page (ops/warehouse for scan/tracking) must NOT see cost → hide the
-  // whole section. (Was: non-edit roles fell through to CargoCostLineSummary,
-  // which PRINTED the cost number — the warehouse leak.)
+  // 2026-06-18 (owner · mig 0189: super loses money-internal visibility) — only
+  // ultra/accounting/pricing may SEE ต้นทุน at all. super/ops/warehouse and every
+  // other role must NOT see cost → hide the whole section. (canViewCostProfit
+  // EXCLUDES super, unlike hasRole which would grant super via isGodRole.)
   const roles = await getAdminRoles();
-  const canEdit = roles != null && hasRole(roles, ["accounting", "pricing"]);
+  const canEdit = canViewCostProfit(roles);
   if (!canEdit) return null;
 
   const admin = createAdminClient();
@@ -328,7 +328,7 @@ export async function ForwarderCostSection({
         )}
         <CostRevealToggle className="ml-auto" />
         <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
-          {canEdit ? "super / accounting / pricing" : "อ่านอย่างเดียว"}
+          ultra / accounting / pricing
         </span>
         <svg className="w-4 h-4 shrink-0 transition-transform duration-200 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
       </summary>

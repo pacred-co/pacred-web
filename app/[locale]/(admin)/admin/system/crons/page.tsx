@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { CRON_REGISTRY, type CronEntry } from "@/lib/cron/registry";
 import { CronTriggerButton } from "./trigger-button";
 
@@ -58,7 +58,7 @@ function getSevenDayCutoffIso(): string {
 
 export default async function AdminCronHealthPage() {
   const { roles } = await requireAdmin(["super", "ops"]);
-  const canTrigger = roles.includes("super");
+  const canTrigger = isGodRole(roles);
 
   const admin = createAdminClient();
   // Wrap the impure Date.now() in a memoised constant — calling it

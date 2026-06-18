@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin, getAdminRoles, hasRole } from "@/lib/auth/require-admin";
+import { requireAdmin, getAdminRoles, hasRole, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
@@ -83,7 +84,14 @@ export default async function CargoDeclarationDetailPage({
   await requireAdmin([...VIEW_ROLES]);
   const { id } = await params;
   const roles = await getAdminRoles();
-  const canEdit = roles != null && hasRole(roles, ["accounting", "freight_import_doc", "pricing"]);
+  // Declared value / duty / VAT = MONEY-internal (มูลค่าสำแดง). Visible + editable
+  // ONLY to ultra/accounting/pricing (owner 2026-06-18 · super + freight_import_doc
+  // keep page access to see status/HS/structure but NOT the money figures).
+  const canViewMoney = canViewCostProfit(roles);
+  const canEdit =
+    canViewMoney &&
+    roles != null &&
+    (isGodRole(roles) || hasRole(roles, ["accounting", "pricing"]));
 
   const admin = createAdminClient();
 
@@ -125,7 +133,26 @@ export default async function CargoDeclarationDetailPage({
   if (linesErr) {
     console.error("[cargo-declaration detail lines]", { id, code: linesErr.code, message: linesErr.message });
   }
-  const lines = ((linesRaw ?? []) as unknown) as Line[];
+  const linesAll = ((linesRaw ?? []) as unknown) as Line[];
+  // DATA-LAYER mask: for non-cost roles (super / freight_import_doc), omit the
+  // declared value / duty / VAT money figures from BOTH the header totals AND
+  // every line before they reach the rendered DOM. HS code + qty + structure
+  // stay visible (operational, not money-internal).
+  if (!canViewMoney) {
+    header.total_declared_value_thb = null;
+    header.total_duty_thb = null;
+    header.total_vat_thb = null;
+    header.total_other_taxes_thb = null;
+  }
+  const lines: Line[] = canViewMoney
+    ? linesAll
+    : linesAll.map((l) => ({
+        ...l,
+        declared_value_thb: null,
+        duty_rate_pct: null,
+        duty_thb: null,
+        vat_thb: null,
+      }));
 
   // Audit timeline.
   const { data: auditRaw, error: auditErr } = await admin
@@ -200,19 +227,25 @@ export default async function CargoDeclarationDetailPage({
         )}
       </section>
 
-      {/* Totals */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1 text-xs">
-        <h2 className="font-bold text-sm mb-2">📋 ยอดรวม (จากมูลค่าสำแดง)</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-1">
-          <p>รวมสำแดง: <span className="font-mono">{thb(header.total_declared_value_thb)}</span></p>
-          <p>อากรขาเข้า: <span className="font-mono">{thb(header.total_duty_thb)}</span></p>
-          <p>VAT 7%: <span className="font-mono">{thb(header.total_vat_thb)}</span></p>
-          <p>ภาษีอื่นๆ: <span className="font-mono">{thb(header.total_other_taxes_thb)}</span></p>
-        </div>
-        <p className="mt-2 text-[10px] text-muted">
-          ⚠️ มูลค่าสำแดง ตั้งจาก <b>ต้นทุน</b> (ไม่ใช่ราคาขาย) · duty = สำแดง × อัตรา% · vat = (สำแดง + duty) × 7%
-        </p>
-      </section>
+      {/* Totals — MONEY-internal (มูลค่าสำแดง). Hidden for non-cost roles. */}
+      {canViewMoney ? (
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1 text-xs">
+          <h2 className="font-bold text-sm mb-2">📋 ยอดรวม (จากมูลค่าสำแดง)</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-1">
+            <p>รวมสำแดง: <span className="font-mono">{thb(header.total_declared_value_thb)}</span></p>
+            <p>อากรขาเข้า: <span className="font-mono">{thb(header.total_duty_thb)}</span></p>
+            <p>VAT 7%: <span className="font-mono">{thb(header.total_vat_thb)}</span></p>
+            <p>ภาษีอื่นๆ: <span className="font-mono">{thb(header.total_other_taxes_thb)}</span></p>
+          </div>
+          <p className="mt-2 text-[10px] text-muted">
+            ⚠️ มูลค่าสำแดง ตั้งจาก <b>ต้นทุน</b> (ไม่ใช่ราคาขาย) · duty = สำแดง × อัตรา% · vat = (สำแดง + duty) × 7%
+          </p>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 text-xs text-muted">
+          🔒 ยอดรวมมูลค่าสำแดง / อากร / VAT เป็นข้อมูลภายใน — แสดงเฉพาะฝ่ายบัญชี / pricing
+        </section>
+      )}
 
       {/* Per-line declared / HS / duty / VAT */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
@@ -232,17 +265,17 @@ export default async function CargoDeclarationDetailPage({
                 <th className="px-3 py-2">สินค้า</th>
                 <th className="px-3 py-2">HS</th>
                 <th className="px-3 py-2 text-right">จำนวน</th>
-                <th className="px-3 py-2 text-right">สำแดง (฿)</th>
-                <th className="px-3 py-2 text-right">อากร%</th>
-                <th className="px-3 py-2 text-right">อากร (฿)</th>
-                <th className="px-3 py-2 text-right">VAT (฿)</th>
+                {canViewMoney && <th className="px-3 py-2 text-right">สำแดง (฿)</th>}
+                {canViewMoney && <th className="px-3 py-2 text-right">อากร%</th>}
+                {canViewMoney && <th className="px-3 py-2 text-right">อากร (฿)</th>}
+                {canViewMoney && <th className="px-3 py-2 text-right">VAT (฿)</th>}
                 {canEdit && isDraft && <th className="px-3 py-2 text-right">แก้ไข</th>}
               </tr>
             </thead>
             <tbody>
               {lines.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit && isDraft ? 9 : 8} className="px-3 py-8 text-center text-xs text-muted">
+                  <td colSpan={4 + (canViewMoney ? 4 : 0) + (canEdit && isDraft ? 1 : 0)} className="px-3 py-8 text-center text-xs text-muted">
                     ยังไม่มีรายการ — สร้างใบขนจะดึงรายการจากออเดอร์โดยอัตโนมัติ
                   </td>
                 </tr>
@@ -257,10 +290,10 @@ export default async function CargoDeclarationDetailPage({
                     <td className="px-3 py-2 text-right font-mono text-[11px]">
                       {num(l.qty)} {l.unit ?? ""}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-xs">{thb(l.declared_value_thb)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[11px]">{num(l.duty_rate_pct)}%</td>
-                    <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.duty_thb)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.vat_thb)}</td>
+                    {canViewMoney && <td className="px-3 py-2 text-right font-mono text-xs">{thb(l.declared_value_thb)}</td>}
+                    {canViewMoney && <td className="px-3 py-2 text-right font-mono text-[11px]">{num(l.duty_rate_pct)}%</td>}
+                    {canViewMoney && <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.duty_thb)}</td>}
+                    {canViewMoney && <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.vat_thb)}</td>}
                     {canEdit && isDraft && (
                       <td className="px-3 py-2 text-right">
                         <CargoDeclarationLineEditor

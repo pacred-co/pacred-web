@@ -29,6 +29,7 @@ import { cache } from "react";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/get-user";
+import { isGodRole } from "@/lib/admin/god-role";
 
 // 'warehouse' + 'driver' added by migration 0033 — extended admins.role
 // CHECK constraint to support warehouse spine + driver scan flows.
@@ -66,6 +67,12 @@ import { getCurrentUser } from "@/lib/auth/get-user";
 // adds the role to the CHECK constraint. Manager has approval rights for
 // cnt-payment + cross-team supervision but NO role grants + NO billing config.
 export type AdminRole =
+  // 2026-06-18 (owner · mig 0189) — `ultra` = "Ultra Admin Z": the TRUE god role.
+  // Sees + does EVERYTHING incl. money internals (cost · profit/margin · cost-rate/FX ·
+  // declared value · commission). Ranks ABOVE `super`. After this, `super` is god for
+  // everything EXCEPT money internals — those are gated by canViewCostProfit() in
+  // lib/admin/money-visibility.ts to {ultra, accounting, pricing} only.
+  | "ultra"
   | "super"
   | "manager"               // Cargo Manager — approve cnt-payment · cross-team supervise (0118)
   | "ops"
@@ -140,7 +147,8 @@ export async function requireAdmin(requiredRoles?: AdminRole[]): Promise<{
   if (roles.length === 0) notFound();
 
   if (requiredRoles && requiredRoles.length > 0) {
-    const ok = roles.includes("super") || requiredRoles.some((r) => roles.includes(r));
+    // `ultra` + `super` are god roles — they satisfy any required-role check.
+    const ok = isGodRole(roles) || requiredRoles.some((r) => roles.includes(r));
     if (!ok) notFound();
   }
 
@@ -156,7 +164,12 @@ export async function getAdminRoles(): Promise<AdminRole[] | null> {
 }
 
 export function hasRole(roles: AdminRole[], required: AdminRole | AdminRole[]): boolean {
-  if (roles.includes("super")) return true;
+  if (isGodRole(roles)) return true;
   const need = Array.isArray(required) ? required : [required];
   return need.some((r) => roles.includes(r));
 }
+
+// `isGodRole` lives in the pure module `lib/admin/god-role.ts` so Client
+// Components can import it too; re-exported here for the many server callers
+// that already import from require-admin.
+export { isGodRole } from "@/lib/admin/god-role";

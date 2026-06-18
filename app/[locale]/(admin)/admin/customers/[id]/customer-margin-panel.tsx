@@ -51,9 +51,23 @@ function fmtDate(iso: string | null): string {
 
 export function CustomerMarginPanel({
   summary,
+  canViewCostProfit,
 }: {
   summary: CustomerMarginSummary;
+  /**
+   * Money-internal gate (owner 2026-06-18). This panel exposes per-ตู้ ต้นทุน
+   * (fcosttotalprice) + margin — visible only to ultra/accounting/pricing. The
+   * PARENT (customers/[id]/legacy-view.tsx) already omits the whole panel (and
+   * thus the cost data) when this is false; the early-return here is a
+   * defense-in-depth net so the cost/margin data can never render if a future
+   * caller mounts the panel unconditionally. (CostRevealRegion is CSS-only and
+   * is NEVER the access boundary.)
+   */
+  canViewCostProfit: boolean;
 }) {
+  // DATA-LAYER guard — bail before reading any cost/margin field.
+  if (!canViewCostProfit) return null;
+
   const { userid, totalDelivered, totalRevenue, totalMargin, avgMargin,
     overCapCount, overCapSumMargin, negativeCount, negativeSumMargin, recent } = summary;
 

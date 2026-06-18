@@ -17,6 +17,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { getSalesPayoutDetailTb } from "@/actions/admin/sales-payouts-tb";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
@@ -45,7 +46,11 @@ export default async function AdminSalesPayoutDetail({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Money-internal gate (owner 2026-06-18): commission payout amount + forwarder
+  // cost (ต้นทุน) + กำไรสุทธิ + the 1%/WHT/net commission summary are visible only
+  // to ultra/accounting/pricing. Selling price (ค่าฝากนำเข้าจีน) + volume/weight stay.
+  const showMoney = canViewCostProfit(roles);
   const { id } = await params;
 
   const payoutId = Number(id);
@@ -106,12 +111,14 @@ export default async function AdminSalesPayoutDetail({
           <KV label="ชื่อธนาคาร" value={d.nameBank || "—"} />
           <KV label="เลขที่บัญชี" value={d.noBank || "—"} mono />
           <KV label="ชื่อบัญชี" value={d.nameAccount || "—"} />
-          <KV
-            label="จำนวนเงิน"
-            value={`฿${Number(d.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            mono
-            danger
-          />
+          {showMoney && (
+            <KV
+              label="จำนวนเงิน"
+              value={`฿${Number(d.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+              mono
+              danger
+            />
+          )}
           <div className="flex justify-between border-b border-border/40 py-1.5 gap-3">
             <span className="text-muted shrink-0">สำเนาบัตร</span>
             {idCardUrl ? (
@@ -172,9 +179,9 @@ export default async function AdminSalesPayoutDetail({
                   <th className="px-3 py-2">เลขแทรคกิ้ง</th>
                   <th className="px-3 py-2 text-right">ปริมาตร(CBM)</th>
                   <th className="px-3 py-2 text-right">น้ำหนัก(Kg)</th>
-                  <th className="px-3 py-2 text-right">ต้นทุนนำเข้าจีน</th>
+                  {showMoney && <th className="px-3 py-2 text-right">ต้นทุนนำเข้าจีน</th>}
                   <th className="px-3 py-2 text-right">ค่าฝากนำเข้าจีน</th>
-                  <th className="px-3 py-2 text-right">กำไรสุทธิ</th>
+                  {showMoney && <th className="px-3 py-2 text-right">กำไรสุทธิ</th>}
                   <th className="px-3 py-2">สถานะ</th>
                   <th className="px-3 py-2">สถานะเบิก</th>
                 </tr>
@@ -200,9 +207,9 @@ export default async function AdminSalesPayoutDetail({
                       <td className="px-3 py-2 font-mono text-xs">{f.fTrackingCHN ?? "—"}</td>
                       <td className="px-3 py-2 text-right font-mono">{f.fVolume.toLocaleString("en-US", { minimumFractionDigits: 5 })}</td>
                       <td className="px-3 py-2 text-right font-mono">{f.fWeight.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 text-right font-mono">{f.fCostTotalPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      {showMoney && <td className="px-3 py-2 text-right font-mono">{f.fCostTotalPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>}
                       <td className="px-3 py-2 text-right font-mono">{f.fTotalPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 text-right font-mono">{f.netProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      {showMoney && <td className="px-3 py-2 text-right font-mono">{f.netProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>}
                       <td className="px-3 py-2">
                         {fs ? (
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] ${fs.cls}`}>{fs.label}</span>
@@ -225,17 +232,19 @@ export default async function AdminSalesPayoutDetail({
           </div>
         )}
 
-        {/* Commission summary — legacy L400-409. */}
-        <div className="border-t border-border px-4 py-4 text-right space-y-1 text-sm">
-          <p className="font-semibold">ค่าขนส่งจีน</p>
-          <p>ราคาขายรวม : {totalSale.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
-          <hr className="my-2 border-border/60" />
-          <p>ส่วนแบ่ง 1% : {commission.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
-          <p>หักภาษี 3% : {wht.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
-          <p className="font-semibold">
-            ส่วนแบ่งสุทธิ : <span className="text-red-700">{netCommission.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span> บาท
-          </p>
-        </div>
+        {/* Commission summary — legacy L400-409 (money-internal: 1%/WHT/net). */}
+        {showMoney && (
+          <div className="border-t border-border px-4 py-4 text-right space-y-1 text-sm">
+            <p className="font-semibold">ค่าขนส่งจีน</p>
+            <p>ราคาขายรวม : {totalSale.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
+            <hr className="my-2 border-border/60" />
+            <p>ส่วนแบ่ง 1% : {commission.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
+            <p>หักภาษี 3% : {wht.toLocaleString("en-US", { minimumFractionDigits: 2 })} บาท</p>
+            <p className="font-semibold">
+              ส่วนแบ่งสุทธิ : <span className="text-red-700">{netCommission.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span> บาท
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 flex-wrap pt-2">

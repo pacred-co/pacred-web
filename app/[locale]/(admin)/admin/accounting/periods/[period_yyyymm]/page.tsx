@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   ACCOUNTING_PERIOD_STATUS_LABEL,
   type AccountingPeriodStatus,
@@ -85,8 +85,8 @@ export default async function AdminAccountingPeriodDetailPage({
   params: Promise<{ period_yyyymm: string }>;
 }) {
   const { roles } = await requireAdmin(["super", "accounting", "ops"]);
-  const canWrite  = roles.includes("super") || roles.includes("accounting");
-  const canReopen = roles.includes("super");
+  const canWrite  = isGodRole(roles) || roles.includes("accounting");
+  const canReopen = isGodRole(roles);
 
   const { period_yyyymm } = await params;
   const parsed = yyyymmSchema.safeParse(period_yyyymm);

@@ -30,6 +30,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 
@@ -56,8 +57,11 @@ export async function exportSalesPayoutsAll(): Promise<{
   rows: CsvRow[];
   truncated: boolean;
 }> {
-  // RBAC — same roles the page gates on.
-  await requireAdmin(["accounting", "sales_admin"]);
+  // RBAC — same roles the page gates on (reachability).
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Payout amount = money-internal — omit from the export for non-cost viewers
+  // (super + sales_admin included) per owner 2026-06-18.
+  const showMoney = canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -86,7 +90,7 @@ export async function exportSalesPayoutsAll(): Promise<{
     date: r.date ? new Date(r.date).toLocaleString("th-TH") : "",
     userIDMain: r.useridmain ?? "",
     adminCreate: r.admincreate ?? "",
-    amount: Number(r.amount ?? 0).toFixed(2),
+    ...(showMoney ? { amount: Number(r.amount ?? 0).toFixed(2) } : {}),
     status: "รอดำเนินการ",
   }));
 

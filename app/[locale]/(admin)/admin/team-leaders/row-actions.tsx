@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminToggleTeamLeader, adminUpdateTeamLeaderPct } from "@/actions/admin/team-leaders";
 
-export function TeamLeaderRowActions({ id, isActive, commissionPct }: { id: string; isActive: boolean; commissionPct: number }) {
+export function TeamLeaderRowActions({ id, isActive, commissionPct }: { id: string; isActive: boolean; commissionPct: number | null }) {
+  // commissionPct === null → the viewer cannot see money internals (owner
+  // 2026-06-18); the % is never sent to the client and the "แก้ %" editor is
+  // hidden. Only the active/inactive toggle (non-money) remains.
+  const canEditPct = commissionPct !== null;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [pctPct, setPctPct] = useState((commissionPct * 100).toFixed(2));
+  const [pctPct, setPctPct] = useState(((commissionPct ?? 0) * 100).toFixed(2));
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +37,7 @@ export function TeamLeaderRowActions({ id, isActive, commissionPct }: { id: stri
     <div className="space-y-1">
       {error && <div className="text-[10px] text-red-700">{error}</div>}
       <div className="flex items-center gap-1">
-        {editing ? (
+        {canEditPct && (editing ? (
           <>
             <input
               type="number" min="0" max="100" step="0.01"
@@ -45,7 +49,7 @@ export function TeamLeaderRowActions({ id, isActive, commissionPct }: { id: stri
           </>
         ) : (
           <Button size="sm" variant="outline" type="button" onClick={() => setEditing(true)}>แก้ %</Button>
-        )}
+        ))}
         <Button size="sm" variant="outline" type="button" onClick={toggle} disabled={pending}>
           {isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
         </Button>

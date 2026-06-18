@@ -35,6 +35,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 
@@ -161,9 +162,15 @@ export async function exportReportCntAll(
   filter: ReportCntExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // Same role gate as the page (super · ops · accounting · warehouse).
-  await requireAdmin(["super", "ops", "accounting", "warehouse"]);
+  const { roles } = await requireAdmin(["super", "ops", "accounting", "warehouse"]);
 
-  const { isWaiting, transportType, actionPay, startDate, endDate, showMoney } = filter;
+  const { isWaiting, transportType, actionPay, startDate, endDate } = filter;
+  // SECURITY (mig 0189): NEVER trust the client-passed showMoney flag — a crafted
+  // call could set it true to leak cost. Re-resolve the money gate from THIS
+  // caller's roles server-side (ultra/accounting/pricing only; super/ops/warehouse
+  // = false), and only honour it if the page ALSO requested money. The CSV money
+  // columns (incl. the derived กำไร) are omitted below when this is false.
+  const showMoney = canViewCostProfit(roles) && filter.showMoney;
   const admin = createAdminClient();
 
   let groupedNoPaid: Omit<Grouped, "isPaid">[] = [];

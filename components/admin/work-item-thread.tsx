@@ -52,6 +52,8 @@ import {
 } from "lucide-react";
 
 import { confirm } from "@/components/ui/confirm";
+import { isGodRole } from "@/lib/admin/god-role";
+import type { AdminRole } from "@/lib/auth/require-admin";
 import { relativeTimeTh } from "@/lib/utils/relative-time";
 import {
   WAITING_REASONS,
@@ -462,7 +464,7 @@ export function WorkItemThread({ workItemId, className }: WorkItemThreadProps) {
 
   const { waiting, messages, viewerProfileId, viewerRoles } = payload;
   const canUnblock = !!waiting.waitingReason && (
-    viewerRoles.includes("super") ||
+    isGodRole(viewerRoles as AdminRole[]) ||
     (waiting.blockedOnRole != null && viewerRoles.includes(waiting.blockedOnRole)) ||
     waiting.blockedOnAdmin === viewerProfileId
   );

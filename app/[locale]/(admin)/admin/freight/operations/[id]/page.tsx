@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { adminGetFreightCockpitDetail } from "@/actions/admin/freight-ops-cockpit";
 import { CockpitDetailClient, type AdminOption } from "./cockpit-detail-client";
 
@@ -52,8 +53,6 @@ export default async function FreightOperationDetailPage({
       </main>
     );
   }
-  const detail = res.data;
-
   // Active admin roster for the assignment dropdowns (page-side fetch).
   const admin = createAdminClient();
   const { data: adminRows, error: adminErr } = await admin
@@ -82,10 +81,19 @@ export default async function FreightOperationDetailPage({
   }
   adminOptions.sort((a, b) => a.name.localeCompare(b.name, "th"));
 
-  const isSuper = roles.includes("super");
-  // P&L (cost/profit) is super/accounting only — matches the p-and-l page gate;
-  // gating the cockpit link avoids a dead 403 click for CS/doc roles. audit SF-3.
-  const canViewPnl = isSuper || roles.includes("accounting");
+  const isSuper = isGodRole(roles);
+  // P&L (cost/profit) is a MONEY-internal view — ultra/accounting/pricing ONLY
+  // (super excluded per owner 2026-06-18). Gating the cockpit link avoids a
+  // dead 403 click for super/CS/doc roles. audit SF-3.
+  const canViewPnl = canViewCostProfit(roles);
+
+  // DATA-LAYER hide: the DOC-stage P&L snapshot (cost/revenue/profit) must
+  // never reach the client for non-cost roles — strip the money fields from
+  // the serialized detail (not just hide the editor). Revenue is kept hidden
+  // alongside cost because profit = revenue − cost (derived-value trap).
+  const detail = canViewPnl
+    ? res.data
+    : { ...res.data, costSnapshot: null, revenueSnapshot: null, profitSnapshot: null };
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 max-w-5xl space-y-5">

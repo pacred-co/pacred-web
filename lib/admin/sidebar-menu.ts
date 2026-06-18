@@ -1995,6 +1995,10 @@ const menuPricing: MenuSection[] = [
 ];
 
 const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
+  // 2026-06-18 (owner · mig 0189) — Ultra Admin Z sees the FULL CEO sidebar,
+  // identical to super (the cost/profit DATA inside those pages is gated
+  // separately by canViewCostProfit, not by the menu).
+  ultra:       menuSuper,
   super:       menuSuper,
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // Per ภูม decision #5 (synthesis §6 D6 · "sidebar รก · fix per-role filter
@@ -2052,6 +2056,7 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
  * revenue path; this is a Pacred-internal tie-breaker, not a legacy rule.
  */
 const ROLE_PRECEDENCE: AdminRole[] = [
+  "ultra",                       // Ultra Admin Z — god, outranks super (mig 0189)
   "super",
   // 2026-05-28 ดึก — Wave 26 · manager outranks accounting/qa/ops.
   // Approval-rights inheritance: super → manager → accounting → qa → ops.
@@ -2082,7 +2087,7 @@ const ROLE_PRECEDENCE: AdminRole[] = [
 ];
 
 export function menuForRoles(roles: AdminRole[]): MenuSection[] {
-  if (roles.includes("super")) return ROLE_MENUS.super;
+  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
   for (const r of ROLE_PRECEDENCE) {
     if (roles.includes(r)) return ROLE_MENUS[r];
   }
@@ -2093,6 +2098,7 @@ export function menuForRoles(roles: AdminRole[]): MenuSection[] {
 
 /** The role whose menu is being shown — for the sidebar role badge. */
 export function primaryRole(roles: AdminRole[]): AdminRole | null {
+  if (roles.includes("ultra")) return "ultra";
   if (roles.includes("super")) return "super";
   for (const r of ROLE_PRECEDENCE) {
     if (roles.includes(r)) return r;
@@ -2117,7 +2123,7 @@ export function primaryRole(roles: AdminRole[]): AdminRole | null {
 /** Sections + items deduped by header + labelKey. Item children preserved
  *  as-is from the higher-precedence role's copy (no per-leaf merging). */
 export function menuForRolesUnion(roles: AdminRole[]): MenuSection[] {
-  if (roles.includes("super")) return ROLE_MENUS.super;
+  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
   if (roles.length === 0) return [];
 
   // Pick all in-precedence-order so the highest-rank menu sets section order.

@@ -213,7 +213,7 @@ export async function readActiveImpersonation(
   }
 
   const roleSet = new Set(((roles ?? []) as unknown as AdminRoleRow[]).map((r) => r.role));
-  const stillEligible = roleSet.has("super") || roleSet.has("ops");
+  const stillEligible = roleSet.has("ultra") || roleSet.has("super") || roleSet.has("ops");
   if (!stillEligible) {
     await admin
       .from("impersonation_sessions")

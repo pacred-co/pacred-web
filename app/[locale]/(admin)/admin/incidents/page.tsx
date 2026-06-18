@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   INCIDENT_SOURCES,
   INCIDENT_KINDS,
@@ -97,7 +97,7 @@ export default async function AdminIncidentsPage({
   const { roles } = await requireAdmin([
     "super", "ops", "accounting", "sales_admin", "warehouse", "driver", "interpreter",
   ]);
-  const canTriage = roles.includes("super") || roles.includes("ops");
+  const canTriage = isGodRole(roles) || roles.includes("ops");
 
   const sp = await searchParams;
   const admin = createAdminClient();

@@ -30,6 +30,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -66,7 +67,11 @@ export default async function AgentPayoutsReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["super", "accounting", "sales_admin"]);
+  // Commission amounts (1% · WHT · net · pending/paid payout) = money-internal
+  // (owner 2026-06-18): only ultra/accounting/pricing. The agent/team + รายการค้าง
+  // (count) + ค่าขนส่งจีน (selling) columns stay visible to all.
+  const showMoney = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);
@@ -83,16 +88,23 @@ export default async function AgentPayoutsReportPage({
   const totalWht = agents.reduce((s, a) => s + a.open_wht, 0);
 
   // ── ReportShell main table = the per-agent commission summary ──
+  // The commission/payout money columns (1% · WHT · net · pending · paid) are
+  // omitted from the columns/rows/totals at the data layer for non-cost viewers.
+  const moneyCols: ReportData["columns"] = showMoney
+    ? [
+        { key: "open_commission", label: "ส่วนแบ่ง 1%", align: "right", format: (v) => thb(v as number) },
+        { key: "open_wht", label: "หักภาษี 3%", align: "right", format: (v) => thb(v as number) },
+        { key: "open_net", label: "เบิกได้สุทธิ", align: "right", format: (v) => thb(v as number) },
+        { key: "pending_payout", label: "รอดำเนินการ", align: "right", format: (v) => thb(v as number) },
+        { key: "paid_payout", label: "จ่ายแล้วรวม", align: "right", format: (v) => thb(v as number) },
+      ]
+    : [];
   const data: ReportData = {
     columns: [
       { key: "agent", label: "ตัวแทน / ทีม" },
       { key: "open_rows", label: "รายการค้าง", align: "right", format: (v) => intTh(v as number) },
       { key: "open_gross", label: "ค่าขนส่งจีน (ค้าง)", align: "right", format: (v) => thb(v as number) },
-      { key: "open_commission", label: "ส่วนแบ่ง 1%", align: "right", format: (v) => thb(v as number) },
-      { key: "open_wht", label: "หักภาษี 3%", align: "right", format: (v) => thb(v as number) },
-      { key: "open_net", label: "เบิกได้สุทธิ", align: "right", format: (v) => thb(v as number) },
-      { key: "pending_payout", label: "รอดำเนินการ", align: "right", format: (v) => thb(v as number) },
-      { key: "paid_payout", label: "จ่ายแล้วรวม", align: "right", format: (v) => thb(v as number) },
+      ...moneyCols,
     ],
     rows: agents.map((a) => ({
       id: a.team_code,
@@ -100,28 +112,37 @@ export default async function AgentPayoutsReportPage({
       agent: `${a.member_code} · ${a.team_code}`,
       open_rows: a.open_rows,
       open_gross: a.open_gross,
-      open_commission: a.open_commission,
-      open_wht: a.open_wht,
-      open_net: a.open_net,
-      pending_payout: a.pending_payout,
-      paid_payout: a.paid_payout,
+      ...(showMoney
+        ? {
+            open_commission: a.open_commission,
+            open_wht: a.open_wht,
+            open_net: a.open_net,
+            pending_payout: a.pending_payout,
+            paid_payout: a.paid_payout,
+          }
+        : {}),
     })),
     totals: {
       open_gross: thb(agents.reduce((s, a) => s + a.open_gross, 0)),
-      open_commission: thb(agents.reduce((s, a) => s + a.open_commission, 0)),
-      open_wht: thb(totalWht),
-      open_net: thb(totalOpenNet),
-      pending_payout: thb(totalPending),
-      paid_payout: thb(totalPaid),
+      ...(showMoney
+        ? {
+            open_commission: thb(agents.reduce((s, a) => s + a.open_commission, 0)),
+            open_wht: thb(totalWht),
+            open_net: thb(totalOpenNet),
+            pending_payout: thb(totalPending),
+            paid_payout: thb(totalPaid),
+          }
+        : {}),
     },
   };
 
   // ── Payout-history CSV (its own download, the dated detail list) ──
+  // จำนวนเงิน (payout amount) = money-internal → omitted for non-cost viewers.
   const historyCsvRows: CsvRow[] = history.map((h) => ({
     วันที่: h.date ? dateTimeTh(h.date) : "",
     รหัสตัวแทน: h.member_code,
     ทีม: h.team_code,
-    จำนวนเงิน: h.amount,
+    ...(showMoney ? { จำนวนเงิน: h.amount } : {}),
     ผู้ทำรายการ: h.created_by ?? "",
     มีสลิป: h.has_slip ? "มี" : "—",
     สถานะ: PAYOUT_STATUS_LABEL[h.status] ?? h.status,
@@ -130,7 +151,7 @@ export default async function AgentPayoutsReportPage({
     { key: "วันที่", label: "วันที่" },
     { key: "รหัสตัวแทน", label: "รหัสตัวแทน" },
     { key: "ทีม", label: "ทีม" },
-    { key: "จำนวนเงิน", label: "จำนวนเงิน" },
+    ...(showMoney ? [{ key: "จำนวนเงิน", label: "จำนวนเงิน" }] : []),
     { key: "ผู้ทำรายการ", label: "ผู้ทำรายการ" },
     { key: "มีสลิป", label: "มีสลิป" },
     { key: "สถานะ", label: "สถานะ" },
@@ -143,12 +164,16 @@ export default async function AgentPayoutsReportPage({
         subtitle={`สรุปส่วนแบ่ง 1% − หักภาษี 3% ต่อทีมตัวแทน + ประวัติการจ่ายเงิน · เบิกขั้นต่ำ ฿${minWithdrawal.toLocaleString("en-US")} (อ่านอย่างเดียว · จ่ายเงินที่หน้า "เบิกเงินตัวแทน")`}
         range={range}
         pathname="/admin/reports/agent-payouts"
-        summary={[
-          { label: "เบิกได้สุทธิ (ค้างทุกทีม)", value: thb(totalOpenNet), tone: "primary" },
-          { label: "รอจ่าย (รอดำเนินการ)", value: thb(totalPending), tone: "red" },
-          { label: "จ่ายแล้วรวม", value: thb(totalPaid), tone: "green" },
-          { label: "หักภาษี 3% (ค้าง)", value: thb(totalWht) },
-        ]}
+        summary={
+          showMoney
+            ? [
+                { label: "เบิกได้สุทธิ (ค้างทุกทีม)", value: thb(totalOpenNet), tone: "primary" },
+                { label: "รอจ่าย (รอดำเนินการ)", value: thb(totalPending), tone: "red" },
+                { label: "จ่ายแล้วรวม", value: thb(totalPaid), tone: "green" },
+                { label: "หักภาษี 3% (ค้าง)", value: thb(totalWht) },
+              ]
+            : []
+        }
         data={data}
         csvSlug="agent-commission-summary"
         emptyLabel="ยังไม่มีตัวแทนที่มียอดคอมมิชชั่น"
@@ -188,7 +213,7 @@ export default async function AgentPayoutsReportPage({
                     <th className="px-4 py-3 whitespace-nowrap">วันที่ทำรายการ</th>
                     <th className="px-4 py-3">รหัสตัวแทน</th>
                     <th className="px-4 py-3">ทีม</th>
-                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+                    {showMoney && <th className="px-4 py-3 text-right">จำนวนเงิน</th>}
                     <th className="px-4 py-3">ผู้ทำรายการ</th>
                     <th className="px-4 py-3 text-center">สลิป</th>
                     <th className="px-4 py-3">สถานะ</th>
@@ -202,9 +227,11 @@ export default async function AgentPayoutsReportPage({
                       </td>
                       <td className="px-4 py-3 text-xs font-mono whitespace-nowrap">{h.member_code}</td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">{h.team_code}</td>
-                      <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap">
-                        {thb(h.amount)}
-                      </td>
+                      {showMoney && (
+                        <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap">
+                          {thb(h.amount)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
                         {h.created_by || "—"}
                       </td>

@@ -27,6 +27,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 // GAP 4+7 — on cost capture, auto-enroll the taxdoc job + mark pricing started.
 import { markCargoPricingStarted } from "./cargo-taxdoc-workspace";
 // Range-guarded field schemas (per-kind bounds + int32-overflow reject). RATE
@@ -43,8 +45,23 @@ import {
   nullableShortText,
 } from "@/lib/validators/cargo-cost-fields";
 
-// Roles allowed to capture cost (mirror the cargo cost domain).
-const ROLES_COST = ["super", "accounting", "pricing"] as const;
+// Roles allowed to capture cost. Owner 2026-06-18 (mig 0189): cost is an
+// ultra/accounting/pricing domain — `super` is god for everything EXCEPT money
+// internals, so it must NOT read or write cost. `withAdmin` lets god roles
+// (ultra+super) bypass its list, so the REAL gate is `assertCostAccess()` below
+// (canViewCostProfit excludes super); the list still admits accounting/pricing.
+const ROLES_COST = ["ultra", "accounting", "pricing"] as const;
+
+/** Server-side cost-access gate. Blocks `super` (which withAdmin would otherwise
+ *  admit as a god role) from writing/pre-filling cost — money internals are
+ *  visible to ultra/accounting/pricing only. */
+async function assertCostAccess(): Promise<{ ok: false; error: string } | null> {
+  const roles = await getAdminRoles();
+  if (!canViewCostProfit(roles)) {
+    return { ok: false, error: "ไม่มีสิทธิ์เข้าถึงข้อมูลต้นทุน (เฉพาะ Ultra Admin Z / บัญชี / Pricing)" };
+  }
+  return null;
+}
 
 // ────────────────────────────────────────────────────────────
 // Import-forwarder line (tb_forwarder_item · COST in THB)
@@ -78,6 +95,8 @@ const forwarderItemCostSchema = z.object({
 export async function setForwarderItemCost(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = forwarderItemCostSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -148,6 +167,8 @@ const forwarderImportDutySchema = z.object({
 export async function setForwarderImportDuty(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = forwarderImportDutySchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -198,6 +219,8 @@ const shopOrderItemCostSchema = z.object({
 export async function setShopOrderItemCost(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = shopOrderItemCostSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

@@ -70,7 +70,7 @@
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -179,7 +179,7 @@ export default async function AdminProfilePage({
 
   // Auth — any signed-in admin can view. `super` gates the mutate buttons.
   const { roles, user } = await requireAdmin();
-  const canMutate = roles.includes("super");
+  const canMutate = isGodRole(roles);
 
   // Defensive — the page is keyed by profile UUID (set by Wave 22 list).
   // If the caller landed here with a non-UUID string (legacy bookmark to

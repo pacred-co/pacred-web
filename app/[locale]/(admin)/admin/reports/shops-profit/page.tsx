@@ -22,6 +22,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { getShopsProfitReport, getShopsProfitDailySeries } from "@/actions/admin/reports";
 import { DailyProfitChart } from "../_components/daily-profit-chart";
@@ -47,7 +48,21 @@ export default async function ShopsProfitReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+
+  // Money-internal report (ราคาต้นทุน · กำไร · มาร์จิ้น). Owner 2026-06-18:
+  // super no longer sees money internals — only ultra/accounting/pricing. Gate
+  // at the DATA layer: bail BEFORE fetching/serializing any cost/profit data.
+  if (!canViewCostProfit(roles)) {
+    return (
+      <main className="p-6 lg:p-8">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          รายงานนี้แสดงต้นทุน/กำไร (ข้อมูลภายในด้านการเงิน) — เฉพาะบัญชี Ultra ·
+          บัญชี · Pricing เท่านั้น
+        </div>
+      </main>
+    );
+  }
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);

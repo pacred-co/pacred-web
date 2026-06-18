@@ -32,7 +32,8 @@ import { CoverEditor } from "./cover-editor";
 import { RowLimitSelect } from "./row-limit-select";
 import { parseRowLimit } from "./row-limit-options";
 import { Link } from "@/i18n/navigation";
-import { getAdminRoles } from "@/lib/auth/require-admin";
+import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
@@ -469,21 +470,24 @@ export async function renderLegacyCustomerView(
   // P0-17: the identity editor's senior-only fields (rep + coID) mirror the
   // legacy CEO/Manager/QAAndQC/Accounting/ITDT gate → Pacred senior roles.
   const adminRoles = (await getAdminRoles()) ?? [];
+  // NON-money privilege gate — ultra inherits super's reach (isGodRole).
   const isSeniorAdmin =
-    adminRoles.includes("super") ||
+    isGodRole(adminRoles) ||
     ["manager", "accounting", "qa"].some((r) => adminRoles.includes(r as never));
 
   // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — per-customer margin/profit IS
-  // cost data → super/accounting/ops only (dropped sales_admin).
-  const canSeeMargin =
-    adminRoles.includes("super") ||
-    ["accounting", "ops"].some((r) => adminRoles.includes(r as never));
+  // cost data. 2026-06-18 (owner · mig 0189) — super ALSO loses money-internal
+  // visibility; margin is gated by canViewCostProfit → {ultra, accounting,
+  // pricing} only (NOT super, NOT ops). The CLIENT margin panel must also OMIT
+  // the cost/margin data when this is false (prop threaded below).
+  const canSeeMargin = canViewCostProfit(adminRoles);
 
-  // Hard-delete is super-only (staff-CRUD gap · §PM-6 #3.3). Exact activity
-  // counts feed the danger-zone panel's safety gate (count reads are best-
-  // effort — a transient miss degrades to 0, but the action re-checks
-  // server-side so a wrong 0 here can never bypass the real gate).
-  const isSuperAdmin = adminRoles.includes("super");
+  // Hard-delete is super-only (staff-CRUD gap · §PM-6 #3.3). NON-money gate →
+  // isGodRole so ultra inherits. Exact activity counts feed the danger-zone
+  // panel's safety gate (count reads are best-effort — a transient miss
+  // degrades to 0, but the action re-checks server-side so a wrong 0 here can
+  // never bypass the real gate).
+  const isSuperAdmin = isGodRole(adminRoles);
   const fwdCount = fwdCountRes.count ?? 0;
   const ordCount = ordCountRes.count ?? 0;
   const payCount = payCountRes.count ?? 0;
@@ -1006,9 +1010,14 @@ export async function renderLegacyCustomerView(
 
       {/* Per-customer Margin Profile (2026-06-05 ภูม · CEO CRM-activation) —
           surfaces this customer's margin history (avg margin vs ฿15k cap).
-          Pairs with /admin/accounting/margin-monitor. Cost data → cost-view
-          roles only (owner 2026-06-15 "ไม่ควรเห็นต้นทุน"). */}
-      {canSeeMargin && <CustomerMarginPanel summary={marginSummary} />}
+          Pairs with /admin/accounting/margin-monitor. Money-internal cost data
+          → ultra/accounting/pricing only (owner 2026-06-18 · canViewCostProfit).
+          The `&& canSeeMargin` short-circuit keeps the panel + its cost-bearing
+          `summary` prop off the client payload entirely for non-cost roles; the
+          `canViewCostProfit` prop is the in-component defense-in-depth net. */}
+      {canSeeMargin && (
+        <CustomerMarginPanel summary={marginSummary} canViewCostProfit={canSeeMargin} />
+      )}
 
       {/* Pricing segments (money · 2026-06-05) — legacy users/comparison (ค่าเทียบ/
           CPS) + users/credit (เครดิต). The price + credit engines already read

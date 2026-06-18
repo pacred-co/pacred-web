@@ -23,6 +23,20 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
+
+/** Server-side cost-access gate (owner 2026-06-18, mig 0189). Carrier rate cards
+ *  are COST data → ultra/accounting/pricing only. `withAdmin` lets god roles
+ *  (ultra+super) bypass its list, so this guard (canViewCostProfit excludes
+ *  `super`) is the real boundary that keeps super out of cost rates. */
+async function assertCostAccess(): Promise<{ ok: false; error: string } | null> {
+  const roles = await getAdminRoles();
+  if (!canViewCostProfit(roles)) {
+    return { ok: false, error: "ไม่มีสิทธิ์เข้าถึงข้อมูลต้นทุน (เฉพาะ Ultra Admin Z / บัญชี / Pricing)" };
+  }
+  return null;
+}
 
 const TRANSPORT_MODES = ["truck", "sea", "air"] as const;
 const SOURCES = ["manual", "momo_api", "partner_email"] as const;
@@ -53,6 +67,8 @@ export type CreateContainerCostInput = z.infer<typeof createSchema>;
 export async function adminCreateContainerCost(
   input: CreateContainerCostInput,
 ): Promise<AdminActionResult<{ id: string }>> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
@@ -121,6 +137,8 @@ export type UpdateContainerCostInput = z.infer<typeof updateSchema>;
 export async function adminUpdateContainerCost(
   input: UpdateContainerCostInput,
 ): Promise<AdminActionResult> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
@@ -172,6 +190,8 @@ const archiveSchema = z.object({
 export async function adminArchiveContainerCost(
   input: z.infer<typeof archiveSchema>,
 ): Promise<AdminActionResult> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = archiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;

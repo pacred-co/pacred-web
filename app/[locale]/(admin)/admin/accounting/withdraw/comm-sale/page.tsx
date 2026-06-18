@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -54,7 +55,11 @@ export default async function AdminWithdrawCommSalePage({
 }: {
   searchParams: Promise<{ status?: string; rep?: string }>;
 }) {
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Commission batch amounts (commbefore/WHT/net) = money-internal (owner
+  // 2026-06-18): only ultra/accounting/pricing. Non-cost viewers keep the batch
+  // list (date/payee/title/status) but the money columns + summary + CSV drop.
+  const showMoney = canViewCostProfit(roles);
   const sp = await searchParams;
   const status = sp.status === "1" || sp.status === "2" || sp.status === "3" ? sp.status : undefined;
   const repId = (sp.rep ?? "").trim() || undefined;
@@ -70,15 +75,18 @@ export default async function AdminWithdrawCommSalePage({
   const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
   const sumWHT        = result.rows.reduce((s, r) => s + r.withholding, 0);
 
-  // CSV rows for accounting reconciliation export
+  // CSV rows for accounting reconciliation export — the commission money columns
+  // (ก่อน WHT / WHT / รับสุทธิ) are omitted for non-cost viewers (data-layer).
   const csvRows: CsvRow[] = result.rows.map((b) => ({
     "Batch #":                 b.id,
     "วันที่สร้าง":             b.date ? new Date(b.date).toLocaleDateString("th-TH") : "",
     "ผู้รับเงิน":              b.adminid,
     "หัวข้อ":                  b.title,
-    "ค่าคอม (ก่อน WHT)":       b.commbefore,
-    "หัก WHT":                 b.withholding,
-    "รับสุทธิ":                b.amount,
+    ...(showMoney ? {
+      "ค่าคอม (ก่อน WHT)":       b.commbefore,
+      "หัก WHT":                 b.withholding,
+      "รับสุทธิ":                b.amount,
+    } : {}),
     "สถานะ":                   STATUS_LABEL[b.status] ?? b.status,
     "ธนาคารผู้รับ":            b.nameuserbank,
     "เลขที่บัญชี":             b.nouserbank,
@@ -86,7 +94,7 @@ export default async function AdminWithdrawCommSalePage({
   }));
   const csvCols = [
     "Batch #", "วันที่สร้าง", "ผู้รับเงิน", "หัวข้อ",
-    "ค่าคอม (ก่อน WHT)", "หัก WHT", "รับสุทธิ",
+    ...(showMoney ? ["ค่าคอม (ก่อน WHT)", "หัก WHT", "รับสุทธิ"] : []),
     "สถานะ", "ธนาคารผู้รับ", "เลขที่บัญชี", "สลิป",
   ];
 
@@ -115,12 +123,12 @@ export default async function AdminWithdrawCommSalePage({
           </span>
         </header>
 
-        {/* Summary band */}
-        <section className="grid sm:grid-cols-4 gap-3">
+        {/* Summary band — money stat cards only for cost-allowed viewers */}
+        <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
           <Stat label="ทั้งหมด" value={total.toLocaleString("th-TH")} />
           <Stat label="ในตาราง" value={result.rows.length.toLocaleString("th-TH")} />
-          <Stat label="ค่าคอมรวม (ก่อนหัก)" value={thb(sumCommBefore)} small />
-          <Stat label="WHT รวม" value={thb(sumWHT)} small />
+          {showMoney && <Stat label="ค่าคอมรวม (ก่อนหัก)" value={thb(sumCommBefore)} small />}
+          {showMoney && <Stat label="WHT รวม" value={thb(sumWHT)} small />}
         </section>
 
         {/* Status filter chips */}
@@ -153,7 +161,9 @@ export default async function AdminWithdrawCommSalePage({
             <div className="flex items-center gap-3">
               {result.rows.length > 0 && (
                 <p className="text-xs text-muted">
-                  {result.rows.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(result.sumAmount)}</span>
+                  {result.rows.length} แถว{showMoney && (
+                    <> · รวม <span className="font-mono font-bold text-primary-700">{thb(result.sumAmount)}</span></>
+                  )}
                 </p>
               )}
               <CsvButton
@@ -177,9 +187,9 @@ export default async function AdminWithdrawCommSalePage({
                     <th className="px-3 py-2">วันที่</th>
                     <th className="px-3 py-2">ผู้รับเงิน</th>
                     <th className="px-3 py-2">หัวข้อ</th>
-                    <th className="px-3 py-2 text-right">ค่าคอม (ก่อน WHT)</th>
-                    <th className="px-3 py-2 text-right">หัก WHT</th>
-                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    {showMoney && <th className="px-3 py-2 text-right">ค่าคอม (ก่อน WHT)</th>}
+                    {showMoney && <th className="px-3 py-2 text-right">หัก WHT</th>}
+                    {showMoney && <th className="px-3 py-2 text-right">รับสุทธิ</th>}
                     <th className="px-3 py-2 text-center">สถานะ</th>
                   </tr>
                 </thead>
@@ -197,9 +207,9 @@ export default async function AdminWithdrawCommSalePage({
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(b.date)}</td>
                       <td className="px-3 py-2 font-mono text-xs">{b.adminid}</td>
                       <td className="px-3 py-2 text-xs">{b.title || "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs">{thb(b.commbefore)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(b.withholding)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(b.amount)}</td>
+                      {showMoney && <td className="px-3 py-2 text-right font-mono text-xs">{thb(b.commbefore)}</td>}
+                      {showMoney && <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(b.withholding)}</td>}
+                      {showMoney && <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(b.amount)}</td>}
                       <td className="px-3 py-2 text-center">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[b.status]}`}>
                           {STATUS_LABEL[b.status] ?? b.status}

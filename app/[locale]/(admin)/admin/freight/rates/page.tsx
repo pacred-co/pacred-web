@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { getFreightRates, getFreightFxRate } from "@/actions/admin/freight-rates";
 import { FreightRatesClient } from "./freight-rates-client";
 import { FreightFxControl } from "./freight-fx-control";
@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminFreightRatesPage() {
   const { roles } = await requireAdmin(["super", "ops", "accounting"]);
   // Write-capable = super OR ops (mirror the table write RLS). accounting = read-only.
-  const canWrite = roles.includes("super") || roles.includes("ops");
+  const canWrite = isGodRole(roles) || roles.includes("ops");
 
   const [{ rows, loadFailed }, fxRate] = await Promise.all([
     getFreightRates(),

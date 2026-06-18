@@ -97,7 +97,7 @@ export function getDefaultFilter(
 ): URLSearchParams | null {
   // `super` = executive view → never auto-filter (matches legacy CEO
   // landing which loaded the full list).
-  if (role === "super") return null;
+  if (role === "super" || role === "ultra") return null;
 
   switch (page) {
     case "/admin/forwarders":
@@ -249,13 +249,14 @@ function walletFilter(role: AdminRole): URLSearchParams | null {
  * variant selection (so a multi-role admin's default queue matches
  * their dashboard variant, not a random other role).
  *
- * Priority (most-focused wins): super > accounting > warehouse >
+ * Priority (most-focused wins): ultra > super > accounting > warehouse >
  * sales_admin > driver > interpreter > qa > sales > ops.
  *
  * Pure (no I/O) — safe to call from a Server Component without
  * dragging in `cache()` indirection.
  */
 const FILTER_ROLE_PRIORITY: AdminRole[] = [
+  "ultra",
   "super",
   "accounting",
   "warehouse",

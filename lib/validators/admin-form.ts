@@ -42,6 +42,10 @@ import { z } from "zod";
  * The form UI exposes ALL 24 so a super-admin can grant any role.
  */
 export const ADMIN_ROLES = [
+  // 2026-06-18 (owner · mig 0189) — `ultra` = "Ultra Admin Z": god role that
+  // sees EVERYTHING incl. money internals. Ranks above super (which loses
+  // cost/profit visibility). Listed first = top of the role dropdown.
+  "ultra",
   "super",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   "manager",
@@ -84,7 +88,8 @@ export type AdminRoleEnum = z.infer<typeof adminRoleSchema>;
  * makes a missing/extra key a compile error if the enum changes.
  */
 export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
-  super:                     "Super Admin (CEO/Manager/Tech)",
+  ultra:                     "Ultra Admin Z (เห็นทุกอย่าง รวมต้นทุน/กำไร/คอม)",
+  super:                     "Super Admin (เห็นทุกอย่าง ยกเว้นต้นทุน/กำไร/คอม)",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
   ops:                       "Ops (forwarder/บริการคลังจีน)",

@@ -30,6 +30,8 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
 import {
   CustomsDeclarationPdf,
@@ -136,6 +138,14 @@ export async function GET(
   if (!declaration) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
   }
+
+  // Dual-audience money gate (owner 2026-06-18). Declared value / duty / VAT are
+  // MONEY-internal. A CUSTOMER may see the declared value on their OWN doc (the
+  // RLS read above already scoped them) — so only mask for ADMIN viewers who lack
+  // cost/profit access (e.g. super, freight_import_doc). getAdminRoles() returns
+  // null for non-admins (customers), so they are never masked.
+  const viewerRoles = await getAdminRoles();
+  const adminMustHideMoney = viewerRoles != null && !canViewCostProfit(viewerRoles);
 
   // Pull shipment + parties + lines via admin client (we've already
   // proven the caller is entitled to the declaration row). The customs schema
@@ -279,17 +289,18 @@ export async function GET(
       unit:               l.unit,
       gross_weight_kg:    l.gross_weight_kg != null ? Number(l.gross_weight_kg) : null,
       net_weight_kg:      l.net_weight_kg   != null ? Number(l.net_weight_kg)   : null,
-      declared_value_thb: Number(l.declared_value_thb),
-      duty_rate_pct:      Number(l.duty_rate_pct),
-      duty_thb:           Number(l.duty_thb),
-      vat_thb:            Number(l.vat_thb),
+      // MONEY-internal — zeroed for non-cost admin viewers (customer keeps own).
+      declared_value_thb: adminMustHideMoney ? 0 : Number(l.declared_value_thb),
+      duty_rate_pct:      adminMustHideMoney ? 0 : Number(l.duty_rate_pct),
+      duty_thb:           adminMustHideMoney ? 0 : Number(l.duty_thb),
+      vat_thb:            adminMustHideMoney ? 0 : Number(l.vat_thb),
       fta_applied:        Boolean(l.fta_applied),
     })),
 
-    total_declared_value_thb: Number(declaration.total_declared_value_thb ?? 0),
-    total_duty_thb:           Number(declaration.total_duty_thb ?? 0),
-    total_vat_thb:            Number(declaration.total_vat_thb ?? 0),
-    total_other_taxes_thb:    Number(declaration.total_other_taxes_thb ?? 0),
+    total_declared_value_thb: adminMustHideMoney ? 0 : Number(declaration.total_declared_value_thb ?? 0),
+    total_duty_thb:           adminMustHideMoney ? 0 : Number(declaration.total_duty_thb ?? 0),
+    total_vat_thb:            adminMustHideMoney ? 0 : Number(declaration.total_vat_thb ?? 0),
+    total_other_taxes_thb:    adminMustHideMoney ? 0 : Number(declaration.total_other_taxes_thb ?? 0),
   };
 
   const filename = `pacred-customs-declaration-${declaration.declaration_no ?? id}.pdf`;
