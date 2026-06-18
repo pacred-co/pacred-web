@@ -18,7 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
-import { WarehouseRateGroup, RouteImportGroup } from "@/components/sections/lcl-price-cards";
+import { WarehouseRateGroup, RouteImportGroup, FreightPortCards } from "@/components/sections/lcl-price-cards";
 
 const LINE_URL = "/line";
 const HOTLINE = "062-603-0456";
@@ -385,9 +385,9 @@ export function PricingSection({
             <div className="flex flex-col gap-7 md:gap-10">
               {/* ═════ Cargo LCL Section — โกดังรับสินค้า (full-card graphic) ═════ */}
               <WarehouseRateGroup />
-              {/* ═════ Freight Import-Export Section (heading only — cards TBD) ═════ */}
+              {/* ═════ Freight Import-Export Section (Port→Port · FOB lean cards) ═════ */}
               <section>
-                <header>
+                <header className="mb-3 md:mb-4">
                   <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
                     <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
                     {t("cargoFclSectionEyebrow")}
@@ -396,6 +396,27 @@ export function PricingSection({
                     {t("cargoFclSectionTitle")}
                   </h3>
                 </header>
+
+                {/* Freight banner (นำเข้า-ส่งออก เอกสารถูกต้อง · text baked into image) — clickable → LINE · hover-zoom */}
+                <TrackedExternalLink
+                  href={LINE_URL}
+                  cta="line_consult"
+                  surface="pricing_freight"
+                  ctaProps={{ position: "freight_banner" }}
+                  aria-label="นำเข้า-ส่งออก เอกสารถูกต้อง Pacred — ติดต่อทาง LINE"
+                  className="group relative block mb-3 md:mb-4 overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
+                >
+                  <Image
+                    src="/images/mainpage/banner/import-export/freight2.png"
+                    alt="บริการนำเข้า-ส่งออก เอกสารถูกต้อง Pacred — Freight FCL / LCL"
+                    width={2280}
+                    height={440}
+                    unoptimized
+                    sizes="(max-width: 768px) 100vw, 1120px"
+                    className="w-full h-auto transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+                  />
+                </TrackedExternalLink>
+                <FreightPortCards />
               </section>
             </div>
           ) : (
