@@ -151,7 +151,7 @@ export function NavBar() {
 
       {/* ── Main navbar ── */}
       <div className="bg-[#B91C1C]">
-        <div className="flex h-[56px] w-full items-center justify-between gap-4 px-4 xl:pl-3 xl:pr-6">
+        <div className="flex h-[56px] w-full items-center justify-between gap-2 px-3 xl:gap-4 xl:pl-3 xl:pr-6">
 
           {/* Logo — clicks back to home (replaces former social cluster, per ปอน 2026-05-22) */}
           <Link
@@ -165,7 +165,7 @@ export function NavBar() {
               width={400}
               height={160}
               priority
-              className="h-10 md:h-12 w-auto object-contain"
+              className="h-9 md:h-12 w-auto object-contain"
             />
           </Link>
 
@@ -225,12 +225,12 @@ export function NavBar() {
           {/* Mobile: บริการ menu trigger + controls. "บริการ" ย้ายมาจาก bottom-nav
               (ช่องนั้นเป็นปุ่ม booking แทนแล้ว · ปอน) → เปิด bottom-sheet เมนูบริการ
               ผ่าน event เดิมที่ header ฟังอยู่ (toggle-mobile-menu). */}
-          <div className="flex xl:hidden items-center gap-2">
+          <div className="flex xl:hidden items-center gap-1.5">
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent("toggle-mobile-menu"))}
               aria-label={tTabs("services")}
-              className="flex items-center gap-1.5 h-9 px-2.5 rounded-lg border border-white/30 text-white text-[13px] font-bold hover:bg-white/15 transition-colors"
+              className="flex items-center gap-1 h-9 px-2 rounded-lg border border-white/30 text-white text-[12px] font-bold hover:bg-white/15 transition-colors"
             >
               <LayoutGrid className="w-4 h-4" strokeWidth={2.4} />
               <span>{tTabs("services")}</span>

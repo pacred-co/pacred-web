@@ -393,7 +393,9 @@ export function PricingSection({
                     {t("cargoFclSectionEyebrow")}
                   </div>
                   <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                    {t("cargoFclSectionTitle")}
+                    {t.rich("cargoFclSectionTitle", {
+                      brand: (chunks) => <span className="text-primary-600 dark:text-primary-400 whitespace-nowrap">{chunks}</span>,
+                    })}
                   </h3>
                 </header>
 
