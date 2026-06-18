@@ -174,6 +174,9 @@ export default async function LogisticsBoardPage() {
             ["🧾 ทำใบวางบิล", "/admin/billing-run"],
             ["🚐 คนขับ/จัดส่ง", "/admin/drivers"],
             ["🛒 ฝากสั่งซื้อ", "/admin/service-orders"],
+            // P1 — paste a PCS tracking list → see which เลขไม่อยู่ในระบบเรา (unmatched)
+            // → feed those in via "ป้อนของเข้าระบบ" above.
+            ["🔎 เช็คของ PCS (tracking หลายเลข)", "/admin/forwarders/bulk-search"],
           ].map(([label, href]) => (
             <Link key={href} href={href} className="rounded-full border border-border bg-surface-alt/40 px-3 py-1.5 hover:bg-surface-alt">
               {label}
