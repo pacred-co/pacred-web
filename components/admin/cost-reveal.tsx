@@ -44,17 +44,32 @@ type CostRevealCtx = {
   revealed: boolean;
   /** Eye toggle: relock when revealed, else open the PIN dialog. */
   toggle: () => void;
+  /** true for the cost-owner roles (super / accounting / pricing) — they see
+   *  cost PLAIN, never blurred, and the eye is hidden for them. */
+  bypass: boolean;
 };
 
 const Ctx = createContext<CostRevealCtx | null>(null);
 
 /** Safe default when used outside a provider → stays hidden (fail-closed). */
 export function useCostReveal(): CostRevealCtx {
-  return useContext(Ctx) ?? { revealed: false, toggle: () => {} };
+  return useContext(Ctx) ?? { revealed: false, toggle: () => {}, bypass: false };
 }
 
-export function CostRevealProvider({ children }: { children: ReactNode }) {
-  const [revealed, setRevealed] = useState(false);
+/**
+ * @param bypass — true for super/accounting/pricing (owner ภูม 2026-06-17:
+ *   "เบลอต้นทุนทุก role ยกเว้น super/บัญชี/pricing"). Those roles see cost plain
+ *   (revealed by default, no PIN, no eye). Every OTHER cost-seeing role gets the
+ *   blur + PIN gate. Roles dave's server gate hides entirely stay hidden.
+ */
+export function CostRevealProvider({
+  children,
+  bypass = false,
+}: {
+  children: ReactNode;
+  bypass?: boolean;
+}) {
+  const [revealed, setRevealed] = useState(bypass);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [pin, setPin] = useState("");
@@ -96,7 +111,7 @@ export function CostRevealProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ revealed, toggle }}>
+    <Ctx.Provider value={{ revealed, toggle, bypass }}>
       {children}
 
       <dialog
@@ -207,7 +222,9 @@ export function CostRevealRegion({
  * ("ดูต้นทุน"), emerald when revealed ("ซ่อนต้นทุน").
  */
 export function CostRevealToggle({ className = "" }: { className?: string }) {
-  const { revealed, toggle } = useCostReveal();
+  const { revealed, toggle, bypass } = useCostReveal();
+  // super / accounting / pricing see cost plain → no eye, no PIN.
+  if (bypass) return null;
   return (
     <button
       type="button"

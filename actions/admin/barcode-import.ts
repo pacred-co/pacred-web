@@ -43,6 +43,8 @@ import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { getContainerCompleteness } from "@/lib/warehouse/container-completeness";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { computeShipmentFlip, type ShipmentScanRow } from "@/lib/forwarder/shipment-scan-flip";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -394,62 +396,99 @@ export async function adminBarcodeImportScan(
         legacyAdminId,
       });
 
-      // ── 3. MAYBE FLIP STATUS — legacy L167-175
+      // ── 3. SHIPMENT-AWARE FLIP (owner ภูม 2026-06-18 · matches legacy PCS) ──
+      // MOMO labels the BOXES with the bill-header tracking, NOT the sub-
+      // trackings (`-N/M`), so the warehouse can only ever scan the bill-header.
+      // Count the scan toward the WHOLE shipment (every sibling sharing
+      // baseTracking + userid) and, when the shipment's scanned ≥ its carrier-
+      // declared total, flip EVERY eligible sibling → '4' (สินค้าถึงไทย) — not
+      // just the matched row (the old per-row flip left the customer-visible
+      // sub-rows stuck). Decision logic + unit tests:
+      // lib/forwarder/shipment-scan-flip.ts. A single non-MOMO order degrades to
+      // the legacy per-row behaviour (a 1-row group counts vs its own famount).
       let statusFlipped = false;
-      if (row && fi2amount >= row.famount) {
-        // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.
-        // Matrix: *→4 = warehouse (super / manager override). The page-
-        // level union ["super","ops","warehouse"] also lets `ops` through
-        // — same justification as warehouse-history: helper additionally
-        // rejects non-warehouse `ops` callers from auto-flipping fstatus,
-        // while still permitting the scan-event upsert in step (2) and
-        // the touch in the else-branch below (no fstatus change there).
-        // Skip the gate when the row is already at fstatus 4 (idempotent
-        // re-scan after parity reached).
-        let allowFlip = row.fstatus === "4";
-        if (!allowFlip) {
-          const callerRoles = (await getAdminRoles()) ?? [];
-          allowFlip = canAnyRoleFlipFstatus(callerRoles, row.fstatus, "4");
-        }
-
-        if (!allowFlip) {
-          // Soft-fail: the scan upsert already succeeded; surface the gap
-          // in the audit log without breaking the warehouse UX. A `super`
-          // can complete the flip via the bulk action.
-          logger.warn(
-            "barcode_import.scan",
-            "fstatus auto-flip blocked by G5 transition gate",
-            { fid: row.id, from: row.fstatus },
-          );
-        } else {
-          const { error: flipErr } = await admin
+      if (row) {
+        // Build the shipment group — fall back to the single matched row.
+        let group: ShipmentScanRow[] = [{
+          id: row.id, famount: row.famount, fstatus: row.fstatus,
+          ftrackingchn: row.ftrackingchn, userid: row.userid,
+        }];
+        const base = baseTracking(row.ftrackingchn);
+        if (base && row.userid) {
+          const { data: sibs, error: sibErr } = await admin
             .from("tb_forwarder")
-            .update({
-              fstatus: "4",
-              fdatestatus4: nowIso,
-              adminidupdate: legacyAdminId,
-              fpallet: fPallet,
-            })
-            .eq("id", row.id);
-          if (!flipErr) {
-            statusFlipped = true;
-            // G8 (2026-05-28 ดึก): every fstatus UPDATE writes the legacy
-            // audit log. Barcode-driven flip → '4' was a missing site
-            // per §7 of the state-machine audit ("no log entry — bug").
-            // No customer notification on this transition: matrix is
-            // log-only for 3→4 (internal warehouse confirmation).
-            await appendStatusLog(admin, row.id, row.fstatus, "4", legacyAdminId);
+            .select("id, famount, fstatus, fcredit, ftrackingchn, fweight, userid")
+            .eq("userid", row.userid)
+            .ilike("ftrackingchn", `${base}%`)
+            .limit(200);
+          if (sibErr) {
+            console.error(`[barcode-import shipment siblings]`, { code: sibErr.code, message: sibErr.message, base });
+          } else {
+            const exact = ((sibs ?? []) as unknown as ShipmentScanRow[])
+              .filter((s) => baseTracking(s.ftrackingchn) === base);
+            if (exact.length > 0) group = exact;
           }
         }
-      } else if (row) {
-        // L171-175 — touch adminidupdate + fpallet even without status flip.
-        await admin
-          .from("tb_forwarder")
-          .update({
-            adminidupdate: legacyAdminId,
-            fpallet: fPallet,
-          })
-          .eq("id", row.id);
+
+        // Σ scanned across the whole group (bill-header + every sub).
+        const groupIds = group.map((g) => g.id);
+        const { data: scanRows, error: scanErr } = await admin
+          .from("tb_forwarder_import2")
+          .select("fid, fi2amount")
+          .in("fid", groupIds);
+        if (scanErr) {
+          console.error(`[barcode-import shipment scans]`, { code: scanErr.code, message: scanErr.message });
+        }
+        const scannedByFid = new Map<number, number>();
+        for (const sr of (scanRows ?? []) as { fid: number | null; fi2amount: number | string | null }[]) {
+          if (sr.fid != null) scannedByFid.set(sr.fid, Number(sr.fi2amount ?? 0) || 0);
+        }
+
+        const flip = computeShipmentFlip(group, scannedByFid);
+
+        if (flip.shouldFlip) {
+          // Wave 26 G5 status-transition role gate (*→4 = warehouse · super /
+          // manager override). Gate on the SCANNED row's status; skip when it is
+          // already '4' (idempotent re-scan after the shipment completed).
+          let allowFlip = row.fstatus === "4";
+          if (!allowFlip) {
+            const callerRoles = (await getAdminRoles()) ?? [];
+            allowFlip = canAnyRoleFlipFstatus(callerRoles, row.fstatus, "4");
+          }
+          if (!allowFlip) {
+            logger.warn(
+              "barcode_import.scan",
+              "shipment fstatus auto-flip blocked by G5 transition gate",
+              { fid: row.id, from: row.fstatus, base },
+            );
+          } else {
+            // Flip every eligible sibling → '4'. The WHERE re-asserts the
+            // physical-axis / credit-6 guard so a row that raced to paid (5-7)
+            // is never pulled back (TOCTOU-safe · mirrors primaryLookup).
+            const { error: flipErr } = await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "4", fdatestatus4: nowIso, adminidupdate: legacyAdminId, fpallet: fPallet })
+              .in("id", flip.eligibleIds)
+              .or("fstatus.lt.5,and(fcredit.eq.1,fstatus.eq.6)");
+            if (!flipErr) {
+              statusFlipped = true;
+              // G8 — audit each flipped row (best-effort · 3→4 is an internal
+              // warehouse confirmation, no customer notify).
+              for (const g of group) {
+                if (flip.eligibleIds.includes(g.id)) {
+                  await appendStatusLog(admin, g.id, g.fstatus, "4", legacyAdminId);
+                }
+              }
+            }
+          }
+        } else {
+          // Shipment not complete yet — touch the matched row only
+          // (adminidupdate + fpallet · legacy L171-175).
+          await admin
+            .from("tb_forwarder")
+            .update({ adminidupdate: legacyAdminId, fpallet: fPallet })
+            .eq("id", row.id);
+        }
       }
 
       // ── 3b. Phase 3 (ops-workflow audit §30) — staff-notify on the

@@ -11,6 +11,11 @@ import { code128SvgDataUrl } from "@/lib/barcode";
 // combo that /edit's FreightBreakdownTable shows). New Pacred component renders
 // that 1:1 from the real tb_forwarder header values.
 import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
+// 2026-06-18 (ภูม · A2) — per-แทรคกิง dimension/price editor (server fetcher). A
+// split parcel has many tb_forwarder rows; the legacy single-row form only ever
+// saved one. This fetches every sibling tracking + renders one editable row each,
+// persisting all via the existing audited adminUpdateForwarderDimensions (per row).
+import { ForwarderPerTrackingEditor } from "./forwarder-per-tracking-editor";
 // 2026-06-11 (Lane A · §0d reachability) — per-line COST + DECLARED capture
 // (P2 tax-invoice platform · `pricing` role). The component was built but never
 // mounted (the SHOP equivalent ShopOrderCostSection already is, on legacy-view).
@@ -18,6 +23,11 @@ import { ForwarderImportItemsTable } from "./forwarder-import-items-table";
 // from the selling-price/status/notify flow (AGENTS.md §0e). It self-gates:
 // super/accounting/pricing get editors, everyone else a read-only summary.
 import { ForwarderCostSection } from "./forwarder-cost-section";
+// 2026-06-18 (ภูม · C · mig 0188) — per-order doc-tier-discount ติ๊กยืนยัน (the C1
+// ฝากโอน confirmation). Self-gates super/accounting/pricing · writes ONLY
+// tb_forwarder.doc_tier_confirmed · the discount stays dormant until the owner
+// flips business_config cargo.doc_tier_discount.enabled (§0e isolated).
+import { ForwarderDocTierConfirm } from "./forwarder-doc-tier-confirm";
 // 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
 import { ForwarderDeleteButton } from "./forwarder-delete-button";
 // 2026-06-11 (ปอน · owner "ฟอร์มแก้ไขต้อง status-driven · แต่ละสถานะมีให้แก้ไม่
@@ -267,6 +277,8 @@ async function tryRenderTbForwarder(
       "ftotalprice, fcosttotalprice, ftransportprice, fpriceupdate, fdiscount, " +
       "pricecrate, fqcprice, ftransportpricechnthb, priceother, fproductstype, " +
       "frefprice, frefrate, customrate, customratekg, customratecbm, " +
+      // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+      "custom_comparison, custom_comparison_value, " +
       "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
@@ -311,6 +323,7 @@ async function tryRenderTbForwarder(
     fproductstype: string | null;
     frefprice: string | null; frefrate: number | null;
     customrate: string | null; customratekg: number | null; customratecbm: number | null;
+    custom_comparison: string | null; custom_comparison_value: number | string | null;
     faddressname: string | null; faddresslastname: string | null;
     faddressno: string | null; faddresssubdistrict: string | null;
     faddressdistrict: string | null; faddressprovince: string | null;
@@ -500,6 +513,10 @@ async function tryRenderTbForwarder(
     customRate: (r.customrate === "1" ? "1" : "0") as "0" | "1",
     customRateKg: num(r.customratekg) || 40,
     customRateCbm: num(r.customratecbm) || 7500,
+    // 2026-06-17 (mig 0187) — seed the per-order ค่าเทียบ override toggle from
+    // the persisted row so it stays ON (with its value) after reload.
+    customComparison: (String(r.custom_comparison ?? "0").trim() === "1" ? "1" : "0") as "0" | "1",
+    customComparisonValue: num(r.custom_comparison_value),
     fDiscount: num(r.fdiscount),
     fTransportPriceChnThb: num(r.ftransportpricechnthb),
     priceOther: num(r.priceother),
@@ -781,7 +798,17 @@ async function tryRenderTbForwarder(
           amountEstimate={creditEstimate}
           pricing={pricingInit}
           reforder={r.reforder}
-          itemsTable={<ForwarderImportItemsTable r={r} />}
+          itemsTable={<ForwarderImportItemsTable r={r} isJuristic={u?.userCompany === "1" || r.fusercompany === "1"} />}
+          pricingEditor={
+            <ForwarderPerTrackingEditor
+              r={r}
+              customRateInit={pricingInit.customRate}
+              customRateKgInit={pricingInit.customRateKg}
+              customRateCbmInit={pricingInit.customRateCbm}
+              customComparisonInit={pricingInit.customComparison}
+              customComparisonValueInit={pricingInit.customComparisonValue}
+            />
+          }
         >
 
           {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
@@ -791,6 +818,14 @@ async function tryRenderTbForwarder(
              it annotates, inside ปอน's status-workflow restructure. ── */}
           <div className="mt-4">
             <ForwarderCostSection fId={r.id} reforder={r.reforder} />
+          </div>
+
+          {/* ── ส่วนลดเอกสาร (doc-tier) ยืนยันเงื่อนไข — owner-locked · dormant-safe
+             (ภูม 2026-06-18 · C · mig 0188). Self-gates super/accounting/pricing.
+             Writes ONLY doc_tier_confirmed; the discount stays ฿0 until the owner
+             flips cargo.doc_tier_discount.enabled. ── */}
+          <div className="mt-4">
+            <ForwarderDocTierConfirm fId={r.id} />
           </div>
         </ForwarderStatusWorkflow>
 

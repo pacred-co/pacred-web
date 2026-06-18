@@ -545,3 +545,23 @@ KGPerCBM <= ค่าเทียบ(250) → bill by CBM  (default · refPrice=
 **The CBM DISPLAY bug was separate + already fixed.** Poom's 82.944-vs-MOMO-1.7280 report was Pacred's `totalCbm` ignoring `fAmountCount` and always multiplying `fvolume*famount` — when `fAmountCount==1` ("รวมกล่อง", fvolume is already the total) it must NOT multiply. Fixed in commit `5f035c28`; the live-rate `cbmProduct` (`live-rate.ts` L261-264) already follows the legacy `fAmountCount==1 ? fvolume : fvolume*famount` convention. Don't confuse the display fix with the sell-price model.
 
 **Cross-links:** `lib/forwarder/resolve-rate.ts` (the ported ค่าเทียบ waterfall · authoritative code home) · `lib/forwarder/live-rate.ts` L261-300 (cbmProduct + userComparison read) · `lib/pricing/min-sell.ts` + `supabase/migrations/0139_min_sell_floor.sql` (the conflicting floor) · `supabase/migrations/0184_cbm_sell_model_reference.sql` (this session's DRAFT-for-P'Dev) · note `docs/learnings/pacred-cargo-tax-invoice-flow.md` says "1CBM=300KG" — **superseded:** current canonical ค่าเทียบ = 250 (per-customer, override 200/150).
+
+---
+
+## [2026-06-18] Forwarder COST is NOT a SELL waterfall — it's a 144-cell tb_settings matrix, computed at report-cnt (or live now)
+
+**Context:** ภูม asked why the forwarder detail cost/profit panel showed ต้นทุน 0 / "ยังไม่บันทึก", whether Pacred even has cost-rates, and what the "144-cell cost matrix" is. Owner wants ต้นทุน + กำไร "เหมือน PCS เป๊ะ". Built option A (live cost compute) → commit `71997363` (Poom-pacred).
+
+**The cost model (distinct from the SELL ค่าเทียบ waterfall in `resolve-rate.ts`):**
+- COST has **no waterfall, no per-customer tier, no ค่าเทียบ**. It's a flat **144-cell matrix on `tb_settings`**: 9 carriers (CTT/Sang/MK/MX/JMF/GOGO/CargoCenter/MOMO) × 2 transports (รถ/เรือ) × 4 product types (ทั่วไป/มอก./อย./พิเศษ) × 2 cities (กวางโจว ""/อี้อู "2") = 144 columns `fcost{car|ship}{1..4}default{carrier}{citySuffix}`.
+- Editor: **`/admin/settings/forwarder-costs`** (commit 73b958ad · `costs-model.ts` is the canonical column-name builder). Real values live on prod+dev (฿2,400–13,000/CBM); MANY cells are 0 = "carrier×mode×type×city not set" → cost 0 (NEVER guess).
+- **basis:** Sang(wh '1') + MX(wh '4') bill by **weight** (× fweight); every other carrier by **CBM** (× fvolume). `cost = round2(dimension × rate)`.
+- **The authoritative cost engine = `actions/admin/report-cnt-detail.ts`** `warehouseSegment()` (column map) + `calcRowCost()` (the port of legacy `calPriceForwarderCost()`). It writes `tb_forwarder.fcosttotalprice` when the ตู้ "คิดเรท" runs. **Accounting/PEAK books `fcosttotalprice`** — it is the authoritative cost.
+
+**Why "ต้นทุนไม่แสดง":** the detail panel only READ `fcosttotalprice`, which stays 0 until report-cnt runs (or the matrix cell is 0). Fix (option A, faithful to PCS forwarder.php which computes cost live): new **`lib/forwarder/resolve-cost.ts`** byte-mirrors report-cnt's warehouseSegment + calcRowCost; the panel reads the header dims + the one matrix cell, computes `liveCost`, and shows `คิดตามปริมาตร/น้ำหนัก {dim} x {rate} = {cost}`.
+
+**Money-safety nuance (adversarial review caught it):** a container that was MANUALLY custom-rated (report-cnt "คิดเรท" with a non-default basis) stores an `fcosttotalprice` that can DISAGREE with the live default-basis figure. So `displayCost` precedence = **live wins, BUT when stored>0 and |live−stored|>฿0.01 → prefer the STORED (accounting-authoritative) value + amber reconcile note** — never let the panel's กำไร silently contradict the booked cost. resolve-cost intentionally does NOT model legacy's MX weight-vs-CBM max() tier or Sang W×L×H (faithful to the simplified report-cnt port).
+
+**Lesson:** COST and SELL are TWO separate engines on Pacred. SELL = `resolve-rate.ts` (per-customer tier + ค่าเทียบ 250 waterfall). COST = the flat 144-cell `tb_settings` matrix read by `report-cnt-detail.ts`. Don't conflate them; the forwarder detail page now shows both (sell buckets → sellNet; matrix → cost; กำไร = sellNet − cost). Verified: order 52028 MOMO·เรือ·กวางโจว cbm 0.04646 × rate 2500 = ต้นทุน 116.15, กำไร 55.75.
+
+**Cross-links:** `lib/forwarder/resolve-cost.ts` + `.test.ts` (38 asserts · this session) · `actions/admin/report-cnt-detail.ts` (the canonical cost engine) · `app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model.ts` (144-cell column builder) · `app/[locale]/(admin)/admin/forwarders/[fNo]/forwarder-cost-section.tsx` (ForwarderProfitPanel — the live wire) · [[resolve-rate]] is the SEPARATE sell engine.

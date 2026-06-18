@@ -42,10 +42,12 @@ const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string; sub: string }[]
   { value: "4", label: "พิเศษ",  sub: "Special goods · ติดต่อเซลส์" },
 ];
 
-const REF_PRICE_OPTIONS: { value: RefPrice; label: string; sub: string }[] = [
-  { value: "1", label: "kgs", sub: "ราคา = น้ำหนัก × เรท/กก." },
-  { value: "2", label: "cbm", sub: "ราคา = CBM × เรท/cbm" },
-];
+// 2026-06-17 (ภูม flag) — REF_PRICE_OPTIONS (the "คิดเรทตาม" kgs/cbm dropdown)
+// REMOVED. The rate engine COMPUTES kg-vs-cbm itself (resolved.refPrice in
+// forwarders-edit.ts overwrites whatever the form sent), and the 2 toggles
+// (คิดราคาแบบกำหนดเอง · คิดค่าเทียบแบบกำหนดเอง) now drive that decision — so the
+// manual dropdown was a redundant no-op. The `RefPrice` type is still used by
+// the live preview's basis calc below.
 
 // Match legacy optionWarehouse() (member/pcs-admin/include/function.php L1823-1833)
 // + nameWarehouseChina() (L1049). Order matches the legacy dropdown.
@@ -97,7 +99,6 @@ export function AdminForwarderEditForm({
   heightInit,
   volumeInit,
   productTypeInit,
-  refPriceInit,
   noteInit,
   itemsInit,
   // 2026-06-05 — legacy update.php parity props (all optional defaults)
@@ -118,8 +119,9 @@ export function AdminForwarderEditForm({
   // the pricer sees what threshold the system is using. The toggle now also
   // RECOMPUTES the price on save: when ON, the typed ค่าเทียบ wins over the
   // customer's stored value for this order (see onSubmit + forwarders-edit.ts).
-  // ⚠️ compute-only — tb_forwarder has no per-order comparison column, so the
-  // override is NOT durably persisted (re-seeds from tb_users on reload).
+  // 2026-06-17 (mig 0187) — NOW DURABLE: the override persists to
+  // tb_forwarder.custom_comparison(_value), so the toggle stays ON with its
+  // value after reload (page.tsx seeds these inits from the row, not tb_users).
   userComparisonInit      = "0",
   userComparisonValueInit = 0,
 }: {
@@ -131,7 +133,6 @@ export function AdminForwarderEditForm({
   heightInit:       number;
   volumeInit:       number;
   productTypeInit:  ProductType;
-  refPriceInit:     RefPrice;
   noteInit:         string;
   itemsInit:        EditItemRow[];
   // 2026-06-05 — legacy update.php parity
@@ -163,7 +164,6 @@ export function AdminForwarderEditForm({
   // price leg, so a manual CBM is authoritative for billing too.
   const [cbm,         setCbm]         = useState<string>(volumeInit ? String(volumeInit) : "0");
   const [productType, setProductType] = useState<ProductType>(productTypeInit);
-  const [refPrice,    setRefPrice]    = useState<RefPrice>(refPriceInit);
   const [note,        setNote]        = useState<string>(noteInit);
   const [items,       setItems]       = useState<EditItemRow[]>(itemsInit);
 
@@ -202,9 +202,8 @@ export function AdminForwarderEditForm({
   // override (1 คิว = N kg threshold · e.g. 150). Now WIRED: onSubmit sends
   // customComparison + userComparisonValue to adminUpdateForwarderDimensions,
   // which recomputes the price with this threshold (winning over tb_users) on
-  // save. ⚠️ compute-only — no tb_forwarder column, so it re-seeds from the
-  // customer's stored value on reload. Seed from that stored value so the
-  // threshold shown is real.
+  // save. 2026-06-17 (mig 0187) — now DURABLE: persists to
+  // tb_forwarder.custom_comparison(_value) so the toggle + value survive reload.
   const [customComparison, setCustomComparison] = useState<"0" | "1">(userComparisonInit);
   const [comparisonValue,  setComparisonValue]  = useState<string>(String(userComparisonValueInit));
   const [fDiscount,             setFDiscount]             = useState<string>(String(fDiscountInit));
@@ -331,7 +330,8 @@ export function AdminForwarderEditForm({
         heightCm:     parsed.height,
         volumeCbm:    cbmNum,      // Issue 3 — send the (possibly hand-typed) CBM
         productType,
-        refPrice,
+        // refPrice (คิดเรทตาม) removed — the engine computes frefprice itself
+        // (forwarders-edit.ts · resolved.refPrice). The 2 toggles decide kg/cbm.
         note:         note.trim() || undefined,
         items:        items.map((it) => ({
           itemId:    it.itemId,
@@ -450,9 +450,12 @@ export function AdminForwarderEditForm({
                  (userComparisonValue · 1 คิว = N kg threshold)
              พอใส่เรท/ค่าเทียบ → ราคาคำนวณให้อัตโนมัติ (live preview ด้านล่าง),
              ช่องเงินที่เหลือไม่ต้องกรอก. ── */}
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        {/* 2026-06-18 (ภูม · พี่ป๊อป "ไม่ยืด/บวม" · PCS รูป2) — compact: narrow
+            fixed-width inputs (was CELL_NUM = w-full → stretched) + inline flex +
+            tight padding, so the 2 toggles read like the PCS rate block. */}
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {/* Toggle 1 — คิดราคาแบบกำหนดเอง (customRate) */}
-          <div className={`rounded-lg border p-3 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+          <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -461,44 +464,42 @@ export function AdminForwarderEditForm({
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
               />
-              <span className={`text-sm font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>
+              <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>
                 คิดราคาแบบกำหนดเอง
               </span>
             </label>
             {customRate === "1" ? (
-              <div className="mt-2.5 grid grid-cols-2 gap-2">
-                <label className="space-y-0.5">
-                  <span className="block text-[11px] text-muted">เรทคิดตามน้ำหนัก (฿/กก.)</span>
+              <div className="mt-1.5 flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="block text-[10px] text-muted">เรท ฿/กก.</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateKg}
                     onChange={(e) => setCustomRateKg(e.target.value)}
                     disabled={pending}
                     placeholder="40"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-0.5">
-                  <span className="block text-[11px] text-muted">เรทคิดตามปริมาตร (฿/CBM)</span>
+                <label className="block">
+                  <span className="block text-[10px] text-muted">เรท ฿/CBM</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateCbm}
                     onChange={(e) => setCustomRateCbm(e.target.value)}
                     disabled={pending}
                     placeholder="7500"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
                   />
                 </label>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-muted">
-                ปิด = ใช้เรทระบบ (โปรไฟล์ลูกค้า / เรททั่วไป). เปิดเพื่อกำหนดเรท ขาย/กก. + ขาย/CBM เอง
-              </p>
+              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = เรทระบบ · เปิด = กำหนดเรท กก./CBM เอง</p>
             )}
           </div>
 
-          {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · ⚠️ preview-only */}
-          <div className={`rounded-lg border p-3 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
+          {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · persists (mig 0187) */}
+          <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -507,33 +508,28 @@ export function AdminForwarderEditForm({
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
               />
-              <span className={`text-sm font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
+              <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
                 คิดค่าเทียบแบบกำหนดเอง
               </span>
             </label>
             {customComparison === "1" ? (
-              <div className="mt-2.5">
-                <label className="space-y-0.5 block max-w-[180px]">
-                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+              <div className="mt-1.5 flex items-end gap-2">
+                <label className="block">
+                  <span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
                   <input
                     type="number" min={0} step="1"
                     value={comparisonValue}
                     onChange={(e) => setComparisonValue(e.target.value)}
                     disabled={pending}
                     placeholder="150"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60"
                   />
                 </label>
-                {/* 2026-06-16 — now wired: the save recomputes the price with this
-                    ค่าเทียบ (wins over the customer's stored value for this order). */}
-                <p className="mt-1.5 text-[10px] text-amber-700">
-                  ค่าเทียบนี้จะใช้คำนวณราคาตอนกดบันทึก (แทนค่าเทียบของลูกค้าสำหรับออเดอร์นี้)
-                </p>
+                {/* 2026-06-16 — wired: the save recomputes the price with this ค่าเทียบ. */}
+                <p className="text-[10px] text-amber-700 leading-snug max-w-[150px]">ใช้ตอนบันทึก · แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้</p>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-muted">
-                ปิด = ใช้ค่าเทียบของลูกค้า. เปิดเพื่อกำหนดเกณฑ์ KG/CBM เอง (KG/คิว &gt; ค่าเทียบ → คิดตามน้ำหนัก)
-              </p>
+              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
             )}
           </div>
         </div>
@@ -548,7 +544,6 @@ export function AdminForwarderEditForm({
                 <th className={CELL_TH}>โกดังต้นทาง (จีน)</th>
                 <th className={CELL_TH}>โกดังที่รับ (ไทย)</th>
                 <th className={CELL_TH}>ประเภทสินค้า</th>
-                <th className={CELL_TH}>คิดเรทตาม</th>
                 <th className={CELL_TH}>น้ำหนัก (Kg)</th>
                 <th className={CELL_TH}>กว้าง (cm)</th>
                 <th className={CELL_TH}>ยาว (cm)</th>
@@ -577,11 +572,6 @@ export function AdminForwarderEditForm({
                 <td>
                   <select value={productType} onChange={(e) => setProductType(e.target.value as ProductType)} disabled={pending} className={CELL_SEL}>
                     {PRODUCT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </td>
-                <td>
-                  <select value={refPrice} onChange={(e) => setRefPrice(e.target.value as RefPrice)} disabled={pending} className={CELL_SEL}>
-                    {REF_PRICE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </td>
                 <td>
@@ -624,8 +614,8 @@ export function AdminForwarderEditForm({
               {/* ── FLAG 4 — extra DRAFT rows (client-side · not persisted yet) ── */}
               {draftRows.map((dr, i) => (
                 <tr key={dr.key} className="border-t border-dashed border-amber-300 align-top bg-amber-50/30 [&>td]:px-1.5 [&>td]:py-1.5">
-                  {/* warehouse / type / basis — draft placeholders (header row owns these) */}
-                  <td colSpan={4} className="text-[10px] text-amber-700 whitespace-nowrap">
+                  {/* warehouse / warehouse-th / type — draft placeholders (header row owns these) */}
+                  <td colSpan={3} className="text-[10px] text-amber-700 whitespace-nowrap">
                     item #{i + 2} <span className="text-amber-500">(ร่าง · ยังไม่บันทึก)</span>
                   </td>
                   <td>

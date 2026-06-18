@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { adminCreateCntPaymentSingle } from "@/actions/admin/cnt-payment";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { confirm } from "@/components/ui/confirm";
 
 export function CntPaySlipPanel({
   fCabinetNumber,
@@ -36,7 +37,7 @@ export function CntPaySlipPanel({
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setOkMsg(null);
@@ -50,6 +51,12 @@ export function CntPaySlipPanel({
       cabinetNumber: fCabinetNumber,
       cntAmount:     Number(fd.get("cntAmount") ?? 0),
     };
+    // §0f confirm-before-mutate (audit 2026-06-18) — files a tb_cnt payment
+    // record (money path) + attaches the slip for this container.
+    const ok = await confirm(
+      `ยืนยันบันทึกจ่ายเงินค่าตู้ ${fCabinetNumber} · ฿${input.cntAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ?`,
+    );
+    if (!ok) return;
     start(async () => {
       const res = await adminCreateCntPaymentSingle(input, slip);
       if (!res.ok) {

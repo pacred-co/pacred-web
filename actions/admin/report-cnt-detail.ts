@@ -613,6 +613,18 @@ export async function adminReportCntBillToCustomer(
 
       const fromStatus = String(row.fstatus ?? "");
 
+      // LOWER-BOUND gate (audit 2026-06-18 · money-safety): the bill is a 4→5
+      // flip (ถึงไทยแล้ว → รอชำระเงิน) that notifies the customer "ยอดค้างชำระ".
+      // Without a floor, a row still in China (fstatus 1/2/3) could be billed
+      // before the goods arrive — refuse it. fstatus 4 = ถึงไทยแล้ว is the only
+      // valid from-state (≥5 is handled by the idempotency no-op below).
+      if (Number(fromStatus) < 4) {
+        return {
+          ok: false,
+          error: "ยังแจ้งหนี้ลูกค้าไม่ได้ — สินค้ายังไม่ถึงไทย (ต้องสถานะ “ถึงไทยแล้ว” ก่อน)",
+        };
+      }
+
       // Idempotency: legacy had no guard, but re-billing a row already at
       // fstatus≥5 would re-stamp fdatestatus5 + re-notify "ยอดค้างชำระ" — a
       // double-bill ping. Refuse it cleanly (money path). For the already-billed

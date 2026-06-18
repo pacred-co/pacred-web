@@ -36,6 +36,18 @@ import {
 // 7%-on-margin staff figure · legacy function.php) into the GAP 9 profit panel.
 import { computeMarginVat } from "@/lib/tax/tax-doc-mode";
 import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+// Live COST resolver (option A · ภูม/พี่ป๊อป 2026-06-18 "แบบ PCS forwarder.php —
+// คำนวณต้นทุนสด") — reads the 144-cell tb_settings matrix the SAME way report-cnt
+// does, so the panel shows ต้นทุน + กำไร immediately instead of only the
+// report-cnt-stored fcosttotalprice (0 until the ตู้ "คิดเรท" runs).
+import {
+  resolveRowCost,
+  costColumn,
+  productTypeIdx,
+  type WarehouseDigit,
+  type CostTransport,
+  type CostBasis,
+} from "@/lib/forwarder/resolve-cost";
 // Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน by default; the eye
 // in the header opens a PIN dialog to reveal.
 import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
@@ -195,12 +207,23 @@ export async function ForwarderCostSection({
   // the direct-forwarder declared-value auto-seed (GAP 1). Has an authoritative
   // writer (the ไอแต้ม container-cost-sheet sync) — we only READ it here.
   let fCostTotal = 0;
+  // The header row's cost dims (carrier × mode × type × city + kg/cbm) — used to
+  // resolve the live matrix cost below. null until the header loads.
+  let costDims: {
+    fwarehousename: string | null;
+    fwarehousechina: string | null;
+    ftransporttype: string | null;
+    fproductstype: string | null;
+    fweight: number;
+    fvolume: number;
+  } | null = null;
   {
     const { data: hdr, error } = await admin
       .from("tb_forwarder")
       .select(
         "import_duty_pct, import_duty_thb, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, " +
-          "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount",
+          "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
+          "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume",
       )
       .eq("id", fId)
       .maybeSingle<{
@@ -215,6 +238,12 @@ export async function ForwarderCostSection({
         ftransportpricechnthb: number | string | null;
         priceother: number | string | null;
         fdiscount: number | string | null;
+        fwarehousename: string | null;
+        fwarehousechina: string | null;
+        ftransporttype: string | null;
+        fproductstype: string | null;
+        fweight: number | string | null;
+        fvolume: number | string | null;
       }>();
     if (error) {
       console.error(`[ForwarderCostSection tb_forwarder header]`, { code: error.code, message: error.message, fid: fId });
@@ -229,8 +258,58 @@ export async function ForwarderCostSection({
           n(hdr.fshippingservice) + n(hdr.pricecrate) + n(hdr.ftransportpricechnthb) +
           n(hdr.priceother) - n(hdr.fdiscount),
       );
+      costDims = {
+        fwarehousename: hdr.fwarehousename,
+        fwarehousechina: hdr.fwarehousechina,
+        ftransporttype: hdr.ftransporttype,
+        fproductstype: hdr.fproductstype,
+        fweight: n(hdr.fweight),
+        fvolume: n(hdr.fvolume),
+      };
     }
   }
+
+  // ── Live COST from the 144-cell matrix (option A) ──
+  // Resolve the carrier×mode×type×city cell, fetch JUST that tb_settings column,
+  // compute ต้นทุน = round2(dimension × rate) via the shared resolver (mirrors
+  // report-cnt). Live wins; falls back to the stored fcosttotalprice when the
+  // matrix cell is unset (so a report-cnt-computed cost still shows).
+  let liveCost = 0;
+  let liveCostRate = 0;
+  let liveCostBasis: CostBasis = "cbm";
+  let liveCostDim = 0;
+  let liveCostCol: string | null = null;
+  if (costDims) {
+    const wh = (costDims.fwarehousename ?? "") as WarehouseDigit;
+    const transport: CostTransport = costDims.ftransporttype === "2" ? "2" : "1";
+    liveCostCol = ["1", "2", "3", "4", "5", "6", "7", "8"].includes(wh)
+      ? costColumn(wh, productTypeIdx(costDims.fproductstype), transport, costDims.fwarehousechina ?? "")
+      : null;
+    if (liveCostCol) {
+      const { data: cs, error } = await admin
+        .from("tb_settings")
+        .select(liveCostCol)
+        .eq("id", 1)
+        .maybeSingle<Record<string, number | string | null>>();
+      if (error) {
+        console.error(`[ForwarderCostSection tb_settings cost]`, { code: error.code, message: error.message, col: liveCostCol });
+      }
+      const rc = resolveRowCost(costDims, cs ?? {});
+      liveCost = rc.cost;
+      liveCostRate = rc.rate;
+      liveCostBasis = rc.basis;
+      liveCostDim = rc.dimension;
+    }
+  }
+  // displayCost precedence (review 2026-06-18 · two reviewers flagged): the live
+  // matrix figure uses the carrier-DEFAULT basis. A container that was MANUALLY
+  // custom-rated (report-cnt "คิดเรท" with a non-default basis) stores a
+  // fcosttotalprice that accounting/PEAK actually books — and it can DISAGREE
+  // with the live default-basis figure. When both exist and disagree > ฿0.01,
+  // PREFER the stored (accounting-authoritative) value + surface a reconcile note,
+  // so the displayed กำไร never silently contradicts the booked cost.
+  const costDiverged = liveCost > 0 && fCostTotal > 0 && Math.abs(liveCost - fCostTotal) > 0.01;
+  const displayCost = costDiverged ? fCostTotal : liveCost > 0 ? liveCost : fCostTotal;
   // DIRECT-forwarder (THB cost) cost/unit seed = the header cost total ÷ Σqty
   // (fcosttotalprice is now resolved). Owner correction 2026-06-12.
   const fwdRealCostUnit = fwdTotalQty > 0 ? fCostTotal / fwdTotalQty : 0;
@@ -270,7 +349,16 @@ export async function ForwarderCostSection({
             internal figure (VAT-on-margin = กำไร × 7%, the legacy staff number).
             Shown to cost-capable roles only. */}
         {canEdit && (
-          <ForwarderProfitPanel sellNet={sellNet} costTotal={fCostTotal} />
+          <ForwarderProfitPanel
+            sellNet={sellNet}
+            costTotal={displayCost}
+            liveCost={liveCost}
+            liveRate={liveCostRate}
+            liveBasis={liveCostBasis}
+            liveDimension={liveCostDim}
+            storedCost={fCostTotal}
+            costDiverged={costDiverged}
+          />
         )}
 
         {/* D-G2 · อากรขาเข้า + ราคารวม VAT (the xlsx SELL-block, per shipment) */}
@@ -414,42 +502,88 @@ function CostLineCard({
  * cost hasn't been captured yet (so profit isn't shown as if it were the full
  * selling price).
  */
-function ForwarderProfitPanel({ sellNet, costTotal }: { sellNet: number; costTotal: number }) {
-  const fmt = (n: number) =>
-    n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function ForwarderProfitPanel({
+  sellNet,
+  costTotal,
+  liveCost,
+  liveRate,
+  liveBasis,
+  liveDimension,
+  storedCost,
+  costDiverged,
+}: {
+  sellNet: number;
+  costTotal: number;
+  /** matrix-computed cost (round2(dimension × rate)) · 0 = rate cell unset */
+  liveCost: number;
+  /** the 144-cell matrix rate used */
+  liveRate: number;
+  /** "weight" → คิดตามน้ำหนัก · "cbm" → คิดตามปริมาตร */
+  liveBasis: CostBasis;
+  /** the dimension multiplied (kg or cbm) */
+  liveDimension: number;
+  /** report-cnt-stored fcosttotalprice (accounting-authoritative) */
+  storedCost: number;
+  /** live (matrix-default) ≠ stored (custom-rated/booked) by > ฿0.01 */
+  costDiverged: boolean;
+}) {
+  // 2026-06-18 (ภูม/พี่ป๊อป "ให้เหมือน PCS เป๊ะ" · option A) — ต้นทุน computed LIVE
+  // from the 144-cell matrix (เรท × คิว/กก. · like PCS forwarder.php) · กำไร =
+  // ขายสุทธิ − ต้นทุน. Display-only · internal. Falls back to the report-cnt-stored
+  // cost when the matrix cell is unset.
+  const baht = (n: number) =>
+    `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
+  const nf = (n: number, dp: number) => n.toLocaleString("th-TH", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   const hasCost = Number.isFinite(costTotal) && costTotal > 0;
   const profit = hasCost ? sellNet - costTotal : 0;
   const marginVat = computeMarginVat(profit); // GAP 8 — canonical 7%-on-margin helper
+  // costTotal = displayCost: live matrix figure unless it diverges from a stored
+  // (custom-rated/booked) cost, in which case the stored value wins.
+  const usingLive = hasCost && liveCost > 0 && !costDiverged;
+  const usingStored = hasCost && (costDiverged || (liveCost <= 0 && storedCost > 0));
   return (
-    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-2.5">
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-800">
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-3">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-800 mb-2">
         <span aria-hidden>📊</span> รายรับ · รายจ่าย · กำไร (ภายใน)
       </div>
-      <dl className="mt-1.5 space-y-0.5 text-[11px]">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted">ยอดขายสุทธิ (รายรับ ฿)</dt>
-          <dd className="tabular-nums font-medium">{fmt(sellNet)}</dd>
+      <div className="grid gap-4 sm:grid-cols-2 text-[11px] font-mono tabular-nums">
+        {/* ── ต้นทุน (PCS left-bottom block · live matrix compute) ── */}
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground font-sans">ต้นทุน</p>
+          {liveCost > 0 && (
+            <p className="text-muted">
+              คิดตาม{liveBasis === "weight" ? "น้ำหนัก" : "ปริมาตร"} {nf(liveDimension, liveBasis === "weight" ? 2 : 5)} x {nf(liveRate, 0)} = <strong className="text-foreground">{baht(liveCost)}</strong>
+              {usingLive ? "" : " (เรทระบบ)"}
+            </p>
+          )}
+          <p>ต้นทุน ส่วนลด : {baht(0)}</p>
+          <p>ต้นทุน เพิ่ม/ลด เงิน : {baht(0)}</p>
+          <p>ราคาต้นทุน : <strong>{hasCost ? baht(costTotal) : "— ยังไม่ตั้งเรทต้นทุน"}</strong></p>
+          <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-0.5">
+            ระบบเลือกต้นทุนโดย {usingStored ? "ต้นทุนที่บันทึก (ตู้)" : "เรทต้นทุนระบบหลัก"}
+          </p>
+          {costDiverged && (
+            <p className="text-[10px] text-amber-700">
+              ⚠ เรทระบบ(สด) {baht(liveCost)} ≠ ต้นทุนที่บันทึก(ตู้) {baht(storedCost)} — บัญชีใช้ตัวที่บันทึก
+            </p>
+          )}
         </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted">ต้นทุนรวม (รายจ่าย ฿)</dt>
-          <dd className="tabular-nums">{hasCost ? fmt(costTotal) : "— ยังไม่บันทึก"}</dd>
+        {/* ── กำไร (PCS middle block) ── */}
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground font-sans">กำไร</p>
+          <p>ยอดขายสุทธิ : <strong>{baht(sellNet)}</strong></p>
+          <p>กำไรค่าขนส่งจีน-ไทย : {hasCost ? baht(profit) : "—"}</p>
+          <p>กำไรค่าบริการ : {baht(0)}</p>
+          <p>กำไร เพิ่ม/ลด เงิน : {baht(0)}</p>
+          <p className="border-t border-indigo-200 pt-0.5 mt-0.5 font-bold font-sans">
+            กำไรสุทธิ : <strong className={`font-mono ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>{hasCost ? baht(profit) : "—"}</strong>
+          </p>
+          {hasCost && <p className="text-[10px] text-muted">VAT ณ กำไร 7% (ภายใน) : {baht(marginVat)}</p>}
         </div>
-        <div className="flex items-baseline justify-between gap-2 border-t border-indigo-200 pt-0.5 font-bold">
-          <dt className="text-indigo-900">กำไรสุทธิ (฿)</dt>
-          <dd className={`tabular-nums ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>
-            {hasCost ? fmt(profit) : "—"}
-          </dd>
-        </div>
-        {hasCost && (
-          <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted">
-            <dt>VAT ณ กำไร 7% (ตัวเลขภายใน)</dt>
-            <dd className="tabular-nums">{fmt(marginVat)}</dd>
-          </div>
-        )}
-      </dl>
+      </div>
       {!hasCost && (
-        <p className="mt-1 text-[10px] text-amber-700">
-          ⚠ ยังไม่ได้บันทึกต้นทุน — บันทึกต้นทุนต่อรายการด้านล่างเพื่อให้คำนวณกำไรได้
+        <p className="mt-1.5 text-[10px] text-amber-700">
+          ⚠ ยังไม่มีเรทต้นทุนสำหรับขนส่ง/โหมด/ประเภทนี้ — ตั้งเรทที่ <span className="font-medium">ตั้งค่า › เรทต้นทุนนำเข้า</span> (/admin/settings/forwarder-costs) แล้วต้นทุน + กำไรจะคำนวณเอง
         </p>
       )}
     </div>

@@ -42,7 +42,6 @@ import { Link } from "@/i18n/navigation";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
-import { AdminForwarderEditForm } from "./edit/edit-form";
 
 type Status = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99";
 
@@ -65,11 +64,13 @@ export type ForwarderPricingInit = {
   height: number;
   volume: number;
   productType: "1" | "2" | "3" | "4";
-  refPrice: "1" | "2";
   note: string;
   customRate: "0" | "1";
   customRateKg: number;
   customRateCbm: number;
+  // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
+  customComparison: "0" | "1";
+  customComparisonValue: number;
   fDiscount: number;
   fTransportPriceChnThb: number;
   priceOther: number;
@@ -96,6 +97,10 @@ type Props = {
   /** รายการสินค้า (table only) — render ก่อน cost panel. @ถึงไทยแล้ว(4): คลิกหัวข้อ
    *  "รายการสินค้า" พับ/กางฟอร์มแก้ไขขนาด/ราคา (default กาง · owner 2026-06-12). */
   itemsTable?: React.ReactNode;
+  /** ฟอร์มกรอกรายละเอียดสินค้า ขนาด/ราคา · @ถึงไทยแล้ว(4) — render ใต้รายการสินค้า.
+   *  2026-06-18 (ภูม · A2): ตอนนี้เป็น <ForwarderPerTrackingEditor> (หลายแถวตามแทรคกิง)
+   *  สร้างฝั่ง server ใน page.tsx แล้วส่งเข้ามาเป็น node (workflow เป็น client). */
+  pricingEditor?: React.ReactNode;
   /** ออเดอร์ต้นทาง (reforder) — สำหรับลิงก์ "ดูออเดอร์ต้นทาง" ข้างหัวข้อรายการสินค้า. */
   reforder?: string | null;
 };
@@ -274,36 +279,16 @@ export function ForwarderStatusWorkflow(p: Props) {
             )}
           </div>
           {p.itemsTable}
-          {showPricing && itemsOpen && (
+          {showPricing && itemsOpen && p.pricingEditor && (
             <section className="mt-3 rounded-2xl border border-border border-l-4 border-l-indigo-400 bg-white dark:bg-surface shadow-sm overflow-hidden">
               <header className="flex items-center gap-2 px-4 pt-4">
                 <Package className="h-4 w-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา (ถึงไทยแล้ว)</h3>
+                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา (ถึงไทยแล้ว) · ทุกแทรคกิง</h3>
               </header>
               <div className="p-3 sm:p-4">
-                <AdminForwarderEditForm
-                  fNo={p.fNo}
-                  idNumeric={p.fId}
-                  weightInit={p.pricing.weight}
-                  widthInit={p.pricing.width}
-                  lengthInit={p.pricing.length}
-                  heightInit={p.pricing.height}
-                  volumeInit={p.pricing.volume}
-                  productTypeInit={p.pricing.productType}
-                  refPriceInit={p.pricing.refPrice}
-                  noteInit={p.pricing.note}
-                  itemsInit={[]}
-                  customRateInit={p.pricing.customRate}
-                  customRateKgInit={p.pricing.customRateKg}
-                  customRateCbmInit={p.pricing.customRateCbm}
-                  fDiscountInit={p.pricing.fDiscount}
-                  fTransportPriceChnThbInit={p.pricing.fTransportPriceChnThb}
-                  priceOtherInit={p.pricing.priceOther}
-                  fTransportPriceInit={p.pricing.fTransportPrice}
-                  fShippingServiceInit={p.pricing.fShippingService}
-                  fWarehouseChinaInit={p.pricing.fWarehouseChina}
-                  fWarehouseNameInit={p.pricing.fWarehouseName}
-                />
+                {/* 2026-06-18 (ภูม · A2) — หลายแถวตามแทรคกิง (สร้างฝั่ง server ใน page.tsx).
+                   แต่ละแทคกรอก/คำนวณราคาด้วยขนาดของตัวเอง แล้ว "บันทึกทุกแถว". */}
+                {p.pricingEditor}
               </div>
             </section>
           )}
