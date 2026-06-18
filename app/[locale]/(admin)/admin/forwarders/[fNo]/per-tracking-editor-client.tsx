@@ -201,30 +201,35 @@ export function PerTrackingEditorClient({
 
   return (
     <div className="space-y-3">
-      {/* ── ORDER-level rate toggles (shared) ── */}
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        <div className={`rounded-lg border p-2.5 ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+      {/* ── ORDER-level rate toggles (shared · ใช้ทุกแทค) ──
+          2026-06-18 (ภูม · พี่ป๊อป "ไม่ยืด/บวม" · PCS รูป2) — compact: narrow
+          fixed-width inputs (was CELL = full-width → stretched) + inline flex +
+          tight padding. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className={`rounded-lg border px-3 py-1.5 ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
             <input type="checkbox" checked={customRate === "1"} onChange={(e) => setCustomRate(e.target.checked ? "1" : "0")} disabled={pending} className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500" />
-            <span className={`text-sm font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>คิดราคาแบบกำหนดเอง</span>
+            <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>คิดราคาแบบกำหนดเอง</span>
           </label>
           {customRate === "1" ? (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <label className="space-y-0.5"><span className="block text-[11px] text-muted">เรท ฿/กก.</span>
-                <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} className={CELL} /></label>
-              <label className="space-y-0.5"><span className="block text-[11px] text-muted">เรท ฿/CBM</span>
-                <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} className={CELL} /></label>
+            <div className="mt-1.5 flex flex-wrap items-end gap-2">
+              <label className="block"><span className="block text-[10px] text-muted">เรท ฿/กก.</span>
+                <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} placeholder="40" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
+              <label className="block"><span className="block text-[10px] text-muted">เรท ฿/CBM</span>
+                <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} placeholder="7500" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
             </div>
           ) : <p className="mt-1 text-[10px] text-muted">ปิด = เรทระบบ · เปิด = กำหนดเรท กก./CBM เอง (ใช้ทุกแทค)</p>}
         </div>
-        <div className={`rounded-lg border p-2.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
+        <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
             <input type="checkbox" checked={customComparison === "1"} onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")} disabled={pending} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500" />
-            <span className={`text-sm font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>คิดค่าเทียบแบบกำหนดเอง</span>
+            <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>คิดค่าเทียบแบบกำหนดเอง</span>
           </label>
           {customComparison === "1" ? (
-            <label className="mt-2 block max-w-[180px] space-y-0.5"><span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
-              <input type="number" min={0} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending} className={CELL} /></label>
+            <div className="mt-1.5 flex items-end gap-2">
+              <label className="block"><span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+                <input type="number" min={0} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending} placeholder="150" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
+            </div>
           ) : <p className="mt-1 text-[10px] text-muted">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนดเอง (ใช้ทุกแทค)</p>}
         </div>
       </div>

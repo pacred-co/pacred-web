@@ -450,9 +450,12 @@ export function AdminForwarderEditForm({
                  (userComparisonValue · 1 คิว = N kg threshold)
              พอใส่เรท/ค่าเทียบ → ราคาคำนวณให้อัตโนมัติ (live preview ด้านล่าง),
              ช่องเงินที่เหลือไม่ต้องกรอก. ── */}
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        {/* 2026-06-18 (ภูม · พี่ป๊อป "ไม่ยืด/บวม" · PCS รูป2) — compact: narrow
+            fixed-width inputs (was CELL_NUM = w-full → stretched) + inline flex +
+            tight padding, so the 2 toggles read like the PCS rate block. */}
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {/* Toggle 1 — คิดราคาแบบกำหนดเอง (customRate) */}
-          <div className={`rounded-lg border p-2.5 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+          <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -461,32 +464,32 @@ export function AdminForwarderEditForm({
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
               />
-              <span className={`text-sm font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>
+              <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>
                 คิดราคาแบบกำหนดเอง
               </span>
             </label>
             {customRate === "1" ? (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <label className="space-y-0.5">
-                  <span className="block text-[11px] text-muted">เรทคิดตามน้ำหนัก (฿/กก.)</span>
+              <div className="mt-1.5 flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="block text-[10px] text-muted">เรท ฿/กก.</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateKg}
                     onChange={(e) => setCustomRateKg(e.target.value)}
                     disabled={pending}
                     placeholder="40"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
                   />
                 </label>
-                <label className="space-y-0.5">
-                  <span className="block text-[11px] text-muted">เรทคิดตามปริมาตร (฿/CBM)</span>
+                <label className="block">
+                  <span className="block text-[10px] text-muted">เรท ฿/CBM</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateCbm}
                     onChange={(e) => setCustomRateCbm(e.target.value)}
                     disabled={pending}
                     placeholder="7500"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
                   />
                 </label>
               </div>
@@ -496,7 +499,7 @@ export function AdminForwarderEditForm({
           </div>
 
           {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · persists (mig 0187) */}
-          <div className={`rounded-lg border p-2.5 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
+          <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
               <input
                 type="checkbox"
@@ -505,25 +508,25 @@ export function AdminForwarderEditForm({
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
               />
-              <span className={`text-sm font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
+              <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
                 คิดค่าเทียบแบบกำหนดเอง
               </span>
             </label>
             {customComparison === "1" ? (
-              <div className="mt-2">
-                <label className="space-y-0.5 block max-w-[180px]">
-                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+              <div className="mt-1.5 flex items-end gap-2">
+                <label className="block">
+                  <span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
                   <input
                     type="number" min={0} step="1"
                     value={comparisonValue}
                     onChange={(e) => setComparisonValue(e.target.value)}
                     disabled={pending}
                     placeholder="150"
-                    className={CELL_NUM}
+                    className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60"
                   />
                 </label>
                 {/* 2026-06-16 — wired: the save recomputes the price with this ค่าเทียบ. */}
-                <p className="mt-1 text-[10px] text-amber-700 leading-snug">ใช้คำนวณราคาตอนบันทึก (แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้)</p>
+                <p className="text-[10px] text-amber-700 leading-snug max-w-[150px]">ใช้ตอนบันทึก · แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้</p>
               </div>
             ) : (
               <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
