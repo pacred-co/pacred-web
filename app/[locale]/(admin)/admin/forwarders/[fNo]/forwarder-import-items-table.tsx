@@ -69,6 +69,12 @@ type ItemRow = {
   fshippingservice: number | string | null;
   priceother: number | string | null;
   fdiscount: number | string | null;
+  // 2026-06-18 (ภูม · image-3 layout) — per-tracking dims + รับ-warehouse so the
+  // detail row shows กว้าง/ยาว/สูง (different dims per แทค → different price).
+  fwidth?: number | string | null;
+  flength?: number | string | null;
+  fheight?: number | string | null;
+  fwarehousename?: string | null;
   // userid drives the sibling lookup. The detail page's `r` always carries it;
   // it's optional here only so older callers still type-check.
   userid?: string | null;
@@ -79,6 +85,7 @@ type Props = { r: ItemRow };
 // The columns we need to re-render any sibling row, kept in sync with ItemRow.
 const SIBLING_SELECT =
   "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, fweight, fvolume, " +
+  "fwidth, flength, fheight, fwarehousename, " +
   "frefprice, frefrate, ftotalprice, fpriceupdate, pricecrate, ftransportpricechnthb, " +
   "ftransportprice, fshippingservice, priceother, fdiscount";
 
@@ -89,6 +96,11 @@ const PRODUCT_TYPE_LABEL: Record<string, string> = {
 // legacy nameRefPrice — the "คิดราคาตาม" basis
 const REF_PRICE_LABEL: Record<string, string> = {
   "1": "น้ำหนัก", "2": "ปริมาตร", "3": "เปรียบเทียบ",
+};
+// legacy optionWarehouse() (function.php L1823-1833) — โกดังที่รับ (ไทย)
+const WAREHOUSE_TH_LABEL: Record<string, string> = {
+  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
 };
 
 function fmtMoney(n: number): string {
@@ -264,12 +276,15 @@ export async function ForwarderImportItemsTable({ r }: Props) {
       priceOther,
       fDiscount,
       priceAllUser,
+      width: Number(row.fwidth ?? 0),
+      length: Number(row.flength ?? 0),
+      height: Number(row.fheight ?? 0),
+      warehouseLbl: WAREHOUSE_TH_LABEL[row.fwarehousename ?? ""] ?? "—",
       refPriceLabel: REF_PRICE_LABEL[row.frefprice ?? ""] ?? "ไม่พบข้อมูล",
       productTypeLbl: PRODUCT_TYPE_LABEL[row.fproductstype ?? ""] ?? "ไม่พบข้อมูล",
     };
   });
 
-  const multi = rendered.length > 1;
   const totals = rendered.reduce(
     (s, x) => ({
       boxes: s.boxes + x.boxes,
@@ -292,19 +307,32 @@ export async function ForwarderImportItemsTable({ r }: Props) {
     },
   );
 
-  const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap";
-  const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap";
+  const TH = "px-2 py-2 font-semibold text-muted whitespace-nowrap border-r border-border";
+  const TD = "px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap border-r border-border";
+  const TDc = "px-2 py-2 text-center whitespace-nowrap border-r border-border";
 
+  const shipmentId = base || (rendered[0]?.tracking ?? "—");
+  const productLabel = rendered[0]?.productTypeLbl ?? "—";
+  // คิดราคาตาม / เรทนำเข้า can differ per แทค → only show one value when the whole
+  // shipment is uniform, else "—" (mixed) so the aggregate isn't misleading.
+  const uniqRef = new Set(rendered.map((x) => x.refPriceLabel));
+  const uniqRate = new Set(rendered.map((x) => x.frefRate));
+  const refPriceCell = uniqRef.size === 1 ? [...uniqRef][0] : "—";
+  const rateCell = uniqRate.size === 1 ? fmtMoney([...uniqRate][0]) : "—";
+
+  // 2026-06-18 (พี่ป๊อป via ภูม) — TOTAL-ONLY summary. The per-แทค breakdown was
+  // rejected ("เอาแค่รวมทั้งหมด"); the per-tracking dimension/price detail lives
+  // in the edit form below (per-tracking editor). This table = ONE aggregated row
+  // in the legacy PCS 16-col layout (matches the owner's PCS reference).
   return (
     <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
       <table className="w-full text-xs md:text-sm">
-        <thead className="bg-surface-alt/50 text-[10px] md:text-[11px] uppercase tracking-wide">
-          <tr className="text-center">
-            <th className={TH}>#</th>
+        <thead className="text-[10px] md:text-[11px] uppercase tracking-wide bg-surface-alt/50 text-center">
+          <tr>
             <th className={`${TH} text-left`}>รายละเอียด</th>
             <th className={TH}>กล่อง</th>
-            <th className={TH}>ปริมาตรรวม CBM</th>
             <th className={TH}>น้ำหนัก Kg.</th>
+            <th className={TH}>ปริมาตรรวม CBM</th>
             <th className={TH}>คิดราคาตาม</th>
             <th className={TH}>เรทนำเข้า</th>
             <th className={TH}>ค่านำเข้าจีน-ไทย</th>
@@ -319,74 +347,30 @@ export async function ForwarderImportItemsTable({ r }: Props) {
           </tr>
         </thead>
         <tbody>
-          {rendered.map((x, idx) => (
-            <tr key={x.id} className="border-t border-border odd:bg-surface-alt/20 align-top">
-              <td className="px-2 py-2 text-center font-mono text-muted">{idx + 1}</td>
-              <td className="px-2 py-2 min-w-[220px] max-w-[360px] text-left">
-                {x.detailText ? (
-                  <span className="break-words">{x.detailText}</span>
-                ) : (
-                  <span className="text-muted">ไม่พบข้อมูล</span>
-                )}
-                {x.itemNames.length > 1 && (
-                  <ul className="mt-0.5 list-disc pl-4 text-[11px] text-muted">
-                    {x.itemNames.slice(1).map((name, i) => (
-                      <li key={i} className="break-words">{name}</li>
-                    ))}
-                  </ul>
-                )}
-                {/* Always surface the row's own China tracking (unless it's
-                    already the รายละเอียด label) so a SINGLE self-created import
-                    — and every split-parcel sibling — is identified by its
-                    แทรคกิง, never left bare. Issue 2a (ภูม 2026-06-16): a lone
-                    self-created row used to hide its tracking because this line
-                    was `multi`-gated, so the รายการ read as just its detail (the
-                    tracking lived only in the header/cabinet field) — Poom's
-                    "รายการมันไม่แสดงเป็นแทคกิง แต่มันจะแสดงเป็นเลขตู้". */}
-                {x.tracking !== "" && x.tracking !== x.detailText && (
-                  <div className="mt-0.5 text-[11px] text-muted">แทรคกิง : {x.tracking}</div>
-                )}
-                <div className="mt-0.5 text-[11px] text-muted">ประเภทสินค้า : {x.productTypeLbl}</div>
-              </td>
-              <td className={TD}>{x.boxes}</td>
-              <td className={TD}>{fmtNum(x.cbm, 5)}</td>
-              <td className={TD}>{fmtNum(x.weight, 2)}</td>
-              <td className="px-2 py-2 text-center whitespace-nowrap">{x.refPriceLabel}</td>
-              <td className={TD}>{fmtMoney(x.frefRate)}</td>
-              <td className={TD}>{fmtMoney(x.fTotalPrice)}</td>
-              <td className={TD}>{fmtMoney(x.fPriceUpdate)}</td>
-              <td className={TD}>{fmtMoney(x.priceCrate)}</td>
-              <td className={TD}>{fmtMoney(x.fTransportPriceCHNTHB)}</td>
-              <td className={TD}>{fmtMoney(x.fTransportPrice)}</td>
-              <td className={TD}>{fmtMoney(x.fShippingService)}</td>
-              <td className={TD}>{fmtMoney(x.priceOther)}</td>
-              <td className={`${TD} text-amber-700`}>{x.fDiscount > 0 ? `−${fmtMoney(x.fDiscount)}` : fmtMoney(0)}</td>
-              <td className={`${TD} font-bold text-red-600`}>{fmtMoney(x.priceAllUser)}</td>
-            </tr>
-          ))}
+          <tr className="border-t border-border align-top bg-primary-50/30 dark:bg-primary-950/10">
+            <td className="px-2 py-2 min-w-[200px] max-w-[320px] text-left border-r border-border">
+              <span className="break-words font-semibold text-primary-700">{shipmentId}</span>
+              {rendered.length > 1 && (
+                <span className="ml-1 text-[11px] text-muted">({rendered.length} แทรคกิง)</span>
+              )}
+              <div className="mt-0.5 text-[11px] text-muted">ประเภท : {productLabel}</div>
+            </td>
+            <td className={TD}>{totals.boxes}</td>
+            <td className={TD}>{fmtNum(totals.weight, 2)}</td>
+            <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
+            <td className={TDc}>{refPriceCell}</td>
+            <td className={TD}>{rateCell}</td>
+            <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>
+            <td className={TD}>{fmtMoney(totals.fPriceUpdate)}</td>
+            <td className={TD}>{fmtMoney(totals.priceCrate)}</td>
+            <td className={TD}>{fmtMoney(totals.fTransportPriceCHNTHB)}</td>
+            <td className={TD}>{fmtMoney(totals.fTransportPrice)}</td>
+            <td className={TD}>{fmtMoney(totals.fShippingService)}</td>
+            <td className={TD}>{fmtMoney(totals.priceOther)}</td>
+            <td className={`${TD} text-amber-700`}>{totals.fDiscount > 0 ? `−${fmtMoney(totals.fDiscount)}` : fmtMoney(0)}</td>
+            <td className={`${TD} font-bold text-red-600`}>{fmtMoney(totals.priceAllUser)}</td>
+          </tr>
         </tbody>
-        {multi && (
-          <tfoot>
-            <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
-              <td className="px-2 py-2 text-center text-muted">รวม</td>
-              <td className="px-2 py-2 text-left text-muted">{rendered.length} แทรคกิง</td>
-              <td className={TD}>{totals.boxes}</td>
-              <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
-              <td className={TD}>{fmtNum(totals.weight, 2)}</td>
-              <td className="px-2 py-2" />
-              <td className="px-2 py-2" />
-              <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>
-              <td className={TD}>{fmtMoney(totals.fPriceUpdate)}</td>
-              <td className={TD}>{fmtMoney(totals.priceCrate)}</td>
-              <td className={TD}>{fmtMoney(totals.fTransportPriceCHNTHB)}</td>
-              <td className={TD}>{fmtMoney(totals.fTransportPrice)}</td>
-              <td className={TD}>{fmtMoney(totals.fShippingService)}</td>
-              <td className={TD}>{fmtMoney(totals.priceOther)}</td>
-              <td className={`${TD} text-amber-700`}>{totals.fDiscount > 0 ? `−${fmtMoney(totals.fDiscount)}` : fmtMoney(0)}</td>
-              <td className={`${TD} font-bold text-red-600`}>{fmtMoney(totals.priceAllUser)}</td>
-            </tr>
-          </tfoot>
-        )}
       </table>
     </div>
   );

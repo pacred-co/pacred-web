@@ -280,8 +280,8 @@ export async function computeAndFillForwarderImportRate(
     .select(
       "id, userid, fweight, fvolume, famount, famountcount, " +
       "fwarehousechina, ftransporttype, fproductstype, frefrate, " +
-      // doc-tier discount inputs (owner 2026-06-16)
-      "tax_doc_pref, reforder, adminidcreator",
+      // doc-tier discount inputs (owner 2026-06-16 · doc_tier_confirmed = C1 mig 0188)
+      "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed",
     )
     .eq("id", fid)
     .maybeSingle<{
@@ -298,6 +298,7 @@ export async function computeAndFillForwarderImportRate(
       tax_doc_pref: string | null;
       reforder: string | null;
       adminidcreator: string | null;
+      doc_tier_confirmed: boolean | null;
     }>();
   if (rowErr) {
     console.error(`[computeAndFillForwarderImportRate: tb_forwarder read] failed`, {
@@ -339,9 +340,12 @@ export async function computeAndFillForwarderImportRate(
   // This is the auto-pricing path for MOMO commit + manual create — both write
   // tb_forwarder rows, so the import-service signal is read from the row itself.
   const docTierEligible = isDocTierEligible({
-    taxDocPref:     row.tax_doc_pref,
-    reforder:       row.reforder,
-    adminidcreator: row.adminidcreator,
+    taxDocPref:       row.tax_doc_pref,
+    reforder:         row.reforder,
+    adminidcreator:   row.adminidcreator,
+    // C1 (ฝากโอน) = the per-order admin ติ๊กยืนยัน (mig 0188). Defaults FALSE on a
+    // fresh/MOMO-committed row; a re-price of a confirmed row honours it.
+    docTierConfirmed: row.doc_tier_confirmed === true,
   });
   const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
 
@@ -439,7 +443,7 @@ export async function previewForwarderRateMissing(
       "id, userid, fweight, fvolume, famount, famountcount, " +
       "fwarehousechina, ftransporttype, fproductstype, " +
       "customrate, customratekg, customratecbm, " +
-      "tax_doc_pref, reforder, adminidcreator",
+      "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed",
     )
     .eq("id", fid)
     .maybeSingle<{
@@ -458,6 +462,7 @@ export async function previewForwarderRateMissing(
       tax_doc_pref: string | null;
       reforder: string | null;
       adminidcreator: string | null;
+      doc_tier_confirmed: boolean | null;
     }>();
   if (rowErr) {
     console.error(`[previewForwarderRateMissing: tb_forwarder read] failed`, {
@@ -494,9 +499,12 @@ export async function previewForwarderRateMissing(
   // rateMissing, which keys off the resolved rate being 0, but kept identical so
   // the resolver runs the exact same way as the save.)
   const docTierEligible = isDocTierEligible({
-    taxDocPref:     row.tax_doc_pref,
-    reforder:       row.reforder,
-    adminidcreator: row.adminidcreator,
+    taxDocPref:       row.tax_doc_pref,
+    reforder:         row.reforder,
+    adminidcreator:   row.adminidcreator,
+    // C1 (ฝากโอน) = the per-order admin ติ๊กยืนยัน (mig 0188). Defaults FALSE on a
+    // fresh/MOMO-committed row; a re-price of a confirmed row honours it.
+    docTierConfirmed: row.doc_tier_confirmed === true,
   });
   const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
 

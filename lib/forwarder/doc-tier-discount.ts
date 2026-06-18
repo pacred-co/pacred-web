@@ -16,16 +16,20 @@ import "server-only";
  *        tb_forwarder.tax_doc_pref ∈ {'tax_invoice','customs'}  (migration 0127;
  *        NOT 'receipt' / null).
  *
- * ⚠️ DORMANT — NOT yet faithfully enforced. The discount ships OFF
- * (`enabled:false`, see getDocTierDiscountCbm). Condition 1 (ฝากโอน) is NOT
- * cleanly detectable from a tb_forwarder row: ฝากโอน/ฝากสั่งซื้อ/ฝากนำเข้า are
- * mutually-exclusive ORIGIN services (tb_wallet_hs.typeservice 3/1/2) — an order
- * is ONE origin, and the ฝากโอน signal lives on the payment ledger with no FK to
- * the shipment. The clean fix = a persisted full-loop flag stamped at create/
- * confirm time (owner-decision pending). Until then the predicate below
- * (isDocTierEligible) only encodes C2+C3-tax-doc and is HELD OFF by the enable
- * gate so it can never under-charge. DO NOT flip enabled:true until the
- * mechanism is locked.
+ * ⚠️ DORMANT — ships OFF (`enabled:false`, see getDocTierDiscountCbm). Condition 1
+ * (ฝากโอน) is NOT cleanly detectable from a tb_forwarder row: ฝากโอน/ฝากสั่งซื้อ/
+ * ฝากนำเข้า are mutually-exclusive ORIGIN services (tb_wallet_hs.typeservice 3/1/2)
+ * — an order is ONE origin, and the ฝากโอน signal lives on the payment ledger with
+ * no FK to the shipment.
+ *
+ * ✅ 2026-06-18 (ภูม · C · mig 0188) — the MECHANISM is now locked: instead of
+ * back-deriving ฝากโอน with fuzzy joins on a money path, C1 is captured as a
+ * PER-ORDER admin ติ๊กยืนยัน — tb_forwarder.doc_tier_confirmed (mig 0188), set by
+ * a role-gated audited action (adminSetForwarderDocTierConfirmed). isDocTierEligible
+ * now ANDs that flag (defaults FALSE → fail-closed). The discount remains DOUBLE
+ * dormant-safe: even a confirmed order gets ฿0 until the owner flips `enabled:true`
+ * here. So the safe go-live is: (1) staff confirm qualifying orders, (2) owner flips
+ * the enable. DO NOT flip enabled:true until the owner signs off on the ฿ effect.
  *
  * ── THE CONDITION-2 SIGNAL (investigated from legacy source) ─────────────────
  * Every tb_forwarder row IS a cargo-import order. Legacy forwarder.php
@@ -110,14 +114,26 @@ export function isCargoImportServiceRow(opts: {
 }
 
 /**
- * Combined eligibility — BOTH conditions. Pure (no IO).
+ * Combined eligibility — ALL THREE owner-locked conditions. Pure (no IO).
+ *
+ * 2026-06-18 (ภูม · C · mig 0188) — `docTierConfirmed` is now REQUIRED and ANDed.
+ * It is the per-order admin ติ๊กยืนยัน (tb_forwarder.doc_tier_confirmed) that
+ * stands in for C1 (ฝากโอน / yuan-transfer) — the un-derivable signal the owner
+ * chose to capture explicitly rather than back-derive with fuzzy joins (see the
+ * module header + docs/learnings/money-feature-dormant-and-data-model-fit.md). So:
+ *   eligible = (ใบกำกับ OR ใบขน)  AND  (cargo-import row)  AND  admin-confirmed.
+ * The column defaults FALSE → NO order is eligible until a role-gated admin
+ * confirms it; combined with the `enabled` config gate this is double dormant-safe.
  */
 export function isDocTierEligible(opts: {
   taxDocPref: string | null | undefined;
   reforder: string | null | undefined;
   adminidcreator: string | null | undefined;
+  /** Per-order admin ติ๊กยืนยัน (mig 0188) — the C1 (ฝากโอน) confirmation. */
+  docTierConfirmed: boolean;
 }): boolean {
   return (
+    opts.docTierConfirmed === true &&
     isDocTierTaxDoc(opts.taxDocPref) &&
     isCargoImportServiceRow({ reforder: opts.reforder, adminidcreator: opts.adminidcreator })
   );
@@ -138,4 +154,24 @@ export async function getDocTierDiscountCbm(): Promise<number> {
   if (cfg?.enabled !== true) return 0; // dormant / fail-closed until owner enables
   const raw = typeof cfg?.cbm_thb === "number" ? cfg.cbm_thb : Number(cfg?.cbm_thb);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+/**
+ * The full doc-tier discount config — both the THB/CBM amount AND the enabled
+ * gate. Unlike getDocTierDiscountCbm (which floors to 0 while dormant, hiding the
+ * amount), this surfaces the configured amount even when `enabled` is false so a
+ * UI can SHOW the incentive ("ลด ฿800/คิว") + clearly mark it dormant. Read-only;
+ * never used in the money math (the pricing path uses getDocTierDiscountCbm, which
+ * stays fail-closed). 2026-06-18 (ภูม · C).
+ */
+export async function getDocTierDiscountConfig(): Promise<{ cbmThb: number; enabled: boolean }> {
+  const cfg = await getBusinessConfig<{ cbm_thb: number; enabled?: boolean }>(
+    DOC_TIER_DISCOUNT_KEY,
+    DEFAULT_DOC_TIER_DISCOUNT,
+  );
+  const raw = typeof cfg?.cbm_thb === "number" ? cfg.cbm_thb : Number(cfg?.cbm_thb);
+  return {
+    cbmThb: Number.isFinite(raw) && raw > 0 ? raw : 0,
+    enabled: cfg?.enabled === true,
+  };
 }
