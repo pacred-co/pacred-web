@@ -331,8 +331,10 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
-  // Header counts (independent of date filter — match legacy)
-  const counts = await loadHeaderCounts(admin, startDate, endDate);
+  // Header counts — now actionPay-aware (0191) so the tab/transport badges match
+  // the actionPay-filtered list exactly ("badge numbers EXACT"). actionPay 'all'
+  // → no paid filter (the old behaviour).
+  const counts = await loadHeaderCounts(admin, startDate, endDate, actionPay);
 
   // 2026-06-06 (ภูม follow-up to B-batch): CSV export for accountants. Builds
   // from the SAME `grouped` array the table renders, so the filtered view
@@ -549,6 +551,7 @@ async function loadHeaderCounts(
   admin: ReturnType<typeof createAdminClient>,
   startDate: string,
   endDate: string,
+  actionPay: string, // 'all' | '1' (ยังไม่จ่าย) | '2' (จ่ายแล้ว) — 0191
 ): Promise<{
   waiting: number;
   succeed: number;
@@ -574,12 +577,19 @@ async function loadHeaderCounts(
     page: "waiting" | "succeed",
     transport?: string,
   ): Promise<number | null> {
-    const { data, error } = await admin.rpc("count_distinct_cabinets", {
+    // 0191: pass p_action_pay ONLY when a non-default paid filter is active, so
+    // the common 'all' case stays a 4-arg call that matches the pre-0191 RPC on
+    // prod (no badge regression before เดฟ applies 0191). The actionPay-filtered
+    // case needs the 5-arg 0191 RPC; if it's not applied yet it errors → the
+    // row-count fallback below (graceful).
+    const rpcArgs: Record<string, string | null> = {
       p_page:      page,
       p_transport: transport ?? null,
       p_start:     (page === "succeed" && startDate) ? startDate : null,
       p_end:       (page === "succeed" && endDate)   ? endDate   : null,
-    });
+    };
+    if (actionPay && actionPay !== "all") rpcArgs.p_action_pay = actionPay;
+    const { data, error } = await admin.rpc("count_distinct_cabinets", rpcArgs);
     if (error) {
       // Fail-safe — log + signal fallback path. Most common reason during
       // rollout: migration 0146 not applied yet.
