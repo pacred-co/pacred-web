@@ -1,4 +1,4 @@
--- 0189 — admins.role enum expansion · `ultra` (Ultra Admin Z)
+-- 0193 — admins.role enum expansion · `ultra` (Ultra Admin Z)
 --
 -- Owner directive 2026-06-18. Adds the TRUE god role `ultra` ("Ultra Admin Z")
 -- that sees + does EVERYTHING, including money internals (cost · profit/margin ·
