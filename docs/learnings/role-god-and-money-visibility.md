@@ -66,3 +66,36 @@ per-variable helper choice → one implementation workflow (disjoint file cluste
 `pnpm verify` → an adversarial leak-hunt workflow that tried to PROVE a leak (default
 leakFree=false). The hunt caught 3 real export leaks the implementation missed. For
 money-critical work, the adversarial verify pass is not optional.
+
+## 7. FOLLOW-UP 2026-06-18 ค่ำ — the sweep was INCOMPLETE; ultra got locked out in prod
+
+The mig-0189/0193 implementation updated the central guards + ~96 files but MISSED two
+whole classes. The owner hit it live as `ultra`: `/admin/api-forwarder-momo/sync` rendered
+the data (page = `requireAdmin` → honors ultra) but every button → 403 (`guardAdmin()` did
+a RAW `ALLOWED_ROLES.has(r)` with no `isGodRole` bypass). "data shows, action FORBIDDEN."
+
+The two missed classes — neither is a `requireAdmin`/`.includes("super")` site, so the
+grep that finds §1's ~75 sites does NOT find them:
+
+- **Raw API/action gates with their own role Set.** `app/api/admin/momo/_shared.ts`
+  `guardAdmin`, `forwarders/check-tracking`, `drivers/[id]/print` isOpsOverride,
+  `crm/page.tsx` canRoute, `driver-work.ts` isAdminOverride, `freight-shipments.ts`
+  declared-value. Fix = `isGodRole(roles) || <existing>`.
+- **`.in("role", [...])` / `.eq("role","super")` DB filters** — the BIGGER blind spot.
+  These pick notification RECIPIENTS + selection-list members, not access. The 8 ex-super
+  admins silently STOPPED getting digests/alerts/lead-notifs: cron `sales-daily-digest`
+  + `sms-balance-check`, `contact`/`bookings`/`freight` lead fan-out, observability
+  `incident-store` (prod IO-1 alert target), rep pickers (`admins.ts`, `transfer-rep`,
+  crm `REP_ROLES`). Fix = append `"ultra"` to every array where `"super"` appears.
+
+**Two compounding rules for the NEXT role change:**
+1. The sweep grep must also cover `\.in("role"`, `\.eq("role"`, and any role-array
+   constant (REP_ROLES-style) — not just `requireAdmin`/`isGodRole`/`.includes("super")`.
+   A Workflow whose finders are prompted around code patterns (`.includes`/`.has`) will
+   systematically UNDER-cover Supabase query-filter role checks — the manual `.in("role")`
+   grep caught what the 12-agent sweep missed. Tell finders explicitly to grep DB filters.
+2. Money-internal WRITE gates are the one exception to "append ultra, keep super":
+   declared-value (ADR-0016 Q3) we kept super via `isGodRole` (adds ultra, leaves super) —
+   stripping super from a money WRITE is a separate owner decision, don't fold it in.
+   Leave pure-cosmetic role labels (a "ผู้ดูแลระบบ" badge, incident actorRole tag) — flag,
+   don't churn. Leave functional-role head-counts (`GO_LIVE_ROLE_KEYS`) — super isn't in them.
