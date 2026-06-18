@@ -145,3 +145,40 @@ Full read: [`docs/research/legacy-admin-deep-read-2026-06-14.md`](../research/le
 **2 — NEW money-audit dimension: a money-mutating DETAIL page needs a concurrent-edit guard, not just a reachable mutate action.** The single highest-value gap in that whole set was not a missing screen — it was the absent yuan-verify lock on a BUILT page (`/admin/yuan-payments/[id]`): two accountants can open the same pending ฝากโอน and both verify/refund → double wallet reversal. Legacy guarded it (`payment.php` payLockDate + session). Add to the §0c/§0e checklist: for any money-mutating detail page, check for a concurrency/lock guard (optimistic `.eq(status, expected)` on the flip, or a lock row), not only that the action exists + is reachable + writes the right table.
 
 (Also reinforced: "missing legacy screen" often = "re-architected into a better Pacred mechanism" — MOMO's tb_tmp staging → cron + review/sync/history. Score PARTIAL/re-arch; flag REAL only when a capability has zero equivalent.)
+
+---
+
+## The forward-only-fix trap + the overloaded-flag detection near-miss (2026-06-19)
+
+Owner re-flagged a container the day after I "fixed the cost-basis bug": report-cnt
+PCS20260528-SEA01 still showed กำไรตู้ −10,204 (cost ฿10,250 = rate 2,500 × 4.10 **kg**
+for a MOMO/sea parcel that costs 2,500 × 0.0022 **cbm** = ฿5.50). Two compounding lessons:
+
+**1 — A logic fix does NOT correct already-STORED values. Pair it with a backfill (or
+compute live).** The cost-basis fix corrected the RECOMPUTE action only — it was
+forward-only. `fcosttotalprice` is a STORED/denormalized field; the detail display, the
+container LIST (RPC `sum_cost`), PEAK export, profit reports + commission all read the
+stored value, which stayed wrong for every row rated before the fix. To the owner that
+reads as "you didn't fix it." Whenever you fix how a STORED money field is *computed*,
+ask immediately: which existing rows hold the old wrong value, and what reads them? Fix
+needs (a) a live-compute display for instant visible correctness AND/OR (b) a data
+backfill for the stored-value consumers (accounting). I shipped both: detail page now
+derives cost live = rate × carrier-basis for non-paid containers (self-heals); + a
+dry-run+backup script corrected the stored rows.
+
+**2 — NEVER use an overloaded flag to DETECT a wrong value — verify from first
+principles.** My first detector filtered `frefprice='1'` (assuming it marked weight-basis
+cost) → surfaced 5 rows. But `frefprice` is the **SELL** basis (kg-mode "11"), NOT the
+cost basis — 4 of the 5 already had CORRECT cbm-basis cost (e.g. ฿777.15 = 2,500 ×
+0.31086). Blindly "correcting" them (× cbm/kg) would have CORRUPTED 4 good money rows.
+The right detector judges each row against first principles: resolve the real cost rate
+(custom tb_cost_container rate → else tb_settings matrix), then flag ONLY where
+`stored == round2(rate×kg)` AND `stored != round2(rate×cbm)`. Across all 13 CBM-carrier
+rows that found exactly 1 truly-wrong row — the one the owner saw. (Legacy `frefprice`
+is overloaded: the recompute action even WRITES it as cost-basis while the page reads it
+as sell-basis — a latent bug; the data fix touched only `fcosttotalprice`, never
+`frefprice`.) When a flag's meaning is ambiguous, compute the truth, don't trust the flag.
+
+Aside: that row's cbm 0.0022 for 4.10 kg = 1,863 kg/cbm (denser than steel) → the CBM
+itself is likely a placeholder from before the China packing-list ingestion. The
+cost-basis fix is correct regardless; the cost re-derives when the real cbm lands.
