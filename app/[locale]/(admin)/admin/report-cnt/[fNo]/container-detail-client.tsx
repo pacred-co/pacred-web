@@ -28,6 +28,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 import {
   fstatusBadge,
@@ -180,6 +181,50 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
       setSortDir("asc");
     }
   }
+
+  // ── ภูม 2026-06-18: group sibling trackings (a split parcel shares
+  // (baseTracking, userid) — e.g. 1779955936 / -2 / -3 …) so an order's boxes
+  // cluster together for easy verification, MIRRORING the รายการสินค้า items
+  // table. We KEEP every box row (ภูม chose "จัดกลุ่ม ยังเห็นทุกกล่อง"): a
+  // multi-box group gets a header strip + a left accent on each member; a
+  // single-box order renders plain (no clutter). Grouping is stable over the
+  // current sort — buckets appear in first-appearance order of `filtered`, so
+  // a column sort still orders the groups by their best-sorted member.
+  const groups = useMemo(() => {
+    const map = new Map<string, DetailRow[]>();
+    const order: string[] = [];
+    for (const r of filtered) {
+      const base = baseTracking(r.ftrackingchn);
+      const key = base ? `${base}|${r.userid}` : `__solo_${r.id}`;
+      let arr = map.get(key);
+      if (!arr) { arr = []; map.set(key, arr); order.push(key); }
+      arr.push(r);
+    }
+    return order.map((k) => map.get(k)!);
+  }, [filtered]);
+
+  // Total column count — for the group-header colSpan (matches the empty-state
+  // colSpan: 22 base cols + the select col + the 3 money cols).
+  const totalCols = 22 + (canBulkCheck && !cabinetIsPaid ? 1 : 0) + (showMoney ? 3 : 0);
+
+  // Flatten groups → a render list that interleaves a group-header strip
+  // before each multi-box order, then its member rows. A single-box order
+  // renders plain (no header, no accent) to keep non-split orders uncluttered.
+  const renderItems = useMemo(() => {
+    const items: Array<
+      | { kind: "header"; group: DetailRow[] }
+      | { kind: "row"; r: DetailRow; member: boolean }
+    > = [];
+    for (const g of groups) {
+      if (g.length > 1) {
+        items.push({ kind: "header", group: g });
+        for (const r of g) items.push({ kind: "row", r, member: true });
+      } else {
+        items.push({ kind: "row", r: g[0], member: false });
+      }
+    }
+    return items;
+  }, [groups]);
 
   // Summary totals for the orange-red gradient band (legacy report-cnt.php L1653-1684 + L1888 totals).
   const summary = useMemo(() => {
@@ -435,10 +480,35 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                 </td>
               </tr>
             ) : (
-              filtered.map((r) => (
+              renderItems.map((it) => {
+                if (it.kind === "header") {
+                  const g = it.group;
+                  const base = baseTracking(g[0].ftrackingchn) ?? g[0].ftrackingchn ?? "-";
+                  const boxGot = g.reduce((s, x) => s + (x.famountfi ?? 0), 0);
+                  const boxExp = g.reduce((s, x) => s + (x.famount ?? 0), 0);
+                  const cbm = g.reduce((s, x) => s + (x.fvolume ?? 0), 0);
+                  const wt = g.reduce((s, x) => s + (x.fweight ?? 0), 0);
+                  return (
+                    <tr
+                      key={`grp-${base}-${g[0].userid}-${g[0].id}`}
+                      className="border-t-2 border-primary-300 bg-primary-50/70 dark:bg-primary-900/15"
+                    >
+                      <td colSpan={totalCols} className="px-3 py-1.5 text-[11px]">
+                        <span className="font-semibold text-primary-700 dark:text-primary-300">
+                          📦 ออเดอร์ {base}
+                        </span>
+                        <span className="ml-2 text-muted">
+                          · {g.length} แทรค · {fmtN(boxGot)}/{fmtN(boxExp)} ลัง · {fmt(cbm, 2)} คิว · {fmt(wt, 2)} กก. · รหัส {g[0].userid}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }
+                const r = it.r;
+                return (
                 <tr
                   key={r.id}
-                  className={`border-t border-border ${detailRowTint({
+                  className={`border-t border-border ${it.member ? "border-l-2 border-l-primary-300" : ""} ${detailRowTint({
                     inCheckQueue: r.inCheckQueue,
                     notYetWarehouse: r.notYetWarehouse,
                     trackingDup: r.trackingDup,
@@ -679,7 +749,8 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     <div className="truncate" title={r.fnote ?? ""}>{r.fnote ?? ""}</div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
