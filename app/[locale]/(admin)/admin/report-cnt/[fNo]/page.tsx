@@ -397,7 +397,20 @@ export default async function AdminReportCntDetailPage({
     const fTransportPriceCHNTHB = Number(r.ftransportpricechnthb ?? 0);
     const priceOther            = Number(r.priceother ?? 0);
     const fDiscount             = Number(r.fdiscount ?? 0);
-    const fCostTotalPrice       = Number(r.fcosttotalprice ?? 0);
+    // COST (ต้นทุน) — compute LIVE for a non-paid container = เรทต้นทุน × carrier
+    // basis. MOMO + every carrier except Sang(1)/MX(4) bill by CBM, not weight
+    // (WEIGHT_DEFAULT_WAREHOUSES / costBasisMode). Rows rated BEFORE the 2026-06-18
+    // basis fix carry a stale weight-basis fcosttotalprice (e.g. 2,500 × 4.10 kg =
+    // ฿10,250 for a 0.0022-คิว MOMO parcel that costs ฿5.50 → กำไรตู้ −10,204). The
+    // เรทต้นทุน is already resolved live above, so deriving cost from it keeps the
+    // page self-consistent + correct without a prod rewrite, and self-heals when
+    // the cost is next recomputed. Paid containers keep their LOCKED stored cost
+    // (may be a manual adjustment); an unfilled rate (0) also keeps the stored value.
+    const storedCost            = Number(r.fcosttotalprice ?? 0);
+    const costBasisIsWeight     = WEIGHT_DEFAULT_WAREHOUSES.has(fWarehouseName);
+    const costDim               = costBasisIsWeight ? Number(r.fweight ?? 0) : Number(r.fvolume ?? 0);
+    const liveCost              = Math.round(rate * costDim * 100) / 100;
+    const fCostTotalPrice       = (!cabinetIsPaid && rate > 0) ? liveCost : storedCost;
 
     const priceGetUserItem =
       fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
