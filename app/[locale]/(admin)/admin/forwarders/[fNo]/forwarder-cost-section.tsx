@@ -415,40 +415,45 @@ function CostLineCard({
  * selling price).
  */
 function ForwarderProfitPanel({ sellNet, costTotal }: { sellNet: number; costTotal: number }) {
-  const fmt = (n: number) =>
-    n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // 2026-06-18 (ภูม/พี่ป๊อป "ให้เหมือน PCS เป๊ะ") — copy the legacy PCS ต้นทุน +
+  // กำไร block (layout + labels verbatim). ต้นทุน = fcosttotalprice (Pacred's real
+  // entered/synced cost) · กำไร = ขายสุทธิ − ต้นทุน. Display-only · internal.
+  const baht = (n: number) =>
+    `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
   const hasCost = Number.isFinite(costTotal) && costTotal > 0;
   const profit = hasCost ? sellNet - costTotal : 0;
   const marginVat = computeMarginVat(profit); // GAP 8 — canonical 7%-on-margin helper
   return (
-    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-2.5">
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-800">
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-3">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-800 mb-2">
         <span aria-hidden>📊</span> รายรับ · รายจ่าย · กำไร (ภายใน)
       </div>
-      <dl className="mt-1.5 space-y-0.5 text-[11px]">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted">ยอดขายสุทธิ (รายรับ ฿)</dt>
-          <dd className="tabular-nums font-medium">{fmt(sellNet)}</dd>
+      <div className="grid gap-4 sm:grid-cols-2 text-[11px] font-mono tabular-nums">
+        {/* ── ต้นทุน (PCS left-bottom block) ── */}
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground font-sans">ต้นทุน</p>
+          <p>ต้นทุน ส่วนลด : {baht(0)}</p>
+          <p>ต้นทุน เพิ่ม/ลด เงิน : {baht(0)}</p>
+          <p>ราคาต้นทุน : <strong>{hasCost ? baht(costTotal) : "— ยังไม่บันทึก"}</strong></p>
+          <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-0.5">
+            ระบบเลือกต้นทุนโดย ระบบหลัก
+          </p>
         </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted">ต้นทุนรวม (รายจ่าย ฿)</dt>
-          <dd className="tabular-nums">{hasCost ? fmt(costTotal) : "— ยังไม่บันทึก"}</dd>
+        {/* ── กำไร (PCS middle block) ── */}
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground font-sans">กำไร</p>
+          <p>ยอดขายสุทธิ : <strong>{baht(sellNet)}</strong></p>
+          <p>กำไรค่าขนส่งจีน-ไทย : {hasCost ? baht(profit) : "—"}</p>
+          <p>กำไรค่าบริการ : {baht(0)}</p>
+          <p>กำไร เพิ่ม/ลด เงิน : {baht(0)}</p>
+          <p className="border-t border-indigo-200 pt-0.5 mt-0.5 font-bold font-sans">
+            กำไรสุทธิ : <strong className={`font-mono ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>{hasCost ? baht(profit) : "—"}</strong>
+          </p>
+          {hasCost && <p className="text-[10px] text-muted">VAT ณ กำไร 7% (ภายใน) : {baht(marginVat)}</p>}
         </div>
-        <div className="flex items-baseline justify-between gap-2 border-t border-indigo-200 pt-0.5 font-bold">
-          <dt className="text-indigo-900">กำไรสุทธิ (฿)</dt>
-          <dd className={`tabular-nums ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>
-            {hasCost ? fmt(profit) : "—"}
-          </dd>
-        </div>
-        {hasCost && (
-          <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted">
-            <dt>VAT ณ กำไร 7% (ตัวเลขภายใน)</dt>
-            <dd className="tabular-nums">{fmt(marginVat)}</dd>
-          </div>
-        )}
-      </dl>
+      </div>
       {!hasCost && (
-        <p className="mt-1 text-[10px] text-amber-700">
+        <p className="mt-1.5 text-[10px] text-amber-700">
           ⚠ ยังไม่ได้บันทึกต้นทุน — บันทึกต้นทุนต่อรายการด้านล่างเพื่อให้คำนวณกำไรได้
         </p>
       )}
