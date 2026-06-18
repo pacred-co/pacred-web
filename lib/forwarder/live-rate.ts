@@ -290,6 +290,9 @@ export async function computeAndFillForwarderImportRate(
     .select(
       "id, userid, fweight, fvolume, famount, famountcount, " +
       "fwarehousechina, ftransporttype, fproductstype, frefrate, " +
+      // manual rate override (มัดจำ/กำหนดเอง) — honour it so an auto re-price
+      // NEVER clobbers an admin's manually-set rate (owner "แก้มือได้ทุกจุด").
+      "customrate, customratekg, customratecbm, " +
       // doc-tier discount inputs (owner 2026-06-16 · doc_tier_confirmed = C1 mig 0188)
       "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed",
     )
@@ -305,6 +308,9 @@ export async function computeAndFillForwarderImportRate(
       ftransporttype: string | null;
       fproductstype: string | null;
       frefrate: number | string | null;
+      customrate: string | null;
+      customratekg: number | string | null;
+      customratecbm: number | string | null;
       tax_doc_pref: string | null;
       reforder: string | null;
       adminidcreator: string | null;
@@ -364,6 +370,10 @@ export async function computeAndFillForwarderImportRate(
   // has (the MOMO commit sets fwarehousechina='1' กวางโจว + ftransporttype
   // '1'/'2'); if genuinely empty leave empty so the rate lookup simply misses
   // → rateMissing (we then DON'T write — never a silent ฿0).
+  // Manual rate override — when the row has customrate='1', honour the admin's
+  // typed KG/CBM rate (the waterfall returns it as source:"manual") so a re-price
+  // (MOMO sync · warehouse measure · backfill) NEVER overwrites a manual rate.
+  const customRateSwitch = String(row.customrate ?? "0").trim() === "1";
   const ctx: PricingRowContext = {
     userid:              row.userid,
     fwarehousechina:     String(row.fwarehousechina ?? "").trim(),
@@ -374,9 +384,9 @@ export async function computeAndFillForwarderImportRate(
     famountcount:        famountCount,
     famount,
     reforder:            null,
-    customRateSwitch:    false,
-    customRateKg:        0,
-    customRateCbm:       0,
+    customRateSwitch,
+    customRateKg:        customRateSwitch ? num(row.customratekg) : 0,
+    customRateCbm:       customRateSwitch ? num(row.customratecbm) : 0,
     userComparison,
     userComparisonValue,
     docTierEligible,

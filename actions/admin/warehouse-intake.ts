@@ -50,6 +50,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
 // Worker-app role-set — matches the W10 spec.
 const WAREHOUSE_ROLES = ["super", "warehouse", "ops", "manager"] as const;
@@ -284,7 +285,9 @@ export async function warehouseMeasure(
 
     const cbm = computeCbm(d.widthCm, d.lengthCm, d.heightCm);
 
-    // ⚠️ NO cost/price column written — measure only.
+    // Write the measured weight + dims + CBM. (Cost is NOT touched here — it's
+    // the per-container ต้นทุน sheet · mig 0150 lock — only the SELL is re-priced
+    // below.)
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update({
@@ -300,6 +303,19 @@ export async function warehouseMeasure(
     if (updErr) {
       console.error(`[tb_forwarder measure update] failed`, { code: updErr.code, message: updErr.message });
       return { ok: false, error: `db_error:${updErr.code ?? "unknown"}` };
+    }
+
+    // ── A (2026-06-19 · owner P2/P3) — AUTO-PRICE the SELL from the just-measured
+    //    kg/cbm so the bill is exact without sales hand-calc ("ห้ามคิดราคาเอง").
+    //    Reuses the shared money-isolated pricer (resolveLiveForwarderRate +
+    //    ค่าเทียบ + doc-tier + honours a manual customrate). Best-effort: a
+    //    rate-missing / pricing error must NOT fail the measure (the parcel is
+    //    measured; the admin can set a rate on the detail page). Manual override
+    //    stays — adminUpdateForwarderDimensions can re-set anything afterward, and
+    //    a customrate='1' row keeps its manual rate (the pricer honours it).
+    const priceRes = await computeAndFillForwarderImportRate(admin, d.fid);
+    if (!priceRes.ok || !priceRes.wrote) {
+      console.warn(`[warehouseMeasure auto-price] not written`, { fid: d.fid, reason: priceRes.reason });
     }
 
     await logIntakeEvent(admin, {
