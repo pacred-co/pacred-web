@@ -1477,6 +1477,10 @@ const menuWarehouse: MenuSection[] = [
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
       { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
+      // 2026-06-19 (owner · P6) — logistics-manager cross-department overview:
+      // the whole cargo pipeline (by fstatus) + money lens + each dept's next
+      // action + tool links. The "ศูนย์งานโลจิสติกส์" board for Win.
+      { labelKey: "warehouse.logisticsBoard", href: "/admin/logistics-board", icon: "LayoutDashboard" },
       // re-sweep A2 #8/#17 — warehouse "scan a cabinet → print all box labels"
       // (faithful port of legacy `printAll.php` box-label modes). The guide
       // page accepts `?cabinet=` so report-cnt can deep-link to it per row.

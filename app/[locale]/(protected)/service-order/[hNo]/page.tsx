@@ -150,24 +150,43 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
       : [];
 
   // ฝากนำเข้า (import) shipments that flowed FROM this shop order — surfaces the
-  // ฝากสั่งซื้อ → ฝากนำเข้า continuity (owner 2026-06-19: "งานเดียวกัน · โปรเซสไหลจาก
-  // ฝากสั่งไปฝากนำเข้า"). The import side already links BACK ("fromShopOrder" on
-  // /service-import); this is the forward link the shop-order page was missing.
-  // Keyed on tb_forwarder.reforder = this order's hno (written at admin spawn).
+  // ฝากสั่งซื้อ → ฝากนำเข้า continuity (owner 2026-06-19). Linked TWO ways (a
+  // MOMO-created forwarder has reforder=""): (1) reforder = this order's hno (the
+  // spawn path), OR (2) the forwarder's ftrackingchn = a China tracking this order
+  // recorded (tb_order.ctrackingnumber). Both, deduped — so MOMO-imported goods
+  // still show here.
   type LinkedImport = { id: number; ftrackingchn: string | null; fstatus: string | null; fcabinetnumber: string | null };
   let linkedImports: LinkedImport[] = [];
   const linkedImportHno = o.h_no ?? hNo;
   if (linkedImportHno && memberCode) {
+    // This order's recorded China trackings (for the tracking-based link).
+    const { data: orderTracks, error: orderTracksErr } = await admin
+      .from("tb_order")
+      .select("ctrackingnumber")
+      .eq("hno", linkedImportHno);
+    if (orderTracksErr) {
+      console.error(`[service-order/[hNo] order tracks] failed`, { code: orderTracksErr.code, message: orderTracksErr.message });
+    }
+    const trackings = Array.from(
+      new Set(((orderTracks ?? []) as Array<{ ctrackingnumber: string | null }>)
+        .map((t) => (t.ctrackingnumber ?? "").trim())
+        .filter((t) => t.length > 0)),
+    );
+    // OR-match reforder / tracking via a single PostgREST .or() filter.
+    const orParts = [`reforder.eq.${linkedImportHno}`];
+    if (trackings.length > 0) orParts.push(`ftrackingchn.in.(${trackings.join(",")})`);
     const { data: imports, error: importsErr } = await admin
       .from("tb_forwarder")
       .select("id, ftrackingchn, fstatus, fcabinetnumber")
-      .eq("reforder", linkedImportHno)
       .eq("userid", memberCode)
+      .or(orParts.join(","))
+      .neq("fstatus", "99")
       .order("id", { ascending: false });
     if (importsErr) {
       console.error(`[service-order/[hNo] linked imports] failed`, { code: importsErr.code, message: importsErr.message });
     }
-    linkedImports = (imports ?? []) as LinkedImport[];
+    const seen = new Set<number>();
+    linkedImports = ((imports ?? []) as LinkedImport[]).filter((r) => !seen.has(r.id) && seen.add(r.id));
   }
 
   return (

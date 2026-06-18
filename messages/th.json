@@ -3519,6 +3519,7 @@
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
+      "logisticsBoard": "ศูนย์งานโลจิสติกส์",
       "printLabels": "พิมพ์ป้ายกล่อง (ตู้)",
       "bulletin": "บุลเลตินตู้รายวัน",
       "qaInspect": "ตรวจสอบคุณภาพ (QA)",

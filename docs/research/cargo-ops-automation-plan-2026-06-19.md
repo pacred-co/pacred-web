@@ -117,3 +117,35 @@ automatic MOMO path (Option B review already satisfied for status-only).
 
 **Next build (owner pick):** A (scan→bill chain) is the highest-value — it directly
 kills the hand-calc money leak. B (PCS reconcile) removes the biggest manual burden.
+
+---
+
+## 6. Build status (2026-06-19 turn 2)
+
+**✅ Shipped:**
+- **P6 — Logistics Center board** `/admin/logistics-board` (`warehouse.logisticsBoard` in the
+  sidebar) — Win's cross-department overview: the whole pipeline by fstatus (ยังไม่ถึงไทย →
+  ถึงไทย/วัด·บิล → รอชำระ → เตรียมส่ง → ส่งแล้ว) with per-stage count + Σ sell + responsible
+  dept + next-action + tool link; money lens (need-bill/collect, juristic-WHT-1%, credit);
+  manual-feed entry ("ป้อนของเข้าระบบ" → /admin/forwarders) = the **P1 preliminary** feed.
+  Read-only · gated super/manager/ops/accounting (+god).
+- **Container decode** corrected (EK=road) + auto-derive + display (`cabinet-transport.ts`).
+- **Status-sync** forwarder→shop-order (reforder OR tracking) + the **flow-continuity card**
+  now also matches by tracking (MOMO rows show).
+
+**⏭ Next dedicated builds (money-path — spec'd, NOT rushed):**
+
+**A — scan→measure→cost→bill auto (the #1 pain).** Trace finding: the plumbing largely
+EXISTS (warehouse worker `/measure` + `warehouse-intake`/`warehouse-history` write
+tb_forwarder; `report-cnt` computes live cost from fvolume×rate; `billing-run` reads
+tb_forwarder). The remaining gap = make the `measure` step write `fweight`+`fvolume`
+(from W×L×H, also on the box sticker) onto the forwarder, and make `billing-run`
+AUTO-pull those measured values + auto-compute cost (kg-vs-คิว rule) so sales never
+hand-type kg/cbm or hand-calc price — **with a manual-edit override at every field**
+(owner: "ออโต้ แต่แก้มือได้ทุกจุด"). This is a focused money-path build: read
+`actions/admin/billing-run.ts` end-to-end first, add the auto-pull + the override, gate +
+adversarial money-review before prod. *Do as its own change, not bundled.*
+
+**B — PCS↔Pacred reconcile board (P1 full).** Needs the PCS data feed (API, or a
+paste/import like the MOMO invoice ingestion already shipped). Until then, the
+logistics board + the manual ฝากนำเข้า feed cover tracking + collection.

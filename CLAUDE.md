@@ -3,6 +3,24 @@
 
 ---
 
+# 🔧 2026-06-19 — เดฟ: ultra RBAC sweep · report-cnt fixes · MOMO invoice-cost ingestion · status-sync · container-decode · logistics board · read FIRST
+
+> **State: dave-pacred = main = `<HEAD>`** (owner: "push ทุก branch" → all 4 branches synced this close · Vercel deploying prod). Gate green every push: **typecheck 0 · lint 0 · test:unit 0 · full `pnpm verify` 0**. **migrations through 0194 applied prod+dev · NEXT FREE = 0195.** ⚙️ shell: `export PATH=…v24.16.0/bin` + `corepack pnpm` + `node scripts/tsc-check.mjs` (bare tsc OOMs). 🔑 prod DB pw ROTATED → `DqOzfEZVXfMHIryz` (Jirayus40x. STALE) · aws-1 session-pooler ipv4first is the working path · dev `lozntlidlqqzzcaathnm` pw `n61OKDy28QcrB1ZJ` (DEV-SYNC every migration).
+>
+> **🔴 ultra RBAC lockout swept (the MOMO-sync FORBIDDEN the owner hit):** mig 0193 added god role `ultra`; ~16 RAW role checks hardcoded `super` without an `isGodRole` bypass → the 8 super→ultra admins (incl. both พี่ป๊อป) were locked out. Fixed 2 classes — (A) raw API/action gates (`+ isGodRole`), (B) the easy-to-miss **`.in("role",[...])` DB recipient/selection filters** (digests/alerts/lead-notifs/rep-pickers were missing 'ultra'). Account cleanup: PR034+PR10822 soft-deleted, emp 690601→PR321 (พี่ป๊อป's sole ultra). Learning: a role-add migration must sweep DB `.in("role")` filters too.
+>
+> **🧾 report-cnt + MOMO cost:** live cost for non-paid containers (the cost-basis fix was forward-only — display summed stale stored fcosttotalprice) · restored per-shipment group-pay (lost in the collapsible merge) · สถานะตู้→สถานะจ่ายค่าตู้ rename (cross-page label collision) · travel-days ≤0→"-" guard. **MOMO cost = 2,500/CBM** (mig 0194 · supplier invoices ฮุย-ไท่ต๋า · was 2,900 sea/4,500 road) + NEW **MOMO invoice→cost ingestion** `/admin/api-forwarder-momo/invoice-cost` (paste invoice → parse per-tracking → match by ftrackingchn → preview → apply fcosttotalprice · gated cost-roles · preview-before-apply). Data-fixes (backup+dry-run): fid 52051 cost 10,250→5.50; transport 11 rows; P22314 stuck-status 4→40.
+>
+> **🔁 status-sync (recurring owner pain — FIXED):** ฝากสั่งซื้อ stayed stuck at hstatus 4 while its forwarder reached ถึงโกดังจีน. Root: the forwarder↔shop-order link has TWO forms — `reforder` (spawn path) OR `tb_order.ctrackingnumber = forwarder.ftrackingchn` (MOMO-created rows have reforder=""). NEW `lib/admin/advance-linked-shop-order.ts` (reforder OR tracking → hstatus 4→40, forward-only) wired into the manual path (`adminBulkUpdateForwarderTbStatus`, ungated) + the MOMO path (propagate.ts, gated) + the customer flow-continuity card.
+>
+> **🚚 container-decode (owner corrected me — EK=ROAD not air):** GZS/SEA=เรือ · GZE/EK=รถ · GZA/AIR=อากาศ. SOT `lib/forwarder/cabinet-transport.ts` (+test) · display derives from name · auto-derives ftransporttype at cabinet-assign.
+>
+> **🗺 logistics board (P6) + cargo-ops automation plan:** owner handed 2 real LINE chats (warehouse + shipping). Analyzed → `docs/research/cargo-ops-automation-plan-2026-06-19.md`. Built **`/admin/logistics-board`** (Win's cross-department pipeline overview by fstatus + money lens + per-dept next-action + tool links + P1 manual-feed entry). **Next dedicated build (spec'd, NOT rushed — money-path): A = scan→measure→cost→bill auto (the #1 pain · plumbing exists, gap = billing-run auto-pull measured kg/cbm + per-field manual override) · B = PCS↔Pacred reconcile (needs PCS feed).**
+>
+> **🔴 carryover (owner):** flip `MOMO_SYNC_PROPAGATE_STATUS=true` (auto status-sync on the MOMO cron, Option B) · build A (scan→bill) + B (PCS reconcile) · the standing flags (COST_REVEAL_PIN · doc-tier enable vs 0139 · daily-warehouse-entry API for non-MOMO CBM).
+
+---
+
 # 🏁 2026-06-16 SESSION CLOSE — ภูม (Poom-pacred): MOMO delivery-address v2 + CBM display fix (shipped) + ค่าเทียบ-250 pricing model captured + DRAFT migration 0184 ส่งพี่เดฟตรวจ · พักก่อน (เดฟกำลังทำอยู่) · read FIRST
 
 > **🏁 CLOSE (owner ภูม: "พักก่อน พี่เดฟกำลังทำอยู่ · สรุปงาน · เลินนิ่ง · อัพเดท memory/docs/md · push Poom-pacred · เขียน migration ส่งพี่เดฟตรวจ").** Branch **Poom-pacred** (NOT promoted — เดฟ owns the trunk + is mid-work; do not touch dave-pacred/main). Gate green at close: **typecheck 0 · lint 0 · test:unit 0** (Node v24.15.0 · corepack pnpm 11.0.9 · `node scripts/tsc-check.mjs` for typecheck — bare tsc OOMs). **migrations through 0183 applied prod+dev; 0184 = DRAFT-not-applied (see below) · next free = 0185.**

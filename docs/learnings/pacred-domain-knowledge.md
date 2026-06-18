@@ -565,3 +565,36 @@ KGPerCBM <= ค่าเทียบ(250) → bill by CBM  (default · refPrice=
 **Lesson:** COST and SELL are TWO separate engines on Pacred. SELL = `resolve-rate.ts` (per-customer tier + ค่าเทียบ 250 waterfall). COST = the flat 144-cell `tb_settings` matrix read by `report-cnt-detail.ts`. Don't conflate them; the forwarder detail page now shows both (sell buckets → sellNet; matrix → cost; กำไร = sellNet − cost). Verified: order 52028 MOMO·เรือ·กวางโจว cbm 0.04646 × rate 2500 = ต้นทุน 116.15, กำไร 55.75.
 
 **Cross-links:** `lib/forwarder/resolve-cost.ts` + `.test.ts` (38 asserts · this session) · `actions/admin/report-cnt-detail.ts` (the canonical cost engine) · `app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model.ts` (144-cell column builder) · `app/[locale]/(admin)/admin/forwarders/[fNo]/forwarder-cost-section.tsx` (ForwarderProfitPanel — the live wire) · [[resolve-rate]] is the SEPARATE sell engine.
+
+---
+
+## Container codes + the forwarder↔shop-order link + cargo flow (2026-06-19)
+
+**Container/cabinet code → transport mode (owner-confirmed SOT · I had EK wrong).**
+`GZS / *SEA*` = ทางเรือ (sea) · `GZE / *EK*` = ทางรถ (road) · `GZA / *AIR*` = ทางอากาศ (air).
+**EK is ROAD, not air** — I assumed air and the owner corrected it. Canonical decode:
+`lib/forwarder/cabinet-transport.ts` (+test). The NAME is authoritative; the stored
+`tb_forwarder.ftransporttype` is unreliable ("อย่าหลงเชื่อข้อมูลผิดๆ"). **Lesson: domain
+codes come from the owner/legacy, never guessed — verify a decode before shipping it.**
+
+**The forwarder↔shop-order link has TWO mechanisms (don't assume reforder).**
+- `tb_forwarder.reforder = tb_header_order.hno` — set ONLY by the spawn-from-order path
+  (`service-orders-spawn.ts`).
+- `tb_forwarder.ftrackingchn = tb_order.ctrackingnumber` (→ that order's hno) — for
+  forwarders **MOMO created** (their `reforder = ""`). This is the common real case.
+Any code linking the two MUST try reforder OR the tracking — the shared helper is
+`lib/admin/advance-linked-shop-order.ts`. The status-sync stuck-order bug (P22314 ↔
+forwarder #52075) was exactly this: #52075 was MOMO-made with reforder="" so the
+reforder-only propagation never fired. `[[forward-only-fix-trap]]` applies too — a
+logic fix doesn't backfill existing rows.
+
+**fstatus IS the cargo flow pipeline** (1 รอเข้าโกดังจีน · 2 ถึงโกดังจีน · 3 กำลังส่งมาไทย ·
+4 ถึงไทยแล้ว · 5 รอชำระเงิน · 6 เตรียมส่ง · 7 ส่งแล้ว). The shop order mirror: hstatus
+4 (รอร้านจีน) → 40 (ถึงโกดังจีน, mig 0185) when the forwarder reaches fstatus ≥ 2.
+
+**The real cargo operation (from the LINE chats · `docs/research/cargo-ops-automation-plan-2026-06-19.md`):**
+China shop → MOMO consolidation (กวางโจว) → container → TH → Pacred warehouse: scan
+(ยิงเข้าระบบ) + measure (kg + W×L×H→CBM, off the box sticker) + box-count → bill
+(CBM×rate, or kg if kg>คิว) → collect (juristic WHT 1%, individual none) → ส่งเหมาๆ /
+รับเอง. The #1 pain = price hand-calculated + can't bill in-system (scan→measure→cost→bill
+not auto-connected); biggest manual burden = the PCS↔Pacred tracking leak (no tool).

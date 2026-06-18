@@ -3519,6 +3519,7 @@
     },
     "warehouse": {
       "containers": "Containers",
+      "logisticsBoard": "Logistics Center",
       "printLabels": "Print box labels (cabinet)",
       "bulletin": "Daily container bulletin",
       "qaInspect": "QA inspections",
