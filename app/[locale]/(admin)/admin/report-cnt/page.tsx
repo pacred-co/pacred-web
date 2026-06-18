@@ -119,8 +119,9 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       existing.priceSum  += Number(r.ftotalprice ?? 0);
       // 0189 fix: container status = MIN(fstatus) across its trackings (the
       // least-advanced = the true overall stage), matching the RPC path. Was:
-      // kept the FIRST row's fstatus → arbitrary/wrong.
-      if (r.fstatus && r.fstatus < existing.fstatus) existing.fstatus = r.fstatus;
+      // kept the FIRST row's fstatus → arbitrary/wrong. Ignore empty/null on
+      // BOTH sides so a blank first row can't pin the MIN (true SQL MIN).
+      if (r.fstatus && (!existing.fstatus || r.fstatus < existing.fstatus)) existing.fstatus = r.fstatus;
       // Keep the most recent fdatestatus4 / fdatecontainerclose (legacy emits any)
       if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
         existing.fdatestatus4 = r.fdatestatus4;
@@ -243,6 +244,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled containers (parity with the RPC)
       .limit(50_000);
     if (isWaiting) q = q.lt("fstatus", "4");
     else            q = q.gt("fstatus", "3");
@@ -599,6 +601,7 @@ async function loadHeaderCounts(
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled
       .lt("fstatus", "4");
     if (transportType) q = q.eq("ftransporttype", transportType);
     const r = await q;
@@ -611,6 +614,7 @@ async function loadHeaderCounts(
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
       .neq("fcabinetnumber", "0")
+      .neq("fstatus", "99") // 0190: drop cancelled
       .gt("fstatus", "3");
     if (transportType) q = q.eq("ftransporttype", transportType);
     if (startDate && endDate) {
