@@ -166,7 +166,14 @@ function diffDateCNT(closeDate: string | null, arrivedDate: string | null): numb
   if (!closeDate || !arrivedDate) return null;
   const c = new Date(closeDate).getTime();
   const a = new Date(arrivedDate).getTime();
-  return Math.floor((a - c) / 86_400_000);
+  if (!Number.isFinite(c) || !Number.isFinite(a)) return null;
+  const days = Math.floor((a - c) / 86_400_000);
+  // Guard data artifacts: a container whose close date == arrival date in the DB
+  // (e.g. GZS260519-1, a few legacy rows) has no recorded transit time → "0 วัน"
+  // is misleading for a cross-border sea/road/air shipment. Treat <= 0 as "no
+  // valid transit data" (renders "-") so it doesn't drag the เฉลี่ย average down.
+  if (days <= 0) return null;
+  return days;
 }
 
 export function CntListTable({

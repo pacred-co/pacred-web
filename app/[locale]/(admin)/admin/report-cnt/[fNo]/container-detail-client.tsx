@@ -25,7 +25,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
-import { adminReportCntAddCheck, adminReportCntBillToCustomer } from "@/actions/admin/report-cnt-detail";
+import { adminReportCntAddCheck, adminReportCntBillToCustomer, adminReportCntBillGroupToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
@@ -445,14 +445,22 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
             </span>
           </td>
         )}
-        {/* สถานะสินค้า */}
-        <td className="px-2 py-2 text-center">
+        {/* สถานะสินค้า + group bill (per-shipment pay) */}
+        <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
           {statusBadge ? (
             <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${statusBadge.chip}`}>
               {statusBadge.label}
             </span>
           ) : (
             <span className="inline-block rounded-full text-[10px] px-2 py-0.5 font-medium bg-gray-200 text-gray-700">หลายสถานะ</span>
+          )}
+          {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
+              — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
+              ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier. */}
+          {showMoney && a.billableIds.length > 0 && (
+            <div className="mt-1">
+              <GroupCollectButton fIDs={a.billableIds} base={base} userid={a.userid} />
+            </div>
           )}
         </td>
         {/* สถานะตู้ */}
@@ -570,7 +578,11 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               {showMoney && <Th k="fcosttotalprice" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ต้นทุน</Th>}
               {showMoney && <Th k="profitItem"      onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">กำไร</Th>}
               <Th k="fstatus" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="center">สถานะสินค้า</Th>
-              <th className="px-2 py-2 text-center">สถานะตู้</th>
+              {/* 2026-06-19 owner "สถานะมั่ว": this column is the container-PAYMENT
+                  state — renamed "สถานะตู้" → "สถานะจ่ายค่าตู้" to match the LIST page
+                  (where "สถานะตู้" means the GOODS journey, not payment). Now the
+                  two pages use the same word for the same axis. */}
+              <th className="px-2 py-2 text-center">สถานะจ่ายค่าตู้</th>
               <th className="px-2 py-2 text-left">หมายเหตุ</th>
             </tr>
             {/* Summary band — orange→red gradient totals row (legacy L1653-1684 `.bg-color`).
@@ -970,6 +982,55 @@ function BillToCustomerButton({ fID }: { fID: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Group bill-to-customer — bill an ENTIRE -N split shipment (per-shipment pay)
+// in one click. Loops the same per-row 4→5 writer (adminReportCntBillGroupToCustomer,
+// gated super/ops/accounting, idempotent). Restored 2026-06-19 (owner-flagged
+// the per-shipment pay selection had disappeared from the collapsed group row).
+// ─────────────────────────────────────────────────────────────────────
+function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: string; userid: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [done, setDone] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function bill() {
+    if (!(await confirm(`แจ้งหนี้ลูกค้า ${userid} ทั้งกลุ่มแทรคกิ้ง ${base} (${fIDs.length} ซอย) พร้อมกัน?`))) return;
+    setMsg(null);
+    start(async () => {
+      const res = await adminReportCntBillGroupToCustomer({ fIDs });
+      if (!res.ok) {
+        setMsg(res.error);
+        return;
+      }
+      setDone(true);
+      const d = res.data;
+      setMsg(
+        `แจ้งหนี้ ${d?.billed ?? 0} ซอย · ยอดรวม ${(d?.totalPricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.` +
+          (d?.failed ? ` · ผิดพลาด ${d.failed}` : ""),
+      );
+      router.refresh();
+    });
+  }
+
+  if (done) {
+    return <span className="inline-block text-[9px] text-amber-700">{msg}</span>;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={bill}
+        disabled={pending}
+        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[9px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
+      >
+        {pending ? "กำลังแจ้ง…" : `แจ้งหนี้ทั้งกลุ่ม (${fIDs.length} ซอย)`}
+      </button>
+      {msg && <div className="mt-0.5 text-[9px] text-red-600">{msg}</div>}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
 
@@ -1009,6 +1070,9 @@ function aggregateGroup(g: DetailRow[]) {
     detail:                uniq((r) => (r.fdetail ?? "").trim() || null),
     allPaid:               g.every((r) => r.cntPaid),
     nonePaid:              g.every((r) => !r.cntPaid),
+    // fids billable now = goods arrived in TH (fstatus 4 = ถึงไทยแล้ว). Feeds the
+    // group "แจ้งหนี้ทั้งกลุ่ม" button so a -N split shipment can be billed once.
+    billableIds:           g.filter((r) => Number(r.fstatus) === 4).map((r) => r.id),
   };
 }
 
