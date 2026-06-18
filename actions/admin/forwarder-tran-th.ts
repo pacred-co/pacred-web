@@ -280,7 +280,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
     totals: {
       itemCount:   items.length,
       totalWeight: Math.round(totalWeight * 100) / 100,
-      totalVolume: Math.round(totalVolume * 100000) / 100000,
+      totalVolume: Math.round(totalVolume * 1000000) / 1000000,
       totalBoxes,
     },
   };

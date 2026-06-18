@@ -402,7 +402,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         {/* ลัง (รับ/คาด) */}
         <td className="px-2 py-2 text-right">{fmtN(a.boxGot)}/{fmtN(a.boxExp)}</td>
         {/* ปริมาตร */}
-        <td className="px-2 py-2 text-right">{fmt(a.volume, 5)}</td>
+        <td className="px-2 py-2 text-right">{fmt(a.volume, 6)}</td>
         {/* หนัก */}
         <td className="px-2 py-2 text-right">{fmt(a.weight, 2)}</td>
         {/* ประเภท */}
@@ -584,7 +584,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               {/* ลัง */}
               <td className="px-2 py-1.5"></td>
               {/* ปริมาตร (CBM) */}
-              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 5)}</td>
+              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 6)}</td>
               {/* หนัก (Kg) */}
               <td className="px-2 py-1.5 text-right">{fmt(summary.weight, 2)}</td>
               {/* ประเภท */}
@@ -731,7 +731,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       );
                     })()}
                   </td>
-                  <td className="px-2 py-2 text-right">{fmt(r.fvolume, 5)}</td>
+                  <td className="px-2 py-2 text-right">{fmt(r.fvolume, 6)}</td>
                   <td className="px-2 py-2 text-right">{fmt(r.fweight, 2)}</td>
                   <td className="px-2 py-2">
                     {productTypeLabel(r.fproductstype)}

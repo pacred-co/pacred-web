@@ -211,7 +211,7 @@ export async function adminCheckMomoSack(
 
     // The legacy PHP formats: CBM to 5dp, weight to 2dp via number_format()
     // then casts back to float. Replicate so the totals are byte-identical.
-    productCBMAllTotal    = Number(productCBMAllTotal.toFixed(5));
+    productCBMAllTotal    = Number(productCBMAllTotal.toFixed(6));
     productWeightAllTotal = Number(productWeightAllTotal.toFixed(2));
 
     return {

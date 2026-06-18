@@ -369,7 +369,7 @@ export function AdminForwarderEditForm({
               ` · ราคารวม ฿${d.grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
             : "";
         setSuccess(
-          `✓ บันทึกขนาด/น้ำหนักสำเร็จ — CBM = ${d?.cbm?.toFixed(5)} m³${priceTxt} — กำลังพากลับหน้ารายละเอียด...`,
+          `✓ บันทึกขนาด/น้ำหนักสำเร็จ — CBM = ${d?.cbm?.toFixed(6)} m³${priceTxt} — กำลังพากลับหน้ารายละเอียด...`,
         );
         // Lane C — surface the min-sell hard-warning when the resolved price
         // is below the sales floor. Keep it on-screen longer (no auto-redirect
@@ -692,7 +692,7 @@ export function AdminForwarderEditForm({
           <div className="space-y-1 text-xs font-mono tabular-nums">
             <p className="font-semibold text-foreground mb-1 font-sans not-italic">ราคานำเข้าจีน-ไทย:</p>
             <p>คิดตามน้ำหนัก {parsed.weight.toFixed(2)} × {(parseFloat(customRateKg) || 0).toFixed(2)} = <strong>฿{preview.priceByKg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
-            <p>คิดตามปริมาตร {cbmNum.toFixed(5)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
+            <p>คิดตามปริมาตร {cbmNum.toFixed(6)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
             {preview.comparisonOn && (
               <p className="text-[10px] text-amber-700 font-sans not-italic">
                 ค่าเทียบ {preview.threshold.toLocaleString("th-TH")} · KG/คิว = {preview.kgPerCbm.toFixed(2)} → {preview.kgPerCbm > preview.threshold ? "เกินค่าเทียบ คิดตามน้ำหนัก" : "ไม่เกิน คิดตามปริมาตร"}
@@ -761,7 +761,7 @@ export function AdminForwarderEditForm({
 
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline text-[11px] text-muted font-mono tabular-nums">
-              #{idNumeric} · {parsed.weight.toFixed(2)} kg · {cbmNum.toFixed(5)} cbm
+              #{idNumeric} · {parsed.weight.toFixed(2)} kg · {cbmNum.toFixed(6)} cbm
             </span>
             <button
               type="submit"

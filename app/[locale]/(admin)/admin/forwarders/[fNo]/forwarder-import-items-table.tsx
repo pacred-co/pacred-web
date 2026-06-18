@@ -367,7 +367,7 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
             </td>
             <td className={TD}>{totals.boxes}</td>
             <td className={TD}>{fmtNum(totals.weight, 2)}</td>
-            <td className={TD}>{fmtNum(totals.cbm, 5)}</td>
+            <td className={TD}>{fmtNum(totals.cbm, 6)}</td>
             <td className={TDc}>{refPriceCell}</td>
             <td className={TD}>{rateCell}</td>
             <td className={TD}>{fmtMoney(totals.fTotalPrice)}</td>

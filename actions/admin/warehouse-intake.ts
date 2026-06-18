@@ -116,7 +116,7 @@ async function logIntakeEvent(
 /** CBM (m³) from cm dims = w·l·h / 1,000,000 (the demo + legacy formula). */
 function computeCbm(widthCm: number, lengthCm: number, heightCm: number): number {
   const cbm = (widthCm * lengthCm * heightCm) / 1_000_000;
-  return Math.round(cbm * 100000) / 100000; // numeric(10,5)
+  return Math.round(cbm * 1000000) / 1000000; // numeric(14,6) 6dp
 }
 
 // ════════════════════════════════════════════════════════════
@@ -480,7 +480,7 @@ async function recomputeSackAggregates(
     .from("warehouse_sack")
     .update({
       weight_kg: Math.round(weight * 100) / 100,
-      cbm: Math.round(cbm * 100000) / 100000,
+      cbm: Math.round(cbm * 1000000) / 1000000,
       parcel_count: list.length,
     })
     .eq("id", sackId);

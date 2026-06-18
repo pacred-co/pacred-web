@@ -255,7 +255,7 @@ export async function adminUpdateForwarderDimensions(
       // Issue 3: a typed CBM overrides the W×L×H derivation (rounded to the
       // legacy numeric(10,5) shape); omitted → fall back to computeCbm.
       const cbm           = d.volumeCbm != null
-        ? Math.round(d.volumeCbm * 100_000) / 100_000
+        ? Math.round(d.volumeCbm * 1_000_000) / 1_000_000
         : computeCbm(d.widthCm, d.lengthCm, d.heightCm);
 
       // ─── Resolve target row ─────────────────────────────────────

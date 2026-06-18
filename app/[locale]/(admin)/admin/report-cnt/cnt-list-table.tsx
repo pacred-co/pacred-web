@@ -367,7 +367,7 @@ export function CntListTable({
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
               <td className="px-2 py-2 text-right">{totals.ctnsSum.toLocaleString()}</td>
-              <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(2)}</td>
+              <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(6)}</td>
               <td className="px-2 py-2 text-right">{totals.weightSum.toFixed(2)}</td>
               <td className="px-2 py-2"></td>
               {showMoney && <td className="px-2 py-2 text-right">{totals.costSum.toFixed(2)}</td>}
@@ -422,7 +422,7 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatestatus4)}</td>
                   <td className="px-2 py-2 text-right">{r.trackCount.toLocaleString()}</td>
                   <td className="px-2 py-2 text-right">{r.completenessExpected.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-right">{r.volumeSum.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-right">{r.volumeSum.toFixed(6)}</td>
                   <td className="px-2 py-2 text-right">{r.weightSum.toFixed(2)}</td>
                   <td className="px-2 py-2 text-center">
                     {r.completenessForwardersTotal === 0 ? (
