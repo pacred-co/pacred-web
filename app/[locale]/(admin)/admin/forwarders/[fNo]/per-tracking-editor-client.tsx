@@ -160,27 +160,28 @@ export function PerTrackingEditorClient({
     const rateCbm = parseFloat(customRateCbm) || 0;
     const comparisonOn = customComparison === "1";
     const threshold = parseFloat(comparisonValue) || 0;
-    const perRow = rows.map((r) => {
-      const w = parseFloat(r.weight) || 0;
-      const v = parseFloat(r.cbm) || 0;
-      const pKg = cr ? w * rateKg : 0;
-      const pCbm = cr ? v * rateCbm : 0;
-      const kgPerCbm = v !== 0 ? w / v : 0;
-      // basis: ค่าเทียบ → KG/คิว > threshold ? น้ำหนัก : ปริมาตร · else ราคามากสุด.
-      const byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
-      const transport = cr ? (comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm)) : 0;
-      const chnThb = parseFloat(r.fTransportPriceChnThb) || 0;
-      const service = parseFloat(r.fShippingService) || 0;
-      const other = parseFloat(r.priceOther) || 0;
-      const thai = parseFloat(r.fTransportPrice) || 0;
-      const discount = parseFloat(r.fDiscount) || 0;
-      const subtotal = transport + chnThb + service + other + thai;
-      return {
-        id: r.id, tracking: r.tracking, w, v, pKg, pCbm, kgPerCbm, byWeight,
-        transport, chnThb, service, other, thai, discount, net: subtotal - discount,
-      };
-    });
-    return { cr, rateKg, rateCbm, comparisonOn, threshold, perRow, grand: perRow.reduce((s, x) => s + x.net, 0) };
+    // ยอดรวมทุกแทค (PCS treats the order as one) — sum weight/cbm/adders.
+    let w = 0, v = 0, chnThb = 0, service = 0, other = 0, thai = 0, discount = 0;
+    for (const r of rows) {
+      w += parseFloat(r.weight) || 0;
+      v += parseFloat(r.cbm) || 0;
+      chnThb += parseFloat(r.fTransportPriceChnThb) || 0;
+      service += parseFloat(r.fShippingService) || 0;
+      other += parseFloat(r.priceOther) || 0;
+      thai += parseFloat(r.fTransportPrice) || 0;
+      discount += parseFloat(r.fDiscount) || 0;
+    }
+    const pKg = cr ? w * rateKg : 0;
+    const pCbm = cr ? v * rateCbm : 0;
+    const kgPerCbm = v !== 0 ? w / v : 0;
+    // basis: ค่าเทียบ → KG/คิว > threshold ? น้ำหนัก : ปริมาตร · else ราคามากสุด.
+    const byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
+    const transport = cr ? (comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm)) : 0;
+    const subtotal = transport + chnThb + service + other + thai;
+    return {
+      cr, rateKg, rateCbm, comparisonOn, threshold, count: rows.length, label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
+      w, v, pKg, pCbm, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
+    };
   }, [rows, customRate, customRateKg, customRateCbm, customComparison, comparisonValue]);
 
   async function onSaveAll() {
@@ -337,53 +338,45 @@ export function PerTrackingEditorClient({
         </table>
       </div>
 
-      {/* ── 🧮 ราคานำเข้าจีน-ไทย — faithful copy of the legacy PCS box, ONE per แทค ── */}
-      {calc.perRow.map((x) => (
-        <div key={`calc-${x.id}`} className="rounded-xl border border-border bg-surface-alt/30 p-3">
-          <div className="grid gap-4 sm:grid-cols-[1fr,240px]">
-            {/* LEFT — rate calc (PCS lines, verbatim) */}
-            <div className="space-y-1 text-xs font-mono tabular-nums">
-              <p className="font-semibold text-foreground mb-1 font-sans">
-                ราคานำเข้าจีน-ไทย : <span className="text-muted font-normal">{x.tracking || "—"}</span>
-                {calc.cr && <span className="ml-1 text-[10px] text-red-600">· เรทแบบกำหนดเอง</span>}
-                {calc.comparisonOn && <span className="ml-1 text-[10px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
+      {/* ── 🧮 ราคานำเข้าจีน-ไทย — ONE box, ยอดรวมทุกแทค (faithful PCS copy) ── */}
+      <div className="rounded-xl border border-border bg-surface-alt/30 p-3">
+        <div className="grid gap-4 sm:grid-cols-[1fr,240px]">
+          {/* LEFT — rate calc (PCS lines, verbatim) */}
+          <div className="space-y-1 text-xs font-mono tabular-nums">
+            <p className="font-semibold text-foreground mb-1 font-sans">
+              ราคานำเข้าจีน-ไทย : <span className="text-muted font-normal">{calc.label}{calc.count > 1 ? ` (${calc.count} แทค)` : ""}</span>
+              {calc.cr && <span className="ml-1 text-[10px] text-red-600">· เรทแบบกำหนดเอง</span>}
+              {calc.comparisonOn && <span className="ml-1 text-[10px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
+            </p>
+            {calc.comparisonOn && (
+              <p className="text-amber-700">
+                หาค่าเทียบ {nf(calc.w, 2)}÷{nf(calc.v, 5)} = {nf(calc.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.threshold, 0)} คิดตาม{calc.byWeight ? "น้ำหนัก" : "ปริมาตร"})
               </p>
-              {calc.comparisonOn && (
-                <p className="text-amber-700">
-                  หาค่าเทียบ {nf(x.w, 2)}÷{nf(x.v, 5)} = {nf(x.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.threshold, 0)} คิดตาม{x.byWeight ? "น้ำหนัก" : "ปริมาตร"})
-                </p>
-              )}
-              <p>คิดตามน้ำหนัก {nf(x.w, 2)} x {nf(calc.rateKg, 0)} = <strong>{baht(x.pKg)}</strong></p>
-              <p>คิดตามปริมาตร {nf(x.v, 5)} x {nf(calc.rateCbm, 2)} = <strong>{baht(x.pCbm)}</strong></p>
-              <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
-                ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : "ราคามากสุด"} → {baht(x.transport)}
+            )}
+            <p>คิดตามน้ำหนัก {nf(calc.w, 2)} x {nf(calc.rateKg, 0)} = <strong>{baht(calc.pKg)}</strong></p>
+            <p>คิดตามปริมาตร {nf(calc.v, 5)} x {nf(calc.rateCbm, 2)} = <strong>{baht(calc.pCbm)}</strong></p>
+            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
+              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : "ราคามากสุด"} → {baht(calc.transport)}
+            </p>
+            {!calc.cr && <p className="text-[10px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
+          </div>
+          {/* RIGHT — price summary (PCS labels, verbatim) */}
+          <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-0.5 text-[11px]">
+            <Sum label="ค่านำเข้าจีน-ไทย" value={calc.transport} />
+            <Sum label="ค่าขนส่งจีน+" value={calc.chnThb} />
+            <Sum label="ค่าบริการ" value={calc.service} />
+            <Sum label="ค่าอื่นๆ CO" value={calc.other} />
+            <Sum label="ค่าจัดส่งในไทย" value={calc.thai} />
+            <Sum label="ส่วนลด" value={calc.discount} negative />
+            <div className="border-t border-border pt-1 mt-1">
+              <p className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-foreground">ราคารวมสุทธิ :</span>
+                <strong className="text-red-600 text-sm font-mono tabular-nums">{baht(calc.net)}</strong>
               </p>
-              {!calc.cr && <p className="text-[10px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
-            </div>
-            {/* RIGHT — price summary (PCS labels, verbatim) */}
-            <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-0.5 text-[11px]">
-              <Sum label="ค่านำเข้าจีน-ไทย" value={x.transport} />
-              <Sum label="ค่าขนส่งจีน+" value={x.chnThb} />
-              <Sum label="ค่าบริการ" value={x.service} />
-              <Sum label="ค่าอื่นๆ CO" value={x.other} />
-              <Sum label="ค่าจัดส่งในไทย" value={x.thai} />
-              <Sum label="ส่วนลด" value={x.discount} negative />
-              <div className="border-t border-border pt-1 mt-1">
-                <p className="flex items-baseline justify-between gap-2">
-                  <span className="font-semibold text-foreground">ราคารวมสุทธิ :</span>
-                  <strong className="text-red-600 text-sm font-mono tabular-nums">{baht(x.net)}</strong>
-                </p>
-              </div>
             </div>
           </div>
         </div>
-      ))}
-      {calc.perRow.length > 1 && (
-        <div className="rounded-xl border-2 border-primary-300 bg-primary-50/40 px-4 py-2.5 flex items-baseline justify-between">
-          <span className="text-sm font-bold text-foreground">รวมทุกแทรคกิง ({calc.perRow.length}) :</span>
-          <strong className="text-red-600 text-base font-mono tabular-nums">{baht(calc.grand)}</strong>
-        </div>
-      )}
+      </div>
 
       <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วกด “บันทึกทุกแถว” · ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก (ต้นทุน/ค่าเทียบ จาก server)</p>
 

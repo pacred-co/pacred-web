@@ -798,7 +798,7 @@ async function tryRenderTbForwarder(
           amountEstimate={creditEstimate}
           pricing={pricingInit}
           reforder={r.reforder}
-          itemsTable={<ForwarderImportItemsTable r={r} />}
+          itemsTable={<ForwarderImportItemsTable r={r} isJuristic={u?.userCompany === "1" || r.fusercompany === "1"} />}
           pricingEditor={
             <ForwarderPerTrackingEditor
               r={r}
