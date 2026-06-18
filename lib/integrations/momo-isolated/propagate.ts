@@ -45,6 +45,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import type { MomoInternalAdminRecord, MomoShipmentStatus } from "./types";
 
 /**
@@ -349,30 +350,20 @@ export async function propagateMomoToForwarders(
       result.updated += 1;
 
       // 4. Shop-order advance (2026-06-16 · the fix that unsticks ฝากสั่งซื้อ).
-      //    When a forwarder LINKED to a ฝากสั่งซื้อ order (reforder=hno) reaches
-      //    the china warehouse or beyond (fstatus >= 2), advance the linked
-      //    tb_header_order 4 (รอร้านจีนจัดส่ง) → 40 (ถึงโกดังจีน). FORWARD-ONLY +
-      //    idempotent (the .eq("hstatus","4") fold → 0-row no-op on 40/5/6),
-      //    best-effort (never fails the propagation). Gated with the SAME
-      //    statusGate (Option B — dormant until the owner flips the env after a
-      //    dry-run). The commit-momo-row-core advance only fires for NEW rows
-      //    where reforder="" — THIS path covers existing spawn-from-order rows.
-      const refNo = f.reforder?.trim();
+      //    When a forwarder reaches the china warehouse or beyond (fstatus >= 2),
+      //    advance the linked tb_header_order 4 (รอร้านจีนจัดส่ง) → 40 (ถึงโกดังจีน).
+      //    The shared helper links by reforder OR by the recorded China tracking
+      //    (MOMO-created rows have reforder="" — 2026-06-19 fix). FORWARD-ONLY +
+      //    idempotent + best-effort. Gated with the SAME statusGate (Option B —
+      //    dormant until the owner flips the env after a dry-run).
       const newFstatus = updates.fstatus ?? f.fstatus;
-      if (statusGate && refNo && fstatusRank(newFstatus) >= fstatusRank("2")) {
-        const { data: advRows, error: advErr } = await admin
-          .from("tb_header_order")
-          .update({ hstatus: "40", hdateupdate: today })
-          .eq("hno", refNo)
-          .eq("hstatus", "4")
-          .select("hno");
-        if (advErr) {
-          console.error("[propagateMomoToForwarders] shop-order advance failed", {
-            hno: refNo, forwarderId: f.id, code: advErr.code, message: advErr.message,
-          });
-        } else if (advRows && advRows.length > 0) {
-          result.shopOrdersAdvanced += 1;
-        }
+      if (statusGate && fstatusRank(newFstatus) >= fstatusRank("2")) {
+        const advanced = await advanceLinkedShopOrder(
+          admin,
+          { reforder: f.reforder, ftrackingchn: f.ftrackingchn },
+          today,
+        );
+        if (advanced) result.shopOrdersAdvanced += 1;
       }
     }
   }

@@ -90,9 +90,15 @@ function nameEmployeeType(t: string | null | undefined): { label: string; color:
 /** Pacred admin `role` (RBAC) → display label + color */
 function nameRole(role: string): { label: string; color: string } {
   switch (role) {
+    // 2026-06-18 (mig 0193) — `ultra` = the god role; was MISSING → its badge fell
+    // through to default + rendered a raw "ultra" (the owner's "สถานะสิทธิบัค" after
+    // 8 staff were moved super→ultra). + manager (0118) + pricing were also absent.
+    case "ultra":            return { label: "Ultra Admin Z",     color: "danger" };
     case "super":            return { label: "Super Admin",       color: "danger" };
+    case "manager":          return { label: "Cargo Manager",     color: "info" };
     case "ops":              return { label: "Ops",               color: "primary" };
     case "accounting":       return { label: "Accounting",        color: "success" };
+    case "pricing":          return { label: "Pricing",           color: "success" };
     case "sales_admin":      return { label: "Sales Mgr (Cargo)", color: "info" };
     case "sales":            return { label: "Sales (Cargo)",     color: "info" };
     case "qa":               return { label: "QA / QC",           color: "warning" };
@@ -100,7 +106,7 @@ function nameRole(role: string): { label: string; color: string } {
     case "driver":           return { label: "Driver",            color: "warning" };
     case "interpreter":      return { label: "ล่ามจีน",            color: "secondary" };
     default:
-      // Freight roles (#16-28) — keep raw name for now
+      // Freight roles (#16-28) — humanised raw name (full labels in ROLE_LABELS).
       return { label: role.replace(/_/g, " "), color: "secondary" };
   }
 }

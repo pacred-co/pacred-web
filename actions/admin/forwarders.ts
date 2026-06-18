@@ -5,6 +5,7 @@ import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
@@ -462,7 +463,7 @@ export async function adminBulkUpdateForwarderTbStatus(
     // the cabinet-lock audit (B4 · backlog #259 · 2026-06-08).
     const { data: before, error: readErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked")
+      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked, reforder, ftrackingchn")
       .in("id", fids);
     if (readErr) return { ok: false, error: readErr.message };
     if (!before || before.length === 0) return { ok: false, error: "not_found" };
@@ -475,6 +476,8 @@ export async function adminBulkUpdateForwarderTbStatus(
       fcabinetnumber: string | null;
       fdatecontainerclose: string | null;
       fcabinet_locked: boolean | null;
+      reforder: string | null;
+      ftrackingchn: string | null;
     }>;
 
     // ── V-C3 — "ตัดตู้" enforce + explain (2026-06-10) ─────────────────────
@@ -664,6 +667,30 @@ export async function adminBulkUpdateForwarderTbStatus(
       }
     }
 
+    // ─── Shop-order advance (2026-06-19 · unstick ฝากสั่งซื้อ on the MANUAL path) ──
+    // When a forwarder LINKED to a ฝากสั่งซื้อ order reaches the china warehouse or
+    // beyond (fstatus ≥ 2), advance the linked tb_header_order 4 (รอร้านจีนจัดส่ง)
+    // → 40 (ถึงโกดังจีน) so the shop order doesn't stay stuck. The helper links by
+    // reforder OR by the recorded China tracking (MOMO-created rows have
+    // reforder=""). UNGATED here — unlike the MOMO cron's Option-B statusGate —
+    // because this is a DELIBERATE admin status change + status-only (no money).
+    // Best-effort (errors are logged inside the helper; never roll back).
+    const shopOrdersAdvanced: string[] = [];
+    if (rankFs(derivedFstatus) >= rankFs("2")) {
+      const seenKey = new Set<string>();
+      for (const row of beforeRows) {
+        const key = (row.reforder?.trim() || row.ftrackingchn?.trim() || "").toLowerCase();
+        if (!key || seenKey.has(key)) continue;
+        seenKey.add(key);
+        const advanced = await advanceLinkedShopOrder(
+          admin,
+          { reforder: row.reforder, ftrackingchn: row.ftrackingchn },
+          nowIso,
+        );
+        if (advanced) shopOrdersAdvanced.push(advanced);
+      }
+    }
+
     // B4 · backlog #259 (2026-06-08): capture the lock-flag changes so staff
     // can audit "who locked/unlocked which cabinet · when · why" — important
     // because the lock changes what the next MOMO cron will do for the row.
@@ -689,6 +716,7 @@ export async function adminBulkUpdateForwarderTbStatus(
         cabinet_locked:    cabinet_locked,
       },
       ...(lockChanges && lockChanges.length > 0 ? { cabinet_lock_changes: lockChanges } : {}),
+      ...(shopOrdersAdvanced.length > 0 ? { shop_orders_advanced_to_40: shopOrdersAdvanced } : {}),
     });
 
     // G8 (2026-05-28 ดึก): append one tb_log_forwarder_status row per
