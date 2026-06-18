@@ -15,6 +15,7 @@ import {
   Sparkles,
   Lock,
   ChevronDown,
+  Send,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -228,66 +229,83 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
     <article
       onMouseEnter={onHover}
       className={[
-        "group relative flex-col rounded-2xl md:rounded-3xl overflow-hidden border border-border transition-all duration-400 min-h-[300px] md:min-h-[460px] shadow-[0_8px_22px_rgba(15,23,42,0.10)]",
+        // freight-card style: photo on top + white body below (owner 2026-06-18: "ทำการ์ดโกดังให้เป็นแบบการ์ด freight")
+        "group relative flex-col rounded-2xl overflow-hidden border border-border bg-white dark:bg-surface transition-all duration-300 shadow-[0_4px_14px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.14)]",
         card.soon ? "hidden md:flex" : "flex", // Shenzhen (coming soon) is hidden on mobile
-        active ? "md:scale-[1.03] md:z-10 md:shadow-[0_18px_42px_rgba(15,23,42,0.18)]" : "",
+        active ? "md:shadow-[0_16px_36px_rgba(15,23,42,0.16)]" : "",
       ].join(" ")}
     >
-      {/* full-bleed cover photo */}
-      <Image src={card.image} alt={city} fill sizes="(max-width: 768px) 80vw, 380px" className={`object-cover ${card.soon ? "grayscale" : ""}`} />
-      {/* dark scrim — bottom only (text area) · top of the photo stays bright/natural
-          so the no-text part shows the image normally, desktop + mobile (owner 2026-06-17) */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.58) 30%, rgba(0,0,0,0) 55%)" }}
-      />
-
-      {/* tag row — WAREHOUSE type + Term: EXW / coming-soon, grouped top-left */}
-      <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-wrap items-center gap-1.5">
-        {card.soon ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/90 text-slate-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
-            <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
-            {t("badgeSoon")}
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
-            Term: EXW
-          </span>
-        )}
+      {/* cover photo + Term badge — 3:2 like the freight port cards */}
+      <div className="relative aspect-[3/2] overflow-hidden bg-surface">
+        <Image
+          src={card.image}
+          alt={city}
+          fill
+          sizes="(max-width: 768px) 46vw, 380px"
+          className={`object-cover transition-transform duration-500 group-hover:scale-[1.05] ${card.soon ? "grayscale" : ""}`}
+        />
+        <div className="absolute top-2 left-2 right-2 z-10 flex flex-wrap items-center gap-1.5">
+          {card.soon ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-slate-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+              <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
+              {t("badgeSoon")}
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+              Term: EXW
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* content (anchored to the bottom over the photo) — NO z-index so the
-          mobile "เพิ่มเติม" toggle (z-30) can escape above the full-card LINE link (z-20) */}
-      <div className="relative mt-auto p-3 md:p-4 flex flex-col gap-2 md:gap-2.5">
-        <div>
-          <h4 className="text-[16px] md:text-[24px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.75)]">{city}</h4>
-        </div>
+      {/* white body — city + rate table + terms + CTA. NO z-index so the mobile
+          "เพิ่มเติม" toggle (z-30) can escape above the full-card LINE link (z-20) */}
+      <div className="relative flex flex-col gap-2 md:gap-2.5 p-3 md:p-3.5">
+        <h4 className="text-[15px] md:text-[19px] font-black leading-tight tracking-tight text-[#111827] dark:text-white">{city}</h4>
 
         {card.soon ? (
-          <p className="text-[12.5px] md:text-[13px] font-semibold text-white/85 leading-snug drop-shadow-[0_1px_6px_rgba(0,0,0,0.75)]">
-            {t("warehouseSoonNote")}
-          </p>
+          <>
+            {/* rate skeleton — SAME shape as the live cards, "เร็วๆนี้" instead of prices so the soon card matches the pattern */}
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 divide-y divide-slate-100 dark:divide-white/10 overflow-hidden bg-slate-50/60 dark:bg-white/5">
+              {(["road", "sea", "air"] as RateMode[]).map((m) => {
+                const RIcon = MODE_ICON[m];
+                return (
+                  <div key={m} className="flex items-center gap-1 px-2 py-1.5 md:gap-2 md:px-2.5">
+                    <RIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-300 dark:text-white/25 shrink-0" strokeWidth={2.6} />
+                    <span className="text-[11px] md:text-[12.5px] font-bold text-slate-400 dark:text-white/50 min-w-[1.6rem] md:min-w-[2.25rem] shrink-0">{t(WH_MODE_KEY[m])}</span>
+                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold text-slate-400 dark:text-white/45">
+                      <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
+                      {t("badgeSoon")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* note — mirrors the เงื่อนไข block position */}
+            <p className="text-[11px] md:text-[12px] font-semibold text-muted leading-snug">{t("warehouseSoonNote")}</p>
+          </>
         ) : (
           <>
-            <div className="rounded-xl bg-black/35 backdrop-blur-[2px] border border-white/12 divide-y divide-white/10 overflow-hidden">
+            {/* rate table — white-body version: dark labels, RED prices stand out */}
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 divide-y divide-slate-100 dark:divide-white/10 overflow-hidden bg-slate-50/60 dark:bg-white/5">
               {card.rates.map((r) => {
                 const RIcon = MODE_ICON[r.mode];
                 return (
-                  <div key={r.mode} className="flex items-center gap-1 px-1.5 py-1.5 md:gap-2 md:px-2.5">
-                    <RIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-400 shrink-0" strokeWidth={2.6} />
-                    <span className="text-[11px] md:text-[12.5px] font-bold text-white/85 min-w-[1.6rem] md:min-w-[2.25rem] shrink-0">{t(WH_MODE_KEY[r.mode])}</span>
+                  <div key={r.mode} className="flex items-center gap-1 px-2 py-1.5 md:gap-2 md:px-2.5">
+                    <RIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-600 dark:text-primary-300 shrink-0" strokeWidth={2.6} />
+                    <span className="text-[11px] md:text-[12.5px] font-bold text-slate-600 dark:text-white/80 min-w-[1.6rem] md:min-w-[2.25rem] shrink-0">{t(WH_MODE_KEY[r.mode])}</span>
                     {r.inquire ? (
-                      <span className="text-[10.5px] md:text-[13px] font-bold text-white/80">{t("priceInquire")}</span>
+                      <span className="ml-auto text-[10.5px] md:text-[13px] font-bold text-slate-500 dark:text-white/60">{t("priceInquire")}</span>
                     ) : (
                       <span className="ml-auto flex items-baseline gap-1.5 md:gap-3">
                         <span className="flex items-baseline gap-0.5">
-                          <span className="text-[12px] md:text-[18px] font-black text-white leading-none tabular-nums">{r.cbm}</span>
-                          <span className="text-[8px] md:text-[9.5px] font-bold text-white/55">CBM</span>
+                          <span className="text-[13px] md:text-[19px] font-black text-primary-600 dark:text-primary-300 leading-none tabular-nums tracking-tight">{r.cbm}</span>
+                          <span className="text-[8px] md:text-[9.5px] font-bold text-slate-400 dark:text-white/45">CBM</span>
                         </span>
                         <span className="flex items-baseline gap-0.5">
-                          <span className="text-[12px] md:text-[18px] font-black text-white leading-none tabular-nums">{r.kg}</span>
-                          <span className="text-[8px] md:text-[9.5px] font-bold text-white/55">KG</span>
+                          <span className="text-[13px] md:text-[19px] font-black text-primary-600 dark:text-primary-300 leading-none tabular-nums tracking-tight">{r.kg}</span>
+                          <span className="text-[8px] md:text-[9.5px] font-bold text-slate-400 dark:text-white/45">KG</span>
                         </span>
                       </span>
                     )}
@@ -298,23 +316,23 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
 
             {/* เงื่อนไข — mobile: collapsed behind "เพิ่มเติม" · desktop: always shown */}
             <div className={showTerms ? "block" : "hidden md:block"}>
-              <div className="text-[10px] font-black tracking-[0.10em] uppercase text-primary-300 mb-1">{t("termsLabel")}</div>
+              <div className="text-[10px] font-black tracking-[0.10em] uppercase text-primary-600 dark:text-primary-300 mb-1">{t("termsLabel")}</div>
               <ul className="flex flex-col gap-0.5">
-                {[t("termNote1"), t("termNote2")].map((term) => (
-                  <li key={term} className="flex items-start gap-1.5 text-[11px] md:text-[11.5px] leading-snug text-white/85 drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)]">
-                    <span className="mt-1.5 inline-block w-1 h-1 rounded-full bg-primary-400 shrink-0" />
+                {[t("termNote1"), t("termNote2"), t("termNote3")].map((term) => (
+                  <li key={term} className="flex items-start gap-1.5 text-[11px] md:text-[11.5px] leading-snug text-slate-600 dark:text-white/75">
+                    <span className="mt-1.5 inline-block w-1 h-1 rounded-full bg-primary-500 shrink-0" />
                     <span>{term}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* toggle "เงื่อนไข เพิ่มเติม / ย่อ" — mobile only · slim text (no frame) · z-30 above the full-card LINE link (z-20) */}
+            {/* toggle "เงื่อนไข เพิ่มเติม / ย่อ" — mobile only · slim text · z-30 above the full-card LINE link (z-20) */}
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowTerms((v) => !v); }}
               aria-expanded={showTerms}
-              className="md:hidden relative z-30 self-start inline-flex items-center gap-0.5 py-1 text-[11px] font-bold text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)] active:opacity-70 transition-opacity"
+              className="md:hidden relative z-30 self-start inline-flex items-center gap-0.5 py-0.5 text-[11px] font-bold text-slate-500 dark:text-white/70 active:opacity-70 transition-opacity"
             >
               {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2.6} />
@@ -323,19 +341,17 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
         )}
       </div>
 
-      {/* whole card → LINE quote (active cards only) */}
-      {!card.soon && (
-        <TrackedExternalLink
-          href={LINE_URL}
-          cta="line_consult"
-          surface="lcl_warehouse_rate"
-          ctaProps={{ card: card.id }}
-          aria-label={`${t("ctaQuoteFree")} · ${city}`}
-          className="absolute inset-0 z-20"
-        >
-          <span className="sr-only">{t("ctaQuoteFree")} · {city}</span>
-        </TrackedExternalLink>
-      )}
+      {/* whole card → LINE (live = free quote · soon = follow for rate updates) */}
+      <TrackedExternalLink
+        href={LINE_URL}
+        cta="line_consult"
+        surface="lcl_warehouse_rate"
+        ctaProps={{ card: card.id }}
+        aria-label={`${card.soon ? t("ctaFollowSoon") : t("ctaQuoteFree")} · ${city}`}
+        className="absolute inset-0 z-20"
+      >
+        <span className="sr-only">{card.soon ? t("ctaFollowSoon") : t("ctaQuoteFree")} · {city}</span>
+      </TrackedExternalLink>
     </article>
   );
 }
@@ -615,6 +631,8 @@ type FreightCard = {
   route: string;     // "ต้นทาง → ปลายทาง" — placeholder, owner fills
   freight?: string;  // FOB freight-only price · omit = "สอบถามเรท"
   unit?: string;     // "฿/ตู้" | "฿/CBM" | "฿/กก."
+  size?: string;     // container-size tag — "20'" | "40'" (sea FCL, from the rate sheet)
+  carrier?: { name: string; url: string }; // shipping line — the tag links to its website
   image?: string;        // นำเข้า cover photo (China port) · defaults to MODE_IMAGE
   exportImage?: string;  // ส่งออก cover photo (Thai port = the export origin)
 };
@@ -625,18 +643,19 @@ const FREIGHT_MODES: FreightMode[] = [
   { mode: "sea", heading: "เรือ", types: [
     // FOB sea-freight (40HQ · เริ่มต้น/ถูกสุด) from "Pricing - FRE IM SEA FCL" (owner 2026-06-17)
     { type: "SEA FREIGHT", cards: [
-      { route: "เซินเจิ้น → แหลมฉบัง", freight: "13,825", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Zenshen.png", exportImage: "/images/mainpage/card/freight/LaemChabang.png" },
-      { route: "หนิงโบ → คลองเตย",     freight: "10,500", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Ningbou.png", exportImage: "/images/mainpage/card/freight/Klongtoey.png" },
-      { route: "เซี่ยงไฮ้ → ลาดกระบัง", freight: "15,400", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Xianghai.png", exportImage: "/images/mainpage/card/freight/ICDLADKRABANG.png" },
-      { route: "กวางโจว → แหลมฉบัง",  freight: "9,100",  unit: "฿/ตู้", image: "/images/mainpage/card/freight/GwangZhou.png", exportImage: "/images/mainpage/card/freight/Laemchabang2.png" },
+      { route: "เซินเจิ้น → แหลมฉบัง", freight: "13,825", unit: "฿/ตู้", size: "40'", carrier: { name: "KMTC", url: "https://www.ekmtc.com" },   image: "/images/mainpage/card/freight/Zenshen.png", exportImage: "/images/mainpage/card/freight/LaemChabang.png" },
+      { route: "หนิงโบ → คลองเตย",     freight: "10,500", unit: "฿/ตู้", size: "40'", carrier: { name: "CNC", url: "https://www.cnc-line.com" }, image: "/images/mainpage/card/freight/Ningbou.png", exportImage: "/images/mainpage/card/freight/Klongtoey.png" },
+      { route: "เซี่ยงไฮ้ → ลาดกระบัง", freight: "15,400", unit: "฿/ตู้", size: "40'", carrier: { name: "OOCL", url: "https://www.oocl.com" },   image: "/images/mainpage/card/freight/Xianghai.png", exportImage: "/images/mainpage/card/freight/ICDLADKRABANG.png" },
+      { route: "กวางโจว → แหลมฉบัง",  freight: "9,100",  unit: "฿/ตู้", size: "40'", carrier: { name: "CUL", url: "https://www.culines.com" },  image: "/images/mainpage/card/freight/GwangZhou.png", exportImage: "/images/mainpage/card/freight/Laemchabang2.png" },
     ] },
   ] },
   { mode: "air", heading: "แอร์", types: [
+    // AIR CARGO rates — บาท/กก. + min-weight tier (owner 2026-06-18). UPS = Shenzhen/Guangzhou, China Cargo = Shanghai/Beijing · ส่งออก = swapRoute ย้อนทาง
     { type: "AIR CARGO", cards: [
-      { route: "กว่างโจว → สุวรรณภูมิ" },
-      { route: "เซินเจิ้น → สุวรรณภูมิ" },
-      { route: "เซี่ยงไฮ้ → ดอนเมือง" },
-      { route: "ปักกิ่ง → สุวรรณภูมิ" },
+      { route: "กว่างโจว → สุวรรณภูมิ", freight: "114", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/gwangzhouairport.png" },
+      { route: "เซินเจิ้น → สุวรรณภูมิ", freight: "131", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/zenshenairport.png" },
+      { route: "เซี่ยงไฮ้ → ดอนเมือง", freight: "229", unit: "฿/กก.", size: "45kg+",  carrier: { name: "China Cargo", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/Xianghaiairport.png" },
+      { route: "ปักกิ่ง → สุวรรณภูมิ", freight: "213", unit: "฿/กก.", size: "300kg+", carrier: { name: "China Cargo", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/beijingairport.png" },
     ] },
   ] },
   { mode: "road", heading: "รถ", types: [
@@ -661,6 +680,7 @@ function FreightRouteCard({ mode, card }: {
   const Icon = MODE_ICON[mode];
   const inquire = !card.freight;
   const [origin, dest] = card.route.split("→").map((s) => s.trim());
+  const carrier = card.carrier; // shipping line (const → TS narrows it inside the click handler)
   return (
     <TrackedExternalLink
       href={LINE_URL}
@@ -679,9 +699,30 @@ function FreightRouteCard({ mode, card }: {
           sizes="(max-width: 768px) 46vw, 260px"
           className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
         />
-        <span className="absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-primary-700 text-[9.5px] font-black tracking-[0.06em] shadow-[0_2px_6px_rgba(0,0,0,0.15)]">
-          FOB
-        </span>
+        {/* top-left tags — shipping-line (clickable) + FOB, grouped together (owner 2026-06-18) */}
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5">
+          {carrier && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(carrier.url, "_blank", "noopener,noreferrer"); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); window.open(carrier.url, "_blank", "noopener,noreferrer"); } }}
+              aria-label={`เปิดเว็บไซต์สายเรือ ${carrier.name}`}
+              title={`สายเรือ ${carrier.name} — เปิดเว็บไซต์`}
+              className="cursor-pointer inline-flex items-center gap-1 rounded-full bg-white/95 text-primary-700 px-2 py-0.5 text-[9.5px] font-black tracking-[0.04em] shadow-[0_2px_6px_rgba(0,0,0,0.15)] transition-colors hover:bg-primary-600 hover:text-white"
+            >
+              <Icon className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
+              {carrier.name}
+              <ArrowRight className="w-2.5 h-2.5 shrink-0 -rotate-45" strokeWidth={2.6} />
+            </span>
+          )}
+          {/* FOB = sea incoterm — not shown on air cards (rate is ฿/กก., owner 2026-06-18) */}
+          {mode !== "air" && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-primary-700 text-[9.5px] font-black tracking-[0.06em] shadow-[0_2px_6px_rgba(0,0,0,0.15)]">
+              FOB
+            </span>
+          )}
+        </div>
       </div>
 
       {/* body — route + price (trip.com style) */}
@@ -700,9 +741,16 @@ function FreightRouteCard({ mode, card }: {
               <span className="text-[10.5px] font-bold text-muted">เริ่มต้น</span>
               <span className="text-[16px] md:text-[18px] font-black leading-none tabular-nums tracking-tight text-primary-600 dark:text-primary-300">{card.freight}</span>
               <span className="text-[10px] font-bold text-muted">{card.unit}</span>
+              {card.size && <span className="text-[10px] font-black text-primary-600 dark:text-primary-300">· {card.size}</span>}
             </>
           )}
         </div>
+        {/* Book Now CTA — follows the price (owner: not over the photo). Thin full-width
+            button so it adds minimal height. Whole card already links to LINE (no nested <a>). */}
+        <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary-600 px-2 py-1.5 text-white text-[10.5px] font-black tracking-tight leading-none transition-colors duration-200 group-hover:bg-primary-700">
+          Booking Now
+          <Send className="w-3 h-3 shrink-0" strokeWidth={2.8} />
+        </span>
       </div>
     </TrackedExternalLink>
   );
