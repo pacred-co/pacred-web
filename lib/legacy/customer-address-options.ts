@@ -99,3 +99,93 @@ export async function loadCustomerAddressOptions(
     };
   });
 }
+
+/**
+ * The customer's saved PRIMARY (ที่อยู่หลัก) delivery address, with the full
+ * structured fields needed to render it (the option list above returns only a
+ * concatenated label). MAIN address first (tb_address_main), else the lowest
+ * active addressid. Soft-fails to null on any error / no address.
+ *
+ * Used by the forwarder detail page (ภูม 2026-06-18) — when a delivery carrier
+ * (not 'PCS' self-pickup) has a stale warehouse-default faddress snapshot, the
+ * page falls back to displaying this profile address instead.
+ */
+export type CustomerPrimaryAddress = {
+  addressid: number | string;
+  name: string;
+  lastname: string;
+  no: string;
+  subdistrict: string;
+  district: string;
+  province: string;
+  zipcode: string;
+  tel: string;
+  tel2: string;
+  note: string;
+};
+
+type FullAddrRow = {
+  addressid: number;
+  addressname: string | null;
+  addresslastname: string | null;
+  addressno: string | null;
+  addresssubdistrict: string | null;
+  addressdistrict: string | null;
+  addressprovince: string | null;
+  addresszipcode: string | null;
+  addresstel: string | null;
+  addresstel2: string | null;
+  addressnote: string | null;
+};
+
+export async function loadCustomerPrimaryAddress(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: SupabaseClient<any, any, any>,
+  memberCode: string,
+): Promise<CustomerPrimaryAddress | null> {
+  if (!memberCode) return null;
+
+  const { data: mainRow, error: mainErr } = await admin
+    .from("tb_address_main")
+    .select("addressid")
+    .eq("userid", memberCode)
+    .maybeSingle<{ addressid: number | string | null }>();
+  if (mainErr) {
+    console.error(`[customer-primary-address tb_address_main] memberCode=${memberCode}`, { code: mainErr.code, message: mainErr.message });
+  }
+  const mainId = mainRow?.addressid ?? null;
+
+  const { data: rows, error } = await admin
+    .from("tb_address")
+    .select("addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote")
+    .eq("userid", memberCode)
+    .eq("addressstatus", "1");
+  if (error) {
+    console.error(`[customer-primary-address tb_address] memberCode=${memberCode}`, { code: error.code, message: error.message });
+    return null;
+  }
+
+  const list = (rows ?? []) as FullAddrRow[];
+  if (list.length === 0) return null;
+
+  // MAIN first; else the lowest active addressid (matches the option-list sort).
+  let pick =
+    mainId != null
+      ? list.find((a) => String(a.addressid) === String(mainId))
+      : undefined;
+  if (!pick) pick = [...list].sort((a, b) => Number(a.addressid) - Number(b.addressid))[0];
+
+  return {
+    addressid:   pick.addressid,
+    name:        pick.addressname ?? "",
+    lastname:    pick.addresslastname ?? "",
+    no:          pick.addressno ?? "",
+    subdistrict: pick.addresssubdistrict ?? "",
+    district:    pick.addressdistrict ?? "",
+    province:    pick.addressprovince ?? "",
+    zipcode:     pick.addresszipcode ?? "",
+    tel:         pick.addresstel ?? "",
+    tel2:        pick.addresstel2 ?? "",
+    note:        pick.addressnote ?? "",
+  };
+}

@@ -3,6 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+// 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
+// self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
+// the customer's saved ที่อยู่หลัก (profile) instead of showing "รับที่โกดัง".
+import { loadCustomerPrimaryAddress } from "@/lib/legacy/customer-address-options";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -354,6 +358,51 @@ async function tryRenderTbForwarder(
     userPicture: string | null; adminIDSale: string | null;
     userCompany: string | null;
   } | null;
+
+  // ── ภูม 2026-06-18: ที่อยู่จัดส่งสินค้า ─────────────────────────────────
+  // The forwarder row snapshots the delivery address into faddress* at create
+  // time. When fShipBy='PCS' (รับเองที่โกดัง) that's the Pacred warehouse; for a
+  // delivery carrier it's the customer's chosen address. BUT an order created as
+  // 'PCS' then switched to a delivery carrier (or auto-committed with a pickup
+  // fallback) keeps the stale warehouse snapshot → the page wrongly shows
+  // "รับที่โกดัง Pacred". So: when the carrier is NOT self-pickup AND the stored
+  // faddress is the warehouse default (empty or "รับที่โกดัง…"), fall back to the
+  // customer's saved ที่อยู่หลัก (profile). A real custom faddress is respected.
+  const isSelfPickup = (r.fshipby ?? "").trim() === "PCS";
+  const faddrIsWarehouseDefault =
+    !(r.faddressname ?? "").trim() ||
+    /รับที่โกดัง|โกดัง\s*pacred/i.test(r.faddressname ?? "");
+  let deliveryAddr = {
+    name:        r.faddressname ?? "",
+    lastname:    r.faddresslastname ?? "",
+    no:          r.faddressno ?? "",
+    subdistrict: r.faddresssubdistrict ?? "",
+    district:    r.faddressdistrict ?? "",
+    province:    r.faddressprovince ?? "",
+    zipcode:     r.faddresszipcode ?? "",
+    tel:         r.faddresstel ?? "",
+    tel2:        r.faddresstel2 ?? "",
+    note:        r.faddressnote ?? "",
+  };
+  let deliveryAddrFromProfile = false;
+  if (!isSelfPickup && faddrIsWarehouseDefault) {
+    const primary = await loadCustomerPrimaryAddress(admin, r.userid);
+    if (primary && (primary.no.trim() || primary.province.trim())) {
+      deliveryAddr = {
+        name:        primary.name,
+        lastname:    primary.lastname,
+        no:          primary.no,
+        subdistrict: primary.subdistrict,
+        district:    primary.district,
+        province:    primary.province,
+        zipcode:     primary.zipcode,
+        tel:         primary.tel,
+        tel2:        primary.tel2,
+        note:        primary.note,
+      };
+      deliveryAddrFromProfile = true;
+    }
+  }
 
   // Items table loading is now owned by <ForwarderItemsTable> further down —
   // it handles tb_order (shop-spawn) + tb_forwarder_item (admin) + empty-state.
@@ -730,11 +779,21 @@ async function tryRenderTbForwarder(
             <EditShipByField fId={r.id} fshipby={r.fshipby} />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>
+              {deliveryAddrFromProfile && (
+                <span className="ml-1 inline-block rounded-full bg-sky-100 text-sky-700 border border-sky-300 text-[10px] px-1.5 py-0.5 align-middle">
+                  ที่อยู่หลักของลูกค้า
+                </span>
+              )}
               <div className="mt-1 leading-relaxed">
-                {r.faddressname ?? ""} {r.faddresslastname ?? ""}<br />
-                {r.faddressno ?? ""} {r.faddresssubdistrict ? `ต.${r.faddresssubdistrict}` : ""} {r.faddressdistrict ? `อ.${r.faddressdistrict}` : ""} {r.faddressprovince ? `จ.${r.faddressprovince}` : ""} {r.faddresszipcode ?? ""}
-                {(r.faddresstel || r.faddresstel2) && (<><br />โทร. {r.faddresstel ?? "—"}{r.faddresstel2 ? `, ${r.faddresstel2}` : ""}</>)}
-                {r.faddressnote && (<><br /><span className="text-muted">📝 {r.faddressnote}</span></>)}
+                {deliveryAddr.name} {deliveryAddr.lastname}<br />
+                {deliveryAddr.no} {deliveryAddr.subdistrict ? `ต.${deliveryAddr.subdistrict}` : ""} {deliveryAddr.district ? `อ.${deliveryAddr.district}` : ""} {deliveryAddr.province ? `จ.${deliveryAddr.province}` : ""} {deliveryAddr.zipcode}
+                {(deliveryAddr.tel || deliveryAddr.tel2) && (<><br />โทร. {deliveryAddr.tel || "—"}{deliveryAddr.tel2 ? `, ${deliveryAddr.tel2}` : ""}</>)}
+                {deliveryAddr.note && (<><br /><span className="text-muted">📝 {deliveryAddr.note}</span></>)}
+                {deliveryAddrFromProfile && (
+                  <><br /><span className="text-[10px] text-amber-600">
+                    ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ดึงที่อยู่หลักจากโปรไฟล์ลูกค้ามาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
+                  </span></>
+                )}
               </div>
             </div>
             <p className="text-foreground"><b className="font-semibold">เลขพัสดุในไทย : </b>{r.ftrackingth ?? "—"}</p>
