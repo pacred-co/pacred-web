@@ -12,6 +12,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { MomoSyncClient } from "./sync-client";
@@ -19,7 +20,8 @@ import { MomoSyncClient } from "./sync-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminMomoSyncPage() {
-  await requireAdmin(["super", "ops", "warehouse", "accounting"]);
+  const { roles } = await requireAdmin(["super", "ops", "warehouse", "accounting"]);
+  const canEditCost = canViewCostProfit(roles);
 
   // Initial DB snapshot — latest 20 rows per momo_* table.
   // Service-role client (bypass RLS) — these are admin-only tables.
@@ -79,6 +81,14 @@ export default async function AdminMomoSyncPage() {
           เชื่อม MOMO Cargo API → บันทึกผลลง <code className="rounded bg-surface-alt px-1">momo_*</code> tables (isolated).
           ไม่กระทบ table เดิม. หน้านี้สำหรับ admin หลังบ้านเท่านั้น.
         </p>
+        {canEditCost && (
+          <Link
+            href="/admin/api-forwarder-momo/invoice-cost"
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white text-amber-700 px-3 py-1.5 text-xs font-medium hover:bg-amber-50"
+          >
+            💰 ลงต้นทุนจากใบแจ้งหนี้ MOMO
+          </Link>
+        )}
       </header>
 
       <MomoSyncClient initialDbRows={initialDbRows} />

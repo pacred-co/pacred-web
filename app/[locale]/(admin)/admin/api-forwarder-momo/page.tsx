@@ -18,6 +18,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import {
   Truck,
@@ -273,7 +274,8 @@ export default async function AdminApiForwarderMomoPage({
   // 2026-06-05 ภูม flag — date range filter for the CBM summary card.
   searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  const { roles } = await requireAdmin(["super", "ops", "warehouse"]);
+  const canEditCost = canViewCostProfit(roles);
 
   const sp = (await searchParams) ?? {};
   const fromIso = parseDateParam(sp.from, false);
@@ -388,6 +390,14 @@ export default async function AdminApiForwarderMomoPage({
           >
             📊 ประวัติ (ตามลูกค้า)
           </Link>
+          {canEditCost && (
+            <Link
+              href="/admin/api-forwarder-momo/invoice-cost"
+              className="rounded-md border border-amber-300 bg-white text-amber-700 px-3 py-1.5 text-xs font-medium hover:bg-amber-50 inline-flex items-center gap-1"
+            >
+              💰 ลงต้นทุนจากใบแจ้งหนี้
+            </Link>
+          )}
         </form>
 
         <div className="grid gap-4 sm:grid-cols-3 items-end">
