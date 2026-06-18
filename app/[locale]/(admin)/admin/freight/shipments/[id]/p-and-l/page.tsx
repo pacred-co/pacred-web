@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getBusinessConfig } from "@/lib/business-config";
 import {
   freightInvoiceTotalThb,
@@ -89,13 +90,17 @@ export default async function FreightShipmentPnlPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — P&L = cost/margin. Restricted
-  // to cost-owners + freight MANAGERS (who close on margin). Dropped the line
-  // freight roles (freight_sales · freight_*_clearance) + sales_admin.
-  await requireAdmin([
-    "super", "accounting", "ops", "pricing",
+  // 2026-06-18 (owner "super ไม่ควรเห็นต้นทุน/กำไร") — this WHOLE page is the P&L
+  // (cost/margin/commission) = MONEY-internal. Visible ONLY to ultra/accounting/
+  // pricing. requireAdmin still admits god roles (ultra+super) via the membership
+  // model, so we add an explicit canViewCostProfit guard to EXCLUDE super (and the
+  // freight managers / ops that were allowed pre-0189). Hide at the data layer:
+  // notFound() before any cost/profit query runs.
+  const { roles } = await requireAdmin([
+    "super", "ultra", "accounting", "ops", "pricing",
     "freight_sales_manager", "freight_import_manager", "freight_export_manager",
   ]);
+  if (!canViewCostProfit(roles)) notFound();
   const { id } = await params;
   const admin = createAdminClient();
 

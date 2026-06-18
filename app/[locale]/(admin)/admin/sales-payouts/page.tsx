@@ -18,6 +18,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getPendingSalesPayoutsTb } from "@/actions/admin/sales-payouts-tb";
@@ -26,20 +27,24 @@ import { exportSalesPayoutsAll } from "@/actions/admin/export/sales-payouts";
 
 export const dynamic = "force-dynamic";
 
-// CSV columns mirror the on-screen table (money pre-formatted, date localised).
-const CSV_COLS: CsvCol[] = [
-  { key: "date", label: "วันที่ทำรายการ" },
-  { key: "userIDMain", label: "รหัสตัวแทนขาย" },
-  { key: "adminCreate", label: "ผู้ทำรายการ" },
-  { key: "amount", label: "จำนวนเงิน" },
-  { key: "status", label: "สถานะ" },
-];
-
 export default async function AdminSalesPayoutsPage() {
   // W-1 (gap-admin H-1): page-level role gate. Exposes sales-rep bank
   // accounts + commission payouts via createAdminClient (RLS-bypass) —
   // accounting + sales_admin (super implicit).
-  await requireAdmin(["accounting", "sales_admin"]);
+  const { roles } = await requireAdmin(["accounting", "sales_admin"]);
+  // Commission payout amount = money-internal (owner 2026-06-18): visible only
+  // to ultra/accounting/pricing. Page stays reachable; amount column + CSV are
+  // dropped at the data layer for everyone else (incl. super, sales_admin).
+  const showMoney = canViewCostProfit(roles);
+
+  // CSV columns mirror the on-screen table (amount only when cost-allowed).
+  const CSV_COLS: CsvCol[] = [
+    { key: "date", label: "วันที่ทำรายการ" },
+    { key: "userIDMain", label: "รหัสตัวแทนขาย" },
+    { key: "adminCreate", label: "ผู้ทำรายการ" },
+    ...(showMoney ? [{ key: "amount", label: "จำนวนเงิน" } as CsvCol] : []),
+    { key: "status", label: "สถานะ" },
+  ];
 
   const res = await getPendingSalesPayoutsTb();
   const rows = res.ok ? (res.data ?? []) : [];
@@ -49,7 +54,7 @@ export default async function AdminSalesPayoutsPage() {
     date: r.date ? new Date(r.date).toLocaleString("th-TH") : "",
     userIDMain: r.userIDMain ?? "",
     adminCreate: r.adminCreate ?? "",
-    amount: Number(r.amount).toFixed(2),
+    ...(showMoney ? { amount: Number(r.amount).toFixed(2) } : {}),
     status: "รอดำเนินการ",
   }));
 
@@ -93,7 +98,7 @@ export default async function AdminSalesPayoutsPage() {
                     <th className="px-4 py-3">วันที่ทำรายการ</th>
                     <th className="px-4 py-3">รหัสตัวแทนขาย</th>
                     <th className="px-4 py-3">ผู้ทำรายการ</th>
-                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+                    {showMoney && <th className="px-4 py-3 text-right">จำนวนเงิน</th>}
                     <th className="px-4 py-3">สถานะ</th>
                     <th className="px-4 py-3">ตัวเลือก</th>
                   </tr>
@@ -106,9 +111,11 @@ export default async function AdminSalesPayoutsPage() {
                       </td>
                       <td className="px-4 py-3 text-xs font-mono">{r.userIDMain}</td>
                       <td className="px-4 py-3 text-xs font-mono">{r.adminCreate ?? "—"}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold">
-                        ฿{Number(r.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
+                      {showMoney && (
+                        <td className="px-4 py-3 text-right font-mono font-bold">
+                          ฿{Number(r.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                           รอดำเนินการ

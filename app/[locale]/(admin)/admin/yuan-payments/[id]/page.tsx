@@ -41,6 +41,7 @@
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
@@ -76,10 +77,12 @@ type PaymentRow = {
   paydetail: string | null;
   payyuan: number | null;
   payrate: number | null;
-  payratecost: number | null;
+  // Money-internal cost columns — only present in the row when the viewer may
+  // see them (omitted from the SELECT otherwise). Optional to reflect that.
+  payratecost?: number | null;
   paythb: number | null;
-  paythbcost: number | null;
-  payprofitthb: number | null;
+  paythbcost?: number | null;
+  payprofitthb?: number | null;
   paydateadmin: string | null;
   userid: string;
   adminid: string | null;
@@ -101,7 +104,14 @@ export default async function AdminYuanPaymentDetail({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["ops", "accounting", "super"]);
+  const { roles } = await requireAdmin(["ops", "accounting", "super"]);
+  // Money-internal visibility (owner 2026-06-18): paythbcost (cost THB),
+  // payratecost (cost FX rate), payprofitthb (profit) are money internals —
+  // visible ONLY to ultra/accounting/pricing, NOT super/ops. We omit those
+  // columns from the SELECT entirely when not allowed (never read the value),
+  // and skip the cost/profit PriceRows. `payrate` (customer FX) + paythb
+  // (selling THB) stay — they are the selling side, not money-internal.
+  const showCostProfit = canViewCostProfit(roles);
   const { id: idParam } = await params;
   const id = Number(idParam);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -109,12 +119,14 @@ export default async function AdminYuanPaymentDetail({
   const admin = createAdminClient();
   // P0-11: pulled `paydeposit` so YuanPaymentActions knows whether the
   // refund modal should warn about a wallet reversal (Phase C QoL #4).
-  // ภูม #2: also pulled `payratecost` for the right-column price breakdown.
+  // ภูม #2: also pulled `payratecost` for the right-column price breakdown
+  // (cost columns added to the SELECT ONLY when showCostProfit).
+  const baseCols =
+    "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit";
+  const costCols = ",payratecost,paythbcost,payprofitthb";
   const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
-    .select(
-      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,payratecost,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit",
-    )
+    .select(showCostProfit ? baseCols + costCols : baseCols)
     .eq("id", id)
     .maybeSingle();
   if (rowRawErr) {
@@ -338,32 +350,42 @@ export default async function AdminYuanPaymentDetail({
             ) : null}
           </div>
 
-          {/* RIGHT 1/3 — price breakdown */}
+          {/* RIGHT 1/3 — price breakdown.
+              Money-internal rows (ต้นทุน cost THB · เรทต้นทุน cost FX · กำไรสุทธิ
+              profit) render ONLY for ultra/accounting/pricing — the values were
+              never even SELECTed otherwise (showCostProfit). `จ่ายจริง` (paythb)
+              + `เรทลูกค้า` (payrate) are the selling side and stay visible. */}
           <div className="p-5 space-y-3 bg-surface-alt/20">
             <p className="text-xs font-semibold text-muted mb-1">สรุปรายการเงิน</p>
             <PriceRow
               label="จ่ายจริง"
               value={`฿${Number(row.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             />
-            <PriceRow
-              label="รับทุนลูกค้า"
-              value={`฿${Number(row.paythbcost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-            />
-            <PriceRow
-              label="เรทกูลฯ"
-              value={Number(row.payratecost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })}
-            />
+            {showCostProfit ? (
+              <PriceRow
+                label="รับทุนลูกค้า"
+                value={`฿${Number(row.paythbcost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              />
+            ) : null}
+            {showCostProfit ? (
+              <PriceRow
+                label="เรทกูลฯ"
+                value={Number(row.payratecost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })}
+              />
+            ) : null}
             <PriceRow
               label="เรทลูกค้า"
               value={Number(row.payrate ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4 })}
             />
-            <div className="pt-2 border-t border-border">
-              <PriceRow
-                label="กำไรสุทธิ"
-                value={`฿${Number(row.payprofitthb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                emphasis
-              />
-            </div>
+            {showCostProfit ? (
+              <div className="pt-2 border-t border-border">
+                <PriceRow
+                  label="กำไรสุทธิ"
+                  value={`฿${Number(row.payprofitthb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  emphasis
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

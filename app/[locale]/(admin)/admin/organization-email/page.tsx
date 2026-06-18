@@ -1,5 +1,5 @@
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrgEmailForms } from "./client";
 
@@ -76,7 +76,7 @@ function nameEmailType(t: string): string {
 
 export default async function OrgEmailPage() {
   const { roles } = await requireAdmin();
-  const canMutate = roles.includes("super");   // = HR/ITDT/CEO in legacy
+  const canMutate = isGodRole(roles);   // = HR/ITDT/CEO in legacy
 
   const admin = createAdminClient();
   // legacy: SELECT oe.ID, date, dateUpdate, email, emailTel, passEmail,

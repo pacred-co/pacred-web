@@ -273,8 +273,10 @@ export function CockpitDetailClient({
                 )}
               </div>
 
-              {/* DOC-stage cost snapshot editor */}
-              {stage === "docs" && (
+              {/* DOC-stage cost snapshot editor — MONEY-internal (cost/profit),
+                  gated on canViewPnl (ultra/accounting/pricing only). Server
+                  also nulls the snapshot fields for non-cost roles. */}
+              {stage === "docs" && canViewPnl && (
                 <CostSnapshotEditor
                   shipmentId={shipmentId}
                   cost={detail.costSnapshot}

@@ -200,7 +200,7 @@ export async function driverUpdateOwnAssignmentStatus(
         .from("admins")
         .select("role")
         .eq("profile_id", adminId)
-        .in("role", ["ops", "super"])
+        .in("role", ["ops", "super", "ultra"])
         .maybeSingle();
       if (callerErr) {
         console.error(`[admins mutation lookup] failed`, { code: callerErr.code, message: callerErr.message });

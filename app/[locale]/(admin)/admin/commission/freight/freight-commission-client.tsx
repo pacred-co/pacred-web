@@ -74,6 +74,7 @@ export function FreightCommissionClient({
   canPay,
   canApprove,
   canConfirmTiers,
+  canViewMoney,
   loadFailed,
 }: {
   enabled: boolean;
@@ -84,6 +85,11 @@ export function FreightCommissionClient({
   canPay: boolean;
   canApprove: boolean;
   canConfirmTiers: boolean;
+  /** Money-internal amounts (base/accrued · gross/WHT/net) visible only to
+   *  ultra/accounting/pricing (owner 2026-06-18). The server already zeroes the
+   *  money fields when false — this prop drops the amount columns + dialog lines
+   *  so an approve/pay-capable super never sees a (real) commission figure. */
+  canViewMoney: boolean;
   loadFailed: boolean;
 }) {
   const router = useRouter();
@@ -96,8 +102,11 @@ export function FreightCommissionClient({
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
   async function handleApprove(w: CommissionWithdrawalRow) {
+    const moneyLine = canViewMoney
+      ? `\n\nยอดสุทธิ ${thb(w.netThb)} (ขั้นต้น ${thb(w.grossThb)} − หัก ณ ที่จ่าย ${thb(w.whtThb)}).`
+      : "";
     const ok = await confirm(
-      `อนุมัติใบเบิกค่าคอมของ ${w.earnerName}?\n\nยอดสุทธิ ${thb(w.netThb)} (ขั้นต้น ${thb(w.grossThb)} − หัก ณ ที่จ่าย ${thb(w.whtThb)}). การอนุมัติยังไม่ใช่การจ่ายเงิน — ขั้นจ่ายต้อง super กดยืนยันแยกต่างหาก.`,
+      `อนุมัติใบเบิกค่าคอมของ ${w.earnerName}?${moneyLine} การอนุมัติยังไม่ใช่การจ่ายเงิน — ขั้นจ่ายต้อง super กดยืนยันแยกต่างหาก.`,
     );
     if (!ok) return;
     start(async () => {
@@ -296,24 +305,24 @@ export function FreightCommissionClient({
               <tr>
                 <th className="px-3 py-3">พนักงาน</th>
                 <th className="px-3 py-3">ที่มา</th>
-                <th className="px-3 py-3 text-right">ฐานรายได้</th>
-                <th className="px-3 py-3 text-right">ค่าคอมสุทธิ</th>
-                <th className="px-3 py-3 text-right">WHT</th>
+                {canViewMoney && <th className="px-3 py-3 text-right">ฐานรายได้</th>}
+                {canViewMoney && <th className="px-3 py-3 text-right">ค่าคอมสุทธิ</th>}
+                {canViewMoney && <th className="px-3 py-3 text-right">WHT</th>}
                 <th className="px-3 py-3">สถานะ</th>
                 <th className="px-3 py-3">วันที่</th>
               </tr>
             </thead>
             <tbody>
               {accruals.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีรายการสะสมค่าคอม</td></tr>
+                <tr><td colSpan={canViewMoney ? 7 : 4} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีรายการสะสมค่าคอม</td></tr>
               )}
               {accruals.map((a) => (
                 <tr key={a.id} className="border-t border-border hover:bg-surface-alt/30">
                   <td className="px-3 py-3">{a.earnerName}</td>
                   <td className="px-3 py-3 text-xs"><span className="text-muted">{a.sourceKind}</span> · {a.sourceRef}</td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">{thb(a.baseThb)}</td>
-                  <td className="px-3 py-3 text-right font-mono font-semibold">{thb(a.accruedAmountThb)}</td>
-                  <td className="px-3 py-3 text-right font-mono text-xs">{a.whtPct}%</td>
+                  {canViewMoney && <td className="px-3 py-3 text-right font-mono text-xs">{thb(a.baseThb)}</td>}
+                  {canViewMoney && <td className="px-3 py-3 text-right font-mono font-semibold">{thb(a.accruedAmountThb)}</td>}
+                  {canViewMoney && <td className="px-3 py-3 text-right font-mono text-xs">{a.whtPct}%</td>}
                   <td className="px-3 py-3 text-xs">{ACCRUAL_STATUS_LABEL[a.status] ?? a.status}</td>
                   <td className="px-3 py-3 text-xs text-muted">{fmtDate(a.createdAt)}</td>
                 </tr>
@@ -337,9 +346,9 @@ export function FreightCommissionClient({
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-3 py-3">พนักงาน</th>
-                <th className="px-3 py-3 text-right">ขั้นต้น</th>
-                <th className="px-3 py-3 text-right">WHT</th>
-                <th className="px-3 py-3 text-right">สุทธิ</th>
+                {canViewMoney && <th className="px-3 py-3 text-right">ขั้นต้น</th>}
+                {canViewMoney && <th className="px-3 py-3 text-right">WHT</th>}
+                {canViewMoney && <th className="px-3 py-3 text-right">สุทธิ</th>}
                 <th className="px-3 py-3">บัญชีรับโอน</th>
                 <th className="px-3 py-3">สถานะ</th>
                 <th className="px-3 py-3">ขอเมื่อ</th>
@@ -348,16 +357,16 @@ export function FreightCommissionClient({
             </thead>
             <tbody>
               {withdrawals.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีใบเบิกค่าคอม</td></tr>
+                <tr><td colSpan={canViewMoney ? 8 : 5} className="px-4 py-8 text-center text-sm text-muted">ยังไม่มีใบเบิกค่าคอม</td></tr>
               )}
               {withdrawals.map((w) => {
                 const st = WITHDRAWAL_STATUS[w.status] ?? { label: w.status, cls: "border-gray-200 bg-gray-100 text-gray-500" };
                 return (
                   <tr key={w.id} className="border-t border-border align-top hover:bg-surface-alt/30">
                     <td className="px-3 py-3">{w.earnerName}</td>
-                    <td className="px-3 py-3 text-right font-mono text-xs">{thb(w.grossThb)}</td>
-                    <td className="px-3 py-3 text-right font-mono text-xs">{thb(w.whtThb)}</td>
-                    <td className="px-3 py-3 text-right font-mono font-semibold">{thb(w.netThb)}</td>
+                    {canViewMoney && <td className="px-3 py-3 text-right font-mono text-xs">{thb(w.grossThb)}</td>}
+                    {canViewMoney && <td className="px-3 py-3 text-right font-mono text-xs">{thb(w.whtThb)}</td>}
+                    {canViewMoney && <td className="px-3 py-3 text-right font-mono font-semibold">{thb(w.netThb)}</td>}
                     <td className="px-3 py-3 text-xs">
                       {w.payeeBankName || w.payeeAccountName || w.payeeAccountNo ? (
                         <span>
@@ -427,8 +436,12 @@ export function FreightCommissionClient({
           {payTarget && (
             <div className="rounded-lg bg-surface-alt/50 px-3 py-2 text-sm">
               <p>พนักงาน: <strong>{payTarget.earnerName}</strong></p>
-              <p>ยอดสุทธิที่จ่าย: <strong className="text-primary-600">{thb(payTarget.netThb)}</strong></p>
-              <p className="text-xs text-muted">ขั้นต้น {thb(payTarget.grossThb)} − หัก ณ ที่จ่าย {thb(payTarget.whtThb)}</p>
+              {canViewMoney && (
+                <>
+                  <p>ยอดสุทธิที่จ่าย: <strong className="text-primary-600">{thb(payTarget.netThb)}</strong></p>
+                  <p className="text-xs text-muted">ขั้นต้น {thb(payTarget.grossThb)} − หัก ณ ที่จ่าย {thb(payTarget.whtThb)}</p>
+                </>
+              )}
             </div>
           )}
           <div>

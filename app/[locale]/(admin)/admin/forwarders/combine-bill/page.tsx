@@ -34,7 +34,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCombineBillPrintHref, buildCombineBillDetailHref } from "@/lib/admin/combine-bill-urls";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -108,7 +108,7 @@ export default async function CombineBillPage({
   // who legitimately need this screen (warehouse + ops + accounting).
   // The mutate gate (super) controls the create + delete actions.
   const { roles } = await requireAdmin(["super", "ops", "warehouse", "accounting"]);
-  const canMutate = roles.includes("super");
+  const canMutate = isGodRole(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();

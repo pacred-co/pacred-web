@@ -18,7 +18,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminRoles, hasRole } from "@/lib/auth/require-admin";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import {
   ShopOrderItemCostEditor,
@@ -47,14 +48,13 @@ type ShopCostItem = {
 
 export async function ShopOrderCostSection({ hno }: { hno: string }) {
   const roles = await getAdminRoles();
-  const canEdit = roles != null && hasRole(roles, ["accounting", "pricing"]);
+  const canEdit = canViewCostProfit(roles);
 
-  // 2026-06-15 (owner: "พนักงานเข้ามาใช้จริงแล้ว ไม่ควรเห็นต้นทุน") — ต้นทุน is
-  // visible ONLY to the cost-capable roles (super/accounting/pricing · hasRole
-  // treats super as always-allowed). EVERY other staff role (sales/sales_admin/
-  // ops/qa/warehouse/driver/interpreter/freight_*) must NOT see cost → hide the
-  // WHOLE section. (Was: it fell through to a read-only CargoCostLineSummary
-  // that still PRINTED the cost number to everyone = the live leak.)
+  // 2026-06-18 (owner · mig 0189: super loses money-internal visibility) — ต้นทุน
+  // is visible ONLY to ultra/accounting/pricing. super and EVERY other staff role
+  // (sales/sales_admin/ops/qa/warehouse/driver/interpreter/freight_*) must NOT see
+  // cost → hide the WHOLE section. (canViewCostProfit EXCLUDES super, unlike the
+  // old hasRole which granted super via isGodRole.)
   if (!canEdit) return null;
 
   const admin = createAdminClient();
@@ -125,7 +125,7 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
         )}
         <CostRevealToggle className="ml-auto" />
         <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
-          {canEdit ? "super / accounting / pricing" : "อ่านอย่างเดียว"}
+          ultra / accounting / pricing
         </span>
       </header>
 

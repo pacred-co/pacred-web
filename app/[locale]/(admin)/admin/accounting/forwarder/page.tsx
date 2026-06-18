@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -285,7 +286,16 @@ export default async function AdminAccountingForwarderPage({
   // Legacy gate (acc-forwarder.php L46): CEO / Manager / QAAndQC /
   // Accounting / ITDT. Closest V3 RBAC = super + accounting; super
   // is always universal via requireAdmin.
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: ต้นทุน (7-term cost sum) + ค่าบริการ (profit = ลค จ่าย −
+  // ต้นทุน) are visible only to ultra/accounting/pricing (NOT super · owner
+  // 2026-06-18). HIGH-RISK note: we suppress DISPLAY only — the totals
+  // aggregation below (fCostTotalPriceAll/profitAll) still runs unchanged; we
+  // just omit the two money-internal columns + their totals cells + CSV keys.
+  // Selling/payment-side columns (ราคาจริง · ส่วนลด · มูลค่าสินค้า · ลค จ่าย ·
+  // หัก ณ ที่จ่าย) stay visible. DERIVED-VALUE GUARD: ค่าบริการ is hidden
+  // together with ต้นทุน (it embeds the cost).
+  const showMoney = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -616,13 +626,15 @@ export default async function AdminAccountingForwarderPage({
       order_id: r.fid,
       tracking: r.ftrackingchn ?? "",
       cabinet: r.fcabinetnumber ?? "",
-      cost: numberFormat2(fCostTotalPrice),
+      ...(showMoney ? { cost: numberFormat2(fCostTotalPrice) } : {}),
       real_price: numberFormat2(fTotalPriceNotDis),
       discount: numberFormat2(r.fdiscount),
       goods_value: numberFormat2(fTotalPrice),
       customer_pay: numberFormat2(walletPayUser),
       wht: isCompany ? numberFormat2(fTotalPrice * 0.01) : "-",
-      service_fee: numberFormat2(walletPayUser - fCostTotalPrice),
+      ...(showMoney
+        ? { service_fee: numberFormat2(walletPayUser - fCostTotalPrice) }
+        : {}),
       member_code: r.userid,
       tax_id: corpNumber || "-",
       name: corpNumber
@@ -638,13 +650,13 @@ export default async function AdminAccountingForwarderPage({
     { key: "order_id", label: "ออเดอร์" },
     { key: "tracking", label: "แทรคกิ้ง" },
     { key: "cabinet", label: "เลขตู้" },
-    { key: "cost", label: "ต้นทุน" },
+    ...(showMoney ? [{ key: "cost", label: "ต้นทุน" }] : []),
     { key: "real_price", label: "ราคาจริง" },
     { key: "discount", label: "ส่วนลด" },
     { key: "goods_value", label: "มูลค่าสินค้า" },
     { key: "customer_pay", label: "ลค จ่าย" },
     { key: "wht", label: "หัก ณ ที่จ่าย" },
-    { key: "service_fee", label: "ค่าบริการ" },
+    ...(showMoney ? [{ key: "service_fee", label: "ค่าบริการ" }] : []),
     { key: "member_code", label: "รหัสสมาชิก" },
     { key: "tax_id", label: "เลขผู้เสียภาษี" },
     { key: "name", label: "ชื่อ-นามสกุล/ชื่อบริษัท" },
@@ -931,9 +943,11 @@ export default async function AdminAccountingForwarderPage({
                                     <th>ออเดอร์</th>
                                     <th>แทรคกิ้ง</th>
                                     <th>..เลขตู้..</th>
-                                    <th title="ต้นทุนนำเข้าจีน-ไทย+ต้นทุนค่าขนส่งในไทย+ค่าบริการ 50 บาท+ค่าตีลังไม้+ค่าอื่นๆ+ค่าราคาเพิ่ม/ลด ฝากสั่งซื้อ">
-                                      ต้นทุน
-                                    </th>
+                                    {showMoney && (
+                                      <th title="ต้นทุนนำเข้าจีน-ไทย+ต้นทุนค่าขนส่งในไทย+ค่าบริการ 50 บาท+ค่าตีลังไม้+ค่าอื่นๆ+ค่าราคาเพิ่ม/ลด ฝากสั่งซื้อ">
+                                        ต้นทุน
+                                      </th>
+                                    )}
                                     <th title="ราคาจริง ราคาที่ยังไม่ได้รวมส่วนลดหรือการหัก ณ ที่จ่าย 1%">
                                       ราคาจริง
                                     </th>
@@ -941,9 +955,11 @@ export default async function AdminAccountingForwarderPage({
                                     <th title="">มูลค่าสินค้า</th>
                                     <th title="">ลค จ่าย</th>
                                     <th title="">หัก ณ ที่จ่าย</th>
-                                    <th title="ค่าบริการ คือ ส่วนต่างที่นำเอาต้นทุนในข้อ ((ลค จ่าย wallet + ลค จ่าย cash back)- ราคาต้นทุน)">
-                                      ค่าบริการ
-                                    </th>
+                                    {showMoney && (
+                                      <th title="ค่าบริการ คือ ส่วนต่างที่นำเอาต้นทุนในข้อ ((ลค จ่าย wallet + ลค จ่าย cash back)- ราคาต้นทุน)">
+                                        ค่าบริการ
+                                      </th>
+                                    )}
                                     <th>รหัสสมาชิก</th>
                                     <th>เลขผู้เสียภาษี</th>
                                     <th>ชื่อ-นามสกุล/ชื่อบริษัท</th>
@@ -965,9 +981,11 @@ export default async function AdminAccountingForwarderPage({
                                     <td className="text-right"></td>
                                     <td className="text-right"></td>
                                     <td className="text-right">รวม</td>
-                                    <td className="text-right fCostTotalPriceAll">
-                                      {numberFormat2(fCostTotalPriceAll)}
-                                    </td>
+                                    {showMoney && (
+                                      <td className="text-right fCostTotalPriceAll">
+                                        {numberFormat2(fCostTotalPriceAll)}
+                                      </td>
+                                    )}
                                     <td className="text-right fTotalPriceNotDisAll">
                                       {numberFormat2(fTotalPriceNotDisAll)}
                                     </td>
@@ -983,9 +1001,11 @@ export default async function AdminAccountingForwarderPage({
                                     <td className="text-right Per1All">
                                       {numberFormat2(Per1All)}
                                     </td>
-                                    <td className="text-right profitAll">
-                                      {numberFormat2(profitAll)}
-                                    </td>
+                                    {showMoney && (
+                                      <td className="text-right profitAll">
+                                        {numberFormat2(profitAll)}
+                                      </td>
+                                    )}
                                     <td className="text-right"></td>
                                     <td className="text-right"></td>
                                     <td className="text-right"></td>
@@ -1084,11 +1104,13 @@ export default async function AdminAccountingForwarderPage({
                                             {row.fcabinetnumber}
                                           </Link>
                                         </td>
-                                        {/* 6 — ต้นทุน
+                                        {/* 6 — ต้นทุน (money-internal · hidden from non-cost roles)
                                             acc-forwarder.php L291 */}
-                                        <td className="text-right">
-                                          {numberFormat2(fCostTotalPrice)}
-                                        </td>
+                                        {showMoney && (
+                                          <td className="text-right">
+                                            {numberFormat2(fCostTotalPrice)}
+                                          </td>
+                                        )}
                                         {/* 7 — ราคาจริง (no discount)
                                             acc-forwarder.php L292 */}
                                         <td className="text-right">
@@ -1124,13 +1146,15 @@ export default async function AdminAccountingForwarderPage({
                                             ? numberFormat2(fTotalPrice * 0.01)
                                             : "-"}
                                         </td>
-                                        {/* 12 — ค่าบริการ (walletPayUser − ต้นทุน)
+                                        {/* 12 — ค่าบริการ (walletPayUser − ต้นทุน · profit · money-internal)
                                             acc-forwarder.php L318 */}
-                                        <td className="text-right">
-                                          {numberFormat2(
-                                            walletPayUser - fCostTotalPrice,
-                                          )}
-                                        </td>
+                                        {showMoney && (
+                                          <td className="text-right">
+                                            {numberFormat2(
+                                              walletPayUser - fCostTotalPrice,
+                                            )}
+                                          </td>
+                                        )}
                                         {/* 13 — รหัสสมาชิก → link to
                                             /admin/customers/<userID>
                                             acc-forwarder.php L319-321 */}

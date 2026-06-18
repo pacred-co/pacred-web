@@ -3187,6 +3187,7 @@
     "showAll": "Show all menus (super)",
     "showRole": "Show my role menu only",
     "role": {
+      "ultra": "Ultra Admin Z",
       "super": "Super Admin",
       "manager": "Cargo Manager",
       "ops": "Cargo Operations",

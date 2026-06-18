@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isGodRole, type AdminRole } from "@/lib/auth/require-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   ALL_COST_COLUMNS_SET,
@@ -125,8 +126,8 @@ export async function adminSetTbSettingsRates(
           });
           return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
         }
-        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-        if (!roles.includes("super")) {
+        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role) as AdminRole[];
+        if (!isGodRole(roles)) {
           return {
             ok: false,
             error: "เฉพาะ super admin เท่านั้นที่ bypass การตรวจช่วงเรทได้",
@@ -245,8 +246,8 @@ export async function adminSetTbRateCustomCbm(
           });
           return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
         }
-        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-        if (!roles.includes("super")) {
+        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role) as AdminRole[];
+        if (!isGodRole(roles)) {
           return {
             ok: false,
             error: "เฉพาะ super admin เท่านั้นที่ bypass การตรวจช่วงเรทได้",
@@ -434,8 +435,8 @@ export async function adminSetTbSettingsForwarderCosts(
           });
           return { ok: false, error: `roles lookup failed: ${rolesErr.message}` };
         }
-        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role);
-        if (!roles.includes("super")) {
+        const roles = (rolesRows ?? []).map((r: { role: string }) => r.role) as AdminRole[];
+        if (!isGodRole(roles)) {
           return {
             ok: false,
             error: "เฉพาะ super admin เท่านั้นที่ bypass การตรวจช่วงเรทได้",

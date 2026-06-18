@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -73,7 +74,22 @@ export default async function AdminMarginMonitorPage({
 }) {
   // 2026-06-15 (owner "พนักงานไม่ควรเห็นต้นทุน") — margin/profit IS cost data;
   // dropped sales_admin → accounting-only dashboard.
-  await requireAdmin(["super", "accounting"]);
+  // 2026-06-18 (owner · mig 0189) — super ALSO loses money-internal visibility;
+  // this whole page is cost/profit/margin. Gate at the DATA layer: don't even
+  // run getMarginReport() when the viewer can't see money internals, so no
+  // cost/profit/margin value is ever fetched or serialized. (The CostRevealRegion
+  // blur is CSS-only UX — never the access boundary.)
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  if (!canViewCostProfit(roles)) {
+    return (
+      <main className="p-6 lg:p-8">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          หน้านี้แสดงต้นทุน · กำไร · มาร์จิ้น (ข้อมูลภายในด้านการเงิน) —
+          เฉพาะบัญชี Ultra · บัญชี · Pricing เท่านั้น
+        </div>
+      </main>
+    );
+  }
   const sp = await searchParams;
   const defaults = defaultDateRange();
   const dateFrom = sp.date_from && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_from) ? sp.date_from : defaults.from;

@@ -39,6 +39,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
@@ -162,12 +163,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   const transportType = sp.transportType ?? "all";
   const actionPay = sp.actionPay ?? "all";
 
-  // Money-column visibility (legacy departmentKey gate — CEO/Manager/QA/Accounting/IT).
-  // Warehouse role sees the list but not cost/price/profit.
-  const showMoney =
-    roles.includes("super") ||
-    roles.includes("ops") ||
-    roles.includes("accounting");
+  // Money-column visibility (owner · mig 0189: super loses money internals).
+  // Cost/price/profit are visible ONLY to ultra/accounting/pricing — super, ops
+  // and warehouse see the list but NOT cost/price/profit. canViewCostProfit
+  // EXCLUDES super by design.
+  const showMoney = canViewCostProfit(roles);
 
   // Date range — only for 'succeed' page; default -90 days
   let startDate = "";
@@ -501,7 +501,16 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
              that navigated to /admin/report-cnt/pay is replaced by the
              client component's floating bar. */
           <CntListTable
-            rows={grouped as CntListRow[]}
+            rows={
+              // DATA-LAYER hide (security · mig 0189): when the viewer may NOT
+              // see money internals, strip cost/price from the rows BEFORE they
+              // serialize to the client — never ship a hidden-but-present cost.
+              // profitSum is derived (price − cost) in the table, so zeroing both
+              // closes the derived-value leak too.
+              (showMoney
+                ? grouped
+                : grouped.map((g) => ({ ...g, costSum: 0, priceSum: 0 }))) as CntListRow[]
+            }
             showMoney={showMoney}
             isWaiting={isWaiting}
             warehouseLabel={WAREHOUSE_LABEL}

@@ -34,6 +34,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import type { CsvRow } from "@/components/admin/csv-button";
@@ -105,7 +106,11 @@ export async function exportForwarderCheckAll(
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // Same role gate as the page (super · ops · accounting). `requireAdmin` here
   // re-asserts auth on the server-action boundary.
-  await requireAdmin(["super", "ops", "accounting"]);
+  const { roles } = await requireAdmin(["super", "ops", "accounting"]);
+  // MONEY: never trust the client-passed `showMoneyColumns` — re-validate against
+  // the caller's real roles so a `super`/`ops` caller can't set it true to export
+  // cost/profit. Money columns ship ONLY for ultra/accounting/pricing (mig 0189).
+  const showMoney = showMoneyColumns && canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -312,8 +317,9 @@ export async function exportForwarderCheckAll(
         .join(" "),
       check_added_at: r.check_added_at ?? "",
       check_added_by: r.check_added_by ?? "",
-      // Money columns — included ONLY when the page would show them (same gate).
-      ...(showMoneyColumns
+      // Money columns — included ONLY for a caller who may see cost/profit
+      // (server-re-validated, NOT the raw client flag).
+      ...(showMoney
         ? {
             cost_total_price: r.cost_total_price.toFixed(2),
             one_percent: r.one_percent.toFixed(2),

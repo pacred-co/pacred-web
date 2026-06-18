@@ -1,4 +1,5 @@
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import {
   getFreightCommissionState,
   adminListCommissionAccruals,
@@ -29,13 +30,18 @@ export default async function AdminFreightCommissionPage() {
     "super", "accounting", "sales_admin", "pricing", "interpreter",
     "freight_sales_manager", "freight_sales", "freight_import_manager", "freight_export_manager",
   ]);
-  // PAID flip = super only (the explicit money-out gate · mirror the action).
-  const canPay = roles.includes("super");
-  // Approve/reject = super + accounting.
-  const canApprove = roles.includes("super") || roles.includes("accounting");
-  // Confirm a commission tier RATE (is_owner_confirmed) = super only (the owner
+  // PAID flip = god roles (ultra + super) — the explicit money-out gate · mirror
+  // the action. (ACTION gate, not money-visibility → isGodRole, NOT canViewCostProfit.)
+  const canPay = isGodRole(roles);
+  // Approve/reject = god roles + accounting.
+  const canApprove = isGodRole(roles) || roles.includes("accounting");
+  // Confirm a commission tier RATE (is_owner_confirmed) = god roles (the owner
   // sign-off gate · mirror adminSetFreightCommissionTierConfirmed).
-  const canConfirmTiers = roles.includes("super");
+  const canConfirmTiers = isGodRole(roles);
+  // Commission AMOUNTS (base/accrued · gross/WHT/net) = money-internal (owner
+  // 2026-06-18): only ultra/accounting/pricing. Drives the amount columns in the
+  // client; super keeps approve/pay reach but does NOT see the money figures.
+  const canViewMoney = canViewCostProfit(roles);
 
   const [stateRes, accrualsRes, withdrawalsRes] = await Promise.all([
     getFreightCommissionState(),
@@ -46,9 +52,20 @@ export default async function AdminFreightCommissionPage() {
   const state = stateRes.ok && stateRes.data
     ? stateRes.data
     : { enabled: false, tiers: [], anyTierPending: false };
-  const accruals = accrualsRes.ok && accrualsRes.data ? accrualsRes.data : [];
-  const withdrawals = withdrawalsRes.ok && withdrawalsRes.data ? withdrawalsRes.data : [];
+  const rawAccruals = accrualsRes.ok && accrualsRes.data ? accrualsRes.data : [];
+  const rawWithdrawals = withdrawalsRes.ok && withdrawalsRes.data ? withdrawalsRes.data : [];
   const loadFailed = !stateRes.ok || !accrualsRes.ok || !withdrawalsRes.ok;
+
+  // DATA-LAYER money hide (owner 2026-06-18): when the viewer cannot see money
+  // internals, zero the commission AMOUNT fields server-side so the real figures
+  // never reach the client payload. WHT % left in place (it's a rate, also shown
+  // in the rate-tier config table). The client also drops the amount columns.
+  const accruals = canViewMoney
+    ? rawAccruals
+    : rawAccruals.map((a) => ({ ...a, baseThb: 0, accruedAmountThb: 0 }));
+  const withdrawals = canViewMoney
+    ? rawWithdrawals
+    : rawWithdrawals.map((w) => ({ ...w, grossThb: 0, whtThb: 0, netThb: 0 }));
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
@@ -71,6 +88,7 @@ export default async function AdminFreightCommissionPage() {
         canPay={canPay}
         canApprove={canApprove}
         canConfirmTiers={canConfirmTiers}
+        canViewMoney={canViewMoney}
         loadFailed={loadFailed}
       />
     </main>

@@ -14,6 +14,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getForwarderProfitAnalytics } from "@/actions/admin/reports-profit";
 import { exportProfitAnalyticsAll } from "@/actions/admin/export/report-profit-analytics";
 import type { ProfitGroupRow } from "@/actions/admin/reports-profit-types";
@@ -56,7 +57,22 @@ export default async function ForwarderProfitAnalyticsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+
+  // Money-internal report (cost · profit · margin). Owner 2026-06-18: super
+  // no longer sees money internals — only ultra/accounting/pricing. Hide at the
+  // DATA layer: skip the cost/profit query entirely when not allowed, so no
+  // cost/profit value is ever computed or serialized to the client.
+  if (!canViewCostProfit(roles)) {
+    return (
+      <main className="p-4 sm:p-6 lg:p-8">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          รายงานนี้แสดงต้นทุน/กำไร/มาร์จิ้น (ข้อมูลภายในด้านการเงิน) —
+          เฉพาะบัญชี Ultra · บัญชี · Pricing เท่านั้น
+        </div>
+      </main>
+    );
+  }
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);

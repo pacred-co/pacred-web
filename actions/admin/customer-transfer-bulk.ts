@@ -34,6 +34,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isGodRole, type AdminRole } from "@/lib/auth/require-admin";
 import { withAdmin, type AdminActionResult } from "./common";
 import { adminTransferSalesRep } from "./admins";
 
@@ -72,7 +73,7 @@ export async function bulkTransferCustomersToSalesRep(
         .from("admins")
         .select("profile_id, role, is_active")
         .eq("profile_id", d.new_sales_admin_id)
-        .in("role", ["sales_admin", "super"])
+        .in("role", ["sales_admin", "super", "ultra"])
         .eq("is_active", true)
         .maybeSingle();
       if (targetErr) {
@@ -96,7 +97,7 @@ export async function bulkTransferCustomersToSalesRep(
       console.error(`[customer-transfer-bulk caller roles lookup] failed`, { code: callerRolesErr.code, message: callerRolesErr.message });
       return { ok: false, error: callerRolesErr.message };
     }
-    const isSuper = (callerRoles ?? []).some((r) => r.role === "super");
+    const isSuper = isGodRole((callerRoles ?? []).map((r) => r.role) as AdminRole[]);
 
     // Pull current sales_admin_id for the selected customers up-front —
     // gives us the ownership filter for non-super callers AND the

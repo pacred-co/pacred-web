@@ -20,6 +20,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import type { CsvRow } from "@/components/admin/csv-button";
 import { logAdminExport } from "@/actions/admin/export-log";
 
@@ -106,7 +107,10 @@ export async function exportYuanPaymentsAll(
   filter: YuanExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // Same role gate as the page (createAdminClient = RLS-bypass · PII surface).
-  await requireAdmin(["ops", "accounting"]);
+  const { roles } = await requireAdmin(["ops", "accounting"]);
+  // Money-internal: omit the กำไร (payprofitthb) column from the CSV unless the
+  // exporter may see money internals (ultra/accounting/pricing — NOT super/ops).
+  const showProfit = canViewCostProfit(roles);
 
   const admin = createAdminClient();
 
@@ -186,7 +190,10 @@ export async function exportYuanPaymentsAll(
       payyuan: r.payyuan != null ? Number(r.payyuan).toFixed(2) : "",
       payrate: r.payrate != null ? Number(r.payrate).toFixed(4) : "",
       paythb: r.paythb != null ? Number(r.paythb).toFixed(2) : "",
-      payprofitthb: r.payprofitthb != null ? Number(r.payprofitthb).toFixed(2) : "",
+      // Money-internal กำไร — omitted entirely unless the exporter may see it.
+      ...(showProfit
+        ? { payprofitthb: r.payprofitthb != null ? Number(r.payprofitthb).toFixed(2) : "" }
+        : {}),
       status: STATUS_LABEL[r.paystatus ?? ""] ?? r.paystatus ?? "",
       detail: r.paydetail ?? "",
       paydateadmin: r.paydateadmin ?? "",

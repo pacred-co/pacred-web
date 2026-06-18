@@ -47,7 +47,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
@@ -137,7 +137,7 @@ export default async function DriverWorkPage({
   const { user, roles } = await requireAdmin(["driver", "ops", "super"]);
   const sp     = await searchParams;
   const tab    = (["all","pending","loaded","done"].includes(sp.tab ?? "") ? sp.tab : "all") as TabKey;
-  const isAdminOverride = roles.includes("super") || roles.includes("ops");
+  const isAdminOverride = isGodRole(roles) || roles.includes("ops");
 
   const admin = createAdminClient();
 

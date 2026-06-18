@@ -42,7 +42,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAdminsAll } from "@/actions/admin/export/admins";
@@ -232,7 +232,7 @@ export default async function AdminTablePage({
   searchParams,
 }: { searchParams: Promise<SP> }) {
   const { roles } = await requireAdmin();
-  const canMutate = roles.includes("super");
+  const canMutate = isGodRole(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();

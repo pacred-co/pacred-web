@@ -33,6 +33,8 @@ import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
 import { costBasisMode } from "@/lib/forwarder/resolve-cost";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 
 // Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
 // cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
@@ -42,6 +44,18 @@ import {
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
   FSTATUS_LABEL,
 } from "@/lib/admin/report-cnt-add-check-gate";
+
+/** Cost-access gate (owner 2026-06-18, mig 0189): the rate writers below persist
+ *  tb_forwarder.fcosttotalprice. `withAdmin` admits god roles (ultra+super), so
+ *  this guard (canViewCostProfit excludes `super`) is what keeps super out of
+ *  setting cost — money internals are ultra/accounting/pricing only. */
+async function assertCostAccess(): Promise<{ ok: false; error: string } | null> {
+  const roles = await getAdminRoles();
+  if (!canViewCostProfit(roles)) {
+    return { ok: false, error: "ไม่มีสิทธิ์แก้ไขต้นทุน (เฉพาะ Ultra Admin Z / บัญชี / Pricing)" };
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Schema — the 4-rate payload from the modal form.
@@ -160,6 +174,8 @@ function calcRowCost(dimension: number | null, rate: number): number {
 // ─────────────────────────────────────────────────────────────────────
 
 export async function adminReportCntCustomRate(input: CustomRateInput): Promise<AdminActionResult<{ updated: number; mode: "cbm" | "weight" }>> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = customRateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -276,6 +292,8 @@ const resetRateSchema = z.object({
 });
 
 export async function adminReportCntResetRate(fCabinetNumber: string): Promise<AdminActionResult<{ updated: number }>> {
+  const denied = await assertCostAccess();
+  if (denied) return denied;
   const parsed = resetRateSchema.safeParse({ fCabinetNumber });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

@@ -5,7 +5,7 @@ import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
-import { getAdminRoles } from "@/lib/auth/require-admin";
+import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { sendSms } from "@/lib/sms/gateway";
@@ -67,7 +67,7 @@ export async function adminUpdateUserIdentity(
     // CEO/Manager/QAAndQC/Accounting/ITDT may reassign rep + customer group).
     const roles = (await getAdminRoles()) ?? [];
     const isSenior =
-      roles.includes("super") ||
+      isGodRole(roles) ||
       roles.some((r) => (SENIOR_IDENTITY_ROLES as readonly string[]).includes(r));
 
     const { data: before, error: beforeErr } = await admin

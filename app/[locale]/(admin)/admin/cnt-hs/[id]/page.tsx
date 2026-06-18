@@ -33,7 +33,8 @@
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -222,7 +223,11 @@ export default async function CntHsDetailPage({
   }
 
   const status = cnt.cntStatus ?? "1";
-  const canAct = status === "1" && (roles.includes("super") || roles.includes("accounting"));
+  // Approve/reject = operational ACTION gate (super keeps it via isGodRole + ultra).
+  const canAct = status === "1" && (isGodRole(roles) || roles.includes("accounting"));
+  // The per-parcel COST editor (fcosttotalprice + ยอดเบิก/ต้นทุน/ส่วนต่าง summary)
+  // is MONEY-internal → ultra/accounting/pricing only (super excluded · 2026-06-18).
+  const canViewMoney = canViewCostProfit(roles);
 
   // Resolve slip + file URLs once on the server (signed-URL fetch is async
   // for admin-bucket uploads — must complete before render).
@@ -426,8 +431,9 @@ export default async function CntHsDetailPage({
       </section>
 
       {/* W4 — paid-container cost editor (report-cnt's paid-lock points here).
-          Edits fcosttotalprice for this bill's forwarders · money-isolated. */}
-      {forwarders.length > 0 && (
+          Edits fcosttotalprice for this bill's forwarders · MONEY-internal →
+          ultra/accounting/pricing only (canViewMoney). */}
+      {forwarders.length > 0 && canViewMoney && (
         <CntCostEditor
           cntId={cnt.ID}
           cntAmount={Number(cnt.cntAmount ?? 0)}

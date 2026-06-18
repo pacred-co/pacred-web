@@ -61,6 +61,8 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logger } from "@/lib/logger";
 import {
   type DateRange,
@@ -792,6 +794,14 @@ const PAYSTATUS_MAP: Record<string, string> = {
 
 export async function getYuanProfitReport(range: DateRange): Promise<Result<YuanProfitRow[]>> {
   try {
+    // Money-internal visibility (owner 2026-06-18): cost_rate / cost_thb /
+    // profit are money internals — returned ONLY to ultra/accounting/pricing,
+    // NOT super. Defense-in-depth at the data layer: when the caller may not
+    // see money internals we null/zero the cost+profit fields so the value
+    // never reaches the page (which also gates rendering). DERIVED-VALUE TRAP:
+    // profit reveals cost → zeroed together.
+    const roles = await getAdminRoles();
+    const showCostProfit = canViewCostProfit(roles);
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("tb_payment")
@@ -861,10 +871,11 @@ export async function getYuanProfitReport(range: DateRange): Promise<Result<Yuan
         channel:       r.paytype ?? "",
         yuan_amount:   Number(r.payyuan     ?? 0),
         exchange_rate: Number(r.payrate     ?? 0),
-        cost_rate:     r.payratecost != null ? Number(r.payratecost) : null,
-        cost_thb:      cost,
+        // Money-internal cost + derived profit — null/zeroed when not allowed.
+        cost_rate:     showCostProfit ? (r.payratecost != null ? Number(r.payratecost) : null) : null,
+        cost_thb:      showCostProfit ? cost : 0,
         sale_thb:      sale,
-        profit,
+        profit:        showCostProfit ? profit : 0,
         vat7: 0, // P0-20: invented column removed; back-compat 0
         status: PAYSTATUS_MAP[r.paystatus] ?? r.paystatus,
         created_at: r.paydate ?? "",

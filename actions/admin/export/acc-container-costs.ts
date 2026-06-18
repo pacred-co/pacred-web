@@ -22,6 +22,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 
@@ -82,8 +83,11 @@ export type ContainerCostsExportFilter = {
 export async function exportContainerCostsAll(
   filter: ContainerCostsExportFilter,
 ): Promise<{ rows: ContainerCostExportRow[]; truncated: boolean }> {
-  // RBAC — same roles the page gates on.
-  await requireAdmin(["super", "accounting"]);
+  // RBAC — same roles the page gates on (reachability).
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Carrier COST rates = money-internal — omit them from the export for non-cost
+  // viewers (super included) per owner 2026-06-18.
+  const showMoney = canViewCostProfit(roles);
 
   const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -131,10 +135,14 @@ export async function exportContainerCostsAll(
       transport_mode: TRANSPORT_LABEL[r.transport_mode] ?? r.transport_mode,
       origin: r.origin,
       destination: r.destination,
-      rate_per_cbm_thb: thb(r.rate_per_cbm_thb),
-      rate_per_kg_thb: thb(r.rate_per_kg_thb),
-      minimum_charge_thb: thb(r.minimum_charge_thb),
-      fuel_surcharge_pct: r.fuel_surcharge_pct != null ? Number(r.fuel_surcharge_pct).toFixed(2) : "",
+      ...(showMoney
+        ? {
+            rate_per_cbm_thb: thb(r.rate_per_cbm_thb),
+            rate_per_kg_thb: thb(r.rate_per_kg_thb),
+            minimum_charge_thb: thb(r.minimum_charge_thb),
+            fuel_surcharge_pct: r.fuel_surcharge_pct != null ? Number(r.fuel_surcharge_pct).toFixed(2) : "",
+          }
+        : {}),
       effective_from: r.effective_from ? r.effective_from.slice(0, 10) : "",
       effective_to: r.effective_to ? r.effective_to.slice(0, 10) : "",
       status: archived ? "ปิดแล้ว" : "กำลังใช้",

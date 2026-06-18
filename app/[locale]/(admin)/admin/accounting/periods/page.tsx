@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   ACCOUNTING_PERIOD_STATUS_LABEL,
   type AccountingPeriodStatus,
@@ -75,7 +75,7 @@ function thb(n: number | null): string {
 
 export default async function AdminAccountingPeriodsPage() {
   const { roles } = await requireAdmin(["super", "accounting", "ops"]);
-  const canWrite  = roles.includes("super") || roles.includes("accounting");
+  const canWrite  = isGodRole(roles) || roles.includes("accounting");
 
   const admin = createAdminClient();
 

@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { getAdminRoles, hasRole } from "@/lib/auth/require-admin";
+import { getAdminRoles, hasRole, isGodRole } from "@/lib/auth/require-admin";
 import { SettingsForm } from "./settings-form";
 
 export default async function AdminSettingsPage() {
   const roles = await getAdminRoles();
-  const isSuper = roles != null && hasRole(roles, ["super"]);
+  const isSuper = roles != null && isGodRole(roles);
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("settings")

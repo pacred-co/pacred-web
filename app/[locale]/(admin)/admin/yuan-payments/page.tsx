@@ -26,6 +26,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -128,8 +129,13 @@ export default async function AdminYuanPaymentsPage({
 }) {
   // W-1 (gap-admin H-1): page-level role gate. Exposes customer slip +
   // recipient details via createAdminClient (RLS-bypass) — accounting + ops
-  // (super implicit).
-  await requireAdmin(["ops", "accounting"]);
+  // (god roles implicit).
+  const { roles } = await requireAdmin(["ops", "accounting"]);
+  // Money-internal visibility (owner 2026-06-18): the กำไร (payprofitthb)
+  // column is a profit figure — visible ONLY to ultra/accounting/pricing,
+  // NOT super/ops. Gate at the DATA layer (omit the field from the CSV row +
+  // skip the column) — never CSS.
+  const showProfit = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -341,7 +347,10 @@ export default async function AdminYuanPaymentsPage({
               payyuan: r.payyuan != null ? Number(r.payyuan).toFixed(2) : "",
               payrate: r.payrate != null ? Number(r.payrate).toFixed(4) : "",
               paythb: r.paythb != null ? Number(r.paythb).toFixed(2) : "",
-              payprofitthb: r.payprofitthb != null ? Number(r.payprofitthb).toFixed(2) : "",
+              // Money-internal: omit profit entirely unless the viewer may see it.
+              ...(showProfit
+                ? { payprofitthb: r.payprofitthb != null ? Number(r.payprofitthb).toFixed(2) : "" }
+                : {}),
               status: STATUS_LABEL[r.paystatus ?? ""] ?? r.paystatus ?? "",
               detail: r.paydetail ?? "",
               paydateadmin: r.paydateadmin ?? "",
@@ -358,7 +367,8 @@ export default async function AdminYuanPaymentsPage({
             { key: "payyuan",      label: "จำนวนหยวน (¥)" },
             { key: "payrate",      label: "เรท" },
             { key: "paythb",       label: "บาท (฿)" },
-            { key: "payprofitthb", label: "กำไร (฿)" },
+            // Money-internal กำไร column — only for ultra/accounting/pricing.
+            ...(showProfit ? [{ key: "payprofitthb", label: "กำไร (฿)" }] : []),
             { key: "status",       label: "สถานะ" },
             { key: "detail",       label: "รายละเอียด" },
             { key: "paydateadmin", label: "วันที่อนุมัติ" },
@@ -406,7 +416,10 @@ export default async function AdminYuanPaymentsPage({
                   <YuanSortTh label="ช่องทาง"     field="paytype"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <YuanSortTh label="หยวน"        field="payyuan"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <YuanSortTh label="บาท"         field="paythb"       activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
-                  <YuanSortTh label="กำไร"        field="payprofitthb" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
+                  {/* Money-internal กำไร — ultra/accounting/pricing only */}
+                  {showProfit ? (
+                    <YuanSortTh label="กำไร"        field="payprofitthb" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
+                  ) : null}
                   <YuanSortTh label="สถานะ"       field="paystatus"    activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">สลิป</th>
                   <th className="px-3 py-3">จัดการ</th>
@@ -460,11 +473,14 @@ export default async function AdminYuanPaymentsPage({
                           @ {Number(r.payrate ?? 0).toFixed(2)}
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-right font-mono text-xs">
-                        {r.payprofitthb !== null
-                          ? `฿${Number(r.payprofitthb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                          : "—"}
-                      </td>
+                      {/* Money-internal กำไร cell — ultra/accounting/pricing only */}
+                      {showProfit ? (
+                        <td className="px-3 py-3 text-right font-mono text-xs">
+                          {r.payprofitthb !== null
+                            ? `฿${Number(r.payprofitthb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                            : "—"}
+                        </td>
+                      ) : null}
                       <td className="px-3 py-3">
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${

@@ -37,6 +37,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 
@@ -106,7 +107,11 @@ export async function exportAccShopAll(
   filter: AccShopExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // SAME gate as the page (acc-shop.php L46 → super + accounting).
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: ต้นทุน (cost) + ค่าบริการ (profit) keys are OMITTED from the
+  // exported rows when the viewer can't see money internals (owner 2026-06-18:
+  // super loses cost/profit) — never written into the CSV file at all.
+  const showMoney = canViewCostProfit(roles);
 
   const admin = createAdminClient();
   const { startDate, endDate } = filter;
@@ -260,6 +265,7 @@ export async function exportAccShopAll(
     const profit = h.hstatus === "6" ? 0 : priceUser - pricePCS;
 
     // SAME column keys/labels/value-mapping as the page <CsvButton> cols.
+    // Cost/service-fee keys omitted at the DATA layer when !showMoney.
     rows.push({
       pay_date: w.date ?? "",
       create_date: h.hdate ?? "",
@@ -268,8 +274,12 @@ export async function exportAccShopAll(
       pay_user: numberFormat2(amount),
       return_wallet: numberFormat2(returnWallet),
       price_sell: numberFormat2(priceUser),
-      cost: numberFormat2(pricePCS),
-      service_fee: numberFormat2(profit),
+      ...(showMoney
+        ? {
+            cost: numberFormat2(pricePCS),
+            service_fee: numberFormat2(profit),
+          }
+        : {}),
       member_code: h.userid,
       customer_name: `${u.username} ${u.userlastname}`.trim(),
     });

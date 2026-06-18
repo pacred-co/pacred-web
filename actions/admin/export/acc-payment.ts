@@ -21,6 +21,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 
@@ -83,7 +84,12 @@ export async function exportAccPaymentAll(
   filter: AccPaymentExportFilter,
 ): Promise<{ rows: AccPaymentExportRow[]; truncated: boolean }> {
   // RBAC — same roles the page gates on.
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: omit เรทต้นทุน (rate_cost), ต้นทุน PCS (cost_pcs), and the
+  // derived ค่าบริการ (service_fee = charge - cost) unless the exporter may see
+  // money internals (ultra/accounting/pricing — NOT super). DERIVED-VALUE TRAP:
+  // service_fee reveals cost, hidden together.
+  const showCost = canViewCostProfit(roles);
 
   const admin = createAdminClient();
   const { startDate, endDate } = filter;
@@ -187,11 +193,16 @@ export async function exportAccPaymentAll(
       order_no: w.reforder,
       status: payStatusName(p.paystatus),
       yuan: numberFormat2(payyuan),
-      rate_cost: numberFormat2(payratecost),
+      // Money-internal cost / derived ค่าบริการ — omitted entirely unless allowed.
+      ...(showCost ? { rate_cost: numberFormat2(payratecost) } : {}),
       rate_customer: numberFormat2(payrate),
       charge_customer: numberFormat2(sumUser),
-      cost_pcs: numberFormat2(sumCost),
-      service_fee: numberFormat2(profit),
+      ...(showCost
+        ? {
+            cost_pcs: numberFormat2(sumCost),
+            service_fee: numberFormat2(profit),
+          }
+        : {}),
       member_code: p.userid,
       customer_name: `${u.username} ${u.userlastname}`.trim(),
     });

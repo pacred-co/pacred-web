@@ -32,7 +32,25 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+
+/**
+ * Money-internal write guard (owner · mig 0189: super loses cost visibility).
+ * These actions persist fcosttotalprice/fcosttotalpricesheet — a money internal
+ * only ultra/accounting/pricing may touch. The existing withAdmin(["super",
+ * "ops","accounting"]) gate lets super/ops THROUGH (super via isGodRole), so we
+ * add this explicit data-layer guard BEFORE any mutation. Mutation payload is
+ * unchanged — this only refuses the caller when they may not see/edit cost.
+ */
+async function assertCanEditCost(): Promise<string | null> {
+  const roles = await getAdminRoles();
+  if (!canViewCostProfit(roles)) {
+    return "ไม่มีสิทธิ์แก้ไขต้นทุน (เฉพาะ ultra / accounting / pricing)";
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Resolve current admin's legacy id (tb_forwarder.adminidupdate is
@@ -154,6 +172,11 @@ export async function adminApplyContainerCostFromSheet(
   return withAdmin<ApplyContainerCostFromSheetResult>(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
+      // mig 0189 — refuse cost edits from roles that can't see money internals
+      // (super/ops pass withAdmin's god/role gate but must NOT edit cost).
+      const denied = await assertCanEditCost();
+      if (denied) return { ok: false, error: denied };
+
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
       const nowIso        = new Date().toISOString();
@@ -318,6 +341,10 @@ export async function adminUpdatePaidContainerCost(
   return withAdmin<UpdatePaidContainerCostResult>(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
+      // mig 0189 — refuse cost edits from roles that can't see money internals.
+      const denied = await assertCanEditCost();
+      if (denied) return { ok: false, error: denied };
+
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
       const nowIso        = new Date().toISOString();
@@ -395,6 +422,10 @@ export async function adminBulkUpdateForwarderCostSheet(
   return withAdmin<BulkUpdateCostSheetResult>(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
+      // mig 0189 — refuse cost edits from roles that can't see money internals.
+      const denied = await assertCanEditCost();
+      if (denied) return { ok: false, error: denied };
+
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
       const nowIso        = new Date().toISOString();

@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { ArrowLeftRight, ChevronRight, Home, Users } from "lucide-react";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { TransferBulkForm } from "./transfer-bulk-form";
 
 // V-G2 — Bulk transfer customers to sales rep (faithful port of legacy
@@ -51,7 +51,7 @@ export default async function TransferBulkPage({
   // sales-rep assignments is a sales-team action. sales_admin will be
   // further restricted to their OWN customers in the server action.
   const { user, roles } = await requireAdmin(["sales_admin"]);
-  const isSuper = roles.includes("super");
+  const isSuper = isGodRole(roles);
 
   const sp = await searchParams;
   // For sales_admin (non-super), the source-rep selector is pinned to
@@ -71,7 +71,7 @@ export default async function TransferBulkPage({
     .select(`profile_id, role,
              profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
              contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
-    .in("role", ["sales_admin", "super"])
+    .in("role", ["sales_admin", "super", "ultra"])
     .eq("is_active", true);
   if (repsErr) {
     console.error(`[transfer-bulk admins read] failed`, { code: repsErr.code, message: repsErr.message });

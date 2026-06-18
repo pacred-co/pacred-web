@@ -21,7 +21,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import {
@@ -128,7 +128,7 @@ export default async function AdminDriverBatchDetailPage({
   // ops/super/warehouse = staff who see ALL runs (bypass the driver-own-run check);
   // a bare driver sees only their own run.
   const isOpsOverride =
-    roles.includes("ops") || roles.includes("super") || roles.includes("warehouse");
+    isGodRole(roles) || roles.includes("ops") || roles.includes("warehouse");
 
   // 1. Batch header
   const { data: batchData, error: batchErr } = await admin

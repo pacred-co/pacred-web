@@ -61,6 +61,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { CsvButton } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
@@ -185,7 +186,12 @@ export default async function AdminReportShopsProfitPayPage({
 }: {
   searchParams: Promise<SP>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal: ต้นทุน · กำไร · VAT-on-profit are visible only to
+  // ultra/accounting/pricing (NOT super · owner 2026-06-18). When false we
+  // OMIT every cost/profit column, stat card, and CSV key at the DATA layer.
+  // ราคาขาย (selling) stays visible to all admins (not money-internal).
+  const showMoney = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -347,7 +353,8 @@ export default async function AdminReportShopsProfitPayPage({
   // cleanly for the text-FK reforder join).
   const totalRows = grandTotal ?? ordersAll.length;
 
-  // 5) CSV.
+  // 5) CSV. Cost/profit/VAT keys are OMITTED from BOTH the rows and the cols
+  // when the viewer can't see money internals — never serialized to the file.
   const csvRows = rows.map((r) => ({
     id:        r.id,
     hno:       r.hno,
@@ -356,10 +363,14 @@ export default async function AdminReportShopsProfitPayPage({
     userid:    r.userid ?? "",
     htitle:    r.htitle ?? "",
     hcount:    r.hcount ?? 0,
-    pricePCS:  Number.isFinite(r.pricePCS) ? r.pricePCS : 0,
-    priceUser: r.priceUser,
-    profit:    Number.isFinite(r.profit) ? r.profit : 0,
-    vat:       Number.isFinite(r.vat) ? r.vat : 0,
+    ...(showMoney
+      ? {
+          pricePCS: Number.isFinite(r.pricePCS) ? r.pricePCS : 0,
+          priceUser: r.priceUser,
+          profit: Number.isFinite(r.profit) ? r.profit : 0,
+          vat: Number.isFinite(r.vat) ? r.vat : 0,
+        }
+      : { priceUser: r.priceUser }),
     hstatus:   ORDER_STATUS_LABEL[r.hstatus ?? ""] ?? r.hstatus ?? "",
     payout:    r.hshoppay === "1" ? "เบิกจ่ายแล้ว" : "ยังไม่จ่าย",
   }));
@@ -371,10 +382,14 @@ export default async function AdminReportShopsProfitPayPage({
     { key: "customer",  label: "ชื่อลูกค้า" },
     { key: "htitle",    label: "สินค้า" },
     { key: "hcount",    label: "จำนวนรายการ" },
-    { key: "pricePCS",  label: "ราคาต้นทุน (บาท)" },
+    ...(showMoney ? [{ key: "pricePCS", label: "ราคาต้นทุน (บาท)" }] : []),
     { key: "priceUser", label: "ราคาขาย (บาท)" },
-    { key: "profit",    label: "ค่าบริการ/กำไร (บาท)" },
-    { key: "vat",       label: "VAT 7% (บาท)" },
+    ...(showMoney
+      ? [
+          { key: "profit", label: "ค่าบริการ/กำไร (บาท)" },
+          { key: "vat", label: "VAT 7% (บาท)" },
+        ]
+      : []),
     { key: "hstatus",   label: "สถานะออเดอร์" },
     { key: "payout",    label: "สถานะเบิก" },
   ];
@@ -509,10 +524,10 @@ export default async function AdminReportShopsProfitPayPage({
           rows only). */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
-        <Card label="ราคาทุนรวม (หน้านี้)"  value={thb(pricePCSAll)} />
+        {showMoney && <Card label="ราคาทุนรวม (หน้านี้)"  value={thb(pricePCSAll)} />}
         <Card label="ราคาขายรวม (หน้านี้)" value={thb(priceUserAll)} />
-        <Card label="ค่าบริการ/กำไรรวม (หน้านี้)" value={thb(profitAll)} highlight />
-        <Card label="VAT 7% รวม (หน้านี้)" value={thb(vatAll)} highlight />
+        {showMoney && <Card label="ค่าบริการ/กำไรรวม (หน้านี้)" value={thb(profitAll)} highlight />}
+        {showMoney && <Card label="VAT 7% รวม (หน้านี้)" value={thb(vatAll)} highlight />}
       </div>
 
       {/* Sub-stats */}
@@ -539,10 +554,10 @@ export default async function AdminReportShopsProfitPayPage({
                   <th className="px-4 py-3">เลขออเดอร์</th>
                   <th className="px-4 py-3">สินค้า</th>
                   <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3 text-right">ต้นทุน</th>
+                  {showMoney && <th className="px-4 py-3 text-right">ต้นทุน</th>}
                   <th className="px-4 py-3 text-right">ขาย</th>
-                  <th className="px-4 py-3 text-right">กำไร</th>
-                  <th className="px-4 py-3 text-right">VAT 7%</th>
+                  {showMoney && <th className="px-4 py-3 text-right">กำไร</th>}
+                  {showMoney && <th className="px-4 py-3 text-right">VAT 7%</th>}
                   <th className="px-4 py-3">สถานะ</th>
                   <th className="px-4 py-3">เบิก</th>
                 </tr>
@@ -581,16 +596,22 @@ export default async function AdminReportShopsProfitPayPage({
                       )}
                       {r.userid && <div className="font-mono text-[10px] text-muted">{r.userid}</div>}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">
-                      {Number.isFinite(r.pricePCS) ? thb(r.pricePCS) : <span className="text-muted">รอคำนวณ</span>}
-                    </td>
+                    {showMoney && (
+                      <td className="px-4 py-3 text-right font-mono text-xs">
+                        {Number.isFinite(r.pricePCS) ? thb(r.pricePCS) : <span className="text-muted">รอคำนวณ</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.priceUser)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-red-700">
-                      {Number.isFinite(r.profit) ? thb(r.profit) : <span className="text-muted">รอคำนวณ</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-red-700">
-                      {Number.isFinite(r.vat) ? thb(r.vat) : <span className="text-muted">—</span>}
-                    </td>
+                    {showMoney && (
+                      <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-red-700">
+                        {Number.isFinite(r.profit) ? thb(r.profit) : <span className="text-muted">รอคำนวณ</span>}
+                      </td>
+                    )}
+                    {showMoney && (
+                      <td className="px-4 py-3 text-right font-mono text-xs text-red-700">
+                        {Number.isFinite(r.vat) ? thb(r.vat) : <span className="text-muted">—</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-xs">
                       <span
                         className={`rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${

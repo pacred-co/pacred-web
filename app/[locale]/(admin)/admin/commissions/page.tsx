@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { computeCommission } from "@/lib/sales-commission/calc";
@@ -72,7 +73,12 @@ export default async function AdminCommissionsPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Money-internal gate (owner 2026-06-18): commission amounts (1% · WHT · net
+  // payout) are visible ONLY to ultra/accounting/pricing — NOT super. The page
+  // stays reachable (god roles satisfy the gate for nav) but a non-cost viewer
+  // sees the queue *structure* without the commission money.
+  const showMoney = canViewCostProfit(roles);
   const sp = await searchParams;
   const status = sp.status === "2" || sp.status === "3" ? sp.status : null;
 
@@ -200,7 +206,8 @@ export default async function AdminCommissionsPage({
     { key: "id", label: "เลขที่" },
     { key: "useridmain", label: "ทีม" },
     { key: "admincreate", label: "ผู้สร้าง" },
-    { key: "amount", label: "รับสุทธิ" },
+    // amount (รับสุทธิ) = commission money → only for cost-allowed viewers.
+    ...(showMoney ? [{ key: "amount", label: "รับสุทธิ" } as CsvCol] : []),
     { key: "status", label: "สถานะ" },
     { key: "requested_at", label: "ขอเมื่อ" },
     { key: "paid_at", label: "จ่ายเมื่อ" },
@@ -209,7 +216,7 @@ export default async function AdminCommissionsPage({
     id: p.id,
     useridmain: p.useridmain ?? "",
     admincreate: p.admincreate ?? "",
-    amount: Number(p.amount ?? 0).toFixed(2),
+    ...(showMoney ? { amount: Number(p.amount ?? 0).toFixed(2) } : {}),
     status: STATUS_LABEL[p.status] ?? p.status,
     requested_at: p.date ? p.date.slice(0, 10) : "",
     paid_at: p.dateslip ? p.dateslip.slice(0, 10) : "",
@@ -240,7 +247,8 @@ export default async function AdminCommissionsPage({
           </Link>
         </header>
 
-        {/* Top earners — top 20 teams with unpaid commissions */}
+        {/* Top earners — top 20 teams with unpaid commissions (money-internal) */}
+        {showMoney && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
           <div className="flex items-baseline justify-between gap-3 mb-3">
             <h2 className="font-bold text-sm">💰 ทีมที่มีค่าคอมรอเบิก ({topEarners.length} ทีม)</h2>
@@ -297,6 +305,7 @@ export default async function AdminCommissionsPage({
             net ≥ ฿1,000 = ทีมเบิกค่าคอมได้แล้ว (legacy <code>getListForwarder.php</code> L174) · ลูกค้าจะเห็นปุ่ม &quot;ทำรายการเบิกเงิน&quot; ใน /sales/report
           </p>
         </section>
+        )}
 
         {/* Status filter chips */}
         <nav className="flex flex-wrap gap-2">
@@ -328,7 +337,9 @@ export default async function AdminCommissionsPage({
               <h2 className="font-bold text-sm">📋 คำขอเบิกค่าคอม</h2>
               {payouts.length > 0 && (
                 <p className="text-xs text-muted">
-                  {payouts.length} แถว · รวม <span className="font-mono font-bold text-primary-700">{thb(sumAmount)}</span>
+                  {payouts.length} แถว{showMoney && (
+                    <> · รวม <span className="font-mono font-bold text-primary-700">{thb(sumAmount)}</span></>
+                  )}
                 </p>
               )}
             </div>
@@ -354,7 +365,7 @@ export default async function AdminCommissionsPage({
                     <th className="px-3 py-2">เลขที่</th>
                     <th className="px-3 py-2">ทีม</th>
                     <th className="px-3 py-2">ผู้สร้าง</th>
-                    <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    {showMoney && <th className="px-3 py-2 text-right">รับสุทธิ</th>}
                     <th className="px-3 py-2 text-center">สถานะ</th>
                     <th className="px-3 py-2">ขอเมื่อ</th>
                     <th className="px-3 py-2">จ่ายเมื่อ</th>
@@ -374,7 +385,7 @@ export default async function AdminCommissionsPage({
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">{p.useridmain}</td>
                       <td className="px-3 py-2 font-mono text-[10px] text-muted">{p.admincreate ?? "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(p.amount)}</td>
+                      {showMoney && <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(p.amount)}</td>}
                       <td className="px-3 py-2 text-center">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[p.status]}`}>
                           {STATUS_LABEL[p.status] ?? p.status}

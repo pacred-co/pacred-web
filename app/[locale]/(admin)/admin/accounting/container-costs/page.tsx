@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
@@ -38,7 +39,11 @@ export default async function AdminContainerCostsPage({
 }: {
   searchParams: Promise<SP>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  // Carrier COST rate cards (per-CBM / per-kg / min / fuel) = money-internal
+  // (owner 2026-06-18): only ultra/accounting/pricing. Page stays reachable;
+  // the cost-rate columns + CSV + the cost-entry form drop for everyone else.
+  const showMoney = canViewCostProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -82,6 +87,15 @@ export default async function AdminContainerCostsPage({
 
   // CSV export — columns mirror the on-screen rate-card table (money as
   // fixed-2 strings, dates sliced to YYYY-MM-DD, codes/labels as-is).
+  // CSV cost-rate columns dropped server-side for non-cost viewers (data-layer).
+  const costCsvCols: CsvCol[] = showMoney
+    ? [
+        { key: "rate_per_cbm_thb", label: "ต่อ CBM (บาท)" },
+        { key: "rate_per_kg_thb", label: "ต่อ kg (บาท)" },
+        { key: "minimum_charge_thb", label: "ขั้นต่ำ (บาท)" },
+        { key: "fuel_surcharge_pct", label: "fuel %" },
+      ]
+    : [];
   const csvCols: CsvCol[] = [
     { key: "carrier_name", label: "carrier" },
     { key: "container_type", label: "ประเภทตู้" },
@@ -89,10 +103,7 @@ export default async function AdminContainerCostsPage({
     { key: "transport_mode", label: "mode" },
     { key: "origin", label: "ต้นทาง" },
     { key: "destination", label: "ปลายทาง" },
-    { key: "rate_per_cbm_thb", label: "ต่อ CBM (บาท)" },
-    { key: "rate_per_kg_thb", label: "ต่อ kg (บาท)" },
-    { key: "minimum_charge_thb", label: "ขั้นต่ำ (บาท)" },
-    { key: "fuel_surcharge_pct", label: "fuel %" },
+    ...costCsvCols,
     { key: "effective_from", label: "ใช้ตั้งแต่" },
     { key: "effective_to", label: "ใช้ถึง" },
     { key: "status", label: "สถานะ" },
@@ -108,10 +119,14 @@ export default async function AdminContainerCostsPage({
       transport_mode: TRANSPORT_LABEL[r.transport_mode] ?? r.transport_mode,
       origin: r.origin,
       destination: r.destination,
-      rate_per_cbm_thb: r.rate_per_cbm_thb != null ? Number(r.rate_per_cbm_thb).toFixed(2) : "",
-      rate_per_kg_thb: r.rate_per_kg_thb != null ? Number(r.rate_per_kg_thb).toFixed(2) : "",
-      minimum_charge_thb: r.minimum_charge_thb != null ? Number(r.minimum_charge_thb).toFixed(2) : "",
-      fuel_surcharge_pct: r.fuel_surcharge_pct != null ? Number(r.fuel_surcharge_pct).toFixed(2) : "",
+      ...(showMoney
+        ? {
+            rate_per_cbm_thb: r.rate_per_cbm_thb != null ? Number(r.rate_per_cbm_thb).toFixed(2) : "",
+            rate_per_kg_thb: r.rate_per_kg_thb != null ? Number(r.rate_per_kg_thb).toFixed(2) : "",
+            minimum_charge_thb: r.minimum_charge_thb != null ? Number(r.minimum_charge_thb).toFixed(2) : "",
+            fuel_surcharge_pct: r.fuel_surcharge_pct != null ? Number(r.fuel_surcharge_pct).toFixed(2) : "",
+          }
+        : {}),
       effective_from: r.effective_from ? r.effective_from.slice(0, 10) : "",
       effective_to: r.effective_to ? r.effective_to.slice(0, 10) : "",
       status: archived ? "ปิดแล้ว" : "กำลังใช้",
@@ -218,9 +233,9 @@ export default async function AdminContainerCostsPage({
                   <tr>
                     <th className="px-3 py-3">carrier · type</th>
                     <th className="px-3 py-3">mode · route</th>
-                    <th className="px-3 py-3 text-right">/ CBM</th>
-                    <th className="px-3 py-3 text-right">/ kg</th>
-                    <th className="px-3 py-3 text-right">min · fuel</th>
+                    {showMoney && <th className="px-3 py-3 text-right">/ CBM</th>}
+                    {showMoney && <th className="px-3 py-3 text-right">/ kg</th>}
+                    {showMoney && <th className="px-3 py-3 text-right">min · fuel</th>}
                     <th className="px-3 py-3">ใช้ตั้งแต่</th>
                     <th className="px-3 py-3">การกระทำ</th>
                   </tr>
@@ -241,16 +256,18 @@ export default async function AdminContainerCostsPage({
                           <div>{TRANSPORT_LABEL[r.transport_mode] ?? r.transport_mode}</div>
                           <div className="text-muted">{r.origin} → {r.destination}</div>
                         </td>
-                        <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.rate_per_cbm_thb)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.rate_per_kg_thb)}</td>
-                        <td className="px-3 py-3 text-right text-xs">
-                          {r.minimum_charge_thb != null && (
-                            <div className="font-mono text-muted">min {thb(r.minimum_charge_thb)}</div>
-                          )}
-                          {r.fuel_surcharge_pct != null && Number(r.fuel_surcharge_pct) > 0 && (
-                            <div className="text-amber-700">+ {Number(r.fuel_surcharge_pct).toFixed(2)}%</div>
-                          )}
-                        </td>
+                        {showMoney && <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.rate_per_cbm_thb)}</td>}
+                        {showMoney && <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.rate_per_kg_thb)}</td>}
+                        {showMoney && (
+                          <td className="px-3 py-3 text-right text-xs">
+                            {r.minimum_charge_thb != null && (
+                              <div className="font-mono text-muted">min {thb(r.minimum_charge_thb)}</div>
+                            )}
+                            {r.fuel_surcharge_pct != null && Number(r.fuel_surcharge_pct) > 0 && (
+                              <div className="text-amber-700">+ {Number(r.fuel_surcharge_pct).toFixed(2)}%</div>
+                            )}
+                          </td>
+                        )}
                         <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                           {new Date(r.effective_from).toLocaleDateString("th-TH")}
                           {r.effective_to && (
@@ -283,9 +300,15 @@ export default async function AdminContainerCostsPage({
           </div>
         </div>
 
-        {/* Add new form */}
+        {/* Add new form — cost-entry surface, only for cost-allowed viewers */}
         <aside className="space-y-4">
-          <ContainerCostForm />
+          {showMoney ? (
+            <ContainerCostForm />
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface-alt/40 p-5 text-xs text-muted">
+              การเพิ่ม / แก้ rate card (ต้นทุน carrier) จำกัดเฉพาะฝ่ายบัญชี / pricing.
+            </div>
+          )}
         </aside>
       </div>
     </main>
