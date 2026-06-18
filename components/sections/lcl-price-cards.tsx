@@ -14,6 +14,7 @@ import {
   Headphones,
   Sparkles,
   Lock,
+  ChevronDown,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -30,6 +31,11 @@ const TERMS_SUPPORTED = "DDP เอาเอกสาร · EXW · FOB";
 
 type RateMode = "road" | "sea" | "air";
 const MODE_ICON: Record<RateMode, typeof Truck> = { road: Truck, sea: Ship, air: Plane };
+const MODE_IMAGE: Record<RateMode, string> = {
+  road: "/images/LCLDETAILED/CAR.png",
+  sea: "/images/LCLDETAILED/SHIP.png",
+  air: "/images/LCLDETAILED/AIR.png",
+};
 
 // ─────────────────────────────────────────────────────────────────────
 //  Shared "active card" behaviour — ported from CustomsModeCards:
@@ -217,6 +223,7 @@ const WAREHOUSE_CARDS: WarehouseCard[] = [
 
 function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; active: boolean; onHover: () => void; t: Translator }) {
   const city = t(`warehouseOrigin_${card.id}`);
+  const [showTerms, setShowTerms] = useState(false);
   return (
     <article
       onMouseEnter={onHover}
@@ -228,8 +235,13 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
     >
       {/* full-bleed cover photo */}
       <Image src={card.image} alt={city} fill sizes="(max-width: 768px) 80vw, 380px" className={`object-cover ${card.soon ? "grayscale" : ""}`} />
-      {!card.soon && <div aria-hidden className={`absolute inset-0 bg-gradient-to-br ${card.accent} mix-blend-multiply`} />}
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/55 to-black/15" />
+      {/* dark scrim — bottom only (text area) · top of the photo stays bright/natural
+          so the no-text part shows the image normally, desktop + mobile (owner 2026-06-17) */}
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.58) 30%, rgba(0,0,0,0) 55%)" }}
+      />
 
       {/* tag row — WAREHOUSE type + Term: EXW / coming-soon, grouped top-left */}
       <div className="absolute top-2.5 left-2.5 right-2.5 z-10 flex flex-wrap items-center gap-1.5">
@@ -245,8 +257,9 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
         )}
       </div>
 
-      {/* content (anchored to the bottom over the photo) */}
-      <div className="relative z-10 mt-auto p-3 md:p-4 flex flex-col gap-2 md:gap-2.5">
+      {/* content (anchored to the bottom over the photo) — NO z-index so the
+          mobile "เพิ่มเติม" toggle (z-30) can escape above the full-card LINE link (z-20) */}
+      <div className="relative mt-auto p-3 md:p-4 flex flex-col gap-2 md:gap-2.5">
         <div>
           <h4 className="text-[16px] md:text-[24px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.75)]">{city}</h4>
         </div>
@@ -283,7 +296,8 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
               })}
             </div>
 
-            <div>
+            {/* เงื่อนไข — mobile: collapsed behind "เพิ่มเติม" · desktop: always shown */}
+            <div className={showTerms ? "block" : "hidden md:block"}>
               <div className="text-[10px] font-black tracking-[0.10em] uppercase text-primary-300 mb-1">{t("termsLabel")}</div>
               <ul className="flex flex-col gap-0.5">
                 {[t("termNote1"), t("termNote2")].map((term) => (
@@ -294,6 +308,17 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
                 ))}
               </ul>
             </div>
+
+            {/* toggle "เงื่อนไข เพิ่มเติม / ย่อ" — mobile only · slim text (no frame) · z-30 above the full-card LINE link (z-20) */}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowTerms((v) => !v); }}
+              aria-expanded={showTerms}
+              className="md:hidden relative z-30 self-start inline-flex items-center gap-0.5 py-1 text-[11px] font-bold text-white/95 drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)] active:opacity-70 transition-opacity"
+            >
+              {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2.6} />
+            </button>
           </>
         )}
       </div>
@@ -329,6 +354,27 @@ export function WarehouseRateGroup() {
           {t("warehouseHeading")}
         </h3>
       </header>
+
+      {/* Warehouse banner (โกดังจีน-ไทย · text baked into image) — clickable → LINE · hover-zoom */}
+      <TrackedExternalLink
+        href={LINE_URL}
+        cta="line_consult"
+        surface="lcl_warehouse_rate"
+        ctaProps={{ position: "warehouse_banner" }}
+        aria-label="โกดังรับสินค้า จีน-ไทย Pacred — ติดต่อทาง LINE"
+        className="group relative block mb-3 md:mb-4 overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
+      >
+        <Image
+          src="/images/mainpage/banner/import-export/warehousec2.png"
+          alt="โกดังรับสินค้า จีน-ไทย Pacred — Cargo / LCL นำเข้า-ส่งออก"
+          width={2280}
+          height={440}
+          unoptimized
+          sizes="(max-width: 768px) 100vw, 1120px"
+          className="w-full h-auto transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+        />
+      </TrackedExternalLink>
+
       <div
         ref={scrollRef}
         className="grid grid-cols-2 gap-2.5 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch"
@@ -550,5 +596,178 @@ export function RouteImportGroup() {
         ))}
       </div>
     </section>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  GROUP 3 — นำเข้า-ส่งออก เฟรท · Trip.com-style cards (mode → type · owner 2026-06-17)
+//  Homepage "FREIGHT IMPORT-EXPORT" section. Structure (owner spec):
+//    เรือ → FCL · แอร์ → AIR CARGO · รถ → FCL   (the "FCL" label is hidden in UI)
+//  Each type shows TWO card-rows: นำเข้า + ส่งออก (export = the นำเข้า routes
+//  with origin/dest swapped — "แค่สลับต้นทางกับปลายทาง"). FREIGHT_MODES stores
+//  the นำเข้า routes only; ส่งออก is derived at render via swapRoute().
+//  = 3 types × 2 directions = 6 card-rows × 4 cards = 24 cards. Trip.com cards
+//  (cover photo + route + "เริ่มต้น" price): 2-up grid on mobile · 4-up on
+//  desktop. Routes/prices/photos = placeholders (owner fills later).
+// ════════════════════════════════════════════════════════════════════
+
+type FreightCard = {
+  route: string;     // "ต้นทาง → ปลายทาง" — placeholder, owner fills
+  freight?: string;  // FOB freight-only price · omit = "สอบถามเรท"
+  unit?: string;     // "฿/ตู้" | "฿/CBM" | "฿/กก."
+  image?: string;        // นำเข้า cover photo (China port) · defaults to MODE_IMAGE
+  exportImage?: string;  // ส่งออก cover photo (Thai port = the export origin)
+};
+type FreightType = { type: string; cards: FreightCard[] };          // FCL | LCL | AIR CARGO
+type FreightMode = { mode: RateMode; heading: string; types: FreightType[] };
+
+const FREIGHT_MODES: FreightMode[] = [
+  { mode: "sea", heading: "เรือ", types: [
+    // FOB sea-freight (40HQ · เริ่มต้น/ถูกสุด) from "Pricing - FRE IM SEA FCL" (owner 2026-06-17)
+    { type: "SEA FREIGHT", cards: [
+      { route: "เซินเจิ้น → แหลมฉบัง", freight: "13,825", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Zenshen.png", exportImage: "/images/mainpage/card/freight/LaemChabang.png" },
+      { route: "หนิงโบ → คลองเตย",     freight: "10,500", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Ningbou.png", exportImage: "/images/mainpage/card/freight/Klongtoey.png" },
+      { route: "เซี่ยงไฮ้ → ลาดกระบัง", freight: "15,400", unit: "฿/ตู้", image: "/images/mainpage/card/freight/Xianghai.png", exportImage: "/images/mainpage/card/freight/ICDLADKRABANG.png" },
+      { route: "กวางโจว → แหลมฉบัง",  freight: "9,100",  unit: "฿/ตู้", image: "/images/mainpage/card/freight/GwangZhou.png", exportImage: "/images/mainpage/card/freight/Laemchabang2.png" },
+    ] },
+  ] },
+  { mode: "air", heading: "แอร์", types: [
+    { type: "AIR CARGO", cards: [
+      { route: "กว่างโจว → สุวรรณภูมิ" },
+      { route: "เซินเจิ้น → สุวรรณภูมิ" },
+      { route: "เซี่ยงไฮ้ → ดอนเมือง" },
+      { route: "ปักกิ่ง → สุวรรณภูมิ" },
+    ] },
+  ] },
+  { mode: "road", heading: "รถ", types: [
+    { type: "TRUCK FREIGHT", cards: [
+      { route: "กวางโจว → กรุงเทพฯ" },
+      { route: "เซินเจิ้น → กรุงเทพฯ" },
+      { route: "คุนหมิง → เชียงของ" },
+      { route: "หนานหนิง → มุกดาหาร" },
+    ] },
+  ] },
+];
+
+// ส่งออก = นำเข้า route with origin ↔ destination swapped ("แค่สลับต้นทางกับปลายทาง")
+function swapRoute(route: string): string {
+  const [origin, dest] = route.split("→").map((s) => s.trim());
+  return `${dest} → ${origin}`;
+}
+
+function FreightRouteCard({ mode, card }: {
+  mode: RateMode; card: FreightCard;
+}) {
+  const Icon = MODE_ICON[mode];
+  const inquire = !card.freight;
+  const [origin, dest] = card.route.split("→").map((s) => s.trim());
+  return (
+    <TrackedExternalLink
+      href={LINE_URL}
+      cta="line_consult"
+      surface="freight_port_card"
+      ctaProps={{ position: `freight_${mode}`, route: card.route }}
+      aria-label={`เส้นทาง ${card.route} — สอบถามเรทเฟรท Pacred ทาง LINE`}
+      className="group flex flex-col rounded-2xl overflow-hidden border border-border bg-white dark:bg-surface shadow-[0_4px_14px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.14)]"
+    >
+      {/* cover photo + FOB badge — 3:2 like Trip.com cards */}
+      <div className="relative aspect-[3/2] overflow-hidden bg-surface">
+        <Image
+          src={card.image ?? MODE_IMAGE[mode]}
+          alt={card.route}
+          fill
+          sizes="(max-width: 768px) 46vw, 260px"
+          className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+        />
+        <span className="absolute top-2 right-2 inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-primary-700 text-[9.5px] font-black tracking-[0.06em] shadow-[0_2px_6px_rgba(0,0,0,0.15)]">
+          FOB
+        </span>
+      </div>
+
+      {/* body — route + price (trip.com style) */}
+      <div className="flex flex-col gap-2 p-3 md:p-3.5">
+        <div className="flex items-center gap-1 text-[11.5px] md:text-[14px] font-black leading-tight text-[#111827] dark:text-white">
+          <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 text-primary-600 dark:text-primary-300" strokeWidth={2.4} />
+          <span className="flex-1 min-w-0 truncate">
+            {origin} <span className="font-bold text-muted">→</span> {dest}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          {inquire ? (
+            <span className="text-[13px] font-black text-primary-600 dark:text-primary-300">สอบถามเรท</span>
+          ) : (
+            <>
+              <span className="text-[10.5px] font-bold text-muted">เริ่มต้น</span>
+              <span className="text-[16px] md:text-[18px] font-black leading-none tabular-nums tracking-tight text-primary-600 dark:text-primary-300">{card.freight}</span>
+              <span className="text-[10px] font-bold text-muted">{card.unit}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </TrackedExternalLink>
+  );
+}
+
+export function FreightPortCards() {
+  return (
+    <div className="flex flex-col gap-6 md:gap-8">
+      {FREIGHT_MODES.map((m) => {
+        const Icon = MODE_ICON[m.mode];
+        return (
+          <div key={m.mode}>
+            {/* ── mode heading (เรือ / แอร์ / รถ) · single non-FCL type (e.g. AIR CARGO) shown inline ── */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="inline-flex w-8 h-8 rounded-lg items-center justify-center bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.25)]">
+                <Icon className="w-[18px] h-[18px]" strokeWidth={2.6} />
+              </span>
+              <h4 className="text-[17px] md:text-[19px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{m.heading}</h4>
+              {m.types.length === 1 && m.types[0].type !== "FCL" && (
+                <>
+                  <span className="inline-flex items-center shrink-0 px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11px] font-black tracking-[0.06em]">
+                    {m.types[0].type}
+                  </span>
+                  <span className="h-px flex-1 bg-border" />
+                </>
+              )}
+            </div>
+
+            {/* ── type sub-rows (FCL / LCL / AIR CARGO) ── */}
+            <div className="flex flex-col gap-4 md:gap-5">
+              {m.types.map((group) => (
+                <div key={group.type}>
+                  {/* type label + divider — only when a mode has >1 type (a single non-FCL type sits in the mode heading) */}
+                  {m.types.length > 1 && group.type !== "FCL" && (
+                    <div className="flex items-center gap-2.5 mb-2.5">
+                      <span className="inline-flex items-center shrink-0 px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11px] font-black tracking-[0.06em]">
+                        {group.type}
+                      </span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+
+                  {/* นำเข้า + ส่งออก (export = origin/dest swapped) */}
+                  <div className="flex flex-col gap-3.5">
+                    {[
+                      { dir: "นำเข้า", cards: group.cards },
+                      // ส่งออก order reversed so prices don't line up column-for-column with นำเข้า (owner 2026-06-17)
+                      { dir: "ส่งออก", cards: group.cards.map((c) => ({ ...c, route: swapRoute(c.route), image: c.exportImage ?? c.image })).reverse() },
+                    ].map((sub) => (
+                      <div key={sub.dir}>
+                        {/* 4 route cards — 2-up grid on mobile · 4-up on desktop (direction label removed · owner 2026-06-17) */}
+                        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 md:items-stretch">
+                          {sub.cards.map((card, i) => (
+                            <FreightRouteCard key={i} mode={m.mode} card={card} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

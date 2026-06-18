@@ -8,12 +8,10 @@ import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
 import { OurService } from "@/components/sections/our-service";
 import { ProductCategories } from "@/components/sections/product-categories";
-import { PurchaseBanner } from "@/components/sections/purchase-banner";
 import { PricingSection } from "@/components/sections/pricing-section";
 import { GuaranteeBanner } from "@/components/sections/guarantee-banner";
 import { CustomsModeCards } from "@/components/sections/customs-mode-cards";
 import { WhyPacred } from "@/components/sections/why-pacred";
-import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { ContactSales } from "@/components/sections/contact-sales";
 import { Reviews } from "@/components/sections/reviews";
 import { Blog } from "@/components/sections/blog";
@@ -114,7 +112,6 @@ export default async function Home({
         <Promotion />
         <OurService />
         <ProductCategories />
-        <PurchaseBanner />
         <PricingSection />
         <GuaranteeBanner />
         <section className="relative pt-3 md:pt-5 pb-1 md:pb-2">
@@ -124,7 +121,6 @@ export default async function Home({
         </section>
         <WhyPacred />
         <ContactSales />
-        <ImportExportBanner />
         <Reviews />
         <Blog />
         <HomeArticle locale={localeTyped} />
