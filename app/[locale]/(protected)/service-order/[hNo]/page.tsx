@@ -27,6 +27,14 @@ const PROVIDER_LABEL: Record<string, string> = {
   "1688": "1688", taobao: "Taobao", tmall: "Tmall", shop: "Shop", nice: "Nice",
 };
 
+// Forwarder (ฝากนำเข้า) fstatus 7-state labels — for the linked-imports card.
+// Mirrors lib/admin/forwarder-status.ts FSTATUS_CFG (kept inline so the customer
+// page doesn't pull the admin status module).
+const IMPORT_STATUS_LABEL: Record<string, string> = {
+  "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
+  "4": "ถึงไทยแล้ว", "5": "รอชำระเงิน", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
+};
+
 // Legacy `nameShipBy($hShipBy)` — function.php L91-143. Same carrier table the
 // forwarder detail page uses; the customer-side <select> enumerates the full
 // list (matching the Pacred forwarder edit-ship-by precedent — the legacy ZIP
@@ -140,6 +148,27 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
     canEditShipping && !warehousePickup && memberCode
       ? await loadCustomerAddressOptions(admin, memberCode)
       : [];
+
+  // ฝากนำเข้า (import) shipments that flowed FROM this shop order — surfaces the
+  // ฝากสั่งซื้อ → ฝากนำเข้า continuity (owner 2026-06-19: "งานเดียวกัน · โปรเซสไหลจาก
+  // ฝากสั่งไปฝากนำเข้า"). The import side already links BACK ("fromShopOrder" on
+  // /service-import); this is the forward link the shop-order page was missing.
+  // Keyed on tb_forwarder.reforder = this order's hno (written at admin spawn).
+  type LinkedImport = { id: number; ftrackingchn: string | null; fstatus: string | null; fcabinetnumber: string | null };
+  let linkedImports: LinkedImport[] = [];
+  const linkedImportHno = o.h_no ?? hNo;
+  if (linkedImportHno && memberCode) {
+    const { data: imports, error: importsErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, fstatus, fcabinetnumber")
+      .eq("reforder", linkedImportHno)
+      .eq("userid", memberCode)
+      .order("id", { ascending: false });
+    if (importsErr) {
+      console.error(`[service-order/[hNo] linked imports] failed`, { code: importsErr.code, message: importsErr.message });
+    }
+    linkedImports = (imports ?? []) as LinkedImport[];
+  }
 
   return (
     <>
@@ -359,6 +388,28 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 <p className="text-xs text-muted">📦 {t("warehousePickupHint")}</p>
               )}
             </div>
+
+            {linkedImports.length > 0 && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/40 dark:bg-blue-900/10 p-5 shadow-sm space-y-2">
+                <h3 className="font-bold text-sm">🚢 {t("linkedImportsTitle")} ({linkedImports.length})</h3>
+                <p className="text-xs text-muted">{t("linkedImportsHint")}</p>
+                <ul className="space-y-1.5">
+                  {linkedImports.map((f) => (
+                    <li key={f.id}>
+                      <Link
+                        href={`/service-import/${f.id}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
+                      >
+                        <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
+                        <span className="inline-block rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 text-[10px] px-2 py-0.5 font-medium whitespace-nowrap">
+                          {IMPORT_STATUS_LABEL[f.fstatus ?? ""] ?? "—"}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {o.note_user && (
               <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
