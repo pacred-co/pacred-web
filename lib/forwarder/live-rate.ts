@@ -293,6 +293,9 @@ export async function computeAndFillForwarderImportRate(
       // manual rate override (มัดจำ/กำหนดเอง) — honour it so an auto re-price
       // NEVER clobbers an admin's manually-set rate (owner "แก้มือได้ทุกจุด").
       "customrate, customratekg, customratecbm, " +
+      // per-order ค่าเทียบ override (mig 0187) — so a measure/sync auto-price picks
+      // the SAME KG-vs-CBM basis as the dimension-edit save (no basis drift).
+      "custom_comparison, custom_comparison_value, " +
       // doc-tier discount inputs (owner 2026-06-16 · doc_tier_confirmed = C1 mig 0188)
       "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed",
     )
@@ -311,6 +314,8 @@ export async function computeAndFillForwarderImportRate(
       customrate: string | null;
       customratekg: number | string | null;
       customratecbm: number | string | null;
+      custom_comparison: string | null;
+      custom_comparison_value: number | string | null;
       tax_doc_pref: string | null;
       reforder: string | null;
       adminidcreator: string | null;
@@ -374,6 +379,10 @@ export async function computeAndFillForwarderImportRate(
   // typed KG/CBM rate (the waterfall returns it as source:"manual") so a re-price
   // (MOMO sync · warehouse measure · backfill) NEVER overwrites a manual rate.
   const customRateSwitch = String(row.customrate ?? "0").trim() === "1";
+  // Per-order ค่าเทียบ override (mig 0187) — pick the SAME KG-vs-CBM basis the
+  // dimension-edit save would, so a measure/sync auto-price never drifts the basis.
+  const customComparisonSwitch = String(row.custom_comparison ?? "0").trim() === "1";
+  const customComparisonValue = customComparisonSwitch ? num(row.custom_comparison_value) : 0;
   const ctx: PricingRowContext = {
     userid:              row.userid,
     fwarehousechina:     String(row.fwarehousechina ?? "").trim(),
@@ -389,6 +398,8 @@ export async function computeAndFillForwarderImportRate(
     customRateCbm:       customRateSwitch ? num(row.customratecbm) : 0,
     userComparison,
     userComparisonValue,
+    customComparisonSwitch,
+    customComparisonValue,
     docTierEligible,
     docTierDiscountCbm,
   };
