@@ -108,6 +108,13 @@ export interface PricingRowContext {
   docTierEligible?: boolean;
   /** THB/CBM discount amount (config-driven, default 800). */
   docTierDiscountCbm?: number;
+  /**
+   * ค่าเทียบ on the ORDER TOTAL (ภูม 2026-06-18). Σweight÷Σcbm of the whole
+   * multi-tracking order — used for the KG-vs-CBM basis DECISION while each row
+   * still prices on its own weight/cbm. Optional + back-compat: undefined → the
+   * decision uses this row's own ratio (every existing caller is unaffected).
+   */
+  comparisonKgPerCbm?: number;
 }
 
 export async function resolveLiveForwarderRate(
@@ -235,6 +242,9 @@ export async function resolveLiveForwarderRate(
     volumeCbm: ctx.cbmProduct,
     comparisonEnabled,
     comparisonValue,
+    // ค่าเทียบ basis decision on the order total (ภูม 2026-06-18) — pass-through;
+    // undefined → resolver uses this row's own ratio (back-compat).
+    comparisonKgPerCbm: ctx.comparisonKgPerCbm,
     // NB: we deliberately DON'T set resolveForwarderRate's `customComparison`
     // flag — that flag FORCES the legacy 200/150 threshold, whereas the edit
     // form lets the admin type an arbitrary ค่าเทียบ (e.g. 250). Threading the

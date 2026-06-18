@@ -218,6 +218,10 @@ export function PerTrackingEditorClient({
           customRateCbm: parseFloat(customRateCbm) || 0,
           customComparison,
           userComparisonValue: parseFloat(comparisonValue) || 0,
+          // ค่าเทียบ on the ORDER TOTAL (ภูม 2026-06-18 "เทียบต่อจำนวนรวม กิโล/คิว") —
+          // Σweight÷Σcbm of every tracking, so the KG-vs-CBM basis is decided ONCE
+          // on the whole order (matching the preview box above), not per row.
+          comparisonKgPerCbm: calc.v > 0 ? calc.kgPerCbm : undefined,
           // per-row adders.
           fDiscount: parseFloat(r.fDiscount) || 0,
           fTransportPriceChnThb: parseFloat(r.fTransportPriceChnThb) || 0,

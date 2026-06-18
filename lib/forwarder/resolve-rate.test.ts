@@ -321,5 +321,52 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("backcompat: docDiscountApplied present + 0", r.docDiscountApplied, 0);
 }
 
+// ── 11. ค่าเทียบ on the ORDER TOTAL (ภูม 2026-06-18) ──
+// comparisonKgPerCbm overrides the basis DECISION (aggregate Σkg÷Σcbm) while the
+// per-row VALUE still uses this row's own weight/cbm. threshold 250.
+{
+  const c = cand({ isSvip: true, svipKg: 10, svipCbm: 100 });
+  // Row is dense (300/1 = 300 > 250 → individually KG) but the ORDER total is
+  // light (aggregate 150 < 250 → should bill CBM on the aggregate).
+  const perRow = resolveForwarderRate(
+    c,
+    inp({ weightKg: 300, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250 }),
+  );
+  eq("total: per-row (no aggregate) → KG (300>250)", perRow.basis, "kg");
+
+  const agg = resolveForwarderRate(
+    c,
+    inp({ weightKg: 300, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250, comparisonKgPerCbm: 150 }),
+  );
+  eq("total: aggregate 150<250 → flips to CBM", agg.basis, "cbm");
+  // VALUE is still THIS row's own cbm (1) × rate 100 = 100 (not the aggregate).
+  near("total: CBM subtotal = row cbm 1 × 100", agg.transportSubtotal, 100);
+  eq("total: refPrice=2 (CBM)", agg.refPrice, 2);
+}
+{
+  const c = cand({ isSvip: true, svipKg: 10, svipCbm: 100 });
+  // Reverse: a light row (100/1 = 100 < 250 → individually CBM) in a DENSE order
+  // (aggregate 300 > 250 → should bill KG).
+  const perRow = resolveForwarderRate(
+    c,
+    inp({ weightKg: 100, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250 }),
+  );
+  eq("total: per-row light → CBM (100<250)", perRow.basis, "cbm");
+
+  const agg = resolveForwarderRate(
+    c,
+    inp({ weightKg: 100, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250, comparisonKgPerCbm: 300 }),
+  );
+  eq("total: aggregate 300>250 → flips to KG", agg.basis, "kg");
+  // VALUE = this row's own weight (100) × rate 10 = 1000.
+  near("total: KG subtotal = row weight 100 × 10", agg.transportSubtotal, 1000);
+}
+{
+  // back-compat: comparison OFF → comparisonKgPerCbm is ignored (ราคามากสุด path).
+  const c = cand({ isSvip: true, svipKg: 50, svipCbm: 2000 });
+  const r = resolveForwarderRate(c, inp({ weightKg: 50, volumeCbm: 1, comparisonKgPerCbm: 999 }));
+  eq("total: comparison OFF ignores aggregate → KG wins (2500>2000)", r.basis, "kg");
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);
