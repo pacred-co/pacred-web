@@ -198,6 +198,13 @@ export function CntListTable({
         return {
           ...r,
           diffDay,
+          // จำนวนแทรคกิ้ง = countable forwarder rows (forwardersTotal already
+          // drops the MOMO หัวบิล placeholder · audit 2026-06-18). Was the RPC
+          // row_count which over-counts a split-MOMO cabinet by +1 (the หัวบิล),
+          // making จำนวนแทรคกิ้ง disagree with ยิงครบ in the same row. The
+          // money/volume Σ are unaffected (the หัวบิล carries 0). Falls back to
+          // the RPC count when there's no completeness data.
+          trackCount: (c?.forwardersTotal ?? 0) > 0 ? c!.forwardersTotal : r.trackCount,
           profitSum: r.priceSum - r.costSum,
           completenessExpected: c?.expected ?? 0,
           completenessScanned: c?.scanned ?? 0,
