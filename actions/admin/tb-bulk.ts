@@ -19,6 +19,7 @@
 
 import { revalidatePath } from "next/cache";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { findDuplicateSlips } from "@/lib/admin/duplicate-slip-check";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -159,6 +160,21 @@ export async function adminBulkApproveWalletHs(
 
       for (const r of candidates) {
         const amt = Number(r.amount);
+
+        // ชั้น-1 dup gate (legacy w-s-deposit-detail.php) — a SAME-CUSTOMER
+        // same-day same-amount pending/approved twin = a likely double-paid slip.
+        // Auto-debit rows with no slip short-circuit (dateslip null). In the BULK
+        // path we can't show a per-row confirm, so we SKIP such a row and report
+        // it: the accountant clears it one-by-one on /admin/wallet/[id] (where
+        // the confirm-to-override dialog lives).
+        {
+          const dups = await findDuplicateSlips(admin, { id: r.id, userid: r.userid, amount: r.amount, dateslip: r.dateslip });
+          if (dups.length > 0) {
+            failed++;
+            errors.push(`id=${r.id}: พบสลิปที่อาจซ้ำ (${dups.length} รายการ) — ตรวจสอบทีละรายการที่หน้ารายละเอียด`);
+            continue;
+          }
+        }
         // Determine wallet delta from legacy `type` taxonomy:
         //   '1'/'2' = deposit (credit) · '4'/'7' = order-pay/pending-pay (debit)
         // ADR-0018 P1-26 note: type='3' (customer withdraw) is INTENTIONALLY

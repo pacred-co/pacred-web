@@ -57,6 +57,7 @@
 
 import { revalidatePath } from "next/cache";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { findDuplicateSlips } from "@/lib/admin/duplicate-slip-check";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -630,6 +631,10 @@ function classifyHnoParent(hno: string): ParentClass {
 
 const approveDepositSchema = z.object({
   id: z.number().int().positive(),
+  // ชั้น-1 dup gate (owner 2026-06-19): the approve REFUSES when a same-day
+  // same-amount slip exists, unless the accountant explicitly acknowledges it
+  // (the legacy blocking dup-review Pacred had softened to an advisory banner).
+  acknowledgeDuplicate: z.boolean().optional(),
 });
 export type AdminApproveWalletDepositInput = z.infer<typeof approveDepositSchema>;
 
@@ -679,7 +684,7 @@ export async function adminApproveWalletDeposit(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { id } = parsed.data;
+  const { id, acknowledgeDuplicate } = parsed.data;
 
   return withAdmin<ApproveResult>(
     ["accounting"],
@@ -737,6 +742,21 @@ export async function adminApproveWalletDeposit(
       }
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+
+      // ── ชั้น-1 BLOCKING dup gate (owner 2026-06-19 · the dropped legacy layer).
+      //    Refuse the settle when a same-day same-amount slip exists (likely a
+      //    double-submitted/double-paid slip) unless the accountant ticked
+      //    acknowledgeDuplicate after eyeballing it. Restores the legacy hard
+      //    dup-review that Pacred had softened to an advisory red banner.
+      if (!acknowledgeDuplicate) {
+        const dups = await findDuplicateSlips(admin, { id: rowRaw.id, userid: rowRaw.userid, amount: rowRaw.amount, dateslip: rowRaw.dateslip });
+        if (dups.length > 0) {
+          return {
+            ok: false,
+            error: `พบสลิปที่อาจซ้ำ (วันโอนเดียวกัน ยอดเท่ากัน ${dups.length} รายการ) — ตรวจสอบแล้วยืนยันว่าไม่ใช่รายการซ้ำก่อนอนุมัติ`,
+          };
+        }
       }
 
       // ──────────────────────────────────────────────

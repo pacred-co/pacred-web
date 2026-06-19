@@ -46,6 +46,7 @@
 
 import { revalidatePath } from "next/cache";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { findDuplicateSlips } from "@/lib/admin/duplicate-slip-check";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -191,6 +192,9 @@ const approveSchema = z.object({
   // UNIT C — optional "หมายเหตุงาน" (internal work note). When present it is
   // APPENDED to tb_wallet_hs.note (never clobbers the [CB:]/[WALLET:] tags).
   note: z.string().trim().max(500).optional(),
+  // ชั้น-1 dup gate: when a same-day same-amount twin exists the approve is
+  // BLOCKED unless the accountant explicitly confirms it's not a double-pay.
+  acknowledgeDuplicate: z.boolean().optional(),
 });
 export type AdminApproveWalletHsInput = z.infer<typeof approveSchema>;
 
@@ -201,7 +205,7 @@ export async function adminApproveWalletHs(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { id, note: workNote } = parsed.data;
+  const { id, note: workNote, acknowledgeDuplicate } = parsed.data;
 
   return withAdmin<{ id: number; new_balance: number }>(
     ["accounting"],
@@ -237,6 +241,21 @@ export async function adminApproveWalletHs(
       if (!row) return { ok: false, error: "ไม่พบรายการ" };
       if (row.status !== "1") {
         return { ok: false, error: `รายการนี้ดำเนินการแล้ว (สถานะ ${row.status})` };
+      }
+
+      // ชั้น-1 dup gate (legacy w-s-deposit-detail.php) — a SAME-CUSTOMER
+      // same-day same-amount pending/approved twin = a likely double-paid slip.
+      // Auto-debit rows with no incoming slip short-circuit (dateslip null), so
+      // this only fires on rows that carry a real slip. BLOCK unless the
+      // accountant confirms it's not a duplicate (acknowledgeDuplicate=true).
+      if (!acknowledgeDuplicate) {
+        const dups = await findDuplicateSlips(admin, { id: row.id, userid: row.userid, amount: row.amount, dateslip: row.dateslip });
+        if (dups.length > 0) {
+          return {
+            ok: false,
+            error: `พบสลิปที่อาจซ้ำ (วันโอนเดียวกัน ยอดเท่ากัน ${dups.length} รายการ) — ตรวจสอบแล้วยืนยันอีกครั้งเพื่ออนุมัติ`,
+          };
+        }
       }
 
       const amt = Number(row.amount);

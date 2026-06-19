@@ -605,6 +605,12 @@ export default async function AdminWalletDetail({
                 id={row.id}
                 hasDateSlip={Boolean(row.dateslip)}
                 kind={row.type === "3" ? "withdraw" : "deposit"}
+                // ชั้น-1 dup gate: only a pending('1')/approved('2') same-day
+                // same-amount twin is a double-pay risk (a rejected '3' twin is
+                // harmless) — mirror the server's findDuplicateSlips predicate.
+                hasDuplicate={similar.some(
+                  (s) => s.status === "1" || s.status === "2",
+                )}
               />
             ) : (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">

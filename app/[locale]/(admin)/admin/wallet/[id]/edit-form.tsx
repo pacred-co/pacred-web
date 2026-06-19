@@ -138,6 +138,7 @@ export function ApproveRejectForm({
   id,
   hasDateSlip,
   kind = "deposit",
+  hasDuplicate = false,
 }: {
   id: number;
   hasDateSlip: boolean;
@@ -150,6 +151,12 @@ export function ApproveRejectForm({
    *                adminApproveWithdraw. ADR-0018 D-2 rule 1 + rule 3 ¶3-4.
    */
   kind?: "deposit" | "withdraw";
+  /**
+   * The legacy verify "ชั้น 1" dup gate: a same-day same-amount slip exists.
+   * When true the approve requires an explicit human confirm before it fires;
+   * the server ALSO re-checks and blocks unless acknowledgeDuplicate=true.
+   */
+  hasDuplicate?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
@@ -168,10 +175,25 @@ export function ApproveRejectForm({
       setError("กรุณากรอกวันที่ในสลิปก่อนอนุมัติ");
       return;
     }
+    // ชั้น-1 dup gate (legacy w-s-deposit-detail.php): a same-day same-amount
+    // slip exists → make the accountant explicitly confirm it's NOT a double
+    // submission before the one-click approve credits the wallet. The server
+    // re-runs the same check and blocks unless acknowledgeDuplicate is set.
+    let acknowledgeDuplicate = false;
+    if (!isWithdraw && hasDuplicate) {
+      if (
+        !window.confirm(
+          "⚠️ พบสลิปที่อาจซ้ำ (วันโอนเดียวกัน ยอดเท่ากัน)\n\nตรวจสอบแล้วว่าไม่ใช่รายการซ้ำ และต้องการอนุมัติต่อใช่หรือไม่?",
+        )
+      ) {
+        return;
+      }
+      acknowledgeDuplicate = true;
+    }
     startTransition(async () => {
       const res = isWithdraw
         ? await adminApproveWithdraw({ id })
-        : await adminApproveWalletDeposit({ id });
+        : await adminApproveWalletDeposit({ id, acknowledgeDuplicate });
       if (res.ok) {
         router.refresh();
       } else {
