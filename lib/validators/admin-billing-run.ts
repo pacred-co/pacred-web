@@ -65,6 +65,18 @@ export const createBillingRunInvoiceSchema = z.object({
   discountThb:    positiveMoney.default(0),
   /** หมายเหตุสำหรับลูกค้า — free text. Max 2000 to bound payload. */
   noteForCustomer: z.string().trim().max(2000, "หมายเหตุยาวเกินไป").default(""),
+  /** Build A guard 2026-06-19 — explicit ack that the admin is billing row(s) with
+   *  NO measured น้ำหนัก+ปริมาตร (the warehouse measure step was skipped → the
+   *  auto-priced transport SELL is ฿0 → silent under-charge). The form shows a
+   *  ⚠️ badge + a confirm before setting this; the server REFUSES unmeasured rows
+   *  unless it is true. */
+  allowUnmeasured: z.boolean().optional().default(false),
+  /** Build A D2 2026-06-19 — per-line bill-amount override (forwarder_id → ฿amount,
+   *  keyed as a string). Lets the admin correct a row's billed amount inline (e.g.
+   *  type the right figure on a ค่าขนส่ง-฿0 row). The action uses the override when
+   *  present, else calcForwarderOutstanding; stray keys not in forwarderIds are
+   *  ignored. Bounded by positiveMoney (≥0, ≤9,999,999,999.99) to block fat-finger. */
+  overrides: z.record(z.string(), positiveMoney).optional().default({}),
 }).superRefine((val, ctx) => {
   if (new Date(val.dateDue) < new Date(val.dateIssued)) {
     ctx.addIssue({
