@@ -133,7 +133,12 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
     } else {
       wtDiff = t.totalWt != null && (curWt == null || Math.abs(curWt - t.totalWt) > WT_EPS);
       volDiff = t.totalVol != null && (curVol == null || Math.abs(curVol - t.totalVol) > VOL_EPS);
-      cabDiff = (t.container ?? "").trim() !== (curCab ?? "").trim();
+      // Only a cabinet diff when แต้ม actually HAS a container value. Continuation
+      // rows (1779955936-2..-5) carry an empty container cell (they inherit the
+      // parent's), so an empty แต้ม container must NOT flag-diff against Pacred's real
+      // cabinet — else those rows would show "จะอัปเดต" forever (and the apply guard
+      // skips the cabinet write anyway). Pacred's cabinet is authoritative there.
+      cabDiff = !!t.container && t.container.trim() !== (curCab ?? "").trim();
       amtDiff = t.parcel != null && curAmt != null && curAmt !== t.parcel;
       const anyDiff = wtDiff || volDiff || cabDiff || amtDiff;
       verdict = !anyDiff ? "ok" : isBilled ? "billed" : "update";

@@ -32,21 +32,23 @@ reconciles should go through the UI tool (which logs `taem_reconcile.apply`).
 
 ---
 
-## 🔴 HELD FOR REVIEW (owner decision — NOT touched)
+## 🔴 HELD FOR REVIEW (owner decision — NOT touched) — only ONE item left
 
-### 1. #52089 `616035273` — BILLED but undercounted
+### 1. #52089 `616035273` — BILLED but undercounted  ← the only open item
 - fstatus=6 (เตรียมส่ง · already billed). Pacred: wt 18 / vol 0.066. แต้ม: wt **36** /
   vol **0.132** — the bill was computed on **half** the real volume → **under-billed**.
 - **Decision needed:** issue a top-up bill for the difference, or accept the loss.
   (Updating the basis now would desync the issued bill, so the tool skips it.)
 
-### 2. `1779955936` (+ `-2..-5`) — held per owner instruction
-- The split sub-rows **DO exist** in Pacred (#52052 parent + #52053–#52056 children) —
-  the earlier "missing ~1 ton" was a recon artifact (the strict parser didn't match the
-  empty-container continuation rows). **Nothing is actually missing.**
-- Held anyway per the owner's "ทำเป็นรีวิว รอไว้ก่อน". The diffs on these rows are minor
-  (sub-µ precision on the parent; children already match). **Decision needed:** include
-  them in a future reconcile apply, or leave as-is.
+## ✅ RESOLVED — `1779955936` (+ `-2..-5`) (2026-06-19, owner: "ทำต่อให้จบ")
+- The split sub-rows DO exist (#52052 parent + #52053–#52056 children) — "missing ~1 ton"
+  was a recon artifact (the strict parser didn't match the empty-container continuation
+  rows). Nothing was missing.
+- Children #52053–56 already matched แต้ม exactly; only the parent #52052 had a sub-µ
+  precision diff (vol 0.310860→0.310856). **Applied #52052 (re-priced).** All
+  1779955936* rows now exact. Backup `/tmp/taem-1779-backup.json`.
+- Tool fix shipped: `cabDiff` now ignores แต้ม's empty-container continuation rows (they
+  were perpetually flagged "จะอัปเดต" against Pacred's real cabinet).
 
 ---
 
