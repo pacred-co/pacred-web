@@ -37,6 +37,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { resolveComparisonInput } from "@/lib/forwarder/comparison-guard";
 import {
   resolveLiveForwarderRate,
   type PricingRowContext,
@@ -249,8 +250,20 @@ export async function adminUpdateForwarderDimensions(
     // (the legacy `update.php` was implicitly any-staff-with-the-
     // adminID-cookie; this matches that intent in V3 roles).
     ["ops", "accounting", "super", "warehouse"],
-    async ({ adminId }) => {
+    async ({ adminId, roles }) => {
       const admin         = createAdminClient();
+
+      // ── ค่าเทียบ (KG-vs-CBM comparison) server-side guard (2026-06-19) ──
+      //   ภูม's client rule: warehouse staff may NOT edit ค่าเทียบ + it's capped
+      //   at ≤350. The client disables the input, but warehouse IS admitted to
+      //   this action — so a crafted POST could still set/override this billing-
+      //   pricing field. resolveComparisonInput() mirrors the client gate: a
+      //   non-god warehouse caller's override is dropped (stored value seeds) and
+      //   an over-cap value is rejected. (See lib/forwarder/comparison-guard.ts.)
+      const cmp = resolveComparisonInput(roles, d.customComparison, d.userComparisonValue);
+      if (cmp.error) return { ok: false, error: cmp.error };
+      const cmpSwitchInput = cmp.switchInput;
+      const cmpValueInput  = cmp.valueInput;
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
       // Issue 3: a typed CBM overrides the W×L×H derivation (rounded to the
       // legacy numeric(10,5) shape); omitted → fall back to computeCbm.
@@ -384,13 +397,16 @@ export async function adminUpdateForwarderDimensions(
       //   write it; when omitted (old callers e.g. ForwarderRateMissingFallback
       //   re-pricing) we SEED from the persisted row value so a re-price keeps
       //   the override (never silently drops it back to the tb_users default).
+      // Uses the role-gated/cap-checked inputs (cmpSwitchInput / cmpValueInput)
+      // computed above — NOT the raw d.customComparison — so a warehouse caller's
+      // override is dropped (stored value seeds) and an over-cap value is rejected.
       const customComparisonSwitch =
-        d.customComparison !== undefined
-          ? d.customComparison === "1"
+        cmpSwitchInput !== undefined
+          ? cmpSwitchInput === "1"
           : String(before.custom_comparison ?? "0").trim() === "1";
       const customComparisonValue =
-        d.customComparison !== undefined
-          ? (d.userComparisonValue !== undefined ? d.userComparisonValue : 0)
+        cmpSwitchInput !== undefined
+          ? (cmpValueInput !== undefined ? cmpValueInput : 0)
           : num(before.custom_comparison_value);
 
       // ── owner-locked doc-tier discount eligibility (owner 2026-06-16) ──

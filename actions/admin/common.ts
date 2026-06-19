@@ -42,8 +42,12 @@ export async function logAdminAction(
 /** Wrap an admin action body with auth + audit. Throws on auth failure. */
 export async function withAdmin<T>(
   roles: AdminRole[] | undefined,
-  fn: (ctx: { adminId: string }) => Promise<AdminActionResult<T>>,
+  // ctx.roles (2026-06-19) exposes the CALLER's actual roles so an action that
+  // admits several roles can still gate a specific field per-role (e.g. the
+  // forwarder ค่าเทียบ override is read-only for `warehouse`). Additive — existing
+  // callers that destructure only { adminId } are unaffected.
+  fn: (ctx: { adminId: string; roles: AdminRole[] }) => Promise<AdminActionResult<T>>,
 ): Promise<AdminActionResult<T>> {
-  const { user } = await requireAdmin(roles);
-  return fn({ adminId: user.id });
+  const { user, roles: actualRoles } = await requireAdmin(roles);
+  return fn({ adminId: user.id, roles: actualRoles });
 }
