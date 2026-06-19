@@ -30,6 +30,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseTaemReconcile } from "@/lib/admin/taem-reconcile-parser";
+import { collectContainerEtdEta } from "@/lib/admin/taem-etd-eta";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
@@ -50,6 +51,8 @@ export type TaemReconcileRow = {
   taemParcel: number | null;
   taemWt: number | null;
   taemVol: number | null;
+  taemEtd: string | null;   // ETD from แต้ม packing-list (ISO yyyy-mm-dd | null)
+  taemEta: string | null;   // ETA from แต้ม packing-list (ISO yyyy-mm-dd | null)
   // pacred current
   matched: boolean;
   fid: number | null;
@@ -154,6 +157,8 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       taemParcel: t.parcel,
       taemWt: t.totalWt,
       taemVol: t.totalVol,
+      taemEtd: t.etd,
+      taemEta: t.eta,
       matched,
       fid: f?.id ?? null,
       userid: f?.userid ?? null,
@@ -194,6 +199,7 @@ export type TaemApplyResult = {
   repriceFailed: number;  // basis written but no rate card → needs manual price
   skippedBilled: number;
   total: number;
+  etdEtaUpserted: number; // distinct containers whose ETD/ETA was stored from แต้ม
 };
 
 /** Apply — re-parses the SAME text, writes the basis on non-billed differing rows,
@@ -246,8 +252,39 @@ export async function applyTaemReconcile(input: unknown): Promise<AdminActionRes
       else { repriceFailed += 1; repriceFailedTracks.push(r.tracking); }
     }
 
+    // ── Persist ETD/ETA per container (report-cnt #4) ──────────────────────
+    // แต้ม (iTAM) is AUTHORITATIVE for ETD/ETA (owner 2026-06-19/20: "ยึดของแต้ม
+    // เป็นหลัก, MOMO มาเทียบ"). Store into the dedicated taem_container_etd_eta
+    // table (keyed by the container code report-cnt groups by). MOMO's own etd/eta
+    // on momo_import_tracks are LEFT UNTOUCHED → the resolver can show แต้ม first +
+    // fall back to MOMO. Independent of the basis-update guard: an `ok` row (already
+    // matching) can still carry fresh etd/eta. Best-effort — never fails the apply.
+    let etdEtaUpserted = 0;
+    const etdEtaRows = collectContainerEtdEta(preview.rows.filter((r) => r.isData));
+    if (etdEtaRows.length > 0) {
+      const nowIso = new Date().toISOString();
+      const { error: upErr } = await admin
+        .from("taem_container_etd_eta")
+        .upsert(
+          etdEtaRows.map((r) => ({
+            container_no: r.container_no,
+            etd: r.etd,
+            eta: r.eta,
+            source: "taem",
+            updated_by: adminId,
+            updated_at: nowIso,
+          })),
+          { onConflict: "container_no" },
+        );
+      if (upErr) {
+        console.error("[taem-reconcile apply] etd/eta upsert failed", { code: upErr.code, message: upErr.message });
+      } else {
+        etdEtaUpserted = etdEtaRows.length;
+      }
+    }
+
     await logAdminAction(adminId, "taem_reconcile.apply", "tb_forwarder", "", {
-      basisUpdated, repriced, repriceFailed,
+      basisUpdated, repriced, repriceFailed, etdEtaUpserted,
       candidates: preview.summary.willUpdate,
       repriceFailedTracks: repriceFailedTracks.slice(0, 50),
     });
@@ -260,6 +297,7 @@ export async function applyTaemReconcile(input: unknown): Promise<AdminActionRes
         repriceFailed,
         skippedBilled: preview.summary.billedDiffer,
         total: preview.summary.willUpdate,
+        etdEtaUpserted,
       },
     };
   });

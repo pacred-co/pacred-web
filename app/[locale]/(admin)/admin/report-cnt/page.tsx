@@ -51,6 +51,10 @@ import {
   getContainerCompletenessBatch,
   type ContainerCompleteness,
 } from "@/lib/warehouse/container-completeness";
+import {
+  resolveMomoContainerInfo,
+  type MomoContainerInfo,
+} from "@/lib/admin/momo-container-resolve";
 
 export const dynamic = "force-dynamic";
 
@@ -329,6 +333,20 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
         )
       : {};
 
+  // report-cnt #4 (owner 2026-06-19/20) — resolve MOMO routing-batch placeholder
+  // cabinets (the "SEA0x" rows like PR20260605-SEA03 / MO20260523-SEA02 that
+  // MOMO generates BEFORE the container closes) → the REAL container code
+  // (container_batch_no · GZS260601-1) or, while the container is still open, the
+  // sack number (เลขกระสอบ · CBX260523-EK01). Also pulls etd/eta from the same
+  // momo_import_tracks rows so the ETD/ETA columns auto-fill the day MOMO/แต้ม
+  // pushes them. One round-trip; only the placeholder cabinets are looked up.
+  // See lib/admin/momo-container-resolve.ts for the data-state caveat (etd/eta
+  // are 100% NULL in prod today — pending the แต้ม packing-list feed).
+  const momoInfoByCab: Record<string, MomoContainerInfo> =
+    grouped.length > 0
+      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
+      : {};
+
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
@@ -343,11 +361,20 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   // (warehouse role doesn't see cost/price/profit). 1 row per cabinet.
   const csvRows: CsvRow[] = grouped.map((g) => {
     const profit = g.priceSum - g.costSum;
+    const momo = momoInfoByCab[g.fcabinetnumber];
+    // เลขตู้/กระสอบจริง — for a SEA0x placeholder, the real container (or, while
+    // the container is still open, the sack) from MOMO. Else the cabinet itself.
+    const realContainer = momo?.realContainer ?? (momo?.sackNo ? `กระสอบ ${momo.sackNo}` : g.fcabinetnumber);
     return {
       "หมายเลขตู้":        g.fcabinetnumber,
+      "เลขตู้/กระสอบจริง":  realContainer,
       "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
       "ขนส่ง":             TRANSPORT_LABEL[resolveTransportMode(g.fcabinetnumber, g.ftransporttype)] ?? g.ftransporttype,
       "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
+      // ETD/ETA — sourced from MOMO/แต้ม when available (NULL in prod today · see
+      // momo-container-resolve.ts). Empty string keeps the CSV column stable.
+      "ETD (เรือออกจีน)":  momo?.etd ?? "",
+      "ETA (ถึงไทย)":      momo?.eta ?? "",
       "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
       "จำนวนแทร็คกิ้ง":    g.trackCount,
       "ปริมาตรรวม (CBM)":  g.volumeSum.toFixed(4),
@@ -517,6 +544,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             warehouseLabel={WAREHOUSE_LABEL}
             transportLabel={TRANSPORT_LABEL}
             completenessByCab={completenessByCab}
+            momoInfoByCab={momoInfoByCab}
           />
         )}
         {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons

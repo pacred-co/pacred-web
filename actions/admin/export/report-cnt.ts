@@ -37,6 +37,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
+import { resolveMomoContainerInfo, type MomoContainerInfo } from "@/lib/admin/momo-container-resolve";
 import type { CsvRow } from "@/components/admin/csv-button";
 
 // Safety cap for the "export all filtered" path (mirrors leads EXPORT_CAP).
@@ -264,14 +265,26 @@ export async function exportReportCntAll(
   const truncated = grouped.length > EXPORT_CAP;
   if (truncated) grouped = grouped.slice(0, EXPORT_CAP);
 
+  // ── Step 3b: resolve SEA0x placeholders → real container/sack + etd/eta
+  //    (report-cnt #4 · IDENTICAL to the page's momoInfoByCab). One round-trip. ──
+  const momoInfoByCab: Record<string, MomoContainerInfo> =
+    grouped.length > 0
+      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
+      : {};
+
   // ── Step 4: map to CSV rows — IDENTICAL keys/labels/value-mapping + showMoney gate ──
   const rows: CsvRow[] = grouped.map((g) => {
     const profit = g.priceSum - g.costSum;
+    const momo = momoInfoByCab[g.fcabinetnumber];
+    const realContainer = momo?.realContainer ?? (momo?.sackNo ? `กระสอบ ${momo.sackNo}` : g.fcabinetnumber);
     return {
       "หมายเลขตู้":        g.fcabinetnumber,
+      "เลขตู้/กระสอบจริง":  realContainer,
       "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
       "ขนส่ง":             TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype,
       "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
+      "ETD (เรือออกจีน)":  momo?.etd ?? "",
+      "ETA (ถึงไทย)":      momo?.eta ?? "",
       "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
       "จำนวนแทร็คกิ้ง":    g.trackCount,
       "ปริมาตรรวม (CBM)":  g.volumeSum.toFixed(4),

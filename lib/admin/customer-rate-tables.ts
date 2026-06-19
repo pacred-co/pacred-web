@@ -96,20 +96,43 @@ export const DEFAULT_START: Record<WarehouseId, RateMatrix> = {
 };
 
 /**
- * Cost floor / ราคาขั้นต่ำ — the minimum sell rate; a customer rate can't be
- * set below this. Display-only in legacy (dev-set), but we surface + soft-
- * enforce it (the modal promises "ราคาที่ไม่สามารถปรับได้ถูกกว่านี้แล้ว").
- * Values from the current prod page (admin-supplied 2026-05-30). Same floor
- * for both warehouses in the legacy build.
+ * Sell floor / ราคาขายขั้นต่ำ — the LOWEST a customer may be sold at; a sell
+ * rate (per-customer or manual override) can't be set below this. Now HARD-
+ * enforced on the save paths (ภูม 2026-06-19: "เผื่อพนักงานตั้งผิดจะได้กดไม่ได้ ·
+ * จะ VIP แค่ไหนก็ห้ามขายต่ำกว่าราคาที่ภูมิบอกไว้เลย").
+ *
+ * ── CBM floor (฿/คิว) — owner-set, PER WAREHOUSE × mode, same for every
+ *    product type (ภูม 2026-06-19, confirmed "ค่าเดียวทุกประเภทสินค้า") ─────────
+ *      กวางโจว (1):  รถ 4,900 · เรือ 2,900
+ *      อี้อู   (2):  รถ 5,500 · เรือ 2,900
+ *    (MOMO ต้นทุนจริง = 2,500/คิว · floor เรือ 2,900 = ต้นทุน + margin ขั้นต่ำ.)
+ *    These REPLACE the older per-product cost figures (5300/3300… were stale).
+ *
+ * ── KG floor (฿/กก.) — legacy values kept (owner spoke only to the CBM rate);
+ *    same both warehouses. A 0 = "ไม่คิดตามหน่วยนี้" → never below floor.
+ *
+ * Edit-the-floor itself = ultra (Ultra Admin Z) only — see the InfoTab note +
+ * the (deferred) in-app floor editor. Today it is code-locked (no non-ultra can
+ * lower it).
  */
-export const COST_FLOOR: RateMatrix = {
-  kg: {
-    "1": { "1": 20, "2": 25, "3": 25, "4": 50 }, // ทางรถ
-    "2": { "1": 15, "2": 20, "3": 20, "4": 40 }, // ทางเรือ
+const KG_FLOOR_LEGACY: RateMatrix["kg"] = {
+  "1": { "1": 20, "2": 25, "3": 25, "4": 50 }, // ทางรถ
+  "2": { "1": 15, "2": 20, "3": 20, "4": 40 }, // ทางเรือ
+};
+/** Build a CBM floor row: one flat value for all 4 product types. */
+const cbmFlat = (v: number): Record<ProductId, number | null> => ({
+  "1": v, "2": v, "3": v, "4": v,
+});
+export const COST_FLOOR: Record<WarehouseId, RateMatrix> = {
+  // กวางโจว — รถ 4,900 · เรือ 2,900
+  "1": {
+    kg: KG_FLOOR_LEGACY,
+    cbm: { "1": cbmFlat(4900), "2": cbmFlat(2900) },
   },
-  cbm: {
-    "1": { "1": 5300, "2": 5500, "3": 5500, "4": 8000 },
-    "2": { "1": 3300, "2": 3500, "3": 3500, "4": 7000 },
+  // อี้อู — รถ 5,500 · เรือ 2,900
+  "2": {
+    kg: KG_FLOOR_LEGACY,
+    cbm: { "1": cbmFlat(5500), "2": cbmFlat(2900) },
   },
 };
 

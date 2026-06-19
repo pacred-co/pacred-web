@@ -46,6 +46,14 @@ export type BoxDimGroup = {
   boxes: number;
   /** Σ CBM (rowCbm) across the rows sharing this dimension — matches the cost engine. */
   cbm: number;
+  /**
+   * report-cnt #4 (B) — the distinct tracking numbers (ftrackingchn) of the
+   * forwarder rows folded into this dimension group, in first-seen order. The
+   * breakdown panel shows these IN PLACE OF the ลำดับ sequence #, which the
+   * owner found hard to read. Usually 1 tracking per group; a group can hold
+   * several when multiple parcels share the exact same box size.
+   */
+  trackings: string[];
 };
 
 /**
@@ -80,13 +88,15 @@ export function groupBoxesByDimension(rows: FwForBreakdown[]): BoxDimGroup[] {
     const height = Number(r.fheight ?? 0) || 0;
     const boxes = Number(r.famount ?? 0) || 0;
     const cbm = rowCbm(r.fvolume, r.famount, r.famountcount);
+    const tracking = (r.ftrackingchn ?? "").trim();
     const key = `${width}|${length}|${height}`;
     const g = map.get(key);
     if (g) {
       g.boxes += boxes;
       g.cbm += cbm;
+      if (tracking && !g.trackings.includes(tracking)) g.trackings.push(tracking);
     } else {
-      map.set(key, { width, length, height, boxes, cbm });
+      map.set(key, { width, length, height, boxes, cbm, trackings: tracking ? [tracking] : [] });
     }
   }
   return [...map.values()].sort((a, b) => b.boxes - a.boxes || b.cbm - a.cbm);

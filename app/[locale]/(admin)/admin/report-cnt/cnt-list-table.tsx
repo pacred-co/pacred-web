@@ -32,6 +32,8 @@ import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { ContainerCompleteness } from "@/lib/warehouse/container-completeness";
 import { fetchContainerBoxBreakdown } from "@/actions/admin/cnt-box-breakdown";
 import type { BoxDimGroup } from "@/lib/warehouse/container-box-breakdown";
+import type { MomoContainerInfo } from "@/lib/admin/momo-container-resolve";
+import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -66,6 +68,13 @@ type Props = {
    * 0/0 (vacuously complete). Drives the "ยิงครบ" column.
    */
   completenessByCab?: Record<string, ContainerCompleteness>;
+  /**
+   * report-cnt #4 — per-cabinet MOMO shipping info keyed by `fcabinetnumber`.
+   * For a "SEA0x" routing-batch placeholder it carries the REAL container code
+   * (or the sack number while the container is still open) + etd/eta. Missing
+   * entries (= real container codes / non-MOMO cabinets) need no resolution.
+   */
+  momoInfoByCab?: Record<string, MomoContainerInfo>;
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -159,6 +168,51 @@ function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
 
+// ── ETD/ETA cell (report-cnt #4) — แต้ม (iTAM) PRIMARY · MOMO fallback ──
+// Owner 2026-06-19/20: "ETD/ETA เอาของ MOMO มาเทียบ แต่ยึดของ iTAM (แต้ม) เป็นหลัก".
+// A small source dot distinguishes the two; when the displayed value is แต้ม's but
+// MOMO carries a DIFFERENT date, the tooltip surfaces MOMO's value for comparison.
+function EtdEtaCell({
+  value,
+  source,
+  momoValue,
+  label,
+}: {
+  value: string | null;
+  source: "taem" | "momo" | null;
+  momoValue: string | null;
+  label: "ETD" | "ETA";
+}) {
+  if (!value) {
+    return (
+      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} (รอ packing list ของแต้ม)`}>
+        —
+      </td>
+    );
+  }
+  const v = value.slice(0, 10);
+  const m = momoValue?.slice(0, 10) ?? null;
+  const isTaem = source === "taem";
+  const momoDiffers = isTaem && m != null && m !== v;
+  const title = isTaem
+    ? momoDiffers
+      ? `${label} จากแต้ม (iTAM · ยึดเป็นหลัก) · MOMO เทียบ = ${m}`
+      : `${label} จากแต้ม (iTAM · ยึดเป็นหลัก)`
+    : `${label} จาก MOMO (แต้มยังไม่ส่ง · ใช้ค่า MOMO ชั่วคราว)`;
+  return (
+    <td className="px-2 py-2 text-right" title={title}>
+      <span className="inline-flex items-center justify-end gap-1">
+        <span
+          aria-hidden
+          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : "bg-gray-400"}`}
+        />
+        <span className={isTaem ? "text-foreground" : "text-muted"}>{v}</span>
+        {momoDiffers && <span className="text-[9px] text-amber-600" aria-hidden>≠MOMO</span>}
+      </span>
+    </td>
+  );
+}
+
 // Number with thousand separators (ลูกน้ำ) + fixed decimals — owner 2026-06-19
 // ("ใส่ลูกน้ำ ตัวเลขอ่านยาก"). e.g. fmtNum(999838.15, 2) → "999,838.15".
 function fmtNum(n: number, digits: number): string {
@@ -195,6 +249,7 @@ export function CntListTable({
   warehouseLabel,
   transportLabel,
   completenessByCab,
+  momoInfoByCab,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
@@ -202,8 +257,9 @@ export function CntListTable({
   const canSelect = showMoney;
 
   // Total column count — drives the expanded box-detail row's colSpan.
-  // checkbox(canSelect) + 11 base cols + 3 money cols(showMoney) + 2 status cols.
-  const colCount = (canSelect ? 1 : 0) + 11 + (showMoney ? 3 : 0) + 2;
+  // checkbox(canSelect) + 13 base cols (incl. ETD + ETA · #4) + 3 money cols
+  // (showMoney) + 2 status cols.
+  const colCount = (canSelect ? 1 : 0) + 13 + (showMoney ? 3 : 0) + 2;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -388,7 +444,7 @@ export function CntListTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+      <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <table className="w-full text-xs">
           <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
             <tr>
@@ -406,6 +462,12 @@ export function CntListTable({
               <SortableTH sortKeyValue="fcabinetnumber"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>หมายเลขตู้</SortableTH>
               <SortableTH sortKeyValue="fwarehousename"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>โกดัง</SortableTH>
               <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
+              {/* ETD/ETA (report-cnt #4) — sea-departure (ETD) + Thailand-arrival
+                  (ETA) per container. Plain (non-sortable) headers: the data
+                  source is แต้ม's packing list, NOT yet wired (etd/eta are NULL in
+                  prod today), so they render "—" until the feed lands. */}
+              <th className="px-2 py-2 text-right" title="วันเรือออกจากจีน (ETD) — ข้อมูลจาก packing list ของแต้ม (ยังไม่เชื่อม)">ETD</th>
+              <th className="px-2 py-2 text-right" title="วันถึงไทย (ETA) — ข้อมูลจาก packing list ของแต้ม (ยังไม่เชื่อม)">ETA</th>
               <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
               <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
@@ -428,7 +490,8 @@ export function CntListTable({
                 a heavier top/bottom border instead of a loud fill. */}
             <tr className="bg-white dark:bg-surface text-foreground font-bold border-y-2 border-border">
               {canSelect && <td className="px-2 py-2"></td>}
-              <td className="px-2 py-2 font-semibold" colSpan={4}>รวม ({rows.length} ตู้)</td>
+              {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + ขนส่ง (6) */}
+              <td className="px-2 py-2 font-semibold" colSpan={6}>รวม ({rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
@@ -463,6 +526,10 @@ export function CntListTable({
                 ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
                 : "hover:bg-surface-alt/40";
               const isExpanded = expanded.has(r.fcabinetnumber);
+              // report-cnt #4 (C) — for a MOMO "SEA0x" placeholder cabinet, the
+              // real container / sack number MOMO carries (resolved server-side).
+              const momo = momoInfoByCab?.[r.fcabinetnumber];
+              const isPlaceholder = isMomoRoutingPlaceholder(r.fcabinetnumber);
               return (
                 <Fragment key={r.fcabinetnumber}>
                 <tr
@@ -494,17 +561,63 @@ export function CntListTable({
                       >
                         {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       </button>
-                      <Link
-                        href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                        className="text-primary-600 hover:underline"
-                        title="ดูรายละเอียดตู้นี้"
-                      >
-                        {r.fcabinetnumber}
-                      </Link>
+                      {/* report-cnt #4 (C): SEA0x placeholders (PR/MO/PCS…-SEA/EK##)
+                          are synthetic — MOMO writes them before the container closes.
+                          Show the REAL container (GZS…) when MOMO has it; else the sack
+                          number (เลขกระสอบ · CBX…) while the container is still open;
+                          else keep the placeholder + a "รอจากแต้ม" note. The link still
+                          drills into the cabinet detail (keyed by fcabinetnumber). */}
+                      {isPlaceholder && momo?.realContainer ? (
+                        <span className="flex flex-col leading-tight">
+                          <Link
+                            href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                            className="text-primary-600 hover:underline"
+                            title={`เลขตู้จริง · placeholder MOMO = ${r.fcabinetnumber}`}
+                          >
+                            {momo.realContainer}
+                          </Link>
+                          <span className="text-[9px] text-muted">MOMO {r.fcabinetnumber}</span>
+                        </span>
+                      ) : isPlaceholder && momo?.sackNo ? (
+                        <span className="flex flex-col leading-tight">
+                          <Link
+                            href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                            className="text-primary-600 hover:underline"
+                            title={`เลขตู้จริงรอจากแต้ม · ตอนนี้แสดงเลขกระสอบ · placeholder MOMO = ${r.fcabinetnumber}`}
+                          >
+                            {momo.sackNo}
+                          </Link>
+                          <span className="text-[9px] text-amber-600">เลขกระสอบ · เลขตู้จริงรอจากแต้ม</span>
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                          className="text-primary-600 hover:underline"
+                          title={isPlaceholder ? "เลขตู้จริงรอจากแต้ม (ตู้ยังไม่ปิด)" : "ดูรายละเอียดตู้นี้"}
+                        >
+                          {r.fcabinetnumber}
+                        </Link>
+                      )}
                     </div>
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
+                  {/* ETD/ETA (report-cnt #4 · A) — แต้ม (iTAM) PRIMARY · MOMO fallback.
+                      Source dot: green = แต้ม (ยึดเป็นหลัก) · gray = MOMO (มาเทียบ).
+                      Tooltip notes MOMO's value when it disagrees with แต้ม. "—" when
+                      no source has it yet. */}
+                  <EtdEtaCell
+                    value={momo?.etd ?? null}
+                    source={momo?.etdSource ?? null}
+                    momoValue={momo?.momoEtd ?? null}
+                    label="ETD"
+                  />
+                  <EtdEtaCell
+                    value={momo?.eta ?? null}
+                    source={momo?.etaSource ?? null}
+                    momoValue={momo?.momoEta ?? null}
+                    label="ETA"
+                  />
                   <td className="px-2 py-2 text-center">{transportLabel[resolveTransportMode(r.fcabinetnumber, r.ftransporttype)] ?? r.ftransporttype}</td>
                   <td className="px-2 py-2 text-right">
                     {r.diffDay == null ? "-" : `${r.diffDay} วัน`}
@@ -698,7 +811,10 @@ function BoxBreakdownPanel({
       <table className="w-full text-[11px]">
         <thead className="text-muted bg-surface-alt/40">
           <tr className="border-b border-border">
-            <th className="px-3 py-1.5 text-left font-medium">#</th>
+            {/* report-cnt #4 (B): show the tracking number(s) instead of a ลำดับ #
+                (owner: the sequence is hard to read). One group usually = one
+                tracking; a few when parcels share an exact box size. */}
+            <th className="px-3 py-1.5 text-left font-medium">แทรคกิ้ง</th>
             <th className="px-3 py-1.5 text-right font-medium">กว้าง (ซม.)</th>
             <th className="px-3 py-1.5 text-right font-medium">ยาว (ซม.)</th>
             <th className="px-3 py-1.5 text-right font-medium">สูง (ซม.)</th>
@@ -713,7 +829,15 @@ function BoxBreakdownPanel({
             const perBox = g.boxes > 0 ? g.cbm / g.boxes : 0;
             return (
               <tr key={i} className="border-b border-border/40 last:border-0">
-                <td className="px-3 py-1.5 text-muted">{i + 1}</td>
+                <td className="px-3 py-1.5 font-mono text-[10px] text-foreground">
+                  {g.trackings.length > 0 ? (
+                    <span className="break-all" title={g.trackings.join(", ")}>
+                      {g.trackings.join(", ")}
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.width) : "—"}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.length) : "—"}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.height) : "—"}</td>

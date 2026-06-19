@@ -434,3 +434,54 @@ export function resolveForwarderRate(
     docDiscountApplied: 0,
   };
 }
+
+/** Per-basis unit rates (baht/kg + baht/cbm) for the SAME tuple, BEFORE the
+ *  KG-vs-CBM winner is picked. Each is null when no rate card matched that basis
+ *  (the caller renders "—" for that line rather than fabricating ฿0). */
+export interface BothBasisRates {
+  /** baht per kg (after any applicable adjustment) · null = no rate card. */
+  kgRate: number | null;
+  /** baht per cbm (doc-tier CBM discount applied, mirroring the winner path) · null = no rate card. */
+  cbmRate: number | null;
+}
+
+/**
+ * Resolve BOTH the kg unit rate AND the cbm unit rate for the same candidates +
+ * inputs, WITHOUT picking a winner — for a DISPLAY-ONLY breakdown that must show
+ * "คิดตามน้ำหนัก" and "คิดตามปริมาตร" on the SAME line even when the system only
+ * bills one basis (owner ภูม 2026-06-19: "คิดตามน้ำหนัก ไม่เห็นขึ้นเลย ·
+ * ต้องคิดตามคิวเป็น default · ถ้าอยากเปลี่ยนค่อยกดติ๊ก").
+ *
+ * PURE + side-effect-free. Re-uses the EXACT same `rateForBasis` probe +
+ * `applyDocTierCbmDiscount` that `resolveForwarderRate` runs internally, so the
+ * per-basis unit rate shown == the unit rate the SAVE would price that basis on
+ * (no parallel formula, no drift). The CBM doc-tier discount is applied to the
+ * cbm rate exactly as the winner path does (the kg path never gets it). A genuine
+ * 0 rate (no card for the tuple) → null so the UI shows "—" for that line only.
+ *
+ * NB: this does NOT decide the winner or apply the comparison/max-price logic —
+ * that stays the sole job of `resolveForwarderRate` (the chosen basis still drives
+ * the bill). This helper only surfaces the two unit rates for the preview labels.
+ */
+export function resolveBothBasisRates(
+  candidates: ResolveRateCandidates,
+  input: ResolveRateInput,
+): BothBasisRates {
+  const weight = n(input.weightKg);
+  const cbm = n(input.volumeCbm);
+
+  // Same doc-tier inputs the winner path uses (CBM-only · never on manual).
+  const docEligible = input.docTierEligible === true && !candidates.manualOverride;
+  const docDiscountCbm = Math.max(0, n(input.docTierDiscountCbm));
+
+  // Probe each basis with the SAME quantity the winner path uses (kg→weight,
+  // cbm→cbm) so a tiered/general lookup picks the same tier.
+  const kgProbe = rateForBasis("kg", candidates, weight);
+  const cbmProbe = rateForBasis("cbm", candidates, cbm);
+  const cbmDisc = applyDocTierCbmDiscount(cbmProbe.rate, docEligible, docDiscountCbm);
+
+  return {
+    kgRate: kgProbe.rate > 0 ? kgProbe.rate : null,
+    cbmRate: cbmDisc.rate > 0 ? cbmDisc.rate : null,
+  };
+}

@@ -47,6 +47,7 @@ import {
   type TransportId,
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
+import { getResolvedFloor } from "@/lib/admin/sell-floor-config";
 
 // ── resolveLegacyAdminId (duplicated · see rate-edits.ts note) ───────────
 async function resolveLegacyAdminId(): Promise<string> {
@@ -172,25 +173,22 @@ export async function adminSaveCustomerRate(
     }
   }
 
-  // Floor check is ADVISORY only. Legacy DISPLAYS "ราคาขั้นต่ำ" but never
-  // enforces it in the price engine, and real SVIP customers carry below-
-  // floor / KG=0 rates (e.g. PW: KG=0, CBM 4500 < floor 5300). We count
-  // below-floor cells for the audit + flag them red in the UI, but do NOT
-  // block the save. A 0 = "not charged by this unit" → never below-floor.
-  // (Hard enforcement is an owner policy decision — deferred.)
-  let belowFloor = 0;
-  for (const c of d.cells) {
-    const kgFloor = COST_FLOOR.kg[c.t][c.p];
-    const cbmFloor = COST_FLOOR.cbm[c.t][c.p];
-    if (c.rkg > 0 && kgFloor != null && c.rkg < kgFloor) belowFloor++;
-    if (c.rcbm > 0 && cbmFloor != null && c.rcbm < cbmFloor) belowFloor++;
-  }
-
+  // Floor enforcement is HARD now (ภูม 2026-06-19: "เผื่อพนักงานตั้งผิดจะได้กดไม่ได้ ·
+  // จะ VIP แค่ไหนก็ห้ามขายต่ำกว่าราคาที่ภูมิบอกไว้") — but computed INSIDE withAdmin
+  // (below), after reading the existing rows, so we GRANDFATHER legacy below-floor
+  // data: only a NEWLY-set below-floor value blocks the save (an untouched legacy
+  // cell never breaks an unrelated edit). A 0 = "ไม่คิดตามหน่วยนี้" → never below.
   return withAdmin<{ changed: number; created: boolean; belowFloor: number }>(
     ["super", "accounting", "sales_admin"],
     async ({ adminId }) => {
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
+
+      // Resolve the LIVE CBM floor (business_config override || COST_FLOOR
+      // constant default · ultra-editable). KG floor stays on the constant
+      // (owner only set the CBM rate). `floor[wh].cbm[t][p]` / `floor[wh].kg`
+      // read identically to COST_FLOOR — only the CBM source swaps.
+      const floor = await getResolvedFloor();
 
       // Verify the customer exists.
       const { data: customer, error: custErr } = await admin
@@ -224,6 +222,44 @@ export async function adminSaveCustomerRate(
       type ExCbm = { id: number; rtransporttype: string; rproductstype: string; rcbm: number | null };
       const kgIdx = new Map<string, ExKg>(((kgRaw ?? []) as unknown as ExKg[]).map((r) => [cellKey(r.rtransporttype, r.rproductstype), r]));
       const cbmIdx = new Map<string, ExCbm>(((cbmRaw ?? []) as unknown as ExCbm[]).map((r) => [cellKey(r.rtransporttype, r.rproductstype), r]));
+
+      // ── HARD floor enforcement (ภูม 2026-06-19) ────────────────────────────
+      // Block a NEWLY-set sell rate below the per-warehouse ราคาขั้นต่ำ. We
+      // GRANDFATHER an unchanged legacy cell (existing == entered) so an
+      // unrelated save on an old below-floor customer isn't broken (กันงานหาย).
+      // belowFloor = total below-floor cells (for the audit); blocked = the
+      // NEW ones that gate the save.
+      let belowFloor = 0;
+      const blocked: string[] = [];
+      for (const c of d.cells) {
+        const k = cellKey(c.t, c.p);
+        const cbmFloor = floor[wh].cbm[c.t][c.p]; // resolved (config || constant)
+        const kgFloor = COST_FLOOR[wh].kg[c.t][c.p];
+        const tS = TRANSPORTS.find((x) => x.id === c.t)?.short ?? c.t;
+        const pL = PRODUCTS.find((x) => x.id === c.p)?.label ?? c.p;
+        if (c.rcbm > 0 && cbmFloor != null && c.rcbm < cbmFloor) {
+          belowFloor++;
+          const exCbm = cbmIdx.get(k)?.rcbm;
+          if (!(exCbm != null && Number(exCbm) === c.rcbm)) {
+            blocked.push(`CBM ${tS}/${pL} ฿${c.rcbm} (ขั้นต่ำ ฿${cbmFloor})`);
+          }
+        }
+        if (c.rkg > 0 && kgFloor != null && c.rkg < kgFloor) {
+          belowFloor++;
+          const exKg = kgIdx.get(k)?.rkg;
+          if (!(exKg != null && Number(exKg) === c.rkg)) {
+            blocked.push(`KG ${tS}/${pL} ฿${c.rkg} (ขั้นต่ำ ฿${kgFloor})`);
+          }
+        }
+      }
+      if (blocked.length > 0) {
+        return {
+          ok: false,
+          error:
+            `ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ — ${blocked.join(" · ")}. ` +
+            `ปรับขึ้นอย่างน้อยเท่าราคาขั้นต่ำก่อนบันทึก (ถ้าจำเป็นต้องต่ำกว่านี้ ให้ Ultra Admin Z แก้ราคาขั้นต่ำ)`,
+        };
+      }
 
       const created = cbmIdx.size === 0; // legacy: "is this a fresh per-user setup?"
 

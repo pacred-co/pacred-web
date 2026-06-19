@@ -5,7 +5,7 @@
 // selection. Covers each waterfall branch (manual · SVIP · general-tiered ·
 // VIP) + KG-vs-CBM selection (ราคามากสุด + comparison) + the SVIP-but-
 // warehouse-missing edge (legacy returns rate 0 → rateMissing flag).
-import { resolveForwarderRate, type ResolveRateCandidates, type ResolveRateInput } from "./resolve-rate";
+import { resolveForwarderRate, resolveBothBasisRates, type ResolveRateCandidates, type ResolveRateInput } from "./resolve-rate";
 
 let pass = 0, fail = 0;
 function eq(label: string, got: unknown, want: unknown) {
@@ -366,6 +366,50 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   const c = cand({ isSvip: true, svipKg: 50, svipCbm: 2000 });
   const r = resolveForwarderRate(c, inp({ weightKg: 50, volumeCbm: 1, comparisonKgPerCbm: 999 }));
   eq("total: comparison OFF ignores aggregate → KG wins (2500>2000)", r.basis, "kg");
+}
+
+// ── resolveBothBasisRates — DISPLAY helper: BOTH unit rates, no winner picked ──
+// (owner ภูม 2026-06-20: the preview "คิดตามน้ำหนัก" line must show a real number
+//  even when CBM is the chosen basis). The per-basis rate MUST equal the unit
+//  rate the winner path would price that basis on.
+{
+  // SVIP flat: kg=15, cbm=4000. Both bases have a card → both non-null.
+  const c = cand({ isSvip: true, svipKg: 15, svipCbm: 4000 });
+  const both = resolveBothBasisRates(c, inp({ weightKg: 100, volumeCbm: 1 }));
+  near("both: kgRate=15", both.kgRate ?? -1, 15);
+  near("both: cbmRate=4000", both.cbmRate ?? -1, 4000);
+  // cross-check vs the winner: weight100×15=1500 < cbm1×4000=4000 → CBM wins,
+  // but the kg unit rate the helper returns matches what the winner priced kg on.
+  const win = resolveForwarderRate(c, inp({ weightKg: 100, volumeCbm: 1 }));
+  eq("both: winner basis=cbm", win.basis, "cbm");
+  near("both: kgRate matches winner kg-leg rate", both.kgRate ?? -1, 15);
+}
+{
+  // Missing kg card (kg rate 0) but cbm present → kgRate null, cbmRate set.
+  const c = cand({ isSvip: true, svipKg: 0, svipCbm: 2900 });
+  const both = resolveBothBasisRates(c, inp({ weightKg: 50, volumeCbm: 2 }));
+  eq("both: no kg card → kgRate null", both.kgRate, null);
+  near("both: cbmRate=2900", both.cbmRate ?? -1, 2900);
+}
+{
+  // Doc-tier discount applies to the CBM rate ONLY (matches the winner path).
+  const c = cand({ isSvip: true, svipKg: 20, svipCbm: 3700 });
+  const both = resolveBothBasisRates(
+    c,
+    inp({ weightKg: 100, volumeCbm: 3, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  near("both: kgRate unaffected by doc-tier (20)", both.kgRate ?? -1, 20);
+  near("both: cbmRate doc-discounted 3700-800=2900", both.cbmRate ?? -1, 2900);
+}
+{
+  // Manual override never gets the doc-tier discount (admin chose the exact rate).
+  const c = cand({ manualOverride: true, manualKg: 18, manualCbm: 3700 });
+  const both = resolveBothBasisRates(
+    c,
+    inp({ weightKg: 100, volumeCbm: 3, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  near("both: manual kgRate=18", both.kgRate ?? -1, 18);
+  near("both: manual cbmRate=3700 (no doc discount on manual)", both.cbmRate ?? -1, 3700);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

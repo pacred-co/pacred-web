@@ -27,7 +27,9 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveForwarderRate,
+  resolveBothBasisRates,
   type ResolveRateCandidates,
+  type ResolveRateInput,
   type ResolvedRate,
 } from "@/lib/forwarder/resolve-rate";
 import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
@@ -120,7 +122,20 @@ export interface PricingRowContext {
 export async function resolveLiveForwarderRate(
   admin: ReturnType<typeof createAdminClient>,
   ctx: PricingRowContext,
-): Promise<{ resolved: ResolvedRate; coID: string } | { error: string }> {
+): Promise<
+  | {
+      resolved: ResolvedRate;
+      coID: string;
+      /**
+       * Per-basis unit rates for this row (baht/kg + baht/cbm), resolved from the
+       * SAME candidates the winner used — so a DISPLAY breakdown can show BOTH
+       * "คิดตามน้ำหนัก" and "คิดตามปริมาตร" lines even though the bill uses only the
+       * chosen basis (owner ภูม 2026-06-19). null = no rate card for that basis.
+       */
+      unitRates: { kgRate: number | null; cbmRate: number | null };
+    }
+  | { error: string }
+> {
   // tb_users — coID drives general(=='PR') vs VIP-group; legacy reads
   // userComparison/userComparisonValue/userCompany too (update_data L1764-1798).
   // tb_users is camelCase (batch 1) — coID/userCompany/userComparison*.
@@ -237,7 +252,10 @@ export async function resolveLiveForwarderRate(
       ? (ctx.customComparisonValue ?? 0)
       : ctx.userComparisonValue;
 
-  const resolved = resolveForwarderRate(candidates, {
+  // Build the resolver INPUT once + share it between the winner (the bill) and
+  // the both-basis probe (the display) so the per-basis unit rates shown match
+  // exactly what the save would price each basis on (no parallel formula).
+  const resolveInput: ResolveRateInput = {
     weightKg: ctx.weightKg,
     volumeCbm: ctx.cbmProduct,
     comparisonEnabled,
@@ -253,9 +271,14 @@ export async function resolveLiveForwarderRate(
     // Owner-locked doc-tier discount (no-op when the caller leaves these unset).
     docTierEligible: ctx.docTierEligible === true,
     docTierDiscountCbm: ctx.docTierDiscountCbm ?? 0,
-  });
+  };
 
-  return { resolved, coID };
+  const resolved = resolveForwarderRate(candidates, resolveInput);
+  // Both per-basis unit rates from the SAME candidates+input (display only — the
+  // bill still uses `resolved`). null per basis = no rate card for that tuple.
+  const unitRates = resolveBothBasisRates(candidates, resolveInput);
+
+  return { resolved, coID, unitRates };
 }
 
 // ════════════════════════════════════════════════════════════

@@ -25,6 +25,10 @@ export type TaemRow = {
   parcel: number | null;      // Total Parcel
   totalWt: number | null;     // Total Wt. (kg)
   totalVol: number | null;    // Total Vol. (m³)
+  /** ETD — date the container departs China (เรือ/รถ ออกจากจีน). ISO yyyy-mm-dd or null. */
+  etd: string | null;
+  /** ETA — date the container arrives in Thailand (ถึงไทย). ISO yyyy-mm-dd or null. */
+  eta: string | null;
   /** true = แต้ม has full data (real container + wt + vol) → reconcilable. */
   isData: boolean;
   /** when !isData, the Container-Name note explaining why (กระสอบรวม/ยังไม่ปิดตู้/…). */
@@ -38,10 +42,18 @@ export type TaemParseResult = {
 
 // Canonical column order of แต้ม's "MOMO Pacred" sheet (1-based in the sheet →
 // 0-based here). Used as the fallback when no header row is detected.
+//
+// ⚠️ etd/eta canonical indices are a BEST-GUESS (sheet layout: Container Name ·
+// Trans · SM Date · etd · eta · …) — they are guarded by parseDate() so a wrong
+// guess yields null, never garbage. The header-NAME mapping (HEADER_MAP) is the
+// authoritative path: แต้ม's paste includes the header row, so etd/eta land on
+// their real columns regardless of these fallback indices.
 const CANON: Record<keyof Omit<TaemRow, "isData" | "note">, number> = {
   tracking: 0,    // A ftrackingchn
   container: 1,   // B Container Name
   trans: 2,       // C Trans
+  etd: 4,         // E etd (best-guess · date-guarded · header-name preferred)
+  eta: 5,         // F eta (best-guess · date-guarded · header-name preferred)
   type: 8,        // I Type
   code: 9,        // J Code
   parcel: 14,     // O Total Parcel
@@ -54,6 +66,8 @@ const HEADER_MAP: Record<string, keyof typeof CANON> = {
   "ftrackingchn": "tracking",
   "container name": "container",
   "trans": "trans",
+  "etd": "etd",
+  "eta": "eta",
   "type": "type",
   "code": "code",
   "total parcel": "parcel",
@@ -75,6 +89,41 @@ function cellStr(v: string | undefined | null): string | null {
   if (v == null) return null;
   const s = String(v).trim();
   return s === "" ? null : s;
+}
+
+/**
+ * Parse a แต้ม date cell → ISO yyyy-mm-dd, tolerating blanks + the common formats
+ * seen in the packing-list:
+ *   - "2026-05-23" / "2026/05/23" (ISO-ish · what แต้ม uses)
+ *   - "23/05/2026" / "23-05-2026" (D/M/Y · Thai data-entry)
+ *   - a bare year-first or day-first is disambiguated by the 4-digit part.
+ * Returns null for blanks, notes (e.g. "ยังไม่ปิดตู้"), or anything that isn't a
+ * real calendar date — so a wrong canonical-index guess can never store garbage.
+ */
+export function parseTaemDate(v: string | undefined | null): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (s === "") return null;
+
+  // ISO / slash with year first: 2026-05-23 · 2026/5/3
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (m) return isoIfValid(+m[1], +m[2], +m[3]);
+
+  // Day-first: 23/05/2026 · 3-5-2026
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (m) return isoIfValid(+m[3], +m[2], +m[1]);
+
+  return null;
+}
+
+function isoIfValid(y: number, mo: number, d: number): string | null {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  // Verify it's a real calendar day (rejects 2026-02-30 etc.).
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  const mm = String(mo).padStart(2, "0");
+  const dd = String(d).padStart(2, "0");
+  return `${y}-${mm}-${dd}`;
 }
 
 export function parseTaemReconcile(text: string): TaemParseResult {
@@ -122,6 +171,11 @@ export function parseTaemReconcile(text: string): TaemParseResult {
       parcel: toNum(cells[idx.parcel]),
       totalWt,
       totalVol,
+      // ETD/ETA — date-guarded (parseTaemDate returns null for non-dates), so a
+      // wrong canonical-index guess yields null instead of garbage. When แต้ม's
+      // paste includes the header row, etd/eta land on their real columns.
+      etd: parseTaemDate(cells[idx.etd]),
+      eta: parseTaemDate(cells[idx.eta]),
       isData,
       note: isData ? null : container,
     });
