@@ -150,6 +150,11 @@ export async function adminBulkApproveWalletHs(
       let failed = 0;
       const errors: string[] = [];
       const receiptBatches = new Map<string, { userid: string; dateSlip: Date; fids: number[] }>();
+      // BUG-1 — track which (userid · dateSlip-day) receipt batches have already
+      // had the PCSF เหมาๆ ฿50 persisted to a forwarder row, so a batch with
+      // multiple PCSF-zero rows gets the ฿50 on the FIRST one only (the receipt
+      // SUMS all rows → total = freight_sum + 50, matching the single paid total).
+      const pcsf50AppliedBatches = new Set<string>();
 
       for (const r of candidates) {
         const amt = Number(r.amount);
@@ -295,6 +300,39 @@ export async function adminBulkApproveWalletHs(
 
             const dt = r.dateslip ? new Date(r.dateslip) : new Date();
             const dayKey = `${r.userid}|${dt.toISOString().slice(0, 10)}`;
+
+            // BUG-1 — persist the PCSF เหมาๆ ฿50 onto tb_forwarder.ftransportprice
+            // BEFORE the batch receipt is issued. submitForwarderPayment (self-pay)
+            // folds the ฿50 into tb_wallet_hs.amount but never writes it back to the
+            // forwarder, so autoIssueReceiptOnPaymentLand (re-reads the rows) would
+            // sum freight-only. Mirror admin pay-on-behalf (pay-user.ts:615): on a
+            // settled typeservice='2' / type='4' row whose forwarder is still
+            // fshipby='PCSF' & ftransportprice=0, bump it to 50 — but ONLY the FIRST
+            // such row per receipt batch (the others stay 0; the receipt sums all →
+            // freight_sum + 50). The conditional WHERE makes it idempotent (a
+            // re-approve / a row already bumped by the admin path = 0-row no-op); the
+            // affected-row count confirms this row WAS the PCSF-zero one before we
+            // mark the batch done (so a leading non-PCSF row doesn't consume the slot).
+            if ((r.typeservice === "2") && (r.type ?? "") === "4" && !pcsf50AppliedBatches.has(dayKey)) {
+              const { data: bumped, error: pcsfErr } = await admin
+                .from("tb_forwarder")
+                .update({ ftransportprice: 50 })
+                .eq("id", fid)
+                .eq("userid", r.userid)
+                .eq("fshipby", "PCSF")
+                .eq("ftransportprice", 0)
+                .select("id")
+                .maybeSingle<{ id: number }>();
+              if (pcsfErr) {
+                logger.warn("tb-bulk", "PCSF ftransportprice=50 persist failed (non-fatal · money already moved)", {
+                  wallet_hs_id: r.id, userid: r.userid, fid, error: pcsfErr.message,
+                });
+              } else if (bumped) {
+                // This row was the PCSF-zero one and got the ฿50 → lock the batch.
+                pcsf50AppliedBatches.add(dayKey);
+              }
+            }
+
             const existing = receiptBatches.get(dayKey);
             if (existing) {
               existing.fids.push(fid);

@@ -351,6 +351,44 @@ export async function adminApproveWalletHs(
             });
           }
 
+          // BUG-1 — persist the PCSF เหมาๆ ฿50 onto tb_forwarder.ftransportprice
+          // BEFORE the receipt. submitForwarderPayment (self-pay) folds the ฿50
+          // into tb_wallet_hs.amount but NEVER writes it back to the forwarder
+          // row, so autoIssueReceiptOnPaymentLand (which RE-READS the row) issued
+          // a receipt + AR for freight-only while the customer paid freight+50.
+          // Mirror the admin pay-on-behalf side-effect (pay-user.ts:615): on a
+          // settled forwarder-payment row (typeservice='2' / type='4'), if the
+          // forwarder is still fshipby='PCSF' & ftransportprice=0, set it to 50.
+          // The `.eq("ftransportprice", 0)` guard keeps this idempotent — a
+          // re-approve (or a row already bumped by the admin path) is a 0-row
+          // no-op → no double-add. Single-row approve settles exactly ONE fid,
+          // so "once per settle" is inherent here. Best-effort + logged: a
+          // ftransportprice write failure must NOT roll back the wallet leg.
+          //
+          // ⚠️ RESIDUAL (audit 2026-06-19): a self-pay submit with N>1 PCSF-zero
+          // rows splits the ฿50 across the rows (50/N each in tb_wallet_hs.amount).
+          // The BULK approve (tb-bulk.ts) handles this correctly — it bumps the
+          // FIRST PCSF row per receipt-batch only. But approving such an order via
+          // N separate SINGLE-row approves (one receipt per fid) would bump each to
+          // 50 → receipt sum over-states by ฿50×(N−1). N=1 (the dominant case) is
+          // exact. Staff should bulk-approve multi-row import payments; the clean
+          // fix (honor the settled wallet_hs.amount in autoIssueReceiptOnPaymentLand)
+          // is tracked separately (out of this unit's file scope).
+          if ((row.typeservice === "2") && (row.type ?? "") === "4") {
+            const { error: pcsfErr } = await admin
+              .from("tb_forwarder")
+              .update({ ftransportprice: 50 })
+              .eq("id", fid)
+              .eq("userid", row.userid)
+              .eq("fshipby", "PCSF")
+              .eq("ftransportprice", 0);
+            if (pcsfErr) {
+              logger.warn("wallet-trans", "PCSF ftransportprice=50 persist failed (non-fatal · money already moved)", {
+                wallet_hs_id: id, userid: row.userid, fid, error: pcsfErr.message,
+              });
+            }
+          }
+
           const dateSlip = row.dateslip ? new Date(row.dateslip) : new Date();
           const r = await autoIssueReceiptOnPaymentLand(admin, {
             userid: row.userid,

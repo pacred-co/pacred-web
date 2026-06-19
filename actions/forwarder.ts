@@ -13,6 +13,11 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
 import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
 import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
+import {
+  computeForwarderCollectTotal,
+  userNotPCS50,
+  type ForwarderCollectRow,
+} from "@/lib/forwarder/forwarder-collect-total";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -108,81 +113,18 @@ export async function calculateForwarderTotal(
     console.error(`[tb_forwarder list] failed`, { code: rowsErr.code, message: rowsErr.message });
   }
 
-  let countID = 0;
-  let price = 0;
-  let countPricePCSF = 0;
-  // calPrice.php L34 — the per-user "no 50฿" allowlist. The legacy
-  // reads it from a static JSON; we mirror just the bare username
-  // membership check the legacy `in_array($userID, $userNotPCS50)` does.
-  const userNotPCS50: Set<string> = new Set([
-    "PCS50", "PCS3083", "PCS3983", "PCS999",
-    // PR equivalents (rebrand parity — D1 keeps the same identifiers
-    // mapped 1:1 from the legacy member-code numbering).
-    "PR50", "PR3083", "PR3983", "PR999",
-  ]);
-
-  for (const r of (rows ?? []) as Array<{
-    faddressdistrict: string | null;
-    fshipby: string | null;
-    fshippingservice: number | string | null;
-    ftransporttype: string | null;
-    fdiscount: number | string | null;
-    ftotalprice: number | string | null;
-    ftransportprice: number | string | null;
-    fpriceupdate: number | string | null;
-    priceother: number | string | null;
-    ftransportpricechnthb: number | string | null;
-    pricecrate: number | string | null;
-  }>) {
-    countID++;
-    // calPrice.php L26 — legacy per-row total formula (verbatim).
-    const totalPrice =
-      Number(r.ftotalprice ?? 0) +
-      Number(r.ftransportprice ?? 0) +
-      Number(r.fpriceupdate ?? 0) +
-      Number(r.fshippingservice ?? 0) +
-      Number(r.pricecrate ?? 0) +
-      Number(r.ftransportpricechnthb ?? 0) +
-      Number(r.priceother ?? 0) -
-      Number(r.fdiscount ?? 0);
-    price = price + totalPrice;
-
-    // calPrice.php L29-31 — PCSF rows with fTransportPrice=0 trigger
-    // the +50฿ flat fee (counted, then applied once below).
-    if (
-      r.fshipby === "PCSF" &&
-      Number(r.ftransportprice ?? 0) === 0
-    ) {
-      countPricePCSF++;
-    }
-
-    // calPrice.php L34-38 — the หนองแขม allowlist exemption: if the
-    // address district contains "หนองแขม" AND the user is on the
-    // userNotPCS50 list, the +50฿ doesn't apply for that row.
-    if (
-      r.faddressdistrict &&
-      r.faddressdistrict.indexOf("หนองแขม") !== -1 &&
-      userNotPCS50.has(userID)
-    ) {
-      countPricePCSF--;
-    }
-  }
-
-  // calPrice.php L40-42 — +50฿ flat when at least one PCSF row qualifies.
-  if (countPricePCSF >= 1) {
-    price = price + 50;
-  }
-  // calPrice.php L43-45 — juristic users with price>=1000 get a 1%
-  // discount (the legacy WHT-aligned reduction).
-  if (userCompany === "1" && price >= 1000) {
-    price = price - price * 0.01;
-  }
+  // calPrice.php L25-45 — the per-row composite total + the +50 PCSF flat
+  // fee (with the หนองแขม/userNotPCS50 exemption) + the juristic 1% reduction.
+  // Routed through the SHARED pure helper so the DISPLAY here can never drift
+  // from the CHARGE in submitForwarderPayment (the BUG-2 root cause).
+  const collectRows = (rows ?? []) as ForwarderCollectRow[];
+  const { total } = computeForwarderCollectTotal(collectRows, { userId: userID, userCompany });
 
   return {
     ok: true,
-    count: countID,
-    price: numberFormatLegacy(price),
-    priceRaw: price,
+    count: collectRows.length,
+    price: numberFormatLegacy(total),
+    priceRaw: total,
   };
 }
 
@@ -421,26 +363,31 @@ export async function submitForwarderPayment(
     };
   }
 
-  // forwarder.php L207-215 — corporate flag (the juristic 1% reduction
-  // lever). The handler reads `tb_corporate` existence; if a row exists
-  // `$corporate=1`.
-  const { data: corpRow, error: corpRowErr } = await admin
-    .from("tb_corporate")
-    .select("id")
-    .eq("userid", userID)
-    .maybeSingle<{ id: number }>();
-  if (corpRowErr) {
-    console.error(`[tb_corporate list] failed`, { code: corpRowErr.code, message: corpRowErr.message });
+  // calPrice.php L11-18 — the juristic 1% reduction lever is
+  // `tb_users.userCompany`, NOT `tb_corporate` existence. The display path
+  // (calculateForwarderTotal) gates on userCompany; the charge MUST use the
+  // SAME source or it drifts (BUG-2b: a tb_corporate row with userCompany≠'1'
+  // — or vice-versa — was charged differently than displayed). Read userCompany
+  // from tb_users and route the whole calc through the shared helper.
+  const { data: userRow, error: userRowErr } = await admin
+    .from("tb_users")
+    .select("userCompany")
+    .eq("userID", userID)
+    .maybeSingle<{ userCompany: string | number | null }>();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
-  const isCorporate = !!corpRow;
+  const userCompany = String(userRow?.userCompany ?? "");
 
   // forwarder.php L252-253 — re-fetch the selected eligible rows
   // server-side (trust nothing from the client). The legacy predicate:
   //   userID=$userID AND (fStatus='5' OR fCredit='1') AND ID IN (ids)
+  // faddressdistrict is now in the SELECT so the helper can apply the
+  // หนองแขม/userNotPCS50 +50 exemption (BUG-2a: the charge dropped it).
   const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fshipby, fcredit, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
+      "id, fshipby, fcredit, faddressdistrict, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
     )
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
@@ -453,6 +400,7 @@ export async function submitForwarderPayment(
     id: number;
     fshipby: string | null;
     fcredit: string | null;
+    faddressdistrict: string | null;
     fpriceupdate: number | string | null;
     ftotalprice: number | string | null;
     ftransportprice: number | string | null;
@@ -473,13 +421,30 @@ export async function submitForwarderPayment(
     return { ok: false, error: "ineligible_row — มีรายการที่ชำระเงินไม่ได้ปะปนมา" };
   }
 
-  // forwarder.php L193 — count PCSF rows (fShipBy='PCSF' AND
-  // fTransportPrice=0) that trigger the +50฿ flat fee.
-  const countPricePCSF = eligible.filter(
-    (r) => r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0,
-  ).length;
+  // calPrice.php L25-45 — route the WHOLE collect calc through the SAME shared
+  // helper the display (calculateForwarderTotal) uses, so charge == shown
+  // (BUG-2). The helper owns: the per-row composite, the PCSF +50 (with the
+  // หนองแขม/userNotPCS50 exemption), and the juristic 1%-if-≥1000 decision.
+  const collect = computeForwarderCollectTotal(eligible as ForwarderCollectRow[], {
+    userId: userID,
+    userCompany,
+  });
+  // The +50 attribution for the per-row tb_wallet_hs split below: it lands on
+  // the surviving PCSF-zero rows (== the helper's countPCSF, post-exemption). We
+  // re-derive the SAME survivor count — reusing the helper's EXPORTED
+  // `userNotPCS50` allowlist (no inline copy → no drift) — so the split's
+  // denominator matches the headline (an exempt หนองแขม PCSF row carries NONE
+  // of the +50).
+  const isAllowlisted50 = userNotPCS50.has(userID);
+  const isExemptPcsfRow = (r: (typeof eligible)[number]) =>
+    isAllowlisted50 && !!r.faddressdistrict && r.faddressdistrict.indexOf("หนองแขม") !== -1;
+  const isCountablePcsfRow = (r: (typeof eligible)[number]) =>
+    r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0 && !isExemptPcsfRow(r);
+  const countPricePCSF = eligible.filter(isCountablePcsfRow).length;
 
-  // forwarder.php L256-257 — per-row total + the bill grand total.
+  // forwarder.php L256-257 — per-row composite total (NO +50/no 1% here; those
+  // are the batch-level adjustments the helper decided). Used only for the
+  // per-row tb_wallet_hs.amount split.
   const num = (v: number | string | null) => Number(v ?? 0);
   const perRowTotal = (r: (typeof eligible)[number]) =>
     num(r.ftotalprice) +
@@ -491,11 +456,14 @@ export async function submitForwarderPayment(
     num(r.priceother) -
     num(r.fdiscount);
 
-  let pricePayAll = eligible.reduce((s, r) => s + perRowTotal(r), 0);
-  // forwarder.php L263-266 — +50฿ flat when ≥1 PCSF row qualifies.
-  if (countPricePCSF >= 1) pricePayAll += 50;
-  // forwarder.php L268-270 — juristic 1% reduction when total ≥ 1000.
-  const applyNiti = isCorporate && pricePayAll >= 1000;
+  // pricePayAll = the HEADLINE the customer is charged (== the display). The
+  // per-row amounts below are split to reconcile to this single number.
+  let pricePayAll = collect.total;
+  // Whether the +50 PCSF flat fee fired (the split must distribute it).
+  const applied50 = collect.applied50;
+  // forwarder.php L268-270 — juristic 1% reduction when total ≥ 1000 (decided
+  // by the helper off userCompany, NOT tb_corporate — BUG-2b fix).
+  const applyNiti = collect.appliedWht;
 
   // ── ADR-0025 — apply-cashback at checkout (getListPayForwarder.php
   //    L188-203 `cashBackKey`). Read the customer's live cashback balance
@@ -548,15 +516,17 @@ export async function submitForwarderPayment(
   //   / typeservice (the 0081 schema marks these NOT NULL).
   const hsRows = eligible.map((r, idx) => {
     let amount = perRowTotal(r);
-    // forwarder.php L316-318 — a PCSF row carries the +50฿ inside its
-    // own amount (the legacy bumps the FIRST PCSF row). We attribute
-    // the +50 to each qualifying PCSF row's amount so the per-row sum
-    // still reconciles to pricePayAll. Faithful net: the bill total is
-    // identical; the per-row split differs only cosmetically.
-    if (countPricePCSF >= 1 && r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0) {
+    // forwarder.php L316-318 — the +50฿ PCSF flat fee is distributed across the
+    // SURVIVING PCSF-zero rows (post-หนองแขม/userNotPCS50 exemption) so the
+    // per-row sum reconciles to pricePayAll. An exempt หนองแขม PCSF row carries
+    // NONE of the +50 (BUG-2a parity: the headline excludes it, so the split
+    // must too). `countPricePCSF` is the survivor count (== the helper's
+    // countPCSF); `applied50` is the helper's batch decision.
+    if (applied50 && countPricePCSF >= 1 && isCountablePcsfRow(r)) {
       amount += 50 / countPricePCSF;
     }
-    // forwarder.php L329-331 — juristic 1% reduction applied per row.
+    // forwarder.php L329-331 — juristic 1% reduction applied per row (the
+    // helper decided `applyNiti` off userCompany — BUG-2b fix).
     if (applyNiti) amount = amount * 0.99;
     // ADR-0025 D-2a — carry the applied cashback as a note tag on the FIRST
     // row so the approve cascade settles it exactly once.

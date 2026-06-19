@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { ForwarderStepRevert } from "./forwarder-step-revert";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -69,6 +70,14 @@ import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 // adminUpdateForwarderDimensions customRate path (no new pricing writer).
 import { previewForwarderRateMissing } from "@/lib/forwarder/live-rate";
 import { ForwarderRateMissingFallback } from "./forwarder-inline-rate-fallback";
+// 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
+// breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
+// (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + PCSF เหมาๆ 50).
+// Uses the canonical money fn — never re-derive money math inline (AGENTS.md money rule).
+import {
+  computeForwarderDebitBatch,
+  type ForwarderDebitRow,
+} from "@/lib/forwarder/forwarder-debit-total";
 import { getTranslations } from "next-intl/server";
 import {
   User as UserIcon,
@@ -115,13 +124,16 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   // 2026-06-08 (ภูม warehouse-handoff readiness): added "warehouse" — list
   // page `/admin/forwarders` now accepts warehouse role (per sidebar-menu's
   // menuWarehouse), so the detail page MUST too or every row-click 404s.
-  await requireAdmin(["ops", "accounting", "warehouse"]);
+  const { roles: viewerRoles } = await requireAdmin(["ops", "accounting", "warehouse"]);
+  // ops/super/warehouse (+god) may revert/advance the status step; accounting views only.
+  const canStepStatus =
+    isGodRole(viewerRoles) || viewerRoles.includes("ops") || viewerRoles.includes("warehouse");
 
   const { fNo } = await params;
   const admin = createAdminClient();
 
   // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
-  const tbResult = await tryRenderTbForwarder(fNo, admin);
+  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus);
   if (tbResult) return tbResult;
 
   // Fallback — rebuilt `forwarders` table (UUID, empty on prod, back-compat).
@@ -266,6 +278,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 async function tryRenderTbForwarder(
   fNo: string,
   admin: ReturnType<typeof createAdminClient>,
+  canStepStatus: boolean,
 ) {
   const asNumber = Number(fNo);
   const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
@@ -595,6 +608,56 @@ async function tryRenderTbForwarder(
   // degrades to not-missing on any DB error so the page still renders.
   const { missing: rateMissing } = await previewForwarderRateMissing(admin, r.id);
   const tRate = await getTranslations("forwarderInlineRate");
+
+  // ── 2026-06-19 (Unit A) — ยอดเก็บจริง + breakdown (แจงรายละเอียดค่า) ──────────
+  // The header/items show ftotalprice = freight ONLY (e.g. 45.10). The amount the
+  // customer is actually collected at pay-time = freight + PCSF เหมาๆ ฿50 (first
+  // PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย นิติ 1% (when juristic & batch ≥ ฿1,000).
+  // So a forwarder showing 45.10 collects 95.10 → the owner's confusion. We compute
+  // it with the SAME canonical fn the จ่ายแทนลูกค้า page uses so the two never drift.
+  //
+  // isCorporate: a tb_corporate row exists for this userid OR fusercompany==='1'.
+  // (Single-row batch: the 1% only fires if THIS row's total ≥ ฿1,000, matching
+  // computeForwarderDebitBatch's batch-≥1000 gate — faithful to pay-users.php.)
+  let collectIsCorporate = (r.fusercompany ?? "").trim() === "1";
+  if (!collectIsCorporate) {
+    const { data: corpRow, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("id")
+      .eq("userid", r.userid)
+      .limit(1)
+      .maybeSingle<{ id: number | string }>();
+    if (corpErr) {
+      console.error(`[tb_corporate collect-check] failed`, { code: corpErr.code, message: corpErr.message, userid: r.userid });
+    }
+    if (corpRow) collectIsCorporate = true;
+  }
+  const collectRow: ForwarderDebitRow = {
+    id: r.id,
+    fshipby: r.fshipby,
+    ftotalprice: r.ftotalprice,
+    ftransportprice: r.ftransportprice,
+    fpriceupdate: r.fpriceupdate,
+    fshippingservice: r.fshippingservice,
+    pricecrate: r.pricecrate,
+    ftransportpricechnthb: r.ftransportpricechnthb,
+    priceother: r.priceother,
+    fdiscount: r.fdiscount,
+  };
+  const collectBatch = computeForwarderDebitBatch([collectRow], {
+    userId: r.userid,
+    isCorporate: collectIsCorporate,
+  });
+  const collect = collectBatch.lines[0]?.breakdown ?? null;
+  // Show the panel when the row is still collectible (รอชำระเงิน fstatus='5' OR
+  // ติดเครดิต fcredit='1') — i.e. before the ฿50 is persisted, which is exactly
+  // when the freight-only number on the page would mislead.
+  const collectShow =
+    collect != null &&
+    Number.isFinite(collect.total) &&
+    ((r.fstatus ?? "").trim() === "5" || (r.fcredit ?? "").trim() === "1");
+  const baht2 = (n: number) =>
+    `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const rateFallbackDims = {
     fId: r.id,
     weight: pricingInit.weight,
@@ -864,6 +927,60 @@ async function tryRenderTbForwarder(
           </div>
         )}
 
+        {/* ── ยอดเก็บจริง + แจงรายละเอียดค่า (Unit A · owner 2026-06-19 "แจงค่าหน้าอื่นด้วย")
+           — the same breakdown the จ่ายแทนลูกค้า page shows, so the freight-only
+           ftotalprice above (e.g. ฿45.10) isn't confusing vs the real collect
+           (฿95.10 = freight + PCSF เหมาๆ ฿50). Shown while still collectible
+           (รอชำระเงิน / ติดเครดิต), before the ฿50 is persisted at pay. ── */}
+        {collectShow && collect && (
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-bold text-primary-700">ยอดเก็บจริง (แจงรายละเอียดค่า)</h4>
+              <span className="text-lg font-mono font-bold text-red-600">{baht2(collect.total)}</span>
+            </div>
+            <dl className="mt-2 space-y-1 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted">ค่าขนส่งสินค้า</dt>
+                <dd className="font-mono">{baht2(collect.freight)}</dd>
+              </div>
+              {collect.otherCharges > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted">+ บริการอื่นๆ</dt>
+                  <dd className="font-mono">{baht2(collect.otherCharges)}</dd>
+                </div>
+              )}
+              {collect.pcsf50 > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-sky-600">+ ค่าส่ง PCSF เหมาๆ</dt>
+                  <dd className="font-mono text-sky-600">{baht2(collect.pcsf50)}</dd>
+                </div>
+              )}
+              {collect.discount > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-emerald-600">− ส่วนลด</dt>
+                  <dd className="font-mono text-emerald-600">{baht2(collect.discount)}</dd>
+                </div>
+              )}
+              {collect.wht1pct > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1%</dt>
+                  <dd className="font-mono text-orange-600">{baht2(collect.wht1pct)}</dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 border-t border-primary-200 pt-1.5 font-semibold text-foreground">
+                <dt>ยอดเก็บจริง</dt>
+                <dd className="font-mono text-red-600">{baht2(collect.total)}</dd>
+              </div>
+            </dl>
+            {collect.pcsf50 > 0 && (
+              <p className="mt-2 text-[11px] text-muted">
+                ℹ️ ค่าส่ง PCSF เหมาๆ ฿50 จะถูกบันทึกลงค่าขนส่งตอนชำระเงิน — ก่อนชำระ
+                ยอดในรายละเอียดสินค้าด้านบนจะแสดงเฉพาะค่าขนส่งสินค้า
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php). owner 2026-06-11:
            "ยกฟอร์มสถานะขึ้นบนรายการสินค้า · ฟอร์มราคา (pricing@4) ให้ต่อจากรายการสินค้า แยกกัน"
            → <ForwarderStatusWorkflow> รับ รายการสินค้า เป็น children แล้ว render:
@@ -912,6 +1029,14 @@ async function tryRenderTbForwarder(
             <ForwarderDocTierConfirm fId={r.id} />
           </div>
         </ForwarderStatusWorkflow>
+
+        {/* ── status-step control (owner 2026-06-19): ถอย/ดัน สถานะทีละขั้น ·
+           money-safe revert (refuses if billed/paid) · ops/super/warehouse. ── */}
+        {canStepStatus && (
+          <div className="mt-3">
+            <ForwarderStepRevert fid={r.id} fstatus={r.fstatus} />
+          </div>
+        )}
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}

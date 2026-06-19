@@ -81,6 +81,10 @@ type WhsRow = {
   userid: string | null;
   adminid: string | null;
   adminidcrate: string | null;
+  // 2026-06-19 (owner #2 · UNIT B) — links a "เติม-แล้วจ่าย" pay sibling to its
+  // parent top-up row (`reforder2 = topup.id`). One slip → a top-up row + N pay
+  // rows; we collapse them into ONE logical "payment" row in the list.
+  reforder2: number | null;
 };
 
 type URow = {
@@ -145,7 +149,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   let qb = admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate",
+      "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder2",
       { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })
@@ -184,6 +188,55 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // UNIT B (owner #2 · 2026-06-19) — collapse the "เติม-แล้วจ่าย" 2-step into
+  // ONE logical payment row. One slip creates a TOP-UP row (type '1'/'7', has
+  // slip+bank) + N PAY rows (type '4'/'2', no bank) linked by reforder2 =
+  // topup.id. Net: the customer paid once. We group what's VISIBLE on this page:
+  // a top-up parent (a row whose id is referenced by ≥1 pay sibling on the page)
+  // becomes the consolidated row; its siblings nest inside a "log หลังบ้าน"
+  // expander. Standalone rows (no reforder2 link either way) render unchanged.
+  // DISPLAY-only — the underlying rows are untouched (still selectable for
+  // bulk-approve, still inspectable in the expander).
+  type GroupedTx =
+    | { kind: "single"; row: WhsRow }
+    | { kind: "group"; parent: WhsRow; siblings: WhsRow[] };
+
+  // Map of parent-topup id → its pay siblings present on this page.
+  const siblingsByParent = new Map<number, WhsRow[]>();
+  for (const r of rows) {
+    if (r.reforder2 != null) {
+      const arr = siblingsByParent.get(r.reforder2) ?? [];
+      arr.push(r);
+      siblingsByParent.set(r.reforder2, arr);
+    }
+  }
+  // A row is a "child" (collapses into its parent) only if its parent top-up
+  // row is ALSO on this page — otherwise we must show it standalone so it never
+  // disappears across page boundaries.
+  const rowById = new Map<number, WhsRow>(rows.map((r) => [r.id, r]));
+  const groupedRows: GroupedTx[] = [];
+  const consumedChildIds = new Set<number>();
+  for (const r of rows) {
+    // Skip rows already absorbed as a sibling of an earlier-rendered parent.
+    if (consumedChildIds.has(r.id)) continue;
+    const sibs = siblingsByParent.get(r.id);
+    if (sibs && sibs.length > 0) {
+      // r is a parent top-up that has pay siblings on this page → group.
+      for (const s of sibs) consumedChildIds.add(s.id);
+      groupedRows.push({ kind: "group", parent: r, siblings: sibs });
+      continue;
+    }
+    if (r.reforder2 != null && rowById.has(r.reforder2)) {
+      // r is a child whose parent is on this page — it'll be rendered inside the
+      // parent's group; skip here (defensive · order-independent).
+      continue;
+    }
+    // Standalone: a plain top-up / pay / withdraw / manual / type='8' / a child
+    // whose parent isn't on this page → render as a single row, unchanged.
+    groupedRows.push({ kind: "single", row: r });
   }
 
   // Lane C 2026-06-02 — pre-compute sort hrefs for each tx column header.
@@ -300,106 +353,24 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
-                  const u = r.userid ? userMap.get(r.userid) : undefined;
-                  const rowStatus = r.status ?? "1";
-                  const type = r.type ?? "";
-                  const amount = Number(r.amount ?? 0);
-                  const isNeg = amount < 0;
-                  const customerName = u
-                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
-                    : r.userid ?? "—";
+                {groupedRows.map((g) => {
+                  if (g.kind === "single") {
+                    return (
+                      <TxRow key={g.row.id} row={g.row} userMap={userMap} slipUrlMap={slipUrlMap} />
+                    );
+                  }
+                  // Consolidated "เติม-แล้วจ่าย" group: ONE payment row (the
+                  // top-up = the real paid figure) + a collapsible log of the
+                  // underlying in/out ledger rows.
+                  const { parent, siblings } = g;
                   return (
-                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-2 py-3 w-8">
-                        {rowStatus === "1" ? <TbWalletRowCheckbox id={r.id} /> : null}
-                      </td>
-                      <td className="px-3 py-3 text-xs whitespace-nowrap">
-                        {r.date
-                          ? new Date(r.date).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        <div className="font-mono">{r.userid ?? "—"}</div>
-                        <div>{customerName}</div>
-                        {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                            TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
-                          }`}
-                        >
-                          {TYPE_LABEL[type] ?? `type ${type}`}
-                        </span>
-                      </td>
-                      <td
-                        className={`px-3 py-3 text-right font-mono text-xs ${isNeg ? "text-red-600" : "text-foreground"}`}
-                      >
-                        {isNeg ? "−" : ""}฿
-                        {Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        {r.depositnamebank ? (
-                          <span className="font-mono text-[11px]">{r.depositnamebank}</span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                            STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
-                          }`}
-                        >
-                          {STATUS_LABEL[rowStatus] ?? `status ${rowStatus}`}
-                        </span>
-                        {(r.adminid || r.adminidcrate) ? (
-                          <div className="text-muted text-[10px] mt-1 font-mono">
-                            {r.adminid ?? r.adminidcrate}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        {(() => {
-                          const url = slipUrlMap[String(r.id)];
-                          if (url) {
-                            return (
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary-600 hover:underline"
-                              >
-                                ดู
-                              </a>
-                            );
-                          }
-                          if (r.imagesslip) {
-                            return (
-                              <span
-                                className="text-amber-600"
-                                title={`สลิป upload แล้วแต่หา URL ไม่ได้ — filename: ${r.imagesslip}`}
-                              >
-                                ⚠ ไม่พบ
-                              </span>
-                            );
-                          }
-                          return <span className="text-muted">—</span>;
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        <Link
-                          href={`/admin/wallet/${r.id}`}
-                          className="text-primary-600 hover:underline"
-                        >
-                          ดู / แก้ไข
-                        </Link>
-                      </td>
-                    </tr>
+                    <TxRow
+                      key={parent.id}
+                      row={parent}
+                      userMap={userMap}
+                      slipUrlMap={slipUrlMap}
+                      groupContext={{ siblings, ledgerCount: 1 + siblings.length }}
+                    />
                   );
                 })}
               </tbody>
@@ -415,6 +386,211 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
         basePath="/admin/wallet"
         params={{ view: "tx", kind, status, q, sort, dir }}
       />
+    </>
+  );
+}
+
+// Slip cell — signed URL → "ดู" link · uploaded-but-unresolved → ⚠ · none → —.
+function SlipCell({ row, slipUrlMap }: { row: WhsRow; slipUrlMap: Record<string, string | null> }) {
+  const url = slipUrlMap[String(row.id)];
+  if (url) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
+        ดู
+      </a>
+    );
+  }
+  if (row.imagesslip) {
+    return (
+      <span className="text-amber-600" title={`สลิป upload แล้วแต่หา URL ไม่ได้ — filename: ${row.imagesslip}`}>
+        ⚠ ไม่พบ
+      </span>
+    );
+  }
+  return <span className="text-muted">—</span>;
+}
+
+/**
+ * One rendered transaction row.
+ *
+ * - Plain rows (no `groupContext`) render exactly as before — 8 cells, a
+ *   pending-only checkbox, and a "ดู / แก้ไข" link.
+ * - When `groupContext` is supplied, `row` is the TOP-UP parent of a
+ *   "เติม-แล้วจ่าย" pair (UNIT B): the displayed amount = the top-up amount =
+ *   the real paid figure, with a "รวมเป็นรายการเดียว" badge, plus a second
+ *   collapsible <tr> ("รายการเดินบัญชี · log หลังบ้าน") holding the parent +
+ *   every pay sibling so the in/out ledger stays inspectable — and every
+ *   pending underlying row keeps its bulk-approve checkbox.
+ */
+function TxRow({
+  row,
+  userMap,
+  slipUrlMap,
+  groupContext,
+}: {
+  row: WhsRow;
+  userMap: Map<string, URow>;
+  slipUrlMap: Record<string, string | null>;
+  groupContext?: { siblings: WhsRow[]; ledgerCount: number };
+}) {
+  const u = row.userid ? userMap.get(row.userid) : undefined;
+  const rowStatus = row.status ?? "1";
+  const type = row.type ?? "";
+  const amount = Number(row.amount ?? 0);
+  const isNeg = amount < 0;
+  const customerName = u
+    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || row.userid
+    : row.userid ?? "—";
+  const isGroup = !!groupContext;
+
+  return (
+    <>
+      <tr className="border-t border-border hover:bg-surface-alt/30">
+        <td className="px-2 py-3 w-8">
+          {rowStatus === "1" ? <TbWalletRowCheckbox id={row.id} /> : null}
+        </td>
+        <td className="px-3 py-3 text-xs whitespace-nowrap">
+          {row.date
+            ? new Date(row.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+            : "—"}
+        </td>
+        <td className="px-3 py-3 text-xs">
+          <div className="font-mono">{row.userid ?? "—"}</div>
+          <div>{customerName}</div>
+          {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
+        </td>
+        <td className="px-3 py-3 text-xs">
+          {isGroup ? (
+            <div className="space-y-0.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                💳 ชำระเงิน (รวมเป็นรายการเดียว)
+              </span>
+              {row.note ? (
+                <div className="text-muted text-[10px] line-clamp-2 max-w-[16rem]">{row.note}</div>
+              ) : null}
+            </div>
+          ) : (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
+              }`}
+            >
+              {TYPE_LABEL[type] ?? `type ${type}`}
+            </span>
+          )}
+        </td>
+        <td className={`px-3 py-3 text-right font-mono text-xs ${isNeg ? "text-red-600" : "text-foreground"}`}>
+          {isNeg ? "−" : ""}฿{Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+        </td>
+        <td className="px-3 py-3 text-xs">
+          {row.depositnamebank ? (
+            <span className="font-mono text-[11px]">{row.depositnamebank}</span>
+          ) : (
+            <span className="text-muted">—</span>
+          )}
+        </td>
+        <td className="px-3 py-3">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+              STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
+            }`}
+          >
+            {STATUS_LABEL[rowStatus] ?? `status ${rowStatus}`}
+          </span>
+          {(row.adminid || row.adminidcrate) ? (
+            <div className="text-muted text-[10px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>
+          ) : null}
+        </td>
+        <td className="px-3 py-3 text-xs">
+          <SlipCell row={row} slipUrlMap={slipUrlMap} />
+        </td>
+        <td className="px-3 py-3 text-xs">
+          <Link href={`/admin/wallet/${row.id}`} className="text-primary-600 hover:underline">
+            ดู / แก้ไข
+          </Link>
+        </td>
+      </tr>
+      {isGroup ? (
+        <tr className="border-t border-border bg-surface-alt/20">
+          <td colSpan={9} className="px-3 pb-3 pt-0">
+            <details className="text-xs">
+              <summary className="cursor-pointer select-none py-1 text-muted hover:text-foreground">
+                รายการเดินบัญชี (log หลังบ้าน) · {groupContext!.ledgerCount} รายการ
+              </summary>
+              <div className="mt-2 overflow-x-auto rounded-lg border border-border bg-white dark:bg-surface">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-surface-alt/40 text-left text-muted">
+                    <tr>
+                      <th className="px-2 py-1.5 w-6"></th>
+                      <th className="px-2 py-1.5">#</th>
+                      <th className="px-2 py-1.5">วันที่</th>
+                      <th className="px-2 py-1.5">ประเภท</th>
+                      <th className="px-2 py-1.5 text-right">จำนวน (THB)</th>
+                      <th className="px-2 py-1.5">สถานะ</th>
+                      <th className="px-2 py-1.5">หมายเหตุ</th>
+                      <th className="px-2 py-1.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[row, ...groupContext!.siblings].map((lr) => {
+                      const lrStatus = lr.status ?? "1";
+                      const lrType = lr.type ?? "";
+                      const lrAmount = Number(lr.amount ?? 0);
+                      const lrNeg = lrAmount < 0;
+                      // The parent's checkbox already lives on the consolidated
+                      // main row — only render checkboxes for the pay siblings
+                      // here, so no id is double-mounted with split local state.
+                      const isParent = lr.id === row.id;
+                      return (
+                        <tr key={lr.id} className="border-t border-border">
+                          <td className="px-2 py-1.5 w-6">
+                            {!isParent && lrStatus === "1" ? <TbWalletRowCheckbox id={lr.id} /> : null}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono text-muted">{lr.id}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            {lr.date
+                              ? new Date(lr.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <span
+                              className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                                TYPE_CLS[lrType] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                              }`}
+                            >
+                              {TYPE_LABEL[lrType] ?? `type ${lrType}`}
+                            </span>
+                          </td>
+                          <td className={`px-2 py-1.5 text-right font-mono ${lrNeg ? "text-red-600" : "text-foreground"}`}>
+                            {lrNeg ? "−" : ""}฿{Math.abs(lrAmount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <span
+                              className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                                STATUS_CLS[lrStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                              }`}
+                            >
+                              {STATUS_LABEL[lrStatus] ?? `status ${lrStatus}`}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1.5 text-muted max-w-[18rem] truncate" title={lr.note ?? ""}>
+                            {lr.note ?? "—"}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <Link href={`/admin/wallet/${lr.id}`} className="text-primary-600 hover:underline">
+                              ดู
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </td>
+        </tr>
+      ) : null}
     </>
   );
 }

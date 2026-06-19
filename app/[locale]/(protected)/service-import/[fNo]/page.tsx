@@ -16,6 +16,14 @@ import {
 } from "./delivery-feedback-card";
 import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
+// 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — READ-ONLY "ยอดเก็บจริง"
+// breakdown so the customer sees the SAME amount admin will collect (freight +
+// PCSF เหมาๆ ฿50 − ส่วนลด − หัก ณ ที่จ่าย นิติ 1%), not the freight-only number.
+// Same canonical money fn the จ่ายแทนลูกค้า + admin detail use — no inline math.
+import {
+  computeForwarderDebitBatch,
+  type ForwarderDebitRow,
+} from "@/lib/forwarder/forwarder-debit-total";
 
 /**
  * Customer "รายการฝากนำเข้าสินค้า — รายละเอียด" (forwarder detail) screen —
@@ -917,6 +925,47 @@ export default async function ServiceImportDetailPage({
     priceOther,
   );
 
+  // ── 2026-06-19 (Unit A) — ยอดเก็บจริง breakdown (READ-ONLY, customer labels) ──
+  // The cost table above shows ftotalprice = freight only; at pay-time admin
+  // collects freight + PCSF เหมาๆ ฿50 (first PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย
+  // นิติ 1% (juristic & batch ≥ ฿1,000). We compute the real collect with the SAME
+  // canonical fn the admin detail + จ่ายแทนลูกค้า use, so the customer sees 95.10
+  // (not 45.10) before paying — no surprise at checkout. isCorporate: a
+  // tb_corporate row exists OR fusercompany==='1' (matches the admin derivation).
+  const collectUserId = (row.userid ?? "").trim();
+  let collectIsCorporate = fUserCompany === "1";
+  if (!collectIsCorporate && collectUserId) {
+    const { data: corpRow, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("id")
+      .eq("userid", collectUserId)
+      .limit(1)
+      .maybeSingle<{ id: number | string }>();
+    if (corpErr) {
+      console.error(`[tb_corporate collect-check] failed`, { code: corpErr.code, message: corpErr.message, userid: collectUserId });
+    }
+    if (corpRow) collectIsCorporate = true;
+  }
+  const collectDebitRow: ForwarderDebitRow = {
+    id: row.id,
+    fshipby: row.fshipby,
+    ftotalprice: fTotalPrice,
+    ftransportprice: fTransportPrice,
+    fpriceupdate: fPriceUpdate,
+    fshippingservice: fShippingService,
+    pricecrate: priceCrate,
+    ftransportpricechnthb: fTransportPriceChnThb,
+    priceother: priceOther,
+    fdiscount: fDiscount,
+  };
+  const collectBatch = computeForwarderDebitBatch([collectDebitRow], {
+    userId: collectUserId,
+    isCorporate: collectIsCorporate,
+  });
+  const collect = collectBatch.lines[0]?.breakdown ?? null;
+  const baht2 = (n: number) =>
+    `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   // forwarder.php L1808-1820 — ETA range.
   const fDateToThai = row.fdatetothai;
   let etaFrom = "";
@@ -1609,6 +1658,59 @@ export default async function ServiceImportDetailPage({
                                 </tbody>
                               </table>
                             </div>
+
+                            {/* ── ยอดเก็บจริง (แจงรายละเอียดค่า) — Unit A · owner
+                               2026-06-19 "แจงค่าหน้าอื่นด้วย". READ-ONLY. Shown while
+                               รอชำระเงิน (fstatus='5') so the customer sees the real
+                               collect (freight + PCSF เหมาๆ ฿50 − ส่วนลด − นิติ 1%),
+                               not the freight-only number in the table above. ── */}
+                            {fStatusValue === "5" && collect && Number.isFinite(collect.total) && (
+                              <div className="mt-3 rounded-xl border border-red-200 bg-red-50/40 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm font-bold text-red-700">ยอดที่ต้องชำระจริง</span>
+                                  <span className="text-lg font-mono font-bold text-red-600">{baht2(collect.total)}</span>
+                                </div>
+                                <dl className="mt-2 space-y-1 text-sm">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <dt className="text-muted">ค่าขนส่งสินค้า</dt>
+                                    <dd className="font-mono tabular-nums">{baht2(collect.freight)}</dd>
+                                  </div>
+                                  {collect.otherCharges > 0 && (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <dt className="text-muted">+ บริการอื่นๆ</dt>
+                                      <dd className="font-mono tabular-nums">{baht2(collect.otherCharges)}</dd>
+                                    </div>
+                                  )}
+                                  {collect.pcsf50 > 0 && (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <dt className="text-sky-600">+ ค่าส่ง PCSF เหมาๆ</dt>
+                                      <dd className="font-mono tabular-nums text-sky-600">{baht2(collect.pcsf50)}</dd>
+                                    </div>
+                                  )}
+                                  {collect.discount > 0 && (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <dt className="text-emerald-600">− ส่วนลด</dt>
+                                      <dd className="font-mono tabular-nums text-emerald-600">{baht2(collect.discount)}</dd>
+                                    </div>
+                                  )}
+                                  {collect.wht1pct > 0 && (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <dt className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1%</dt>
+                                      <dd className="font-mono tabular-nums text-orange-600">{baht2(collect.wht1pct)}</dd>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-between gap-3 border-t border-red-200 pt-1.5 font-semibold text-foreground">
+                                    <dt>รวมที่ต้องชำระ</dt>
+                                    <dd className="font-mono tabular-nums text-red-600">{baht2(collect.total)}</dd>
+                                  </div>
+                                </dl>
+                                {collect.pcsf50 > 0 && (
+                                  <p className="mt-2 text-[11px] text-muted">
+                                    ℹ️ มีค่าส่ง PCSF เหมาๆ ฿50 รวมในยอดชำระ (ยังไม่แสดงในตารางค่าใช้จ่ายด้านบนจนกว่าจะชำระ)
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </>
                         ) : (
                           <>
