@@ -18,6 +18,8 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 // Strip to canonical id+skuId only.
 import { normalizeProductUrl } from "@/lib/url/normalize-product-url";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
+import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
+import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
   modeFromPref,
@@ -325,11 +327,15 @@ export async function submitCartOrder(input: {
 
   // shops.php L17-42 — resolve hShipBy: pro='f' → PCSF (+50฿ ship),
   // addressID='PCS' → PCS (self-pickup), else use the customer's pick.
+  // Preliminary carrier. The เหมาๆ promo (pro="f") is RE-VALIDATED against the resolved
+  // delivery ZIP after the address lookup below — the client flag is NEVER trusted
+  // (owner 2026-06-19: out-of-zone must NOT get เหมาๆ + ต้นทาง). Fee = MAO_FLAT_FEE
+  // (฿100 · was a stale ฿50 here).
   let fShippingService = 0;
   let hShipBy: string | null = null;
   if (input.pro === "f") {
-    fShippingService = 50;
-    hShipBy = "PCSF";
+    fShippingService = MAO_FLAT_FEE;
+    hShipBy = MAO_CARRIER_CODE; // preliminary · re-checked post-address
   } else if (input.addressID === "PCS") {
     hShipBy = "PCS";
   } else {
@@ -440,6 +446,21 @@ export async function submitCartOrder(input: {
       addressZIPCode: addrRow.addresszipcode ?? "",
       addressNote: input.hNote ?? addrRow.addressnote ?? "",
     };
+  }
+
+  // Re-validate the เหมาๆ promo against the RESOLVED delivery ZIP (owner 2026-06-19 ·
+  // faithful checkFreeArea): out-of-zone → drop the promo to the customer's picked carrier
+  // (no fee · → derivePayMethod = '2' ปลายทาง); ticked-only-เหมาๆ with no carrier → reject
+  // with the zone message. Self-pickup (PCS) is exempt (no delivery zip).
+  if (input.pro === "f" && input.addressID !== "PCS") {
+    const mao = resolveMaomaoCarrier({
+      pro: "f", addressID: input.addressID, zip: addr.addressZIPCode, pickedCarrier: input.hShipBy,
+    });
+    if (mao.carrier == null) {
+      return { ok: false, error: "maomao_out_of_zone — เหมาๆ ใช้ได้เฉพาะเขตกรุงเทพฯ-ปริมณฑล กรุณาเลือกขนส่งต่างจังหวัด" };
+    }
+    hShipBy = mao.carrier;
+    if (!mao.maoApplied) fShippingService = 0; // promo dropped → no เหมาๆ fee
   }
 
   // shops.php L96-97 — INSERT tb_header_order.

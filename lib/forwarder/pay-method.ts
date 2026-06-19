@@ -29,7 +29,8 @@
 /** Carrier ids/codes that bill at ORIGIN (sender pays · payMethod='1'). */
 export const PAY_AT_ORIGIN_CARRIERS: ReadonlySet<string> = new Set([
   "PCS",   // รับเองที่โกดัง (self-pickup)
-  "PCSF",  // PCS เหมาๆ (Flash promo)
+  "PCSF",  // PCS เหมาๆ (legacy code)
+  "PRF",   // PR เหมาๆ (D1 rebrand of PCSF · new orders write this)
   "PCSE",  // PCS Express
   "24",    // J&T Express
   "2",     // Flash Express

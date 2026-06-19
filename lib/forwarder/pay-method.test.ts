@@ -36,11 +36,12 @@ t("' 2 ' (padded Flash) → '1' via trim", () => assert.strictEqual(derivePayMet
 
 // ── isPayAtOriginCarrier mirrors derivePayMethod ────────────────────────
 t("isPayAtOriginCarrier('PCS') true", () => assert.strictEqual(isPayAtOriginCarrier("PCS"), true));
+t("isPayAtOriginCarrier('PRF') true (เหมาๆ rebrand)", () => assert.strictEqual(isPayAtOriginCarrier("PRF"), true));
 t("isPayAtOriginCarrier('5') false", () => assert.strictEqual(isPayAtOriginCarrier("5"), false));
 t("isPayAtOriginCarrier(null) false", () => assert.strictEqual(isPayAtOriginCarrier(null), false));
 
-// ── Set membership = exactly the 6 legacy origin carriers ───────────────
-t("PAY_AT_ORIGIN_CARRIERS has exactly 6 entries", () =>
-  assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 6));
+// ── Set membership = the 6 legacy origin carriers + PRF (PCSF rebrand) = 7 ───────
+t("PAY_AT_ORIGIN_CARRIERS has exactly 7 entries (incl. PRF)", () =>
+  assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 7));
 
 console.log(`\n  ${pass} passed · 0 failed\n`);
