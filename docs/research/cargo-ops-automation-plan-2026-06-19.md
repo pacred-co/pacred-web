@@ -146,6 +146,26 @@ hand-type kg/cbm or hand-calc price — **with a manual-edit override at every f
 `actions/admin/billing-run.ts` end-to-end first, add the auto-pull + the override, gate +
 adversarial money-review before prod. *Do as its own change, not bundled.*
 
-**B — PCS↔Pacred reconcile board (P1 full).** Needs the PCS data feed (API, or a
-paste/import like the MOMO invoice ingestion already shipped). Until then, the
-logistics board + the manual ฝากนำเข้า feed cover tracking + collection.
+**B — PCS↔Pacred reconcile board (P1 full).** ✅ SHIPPED (2026-06-19, local) as the
+**แต้ม reconcile tool** — the owner provided แต้ม's authoritative feed (`Pacred
+2026-06-19.xlsx` · sheet "MOMO Pacred"). `/admin/api-forwarder-momo/warehouse-reconcile`:
+paste the sheet → match by ftrackingchn → preview the diff (container/transport/box/
+wt/vol) → apply on NON-BILLED rows + auto re-price. `lib/admin/taem-reconcile-parser.ts`
+(+test) + `actions/admin/taem-reconcile.ts`. Dry-run over the 89-row feed: 32 already
+match · 24 non-billed alignable (incl. ~6 real undercounts) · 1 BILLED under-bill
+(#52089) → owner decision · 31 note-rows (แต้ม no data yet). Owner applies via the
+preview tool (not auto-applied — money path).
+
+## 7. Build status (2026-06-19 turn 4 — แต้ม feed)
+
+- ✅ **B — แต้ม reconcile tool** (above).
+- ✅ **D — pending-dispatch alert** (not blind auto-dispatch). `lib/admin/pending-dispatch.ts`
+  (fstatus=6 not in an open driver batch). Alert on the logistics board + the /admin/drivers
+  banner → "จัดรถ (เฟิมบันทึก)" → /admin/drivers/new (the existing human confirm-save). Owner's
+  rule: *"รอขึ้นแจ้งเตือน · โกดัง/แพลนนิ่งไปเฟิมบันทึก"* — alert auto, dispatch human.
+- ✅ **E — MOMO status-sync DEFAULT-ON.** `MOMO_SYNC_PROPAGATE_STATUS` gate flipped to
+  `!== "false"` (status-only · no money · no notify). Disable with env=false. Owner: don't
+  make me remember the env.
+- 🔴 **Owner decisions from the reconcile dry-run:** #52089 (616035273) is BILLED but
+  undercounted (charged half-volume) → re-bill or accept; 1779955936 is missing its split
+  sub-rows (-2..-5 ≈1098kg) in Pacred (the tool updates existing rows, can't create them).
