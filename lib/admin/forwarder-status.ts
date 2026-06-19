@@ -40,7 +40,7 @@ export const FSTATUS_CFG: Record<
 > = {
   "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-400 text-yellow-950 border border-yellow-600",   rowBg: "bg-yellow-100" },
   "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-400 text-cyan-950 border border-cyan-600",         rowBg: "bg-cyan-100" },
-  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-400 text-pink-950 border border-pink-600",         rowBg: "bg-pink-100" },
+  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-500 text-pink-50 border border-pink-700",          rowBg: "bg-pink-100" },
   "4": { label: "ถึงไทยแล้ว",       chip: "bg-amber-700 text-amber-50 border border-amber-900",       rowBg: "bg-amber-100" },
   "5": { label: "รอชำระเงิน",       chip: "bg-red-500 text-red-50 border border-red-700",             rowBg: "bg-red-100" },
   "6": { label: "เตรียมส่ง",        chip: "bg-blue-500 text-blue-50 border border-blue-700",          rowBg: "bg-blue-100" },
