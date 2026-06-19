@@ -35,6 +35,7 @@ import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
+import { getSellFloorCbm } from "@/lib/admin/sell-floor-config";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
@@ -488,6 +489,14 @@ export async function renderLegacyCustomerView(
   // degrades to 0, but the action re-checks server-side so a wrong 0 here can
   // never bypass the real gate).
   const isSuperAdmin = isGodRole(adminRoles);
+
+  // Sell-rate CBM floor — resolve the LIVE floor (business_config override ||
+  // COST_FLOOR constant) on the server and pass it into the (client) rate
+  // editor for both enforcement display + the InfoTab floor table. The floor is
+  // EDITABLE inline by `ultra` only (isGodRole) — non-ultra sees it read-only.
+  const sellFloorCbm = await getSellFloorCbm();
+  const canEditSellFloor = isGodRole(adminRoles); // ultra/super only
+
   const fwdCount = fwdCountRes.count ?? 0;
   const ordCount = ordCountRes.count ?? 0;
   const payCount = payCountRes.count ?? 0;
@@ -575,6 +584,8 @@ export async function renderLegacyCustomerView(
               matrix={rateMatrix}
               comparisonEnabled={comparisonEnabled}
               comparisonValue={comparisonValue}
+              sellFloorCbm={sellFloorCbm}
+              canEditSellFloor={canEditSellFloor}
             />
             <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
               ← รายการลูกค้า

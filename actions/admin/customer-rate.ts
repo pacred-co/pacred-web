@@ -47,6 +47,7 @@ import {
   type TransportId,
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
+import { getResolvedFloor } from "@/lib/admin/sell-floor-config";
 
 // ── resolveLegacyAdminId (duplicated · see rate-edits.ts note) ───────────
 async function resolveLegacyAdminId(): Promise<string> {
@@ -183,6 +184,12 @@ export async function adminSaveCustomerRate(
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
 
+      // Resolve the LIVE CBM floor (business_config override || COST_FLOOR
+      // constant default · ultra-editable). KG floor stays on the constant
+      // (owner only set the CBM rate). `floor[wh].cbm[t][p]` / `floor[wh].kg`
+      // read identically to COST_FLOOR — only the CBM source swaps.
+      const floor = await getResolvedFloor();
+
       // Verify the customer exists.
       const { data: customer, error: custErr } = await admin
         .from("tb_users")
@@ -226,7 +233,7 @@ export async function adminSaveCustomerRate(
       const blocked: string[] = [];
       for (const c of d.cells) {
         const k = cellKey(c.t, c.p);
-        const cbmFloor = COST_FLOOR[wh].cbm[c.t][c.p];
+        const cbmFloor = floor[wh].cbm[c.t][c.p]; // resolved (config || constant)
         const kgFloor = COST_FLOOR[wh].kg[c.t][c.p];
         const tS = TRANSPORTS.find((x) => x.id === c.t)?.short ?? c.t;
         const pL = PRODUCTS.find((x) => x.id === c.p)?.label ?? c.p;

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { adminSetUserComparison, adminRemoveUserComparison } from "@/actions/admin/users-pricing";
+import { adminUpdateSellFloorCbm } from "@/actions/admin/sell-floor";
 import {
   COST_FLOOR,
   DEFAULT_START,
@@ -26,10 +27,33 @@ import {
   TRANSPORTS,
   WAREHOUSES,
   type CustomerRateMatrix,
+  type RateMatrix,
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
+import type { SellFloorCbmConfig } from "@/lib/admin/sell-floor-config";
 
 type Measure = "kg" | "cbm";
+
+// Bounds for an ultra floor edit — mirror lib/admin/sell-floor-config.ts (kept
+// as literals here because that module is server-only · cannot import into a
+// client component).
+const FLOOR_MIN = 1000;
+const FLOOR_MAX = 99999;
+
+/**
+ * Project the resolved flat CBM floor (sellFloorCbm prop) + the constant KG
+ * floor into the full `COST_FLOOR`-shaped matrix the grid/InfoTab/belowFloor
+ * code reads. Only the CBM source swaps (config || constant); KG stays on the
+ * constant. Mirrors buildResolvedFloor() in the server resolver.
+ */
+function buildFloorMatrix(cbm: SellFloorCbmConfig): Record<WarehouseId, RateMatrix> {
+  const flat = (v: number): Record<ProductId, number | null> => ({ "1": v, "2": v, "3": v, "4": v });
+  const forWh = (wh: WarehouseId): RateMatrix => ({
+    kg: COST_FLOOR[wh].kg,
+    cbm: { "1": flat(cbm[wh]["1"]), "2": flat(cbm[wh]["2"]) },
+  });
+  return { "1": forWh("1"), "2": forWh("2") };
+}
 
 function vKey(wh: WarehouseId, m: Measure, t: TransportId, p: ProductId) {
   return `${wh}-${m}-${t}-${p}`;
@@ -41,6 +65,8 @@ export function CustomerRateEditor({
   matrix,
   comparisonEnabled = false,
   comparisonValue = 0,
+  sellFloorCbm,
+  canEditSellFloor = false,
 }: {
   userid: string;
   customerName: string;
@@ -49,8 +75,16 @@ export function CustomerRateEditor({
   comparisonEnabled?: boolean;
   /** tb_users.userComparisonValue — the kg-per-CBM density threshold. */
   comparisonValue?: number;
+  /** Resolved CBM sell floor (business_config override || COST_FLOOR constant). */
+  sellFloorCbm: SellFloorCbmConfig;
+  /** True = viewer is ultra (Ultra Admin Z) → can edit the floor inline. */
+  canEditSellFloor?: boolean;
 }) {
   const router = useRouter();
+  // Resolved floor matrix — CBM from the prop (config || constant), KG from the
+  // constant. ALL floor reads (grid "ขั้นต่ำ" labels · belowFloor block · InfoTab
+  // table) go through this, NOT the raw COST_FLOOR constant.
+  const floorMatrix = useMemo(() => buildFloorMatrix(sellFloorCbm), [sellFloorCbm]);
   const tCmp = useTranslations("customerRateComparison");
   const [pending, startTransition] = useTransition();
   // "cmp" = the ค่าเทียบ (CPS) tab — set the kg-over-คิว threshold in the SAME
@@ -118,8 +152,8 @@ export function CustomerRateEditor({
     const seedNum = (m: Measure, t: TransportId, p: ProductId) =>
       parseFloat((seeded.get(vKey(wh, m, t, p)) ?? "").replace(/,/g, ""));
     for (const c of collectCells(wh)) {
-      const kgF = COST_FLOOR[wh].kg[c.t][c.p];
-      const cbmF = COST_FLOOR[wh].cbm[c.t][c.p];
+      const kgF = floorMatrix[wh].kg[c.t][c.p];
+      const cbmF = floorMatrix[wh].cbm[c.t][c.p];
       const tS = TRANSPORTS.find((x) => x.id === c.t)?.short;
       const pL = PRODUCTS.find((x) => x.id === c.p)?.label;
       const kgSeed = seedNum("kg", c.t, c.p);
@@ -299,7 +333,7 @@ export function CustomerRateEditor({
                   <strong> สร้างเรทเฉพาะตัว</strong> ทำให้เป็น SVIP
                 </p>
               )}
-              <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} />
+              <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} floorMatrix={floorMatrix} />
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-[11px] text-muted">
                   ตัวเลขสีแดง = ต่ำกว่าราคาขั้นต่ำ · เรทนี้ใช้กับ
@@ -332,8 +366,20 @@ export function CustomerRateEditor({
         {/* ใบเสนอราคา */}
         {tab === "quote" && <QuoteTab />}
 
-        {/* Info + cost floor */}
-        {tab === "info" && <InfoTab />}
+        {/* Info + cost floor (ultra can edit the floor inline here) */}
+        {tab === "info" && (
+          <InfoTab
+            sellFloorCbm={sellFloorCbm}
+            canEdit={canEditSellFloor}
+            onSaved={(msg) => {
+              setError(null);
+              setSuccess(msg);
+              router.refresh();
+              setTimeout(() => setSuccess(null), 6000);
+            }}
+            onError={(msg) => setError(msg)}
+          />
+        )}
       </div>
           </div>
 
@@ -357,12 +403,14 @@ export function CustomerRateEditor({
 
 // ── rate grid for one warehouse ───────────────────────────────────────────
 function RateGrid({
-  wh, values, setVal, pending,
+  wh, values, setVal, pending, floorMatrix,
 }: {
   wh: WarehouseId;
   values: Map<string, string>;
   setVal: (k: string, v: string) => void;
   pending: boolean;
+  /** Resolved floor (config || constant) — drives the "ขั้นต่ำ" labels + red. */
+  floorMatrix: Record<WarehouseId, RateMatrix>;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -384,7 +432,7 @@ function RateGrid({
                 (["1", "2"] as TransportId[]).map((t) => {
                   const k = vKey(wh, meas, t, p.id);
                   const raw = values.get(k) ?? "";
-                  const floor = COST_FLOOR[wh][meas][t][p.id];
+                  const floor = floorMatrix[wh][meas][t][p.id];
                   const n = parseFloat(raw.replace(/,/g, ""));
                   const isBelow = Number.isFinite(n) && n > 0 && floor != null && n < floor;
                   return (
@@ -543,7 +591,77 @@ function QuoteTab() {
 }
 
 // ── info + cost-floor tab (legacy tab 3) ──────────────────────────────────
-function InfoTab() {
+// Shows the system explainer + the CBM ราคาขายขั้นต่ำ table. The floor is
+// EDITABLE inline (no new page) by `ultra` (Ultra Admin Z) only — 4 number
+// inputs (โกดัง × รถ/เรือ) + a confirm-before-save (§0f) calling
+// adminUpdateSellFloorCbm. Non-ultra sees the same numbers read-only.
+function InfoTab({
+  sellFloorCbm,
+  canEdit,
+  onSaved,
+  onError,
+}: {
+  sellFloorCbm: SellFloorCbmConfig;
+  canEdit: boolean;
+  onSaved: (msg: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const { confirm, dialogs } = useConfirmDialogs();
+  const [pending, start] = useTransition();
+  // Editable drafts (string per cell) — seeded from the resolved floor.
+  const fkey = (wh: WarehouseId, t: TransportId) => `${wh}-${t}`;
+  const [draft, setDraft] = useState<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    for (const wh of ["1", "2"] as WarehouseId[]) {
+      for (const t of ["1", "2"] as TransportId[]) {
+        m.set(fkey(wh, t), String(sellFloorCbm[wh][t]));
+      }
+    }
+    return m;
+  });
+  const setCell = (wh: WarehouseId, t: TransportId, v: string) =>
+    setDraft((prev) => new Map(prev).set(fkey(wh, t), v));
+  const readCell = (wh: WarehouseId, t: TransportId) => draft.get(fkey(wh, t)) ?? "";
+
+  function parsedFloor(): { ok: true; floor: SellFloorCbmConfig } | { ok: false; bad: string } {
+    const out = { "1": { "1": 0, "2": 0 }, "2": { "1": 0, "2": 0 } } as SellFloorCbmConfig;
+    for (const wh of ["1", "2"] as WarehouseId[]) {
+      for (const t of ["1", "2"] as TransportId[]) {
+        const n = parseFloat(readCell(wh, t).replace(/,/g, "").trim());
+        const whShort = WAREHOUSES.find((w) => w.id === wh)?.short;
+        const tShort = TRANSPORTS.find((x) => x.id === t)?.short;
+        if (!Number.isFinite(n) || n < FLOOR_MIN || n > FLOOR_MAX) {
+          return { ok: false, bad: `${whShort}/${tShort} (ต้อง ${FLOOR_MIN.toLocaleString()}–${FLOOR_MAX.toLocaleString()})` };
+        }
+        out[wh][t] = n;
+      }
+    }
+    return { ok: true, floor: out };
+  }
+
+  function save() {
+    const p = parsedFloor();
+    if (!p.ok) {
+      onError(`ค่าราคาขั้นต่ำไม่ถูกต้อง: ${p.bad}`);
+      return;
+    }
+    start(async () => {
+      const ok = await confirm(
+        `ยืนยันแก้ราคาขายขั้นต่ำ (CBM) — ` +
+          `กวางโจว รถ ฿${p.floor["1"]["1"].toLocaleString()} · เรือ ฿${p.floor["1"]["2"].toLocaleString()} · ` +
+          `อี้อู รถ ฿${p.floor["2"]["1"].toLocaleString()} · เรือ ฿${p.floor["2"]["2"].toLocaleString()}? ` +
+          `มีผลกับการเซฟเรททุกลูกค้าทันที`,
+      );
+      if (!ok) return;
+      const res = await adminUpdateSellFloorCbm({ floor: p.floor });
+      if (!res.ok) {
+        onError(res.error);
+        return;
+      }
+      onSaved("บันทึกราคาขายขั้นต่ำ (CBM) แล้ว — มีผลกับการเซฟเรททันที");
+    });
+  }
+
   return (
     <div className="space-y-4 text-sm">
       <div>
@@ -560,8 +678,13 @@ function InfoTab() {
         </ol>
       </div>
       <div>
-        <h3 className="font-semibold text-foreground mb-1.5">
-          ราคาขายขั้นต่ำ — CBM (฿/คิว · ห้ามขายต่ำกว่านี้)
+        <h3 className="font-semibold text-foreground mb-1.5 flex items-center gap-2 flex-wrap">
+          <span>ราคาขายขั้นต่ำ — CBM (฿/คิว · ห้ามขายต่ำกว่านี้)</span>
+          {canEdit ? (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+              <BadgeCheck className="w-3 h-3" /> Ultra · แก้ได้
+            </span>
+          ) : null}
         </h3>
         <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm min-w-[360px]">
@@ -576,8 +699,22 @@ function InfoTab() {
               {WAREHOUSES.map((w) => (
                 <tr key={w.id} className="border-t border-border">
                   <td className="px-3 py-2 font-medium">{w.short}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR[w.id].cbm["1"]["1"]}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR[w.id].cbm["2"]["1"]}</td>
+                  {(["1", "2"] as TransportId[]).map((t) => (
+                    <td key={t} className="px-3 py-2 text-right">
+                      {canEdit ? (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={readCell(w.id, t)}
+                          disabled={pending}
+                          onChange={(e) => setCell(w.id, t, e.target.value)}
+                          className="w-24 rounded-md border border-border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                        />
+                      ) : (
+                        <span className="font-mono">{sellFloorCbm[w.id][t].toLocaleString()}</span>
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -586,7 +723,18 @@ function InfoTab() {
         <p className="text-[11px] text-muted mt-1.5">
           * ราคาขั้นต่ำ CBM เท่ากันทุกประเภทสินค้า (ทั่วไป/มอก./อย./พิเศษ) · ราคาขั้นต่ำ KG ใช้เรทเดิม · 0 = ไม่คิดตามหน่วยนั้น
         </p>
+        {canEdit ? (
+          <div className="flex items-center justify-between flex-wrap gap-2 mt-2">
+            <p className="text-[11px] text-amber-700">
+              ⚠ การแก้ราคาขั้นต่ำมีผลกับการเซฟเรทของ <strong>ทุกลูกค้า</strong> ทันที — เฉพาะ Ultra Admin Z
+            </p>
+            <Button type="button" size="sm" disabled={pending} onClick={save}>
+              <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "บันทึกราคาขั้นต่ำ"}
+            </Button>
+          </div>
+        ) : null}
       </div>
+      {dialogs}
     </div>
   );
 }
