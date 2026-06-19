@@ -63,6 +63,9 @@ type Props = {
   customRateCbmInit: number;
   customComparisonInit: "0" | "1";
   customComparisonValueInit: number;
+  /** ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff. When false
+   *  the ค่าเทียบ checkbox + input are read-only and seeded from the STORED value. */
+  canEditComparison: boolean;
 };
 
 const WAREHOUSE_CHINA = [
@@ -94,7 +97,9 @@ export function PerTrackingEditorClient({
   rows: rowsInit,
   customRateKgInit,
   customRateCbmInit,
+  customComparisonInit,
   customComparisonValueInit,
+  canEditComparison,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -115,7 +120,9 @@ export function PerTrackingEditorClient({
   const [customRate, setCustomRate] = useState<"0" | "1">("1");
   const [customRateKg, setCustomRateKg] = useState<string>(String(customRateKgInit));
   const [customRateCbm, setCustomRateCbm] = useState<string>(String(customRateCbmInit));
-  const [customComparison, setCustomComparison] = useState<"0" | "1">("1");
+  // ค่าเทียบ — warehouse staff CANNOT edit it, so seed from the STORED value (no
+  // forced-on for them); everyone else gets the pinned-ON default (item 1).
+  const [customComparison, setCustomComparison] = useState<"0" | "1">(canEditComparison ? "1" : customComparisonInit);
   const [comparisonValue, setComparisonValue] = useState<string>(String(customComparisonValueInit));
 
   // ── per-tracking rows (string-valued for free typing) ──
@@ -289,15 +296,15 @@ export function PerTrackingEditorClient({
         </div>
         <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
-            <input type="checkbox" checked={customComparison === "1"} onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")} disabled={pending} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500" />
+            <input type="checkbox" checked={customComparison === "1"} onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")} disabled={pending || !canEditComparison} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 disabled:opacity-50" />
             <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>คิดค่าเทียบแบบกำหนดเอง</span>
           </label>
           {/* PINNED OPEN + เพดาน 350 (ภูม 2026-06-19: "ค่าเทียบ 1 คิว ไม่เกิน 350 กก."). */}
           <div className="mt-1.5 flex items-end gap-2">
             <label className="block"><span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก. · ไม่เกิน 350)</span>
-              <input type="number" min={0} max={MAX_COMPARISON} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
+              <input type="number" min={0} max={MAX_COMPARISON} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending || !canEditComparison} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
           </div>
-          <p className="mt-1 text-[10px] text-muted">ติ๊ก = ใช้ค่าเทียบที่กรอก · 1 คิว ไม่เกิน {MAX_COMPARISON} กก.</p>
+          <p className="mt-1 text-[10px] text-muted">{canEditComparison ? `ติ๊ก = ใช้ค่าเทียบที่กรอก · 1 คิว ไม่เกิน ${MAX_COMPARISON} กก.` : "🔒 ค่าเทียบสงวนไว้ — พนักงานโกดังแก้ไม่ได้"}</p>
         </div>
       </div>
 

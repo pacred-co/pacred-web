@@ -132,12 +132,15 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   // Admin Z only. Staff advance status via the proper flow (scan → ถึงไทย · วางบิล →
   // รอชำระ · ส่งแล้ว close), which stay role-gated by the transition matrix.
   const viewerIsUltra = viewerRoles.includes("ultra");
+  // ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff (god roles
+  // always can). Threaded into the pricing editor to lock the ค่าเทียบ field.
+  const canEditComparison = isGodRole(viewerRoles) || !viewerRoles.includes("warehouse");
 
   const { fNo } = await params;
   const admin = createAdminClient();
 
   // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
-  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus, viewerIsUltra);
+  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus, viewerIsUltra, canEditComparison);
   if (tbResult) return tbResult;
 
   // Fallback — rebuilt `forwarders` table (UUID, empty on prod, back-compat).
@@ -284,6 +287,7 @@ async function tryRenderTbForwarder(
   admin: ReturnType<typeof createAdminClient>,
   canStepStatus: boolean,
   isUltra: boolean,
+  canEditComparison: boolean,
 ) {
   const asNumber = Number(fNo);
   const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
@@ -1014,6 +1018,7 @@ async function tryRenderTbForwarder(
               customRateCbmInit={pricingInit.customRateCbm}
               customComparisonInit={pricingInit.customComparison}
               customComparisonValueInit={pricingInit.customComparisonValue}
+              canEditComparison={canEditComparison}
             />
           }
         >
