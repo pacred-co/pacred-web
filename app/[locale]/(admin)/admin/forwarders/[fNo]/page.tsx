@@ -128,12 +128,16 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   // ops/super/warehouse (+god) may revert/advance the status step; accounting views only.
   const canStepStatus =
     isGodRole(viewerRoles) || viewerRoles.includes("ops") || viewerRoles.includes("warehouse");
+  // ภูม 2026-06-19 — the MANUAL "อัปเดตสถานะรายการ" dropdown is reserved for Ultra
+  // Admin Z only. Staff advance status via the proper flow (scan → ถึงไทย · วางบิล →
+  // รอชำระ · ส่งแล้ว close), which stay role-gated by the transition matrix.
+  const viewerIsUltra = viewerRoles.includes("ultra");
 
   const { fNo } = await params;
   const admin = createAdminClient();
 
   // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
-  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus);
+  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus, viewerIsUltra);
   if (tbResult) return tbResult;
 
   // Fallback — rebuilt `forwarders` table (UUID, empty on prod, back-compat).
@@ -279,6 +283,7 @@ async function tryRenderTbForwarder(
   fNo: string,
   admin: ReturnType<typeof createAdminClient>,
   canStepStatus: boolean,
+  isUltra: boolean,
 ) {
   const asNumber = Number(fNo);
   const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
@@ -990,6 +995,7 @@ async function tryRenderTbForwarder(
         <ForwarderStatusWorkflow
           fId={r.id}
           fNo={String(r.id)}
+          isUltra={isUltra}
           currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
           currentCabinet={r.fcabinetnumber ?? ""}
           currentTrackingTh={r.ftrackingth ?? ""}
