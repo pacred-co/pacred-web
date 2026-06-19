@@ -29,11 +29,15 @@ import "server-only";
  *   2. fdatetothai    ← today, only if MOMO indicates arrival + tb_forwarder
  *                       has no fdatetothai yet
  *   3. fstatus        ← derived from MOMO shipmentStatus, only if STRICTLY
- *                       FORWARD progress (never roll back) AND gated behind
- *                       env `MOMO_SYNC_PROPAGATE_STATUS=true` (default OFF).
- *                       fstatus writes can fire SMS/LINE/email per the
- *                       legacy notification path, so this stays opt-in
- *                       until ภูม has eyeballed the propagation log.
+ *                       FORWARD progress (never roll back). 2026-06-19 (owner
+ *                       "ไม่ต้องจำ env · ทำให้เลย"): now DEFAULT-ON — the gate
+ *                       only disables when env MOMO_SYNC_PROPAGATE_STATUS="false".
+ *                       This is STATUS-ONLY (forward-only, idempotent): it does a
+ *                       raw tb_forwarder.update with NO sendNotification call (the
+ *                       cron already writes fcabinetnumber/fdatetothai through the
+ *                       same path ungated), so it never touches money/dispatch and
+ *                       fires no customer SMS/LINE/email. Money collection stays
+ *                       admin-review (Option B). Set the env to "false" to pause it.
  *
  * NEVER touched here:
  *   - Money columns (ftotalprice, paydeposit, fcredit, etc.)
@@ -171,7 +175,10 @@ export async function propagateMomoToForwarders(
   records: MomoInternalAdminRecord[],
 ): Promise<PropagationResult> {
   const result = emptyResult();
-  const statusGate = process.env.MOMO_SYNC_PROPAGATE_STATUS === "true";
+  // 2026-06-19 (owner): default-ON status propagation — auto-sync forwarder +
+  // shop-order status on the MOMO cron so ฝากสั่งซื้อ no longer sticks. Opt OUT
+  // only by setting the env to "false". Status-only · no money · no notifications.
+  const statusGate = process.env.MOMO_SYNC_PROPAGATE_STATUS !== "false";
 
   // Filter to records with a real tracking number — that's our match key.
   const candidates = records.filter((r) => r.trackingNo);

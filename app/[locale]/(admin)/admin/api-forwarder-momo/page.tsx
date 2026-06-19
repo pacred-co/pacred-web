@@ -398,6 +398,12 @@ export default async function AdminApiForwarderMomoPage({
               💰 ลงต้นทุนจากใบแจ้งหนี้
             </Link>
           )}
+          <Link
+            href="/admin/api-forwarder-momo/warehouse-reconcile"
+            className="rounded-md border border-sky-300 bg-white text-sky-700 px-3 py-1.5 text-xs font-medium hover:bg-sky-50 inline-flex items-center gap-1"
+          >
+            🔄 เทียบข้อมูลกับแต้ม
+          </Link>
         </form>
 
         <div className="grid gap-4 sm:grid-cols-3 items-end">
@@ -548,8 +554,8 @@ export default async function AdminApiForwarderMomoPage({
             <p className="mt-1 text-[10px] text-gray-600">
               ตู้/พัสดุที่ MOMO บอกถึงไทย แต่ของเรายัง fstatus 1/2/3
               {" · "}
-              ตั้ง <code className="rounded bg-white/60 px-1">MOMO_SYNC_PROPAGATE_STATUS=true</code>{" "}
-              ให้ cron แก้ให้อัตโนมัติ
+              <span className="text-emerald-700 font-medium">cron ซิงค์สถานะให้อัตโนมัติแล้ว</span>{" "}
+              (เปิดเป็นค่าเริ่มต้น · ปิดได้ด้วย env <code className="rounded bg-white/60 px-1">MOMO_SYNC_PROPAGATE_STATUS=false</code>)
             </p>
           </div>
         </div>
