@@ -110,15 +110,22 @@ export function CustomerRateEditor({
     );
   }
 
+  // NEW below-floor cells (changed from the loaded value AND below the per-
+  // warehouse ราคาขั้นต่ำ). Grandfathers untouched legacy below-floor data so an
+  // unrelated edit isn't blocked — mirrors the server (ภูม 2026-06-19 hard floor).
   function belowFloor(wh: WarehouseId) {
     const out: string[] = [];
+    const seedNum = (m: Measure, t: TransportId, p: ProductId) =>
+      parseFloat((seeded.get(vKey(wh, m, t, p)) ?? "").replace(/,/g, ""));
     for (const c of collectCells(wh)) {
-      const kgF = COST_FLOOR.kg[c.t][c.p];
-      const cbmF = COST_FLOOR.cbm[c.t][c.p];
+      const kgF = COST_FLOOR[wh].kg[c.t][c.p];
+      const cbmF = COST_FLOOR[wh].cbm[c.t][c.p];
       const tS = TRANSPORTS.find((x) => x.id === c.t)?.short;
       const pL = PRODUCTS.find((x) => x.id === c.p)?.label;
-      if (Number.isFinite(c.rkg) && c.rkg > 0 && kgF != null && c.rkg < kgF) out.push(`KG ${tS}/${pL}`);
-      if (Number.isFinite(c.rcbm) && c.rcbm > 0 && cbmF != null && c.rcbm < cbmF) out.push(`CBM ${tS}/${pL}`);
+      const kgSeed = seedNum("kg", c.t, c.p);
+      const cbmSeed = seedNum("cbm", c.t, c.p);
+      if (Number.isFinite(c.rkg) && c.rkg > 0 && kgF != null && c.rkg < kgF && c.rkg !== kgSeed) out.push(`KG ${tS}/${pL} (ขั้นต่ำ ฿${kgF})`);
+      if (Number.isFinite(c.rcbm) && c.rcbm > 0 && cbmF != null && c.rcbm < cbmF && c.rcbm !== cbmSeed) out.push(`CBM ${tS}/${pL} (ขั้นต่ำ ฿${cbmF})`);
     }
     return out;
   }
@@ -133,6 +140,13 @@ export function CustomerRateEditor({
         setError("กรอกเรททุกช่องให้เป็นตัวเลข (0 = ไม่คิดตามหน่วยนี้)");
         return;
       }
+    }
+    // HARD floor (ภูม 2026-06-19 "ห้ามขายต่ำกว่าราคาขั้นต่ำ แม้ VIP") — block a
+    // newly-set below-floor rate client-side too (the server also rejects it).
+    const newBelow = belowFloor(wh);
+    if (newBelow.length > 0) {
+      setError(`ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ: ${newBelow.join(" · ")} — ปรับขึ้นก่อนบันทึก`);
+      return;
     }
     startTransition(async () => {
       const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wh, cells });
@@ -370,7 +384,7 @@ function RateGrid({
                 (["1", "2"] as TransportId[]).map((t) => {
                   const k = vKey(wh, meas, t, p.id);
                   const raw = values.get(k) ?? "";
-                  const floor = COST_FLOOR[meas][t][p.id];
+                  const floor = COST_FLOOR[wh][meas][t][p.id];
                   const n = parseFloat(raw.replace(/,/g, ""));
                   const isBelow = Number.isFinite(n) && n > 0 && floor != null && n < floor;
                   return (
@@ -542,39 +556,35 @@ function InfoTab() {
           </li>
           <li>ต้องกด <strong>บันทึก</strong> เรทถึงจะมีผล</li>
           <li>ลูกค้าที่ปรับเรทเฉพาะตัว จะกลายเป็น <strong>SVIP (Super VIP)</strong></li>
-          <li>ราคาขั้นต่ำตั้งเองไม่ได้ — หากต้องตั้งต่ำกว่านี้ ต้องให้ผู้บริหาร (super admin) ยืนยัน</li>
+          <li><strong>ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ</strong> — ระบบจะกดบันทึกไม่ได้ (จะ VIP แค่ไหนก็ห้ามต่ำกว่านี้). แก้ราคาขั้นต่ำเองได้เฉพาะ <strong>Ultra Admin Z</strong></li>
         </ol>
       </div>
       <div>
         <h3 className="font-semibold text-foreground mb-1.5">
-          ราคาขั้นต่ำ (เรทต้นทุน — ปรับต่ำกว่านี้ไม่ได้)
+          ราคาขายขั้นต่ำ — CBM (฿/คิว · ห้ามขายต่ำกว่านี้)
         </h3>
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm min-w-[480px]">
+          <table className="w-full text-sm min-w-[360px]">
             <thead className="bg-surface-alt/60 text-[11px] uppercase text-muted">
               <tr>
-                <th className="px-3 py-2 text-left">ประเภทสินค้า</th>
-                <th className="px-3 py-2 text-right">KG · รถ</th>
-                <th className="px-3 py-2 text-right">KG · เรือ</th>
+                <th className="px-3 py-2 text-left">โกดัง</th>
                 <th className="px-3 py-2 text-right">CBM · รถ</th>
                 <th className="px-3 py-2 text-right">CBM · เรือ</th>
               </tr>
             </thead>
             <tbody>
-              {PRODUCTS.map((p) => (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium">{p.label}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR.kg["1"][p.id]}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR.kg["2"][p.id]}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR.cbm["1"][p.id]}</td>
-                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR.cbm["2"][p.id]}</td>
+              {WAREHOUSES.map((w) => (
+                <tr key={w.id} className="border-t border-border">
+                  <td className="px-3 py-2 font-medium">{w.short}</td>
+                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR[w.id].cbm["1"]["1"]}</td>
+                  <td className="px-3 py-2 text-right font-mono">{COST_FLOOR[w.id].cbm["2"]["1"]}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="text-[11px] text-muted mt-1.5">
-          * ราคาขั้นต่ำเท่ากันทั้งสองโกดัง (กำหนดโดยทีมพัฒนา)
+          * ราคาขั้นต่ำ CBM เท่ากันทุกประเภทสินค้า (ทั่วไป/มอก./อย./พิเศษ) · ราคาขั้นต่ำ KG ใช้เรทเดิม · 0 = ไม่คิดตามหน่วยนั้น
         </p>
       </div>
     </div>
