@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
@@ -464,12 +465,12 @@ export async function adminBulkUpdateForwarderTbStatus(
     // the cabinet-lock audit (B4 · backlog #259 · 2026-06-08).
     const { data: before, error: readErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked, reforder, ftrackingchn")
+      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked, reforder, ftrackingchn, fcredit")
       .in("id", fids);
     if (readErr) return { ok: false, error: readErr.message };
     if (!before || before.length === 0) return { ok: false, error: "not_found" };
 
-    const beforeRows = before as unknown as Array<{
+    let beforeRows = before as unknown as Array<{
       id: number;
       fstatus: string;
       userid: string;
@@ -479,7 +480,12 @@ export async function adminBulkUpdateForwarderTbStatus(
       fcabinet_locked: boolean | null;
       reforder: string | null;
       ftrackingchn: string | null;
+      fcredit: string | null;
     }>;
+    // Working fid set — narrowed below if the UNIT E credit-limit lock skips any
+    // credit-blocked rows on a move to fstatus '6'. All downstream UPDATEs /
+    // backfills / audit / notifications operate on `workFids` + `beforeRows`.
+    let workFids: number[] = fids;
 
     // ── V-C3 — "ตัดตู้" enforce + explain (2026-06-10) ─────────────────────
     // Forensics C3 (docs/audit/cargo-ops-forensics-2026-05-16.md §C): assigning
@@ -580,6 +586,137 @@ export async function adminBulkUpdateForwarderTbStatus(
       };
     }
 
+    // ── UNIT E — credit-limit lock on the move to fstatus '6' (เตรียมส่ง) ──────
+    // Owner: a credit customer at/over their credit limit (with unpaid debt) must
+    // NEVER be advanced to '6'. Apply the guard PER ROW; SKIP the blocked rows
+    // (don't fail the whole batch — the rest proceed), and best-effort fire a
+    // payment-due notification to each blocked customer so they pay down the
+    // credit. Reads the LIVE legacy credit pair (tb_users.userCreditValue +
+    // tb_credit.creditvalue) — the same columns getMyCredit reads (ADR-0023).
+    //
+    // Read-only signal check + a status SKIP — never touches wallet/credit/status.
+    // Batched by unique userid so a 100-row container check is a couple of reads.
+    let creditBlocked: Array<{ id: number; userid: string; fidorco: string | null; reason: string }> = [];
+    if (derivedFstatus === "6") {
+      const creditCandidates = beforeRows.filter(
+        (r) => isCreditRow(r.fcredit) && r.fstatus !== "6",
+      );
+      if (creditCandidates.length > 0) {
+        const codes = Array.from(
+          new Set(creditCandidates.map((r) => String(r.userid ?? "").trim()).filter(Boolean)),
+        );
+        // Per-customer credit snapshot (limit + outstanding). On a read error we
+        // FAIL CLOSED for that customer (block) — a money guard we can't complete
+        // must hold rather than silently let a full-credit row flow to เตรียมส่ง.
+        const limitByCode = new Map<string, number | string | null>();
+        const outByCode = new Map<string, number | string | null>();
+        const readFailedCodes = new Set<string>();
+        if (codes.length > 0) {
+          const [limitRes, creditRes] = await Promise.all([
+            admin.from("tb_users").select("userID, userCreditValue").in("userID", codes),
+            admin.from("tb_credit").select("userid, creditvalue").in("userid", codes),
+          ]);
+          if (limitRes.error) {
+            console.error(`[bulk credit-lock tb_users read] failed — failing closed`, { code: limitRes.error.code, message: limitRes.error.message });
+            for (const c of codes) readFailedCodes.add(c);
+          } else {
+            for (const r of (limitRes.data ?? []) as Array<{ userID: string; userCreditValue: number | string | null }>) {
+              limitByCode.set(String(r.userID).trim(), r.userCreditValue);
+            }
+          }
+          if (creditRes.error) {
+            console.error(`[bulk credit-lock tb_credit read] failed — failing closed`, { code: creditRes.error.code, message: creditRes.error.message });
+            for (const c of codes) readFailedCodes.add(c);
+          } else {
+            for (const r of (creditRes.data ?? []) as Array<{ userid: string; creditvalue: number | string | null }>) {
+              outByCode.set(String(r.userid).trim(), r.creditvalue);
+            }
+          }
+        }
+
+        creditBlocked = creditCandidates.flatMap((r) => {
+          const code = String(r.userid ?? "").trim();
+          if (!code) {
+            // credit row with no customer code — anomalous, hold it.
+            return [{ id: r.id, userid: "", fidorco: r.fidorco, reason: "ตรวจสอบวงเงินเครดิตไม่ได้ (ไม่พบรหัสลูกค้า)" }];
+          }
+          if (readFailedCodes.has(code)) {
+            return [{ id: r.id, userid: code, fidorco: r.fidorco, reason: "ตรวจสอบวงเงินเครดิตไม่สำเร็จ — ระบบไม่ได้เลื่อนสถานะรายการนี้" }];
+          }
+          const verdict = canAdvanceCreditCustomer({
+            fcredit: r.fcredit,
+            outstanding: outByCode.get(code) ?? 0,
+            limit: limitByCode.get(code) ?? 0,
+          });
+          return verdict.blocked ? [{ id: r.id, userid: code, fidorco: r.fidorco, reason: verdict.reason }] : [];
+        });
+
+        if (creditBlocked.length > 0) {
+          const blockedIdSet = new Set(creditBlocked.map((b) => b.id));
+          // Narrow the working set so the UPDATE / backfill / audit / notify all
+          // operate only on the rows we actually advanced.
+          workFids = workFids.filter((id) => !blockedIdSet.has(id));
+          beforeRows = beforeRows.filter((r) => !blockedIdSet.has(r.id));
+
+          // Best-effort payment-due notifications (one per blocked customer).
+          // Never blocks the batch. Resolve userid → profile_id then sendNotification.
+          try {
+            const blockedCodes = Array.from(new Set(creditBlocked.map((b) => b.userid).filter(Boolean)));
+            const profileMap = await resolveProfileIdsForLegacyUserids(blockedCodes);
+            const firstByCode = new Map<string, { id: number; fidorco: string | null }>();
+            for (const b of creditBlocked) {
+              if (b.userid && !firstByCode.has(b.userid)) firstByCode.set(b.userid, { id: b.id, fidorco: b.fidorco });
+            }
+            for (const [code, info] of firstByCode) {
+              const profileId = profileMap.get(code);
+              if (!profileId) continue;
+              const fNo = info.fidorco ?? String(info.id);
+              try {
+                await sendNotification(profileId, {
+                  category:       "payment",
+                  severity:       "warning",
+                  title:          "กรุณาชำระยอดค้างเครดิต",
+                  body:
+                    `รายการฝากนำเข้า ${fNo} พร้อมจัดส่ง แต่บัญชีของท่านเครดิตเต็ม/เกินวงเงิน — ` +
+                    `กรุณาชำระยอดค้างเครดิตก่อน เพื่อให้ระบบเลื่อนสถานะเป็น "เตรียมส่ง" ได้`,
+                  link_href:      "/wallet-credit",
+                  reference_type: "forwarder",
+                  reference_id:   String(info.id),
+                });
+              } catch (err) {
+                logger.warn("forwarder.bulk_update_tb", "credit payment-due notify failed (continuing)", {
+                  userid: redactId(code), error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          } catch (err) {
+            logger.warn("forwarder.bulk_update_tb", "credit payment-due notify resolver failed (rows still skipped)", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+
+          // Audit the skip so staff can see which rows were held + why.
+          await logAdminAction(adminId, "forwarder.bulk_credit_lock_skip", "tb_forwarder", "bulk", {
+            target_fstatus: derivedFstatus,
+            skipped: creditBlocked.map((b) => ({ id: b.id, userid: b.userid || null, reason: b.reason })),
+          });
+
+          // Every targeted row was credit-blocked → nothing left to update.
+          if (workFids.length === 0 || beforeRows.length === 0) {
+            const sample = creditBlocked.slice(0, 5).map((b) => `#${b.fidorco ?? b.id}`).join(", ");
+            const more = creditBlocked.length > 5 ? ` และอีก ${creditBlocked.length - 5} รายการ` : "";
+            bustAdminChrome();
+            return {
+              ok: false,
+              error:
+                `เครดิตเต็ม/เกินวงเงิน — เลื่อนเป็นเตรียมส่งไม่ได้ ต้องชำระเครดิตก่อน: ${sample}${more}. ` +
+                `ระบบได้แจ้งชำระไปยังลูกค้าแล้ว`,
+            };
+          }
+        }
+      }
+    }
+
     const nowIso = new Date().toISOString();
     const dateCol = TB_STATUS_DATE_COL[derivedFstatus];
     // tb_forwarder.adminidupdate is varchar(10) — same legacy pcsc_main
@@ -648,15 +785,22 @@ export async function adminBulkUpdateForwarderTbStatus(
     //          (the back-fill subset gets the extra column; the rest don't).
     //          A 2-statement split is honest about which rows changed when,
     //          and keeps the audit log accurate. Cheaper than a per-row loop.
+    //
+    // ⚠️ UNIT E — write `workFids`, NOT the original `fids`. The credit-limit
+    // lock above narrows `workFids` (+ `beforeRows`) to DROP credit-blocked
+    // rows on a move to fstatus '6'. The UPDATE must honor that narrowing,
+    // else a full-credit row would still be advanced to เตรียมส่ง here even
+    // though it was skipped from the audit/notify/shop-advance logic.
+    // `needsBackfillSet` is already derived from the narrowed `beforeRows`.
     if (needsBackfillSet.size === 0) {
       const { error: updErr } = await admin
         .from("tb_forwarder")
         .update(update)
-        .in("id", fids);
+        .in("id", workFids);
       if (updErr) return { ok: false, error: updErr.message };
     } else {
       const backfillIds = Array.from(needsBackfillSet);
-      const otherIds = fids.filter((id) => !needsBackfillSet.has(id));
+      const otherIds = workFids.filter((id) => !needsBackfillSet.has(id));
 
       // 1) rows that need the close-date back-fill
       const { error: updWithCloseErr } = await admin

@@ -27,6 +27,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -347,11 +348,11 @@ export default async function AdminDriversPage({
                       </td>
                       <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                         {r.fddate && (
-                          <div>{new Date(r.fddate).toLocaleDateString("th-TH")}</div>
+                          <div>{formatThaiDate(r.fddate)}</div>
                         )}
                         {r.endtime && (
                           <div className={expired ? "text-rose-600 font-medium" : ""}>
-                            → {new Date(r.endtime).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                            → {formatThaiDateTime(r.endtime)}
                             {expired ? " (เลย)" : ""}
                           </div>
                         )}

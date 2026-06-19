@@ -20,6 +20,7 @@ import { TbWalletBulkBar, TbWalletRowCheckbox } from "./tb-bulk-bar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -450,9 +451,7 @@ function TxRow({
           {rowStatus === "1" ? <TbWalletRowCheckbox id={row.id} /> : null}
         </td>
         <td className="px-3 py-3 text-xs whitespace-nowrap">
-          {row.date
-            ? new Date(row.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
-            : "—"}
+          {formatThaiDateTime(row.date)}
         </td>
         <td className="px-3 py-3 text-xs">
           <div className="font-mono">{row.userid ?? "—"}</div>
@@ -548,9 +547,7 @@ function TxRow({
                           </td>
                           <td className="px-2 py-1.5 font-mono text-muted">{lr.id}</td>
                           <td className="px-2 py-1.5 whitespace-nowrap">
-                            {lr.date
-                              ? new Date(lr.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
-                              : "—"}
+                            {formatThaiDateTime(lr.date)}
                           </td>
                           <td className="px-2 py-1.5">
                             <span

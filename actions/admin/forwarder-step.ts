@@ -62,6 +62,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { FSTATUS_CFG } from "@/lib/admin/forwarder-status";
+import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
+import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { sendNotification } from "@/lib/notifications";
 
 // ── Local resolveLegacyAdminId (same pattern as forwarders-field-edits.ts) ───
 // Known consolidation TODO across the forwarder actions; kept local to avoid
@@ -84,6 +87,68 @@ async function resolveLegacyAdminId(): Promise<string> {
     console.error(`[forwarder-step tb_admin lookup] failed`, { code: aErr.code, message: aErr.message });
   }
   return data?.adminID ?? email.slice(0, 10);
+}
+
+// ── checkCreditAdvanceToPrepShip — UNIT E credit-limit lock ──────────────────
+// Owner: a credit customer at/over their credit limit (with unpaid debt) must
+// NEVER be advanced to fstatus '6' (เตรียมส่ง) — lock the row until they pay the
+// credit down enough. Reads the LIVE legacy credit pair by member-code:
+//   limit       = tb_users.userCreditValue   (camelCase · per userID)
+//   outstanding = tb_credit.creditvalue      (lowercase  · per userid)
+// (the SAME columns actions/credit.ts::getMyCredit reads · ADR-0023).
+//
+// Returns { blocked, reason }. On a read error it FAILS CLOSED (blocked) — a
+// money guard we can't complete must hold, not silently let a full-credit row
+// flow to เตรียมส่ง. When NOT a credit row it short-circuits without a DB read.
+async function checkCreditAdvanceToPrepShip(
+  admin: ReturnType<typeof createAdminClient>,
+  fcredit: string | null,
+  userid: string | null,
+): Promise<{ blocked: boolean; reason: string }> {
+  // Cheap short-circuit: only credit rows can ever be blocked — skip the DB read.
+  if (!isCreditRow(fcredit)) {
+    return { blocked: false, reason: "" };
+  }
+
+  const code = String(userid ?? "").trim();
+  if (!code) {
+    // A credit row with no resolvable customer code is anomalous — hold it.
+    return {
+      blocked: true,
+      reason: "ตรวจสอบวงเงินเครดิตไม่ได้ (ไม่พบรหัสลูกค้า) — กรุณาตรวจสอบรายการก่อนเลื่อนสถานะ",
+    };
+  }
+
+  const [limitRes, creditRes] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select("userCreditValue")
+      .eq("userID", code)
+      .maybeSingle<{ userCreditValue: number | string | null }>(),
+    admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", code)
+      .maybeSingle<{ creditvalue: number | string | null }>(),
+  ]);
+  if (limitRes.error) {
+    console.error(`[checkCreditAdvanceToPrepShip tb_users read] failed`, {
+      code: limitRes.error.code, message: limitRes.error.message, userid: code,
+    });
+    return { blocked: true, reason: `ตรวจสอบวงเงินเครดิตไม่สำเร็จ: ${limitRes.error.message}` };
+  }
+  if (creditRes.error) {
+    console.error(`[checkCreditAdvanceToPrepShip tb_credit read] failed`, {
+      code: creditRes.error.code, message: creditRes.error.message, userid: code,
+    });
+    return { blocked: true, reason: `ตรวจสอบยอดค้างเครดิตไม่สำเร็จ: ${creditRes.error.message}` };
+  }
+
+  return canAdvanceCreditCustomer({
+    fcredit,
+    outstanding: creditRes.data?.creditvalue ?? 0,
+    limit: limitRes.data?.userCreditValue ?? 0,
+  });
 }
 
 // `fdatestatusN` map — status '1' has no dedicated date column (matches
@@ -272,9 +337,15 @@ export async function advanceForwarderStep(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus")
+      .select("id, fstatus, fcredit, userid, fidorco")
       .eq("id", fid)
-      .maybeSingle<{ id: number; fstatus: string | null }>();
+      .maybeSingle<{
+        id: number;
+        fstatus: string | null;
+        fcredit: string | null;
+        userid: string | null;
+        fidorco: string | null;
+      }>();
     if (fwdErr) {
       console.error(`[advanceForwarderStep read] failed`, { code: fwdErr.code, message: fwdErr.message, fid });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -295,6 +366,48 @@ export async function advanceForwarderStep(
       };
     }
     const to = String(fromInt + 1);
+
+    // ── UNIT E — credit-limit lock on the advance to fstatus '6' (เตรียมส่ง) ──
+    // Owner: a credit customer who is at/over their credit limit (with unpaid
+    // debt) must NEVER be advanced to '6'. Hold the row; tell them to pay the
+    // credit down first. Only checked for the 5→6 advance — the 4→5 advance is
+    // pre-prep-ship and carries no shipping commitment.
+    if (to === "6") {
+      const verdict = await checkCreditAdvanceToPrepShip(admin, fwd.fcredit, fwd.userid);
+      if (verdict.blocked) {
+        // Best-effort: fire a payment-due notification to the customer so they
+        // know to pay the credit down. Never fails the (refused) advance.
+        const code = String(fwd.userid ?? "").trim();
+        if (code) {
+          try {
+            const profileId = await resolveProfileIdForLegacyUserid(code);
+            if (profileId) {
+              const fNo = fwd.fidorco ?? String(fwd.id);
+              await sendNotification(profileId, {
+                category:       "payment",
+                severity:       "warning",
+                title:          "กรุณาชำระยอดค้างเครดิต",
+                body:
+                  `รายการฝากนำเข้า ${fNo} พร้อมจัดส่ง แต่บัญชีของท่านเครดิตเต็ม/เกินวงเงิน — ` +
+                  `กรุณาชำระยอดค้างเครดิตก่อน เพื่อให้ระบบเลื่อนสถานะเป็น "เตรียมส่ง" ได้`,
+                link_href:      "/wallet-credit",
+                reference_type: "forwarder",
+                reference_id:   String(fwd.id),
+              });
+            }
+          } catch (err) {
+            console.error(`[advanceForwarderStep credit payment-due notify] failed (advance still refused)`, {
+              fid, error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        // Audit the refusal (best-effort) so staff can see why the row is held.
+        await logAdminAction(adminId, "tb_forwarder.advance_step_blocked_credit", "tb_forwarder", String(fid), {
+          from, to, reason: verdict.reason, userid: code || null,
+        });
+        return { ok: false, error: verdict.reason };
+      }
+    }
 
     const nowIso = new Date().toISOString();
     const enteredDateCol = STATUS_DATE_COL[to]; // stamp the state we ENTER

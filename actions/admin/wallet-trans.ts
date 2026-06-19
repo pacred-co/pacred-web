@@ -56,6 +56,24 @@ import { spendCashbackAtCheckout, refundCashbackOnReject } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 
 // ────────────────────────────────────────────────────────────
+// UNIT C (owner 2026-06-19) — "หมายเหตุงาน" work-note append helper.
+// Appends a staff work note onto the EXISTING tb_wallet_hs.note WITHOUT
+// clobbering it. The note column carries load-bearing tags ([CB:<amt>] ·
+// [WALLET:<thb>]) read by the cashback / wallet-refund settle logic, so we
+// must never overwrite — only append with a separator. Returns the prior
+// note unchanged when no work note is supplied (note stays optional /
+// fully backward-compatible). Caps the combined string to fit the legacy
+// column without surprises.
+// ────────────────────────────────────────────────────────────
+function appendWorkNote(prior: string | null | undefined, workNote: string | undefined): string | null {
+  const base = (prior ?? "").trim();
+  const add = (workNote ?? "").trim();
+  if (!add) return prior ?? null; // nothing to add → leave the row untouched
+  const combined = base ? `${base} | ${add}` : add;
+  return combined;
+}
+
+// ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-hs.ts L54 (third caller —
 // next refactor task should lift it to actions/admin/common.ts).
 // ────────────────────────────────────────────────────────────
@@ -170,6 +188,9 @@ export async function adminUpdateWalletHsDateSlip(
 
 const approveSchema = z.object({
   id: z.number().int().positive(),
+  // UNIT C — optional "หมายเหตุงาน" (internal work note). When present it is
+  // APPENDED to tb_wallet_hs.note (never clobbers the [CB:]/[WALLET:] tags).
+  note: z.string().trim().max(500).optional(),
 });
 export type AdminApproveWalletHsInput = z.infer<typeof approveSchema>;
 
@@ -180,7 +201,7 @@ export async function adminApproveWalletHs(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { id } = parsed.data;
+  const { id, note: workNote } = parsed.data;
 
   return withAdmin<{ id: number; new_balance: number }>(
     ["accounting"],
@@ -224,10 +245,22 @@ export async function adminApproveWalletHs(
                   : (t === "4" || t === "7") ? -amt
                   : 0;
 
-      // 2. UPDATE tb_wallet_hs status='2'.
+      // 2. UPDATE tb_wallet_hs status='2'. UNIT C — when a "หมายเหตุงาน" work
+      //    note is supplied, append it onto the existing note (preserving the
+      //    [CB:]/[WALLET:] tags read above by reference to row.note). The tags
+      //    are read BEFORE this update (cashback settle reads row.note, not the
+      //    appended value), so appending here is safe + persists the staff note.
+      const approvePatch: Record<string, unknown> = {
+        status: "2",
+        adminid: legacyAdminId,
+        adminidupdate: legacyAdminId,
+      };
+      if (workNote && workNote.length > 0) {
+        approvePatch.note = appendWorkNote(row.note, workNote);
+      }
       const { error: updHsErr } = await admin
         .from("tb_wallet_hs")
-        .update({ status: "2", adminid: legacyAdminId, adminidupdate: legacyAdminId })
+        .update(approvePatch)
         .eq("id", id)
         .eq("status", "1");
       if (updHsErr) {
@@ -300,6 +333,7 @@ export async function adminApproveWalletHs(
         amount: amt,
         delta,
         new_balance: newTotal,
+        ...(workNote && workNote.length > 0 ? { work_note: workNote } : {}),
       });
 
       // 4. Wave 29: auto-receipt hook (matches legacy grenrateReceiptF
@@ -449,7 +483,14 @@ export async function adminApproveWalletHs(
 
 const rejectSchema = z.object({
   id:   z.number().int().positive(),
+  // The rejection reason (legacy behaviour — REPLACES the note when no work
+  // note is also given, to stay byte-for-byte backward compatible).
   note: z.string().trim().max(1000).optional(),
+  // UNIT C — optional "หมายเหตุงาน" (internal work note). When present, the
+  // persisted note APPENDS (reason + work note) onto the existing note so the
+  // [CB:]/[WALLET:] tags survive — they are read from row.note above before
+  // the update, but appending keeps them visible to staff afterwards too.
+  workNote: z.string().trim().max(500).optional(),
 });
 export type AdminRejectWalletHsInput = z.infer<typeof rejectSchema>;
 
@@ -460,7 +501,7 @@ export async function adminRejectWalletHs(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { id, note } = parsed.data;
+  const { id, note, workNote } = parsed.data;
 
   return withAdmin<{ id: number }>(
     ["accounting"],
@@ -487,7 +528,17 @@ export async function adminRejectWalletHs(
         adminid: legacyAdminId,
         adminidupdate: legacyAdminId,
       };
-      if (note && note.length > 0) patch.note = note;
+      // UNIT C — note-write policy:
+      //   • work note present → APPEND (existing note + reason + work note) so
+      //     the [CB:]/[WALLET:] tags + any prior note survive (no clobber).
+      //   • work note absent  → legacy behaviour: replace with the reason only
+      //     (byte-for-byte backward compatible).
+      if (workNote && workNote.length > 0) {
+        const reasonAndWork = [note, workNote].filter((s) => s && s.length > 0).join(" — ");
+        patch.note = appendWorkNote(row.note, reasonAndWork);
+      } else if (note && note.length > 0) {
+        patch.note = note;
+      }
 
       const { error: updErr } = await admin
         .from("tb_wallet_hs")
@@ -542,6 +593,7 @@ export async function adminRejectWalletHs(
       await logAdminAction(adminId, "tb_wallet_hs.reject", "tb_wallet_hs", String(id), {
         userid: row.userid,
         note,
+        ...(workNote && workNote.length > 0 ? { work_note: workNote } : {}),
       });
 
       revalidatePath(`/admin/wallet/${id}`);
