@@ -65,6 +65,12 @@ export const createBillingRunInvoiceSchema = z.object({
   discountThb:    positiveMoney.default(0),
   /** หมายเหตุสำหรับลูกค้า — free text. Max 2000 to bound payload. */
   noteForCustomer: z.string().trim().max(2000, "หมายเหตุยาวเกินไป").default(""),
+  /** Build A guard 2026-06-19 — explicit ack that the admin is billing row(s) with
+   *  NO measured น้ำหนัก+ปริมาตร (the warehouse measure step was skipped → the
+   *  auto-priced transport SELL is ฿0 → silent under-charge). The form shows a
+   *  ⚠️ badge + a confirm before setting this; the server REFUSES unmeasured rows
+   *  unless it is true. */
+  allowUnmeasured: z.boolean().optional().default(false),
 }).superRefine((val, ctx) => {
   if (new Date(val.dateDue) < new Date(val.dateIssued)) {
     ctx.addIssue({

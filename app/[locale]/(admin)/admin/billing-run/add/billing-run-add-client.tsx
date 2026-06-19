@@ -21,6 +21,7 @@ import {
   type EligibleCustomerRow,
   type EligibleForwarderRow,
 } from "@/actions/admin/billing-run";
+import { confirm } from "@/components/ui/confirm";
 
 type Props = {
   customers: EligibleCustomerRow[];
@@ -46,6 +47,19 @@ function thbFmt(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/**
+ * Build A guard 2026-06-19 (money-review hardened) — a row whose import transport
+ * SELL (ค่านำเข้า · ftotalprice) is ฿0 is an under-charge risk: either it was never
+ * measured (fweight+fvolume empty → auto-pricer wrote nothing), OR it was measured
+ * WEIGHT-ONLY under comparison pricing so the CBM leg priced to 0 (the residual
+ * leak a raw-dimension check misses). `ftotalprice<=0` is the DIRECT money signal —
+ * it catches both. The form flags these + requires a confirm before billing; the
+ * server backstops with allowUnmeasured.
+ */
+function isZeroTransport(f: EligibleForwarderRow): boolean {
+  return (Number(f.ftotalprice) || 0) <= 0;
 }
 
 const inputCls =
@@ -174,7 +188,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const whtAmount = showWht ? Math.round(totalAmount * 0.01 * 100) / 100 : 0;
   const netPayable = Math.round((totalAmount - whtAmount) * 100) / 100;
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitErr(null);
 
@@ -187,6 +201,26 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       return;
     }
 
+    // Build A guard — SELECTED rows whose import transport SELL is ฿0
+    // (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด). Names the ids in the confirm
+    // so the human ack matches the per-row badge + the server error.
+    const zeroIds = (eligible ?? [])
+      .filter((f) => selectedIds.has(f.id) && isZeroTransport(f))
+      .map((f) => f.id);
+
+    // §0f confirm-before-mutate (money action · ออกเอกสารวางบิลจริง).
+    const warn =
+      zeroIds.length > 0
+        ? `⚠️ มี ${zeroIds.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ${zeroIds.map((id) => `#${id}`).join(", ")}\nควรตรวจสอบ/วัดที่โกดังก่อน — ถ้าจะออกบิลทั้งที่ค่าขนส่งเป็น ฿0 กดตกลง\n\n`
+        : "";
+    const ok = await confirm(
+      `${warn}ยืนยันออกใบวางบิล?\n` +
+        `ลูกค้า: ${selectedCustomer?.display_name ?? selectedUserid}\n` +
+        `จำนวน: ${selectedIds.size} รายการ\n` +
+        `ยอด${showWht ? "ชำระสุทธิ" : "รวมทั้งสิ้น"}: ฿${thbFmt(showWht ? netPayable : totalAmount)}`,
+    );
+    if (!ok) return;
+
     startTransition(async () => {
       const res = await createBillingRunInvoice({
         userid:           selectedUserid,
@@ -198,6 +232,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         otherThb:         numOther,
         discountThb:      numDiscount,
         noteForCustomer:  note,
+        allowUnmeasured:  zeroIds.length > 0,
       });
       if (res.ok) {
         const id = res.data!.invoiceId;
@@ -363,15 +398,22 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                 </tr>
               </thead>
               <tbody>
-                {visibleForwarders.map((f) => (
+                {visibleForwarders.map((f) => {
+                  const zeroTransport = isZeroTransport(f);
+                  const selected = selectedIds.has(f.id);
+                  return (
                   <tr
                     key={f.id}
-                    className={`border-t border-border hover:bg-surface-alt/30 ${selectedIds.has(f.id) ? "bg-primary-50/30" : ""}`}
+                    className={`border-t border-border hover:bg-surface-alt/30 ${
+                      zeroTransport
+                        ? `bg-amber-50/60${selected ? " ring-1 ring-inset ring-primary-300" : ""}`
+                        : selected ? "bg-primary-50/30" : ""
+                    }`}
                   >
                     <td className="px-3 py-2 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(f.id)}
+                        checked={selected}
                         onChange={(e) => toggleId(f.id, e.target.checked)}
                       />
                     </td>
@@ -382,15 +424,24 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                           เครดิต
                         </span>
                       )}
+                      {zeroTransport && (
+                        <span
+                          className="ml-1 inline-block rounded bg-amber-200 px-1 py-0.5 text-[9px] font-semibold text-amber-900 align-middle"
+                          title="ค่านำเข้า/ขนส่งเป็น ฿0 — ยังไม่ได้วัด หรือยังไม่ตั้งราคา · อาจเก็บเงินขาด · ตรวจสอบก่อนออกบิล"
+                        >
+                          ⚠️ ค่าขนส่ง ฿0
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">{f.ftrackingchn}</td>
                     <td className="px-3 py-2 text-right">{f.famount ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fvolume ?? "—"}</td>
-                    <td className="px-3 py-2 text-right font-medium">{thbFmt(f.outstanding_thb)}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${zeroTransport ? "text-amber-700" : ""}`}>{thbFmt(f.outstanding_thb)}</td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-surface-alt/40">

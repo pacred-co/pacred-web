@@ -935,6 +935,26 @@ export async function createBillingRunInvoice(
         };
       }
 
+      // (a2) Build A 2026-06-19 (money-review hardened) — ZERO-TRANSPORT GUARD
+      // (kills the silent under-charge). A row whose import transport SELL
+      // (ค่านำเข้า · ftotalprice) is ฿0 was either never measured (fweight+fvolume
+      // empty → the auto-pricer wrote nothing), OR measured WEIGHT-ONLY under
+      // comparison pricing so the CBM leg priced to 0 (the residual leak a raw
+      // dimension check missed). ftotalprice<=0 is the DIRECT money signal —
+      // calcForwarderOutstanding then bills 0 transport → silent under-charge.
+      // Refuse unless the admin explicitly acknowledged (the form shows a ⚠️ badge
+      // + a confirm that sets allowUnmeasured). Server-side backstop — a client
+      // can't bypass it (the count is recomputed here from the DB rows).
+      const zeroTransport = fwd.filter((f) => (Number(f.ftotalprice) || 0) <= 0);
+      if (zeroTransport.length > 0 && !v.allowUnmeasured) {
+        return {
+          ok: false,
+          error:
+            `มี ${zeroTransport.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ` +
+            `${zeroTransport.map((f) => `#${f.id}`).join(", ")} — กรุณาตรวจสอบ/วัดที่โกดังก่อน หรือยืนยันออกบิลทั้งที่ค่าขนส่งเป็น ฿0`,
+        };
+      }
+
       // (b) Already-billed-on-non-cancelled-invoice guard
       const { data: billed, error: billedErr } = await admin
         .from("tb_forwarder_invoice_item")
@@ -1150,6 +1170,12 @@ export async function createBillingRunInvoice(
       await logAdminAction(adminId, "billing_run.create_invoice", "forwarder_invoice", String(invoiceId), {
         doc_no: docNo, userid: v.userid, forwarder_count: v.forwarderIds.length,
         total_thb: total, date_due: v.dateDue,
+        // Build A money-review — leave a forensic breadcrumb when the admin
+        // OVERRODE the zero-transport guard, so an under-billed invoice can later
+        // be told apart from a correctly-billed one.
+        ...(zeroTransport.length > 0
+          ? { zero_transport_override: true, zero_transport_ids: zeroTransport.map((f) => f.id) }
+          : {}),
       });
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
