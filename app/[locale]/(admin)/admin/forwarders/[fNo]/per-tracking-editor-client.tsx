@@ -66,6 +66,19 @@ type Props = {
   /** ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff. When false
    *  the ค่าเทียบ checkbox + input are read-only and seeded from the STORED value. */
   canEditComparison: boolean;
+  // ── 2026-06-19 (#1 revise) — the customer's PROFILE/SYSTEM rate, resolved
+  // SERVER-SIDE (the client can't reach the rate cards). Used to show the REAL
+  // breakdown when the "คิดราคาแบบกำหนดเอง" toggle is OFF (was ฿0). ─────────────
+  /** The system unit rate chosen by the waterfall (baht per kg OR per cbm). */
+  profileRate?: number;
+  /** Which basis the system rate priced on. */
+  profileBasis?: "kg" | "cbm";
+  /** Σ transportSubtotal across all trackings (the real "ระบบเลือก" amount). */
+  profileTransportTotal?: number;
+  /** True when no rate card matched the tuple — fall back to the "คำนวณตอนบันทึก" note. */
+  profileRateMissing?: boolean;
+  /** True once the server actually ran the resolver (vs no userid / empty rows). */
+  profileResolved?: boolean;
 };
 
 const WAREHOUSE_CHINA = [
@@ -95,11 +108,13 @@ const TH = "px-2 py-1.5 text-[11px] font-semibold text-muted whitespace-nowrap b
 
 export function PerTrackingEditorClient({
   rows: rowsInit,
-  customRateKgInit,
-  customRateCbmInit,
   customComparisonInit,
-  customComparisonValueInit,
   canEditComparison,
+  profileRate = 0,
+  profileBasis = "cbm",
+  profileTransportTotal = 0,
+  profileRateMissing = false,
+  profileResolved = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -112,18 +127,19 @@ export function PerTrackingEditorClient({
   const [results, setResults] = useState<Record<number, RowResult>>({});
 
   // ── ORDER-level shared toggles ──
-  // ภูม 2026-06-19 — PIN both override boxes OPEN + ON by default. The inputs
-  // render always (below); sales must enter the rate (฿/กก. · ฿/CBM) + ค่าเทียบ
-  // every time. Values default to the stored figure — 0 for a fresh/unpriced
-  // order. The billing D1 guard still blocks any ฿0-transport bill if a rate is
-  // left at 0, so forcing the toggle on is money-safe.
+  // ภูม 2026-06-19 — PIN both override boxes OPEN by default; the inputs render
+  // always (below) so the seller can type a rate (฿/กก. · ฿/CBM) + ค่าเทียบ when
+  // overriding. 2026-06-19 (#1 revise · owner) — the input fields now DEFAULT TO 0
+  // (the seller types only when overriding); they NO LONGER seed from the stored
+  // figure. The billing D1 guard still blocks any ฿0-transport bill if a rate is
+  // left at 0, so a 0 default is money-safe. The checkbox defaults are unchanged.
   const [customRate, setCustomRate] = useState<"0" | "1">("1");
-  const [customRateKg, setCustomRateKg] = useState<string>(String(customRateKgInit));
-  const [customRateCbm, setCustomRateCbm] = useState<string>(String(customRateCbmInit));
-  // ค่าเทียบ — warehouse staff CANNOT edit it, so seed from the STORED value (no
-  // forced-on for them); everyone else gets the pinned-ON default (item 1).
+  const [customRateKg, setCustomRateKg] = useState<string>("0");
+  const [customRateCbm, setCustomRateCbm] = useState<string>("0");
+  // ค่าเทียบ — warehouse staff CANNOT edit it, so seed the checkbox from the STORED
+  // value (no forced-on for them); everyone else gets the pinned-ON default.
   const [customComparison, setCustomComparison] = useState<"0" | "1">(canEditComparison ? "1" : customComparisonInit);
-  const [comparisonValue, setComparisonValue] = useState<string>(String(customComparisonValueInit));
+  const [comparisonValue, setComparisonValue] = useState<string>("0");
 
   // ── per-tracking rows (string-valued for free typing) ──
   type RowState = {
@@ -168,7 +184,14 @@ export function PerTrackingEditorClient({
   // (ภูม/พี่ป๊อป 2026-06-18: "ลอกให้เหมือน PCS เป๊ะ · อย่าดริฟ"). ONE box PER แทรคกิง
   // (PCS shows it per forwarder row), with the exact PCS lines: หาค่าเทียบ ÷ ·
   // คิดตามน้ำหนัก/ปริมาตร with the real numbers · ระบบเลือก · the right summary.
-  // CLIENT estimate — customRate OFF → ฿0 (server resolves the real rate on save).
+  //
+  // 2026-06-19 (#1 revise · owner "เรท default profile ให้ดึงมา auto คำนวณมาเลย
+  // แจงยอดเท่าไรเลย") — when "คิดราคาแบบกำหนดเอง" is OFF, the breakdown now shows the
+  // REAL system/profile-rate numbers (resolved SERVER-SIDE, passed as profile*),
+  // not ฿0. The chosen basis line shows the real Σ amount; the other shows "—"
+  // (the server resolves only the winning basis). When ON, the typed rate is used
+  // exactly as before. A null pKg/pCbm = "ไม่ทราบ" (render "—") for the non-chosen
+  // basis under system pricing.
   const calc = useMemo(() => {
     const cr = customRate === "1";
     const rateKg = parseFloat(customRateKg) || 0;
@@ -186,18 +209,48 @@ export function PerTrackingEditorClient({
       thai += parseFloat(r.fTransportPrice) || 0;
       discount += parseFloat(r.fDiscount) || 0;
     }
-    const pKg = cr ? w * rateKg : 0;
-    const pCbm = cr ? v * rateCbm : 0;
     const kgPerCbm = v !== 0 ? w / v : 0;
-    // basis: ค่าเทียบ → KG/คิว > threshold ? น้ำหนัก : ปริมาตร · else ราคามากสุด.
-    const byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
-    const transport = cr ? (comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm)) : 0;
+
+    // System/profile rate is usable when manual is OFF, the server ran the
+    // resolver, AND a rate card matched (not missing). Then we display the SERVER
+    // numbers (no client fabrication). Otherwise (manual OFF + no profile rate)
+    // we keep the legacy ฿0 + "คำนวณตอนบันทึก" note.
+    const useProfile = !cr && profileResolved && !profileRateMissing && profileRate > 0;
+
+    // pKg / pCbm — null means "ไม่ทราบ" (render "—"). Under manual pricing both
+    // are real (typed rate × qty). Under system pricing only the chosen basis is
+    // known (the server resolves one basis); the other is null.
+    let pKg: number | null;
+    let pCbm: number | null;
+    let byWeight: boolean;
+    let transport: number;
+    if (cr) {
+      pKg = w * rateKg;
+      pCbm = v * rateCbm;
+      byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
+      transport = comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm);
+    } else if (useProfile) {
+      byWeight = profileBasis === "kg";
+      transport = profileTransportTotal;
+      pKg = byWeight ? profileTransportTotal : null;
+      pCbm = byWeight ? null : profileTransportTotal;
+    } else {
+      pKg = 0;
+      pCbm = 0;
+      byWeight = comparisonOn ? kgPerCbm > threshold : false;
+      transport = 0;
+    }
     const subtotal = transport + chnThb + service + other + thai;
     return {
-      cr, rateKg, rateCbm, comparisonOn, threshold, count: rows.length, label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
+      cr, useProfile, profileRate, profileBasis,
+      rateKg, rateCbm, comparisonOn, threshold, count: rows.length,
+      label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
       w, v, pKg, pCbm, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
-  }, [rows, customRate, customRateKg, customRateCbm, customComparison, comparisonValue]);
+  }, [
+    rows, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
+    profileResolved, profileRateMissing, profileRate, profileBasis, profileTransportTotal,
+  ]);
 
   async function onSaveAll() {
     setError(null);
@@ -371,6 +424,9 @@ export function PerTrackingEditorClient({
             <p className="font-semibold text-foreground mb-1 font-sans">
               ราคานำเข้าจีน-ไทย : <span className="text-muted font-normal">{calc.label}{calc.count > 1 ? ` (${calc.count} แทค)` : ""}</span>
               {calc.cr && <span className="ml-1 text-[10px] text-red-600">· เรทแบบกำหนดเอง</span>}
+              {/* 2026-06-19 (#1 revise) — system pricing now shows the customer's
+                  PROFILE rate auto-pulled (no longer ฿0). */}
+              {!calc.cr && calc.useProfile && <span className="ml-1 text-[10px] text-emerald-600">· เรทระบบ (โปรไฟล์ลูกค้า)</span>}
               {calc.comparisonOn && <span className="ml-1 text-[10px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
             </p>
             {calc.comparisonOn && (
@@ -378,12 +434,27 @@ export function PerTrackingEditorClient({
                 หาค่าเทียบ {nf(calc.w, 2)}÷{nf(calc.v, 5)} = {nf(calc.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.threshold, 0)} คิดตาม{calc.byWeight ? "น้ำหนัก" : "ปริมาตร"})
               </p>
             )}
-            <p>คิดตามน้ำหนัก {nf(calc.w, 2)} x {nf(calc.rateKg, 0)} = <strong>{baht(calc.pKg)}</strong></p>
-            <p>คิดตามปริมาตร {nf(calc.v, 5)} x {nf(calc.rateCbm, 2)} = <strong>{baht(calc.pCbm)}</strong></p>
-            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
-              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : "ราคามากสุด"} → {baht(calc.transport)}
+            {/* คิดตามน้ำหนัก / ปริมาตร — under manual pricing both show the typed
+                rate × qty; under system pricing only the chosen basis is known
+                (server resolves one basis) → the other renders "—". */}
+            <p>
+              คิดตามน้ำหนัก {nf(calc.w, 2)}
+              {calc.cr ? ` x ${nf(calc.rateKg, 0)}` : calc.useProfile && calc.profileBasis === "kg" ? ` x ${nf(calc.profileRate, 2)}` : ""}
+              {" = "}
+              <strong>{calc.pKg == null ? "—" : baht(calc.pKg)}</strong>
             </p>
-            {!calc.cr && <p className="text-[10px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
+            <p>
+              คิดตามปริมาตร {nf(calc.v, 5)}
+              {calc.cr ? ` x ${nf(calc.rateCbm, 2)}` : calc.useProfile && calc.profileBasis === "cbm" ? ` x ${nf(calc.profileRate, 2)}` : ""}
+              {" = "}
+              <strong>{calc.pCbm == null ? "—" : baht(calc.pCbm)}</strong>
+            </p>
+            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
+              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : calc.useProfile ? (calc.byWeight ? "น้ำหนัก" : "ปริมาตร") : "ราคามากสุด"} → {baht(calc.transport)}
+            </p>
+            {/* Only fall back to the "คำนวณตอนบันทึก" note when system pricing
+                couldn't resolve a profile rate (no rate card for the tuple). */}
+            {!calc.cr && !calc.useProfile && <p className="text-[10px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
           </div>
           {/* RIGHT — price summary (PCS labels, verbatim) */}
           <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-0.5 text-[11px]">
