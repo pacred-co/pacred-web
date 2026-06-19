@@ -16,14 +16,33 @@ const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 // S-4 — true when `pathname` (after stripping an optional leading locale
 // segment) is inside the /admin route group. Locale prefix is `as-needed`,
 // so admin URLs are `/admin/…` (th, the default) or `/<locale>/admin/…`.
-function isAdminPath(pathname: string): boolean {
+function stripLocale(pathname: string): string {
   let p = pathname;
   for (const loc of routing.locales) {
-    if (p === `/${loc}`) return false;                  // bare /<locale> = home
+    if (p === `/${loc}`) return "/";                    // bare /<locale> = home
     if (p.startsWith(`/${loc}/`)) { p = p.slice(loc.length + 1); break; }
   }
+  return p;
+}
+
+function isAdminPath(pathname: string): boolean {
+  const p = stripLocale(pathname);
   return p === "/admin" || p.startsWith("/admin/");
 }
+
+// `/admin/login` (2026-06-19) = the DEDICATED admin entrance. It lives under the
+// /admin URL prefix but is NOT gated — unauthenticated staff must reach it, and
+// it carries its own login form (signInAdmin). Excluded from the admin gate.
+function isAdminLoginPath(pathname: string): boolean {
+  return stripLocale(pathname) === "/admin/login";
+}
+
+// The admin-login ticket cookie name (mirror of ADMIN_SESSION_COOKIE in
+// lib/auth/admin-session.ts — duplicated as a literal here so the middleware
+// edge bundle doesn't import that server-only / node:crypto module). The proxy
+// only PRESENCE-checks it for a fast redirect; the (admin) layout does the
+// authoritative HMAC verify.
+const ADMIN_SESSION_COOKIE = "pacred_admin";
 
 export default async function middleware(request: NextRequest) {
   // Skip i18n routing for /auth/* (OAuth callback, signout) — they live outside the [locale] segment
@@ -109,11 +128,29 @@ export default async function middleware(request: NextRequest) {
   // GUARD: only redirect when getUser() returned a CONFIRMED null (no error).
   // On a failed RPC we pass through; the layout retries (different cache
   // window) and renders properly when the auth check succeeds.
-  if (!user && !authErr && isAdminPath(request.nextUrl.pathname)) {
-    const redirect = NextResponse.redirect(new URL("/login", request.url));
-    // carry over cookies the middleware set (visitor id, refreshed session)
-    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
-    return redirect;
+  //
+  // 2026-06-19 (owner) — the back-office is reachable ONLY via the dedicated
+  // /admin/login entrance + the `pacred_admin` ticket it mints. Two-stage edge
+  // gate for every /admin/* path EXCEPT /admin/login itself:
+  //   (a) no session  → /admin/login (the admin entrance, not the customer one)
+  //   (b) session but NO admin ticket → /dashboard (customer front-office) — this
+  //       is the case for a normal /login (incl. an admin_* account logged in
+  //       there): they hold a session but never minted the ticket.
+  // Presence-only check here (edge-safe); the (admin) layout HMAC-verifies the
+  // ticket against the authed user, so faking cookie presence can't bypass it.
+  const adminGated =
+    isAdminPath(request.nextUrl.pathname) && !isAdminLoginPath(request.nextUrl.pathname);
+  if (adminGated && !authErr) {
+    if (!user) {
+      const redirect = NextResponse.redirect(new URL("/admin/login", request.url));
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
+    }
+    if (!request.cookies.get(ADMIN_SESSION_COOKIE)) {
+      const redirect = NextResponse.redirect(new URL("/dashboard", request.url));
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
+    }
   }
 
   // ──────────────────────────────────────────────────────────────

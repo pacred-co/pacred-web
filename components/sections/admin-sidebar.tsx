@@ -36,7 +36,7 @@ import {
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
-  Rocket,
+  Rocket, PanelLeft,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -574,39 +574,58 @@ export function AdminSidebar({
         {/* owner 2026-06-11 "PRADMIN ตอนเต็ม ชิดซ้าย · ไม่โดนตัด/ทับ": F โลโก้ชิดซ้าย (ml-4)
             + กล่องสูง h-12 (เดิม h-9 ทำให้ object-cover ตัดหัว A badge ทิ้ง) → โลโก้เต็มไม่โดนกิน.
             H (rail) ยังกึ่งกลาง (mx-auto). */}
-        {/* The PR brand bar is also the rail PIN toggle (owner 2026-06-13 "กดปุ่ม
-            pr แล้วแถบขึ้นค้างไว้"): click to pin the sidebar open (full) ⇄ collapse
-            back to the icon rail. Choice persists via togglePinRail. */}
-        <button
-          type="button"
-          onClick={togglePinRail}
-          aria-label="ปักหมุด/ย่อเมนู"
-          title="คลิกเพื่อกางเมนูค้างไว้ / ย่อกลับเป็นแถบไอคอน"
-          className="h-14 shrink-0 bg-[#B91C1C] flex items-center overflow-hidden border-0 p-0 w-full cursor-pointer hover:brightness-110 transition-[filter]"
-        >
-          {/* F — full logo (expanded) · ชิดซ้าย · กล่องสูงพอให้โลโก้ไม่โดนตัด */}
-          <div className="admin-rail-hide relative h-12 w-[150px] ml-4">
-            <Image
-              src="/images/hero-section/icon-draf/LOGOADMINPACREDF.png"
-              alt="PR Admin"
-              fill
-              sizes="150px"
-              priority
-              className="object-cover object-center"
-            />
-          </div>
-          {/* H — compact logo (rail collapsed) · กึ่งกลาง */}
-          <div className="admin-rail-only relative h-9 w-9 mx-auto">
-            <Image
-              src="/images/hero-section/icon-draf/LOGOADMINPACREDH.png"
-              alt="PR"
-              fill
-              sizes="36px"
-              priority
-              className="object-cover object-center"
-            />
-          </div>
-        </button>
+        {/* Brand bar — TWO behaviours kept separate (ปอน/owner 2026-06-19
+            "กดที่ไอคอน แล้วไปหน้า dashboard", keeping the owner's 2026-06-13 pin):
+              · the LOGO is a Link → /admin (Dashboard).
+              · the rail PIN toggle (gang/pin the sidebar open ⇄ collapse back to
+                the icon rail, persisted via togglePinRail) moves to a small button
+                on the right — it shows while the bar is expanded/hovered
+                (admin-rail-hide) so it never collides with the logo's navigation. */}
+        <div className="h-14 shrink-0 bg-[#B91C1C] flex items-center overflow-hidden">
+          {/* Logo → Dashboard (/admin) */}
+          <Link
+            href="/admin"
+            onClick={closeMobile}
+            aria-label="ไปหน้า Dashboard"
+            title="ไปหน้า Dashboard"
+            className="flex items-center flex-1 min-w-0 h-full hover:brightness-110 transition-[filter]"
+          >
+            {/* F — full logo (expanded) · ชิดซ้าย · กล่องสูงพอให้โลโก้ไม่โดนตัด */}
+            <div className="admin-rail-hide relative h-12 w-[150px] ml-4">
+              <Image
+                src="/images/hero-section/icon-draf/LOGOADMINPACREDF.png"
+                alt="PR Admin"
+                fill
+                sizes="150px"
+                priority
+                className="object-cover object-center"
+              />
+            </div>
+            {/* H — compact logo (rail collapsed) · กึ่งกลาง */}
+            <div className="admin-rail-only relative h-9 w-9 mx-auto">
+              <Image
+                src="/images/hero-section/icon-draf/LOGOADMINPACREDH.png"
+                alt="PR"
+                fill
+                sizes="36px"
+                priority
+                className="object-cover object-center"
+              />
+            </div>
+          </Link>
+          {/* Rail pin / collapse toggle — separate from the logo so the logo can
+              navigate. admin-rail-hide → hidden while the rail is collapsed-and-
+              unhovered, appears on hover / when pinned open. */}
+          <button
+            type="button"
+            onClick={togglePinRail}
+            aria-label="ปักหมุด/ย่อเมนู"
+            title="ปักหมุดเมนูให้กางค้าง / ย่อกลับเป็นแถบไอคอน"
+            className="admin-rail-hide mr-2 ml-1 inline-flex items-center justify-center w-8 h-8 shrink-0 rounded-md text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
+        </div>
 
         {/* Avatar + adminID + role badge — legacy itop block */}
         <SidebarHeader adminLabel={adminLabel} adminAvatar={adminAvatar} roleKey={roleKey} t={t} />

@@ -42,7 +42,7 @@ export function Partner() {
     p.file === "etracking.png" ? { ...p, name: t("etrackingName") } : p,
   );
   return (
-    <section id="partner" className="py-4 md:py-12">
+    <section id="partner" className="py-2 md:py-12">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Heading */}

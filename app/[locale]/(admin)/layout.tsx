@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
+import { verifyAdminSession } from "@/lib/auth/admin-session";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
@@ -17,7 +19,18 @@ import { CostRevealProvider } from "@/components/admin/cost-reveal";
  * are resolved here (Server Component) and passed into <AdminSidebar>.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { roles } = await requireAdmin();
+  const { user, roles } = await requireAdmin();
+
+  // 2026-06-19 (owner directive · พี่ป๊อป via ปอน) — the back-office is reachable
+  // ONLY via the dedicated /admin/login entrance, which mints the `pacred_admin`
+  // ticket. This is the AUTHORITATIVE gate: HMAC-verify the ticket against the
+  // signed-in user. An admin who logged in through the normal /login holds NO
+  // ticket → sent to the customer front-office. A forged cookie (faked presence
+  // to slip past the proxy) fails the HMAC here. The proxy already redirects the
+  // no-ticket case; this catches a forged ticket + is the real security boundary.
+  if (!(await verifyAdminSession(user.id))) {
+    redirect("/dashboard");
+  }
 
   // Fetch the sidebar badge counts + the signed-in admin's display name
   // in parallel — both feed the per-role sidebar chrome.

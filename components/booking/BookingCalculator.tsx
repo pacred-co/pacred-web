@@ -252,11 +252,14 @@ export function BookingCalculator({
   }
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto pb-6 md:pb-10">
+    <div className="w-full max-w-[1280px] mx-auto pb-1 md:pb-10">
       <BookingHero activeTab={activeTab} seaMode={seaMode} forceDefault={defaultHero} customTitle={heroTitle} customHighlight={heroHighlight} customBgMobile={heroBgMobile} customBgDesktop={heroBgDesktop} />
 
-      <div className="relative z-10 max-w-[1280px] mx-auto -mt-10 md:-mt-16 px-3 md:px-5">
-        <div className="bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100">
+      {/* Mobile (ปอน 2026-06-19): no negative margin → the icon area does NOT
+          overlap the hero banner, and no card frame (border/shadow/rounded) so the
+          circular icons sit clean like Trip. Desktop keeps the overlapping card. */}
+      <div className="relative z-10 max-w-[1280px] mx-auto mt-1.5 px-3 md:mt-0 md:-mt-16 md:px-5">
+        <div className="bg-white md:rounded-2xl md:shadow-[0_10px_40px_rgba(0,0,0,0.08)] md:border md:border-gray-100">
 
           {isCustomsLanding ? (
             <BookingPortTabs

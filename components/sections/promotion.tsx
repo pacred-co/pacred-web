@@ -51,7 +51,7 @@ export function Promotion() {
   ];
 
   return (
-    <section id="promotion" className="pb-3 md:pb-6 pt-2">
+    <section id="promotion" className="pb-1.5 md:pb-6 pt-1 md:pt-2">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Container 1 — Section heading */}
@@ -72,8 +72,9 @@ export function Promotion() {
           </h2>
         </div>
 
-        {/* Container 2 — 4 ticket-style benefit cards (horizontal swipe on mobile) */}
-        <div className="mx-auto mt-[18px] w-full max-w-[1120px] relative">
+        {/* Container 2 — 4 ticket-style benefit cards (horizontal swipe on mobile).
+            Hidden on mobile (ปอน 2026-06-19: "เอาที่เป็นตั๋วออก"), shown on desktop. */}
+        <div className="hidden md:block mx-auto mt-[18px] w-full max-w-[1120px] relative">
           <div className="flex overflow-x-auto gap-2.5 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {benefits.map((b, i) => (
               <div

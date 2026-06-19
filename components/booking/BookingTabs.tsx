@@ -94,90 +94,164 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
     }
   }, [active]);
 
+  // Desktop / single-row tab button (the original column-tab look) — used by the
+  // desktop strip on the homepage AND the import-only single-row strip. UNCHANGED.
+  const renderTab = (tab: TabItem) => {
+    const isActive = !tab.disabled && active === tab.mode;
+    // mobile 2-row sizing: transport = 3-up, service = 4-up; flat on desktop
+    const basis = twoRow
+      ? (tab.group === "transport"
+          ? "basis-[31%] grow md:basis-auto md:grow-0"
+          : "basis-[22%] grow md:basis-auto md:grow-0")
+      : "shrink-0";
+    return (
+      <button
+        key={tab.mode}
+        type="button"
+        role="tab"
+        data-tab={tab.mode}
+        aria-selected={isActive}
+        disabled={tab.disabled}
+        suppressHydrationWarning
+        onClick={tab.disabled ? undefined : () => onChange(tab.mode as TabMode)}
+        className={[
+          "snap-start transition-all whitespace-nowrap",
+          basis,
+          // shared shell · desktop column-tab with bottom-border indicator (unchanged)
+          "inline-flex flex-col items-center rounded-xl border md:flex md:gap-0.5 md:px-[22px] md:py-4 md:rounded-none md:border-0 md:border-b-[3px] md:-mb-px",
+          // mobile padding/gap: lean 2-row grid (room for the long "ขนส่งในประเทศ" label on 1 line); original for the single-row strip
+          twoRow ? "px-1 py-1 gap-0.5" : "px-3.5 py-2 gap-0",
+          tab.disabled
+            ? // Greyed-out placeholder (ขนส่งในประเทศ — not built yet)
+              "cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200 md:bg-transparent md:text-gray-300 md:border-transparent"
+            : isActive
+              ? [
+                  "cursor-pointer",
+                  // Mobile active: red pill with shadow
+                  "bg-red-50 text-red-600 border-red-300 shadow-[0_4px_10px_rgba(220,38,38,0.12)]",
+                  // Desktop active: just bottom border + red text
+                  "md:bg-transparent md:border-red-600 md:shadow-none",
+                ].join(" ")
+              : [
+                  "cursor-pointer",
+                  "bg-white text-gray-500 border-gray-200 hover:border-red-300 hover:text-red-600",
+                  "md:bg-transparent md:border-transparent md:border-b-[3px] md:hover:bg-transparent md:hover:text-red-600",
+                ].join(" "),
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "font-bold items-center leading-none md:text-sm",
+            // 2-row mobile: emoji stacked over the (short) label. Single-row: emoji beside the full label.
+            twoRow ? "text-[11px] flex flex-col md:flex-row gap-0.5 md:gap-1.5" : "text-[12.5px] flex gap-1.5",
+          ].join(" ")}
+        >
+          <span
+            className={`${twoRow ? "text-[15px]" : "text-[16px]"} md:text-[20px] leading-none transition-all duration-200`}
+            style={{
+              filter: isActive
+                ? "grayscale(1) sepia(1) saturate(10) hue-rotate(320deg) brightness(0.85)"
+                : "grayscale(1) brightness(0.45)",
+            }}
+          >{tab.emoji}</span>
+          {twoRow ? (
+            <>
+              {/* short label on mobile · full label on desktop */}
+              <span className="md:hidden">{tab.short}</span>
+              <span className="hidden md:inline">{tab.label}</span>
+            </>
+          ) : tab.label}
+        </span>
+        <span className={`hidden md:inline text-[11px] font-medium mt-0.5 ${isActive ? "text-red-500/70" : tab.disabled ? "text-gray-300" : "text-gray-400"}`}>
+          {tab.sub}
+        </span>
+      </button>
+    );
+  };
+
+  // Mobile-only circular service icon (Trip.com style · ปอน 2026-06-19): a round
+  // icon chip with the label below. Used ONLY on the homepage (twoRow) at < md.
+  const renderCircle = (tab: TabItem) => {
+    const isActive = !tab.disabled && active === tab.mode;
+    return (
+      <button
+        key={tab.mode}
+        type="button"
+        role="tab"
+        data-tab={tab.mode}
+        aria-selected={isActive}
+        disabled={tab.disabled}
+        suppressHydrationWarning
+        onClick={tab.disabled ? undefined : () => onChange(tab.mode as TabMode)}
+        className="flex flex-col items-center gap-1.5 py-1 transition-transform active:scale-95 disabled:cursor-not-allowed"
+      >
+        <span
+          className={[
+            "flex h-14 w-14 items-center justify-center rounded-full text-[24px] leading-none transition-all",
+            // ปอน 2026-06-19: row 1 (transport เรือ/รถ/แอร์) = RED circle + WHITE icon ·
+            // row 2 (service) = WHITE circle + RED icon. Active adds a ring.
+            tab.disabled
+              ? "bg-gray-100"
+              : tab.group === "transport"
+                ? "bg-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.30)]"
+                : "bg-white border border-gray-200 shadow-sm",
+            isActive ? "ring-2 ring-red-600 ring-offset-2" : "",
+          ].join(" ")}
+        >
+          <span
+            className="leading-none"
+            style={{
+              filter: tab.disabled
+                ? "grayscale(1) brightness(0.85) opacity(0.5)"
+                : tab.group === "transport"
+                  ? "brightness(0) invert(1)" // white icon on the red circle
+                  : "brightness(0) invert(11%) sepia(91%) saturate(6932%) hue-rotate(2deg) brightness(96%) contrast(116%)", // red icon on the white circle
+            }}
+          >{tab.emoji}</span>
+        </span>
+        <span
+          className={[
+            "text-center text-[11px] font-semibold leading-tight",
+            tab.disabled ? "text-gray-400" : isActive ? "text-red-600" : "text-gray-600",
+          ].join(" ")}
+        >{tab.short}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="relative">
-      <div
-        ref={scrollerRef}
-        className={
-          twoRow
-            // Mobile: 2-row wrap (transport row + services row). Desktop: single centered row.
-            ? "flex flex-wrap gap-1 px-2.5 py-1.5 md:flex-nowrap md:overflow-x-auto md:gap-0 md:py-0 md:justify-center md:border-b md:border-gray-200 md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden"
-            : "flex overflow-x-auto px-2.5 py-2 md:py-0 gap-1.5 md:gap-0 md:border-b md:border-gray-200 md:justify-center snap-x snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_18px,black_calc(100%-18px),transparent)] md:[mask-image:none]"
-        }
-      >
-        {tabs.map(tab => {
-          const isActive = !tab.disabled && active === tab.mode;
-          // mobile 2-row sizing: transport = 3-up, service = 4-up; flat on desktop
-          const basis = twoRow
-            ? (tab.group === "transport"
-                ? "basis-[31%] grow md:basis-auto md:grow-0"
-                : "basis-[22%] grow md:basis-auto md:grow-0")
-            : "shrink-0";
-          return (
-            <button
-              key={tab.mode}
-              type="button"
-              role="tab"
-              data-tab={tab.mode}
-              aria-selected={isActive}
-              disabled={tab.disabled}
-              suppressHydrationWarning
-              onClick={tab.disabled ? undefined : () => onChange(tab.mode as TabMode)}
-              className={[
-                "snap-start transition-all whitespace-nowrap",
-                basis,
-                // shared shell · desktop column-tab with bottom-border indicator (unchanged)
-                "inline-flex flex-col items-center rounded-xl border md:flex md:gap-0.5 md:px-[22px] md:py-4 md:rounded-none md:border-0 md:border-b-[3px] md:-mb-px",
-                // mobile padding/gap: lean 2-row grid (room for the long "ขนส่งในประเทศ" label on 1 line); original for the single-row strip
-                twoRow ? "px-1 py-1 gap-0.5" : "px-3.5 py-2 gap-0",
-                tab.disabled
-                  ? // Greyed-out placeholder (ขนส่งในประเทศ — not built yet)
-                    "cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200 md:bg-transparent md:text-gray-300 md:border-transparent"
-                  : isActive
-                    ? [
-                        "cursor-pointer",
-                        // Mobile active: red pill with shadow
-                        "bg-red-50 text-red-600 border-red-300 shadow-[0_4px_10px_rgba(220,38,38,0.12)]",
-                        // Desktop active: just bottom border + red text
-                        "md:bg-transparent md:border-red-600 md:shadow-none",
-                      ].join(" ")
-                    : [
-                        "cursor-pointer",
-                        "bg-white text-gray-500 border-gray-200 hover:border-red-300 hover:text-red-600",
-                        "md:bg-transparent md:border-transparent md:border-b-[3px] md:hover:bg-transparent md:hover:text-red-600",
-                      ].join(" "),
-              ].join(" ")}
-            >
-              <span
-                className={[
-                  "font-bold items-center leading-none md:text-sm",
-                  // 2-row mobile: emoji stacked over the (short) label. Single-row: emoji beside the full label.
-                  twoRow ? "text-[11px] flex flex-col md:flex-row gap-0.5 md:gap-1.5" : "text-[12.5px] flex gap-1.5",
-                ].join(" ")}
-              >
-                <span
-                  className={`${twoRow ? "text-[15px]" : "text-[16px]"} md:text-[20px] leading-none transition-all duration-200`}
-                  style={{
-                    filter: isActive
-                      ? "grayscale(1) sepia(1) saturate(10) hue-rotate(320deg) brightness(0.85)"
-                      : "grayscale(1) brightness(0.45)",
-                  }}
-                >{tab.emoji}</span>
-                {twoRow ? (
-                  <>
-                    {/* short label on mobile · full label on desktop */}
-                    <span className="md:hidden">{tab.short}</span>
-                    <span className="hidden md:inline">{tab.label}</span>
-                  </>
-                ) : tab.label}
-              </span>
-              <span className={`hidden md:inline text-[11px] font-medium mt-0.5 ${isActive ? "text-red-500/70" : tab.disabled ? "text-gray-300" : "text-gray-400"}`}>
-                {tab.sub}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {twoRow ? (
+        <>
+          {/* Mobile — Trip.com-style circular service icons (ปอน 2026-06-19 ·
+              "ทำให้เป็นไอคอนกลมๆแบบ trip เฉพาะมือถือ"). Transport row (3) over the
+              services row (4). Desktop is untouched (hidden here). */}
+          <div className="px-3 pt-2 pb-1.5 md:hidden">
+            <div className="grid grid-cols-3 gap-2">
+              {tabs.filter((tb) => tb.group === "transport").map(renderCircle)}
+            </div>
+            <div className="mt-2.5 grid grid-cols-4 gap-1">
+              {tabs.filter((tb) => tb.group === "service").map(renderCircle)}
+            </div>
+          </div>
+
+          {/* Desktop — the original single centered tab strip (UNCHANGED). */}
+          <div
+            ref={scrollerRef}
+            className="hidden px-2.5 md:flex md:flex-nowrap md:justify-center md:gap-0 md:overflow-x-auto md:border-b md:border-gray-200 md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden"
+          >
+            {tabs.map(renderTab)}
+          </div>
+        </>
+      ) : (
+        // Import-only pages — original single-row horizontal-scroll strip (UNCHANGED).
+        <div
+          ref={scrollerRef}
+          className="flex overflow-x-auto px-2.5 py-2 md:py-0 gap-1.5 md:gap-0 md:border-b md:border-gray-200 md:justify-center snap-x snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_18px,black_calc(100%-18px),transparent)] md:[mask-image:none]"
+        >
+          {tabs.map(renderTab)}
+        </div>
+      )}
 
       {/* Mobile scroll affordances — only for the single-row (import-only) layout */}
       {!twoRow && (

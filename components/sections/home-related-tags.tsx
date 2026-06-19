@@ -192,7 +192,7 @@ export function HomeRelatedTags() {
   ];
 
   return (
-    <section className="relative pt-6 md:pt-10 pb-2 md:pb-4">
+    <section className="relative pt-3 md:pt-10 pb-2 md:pb-4">
       <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
         <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
           <Tag className="w-3.5 h-3.5" strokeWidth={2.6} />

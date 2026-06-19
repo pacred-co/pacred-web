@@ -217,7 +217,7 @@ export function PricingSection({
   const visibleTerms = TERMS.filter((t) => t.modes.includes(mode));
 
   return (
-    <section id="pricing" className="relative pt-2 md:pt-4 pb-10 md:pb-14">
+    <section id="pricing" className="relative pt-1 md:pt-4 pb-4 md:pb-14">
       <div className="relative mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* ─── Heading (hidden on the LCL-landing variant · owner 2026-06-05) ─── */}
@@ -227,7 +227,7 @@ export function PricingSection({
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             PRICING
           </div>
-          <h2 className="text-[28px] md:text-[38px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+          <h2 className="text-[22px] md:text-[38px] leading-[1.25] md:leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
             {t("titlePrefix")}
             <span className="text-primary-600">{t("titleHighlight")}</span>
           </h2>
