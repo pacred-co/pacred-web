@@ -22,6 +22,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,13 @@ export default async function LogisticsBoardPage() {
   const juristicToWht = needBillOrCollect.filter(isJuristic);
   const creditOrders = rows.filter((r) => (r.fcredit ?? "").trim() !== "" && (r.fcredit ?? "").trim() !== "0");
 
+  // 🚐 Pending-dispatch alert (owner 2026-06-19): fstatus=6 (เตรียมส่ง · ชำระแล้ว) not
+  // yet in an OPEN driver batch → planning/warehouse goes to /admin/drivers/new and
+  // confirm-saves (เฟิมบันทึก). Auto-surfaced; the dispatch itself stays a human action.
+  const readyIds = rows.filter((r) => String(r.fstatus ?? "") === "6").map((r) => r.id);
+  const assignedFids = await loadAssignedFids(admin, readyIds);
+  const pendingDispatch = readyIds.filter((id) => !assignedFids.has(id)).length;
+
   return (
     <main className="p-4 lg:p-8 space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-muted">
@@ -111,6 +119,30 @@ export default async function LogisticsBoardPage() {
           + ป้อนของเข้าระบบ (ฝากนำเข้า)
         </Link>
       </header>
+
+      {/* 🚐 Pending-dispatch alert — ready-to-ship but no driver assigned yet. */}
+      {pendingDispatch > 0 && (
+        <section className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-blue-900">🚐 รอจัดรถ — ยังไม่มอบงานคนขับ</h2>
+              <p className="mt-0.5 text-[11px] text-blue-800">
+                ชำระแล้ว/เตรียมส่ง <strong>{pendingDispatch}</strong> รายการ ยังไม่ถูกจัดเข้ารอบคนขับ —
+                แพลนนิ่ง/โกดังไปจัดรถแล้วกด <strong>เฟิมบันทึก</strong>
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-3xl font-extrabold text-blue-700">{pendingDispatch}</span>
+              <Link
+                href="/admin/drivers/new"
+                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                จัดรถ (เฟิมบันทึก) →
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Pipeline */}
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

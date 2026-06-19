@@ -26,6 +26,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
+import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -188,13 +189,11 @@ export default async function AdminDriversPage({
     );
   }
 
-  // Pending forwarders ready for assignment (fstatus=6 = เตรียมส่ง) for the
-  // CTA badge — the legacy "x รายการรอมอบหมาย" chip on top of the create button.
-  const { count: readyCount, error: readyErr } = await admin
-    .from("tb_forwarder")
-    .select("id", { count: "exact", head: true })
-    .eq("fstatus", "6");
-  if (readyErr) console.error("/admin/drivers: ready count failed", readyErr);
+  // Pending forwarders ready for assignment for the CTA badge + the alert banner.
+  // 2026-06-19 (owner): the accurate "รอจัดรถ" = fstatus=6 (เตรียมส่ง · ชำระแล้ว) NOT
+  // already in an open driver batch (the plain fstatus=6 count over-counted by
+  // including rows already on a run). Warehouse/planning sees this → confirm-saves.
+  const readyCount = await countPendingDispatch(admin);
 
   // ── CSV export — columns mirror the <thead> 1:1, multi-line cells split out ──
   const csvCols: CsvCol[] = [
@@ -269,6 +268,23 @@ export default async function AdminDriversPage({
           </Link>
         </div>
       </div>
+
+      {/* 🚐 Pending-dispatch alert — paid/ready forwarders with no driver yet. */}
+      {readyCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-blue-400 bg-blue-50 px-4 py-3">
+          <p className="text-sm text-blue-900">
+            <Truck className="inline h-4 w-4 mr-1" />
+            <strong>{readyCount}</strong> รายการชำระแล้ว/เตรียมส่ง <strong>รอจัดรถ</strong> (ยังไม่มอบงานคนขับ) —
+            กดจัดรถแล้ว <strong>เฟิมบันทึก</strong> เพื่อมอบงาน
+          </p>
+          <Link
+            href="/admin/drivers/new"
+            className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> จัดรถ (เฟิมบันทึก)
+          </Link>
+        </div>
+      )}
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2">
