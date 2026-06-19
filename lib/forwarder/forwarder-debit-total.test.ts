@@ -227,5 +227,34 @@ console.log("computeForwarderDebitBatch — empty batch");
   assertEq("empty fix-id", b.pcsfTransportFixId, null);
 }
 
+console.log("computeForwarderDebitBatch — itemised breakdown (owner: แจงรายละเอียดค่า)");
+{
+  // PCSF-zero juristic batch ≥1000: freight 1000 + other 200 - disc 100 + PCSF 50 = 1150; 1% off
+  const b = computeForwarderDebitBatch(
+    [row({ id: 90, fshipby: "PCSF", ftransportprice: 0, ftotalprice: "1000", fpriceupdate: "200", fdiscount: "100" })],
+    { userId: "PR130", isCorporate: true },
+  );
+  const bd = b.lines[0].breakdown;
+  assertClose("breakdown.freight", bd.freight, 1000);
+  assertClose("breakdown.otherCharges", bd.otherCharges, 200);
+  assertClose("breakdown.discount", bd.discount, 100);
+  assertEq("breakdown.pcsf50 (first PCSF-zero)", bd.pcsf50, 50);
+  assertClose("breakdown.wht1pct = 1% of 1150", bd.wht1pct, 11.5);
+  assertClose("breakdown.total = 1150 - 11.5", bd.total, 1138.5);
+  assertClose("breakdown.total === price_thb", bd.total, b.lines[0].price_thb);
+  assertClose("components reconcile to total", bd.freight + bd.otherCharges + bd.pcsf50 - bd.discount - bd.wht1pct, bd.total);
+}
+{
+  // non-PCSF personal small order: no pcsf50, no wht
+  const b = computeForwarderDebitBatch(
+    [row({ id: 91, fshipby: "Flash", ftransportprice: 0, ftotalprice: "45.10" })],
+    { userId: "PR131", isCorporate: false },
+  );
+  const bd = b.lines[0].breakdown;
+  assertEq("no PCSF → pcsf50=0", bd.pcsf50, 0);
+  assertEq("personal → wht1pct=0", bd.wht1pct, 0);
+  assertClose("total = freight", bd.total, 45.1);
+}
+
 console.log(`\nforwarder-debit-total: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -60,6 +60,7 @@ import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import {
   computeForwarderDebitBatch,
   type ForwarderDebitRow,
+  type ForwarderCollectBreakdown,
 } from "@/lib/forwarder/forwarder-debit-total";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
@@ -130,6 +131,8 @@ export type PayUserForwarder = {
   fstatus: string | null;
   /** true if this row reached the list via fCredit='1' (not fStatus='5'). */
   is_credit: boolean;
+  /** Itemised "what is this charge" breakdown (owner 2026-06-19: แจงรายละเอียดค่า). */
+  breakdown: ForwarderCollectBreakdown;
 };
 
 export type PayUserContext = {
@@ -237,16 +240,20 @@ export async function getPayUserContext(
       ForwarderDebitRow & { ftrackingchn: string | null; fstatus: string | null; fcredit: string | null }
     >;
     const fBatch = computeForwarderDebitBatch(fEligible, { userId: code, isCorporate });
-    const priceById = new Map(fBatch.lines.map((l) => [l.id, l.price_thb]));
+    const lineById = new Map(fBatch.lines.map((l) => [l.id, l]));
 
     const forwarders: PayUserForwarder[] = fEligible
-      .map((r) => ({
-        fid: String(r.id),
-        price_thb: priceById.get(String(r.id)) ?? NaN,
-        ftracking: r.ftrackingchn,
-        fstatus: r.fstatus,
-        is_credit: (r.fcredit ?? "").trim() === "1",
-      }))
+      .map((r) => {
+        const line = lineById.get(String(r.id));
+        return {
+          fid: String(r.id),
+          price_thb: line?.price_thb ?? NaN,
+          ftracking: r.ftrackingchn,
+          fstatus: r.fstatus,
+          is_credit: (r.fcredit ?? "").trim() === "1",
+          breakdown: line?.breakdown ?? { freight: 0, otherCharges: 0, discount: 0, pcsf50: 0, wht1pct: 0, total: NaN },
+        };
+      })
       .filter((f) => Number.isFinite(f.price_thb) && f.price_thb > 0);
 
     return {
