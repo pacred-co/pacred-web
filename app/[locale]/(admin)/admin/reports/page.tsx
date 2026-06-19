@@ -148,6 +148,10 @@ const REPORTS_MENUBAR: MenubarItem[] = [
   // this.) Wired here so staff reach it in ≤2 clicks.
   { label: "ตัวแทน/คอมมิชชั่น", href: "/admin/reports/agent-payouts" },
   { label: "คนขับ", href: "/admin/driver-runs" },
+  // 2026-06-19 (ภูม · §0d) — port of legacy history.php: ประวัติการส่งสินค้า.
+  // Pacred had no delivery-history report; this surfaces forwarder shipments
+  // that reached เตรียมส่ง/ส่งแล้ว (default fstatus 6,7 · last 30 days).
+  { label: "📦 ประวัติการส่งสินค้า", href: "/admin/reports/delivery-history" },
   // Phase 4a (2026-06-08 · ops-workflow audit §32): customer delivery
   // feedback rollup — rating + comment + photo submitted from
   // /service-import/[fNo] after fstatus=7. ≤2 clicks from sidebar.
