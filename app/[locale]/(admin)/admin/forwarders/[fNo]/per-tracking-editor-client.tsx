@@ -79,6 +79,16 @@ type Props = {
   profileRateMissing?: boolean;
   /** True once the server actually ran the resolver (vs no userid / empty rows). */
   profileResolved?: boolean;
+  // ── 2026-06-20 (#1 refine · owner ภูม) — BOTH per-basis amounts so the
+  // "คิดตามน้ำหนัก" line is no longer blank when CBM is the chosen basis. ───────
+  /** Σ rowWeight×rowKgRate across trackings (the real คิดตามน้ำหนัก amount) · null = no kg card. */
+  profileKgAmount?: number | null;
+  /** Σ rowCbm×rowCbmRate across trackings (the real คิดตามปริมาตร amount) · null = no cbm card. */
+  profileCbmAmount?: number | null;
+  /** uniform kg unit rate to label "× rate" (null = rows differ → omit multiplier). */
+  profileKgUnitRate?: number | null;
+  /** uniform cbm unit rate to label "× rate" (null = rows differ → omit multiplier). */
+  profileCbmUnitRate?: number | null;
 };
 
 const WAREHOUSE_CHINA = [
@@ -115,6 +125,10 @@ export function PerTrackingEditorClient({
   profileTransportTotal = 0,
   profileRateMissing = false,
   profileResolved = false,
+  profileKgAmount = null,
+  profileCbmAmount = null,
+  profileKgUnitRate = null,
+  profileCbmUnitRate = null,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -218,10 +232,13 @@ export function PerTrackingEditorClient({
     const useProfile = !cr && profileResolved && !profileRateMissing && profileRate > 0;
 
     // pKg / pCbm — null means "ไม่ทราบ" (render "—"). Under manual pricing both
-    // are real (typed rate × qty). Under system pricing only the chosen basis is
-    // known (the server resolves one basis); the other is null.
+    // are real (typed rate × qty). Under system pricing BOTH lines now show the
+    // server-resolved per-basis amounts (owner ภูม 2026-06-20: "คิดตามน้ำหนัก
+    // ต้องขึ้นด้วย · คิดตามคิวเป็น default") — a basis with no rate card stays null.
     let pKg: number | null;
     let pCbm: number | null;
+    let pKgRate: number | null = null;  // unit rate to label "× rate" (system path)
+    let pCbmRate: number | null = null;
     let byWeight: boolean;
     let transport: number;
     if (cr) {
@@ -230,10 +247,15 @@ export function PerTrackingEditorClient({
       byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
       transport = comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm);
     } else if (useProfile) {
+      // BOTH amounts from the server (computed by the SAME engine the save runs).
+      pKg = profileKgAmount;
+      pCbm = profileCbmAmount;
+      pKgRate = profileKgUnitRate;
+      pCbmRate = profileCbmUnitRate;
+      // The CHOSEN basis (CBM by default, per ค่าเทียบ) still drives the bill —
+      // it's the only one that flows into "ราคารวมสุทธิ".
       byWeight = profileBasis === "kg";
       transport = profileTransportTotal;
-      pKg = byWeight ? profileTransportTotal : null;
-      pCbm = byWeight ? null : profileTransportTotal;
     } else {
       pKg = 0;
       pCbm = 0;
@@ -245,11 +267,12 @@ export function PerTrackingEditorClient({
       cr, useProfile, profileRate, profileBasis,
       rateKg, rateCbm, comparisonOn, threshold, count: rows.length,
       label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
-      w, v, pKg, pCbm, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
+      w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
   }, [
     rows, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
     profileResolved, profileRateMissing, profileRate, profileBasis, profileTransportTotal,
+    profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate,
   ]);
 
   async function onSaveAll() {
@@ -434,18 +457,21 @@ export function PerTrackingEditorClient({
                 หาค่าเทียบ {nf(calc.w, 2)}÷{nf(calc.v, 5)} = {nf(calc.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.threshold, 0)} คิดตาม{calc.byWeight ? "น้ำหนัก" : "ปริมาตร"})
               </p>
             )}
-            {/* คิดตามน้ำหนัก / ปริมาตร — under manual pricing both show the typed
-                rate × qty; under system pricing only the chosen basis is known
-                (server resolves one basis) → the other renders "—". */}
+            {/* คิดตามน้ำหนัก / ปริมาตร — BOTH lines show a real computed amount.
+                Under manual pricing: typed rate × qty. Under system pricing: the
+                server-resolved per-basis amount (CBM is the default chosen basis;
+                the weight line is no longer blank · owner ภูม 2026-06-20). A basis
+                with no rate card on any row → "—" for that line only. The "× rate"
+                multiplier shows only when the unit rate is uniform across rows. */}
             <p>
               คิดตามน้ำหนัก {nf(calc.w, 2)}
-              {calc.cr ? ` x ${nf(calc.rateKg, 0)}` : calc.useProfile && calc.profileBasis === "kg" ? ` x ${nf(calc.profileRate, 2)}` : ""}
+              {calc.cr ? ` x ${nf(calc.rateKg, 0)}` : calc.useProfile && calc.pKgRate != null ? ` x ${nf(calc.pKgRate, 2)}` : ""}
               {" = "}
               <strong>{calc.pKg == null ? "—" : baht(calc.pKg)}</strong>
             </p>
             <p>
               คิดตามปริมาตร {nf(calc.v, 5)}
-              {calc.cr ? ` x ${nf(calc.rateCbm, 2)}` : calc.useProfile && calc.profileBasis === "cbm" ? ` x ${nf(calc.profileRate, 2)}` : ""}
+              {calc.cr ? ` x ${nf(calc.rateCbm, 2)}` : calc.useProfile && calc.pCbmRate != null ? ` x ${nf(calc.pCbmRate, 2)}` : ""}
               {" = "}
               <strong>{calc.pCbm == null ? "—" : baht(calc.pCbm)}</strong>
             </p>

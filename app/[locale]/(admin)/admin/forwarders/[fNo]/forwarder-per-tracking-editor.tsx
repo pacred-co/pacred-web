@@ -271,11 +271,28 @@ export async function ForwarderPerTrackingEditor({
   // "ระบบเลือก" number; the chosen unit rate + basis of the (first) row labels the
   // breakdown line. If no rate card matches the tuple → profileRateMissing, and
   // the client falls back to the legacy "ใช้เรทระบบ — คำนวณจริงตอนบันทึก" note.
+  //
+  // 2026-06-20 (#1 refine · owner ภูม "คิดตามน้ำหนัก ไม่เห็นขึ้นเลย · ต้องคิดตามคิว
+  // เป็น default · ถ้าอยากเปลี่ยนค่อยกดติ๊ก") — we ALSO sum the kg-basis AND cbm-basis
+  // amounts (Σ rowWeight×rowKgRate · Σ rowCbm×rowCbmRate) from the SAME engine, so
+  // the preview shows a REAL number on BOTH lines (the non-chosen line was blank).
+  // CBM stays the system's chosen basis (per ค่าเทียบ); only the chosen one drives
+  // "ราคารวมสุทธิ". A basis with no rate card on any row → null amount → "—".
   let profileTransportTotal = 0;
   let profileRate = 0;
   let profileBasis: "kg" | "cbm" = "cbm";
   let profileRateMissing = false;
   let profileResolved = false;
+  // Per-basis display amounts (Σ over rows) + a uniform unit rate to label the
+  // "× rate" multiplier when every row shares it (typical single-row order).
+  let kgAmount = 0;          // Σ rowWeight × rowKgRate
+  let cbmAmount = 0;         // Σ rowCbm × rowCbmRate
+  let kgAnyRate = false;     // at least one row had a kg rate card
+  let cbmAnyRate = false;    // at least one row had a cbm rate card
+  let kgUnitRate: number | null = null;   // uniform kg unit rate (null if rows differ)
+  let cbmUnitRate: number | null = null;  // uniform cbm unit rate (null if rows differ)
+  let kgRateUniform = true;
+  let cbmRateUniform = true;
   if (r.userid && display.length > 0) {
     // Σweight / Σcbm across display rows — the order-total ค่าเทียบ ratio (same
     // aggregate the client preview box sums). cbmProduct per row = famountcount==1
@@ -345,6 +362,28 @@ export async function ForwarderPerTrackingEditor({
           firstSet = true;
         }
       }
+      // ── Per-basis display amounts (both lines, owner ภูม 2026-06-20) ──
+      // Accumulate Σ rowWeight×rowKgRate and Σ rowCbm×rowCbmRate from the SAME
+      // engine, so the weight line is never blank when CBM is the chosen basis.
+      const { kgRate, cbmRate } = res.unitRates;
+      const rowWeight = num(row.fweight);
+      if (kgRate != null && kgRate > 0) {
+        kgAmount += rowWeight * kgRate;
+        kgAnyRate = true;
+        if (kgUnitRate == null) kgUnitRate = kgRate;
+        else if (kgUnitRate !== kgRate) kgRateUniform = false;
+      } else {
+        // a row missing a kg card means the "× rate" label can't be uniform.
+        kgRateUniform = false;
+      }
+      if (cbmRate != null && cbmRate > 0) {
+        cbmAmount += cbmProduct * cbmRate;
+        cbmAnyRate = true;
+        if (cbmUnitRate == null) cbmUnitRate = cbmRate;
+        else if (cbmUnitRate !== cbmRate) cbmRateUniform = false;
+      } else {
+        cbmRateUniform = false;
+      }
     }
     profileRateMissing = allMissing;
     profileResolved = true;
@@ -364,6 +403,14 @@ export async function ForwarderPerTrackingEditor({
       profileTransportTotal={Math.round(profileTransportTotal * 100) / 100}
       profileRateMissing={profileRateMissing}
       profileResolved={profileResolved}
+      // BOTH per-basis amounts (display) — null when no rate card matched that
+      // basis on any row (the client shows "—" for that line only).
+      profileKgAmount={kgAnyRate ? Math.round(kgAmount * 100) / 100 : null}
+      profileCbmAmount={cbmAnyRate ? Math.round(cbmAmount * 100) / 100 : null}
+      // a uniform unit rate to label "× rate" (only when every priced row shared
+      // it — else the client omits the multiplier and shows just the Σ amount).
+      profileKgUnitRate={kgRateUniform ? kgUnitRate : null}
+      profileCbmUnitRate={cbmRateUniform ? cbmUnitRate : null}
     />
   );
 }
