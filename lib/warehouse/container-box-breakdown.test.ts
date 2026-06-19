@@ -101,6 +101,21 @@ it("identical size → ONE row (not split)", () => {
   assert.equal(groups[0].boxes, 9);
 });
 
+it("collects distinct trackings per dimension group (report-cnt #4 · B)", () => {
+  const rows = [
+    fw({ id: 1, famount: 6, famountcount: "2", fvolume: 0.06, fwidth: 50, flength: 40, fheight: 30, ftrackingchn: "TRK-A" }),
+    fw({ id: 2, famount: 3, famountcount: "2", fvolume: 0.024, fwidth: 50, flength: 40, fheight: 30, ftrackingchn: "TRK-B" }), // same size, diff tracking
+    fw({ id: 3, famount: 2, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, ftrackingchn: "TRK-C" }), // diff size
+    fw({ id: 4, famount: 1, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, ftrackingchn: "TRK-C" }), // dup tracking → dedup
+    fw({ id: 5, famount: 1, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, ftrackingchn: null }),    // null → skipped
+  ];
+  const groups = groupBoxesByDimension(rows);
+  const big = groups.find((g) => g.width === 50)!;
+  const small = groups.find((g) => g.width === 20)!;
+  assert.deepEqual(big.trackings, ["TRK-A", "TRK-B"]); // both, first-seen order
+  assert.deepEqual(small.trackings, ["TRK-C"]);         // deduped · null dropped
+});
+
 it("no-dimension rows (MOMO total CBM) collapse to the (0,0,0) group", () => {
   const rows = [
     fw({ id: 1, famount: 48, famountcount: "1", fvolume: 1.728 }), // dims all 0
