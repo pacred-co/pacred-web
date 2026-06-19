@@ -253,11 +253,25 @@ function hrefMatches(href: string, pathname: string, currentSearch: string): boo
 // ── A red count pill — the legacy badgeMenu($n). ───────────────────────
 function CountBadge({ value }: { value: number }) {
   if (value <= 0) return null;
+  // Owner 2026-06-19: badges must "เด้ง · จูงสายตา" — bright red, bigger, ring halo
+  // + shadow so staff can't miss there's work waiting (was a dim small pill).
   return (
-    <span className="admin-count-badge ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary-600 text-white text-[10px] font-bold leading-none">
+    <span className="admin-count-badge ml-auto inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-500 text-white text-[11px] font-extrabold leading-none ring-2 ring-red-200 shadow-sm">
       {value > 999 ? "999+" : value}
     </span>
   );
+}
+
+/**
+ * A parent's EFFECTIVE badge = its own count + the sum of every descendant's
+ * count — so a COLLAPSED parent still shows there's work inside it without the
+ * staff having to expand it (owner 2026-06-19: "อยู่ในหัวข้อย่อย แต่หัวข้อใหญ่
+ * ไม่เห็นแจ้งเตือนถ้าไม่กดขยาย"). Sums over item.children = the rendered tree.
+ */
+function rollupBadge(item: MenuItem, counts: BadgeCounts): number {
+  let total = item.badge ? counts[item.badge] ?? 0 : 0;
+  for (const c of item.children ?? []) total += rollupBadge(c, counts);
+  return total;
 }
 
 // One-open-at-a-time group for the top-level (depth-0) accordions — opening a
@@ -289,7 +303,11 @@ function MenuRow({
   const handleToggle = () =>
     depth === 0 && group ? group.toggle(rowId) : setLocalOpen((v) => !v);
 
-  const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
+  // A parent shows its ROLLED-UP count (own + all descendants) so a collapsed
+  // section still flags work inside; a leaf shows just its own.
+  const badgeVal = hasChildren
+    ? rollupBadge(item, counts)
+    : (item.badge ? counts[item.badge] ?? 0 : 0);
   // Indentation grows with depth (legacy nested <ul> visual nesting).
   // depth ≥ 3 happens under the CLASS wrappers (e.g. ACC → รายการเบิกเงิน →
   // Pacred → leaves) — one more step so tier 3/4 don't share an indent.
