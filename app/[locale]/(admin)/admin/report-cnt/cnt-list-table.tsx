@@ -23,13 +23,15 @@
  * updates filling t7..t12 sums and t16 avg).
  */
 
-import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
-import { fstatusBadge, listRowTint } from "@/lib/admin/forwarder-status";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { ContainerCompleteness } from "@/lib/warehouse/container-completeness";
+import { fetchContainerBoxBreakdown } from "@/actions/admin/cnt-box-breakdown";
+import type { BoxDimGroup } from "@/lib/warehouse/container-box-breakdown";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -157,6 +159,15 @@ function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
 
+// Number with thousand separators (ลูกน้ำ) + fixed decimals — owner 2026-06-19
+// ("ใส่ลูกน้ำ ตัวเลขอ่านยาก"). e.g. fmtNum(999838.15, 2) → "999,838.15".
+function fmtNum(n: number, digits: number): string {
+  return n.toLocaleString("th-TH", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 function diffDateNow(closeDate: string | null): number | null {
   if (!closeDate) return null;
   const d = new Date(closeDate).getTime();
@@ -190,10 +201,56 @@ export function CntListTable({
   // report-cnt.php L501-505.
   const canSelect = showMoney;
 
+  // Total column count — drives the expanded box-detail row's colSpan.
+  // checkbox(canSelect) + 11 base cols + 3 money cols(showMoney) + 2 status cols.
+  const colCount = (canSelect ? 1 : 0) + 11 + (showMoney ? 3 : 0) + 2;
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("fdatecontainerclose");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // ── Expandable box-dimension detail (owner ask 2026-06-19 · ปอน) ──
+  // Click a container's chevron → drop down its box detail (กว้าง/ยาว/สูง/CBM/
+  // จำนวนกล่อง) grouped by size. Lazy: the breakdown is fetched once on first
+  // expand (NOT eagerly for every container · most rows are never opened), then
+  // cached in state. Independent of the row Link (which still navigates to detail).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [breakdownCache, setBreakdownCache] = useState<Record<string, BoxDimGroup[]>>({});
+  const [breakdownLoading, setBreakdownLoading] = useState<Set<string>>(new Set());
+  const [breakdownError, setBreakdownError] = useState<Record<string, string>>({});
+
+  function toggleExpand(cab: string) {
+    const willExpand = !expanded.has(cab);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(cab)) next.delete(cab);
+      else next.add(cab);
+      return next;
+    });
+    // Fetch once, on first expand only.
+    if (willExpand && !(cab in breakdownCache) && !breakdownLoading.has(cab)) {
+      setBreakdownLoading((prev) => new Set(prev).add(cab));
+      void fetchContainerBoxBreakdown(cab)
+        .then((res) => {
+          if (res.ok) {
+            setBreakdownCache((prev) => ({ ...prev, [cab]: res.data ?? [] }));
+          } else {
+            setBreakdownError((prev) => ({ ...prev, [cab]: res.error }));
+          }
+        })
+        .catch(() => {
+          setBreakdownError((prev) => ({ ...prev, [cab]: "โหลดรายละเอียดกล่องไม่สำเร็จ" }));
+        })
+        .finally(() => {
+          setBreakdownLoading((prev) => {
+            const next = new Set(prev);
+            next.delete(cab);
+            return next;
+          });
+        });
+    }
+  }
 
   // Annotate rows with computed diff-days (so sort + summary stay in sync)
   // + per-container completeness (Phase 3 — ยิงครบ column).
@@ -352,7 +409,7 @@ export function CntListTable({
               <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
               <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
-              <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนแทรคกิ้ง</SortableTH>
+              <SortableTH sortKeyValue="trackCount"          align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนชิปเมนต์</SortableTH>
               <SortableTH sortKeyValue="completenessExpected" align="right" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>จำนวนกล่อง (CTNS)</SortableTH>
               <SortableTH sortKeyValue="volumeSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ปริมาตร</SortableTH>
               <SortableTH sortKeyValue="weightSum"           align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>น้ำหนัก</SortableTH>
@@ -365,37 +422,50 @@ export function CntListTable({
             </tr>
           </thead>
           <tbody>
-            {/* Orange→red gradient summary band — faithful to legacy .bg-color
-                row (L407-423 + L532-538 jQuery fills). Shows total container
-                count + avg waiting/transit days + per-column aggregates. */}
-            <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium">
+            {/* Summary band — total container count + avg waiting/transit days
+                + per-column aggregates. Per owner (2026-06-19): kept WHITE (was
+                an orange→red gradient) — separated from data rows by bold text +
+                a heavier top/bottom border instead of a loud fill. */}
+            <tr className="bg-white dark:bg-surface text-foreground font-bold border-y-2 border-border">
               {canSelect && <td className="px-2 py-2"></td>}
               <td className="px-2 py-2 font-semibold" colSpan={4}>รวม ({rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
               <td className="px-2 py-2 text-right">{totals.ctnsSum.toLocaleString()}</td>
-              <td className="px-2 py-2 text-right">{totals.volumeSum.toFixed(6)}</td>
-              <td className="px-2 py-2 text-right">{totals.weightSum.toFixed(2)}</td>
+              <td className="px-2 py-2 text-right">{fmtNum(totals.volumeSum, 6)}</td>
+              <td className="px-2 py-2 text-right">{fmtNum(totals.weightSum, 2)}</td>
               <td className="px-2 py-2"></td>
-              {showMoney && <td className="px-2 py-2 text-right">{totals.costSum.toFixed(2)}</td>}
-              {showMoney && <td className="px-2 py-2 text-right">{totals.priceSum.toFixed(2)}</td>}
-              {showMoney && <td className="px-2 py-2 text-right">{totals.profitSum.toFixed(2)}</td>}
+              {showMoney && <td className="px-2 py-2 text-right">{fmtNum(totals.costSum, 2)}</td>}
+              {showMoney && <td className="px-2 py-2 text-right">{fmtNum(totals.priceSum, 2)}</td>}
+              {showMoney && <td className="px-2 py-2 text-right">{fmtNum(totals.profitSum, 2)}</td>}
               <td className="px-2 py-2" colSpan={2}></td>
             </tr>
 
             {sortedRows.map((r) => {
-              const badge = fstatusBadge(r.fstatus);
+              // สถานะตู้ — owner 2026-06-19 (ปอน): "มีเลขตู้ = กำลังส่งมาไทย ทั้งหมด".
+              // Every row on the รอเข้าโกดังไทย tab has a cabinet number (the page
+              // groups by + filters fcabinetnumber), so the container is loaded +
+              // in transit → its CONTAINER status is "กำลังส่งมาไทย" (3). The old
+              // MIN(fstatus) left a ตู้ reading "รอเข้าโกดังจีน/ถึงโกดังจีนแล้ว" when
+              // one stale tracking sat at 1/2 — contradictory for a closed container.
+              // Display-only · the per-tracking tb_forwarder.fstatus is unchanged.
+              // The เข้าโกดังไทยแล้ว tab (arrived) keeps its real status.
+              const badge = fstatusBadge(isWaiting ? "3" : r.fstatus);
               const isOn = selected.has(r.fcabinetnumber);
               const selectable = canSelect && !r.isPaid;
-              // SOLID row tint per fstatus (canonical listRowTint · isPaid =
-              // emerald-100 wins · fstatus → yellow/cyan/pink/amber/red/blue/
-              // emerald-100). Replaces the prior bg-green-50/30 opacity tint
-              // that was invisible at-a-glance for staff.
-              const rowTint = listRowTint(r.fstatus, r.isPaid, isOn);
+              // Per owner (2026-06-19): keep the LIST table WHITE — drop the
+              // per-fstatus / isPaid solid row tint. The same status is still
+              // legible in the colored สถานะตู้ / สถานะจ่าย pills on each row, so
+              // no info is lost. Only the selection highlight remains (it's
+              // interaction feedback for the checkbox + floating action bar).
+              const rowTint = isOn
+                ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
+                : "hover:bg-surface-alt/40";
+              const isExpanded = expanded.has(r.fcabinetnumber);
               return (
+                <Fragment key={r.fcabinetnumber}>
                 <tr
-                  key={r.fcabinetnumber}
                   className={`border-t border-border ${rowTint}`}
                 >
                   {canSelect && (
@@ -413,13 +483,25 @@ export function CntListTable({
                     </td>
                   )}
                   <td className="px-2 py-2 font-mono">
-                    <Link
-                      href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                      className="text-primary-600 hover:underline"
-                      title="ดูรายละเอียดตู้นี้"
-                    >
-                      {r.fcabinetnumber}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(r.fcabinetnumber)}
+                        className="shrink-0 text-muted hover:text-primary-600 transition-colors"
+                        aria-label={isExpanded ? "ซ่อนรายละเอียดกล่อง" : "ดูรายละเอียดกล่อง"}
+                        aria-expanded={isExpanded}
+                        title="รายละเอียดกล่อง — กว้าง × ยาว × สูง · CBM · จำนวน (แยกตามขนาด)"
+                      >
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
+                      <Link
+                        href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                        className="text-primary-600 hover:underline"
+                        title="ดูรายละเอียดตู้นี้"
+                      >
+                        {r.fcabinetnumber}
+                      </Link>
+                    </div>
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
@@ -430,30 +512,34 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatestatus4)}</td>
                   <td className="px-2 py-2 text-right">{r.trackCount.toLocaleString()}</td>
                   <td className="px-2 py-2 text-right">{r.completenessExpected.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-right">{r.volumeSum.toFixed(6)}</td>
-                  <td className="px-2 py-2 text-right">{r.weightSum.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-right">{fmtNum(r.volumeSum, 6)}</td>
+                  <td className="px-2 py-2 text-right">{fmtNum(r.weightSum, 2)}</td>
+                  {/* ยิงครบ — per owner (2026-06-19): count by BOX (CTNS) not by
+                      record. Shows scanned/expected boxes (Σ fi2amount / Σ famount);
+                      green when every box is in. The รายการ (shipment) breakdown
+                      stays in the tooltip for reference. */}
                   <td className="px-2 py-2 text-center">
                     {r.completenessForwardersTotal === 0 ? (
                       <span className="text-[10px] text-muted">-</span>
-                    ) : r.completenessIsComplete ? (
+                    ) : r.completenessScanned >= r.completenessExpected ? (
                       <span
                         className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 px-2 py-0.5 text-[10px] font-medium"
-                        title={`ครบทุกรายการ — ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง`}
+                        title={`ยิงครบทุกกล่อง — ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ`}
                       >
-                        {r.completenessForwardersComplete}/{r.completenessForwardersTotal}
+                        {r.completenessScanned}/{r.completenessExpected}
                       </span>
                     ) : (
                       <span
                         className="inline-block rounded-full bg-red-500 text-red-50 border border-red-700 px-2 py-0.5 text-[10px] font-medium"
-                        title={`ของยังขาด ${r.completenessForwardersTotal - r.completenessForwardersComplete} รายการ — ยิง ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessPct}%`}
+                        title={`ของยังขาด ${r.completenessExpected - r.completenessScanned} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
-                        {r.completenessForwardersComplete}/{r.completenessForwardersTotal}
+                        {r.completenessScanned}/{r.completenessExpected}
                       </span>
                     )}
                   </td>
-                  {showMoney && <td className="px-2 py-2 text-right">{r.costSum.toFixed(2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{r.priceSum.toFixed(2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{r.profitSum.toFixed(2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.costSum, 2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.priceSum, 2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.profitSum, 2)}</td>}
                   <td className="px-2 py-2 text-center">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.chip}`}>{badge.label}</span>
                   </td>
@@ -465,6 +551,18 @@ export function CntListTable({
                     )}
                   </td>
                 </tr>
+                {isExpanded && (
+                  <tr className="bg-surface-alt/30">
+                    <td colSpan={colCount} className="px-3 pb-3 pt-1">
+                      <BoxBreakdownPanel
+                        loading={breakdownLoading.has(r.fcabinetnumber)}
+                        error={breakdownError[r.fcabinetnumber]}
+                        groups={breakdownCache[r.fcabinetnumber]}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -556,5 +654,89 @@ export function CntListTable({
         selected={selectedSummaries}
       />
     </>
+  );
+}
+
+// ── Box-dimension breakdown panel (expanded row · owner ask 2026-06-19 · ปอน) ──
+// Renders the lazy-loaded per-size breakdown: one row per distinct box dimension
+// (กว้าง × ยาว × สูง) with Σ กล่อง + Σ CBM — like the import page (หน้านำเข้า). A
+// container with 9 boxes = 6 of size A + 3 of size B shows 2 rows.
+function BoxBreakdownPanel({
+  loading,
+  error,
+  groups,
+}: {
+  loading: boolean;
+  error?: string;
+  groups?: BoxDimGroup[];
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-xs text-muted">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังโหลดรายละเอียดกล่อง…
+      </div>
+    );
+  }
+  if (error) {
+    return <div className="py-2 text-xs text-red-600">⚠️ {error}</div>;
+  }
+  if (!groups) return null;
+  if (groups.length === 0) {
+    return <div className="py-2 text-xs text-muted">— ไม่มีข้อมูลขนาดกล่องในตู้นี้</div>;
+  }
+
+  const totalBoxes = groups.reduce((s, g) => s + g.boxes, 0);
+  const totalCbm = groups.reduce((s, g) => s + g.cbm, 0);
+  const hasUnsized = groups.some((g) => g.width === 0 && g.length === 0 && g.height === 0);
+  const dim = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+
+  return (
+    <div className="rounded-lg border border-border bg-white dark:bg-surface overflow-x-auto">
+      <div className="px-3 py-1.5 text-[11px] font-semibold text-foreground border-b border-border">
+        📦 รายละเอียดกล่อง — แยกตามขนาด ({groups.length} ขนาด)
+      </div>
+      <table className="w-full text-[11px]">
+        <thead className="text-muted bg-surface-alt/40">
+          <tr className="border-b border-border">
+            <th className="px-3 py-1.5 text-left font-medium">#</th>
+            <th className="px-3 py-1.5 text-right font-medium">กว้าง (ซม.)</th>
+            <th className="px-3 py-1.5 text-right font-medium">ยาว (ซม.)</th>
+            <th className="px-3 py-1.5 text-right font-medium">สูง (ซม.)</th>
+            <th className="px-3 py-1.5 text-right font-medium">CBM/กล่อง</th>
+            <th className="px-3 py-1.5 text-right font-medium">จำนวนกล่อง</th>
+            <th className="px-3 py-1.5 text-right font-medium">CBM รวม</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g, i) => {
+            const hasDims = g.width > 0 || g.length > 0 || g.height > 0;
+            const perBox = g.boxes > 0 ? g.cbm / g.boxes : 0;
+            return (
+              <tr key={i} className="border-b border-border/40 last:border-0">
+                <td className="px-3 py-1.5 text-muted">{i + 1}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.width) : "—"}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.length) : "—"}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.height) : "—"}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(perBox, 6)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{g.boxes.toLocaleString()}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(g.cbm, 6)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border font-semibold bg-surface-alt/30">
+            <td className="px-3 py-1.5" colSpan={5}>รวม</td>
+            <td className="px-3 py-1.5 text-right tabular-nums">{totalBoxes.toLocaleString()}</td>
+            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(totalCbm, 6)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      {hasUnsized && (
+        <div className="px-3 py-1 text-[10px] text-muted border-t border-border">
+          &quot;—&quot; = กล่องที่ไม่ได้ระบุขนาด (เช่น พัสดุ MOMO ที่บันทึกแต่ CBM รวม)
+        </div>
+      )}
+    </div>
   );
 }
