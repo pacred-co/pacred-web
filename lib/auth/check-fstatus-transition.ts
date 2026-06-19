@@ -45,6 +45,7 @@
  */
 
 import type { AdminRole } from "@/lib/auth/require-admin";
+import { isGodRole } from "@/lib/admin/god-role";
 
 /**
  * The role-allowlist per (from, to) transition. Each entry's value is the
@@ -125,8 +126,14 @@ export function canFlipFstatus(
   from: string,
   to: string,
 ): boolean {
-  // Rule 1 — super/manager override applies to every transition.
-  if (OVERRIDE_ROLES.includes(role)) return true;
+  // Rule 1 — god-role (super / ultra) + manager override applies to every
+  // transition. `isGodRole` covers super+ultra (the 2026-06-18 god-role sweep,
+  // mig 0193 — `ultra` "Ultra Admin Z" must inherit every super privilege); the
+  // OVERRIDE_ROLES list keeps `manager` (co-founder/COO) as an explicit override.
+  // Without the isGodRole check an `ultra` admin was silently blocked from the
+  // warehouse 3→4 arrival flip (the barcode scan flagged the row scanned but the
+  // status stuck at "กำลังส่งมาไทย" — ภูม 2026-06-19).
+  if (isGodRole([role]) || OVERRIDE_ROLES.includes(role)) return true;
 
   // Rule 2 — shelve/restore is super/manager only (the OVERRIDE_ROLES above).
   // We hit Rule 1 earlier if the caller is super/manager; reaching here

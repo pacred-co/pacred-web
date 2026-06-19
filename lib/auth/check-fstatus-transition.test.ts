@@ -33,6 +33,20 @@ assert("manager: 6→7",    canFlipFstatus("manager", "6", "7"));
 assert("manager: *→99",   canFlipFstatus("manager", "4", "99"));
 assert("manager: 99→4",   canFlipFstatus("manager", "99", "4"));
 
+// ── God role `ultra` ("Ultra Admin Z", mig 0193) overrides EVERY transition ──
+// Regression lock for the 2026-06-19 bug: an `ultra` admin (incl. both พี่ป๊อป)
+// scanned a shipment IN to 15/15 but the 3→4 flip was silently blocked because
+// `ultra` was missing from the override path (the ultra-RBAC sweep missed this
+// pure-function gate). isGodRole(super/ultra) now grants the override.
+assert("ultra: 3→4",      canFlipFstatus("ultra",   "3", "4"));
+assert("ultra: 4→5",      canFlipFstatus("ultra",   "4", "5"));
+assert("ultra: 6→7",      canFlipFstatus("ultra",   "6", "7"));
+assert("ultra: *→99",     canFlipFstatus("ultra",   "5", "99"));
+assert("ultra: 99→3",     canFlipFstatus("ultra",   "99", "3"));
+assert("ultra: 7→1 (reset)",  canFlipFstatus("ultra", "7", "1"));
+// The exact bug path: the barcode scan calls canAnyRoleFlipFstatus(['ultra'],'3','4').
+assert("anyRole [ultra]: 3→4 (the scan-flip path)", canAnyRoleFlipFstatus(["ultra"], "3", "4"));
+
 // ── Warehouse — owns *→4 + 1→2 / 2→3 sync ──
 assert("warehouse: 3→4 (parity)",  canFlipFstatus("warehouse", "3", "4"));
 assert("warehouse: 2→3 (sync)",    canFlipFstatus("warehouse", "2", "3"));
