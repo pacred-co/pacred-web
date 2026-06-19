@@ -108,13 +108,17 @@ export default async function Home({
       <SearchBar />
       <main>
         <BookingCalculator />
-        <StatsBar />
+        {/* Stats strip — hidden on mobile (ปอน 2026-06-19), shown on desktop.
+            Promotion stays visible on BOTH (ปอน asked to bring it back on mobile). */}
+        <div className="hidden md:block">
+          <StatsBar />
+        </div>
         <Promotion />
         <OurService />
         <ProductCategories />
         <PricingSection />
         <GuaranteeBanner />
-        <section className="relative pt-3 md:pt-5 pb-1 md:pb-2">
+        <section className="relative pt-1.5 md:pt-5 pb-1 md:pb-2">
           <div className="mx-auto w-full max-w-[1140px] px-[10px] md:px-5">
             <CustomsModeCards />
           </div>

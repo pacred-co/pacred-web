@@ -113,7 +113,7 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
   }, []);
 
   return (
-    <section id="contact-sales" className={`relative ${compact ? "py-2 md:py-4" : "py-5 md:py-14"}`}>
+    <section id="contact-sales" className={`relative ${compact ? "py-2 md:py-4" : "py-2.5 md:py-14"}`}>
       <div className="relative mx-auto w-full max-w-[1140px] px-[10px]">
         {/* Heading */}
         <div className="mx-auto w-full max-w-[1120px]">
@@ -144,61 +144,66 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                 i === activeIdx ? "max-md:scale-[1.03] max-md:z-10" : "",
               ].join(" ")}
             >
-              <div className="p-3.5 md:p-5">
-                {/* Header — avatar + name + ONLINE + role */}
-                <div className="flex items-center gap-3">
-                  <div className="relative w-[54px] h-[54px] md:w-[68px] md:h-[68px] rounded-full overflow-hidden shrink-0 border-[3px] border-white bg-white shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
-                    <Image
-                      src={s.image}
-                      alt={t(s.altKey)}
-                      fill
-                      sizes="72px"
-                      loading="eager"
-                      className={s.useContain ? "object-contain p-2" : "object-cover"}
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-[17px] md:text-[21px] font-black leading-none tracking-tight text-[#111827] dark:text-white">
-                        {s.name}
-                      </h3>
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full border border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-300 text-[8.5px] md:text-[9px] font-black tracking-[0.08em]">
-                        ONLINE
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[10px] md:text-[11.5px] font-black uppercase tracking-[0.08em] text-primary-600">
-                      {t(s.roleKey)}
-                    </div>
-                  </div>
+              {/* LINE-OA-style card (ปอน 2026-06-20): vertical + centred — big
+                  circular avatar → name → role → red phone pill → tagline →
+                  ติดต่อ (LINE). Same on desktop + mobile. */}
+              <div className="flex h-full flex-col items-center p-4 md:p-6 text-center">
+                {/* Big circular avatar */}
+                <div className="relative w-[104px] h-[104px] md:w-[124px] md:h-[124px] rounded-full overflow-hidden shrink-0 border-4 border-white bg-white shadow-[0_10px_24px_rgba(179,0,0,0.20)] ring-2 ring-primary-200 dark:ring-primary-900/40">
+                  <Image
+                    src={s.image}
+                    alt={t(s.altKey)}
+                    fill
+                    sizes="130px"
+                    loading="eager"
+                    className={s.useContain ? "object-contain p-3" : "object-cover"}
+                  />
                 </div>
 
+                {/* Name + ONLINE */}
+                <div className="mt-3 flex items-center justify-center gap-1.5">
+                  <h3 className="text-[20px] md:text-[23px] font-black leading-none tracking-tight text-[#111827] dark:text-white">
+                    {s.name}
+                  </h3>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 text-[8.5px] font-black tracking-[0.08em]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    ONLINE
+                  </span>
+                </div>
+
+                {/* Role */}
+                <div className="mt-1 text-[10px] md:text-[11px] font-black uppercase tracking-[0.10em] text-primary-600">
+                  {t(s.roleKey)}
+                </div>
+
+                {/* Phone — red pill */}
+                <a
+                  href={`tel:${s.phone.replace(/-/g, "")}`}
+                  onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.roleKey })}
+                  className="mt-2.5 inline-flex items-center justify-center gap-1.5 rounded-full bg-primary-600 px-4 py-1.5 text-[13px] md:text-[14px] font-black tracking-tight text-white shadow-[0_6px_16px_rgba(179,0,0,0.28)] hover:bg-primary-700 transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5" strokeWidth={2.8} />
+                  {s.phone}
+                </a>
+
                 {/* Tagline */}
-                <p className="mt-2.5 md:mt-3.5 text-[12px] md:text-[13.5px] leading-[1.5] md:leading-[1.55] font-medium text-muted line-clamp-2 min-h-[18px] md:min-h-[21px]">
+                <p className="mt-2.5 text-[12px] md:text-[13px] leading-[1.5] font-medium text-muted line-clamp-2 min-h-[36px]">
                   {t(s.taglineKey)}
                 </p>
 
-                {/* Divider + action buttons */}
-                <div className="mt-3 md:mt-5 pt-3 md:pt-4 border-t border-border grid grid-cols-2 gap-2">
-                  <a
-                    href={`tel:${s.phone.replace(/-/g, "")}`}
-                    onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.roleKey })}
-                    className="inline-flex items-center justify-center gap-1.5 h-11 rounded-xl text-[11.5px] md:text-[12.5px] font-black border bg-white dark:bg-background text-[#111827] dark:text-white border-border hover:border-primary-400 hover:text-primary-700 transition-all duration-300"
-                  >
-                    <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    {s.phone}
-                  </a>
-                  <TrackedExternalLink
-                    href={LINE_URL}
-                    cta="line_consult"
-                    surface="contact_sales"
-                    ctaProps={{ rep: s.name, role: s.roleKey }}
-                    className="inline-flex items-center justify-center gap-1.5 h-11 rounded-xl text-[11.5px] md:text-[12.5px] font-black bg-[#06C755] text-white hover:bg-[#05a548] shadow-[0_8px_18px_rgba(6,199,85,0.30)] transition-all duration-300"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} fill="currentColor" />
+                {/* ติดต่อ — LINE chat (full-width, pinned to the card bottom) */}
+                <TrackedExternalLink
+                  href={LINE_URL}
+                  cta="line_consult"
+                  surface="contact_sales"
+                  ctaProps={{ rep: s.name, role: s.roleKey }}
+                  className="mt-auto pt-3 w-full"
+                >
+                  <span className="inline-flex w-full items-center justify-center gap-1.5 h-11 rounded-xl text-[13px] md:text-[13.5px] font-black bg-[#06C755] text-white hover:bg-[#05a548] shadow-[0_8px_18px_rgba(6,199,85,0.30)] transition-all duration-300">
+                    <MessageCircle className="w-4 h-4" strokeWidth={2.6} fill="currentColor" />
                     {t("chatLine")}
-                  </TrackedExternalLink>
-                </div>
+                  </span>
+                </TrackedExternalLink>
               </div>
             </div>
           ))}

@@ -72,7 +72,7 @@ export function HomeArticle({ locale }: { locale: "th" | "en" }) {
   const ports = isTh ? PORTS : PORTS_EN;
 
   return (
-    <section className="relative py-10 md:py-20">
+    <section className="relative py-4 md:py-20">
       <div className="mx-auto w-full max-w-[1140px] px-3 md:px-5">
 
         {/* ── SECTION 1 · Hero article ─────────────────────────── */}

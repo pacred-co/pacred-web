@@ -24,7 +24,7 @@ export function WhyPacred() {
   const t = useTranslations("whyPacred");
 
   return (
-    <section id="why-pacred" className="relative py-4 md:py-12">
+    <section id="why-pacred" className="relative py-2 md:py-12">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* ─── Header ─── */}
@@ -33,7 +33,7 @@ export function WhyPacred() {
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             {t("eyebrow")}
           </div>
-          <h2 className="text-[26px] md:text-[38px] leading-[1.18] md:leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+          <h2 className="text-[22px] md:text-[38px] leading-[1.25] md:leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
             {t("titlePart1")}{" "}
             <span className="text-primary-600">{t("titleHighlight")}</span>
           </h2>

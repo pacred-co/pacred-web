@@ -36,7 +36,7 @@ export function ProductCategories() {
   }));
 
   return (
-    <section className="pt-3 md:pt-6 pb-3 md:pb-5">
+    <section className="pt-1.5 md:pt-6 pb-1.5 md:pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}
@@ -45,7 +45,7 @@ export function ProductCategories() {
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             {tPc("eyebrow")}
           </div>
-          <h2 className="text-[32px] md:text-[36px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white relative pl-[18px]">
+          <h2 className="text-[22px] md:text-[36px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white relative pl-[18px]">
             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[7px] h-[34px] rounded-full bg-gradient-to-b from-red-600 to-red-800" />
             {tPc("titlePrefix")}
             <span className="text-primary-600">{tPc("titleHighlight")}</span>

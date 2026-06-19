@@ -15,7 +15,7 @@ const PARTNERS = [
 export async function GuaranteeBanner() {
   const t = await getTranslations("guaranteeBanner");
   return (
-    <section className="py-3 md:py-5">
+    <section className="py-1.5 md:py-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
         <div className="relative max-w-[1100px] mx-auto group">
           <div

@@ -80,7 +80,7 @@ export function Blog() {
   const [tab, setTab] = useState<"knowledge" | "news">("knowledge");
 
   return (
-    <section id="blog" className="py-4 md:py-8">
+    <section id="blog" className="py-2 md:py-8">
       <div className="mx-auto w-full max-w-[1140px] px-[10px] flex flex-col gap-4">
 
         {/* Container 1 — heading + ดูทั้งหมด button */}

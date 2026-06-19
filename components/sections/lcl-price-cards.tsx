@@ -252,7 +252,7 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
             </span>
           ) : (
             <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
-              Term: EXW
+              Term: FOB
             </span>
           )}
         </div>
@@ -659,11 +659,15 @@ const FREIGHT_MODES: FreightMode[] = [
     ] },
   ] },
   { mode: "road", heading: "รถ", types: [
+    // Truck = overland border freight → the Thai-side destination is the
+    // มุกดาหาร land border, never Bangkok (ปอน 2026-06-20: "รถ ไม่มีกรุงเทพ มีแต่มุกดาหาร").
     { type: "TRUCK FREIGHT", cards: [
-      { route: "กวางโจว → กรุงเทพฯ" },
-      { route: "เซินเจิ้น → กรุงเทพฯ" },
-      { route: "คุนหมิง → เชียงของ" },
-      { route: "หนานหนิง → มุกดาหาร" },
+      // China border → Thai border — overland checkpoints (ปอน 2026-06-20 · "เอา
+      // ด่าน ออก มันล้น"). Thai = สะเดา/มุกดาหาร/เบตง/นครพนม · จีน = โหย่วอี้กวน/ตงซิง/โม่ฮาน.
+      { route: "โหย่วอี้กวน → สะเดา" },
+      { route: "ตงซิง → มุกดาหาร" },
+      { route: "โม่ฮาน → เบตง" },
+      { route: "โม่ฮาน → นครพนม" },
     ] },
   ] },
 ];
@@ -674,13 +678,39 @@ function swapRoute(route: string): string {
   return `${dest} → ${origin}`;
 }
 
-function FreightRouteCard({ mode, card }: {
-  mode: RateMode; card: FreightCard;
+function FreightRouteCard({ mode, card, index, total }: {
+  mode: RateMode; card: FreightCard; index: number; total: number;
 }) {
   const Icon = MODE_ICON[mode];
   const inquire = !card.freight;
   const [origin, dest] = card.route.split("→").map((s) => s.trim());
   const carrier = card.carrier; // shipping line (const → TS narrows it inside the click handler)
+  // Mobile masonry (ปอน 2026-06-20 · "เหลื่อมๆแบบ trip"): the FIRST + LAST card in
+  // each 4-card row get a TALL cover (3:4), the middle two get the normal SHORT
+  // cover (3:2). With `columns-2`, col1=[0,1] col2=[2,3] → tops align (0,2),
+  // the middle staggers (1 sits below tall-0, 3 below short-2), bottoms align.
+  // Desktop keeps the uniform 3:2 grid card (md:aspect-[3/2]).
+  const tall = index === 0 || index === total - 1;
+
+  // Price-expiry tag (ปอน 2026-06-20 · "exp ราคา สุ่มๆ") — a near-future date
+  // seeded deterministically by the route so it varies per card yet is stable,
+  // and computed client-side (useEffect) so it's always in the FUTURE without an
+  // SSR/CSR hydration mismatch. Only priced cards get it (inquire cards stay clean).
+  const [exp, setExp] = useState<string | null>(null);
+  useEffect(() => {
+    if (inquire) return;
+    // Defer the setState to a rAF (not synchronous in the effect body · matches
+    // useActiveCard's pattern in this file). Client-only → no SSR hydration clash.
+    const raf = requestAnimationFrame(() => {
+      let h = 0;
+      for (let i = 0; i < card.route.length; i++) h = (h * 31 + card.route.charCodeAt(i)) >>> 0;
+      const d = new Date();
+      d.setDate(d.getDate() + 7 + (h % 36)); // 7–42 days ahead
+      setExp(`${d.getDate()}/${d.getMonth() + 1}/${String((d.getFullYear() + 543) % 100).padStart(2, "0")}`);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [card.route, inquire]);
+
   return (
     <TrackedExternalLink
       href={LINE_URL}
@@ -688,10 +718,11 @@ function FreightRouteCard({ mode, card }: {
       surface="freight_port_card"
       ctaProps={{ position: `freight_${mode}`, route: card.route }}
       aria-label={`เส้นทาง ${card.route} — สอบถามเรทเฟรท Pacred ทาง LINE`}
-      className="group flex flex-col rounded-2xl overflow-hidden border border-border bg-white dark:bg-surface shadow-[0_4px_14px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.14)]"
+      className="group mb-2.5 break-inside-avoid flex flex-col rounded-2xl overflow-hidden border border-border bg-white dark:bg-surface shadow-[0_4px_14px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.14)] md:mb-0"
     >
-      {/* cover photo + FOB badge — 3:2 like Trip.com cards */}
-      <div className="relative aspect-[3/2] overflow-hidden bg-surface">
+      {/* cover photo + FOB badge — mobile masonry: tall (3:4) for the edge cards,
+          short (3:2) for the middle · desktop uniform 3:2 */}
+      <div className={`relative ${tall ? "aspect-[4/5]" : "aspect-square"} overflow-hidden bg-surface md:aspect-[3/2]`}>
         <Image
           src={card.image ?? MODE_IMAGE[mode]}
           alt={card.route}
@@ -729,7 +760,7 @@ function FreightRouteCard({ mode, card }: {
       <div className="flex flex-col gap-2 p-3 md:p-3.5">
         <div className="flex items-center gap-1 text-[11.5px] md:text-[14px] font-black leading-tight text-[#111827] dark:text-white">
           <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0 text-primary-600 dark:text-primary-300" strokeWidth={2.4} />
-          <span className="flex-1 min-w-0 truncate">
+          <span className="flex-1 min-w-0 line-clamp-2 leading-tight">
             {origin} <span className="font-bold text-muted">→</span> {dest}
           </span>
         </div>
@@ -745,6 +776,13 @@ function FreightRouteCard({ mode, card }: {
             </>
           )}
         </div>
+        {/* Exp — price-valid-until date (only on priced cards · subtle, no clutter).
+            min-h reserves the line on SSR so the client fill-in causes no shift. */}
+        {!inquire && (
+          <span className="-mt-1 min-h-[13px] text-[10px] font-bold leading-none text-muted/80">
+            {exp ? `Exp: ${exp}` : ""}
+          </span>
+        )}
         {/* Book Now CTA — follows the price (owner: not over the photo). Thin full-width
             button so it adds minimal height. Whole card already links to LINE (no nested <a>). */}
         <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary-600 px-2 py-1.5 text-white text-[10.5px] font-black tracking-tight leading-none transition-colors duration-200 group-hover:bg-primary-700">
@@ -801,10 +839,11 @@ export function FreightPortCards() {
                       { dir: "ส่งออก", cards: group.cards.map((c) => ({ ...c, route: swapRoute(c.route), image: c.exportImage ?? c.image })).reverse() },
                     ].map((sub) => (
                       <div key={sub.dir}>
-                        {/* 4 route cards — 2-up grid on mobile · 4-up on desktop (direction label removed · owner 2026-06-17) */}
-                        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 md:items-stretch">
+                        {/* 4 route cards — mobile = Trip-style masonry (2 columns,
+                            staggered via per-card cover height) · 4-up grid on desktop */}
+                        <div className="columns-2 gap-2.5 md:grid md:grid-cols-4 md:gap-3 md:items-stretch">
                           {sub.cards.map((card, i) => (
-                            <FreightRouteCard key={i} mode={m.mode} card={card} />
+                            <FreightRouteCard key={i} mode={m.mode} card={card} index={i} total={sub.cards.length} />
                           ))}
                         </div>
                       </div>

@@ -14,6 +14,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { bridgeLegacyLogin } from "@/lib/auth/pcs-legacy-bridge";
 import { bridgeLegacyAdminLogin } from "@/lib/auth/pcs-legacy-admin-bridge";
 import { legacySyntheticEmail } from "@/lib/auth/pcs-legacy-password";
+import {
+  setAdminSessionCookie,
+  clearAdminSessionCookie,
+} from "@/lib/auth/admin-session";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { verifyHcaptcha } from "@/lib/hcaptcha";
@@ -243,7 +247,118 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
     isAdmin = (adminRows?.length ?? 0) > 0;
   }
 
+  // Owner 2026-06-19 — the normal login NEVER carries an admin ticket. Even an
+  // admin_* account logging in here lands on the customer front-office and
+  // cannot enter /admin; only `/admin/login` (signInAdmin) mints the ticket.
+  // Clearing here also drops any stale ticket from a previous admin session on
+  // this browser, so a normal login can't ride in on it. `isAdmin` is still
+  // returned (telemetry / future use) but the client no longer routes to /admin.
+  await clearAdminSessionCookie();
+
   return { ok: true, data: { isAdmin } };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sign In — ADMIN (dedicated back-office login · /admin/login)
+// ─────────────────────────────────────────────────────────────
+/**
+ * Admin-only login. Owner directive 2026-06-19 (พี่ป๊อป via ปอน): the back-office
+ * is reachable ONLY via this dedicated entrance. Rules enforced here:
+ *
+ *   - The identifier MUST be an `admin_*` username (e.g. `admin_pop`). A PR code,
+ *     phone, or email is refused here ("ใช้บัญชีผู้ดูแล admin_…") — those belong on
+ *     the normal /login and go to the front-office.
+ *   - The account must actually hold an active admins-table role (defence in
+ *     depth — an `admin_*` shape alone is not enough).
+ *   - On success it mints the `pacred_admin` ticket → the (admin) layout + proxy
+ *     then allow /admin. Without this ticket, /admin redirects to the front-office.
+ *
+ * Returns ok on a real admin login (client → /admin). Any failure returns a
+ * stable error code; we sign out a non-admin who passed credentials so no stray
+ * session lingers.
+ */
+export async function signInAdmin(
+  input: SignInInput,
+): Promise<ActionResult<{ name: string; avatarUrl: string | null }>> {
+  const parsed = signInSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  // Same per-IP credential-stuffing ceiling as the normal login.
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("login", ip);
+  if (blocked) return blocked;
+
+  const { identifier, password } = parsed.data;
+  const idTrim = identifier.trim();
+
+  // Gate on the admin_* username shape (owner: "ใครรหัสเป็น admin_ อยู่แล้ว ก็เข้าได้"
+  // · "อื่นๆที่ไม่ใช่ admin_ … ก็ไปหน้าบ้าน"). Anything else is refused HERE so a PR
+  // customer (even an admin-roled one like PR321) can't use the admin entrance.
+  if (!/^admin_[a-z0-9_]+$/i.test(idTrim)) {
+    return { ok: false, error: "not_admin_account" };
+  }
+
+  // admin_* accounts are provisioned with the email admin_<name>@pacred.co.th
+  // (see actions/admin/admins.ts + the normal signIn shorthand). Native auth.
+  const email = `${idTrim.toLowerCase()}@pacred.co.th`;
+  const supabase = await createClient();
+  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInErr) return { ok: false, error: "invalid_credentials" };
+
+  // Confirm an ACTIVE admins-table role — the ticket grants nothing without it,
+  // but refusing + signing out here keeps a roleless account from holding a live
+  // Supabase session it can't use.
+  const { data: { user: signedInUser }, error: getUserErr } = await supabase.auth.getUser();
+  if (getUserErr || !signedInUser) return { ok: false, error: "invalid_credentials" };
+
+  const { data: adminRows, error: adminRowsErr } = await supabase
+    .from("admins")
+    .select("role")
+    .eq("profile_id", signedInUser.id)
+    .eq("is_active", true)
+    .limit(1);
+  if (adminRowsErr) {
+    console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+  }
+  if ((adminRows?.length ?? 0) === 0) {
+    // Authenticated but not an admin → drop the session + refuse.
+    await supabase.auth.signOut();
+    return { ok: false, error: "not_admin_account" };
+  }
+
+  // Welcome name + profile picture for the success popup (ปอน 2026-06-19): the
+  // nickname (admin_contact_extras) wins for the greeting; the avatar is the
+  // staffer's own profiles.avatar_url, shown as a circular profile picture.
+  // Best-effort — a lookup hiccup just yields the fallback name + no avatar.
+  let name = "ผู้ดูแล";
+  let avatarUrl: string | null = null;
+
+  const { data: prof, error: profErr } = await supabase
+    .from("profiles")
+    .select("first_name, avatar_url")
+    .eq("id", signedInUser.id)
+    .maybeSingle<{ first_name: string | null; avatar_url: string | null }>();
+  if (profErr) {
+    console.error(`[profiles lookup] failed`, { code: profErr.code, message: profErr.message });
+  }
+  avatarUrl = prof?.avatar_url ?? null;
+
+  const { data: extras, error: extrasErr } = await supabase
+    .from("admin_contact_extras")
+    .select("nickname")
+    .eq("profile_id", signedInUser.id)
+    .maybeSingle<{ nickname: string | null }>();
+  if (extrasErr) {
+    console.error(`[admin_contact_extras lookup] failed`, { code: extrasErr.code, message: extrasErr.message });
+  }
+  name = extras?.nickname?.trim() || prof?.first_name?.trim() || "ผู้ดูแล";
+
+  // Mint the back-office ticket bound to this user. The (admin) layout verifies
+  // its HMAC before rendering any admin page.
+  await setAdminSessionCookie(signedInUser.id);
+  return { ok: true, data: { name, avatarUrl } };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -252,6 +367,9 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
 export async function signOutAction(): Promise<never> {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  // Drop the admin-login ticket (2026-06-19) so a later normal login on this
+  // browser can't ride in on a stale admin session.
+  await clearAdminSessionCookie();
   redirect("/");
 }
 
