@@ -30,6 +30,7 @@ import {
   adminUpdateWalletTransaction,
   adminGetWalletTxSlipSignedUrl,
 } from "@/actions/admin/wallet-hs";
+import { WorkNoteField } from "@/components/admin/work-note-field";
 
 type Props = {
   open:    boolean;
@@ -59,6 +60,8 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
   const [signedLoading, setSignedLoading] = useState(false);
   const [rejectMode, setRejectMode]   = useState(false);
   const [reason, setReason]           = useState("");
+  // UNIT C — "หมายเหตุงาน" (internal work note) captured on approve/reject.
+  const [workNote, setWorkNote]       = useState("");
 
   // Lazily fetch the signed URL only when the modal opens. Saves a
   // round-trip per row on the wallet page. React 19 forbids synchronous
@@ -94,6 +97,7 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
       setErr(null);
       setRejectMode(false);
       setReason("");
+      setWorkNote("");
     });
   }, [open]);
 
@@ -115,6 +119,9 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
       const res = await adminUpdateWalletTransaction({
         id:     tx.id,
         status: "completed",
+        // UNIT C — carry the internal work note through to the action so it
+        // persists onto the row's note column (pulled back into the UI later).
+        ...(workNote.trim() ? { note: workNote.trim() } : {}),
       });
       if (res.ok) {
         router.refresh();
@@ -132,10 +139,15 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
       return;
     }
     startTransition(async () => {
+      // UNIT C — combine the rejection reason with the optional internal work
+      // note so both land on the row's note (reason first, then the work note).
+      const combinedNote = [reason.trim(), workNote.trim()]
+        .filter((s) => s.length > 0)
+        .join(" — ");
       const res = await adminUpdateWalletTransaction({
         id:     tx.id,
         status: "cancelled",
-        note:   reason.trim(),
+        note:   combinedNote,
       });
       if (res.ok) {
         router.refresh();
@@ -215,6 +227,17 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
           </div>
 
           <div className="flex-1 overflow-auto p-4 space-y-4">
+            {/* UNIT C — surface any EXISTING note on the row so staff see prior
+                notes (cashback/wallet tags + previous work notes) before acting. */}
+            {tx.note && tx.note.trim().length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs">
+                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                  หมายเหตุเดิมในรายการ
+                </p>
+                <p className="whitespace-pre-wrap break-words text-amber-900">{tx.note}</p>
+              </div>
+            )}
+
             {/* Customer */}
             <div className="space-y-1 text-sm">
               <p className="text-[10px] uppercase tracking-wider text-muted">ลูกค้า</p>
@@ -253,6 +276,14 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
               />
               <Field label="หมายเหตุลูกค้า" value={tx.note ?? "—"} />
             </dl>
+
+            {/* UNIT C — internal "หมายเหตุงาน" field. Captured on approve OR
+                reject and persisted onto the row's note (ดึงไปใช้จริง). */}
+            <WorkNoteField
+              value={workNote}
+              onChange={setWorkNote}
+              disabled={pending}
+            />
 
             {err && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">

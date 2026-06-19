@@ -406,7 +406,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
                 >
                   {tab.label}
                   {count > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold px-1.5">
+                    <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-red-500 text-white text-[11px] font-extrabold px-1.5 ring-2 ring-red-200 shadow-sm">
                       {count > 999 ? "999+" : count}
                     </span>
                   )}

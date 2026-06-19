@@ -7,6 +7,8 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethod, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
+import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
+import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { ADDRESSES } from "@/components/seo/site";
 import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
 
@@ -154,16 +156,14 @@ export async function createLegacyForwarder(
   // Self-pickup wins over Flash promo (you can't Flash-ship something the
   // customer is picking up at our warehouse) — matches actions/cart.ts
   // L332-337 belt-and-braces.
+  // Preliminary carrier from the client. The เหมาๆ promo (pro="f") is RE-VALIDATED
+  // against the resolved delivery ZIP AFTER the address fetch below — the client flag
+  // is NEVER trusted blindly (owner 2026-06-19: an out-of-zone customer must NOT get
+  // เหมาๆ + ต้นทาง · faithful checkFreeArea.php which cleared the promo out-of-zone).
   let fShipBy: string | null = d.hShipBy ?? null;
-  if (d.pro === "f") {
-    fShipBy = "PCSF";
-  }
-  if (d.addressID === "PCS") {
-    fShipBy = "PCS"; // PCS self-pickup wins over Flash promo
-  }
-  // forwarder.php L49-53 — paymethod derived from fShipBy (setPayMethodShip).
-  // Shared with the shop-cart path via lib/forwarder/pay-method.ts.
-  const paymethod = derivePayMethod(fShipBy);
+  if (d.pro === "f") fShipBy = MAO_CARRIER_CODE; // preliminary · re-checked post-address
+  if (d.addressID === "PCS") fShipBy = "PCS";    // self-pickup wins over the promo
+  // paymethod is derived AFTER the เหมาๆ re-validation (it depends on the final carrier).
 
   // forwarder.php L55-87 — address copy (PCS warehouse fallback ELSE tb_address lookup)
   let addressName = "", addressLastname = "", addressTel = "", addressTel2 = "";
@@ -221,6 +221,23 @@ export async function createLegacyForwarder(
     addressZIPCode     = addr.addresszipcode     ?? "";
     addressNote        = addr.addressnote        ?? "";
   }
+
+  // Re-validate the เหมาๆ promo against the RESOLVED delivery ZIP (the owner's
+  // "default เขตเหมาๆ เก็บต้นทาง" bug). Faithful checkFreeArea.php: out-of-zone →
+  // DROP the promo to the customer's picked carrier (→ derivePayMethod = '2' ปลายทาง);
+  // if they ticked only เหมาๆ with no carrier → reject with the legacy zone message
+  // (don't silently write a blank carrier). Self-pickup (PCS) is exempt — no delivery zip.
+  if (d.pro === "f" && d.addressID !== "PCS") {
+    const mao = resolveMaomaoCarrier({
+      pro: "f", addressID: d.addressID, zip: addressZIPCode, pickedCarrier: d.hShipBy,
+    });
+    if (mao.carrier == null) {
+      return { ok: false, error: "maomao_out_of_zone — เหมาๆ ใช้ได้เฉพาะเขตกรุงเทพฯ-ปริมณฑล กรุณาเลือกขนส่งต่างจังหวัด" };
+    }
+    fShipBy = mao.carrier;
+  }
+  // forwarder.php L49-53 — paymethod from the FINAL carrier (setPayMethodShip).
+  const paymethod = derivePayMethod(fShipBy);
 
   // forwarder.php L89-91 — the INSERT. Every column the legacy doesn't
   // mention defaults from the schema (numbers → 0, strings → ''). The

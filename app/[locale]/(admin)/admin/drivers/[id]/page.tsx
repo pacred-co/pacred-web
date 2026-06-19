@@ -32,6 +32,7 @@ import { BatchCountdown } from "./batch-countdown";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -360,7 +361,7 @@ export default async function AdminDriverBatchDetailPage({
     `🚚 จองรถ — รอบ #${batch.id}${batch.fdname ? ` (${batch.fdname})` : ""}`,
     `ต้นทาง: โกดัง Pacred (สมุทรสาคร)`,
     `รวม ${stops.length} จุดส่ง · ${totalBoxes} กล่อง · ${fmt2(totalCbmAll)} CBM · ${fmt2(totalWeightAll)} KG`,
-    batch.endtime ? `ส่งก่อนเวลา: ${new Date(batch.endtime).toLocaleString("th-TH")}` : "",
+    batch.endtime ? `ส่งก่อนเวลา: ${formatThaiDateTime(batch.endtime)}` : "",
     "",
     ...stopBlocks,
     "",
@@ -397,7 +398,7 @@ export default async function AdminDriverBatchDetailPage({
               {batch.fddate && (
                 <div>
                   <span className="font-medium">วันที่สร้าง:</span>{" "}
-                  {new Date(batch.fddate).toLocaleString("th-TH")}
+                  {formatThaiDateTime(batch.fddate)}
                 </div>
               )}
             </div>

@@ -56,6 +56,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1823,8 +1824,8 @@ export async function adminRejectWalletDeposit(
               .from("tb_forwarder")
               .select("id")
               .eq("id", fwdId)
-              .eq("fshipby", "PCSF")
-              .eq("ftransportprice", 50)
+              .in("fshipby", ["PCSF", "PRF"])
+              .eq("ftransportprice", MAO_FLAT_FEE)
               .maybeSingle<{ id: number }>();
             if (pcsf50Err) {
               console.error(`[tb_forwarder PCSF-50 probe] failed`, { code: pcsf50Err.code, message: pcsf50Err.message });

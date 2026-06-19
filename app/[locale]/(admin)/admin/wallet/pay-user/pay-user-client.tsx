@@ -442,24 +442,40 @@ export function PayUserClient() {
                 <button onClick={() => setSelFwds(new Set(ctx.forwarders.map((f) => f.fid)))} className="text-xs text-primary-600 hover:underline">เลือกทั้งหมด</button>
               </div>
               <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
-                {ctx.forwarders.map((f) => (
-                  <label key={f.fid} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={selFwds.has(f.fid)}
-                      onChange={() => toggleFwd(f.fid)}
-                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    <span className="text-sm font-medium text-gray-900">#{f.fid}</span>
-                    {f.ftracking && f.ftracking !== "-" && (
-                      <span className="text-xs text-gray-400 truncate max-w-[160px]">{f.ftracking}</span>
+                {ctx.forwarders.map((f) => {
+                  const b = f.breakdown;
+                  const hasExtras = b.maoFee > 0 || b.otherCharges > 0 || b.discount > 0 || b.wht1pct > 0;
+                  return (
+                  <label key={f.fid} className="block cursor-pointer px-3 py-2.5 hover:bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selFwds.has(f.fid)}
+                        onChange={() => toggleFwd(f.fid)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-medium text-gray-900">#{f.fid}</span>
+                      {f.ftracking && f.ftracking !== "-" && (
+                        <span className="text-xs text-gray-400 truncate max-w-[160px]">{f.ftracking}</span>
+                      )}
+                      {f.is_credit && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">เครดิต</span>
+                      )}
+                      <span className="ml-auto text-sm font-mono font-semibold text-gray-900">{thb(f.price_thb)}</span>
+                    </div>
+                    {/* itemised breakdown — owner 2026-06-19 "แจงรายละเอียดค่า" */}
+                    {hasExtras && (
+                      <div className="mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                        <span>ค่าขนส่งสินค้า {thb(b.freight)}</span>
+                        {b.otherCharges > 0 && <span>+ บริการอื่นๆ {thb(b.otherCharges)}</span>}
+                        {b.maoFee > 0 && <span className="text-sky-600">+ ค่าส่งเหมาๆ {thb(b.maoFee)}</span>}
+                        {b.discount > 0 && <span className="text-emerald-600">− ส่วนลด {thb(b.discount)}</span>}
+                        {b.wht1pct > 0 && <span className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1% {thb(b.wht1pct)}</span>}
+                      </div>
                     )}
-                    {f.is_credit && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">เครดิต</span>
-                    )}
-                    <span className="ml-auto text-sm font-mono font-semibold text-gray-900">{thb(f.price_thb)}</span>
                   </label>
-                ))}
+                  );
+                })}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
                 <div className="text-sm">

@@ -51,6 +51,8 @@
  * satang.
  */
 
+import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
+
 /** One unpaid forwarder row's pricing inputs (lowercase = PostgREST casing). */
 export interface ForwarderDebitRow {
   id: number | string;
@@ -65,6 +67,20 @@ export interface ForwarderDebitRow {
   fdiscount: number | string | null;
 }
 
+/**
+ * Itemised collect breakdown for ONE row (owner 2026-06-19 "แจงรายละเอียดค่า" — so
+ * staff + customers see exactly what the charge is made of, not one opaque number).
+ * All amounts THB, rounded 2dp. `total` === the line's `price_thb`.
+ */
+export interface ForwarderCollectBreakdown {
+  freight: number;       // ค่าขนส่งสินค้า (ftotalprice — rate × kg/cbm)
+  otherCharges: number;  // ค่าบริการ/ขนส่งอื่นๆ (ftransportprice + fpriceupdate + fshippingservice + pricecrate + ftransportpricechnthb + priceother)
+  discount: number;      // ส่วนลด (fdiscount) — a positive number that is SUBTRACTED
+  maoFee: number;        // ค่าส่งเหมาๆ (MAO_FLAT_FEE ฿100 on the first PCSF/PRF-zero row, else 0)
+  wht1pct: number;       // หัก ณ ที่จ่าย นิติ 1% — a positive number that is SUBTRACTED (0 if not applied)
+  total: number;         // ยอดเก็บจริง = freight + otherCharges + maoFee − discount − wht1pct
+}
+
 export interface ForwarderDebitLine {
   /** tb_forwarder.id (as string, matching how callers key the loop). */
   id: string;
@@ -72,6 +88,8 @@ export interface ForwarderDebitLine {
   price_thb: number;
   /** This row is the first PCSF-zero item → it carries the ฿50 transport. */
   isPcsfFirst: boolean;
+  /** Itemised "what is this charge" breakdown (owner: แจงรายละเอียดค่า). */
+  breakdown: ForwarderCollectBreakdown;
 }
 
 export interface ForwarderDebitBatch {
@@ -97,11 +115,10 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Is this a PCSF row eligible for the เหมาๆ ฿50 first-item rule? */
+/** Is this a เหมาๆ row eligible for the flat first-item fee? (PCSF legacy / PRF rebrand) */
 function isPcsfZero(row: ForwarderDebitRow): boolean {
-  const shipBy = (row.fshipby ?? "").trim();
   // legacy compares fTransportPrice==0 (loose) — treat 0 / "0" / "" as zero
-  return shipBy === "PCSF" && toNumber(row.ftransportprice) === 0;
+  return isMaoCarrier(row.fshipby) && toNumber(row.ftransportprice) === 0;
 }
 
 /**
@@ -134,18 +151,20 @@ export function computeForwarderDebitBatch(
   // ── pass 2: per-row BASE price (pre-corporate) ──
   // The first PCSF-zero row carries +฿50 on its transport leg (L387).
   const baseLines = rows.map((r, i) => {
-    const base =
-      toNumber(r.ftotalprice) +
+    const freight = toNumber(r.ftotalprice);
+    const otherCharges =
       toNumber(r.ftransportprice) +
       toNumber(r.fpriceupdate) +
       toNumber(r.fshippingservice) +
       toNumber(r.pricecrate) +
       toNumber(r.ftransportpricechnthb) +
-      toNumber(r.priceother) -
-      toNumber(r.fdiscount);
+      toNumber(r.priceother);
+    const discount = toNumber(r.fdiscount);
+    const base = freight + otherCharges - discount;
     const isPcsfFirst = pcsfFirstApplies && i === firstPcsfIdx;
-    const withPcsf = isPcsfFirst ? base + 50 : base;
-    return { id: String(r.id), base: withPcsf, isPcsfFirst };
+    const maoFee = isPcsfFirst ? MAO_FLAT_FEE : 0;
+    const withPcsf = base + maoFee;
+    return { id: String(r.id), base: withPcsf, isPcsfFirst, freight, otherCharges, discount, maoFee };
   });
 
   // ── batch threshold (== legacy pricePayAll BEFORE corporate, L321-331) ──
@@ -161,12 +180,22 @@ export function computeForwarderDebitBatch(
   const applyCorporateDiscount = opts.isCorporate && preCorporateTotal >= 1000;
 
   const lines: ForwarderDebitLine[] = baseLines.map((l) => {
-    let price = l.base;
-    if (applyCorporateDiscount) {
-      price = price - price * 0.01; // L398/L456: per-row 1% off
-    }
+    const wht1pct = applyCorporateDiscount ? l.base * 0.01 : 0; // L398/L456: per-row 1% off
+    const price = l.base - wht1pct;
     const finalPrice = Number.isFinite(price) && price > 0 ? round2(price) : NaN;
-    return { id: l.id, price_thb: finalPrice, isPcsfFirst: l.isPcsfFirst };
+    return {
+      id: l.id,
+      price_thb: finalPrice,
+      isPcsfFirst: l.isPcsfFirst,
+      breakdown: {
+        freight: round2(l.freight),
+        otherCharges: round2(l.otherCharges),
+        discount: round2(l.discount),
+        maoFee: l.maoFee,
+        wht1pct: round2(wht1pct),
+        total: Number.isFinite(finalPrice) ? finalPrice : round2(l.base - wht1pct),
+      },
+    };
   });
 
   const total_thb = round2(

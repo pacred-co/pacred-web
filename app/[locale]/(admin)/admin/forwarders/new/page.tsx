@@ -23,7 +23,7 @@
  * tb_address rows (or hardcoded to PCS pickup when fShipBy='PCS').
  *
  * Server fetch (this page):
- *   - tb_settings.freeShipping flag (controls whether "PCSF · เหมาๆ 50บ." appears)
+ *   - tb_settings.freeShipping flag (controls whether "PCSF · เหมาๆ 100บ." appears)
  *   - Optional preset user from ?q=PR1234 (also fetch their coid + addresses
  *     so the form opens at the right step).
  *
@@ -58,7 +58,7 @@ export default async function AdminForwarderNewPage({
   const admin = createAdminClient();
 
   // ─── tb_settings.freeShipping ───────────────────────────────────────
-  // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 50บ." option
+  // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 100บ." option
   // only when tb_settings.freeShipping = '1'. We pass the flag to the
   // client form so it can branch the dropdown the same way.
   const { data: settingsRow, error: settingsRowErr } = await admin
