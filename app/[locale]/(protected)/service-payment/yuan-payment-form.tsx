@@ -3,12 +3,9 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import { createYuanPayment } from "@/actions/payment";
-import { createYuanPaymentFromWallet } from "@/actions/payment-tb";
-import { confirm } from "@/components/ui/confirm";
 import { uploadSlip } from "@/lib/storage-upload";
-import { Wallet as WalletIcon, Plus } from "lucide-react";
+import { Wallet as WalletIcon } from "lucide-react";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { trackPlaceOrder } from "@/lib/analytics";
 import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
@@ -33,7 +30,6 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
   const [channel, setChannel] = useState<"alipay" | "wechat" | "bank">("alipay");
   const [recipientDetail, setRecipientDetail] = useState("");
   const [yuan, setYuan] = useState("");
-  const [paidViaWallet, setPaidViaWallet] = useState(false);
   const [slipPath, setSlipPath] = useState<string | null>(null);
   const [idDocPath, setIdDocPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,46 +69,33 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
       setError(t("yuanInvalid"));
       return;
     }
-    if (!paidViaWallet && !slipPath) {
+    // 2026-06-19 (owner) — ฝากโอนหยวน = DIRECT-CUT: slip only, no wallet. The
+    // customer transfers to the company account + attaches the slip; accounting
+    // verifies (2 layers) → ตัดจ่าย. A slip is therefore always required.
+    if (!slipPath) {
       setError(t("slipRequired"));
-      return;
-    }
-    if (paidViaWallet && thb > walletBalance) {
-      setError(t("walletInsufficient"));
       return;
     }
 
     // GAP 3 — read <CartTaxDocPref>'s hidden inputs synchronously (the form is a
     // controlled-payload form, not a FormData submit — currentTarget is nulled
-    // once the async transition runs, so capture it now). Capture BEFORE the
-    // awaited confirm() below, for the same currentTarget-nulling reason.
+    // once the async transition runs, so capture it now).
     const fd = new FormData(e.currentTarget);
     const taxDocPref        = (fd.get("taxDocPref") as string | null) ?? undefined;
     const taxDocTaxId       = (fd.get("taxDocTaxId") as string | null) ?? undefined;
     const taxDocBillingName = (fd.get("taxDocBillingName") as string | null) ?? undefined;
     const taxDocAddress     = (fd.get("taxDocAddress") as string | null) ?? undefined;
 
-    // §0f — the wallet-paid branch (createYuanPaymentFromWallet) debits
-    // tb_wallet immediately on submit; confirm before the irreversible
-    // money move (slip-paid branch creates a pending row, no debit → no gate).
-    if (paidViaWallet) {
-      const ok = await confirm(
-        t("confirmPayFromWalletDialog", { amount: thb.toLocaleString("th-TH", { minimumFractionDigits: 2 }) }),
-      );
-      if (!ok) return;
-    }
-
     startTransition(async () => {
-      // P0-2 (ADR-0018 §D-2 rule 1): wallet-paid branch goes to the
-      // tb_* lane (createYuanPaymentFromWallet) which debits tb_wallet
-      // on submit. Slip-paid branch keeps the existing path — no wallet
-      // movement to fix there, admin reviews the slip separately.
+      // DIRECT-CUT: always the slip-paid lane (actions/payment.ts) → writes
+      // tb_payment (paystatus='1' รอตรวจ, paydeposit='0') with NO wallet
+      // movement. Admin/accounting verifies the slip + settles (paystatus→'2').
       const payload = {
         channel,
         recipient_detail: recipientDetail,
         yuan_amount:      y,
         exchange_rate:    rate,
-        paid_via_wallet:  paidViaWallet,
+        paid_via_wallet:  false,
         slip_url:         slipPath ?? undefined,
         id_doc_url:       idDocPath ?? undefined,
         taxDocPref,
@@ -120,9 +103,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         taxDocBillingName,
         taxDocAddress,
       };
-      const res = paidViaWallet
-        ? await createYuanPaymentFromWallet(payload)
-        : await createYuanPayment(payload);
+      const res = await createYuanPayment(payload);
       if (res.ok && res.data) {
         trackPlaceOrder("service_payment", res.data.thb_amount);
         setDone({ id: res.data.id, thb: res.data.thb_amount });
@@ -183,12 +164,8 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
             {t("rateLabel")} <b className="font-mono">1 ¥ = ฿{rate.toFixed(4)}</b>
             <span className="ml-2 opacity-70">{t("rateUpdatedTime", { time: new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })}</span>
           </p>
-          <Link
-            href="/wallet/deposit"
-            className="inline-flex items-center gap-1 rounded-full bg-white text-amber-700 px-3 py-1 text-xs font-bold hover:bg-white/90"
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("topUpWallet")}
-          </Link>
+          {/* 2026-06-19 (owner) — "เติมเงิน" (wallet top-up) removed platform-wide.
+              ฝากโอนหยวน pays by slip directly (DIRECT-CUT), no wallet needed. */}
         </div>
       </div>
 
@@ -267,74 +244,42 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           is never hard-blocked from paying by incomplete billing (opt-in). */}
       {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />}
 
-      {/* Payment method */}
+      {/* Payment — slip only (2026-06-19 owner: ฝากโอนหยวน = DIRECT-CUT, no
+          wallet. The customer transfers to the company account + attaches the
+          slip; accounting verifies (2 layers) → ตัดจ่าย). */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-foreground">{t("paymentSection")}</h2>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="radio"
-            name="paymethod"
-            checked={!paidViaWallet}
-            onChange={() => setPaidViaWallet(false)}
-            className="mt-1"
+        {/* Bank-account block — owner 2026-06-08: customers transfer to the
+            company account, type the amount, attach slip (staff verify). No
+            dynamic/amount-encoded PromptPay. */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
+          <p className="text-sm font-bold text-foreground">โอนเข้าบัญชีบริษัท</p>
+          <p className="text-sm text-foreground">
+            บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
+          </p>
+          <p className="text-xs text-muted">
+            โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> เข้าบัญชีด้านบน แล้วแนบสลิป (ทีมงานตรวจสอบ)
+          </p>
+        </div>
+        <div className="space-y-1">
+          <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>
+          <StyledFileInput
+            accept="image/*,application/pdf"
+            onChange={onSlipFile}
+            label={tp("slipAttachLabel")}
+            selectedLabel={slipPath ? t("slipUploaded") : undefined}
           />
-          <div>
-            <p className="font-medium">{t("paySlip")}</p>
-            <p className="text-xs text-muted">{t("paySlipDesc")}</p>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="radio"
-            name="paymethod"
-            checked={paidViaWallet}
-            onChange={() => setPaidViaWallet(true)}
-            disabled={walletBalance < thb && thb > 0}
-            className="mt-1"
+        </div>
+        <div className="space-y-1">
+          <span className="text-sm font-medium">{t("idDocLabel")}</span>
+          <StyledFileInput
+            accept="image/*,application/pdf"
+            onChange={onIdDocFile}
+            label={tp("idCardAttachLabel")}
+            hint={t("idDocHint")}
+            selectedLabel={idDocPath ? t("idDocUploaded") : undefined}
           />
-          <div>
-            <p className="font-medium">{t("payWallet")}</p>
-            <p className="text-xs text-muted">
-              {t("payWalletDesc", { balance: walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 }) })}
-            </p>
-          </div>
-        </label>
-
-        {!paidViaWallet && (
-          <>
-            {/* Bank-account block — owner 2026-06-08: customers transfer to the
-                company account, type the amount, attach slip (staff verify). No
-                dynamic/amount-encoded PromptPay. */}
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
-              <p className="text-sm font-bold text-foreground">โอนเข้าบัญชีบริษัท</p>
-              <p className="text-sm text-foreground">
-                บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
-              </p>
-              <p className="text-xs text-muted">
-                โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> เข้าบัญชีด้านบน แล้วแนบสลิป (ทีมงานตรวจสอบ)
-              </p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>
-              <StyledFileInput
-                accept="image/*,application/pdf"
-                onChange={onSlipFile}
-                label={tp("slipAttachLabel")}
-                selectedLabel={slipPath ? t("slipUploaded") : undefined}
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-sm font-medium">{t("idDocLabel")}</span>
-              <StyledFileInput
-                accept="image/*,application/pdf"
-                onChange={onIdDocFile}
-                label={tp("idCardAttachLabel")}
-                hint={t("idDocHint")}
-                selectedLabel={idDocPath ? t("idDocUploaded") : undefined}
-              />
-            </div>
-          </>
-        )}
+        </div>
       </div>
 
       <div className="flex justify-end">

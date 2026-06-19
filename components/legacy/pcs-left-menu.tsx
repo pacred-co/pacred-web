@@ -220,7 +220,8 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           {/* กระเป๋าสตางค์เงินสด — expandable (holds sidebar-only routes) */}
           <MenuRow iconKey="wallet" label={t("cashWallet")}>
             <CardSubLink href="/wallet">{t("accountStatement")}</CardSubLink>
-            <CardSubLink href="/wallet/deposit">{t("deposit")}</CardSubLink>
+            {/* 2026-06-19 (owner) — "เติมเงิน" (deposit) removed platform-wide;
+                wallet statement / withdraw / scan-pay / refunds stay. */}
             <CardSubLink href="/wallet/withdraw">{t("withdraw")}</CardSubLink>
             <CardSubLink href="/pay">{t("scanPay")}</CardSubLink>
             <CardSubLink href="/refunds">{t("refundStatus")}</CardSubLink>

@@ -85,9 +85,11 @@ export default async function Page({
                 {t.rich("fwdStep3Body", { pill: (c) => <Pill>{c}</Pill> })}
               </Step>
               <Step n={4} title={t("fwdStep4Title")}>
+                {/* 2026-06-19 (owner) — "เติมเงิน" removed; point at the wallet
+                    page (customers pay each service directly by slip). */}
                 {t.rich("fwdStep4Body", {
                   pill: (c) => <Pill>{c}</Pill>,
-                  code: (c) => <Code href="/wallet/deposit">{c}</Code>,
+                  code: (c) => <Code href="/wallet">{c}</Code>,
                 })}
               </Step>
               <Step n={5} title={t("fwdStep5Title")}>

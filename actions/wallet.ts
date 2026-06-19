@@ -213,6 +213,12 @@ export async function getDepositQr(amountThb: number): Promise<ActionResult<{ da
   }
 }
 
+// ── 2026-06-19 (owner) — customer "เติมเงิน" (wallet self top-up) RETIRED
+//    platform-wide. The /wallet/deposit route now redirects + every nav entry
+//    was removed, so this action is no longer reachable from any UI. It is kept
+//    intact (writes a PENDING row that still requires an admin slip-approve, so
+//    a crafted POST can't self-credit) — a future cleanup may delete it.
+//    Admin manual-credit (actions/admin/wallet-hs.ts) is unaffected.
 export async function createDeposit(
   input: DepositInput,
 ): Promise<ActionResult<{ id: string }>> {

@@ -154,6 +154,14 @@ export async function createYuanPaymentFromWallet(
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
 
+  // ── 2026-06-19 (owner) — ฝากโอนหยวน moved to the DIRECT-CUT model: the
+  //    customer submits a slip → accounting verifies (2 layers) → ตัดจ่าย, with
+  //    NO wallet top-up/debit ("ไม่ต้องกระเป๋าตัง"). The /service-payment form no
+  //    longer offers a pay-from-wallet option, so this action is no longer wired
+  //    to any UI. It is kept intact (correct, money-safe) for back-compat; a
+  //    crafted POST here only spends the caller's OWN wallet on their OWN ฝากโอน
+  //    (legit self-spend, not a vuln). Slip path = actions/payment.ts::createYuanPayment.
+
   const parsed = yuanPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

@@ -5,7 +5,6 @@ import {
   ReceiptText,
   ArrowLeftRight,
   Wallet,
-  CirclePlus,
   CircleMinus,
   MapPin,
   LogOut,
@@ -49,7 +48,8 @@ const TILES: Tile[] = [
   { key: "tileReceipts", href: "/service-import/receipts",  icon: ReceiptText,    tone: "text-amber-500" },
   { key: "tilePayment",  href: "/service-payment",          icon: ArrowLeftRight, tone: "text-emerald-500" },
   { key: "tileWallet",   href: "/wallet/history",           icon: Wallet,         tone: "text-sky-500" },
-  { key: "tileTopUp",    href: "/wallet/deposit",           icon: CirclePlus,     tone: "text-green-600" },
+  // 2026-06-19 (owner) — "เติมเงิน" (tileTopUp · /wallet/deposit) removed
+  // platform-wide. Wallet, withdraw, and history stay.
   { key: "tileWithdraw", href: "/wallet/withdraw",          icon: CircleMinus,    tone: "text-cyan-600" },
   { key: "tileAddress",  href: "/addresses",                icon: MapPin,         tone: "text-indigo-500" },
 ];
