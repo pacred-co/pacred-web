@@ -462,3 +462,323 @@ export async function setForwarderCourierUrl(
     return { ok: true };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// UPDATE batch deadline (ขยายเวลา / แก้เวลาส่ง)
+// ────────────────────────────────────────────────────────────
+//
+// 2026-06-19 owner sweep — "แก้ไขอัพเดท หรือ เริ่มใหม่ ยังไง แก้ไขได้ทุกจุด".
+// Ops can re-set the delivery deadline on an OPEN run (fdstatus='1') —
+// recomputed from now + the chosen preset (legacy presets 17/24/30 h).
+
+const updateEndtimeSchema = z.object({
+  batchId: z.number().int().positive(),
+  endTimeHours: z.union([z.literal(17), z.literal(24), z.literal(30)]),
+});
+export type UpdateEndtimeInput = z.infer<typeof updateEndtimeSchema>;
+
+export async function updateBatchEndtime(
+  input: UpdateEndtimeInput,
+): Promise<AdminActionResult> {
+  const parsed = updateEndtimeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { batchId, endTimeHours } = parsed.data;
+
+  return withAdmin(["ops", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: batch, error: batchErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdstatus")
+      .eq("id", batchId)
+      .maybeSingle<{ id: number; fdstatus: string | null }>();
+    if (batchErr) {
+      console.error("updateBatchEndtime: batch read failed", batchErr, { batchId });
+      return { ok: false, error: batchErr.message };
+    }
+    if (!batch) return { ok: false, error: "ไม่พบรอบจัดส่งนี้" };
+    if (batch.fdstatus !== "1") {
+      return { ok: false, error: "แก้เวลาได้เฉพาะรอบที่กำลังดำเนินการ" };
+    }
+
+    const endTime = new Date(Date.now() + endTimeHours * 3_600_000)
+      .toISOString().replace("T", " ").substring(0, 19);
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder_driver")
+      .update({ endtime: endTime })
+      .eq("id", batchId)
+      .eq("fdstatus", "1"); // re-assert the open-state in the WHERE (TOCTOU)
+    if (updErr) {
+      console.error("updateBatchEndtime: update failed", updErr, { batchId });
+      return { ok: false, error: updErr.message };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder_driver.update_endtime", "tb_forwarder_driver", String(batchId), {
+      end_time_hours: endTimeHours, end_time: endTime,
+    });
+    revalidatePath(`/admin/drivers/${batchId}`);
+    revalidatePath("/admin/drivers");
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// REASSIGN driver (เปลี่ยนคนขับ)
+// ────────────────────────────────────────────────────────────
+//
+// 2026-06-19 owner sweep. Move an OPEN run to a different active driver.
+// Only allowed before anything is delivered (no fdistatus='2') so we don't
+// orphan a partly-completed run. Best-effort LINE push to the new driver.
+
+const reassignSchema = z.object({
+  batchId: z.number().int().positive(),
+  driverMemberCode: z.string().trim().regex(/^PR\d{3,}$/i, "ระบุรหัสคนขับ (PR-format)"),
+});
+export type ReassignInput = z.infer<typeof reassignSchema>;
+
+export async function reassignBatchDriver(
+  input: ReassignInput,
+): Promise<AdminActionResult> {
+  const parsed = reassignSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { batchId, driverMemberCode } = parsed.data;
+
+  return withAdmin(["ops", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: batch, error: batchErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdstatus, fdadminid, fdname")
+      .eq("id", batchId)
+      .maybeSingle<{ id: number; fdstatus: string | null; fdadminid: string | null; fdname: string | null }>();
+    if (batchErr) {
+      console.error("reassignBatchDriver: batch read failed", batchErr, { batchId });
+      return { ok: false, error: batchErr.message };
+    }
+    if (!batch) return { ok: false, error: "ไม่พบรอบจัดส่งนี้" };
+    if (batch.fdstatus !== "1") {
+      return { ok: false, error: "เปลี่ยนคนขับได้เฉพาะรอบที่กำลังดำเนินการ" };
+    }
+    if (batch.fdadminid?.toLowerCase() === driverMemberCode.toLowerCase()) {
+      return { ok: false, error: "เป็นคนขับคนเดิมอยู่แล้ว" };
+    }
+
+    // Block if anything is already delivered (preserve the audit trail).
+    const { data: deliveredItems, error: chkErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("id")
+      .eq("fdid", batchId)
+      .eq("fdistatus", "2");
+    if (chkErr) {
+      console.error("reassignBatchDriver: delivered check failed", chkErr, { batchId });
+      return { ok: false, error: chkErr.message };
+    }
+    if ((deliveredItems ?? []).length > 0) {
+      return { ok: false, error: "รอบนี้มีรายการส่งสำเร็จแล้ว — เปลี่ยนคนขับไม่ได้" };
+    }
+
+    // Verify the target driver exists + is active.
+    const { data: driverRows, error: driverErr } = await admin
+      .from("admins")
+      .select("profile_id, profile:profiles!profile_id(member_code, first_name, last_name)")
+      .eq("role", "driver")
+      .eq("is_active", true);
+    if (driverErr) {
+      console.error("reassignBatchDriver: driver lookup failed", driverErr);
+      return { ok: false, error: driverErr.message };
+    }
+    type DRow = { profile_id: string; profile: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null };
+    const driverLower = driverMemberCode.toLowerCase();
+    let driverProfileId: string | null = null;
+    let driverDisplayName = driverMemberCode;
+    const found = ((driverRows ?? []) as unknown as DRow[]).some((d) => {
+      const prof = Array.isArray(d.profile) ? d.profile[0] : d.profile;
+      if (prof?.member_code?.toLowerCase() === driverLower) {
+        driverProfileId = d.profile_id;
+        const full = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim();
+        if (full) driverDisplayName = full;
+        return true;
+      }
+      return false;
+    });
+    if (!found) return { ok: false, error: `ไม่พบคนขับรหัส ${driverMemberCode}` };
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder_driver")
+      .update({ fdadminid: driverMemberCode })
+      .eq("id", batchId)
+      .eq("fdstatus", "1");
+    if (updErr) {
+      console.error("reassignBatchDriver: update failed", updErr, { batchId });
+      return { ok: false, error: updErr.message };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder_driver.reassign_driver", "tb_forwarder_driver", String(batchId), {
+      from: batch.fdadminid, to: driverMemberCode,
+    });
+
+    // Best-effort push to the new driver (never fails the reassign).
+    try {
+      if (driverProfileId) {
+        void sendNotification(driverProfileId, {
+          category:       "forwarder",
+          severity:       "info",
+          title:          "ได้รับมอบหมายรอบจัดส่ง",
+          body:           `คุณ${driverDisplayName} ได้รับมอบหมายรอบ #${batchId}${batch.fdname ? ` (${batch.fdname})` : ""}`,
+          link_href:      `/admin/drivers/${batchId}`,
+          reference_type: "forwarder",
+          reference_id:   String(batchId),
+        });
+      }
+    } catch (notifyErr) {
+      console.error("reassignBatchDriver: notify threw", {
+        batchId, error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      });
+    }
+
+    revalidatePath(`/admin/drivers/${batchId}`);
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/drivers/work");
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// REOPEN a closed run (เริ่มรอบใหม่ / เปิดอีกครั้ง)
+// ────────────────────────────────────────────────────────────
+//
+// 2026-06-19 owner sweep — "เริ่มใหม่ ยังไง". A run that was closed
+// สำเร็จ('2')/ไม่สำเร็จ('3') can be re-opened: fdstatus → '1', a fresh
+// deadline, and any failed stops ('3') reset to ยังไม่ขึ้นรถ('') so the
+// driver can retry them. Delivered stops ('2') are LEFT as-is (audit).
+
+const reopenSchema = z.object({
+  batchId: z.number().int().positive(),
+  endTimeHours: z.union([z.literal(17), z.literal(24), z.literal(30)]).default(17),
+});
+export type ReopenInput = z.infer<typeof reopenSchema>;
+
+export async function reopenDriverBatch(
+  input: ReopenInput,
+): Promise<AdminActionResult> {
+  const parsed = reopenSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { batchId, endTimeHours } = parsed.data;
+
+  return withAdmin(["ops", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: batch, error: batchErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdstatus")
+      .eq("id", batchId)
+      .maybeSingle<{ id: number; fdstatus: string | null }>();
+    if (batchErr) {
+      console.error("reopenDriverBatch: batch read failed", batchErr, { batchId });
+      return { ok: false, error: batchErr.message };
+    }
+    if (!batch) return { ok: false, error: "ไม่พบรอบจัดส่งนี้" };
+    if (batch.fdstatus !== "2" && batch.fdstatus !== "3") {
+      return { ok: false, error: "เปิดใหม่ได้เฉพาะรอบที่ปิดแล้ว (สำเร็จ/ไม่สำเร็จ)" };
+    }
+
+    const endTime = new Date(Date.now() + endTimeHours * 3_600_000)
+      .toISOString().replace("T", " ").substring(0, 19);
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder_driver")
+      .update({ fdstatus: "1", endtime: endTime })
+      .eq("id", batchId)
+      .in("fdstatus", ["2", "3"]); // TOCTOU: only flip a still-closed run
+    if (updErr) {
+      console.error("reopenDriverBatch: batch update failed", updErr, { batchId });
+      return { ok: false, error: updErr.message };
+    }
+
+    // Reset only the failed stops so they re-enter the driver's work-list.
+    const { error: resetErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .update({ fdistatus: "" })
+      .eq("fdid", batchId)
+      .eq("fdistatus", "3");
+    if (resetErr) {
+      console.error("reopenDriverBatch: item reset failed", resetErr, { batchId });
+      // Batch already re-opened — don't hard-fail; surface a soft warning.
+      return { ok: false, error: `เปิดรอบแล้วแต่รีเซ็ตรายการไม่สำเร็จ: ${resetErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder_driver.reopen", "tb_forwarder_driver", String(batchId), {
+      from_status: batch.fdstatus, end_time_hours: endTimeHours,
+    });
+    revalidatePath(`/admin/drivers/${batchId}`);
+    revalidatePath("/admin/drivers");
+    revalidatePath("/admin/drivers/work");
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// REMOVE one stop/item from a batch (ลบรายการออกจากรอบ)
+// ────────────────────────────────────────────────────────────
+//
+// 2026-06-19 owner sweep — "แก้ได้ทุกจุด". Drop a single forwarder row from
+// an open run (e.g. the customer cancelled, or it was added by mistake).
+// Blocked once that stop is delivered ('2'). The forwarder row itself is
+// untouched — it just leaves this run and becomes re-assignable.
+
+const removeItemSchema = z.object({
+  itemId: z.number().int().positive(),
+});
+export type RemoveItemInput = z.infer<typeof removeItemSchema>;
+
+export async function removeItemFromBatch(
+  input: RemoveItemInput,
+): Promise<AdminActionResult<{ batchId: number }>> {
+  const parsed = removeItemSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { itemId } = parsed.data;
+
+  return withAdmin<{ batchId: number }>(["ops", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: item, error: itemErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("id, fdid, fid, fdistatus")
+      .eq("id", itemId)
+      .maybeSingle<{ id: number; fdid: number; fid: number; fdistatus: string | null }>();
+    if (itemErr) {
+      console.error("removeItemFromBatch: item read failed", itemErr, { itemId });
+      return { ok: false, error: itemErr.message };
+    }
+    if (!item) return { ok: false, error: "ไม่พบรายการนี้ในรอบ" };
+    if (item.fdistatus === "2") {
+      return { ok: false, error: "รายการนี้ส่งสำเร็จแล้ว — ลบออกไม่ได้" };
+    }
+
+    const { error: delErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .delete()
+      .eq("id", itemId)
+      .neq("fdistatus", "2"); // TOCTOU: never delete a delivered stop
+    if (delErr) {
+      console.error("removeItemFromBatch: delete failed", delErr, { itemId });
+      return { ok: false, error: delErr.message };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder_driver_item.remove", "tb_forwarder_driver_item", String(itemId), {
+      batch_id: item.fdid, forwarder_id: item.fid,
+    });
+    revalidatePath(`/admin/drivers/${item.fdid}`);
+    revalidatePath("/admin/drivers");
+    return { ok: true, data: { batchId: item.fdid } };
+  });
+}

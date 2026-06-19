@@ -299,6 +299,25 @@ body {
   body.admin-sidebar-rail .admin-sidebar:not(:hover) .admin-rail-only {
     display: block;
   }
+  /* …but a CountBadge keeps its number visible while collapsed — repositioned
+     as a corner badge over the menu icon (owner 2026-06-19 "ตอนย่อ ก็ยังต้อง
+     เห็นเลขแจ้งเตือนแบบเต็มๆชัดเจน"). This class selector out-specificities AND
+     re-asserts !important over the `nav span` hide rule above, then pins the
+     pill to the row's top-right corner (rowClasses is `relative`). */
+  body.admin-sidebar-rail .admin-sidebar:not(:hover) .admin-count-badge {
+    display: inline-flex !important;
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    margin: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    font-size: 9px;
+    border: 1.5px solid var(--surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    z-index: 2;
+  }
   /* hover → full 16rem menu slides out. */
   body.admin-sidebar-rail .admin-sidebar:hover {
     width: 16rem;

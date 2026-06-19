@@ -38,6 +38,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
@@ -105,15 +106,10 @@ const STATUS_LABEL: Record<string, string> = {
   "6": "ยกเลิก",
 };
 
-const STATUS_BADGE_COLOR: Record<string, string> = {
-  "1": "bg-amber-100 text-amber-700 border-amber-200",
-  "2": "bg-red-100 text-red-700 border-red-200",
-  "3": "bg-blue-100 text-blue-700 border-blue-200",
-  "4": "bg-indigo-100 text-indigo-700 border-indigo-200",
-  "40": "bg-teal-100 text-teal-700 border-teal-200",
-  "5": "bg-green-100 text-green-700 border-green-200",
-  "6": "bg-gray-100 text-gray-600 border-gray-200",
-};
+// 2026-06-19 vivid hstatus chips via the HSTATUS_CFG SOT (matches report-cnt + the list table).
+const STATUS_BADGE_COLOR: Record<string, string> = Object.fromEntries(
+  Object.entries(HSTATUS_CFG).map(([k, v]) => [k, v.chip]),
+);
 
 type SortField = "id" | "hdate" | "hno" | "userid" | "price" | "hstatus" | "hdateupdate";
 

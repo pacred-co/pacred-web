@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+import { FSTATUS_CFG, listRowTint } from "@/lib/admin/forwarder-status";
 // 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
 // shared, unit-tested helper so the report / completeness / check-queue Σ
 // reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
@@ -159,15 +160,19 @@ export type Row = {
   } | null;
 };
 
+// 2026-06-19 (owner "จืดไป · เอาสีสันชัดๆแบบ report-cnt"): the status chips now reuse
+// the VIVID FSTATUS_CFG palette (the SOT report-cnt uses) instead of the old faded
+// -50 weights, so a row's stage reads at-a-glance + matches report-cnt 1:1. 99 (พิเศษ)
+// keeps a solid orange (not in FSTATUS_CFG's 1-7 journey).
 const STATUS_BADGE: Record<string, string> = {
-  "1":  "bg-yellow-50 text-yellow-700 border-yellow-200",
-  "2":  "bg-blue-50 text-blue-700 border-blue-200",
-  "3":  "bg-pink-50 text-pink-700 border-pink-200",
-  "4":  "bg-purple-50 text-purple-700 border-purple-200",
-  "5":  "bg-red-50 text-red-700 border-red-200",
-  "6":  "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "7":  "bg-green-50 text-green-700 border-green-200",
-  "99": "bg-orange-50 text-orange-700 border-orange-200",
+  "1":  FSTATUS_CFG["1"].chip,
+  "2":  FSTATUS_CFG["2"].chip,
+  "3":  FSTATUS_CFG["3"].chip,
+  "4":  FSTATUS_CFG["4"].chip,
+  "5":  FSTATUS_CFG["5"].chip,
+  "6":  FSTATUS_CFG["6"].chip,
+  "7":  FSTATUS_CFG["7"].chip,
+  "99": "bg-orange-400 text-orange-950 border border-orange-600",
 };
 
 // Bulk-update target options. The dropdown intentionally excludes "6.1"
@@ -755,6 +760,7 @@ export function ForwardersTable({
                       }}
                       onChange={toggleAll}
                       aria-label="เลือกทั้งหมด"
+                      className="h-4 w-4 cursor-pointer accent-primary-600"
                     />
                   </th>
                   <FwSortableTh label="ID"            sortKey="id"                activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
@@ -859,7 +865,7 @@ export function ForwardersTable({
                   return (
                     <Fragment key={group ? `g-${group.key}` : r.id}>
                     <tr
-                      className={`border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : ""}`}
+                      className={`border-t border-border hover:bg-surface-alt/30 ${listRowTint(r.status, false, isOn)}`}
                     >
                       <td className="px-2 py-2.5 w-8">
                         {group && memberIds ? (
@@ -874,6 +880,7 @@ export function ForwardersTable({
                             }}
                             onChange={() => toggleGroup(memberIds)}
                             aria-label={`เลือกกลุ่มพัสดุ ${groupBase ?? ""} ทั้ง ${memberIds.length} รายการ`}
+                            className="h-4 w-4 cursor-pointer accent-primary-600"
                           />
                         ) : (
                           <input
@@ -881,6 +888,7 @@ export function ForwardersTable({
                             checked={isOn}
                             onChange={() => toggleRow(r.id)}
                             aria-label={`เลือก ออเดอร์ #${r.id}`}
+                            className="h-4 w-4 cursor-pointer accent-primary-600"
                           />
                         )}
                       </td>
@@ -1377,6 +1385,7 @@ export function ForwardersTable({
                                           checked={mOn}
                                           onChange={() => toggleRow(m.id)}
                                           aria-label={`เลือก ออเดอร์ #${m.id}`}
+                                          className="h-4 w-4 cursor-pointer accent-primary-600"
                                         />
                                       </td>
                                       <td className="px-2 py-1.5 text-slate-500">

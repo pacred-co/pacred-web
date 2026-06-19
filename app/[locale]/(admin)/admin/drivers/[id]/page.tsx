@@ -29,7 +29,7 @@ import {
   Package, AlertTriangle, ArrowLeft, Printer,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
-import { BatchActions } from "./batch-actions";
+import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 
@@ -209,6 +209,29 @@ export default async function AdminDriverBatchDetailPage({
     if (driverUser) {
       driverName = `${driverUser.userName ?? ""} ${driverUser.userLastName ?? ""}`.trim() || "—";
     }
+  }
+
+  // 4b. Active driver roster — for the "เปลี่ยนคนขับ" dropdown (ops only).
+  let driverOptions: { code: string; name: string }[] = [];
+  if (isOpsOverride) {
+    const { data: dRows, error: dErr } = await admin
+      .from("admins")
+      .select("profile:profiles!profile_id(member_code, first_name, last_name)")
+      .eq("role", "driver")
+      .eq("is_active", true);
+    if (dErr) {
+      console.error(`/admin/drivers/${id}: driver roster read failed`, dErr);
+    }
+    type DProf = { member_code: string | null; first_name: string | null; last_name: string | null };
+    driverOptions = ((dRows ?? []) as unknown as { profile: DProf | DProf[] | null }[])
+      .map((r) => {
+        const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+        const code = (p?.member_code ?? "").trim();
+        if (!code) return null;
+        const name = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || code;
+        return { code, name };
+      })
+      .filter((d): d is { code: string; name: string } => d !== null);
   }
 
   // 5. Group items by recipient address (legacy "1 จุดส่ง" model)
@@ -446,8 +469,14 @@ export default async function AdminDriverBatchDetailPage({
             <Printer className="h-3.5 w-3.5" />
             พิมพ์ใบส่งสินค้า
           </Link>
-          {isOpsOverride && fdstatus === "1" && deliveredCount === 0 && (
-            <BatchActions batchId={batch.id} />
+          {isOpsOverride && (
+            <BatchManage
+              batchId={batch.id}
+              fdstatus={fdstatus}
+              deliveredCount={deliveredCount}
+              currentDriverCode={batch.fdadminid}
+              drivers={driverOptions}
+            />
           )}
         </div>
       </section>
@@ -600,6 +629,11 @@ export default async function AdminDriverBatchDetailPage({
                             {forwarder.fnote && (
                               <div className="mt-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
                                 📝 {forwarder.fnote}
+                              </div>
+                            )}
+                            {isOpsOverride && (
+                              <div className="mt-1">
+                                <RemoveItemButton itemId={item.id} fNo={fNo} delivered={fdistatus === "2"} />
                               </div>
                             )}
                           </td>

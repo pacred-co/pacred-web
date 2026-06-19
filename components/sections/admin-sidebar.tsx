@@ -254,7 +254,7 @@ function hrefMatches(href: string, pathname: string, currentSearch: string): boo
 function CountBadge({ value }: { value: number }) {
   if (value <= 0) return null;
   return (
-    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary-600 text-white text-[10px] font-bold leading-none">
+    <span className="admin-count-badge ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary-600 text-white text-[10px] font-bold leading-none">
       {value > 999 ? "999+" : value}
     </span>
   );
@@ -295,7 +295,7 @@ function MenuRow({
   // Pacred → leaves) — one more step so tier 3/4 don't share an indent.
   const padLeft =
     depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : depth === 2 ? "pl-10" : "pl-[52px]";
-  const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
+  const rowClasses = `group relative flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
     active
       ? "bg-primary-600 text-white font-semibold shadow-sm"
       : "text-foreground/75 hover:bg-primary-50 hover:text-primary-700"

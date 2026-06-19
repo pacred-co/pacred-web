@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
 import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
@@ -77,15 +78,11 @@ const STATUS_LABEL: Record<string, string> = {
   "6": "ยกเลิก",
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  "1": "bg-amber-50 text-amber-700 border-amber-200",
-  "2": "bg-red-50 text-red-700 border-red-200",
-  "3": "bg-blue-50 text-blue-700 border-blue-200",
-  "4": "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "40": "bg-teal-50 text-teal-700 border-teal-200",
-  "5": "bg-green-50 text-green-700 border-green-200",
-  "6": "bg-gray-50 text-gray-600 border-gray-200",
-};
+// 2026-06-19 (owner "สั่งซื้อก็จืด"): vivid hstatus chips via the HSTATUS_CFG SOT
+// (mirrors report-cnt's FSTATUS_CFG) — was faded -50 weights.
+const STATUS_BADGE: Record<string, string> = Object.fromEntries(
+  Object.entries(HSTATUS_CFG).map(([k, v]) => [k, v.chip]),
+);
 
 // Sort field keys (server-side via ?sort=&dir=).
 type SortField = "id" | "hdate" | "hno" | "userid" | "price" | "hstatus" | "hdateupdate";
