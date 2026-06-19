@@ -72,7 +72,7 @@ import { previewForwarderRateMissing } from "@/lib/forwarder/live-rate";
 import { ForwarderRateMissingFallback } from "./forwarder-inline-rate-fallback";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
 // breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
-// (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + PCSF เหมาๆ 50).
+// (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + เหมาๆ 100).
 // Uses the canonical money fn — never re-derive money math inline (AGENTS.md money rule).
 import {
   computeForwarderDebitBatch,
@@ -611,7 +611,7 @@ async function tryRenderTbForwarder(
 
   // ── 2026-06-19 (Unit A) — ยอดเก็บจริง + breakdown (แจงรายละเอียดค่า) ──────────
   // The header/items show ftotalprice = freight ONLY (e.g. 45.10). The amount the
-  // customer is actually collected at pay-time = freight + PCSF เหมาๆ ฿50 (first
+  // customer is actually collected at pay-time = freight + เหมาๆ ฿100 (first
   // PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย นิติ 1% (when juristic & batch ≥ ฿1,000).
   // So a forwarder showing 45.10 collects 95.10 → the owner's confusion. We compute
   // it with the SAME canonical fn the จ่ายแทนลูกค้า page uses so the two never drift.
@@ -930,7 +930,7 @@ async function tryRenderTbForwarder(
         {/* ── ยอดเก็บจริง + แจงรายละเอียดค่า (Unit A · owner 2026-06-19 "แจงค่าหน้าอื่นด้วย")
            — the same breakdown the จ่ายแทนลูกค้า page shows, so the freight-only
            ftotalprice above (e.g. ฿45.10) isn't confusing vs the real collect
-           (฿95.10 = freight + PCSF เหมาๆ ฿50). Shown while still collectible
+           (฿95.10 = freight + เหมาๆ ฿100). Shown while still collectible
            (รอชำระเงิน / ติดเครดิต), before the ฿50 is persisted at pay. ── */}
         {collectShow && collect && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/40 p-4">
@@ -949,10 +949,10 @@ async function tryRenderTbForwarder(
                   <dd className="font-mono">{baht2(collect.otherCharges)}</dd>
                 </div>
               )}
-              {collect.pcsf50 > 0 && (
+              {collect.maoFee > 0 && (
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-sky-600">+ ค่าส่ง PCSF เหมาๆ</dt>
-                  <dd className="font-mono text-sky-600">{baht2(collect.pcsf50)}</dd>
+                  <dt className="text-sky-600">+ ค่าส่งเหมาๆ</dt>
+                  <dd className="font-mono text-sky-600">{baht2(collect.maoFee)}</dd>
                 </div>
               )}
               {collect.discount > 0 && (
@@ -972,9 +972,9 @@ async function tryRenderTbForwarder(
                 <dd className="font-mono text-red-600">{baht2(collect.total)}</dd>
               </div>
             </dl>
-            {collect.pcsf50 > 0 && (
+            {collect.maoFee > 0 && (
               <p className="mt-2 text-[11px] text-muted">
-                ℹ️ ค่าส่ง PCSF เหมาๆ ฿50 จะถูกบันทึกลงค่าขนส่งตอนชำระเงิน — ก่อนชำระ
+                ℹ️ ค่าส่งเหมาๆ ฿100 จะถูกบันทึกลงค่าขนส่งตอนชำระเงิน — ก่อนชำระ
                 ยอดในรายละเอียดสินค้าด้านบนจะแสดงเฉพาะค่าขนส่งสินค้า
               </p>
             )}

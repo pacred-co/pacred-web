@@ -444,7 +444,7 @@ export function PayUserClient() {
               <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
                 {ctx.forwarders.map((f) => {
                   const b = f.breakdown;
-                  const hasExtras = b.pcsf50 > 0 || b.otherCharges > 0 || b.discount > 0 || b.wht1pct > 0;
+                  const hasExtras = b.maoFee > 0 || b.otherCharges > 0 || b.discount > 0 || b.wht1pct > 0;
                   return (
                   <label key={f.fid} className="block cursor-pointer px-3 py-2.5 hover:bg-gray-50">
                     <div className="flex items-center gap-3">
@@ -468,7 +468,7 @@ export function PayUserClient() {
                       <div className="mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
                         <span>ค่าขนส่งสินค้า {thb(b.freight)}</span>
                         {b.otherCharges > 0 && <span>+ บริการอื่นๆ {thb(b.otherCharges)}</span>}
-                        {b.pcsf50 > 0 && <span className="text-sky-600">+ ค่าส่ง PCSF เหมาๆ {thb(b.pcsf50)}</span>}
+                        {b.maoFee > 0 && <span className="text-sky-600">+ ค่าส่งเหมาๆ {thb(b.maoFee)}</span>}
                         {b.discount > 0 && <span className="text-emerald-600">− ส่วนลด {thb(b.discount)}</span>}
                         {b.wht1pct > 0 && <span className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1% {thb(b.wht1pct)}</span>}
                       </div>

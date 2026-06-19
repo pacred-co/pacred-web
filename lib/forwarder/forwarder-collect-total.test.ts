@@ -94,8 +94,8 @@ console.log("forwarder-collect-total:");
     [row({ fshipby: "PCSF", ftransportprice: 0, ftotalprice: "45.10" })],
     { userId: "PR131", userCompany: "0" },
   );
-  // 45.10 + 50 = 95.10
-  assertClose("PCSF-zero row total = freight + 50", r.total, 95.1);
+  // 45.10 + 100 = 145.10
+  assertClose("PCSF-zero row total = freight + 100 (เหมาๆ)", r.total, 145.1);
   assertEq("PCSF-zero row applied50", r.applied50, true);
   assertEq("PCSF-zero row countPCSF = 1", r.countPCSF, 1);
 }
@@ -130,7 +130,7 @@ console.log("forwarder-collect-total:");
     })],
     { userId: "PR9999", userCompany: "0" }, // NOT on the allowlist
   );
-  assertClose("หนองแขม but non-allowlist user → +50 applies", r.total, 95.1);
+  assertClose("หนองแขม but non-allowlist user → +100 applies", r.total, 145.1);
   assertEq("หนองแขม but non-allowlist user → applied50 true", r.applied50, true);
 }
 
@@ -165,30 +165,30 @@ console.log("forwarder-collect-total:");
   assertEq("non-juristic >= 1000 → appliedWht false", r.appliedWht, false);
 }
 
-// 7. Combined: PCSF +50 lifts a 960 personal order to 1010 — but personal so NO 1%.
+// 7. Combined: เหมาๆ +100 lifts a 960 personal order to 1060 — but personal so NO 1%.
 {
   const r = computeForwarderCollectTotal(
     [row({ fshipby: "PCSF", ftransportprice: 0, ftotalprice: "960" })],
     { userId: "PR143", userCompany: "0" },
   );
-  assertClose("PCSF +50 → 1010, personal → no 1%", r.total, 1010);
+  assertClose("เหมาๆ +100 → 1060, personal → no 1%", r.total, 1060);
   assertEq("applied50 true", r.applied50, true);
   assertEq("appliedWht false (personal)", r.appliedWht, false);
 }
 
-// 8. Combined juristic: PCSF +50 pushes a 980 juristic order over 1000 → 1% on 1030.
+// 8. Combined juristic: เหมาๆ +100 pushes a 980 juristic order over 1000 → 1% on 1080.
 {
   const r = computeForwarderCollectTotal(
-    [row({ fshipby: "PCSF", ftransportprice: 0, ftotalprice: "980" })],
+    [row({ fshipby: "PRF", ftransportprice: 0, ftotalprice: "980" })],
     { userId: "PR144", userCompany: "1" },
   );
-  // 980 + 50 = 1030 → >= 1000 → 1% off = 1019.70
-  assertClose("PCSF +50 lifts juristic over 1000 → 1% on 1030 = 1019.70", r.total, 1019.7);
+  // 980 + 100 = 1080 → >= 1000 → 1% off = 1069.20  (also asserts PRF alias)
+  assertClose("เหมาๆ +100 lifts juristic over 1000 → 1% on 1080 = 1069.20", r.total, 1069.2);
   assertEq("applied50 true", r.applied50, true);
   assertEq("appliedWht true", r.appliedWht, true);
 }
 
-// 9. Multiple PCSF-zero rows → still ONE flat +50 (not per-row).
+// 9. Multiple เหมาๆ-zero rows → still ONE flat +100 (not per-row).
 {
   const r = computeForwarderCollectTotal(
     [
@@ -197,8 +197,8 @@ console.log("forwarder-collect-total:");
     ],
     { userId: "PR145", userCompany: "0" },
   );
-  // 100 + 200 + 50 (one flat) = 350
-  assertClose("two PCSF-zero rows → ONE +50 → 350", r.total, 350);
+  // 100 + 200 + 100 (one flat) = 400
+  assertClose("two เหมาๆ-zero rows → ONE +100 → 400", r.total, 400);
   assertEq("countPCSF = 2", r.countPCSF, 2);
   assertEq("applied50 true (count >= 1)", r.applied50, true);
 }

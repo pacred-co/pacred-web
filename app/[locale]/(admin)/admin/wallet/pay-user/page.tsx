@@ -11,7 +11,7 @@ import { PayUserClient } from "./pay-user-client";
  *   • ฝากนำเข้า (forwarder · paymentForwarderNew · Phase 2) — debit
  *     `tb_wallet` + `tb_wallet_hs` (type='4'/typeNew='6'/typeService='2') +
  *     flip `tb_forwarder.fStatus` 5→6 (credit rows: fCredit→'' instead).
- *     Pricing (PCSF เหมาๆ ฿50 + corporate 1%) via
+ *     Pricing (เหมาๆ ฿100 + corporate 1%) via
  *     lib/forwarder/forwarder-debit-total.ts.
  * The wallet contract is shared with the customer self-pay path (ADR-0018)
  * so the THB charged is identical.

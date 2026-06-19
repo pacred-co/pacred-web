@@ -18,7 +18,7 @@ import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — READ-ONLY "ยอดเก็บจริง"
 // breakdown so the customer sees the SAME amount admin will collect (freight +
-// PCSF เหมาๆ ฿50 − ส่วนลด − หัก ณ ที่จ่าย นิติ 1%), not the freight-only number.
+// เหมาๆ ฿100 − ส่วนลด − หัก ณ ที่จ่าย นิติ 1%), not the freight-only number.
 // Same canonical money fn the จ่ายแทนลูกค้า + admin detail use — no inline math.
 import {
   computeForwarderDebitBatch,
@@ -927,7 +927,7 @@ export default async function ServiceImportDetailPage({
 
   // ── 2026-06-19 (Unit A) — ยอดเก็บจริง breakdown (READ-ONLY, customer labels) ──
   // The cost table above shows ftotalprice = freight only; at pay-time admin
-  // collects freight + PCSF เหมาๆ ฿50 (first PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย
+  // collects freight + เหมาๆ ฿100 (first PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย
   // นิติ 1% (juristic & batch ≥ ฿1,000). We compute the real collect with the SAME
   // canonical fn the admin detail + จ่ายแทนลูกค้า use, so the customer sees 95.10
   // (not 45.10) before paying — no surprise at checkout. isCorporate: a
@@ -1662,7 +1662,7 @@ export default async function ServiceImportDetailPage({
                             {/* ── ยอดเก็บจริง (แจงรายละเอียดค่า) — Unit A · owner
                                2026-06-19 "แจงค่าหน้าอื่นด้วย". READ-ONLY. Shown while
                                รอชำระเงิน (fstatus='5') so the customer sees the real
-                               collect (freight + PCSF เหมาๆ ฿50 − ส่วนลด − นิติ 1%),
+                               collect (freight + เหมาๆ ฿100 − ส่วนลด − นิติ 1%),
                                not the freight-only number in the table above. ── */}
                             {fStatusValue === "5" && collect && Number.isFinite(collect.total) && (
                               <div className="mt-3 rounded-xl border border-red-200 bg-red-50/40 p-3">
@@ -1681,10 +1681,10 @@ export default async function ServiceImportDetailPage({
                                       <dd className="font-mono tabular-nums">{baht2(collect.otherCharges)}</dd>
                                     </div>
                                   )}
-                                  {collect.pcsf50 > 0 && (
+                                  {collect.maoFee > 0 && (
                                     <div className="flex items-center justify-between gap-3">
-                                      <dt className="text-sky-600">+ ค่าส่ง PCSF เหมาๆ</dt>
-                                      <dd className="font-mono tabular-nums text-sky-600">{baht2(collect.pcsf50)}</dd>
+                                      <dt className="text-sky-600">+ ค่าส่งเหมาๆ</dt>
+                                      <dd className="font-mono tabular-nums text-sky-600">{baht2(collect.maoFee)}</dd>
                                     </div>
                                   )}
                                   {collect.discount > 0 && (
@@ -1704,9 +1704,9 @@ export default async function ServiceImportDetailPage({
                                     <dd className="font-mono tabular-nums text-red-600">{baht2(collect.total)}</dd>
                                   </div>
                                 </dl>
-                                {collect.pcsf50 > 0 && (
+                                {collect.maoFee > 0 && (
                                   <p className="mt-2 text-[11px] text-muted">
-                                    ℹ️ มีค่าส่ง PCSF เหมาๆ ฿50 รวมในยอดชำระ (ยังไม่แสดงในตารางค่าใช้จ่ายด้านบนจนกว่าจะชำระ)
+                                    ℹ️ มีค่าส่งเหมาๆ ฿100 รวมในยอดชำระ (ยังไม่แสดงในตารางค่าใช้จ่ายด้านบนจนกว่าจะชำระ)
                                   </p>
                                 )}
                               </div>

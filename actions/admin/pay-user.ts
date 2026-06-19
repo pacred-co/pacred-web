@@ -48,6 +48,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -251,7 +252,7 @@ export async function getPayUserContext(
           ftracking: r.ftrackingchn,
           fstatus: r.fstatus,
           is_credit: (r.fcredit ?? "").trim() === "1",
-          breakdown: line?.breakdown ?? { freight: 0, otherCharges: 0, discount: 0, pcsf50: 0, wht1pct: 0, total: NaN },
+          breakdown: line?.breakdown ?? { freight: 0, otherCharges: 0, discount: 0, maoFee: 0, wht1pct: 0, total: NaN },
         };
       })
       .filter((f) => Number.isFinite(f.price_thb) && f.price_thb > 0);
@@ -619,7 +620,7 @@ export async function adminPayForwardersOnBehalf(
       if (isPcsfFix) {
         const { error: pcsfErr } = await admin
           .from("tb_forwarder")
-          .update({ ftransportprice: 50 })
+          .update({ ftransportprice: MAO_FLAT_FEE })
           .eq("id", Number(fid))
           .eq("userid", userId);
         if (pcsfErr) {
@@ -1318,7 +1319,7 @@ export async function adminPayForwardersWithTopUp(
     if (batch.pcsfTransportFixId) {
       const { error: pcsfErr } = await admin
         .from("tb_forwarder")
-        .update({ ftransportprice: 50 })
+        .update({ ftransportprice: MAO_FLAT_FEE })
         .eq("id", Number(batch.pcsfTransportFixId))
         .eq("userid", userId);
       if (pcsfErr) {

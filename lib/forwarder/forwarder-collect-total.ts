@@ -44,6 +44,8 @@
  * (string|number|null) — we coerce defensively. The total rounds to 2 satang.
  */
 
+import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
+
 /** One forwarder row's pricing inputs (lowercase = PostgREST casing). */
 export interface ForwarderCollectRow {
   fshipby: string | null;
@@ -130,8 +132,9 @@ export function computeForwarderCollectTotal(
       toNumber(r.fdiscount);
     price += totalPrice;
 
-    // calPrice.php L29-31 — PCSF rows with fTransportPrice=0 are counted.
-    if ((r.fshipby ?? "").trim() === "PCSF" && toNumber(r.ftransportprice) === 0) {
+    // calPrice.php L29-31 — เหมาๆ rows (PCSF legacy / PRF rebrand) with
+    // fTransportPrice=0 are counted.
+    if (isMaoCarrier(r.fshipby) && toNumber(r.ftransportprice) === 0) {
       countPricePCSF++;
     }
 
@@ -147,9 +150,10 @@ export function computeForwarderCollectTotal(
     }
   }
 
-  // calPrice.php L40-42 — +50฿ flat when at least one PCSF row survives.
+  // calPrice.php L40-42 — flat เหมาๆ fee when at least one PCSF/PRF row survives.
+  // Owner 2026-06-19: the fee is ฿100 (MAO_FLAT_FEE), raised from the legacy ฿50.
   const applied50 = countPricePCSF >= 1;
-  if (applied50) price += 50;
+  if (applied50) price += MAO_FLAT_FEE;
 
   // calPrice.php L43-45 — juristic users with price >= 1000 get a 1% reduction.
   const appliedWht = userCompany === "1" && price >= 1000;

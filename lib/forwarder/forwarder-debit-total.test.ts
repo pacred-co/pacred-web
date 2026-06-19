@@ -100,9 +100,9 @@ console.log("computeForwarderDebitBatch — multi-row sum");
   assertEq("under-1000 corporate=false → no discount even if corp", b.applyCorporateDiscount, false);
 }
 
-console.log("computeForwarderDebitBatch — PCSF first-item ฿50");
+console.log("computeForwarderDebitBatch — PCSF/PRF first-item เหมาๆ ฿100");
 {
-  // 2 PCSF-zero rows. Only the FIRST gets +50 + the transport-fix id.
+  // 2 เหมาๆ-zero rows. Only the FIRST gets +100 + the transport-fix id.
   const b = computeForwarderDebitBatch(
     [
       row({ id: 11, fshipby: "PCSF", ftransportprice: 0, ftotalprice: 100 }),
@@ -110,13 +110,22 @@ console.log("computeForwarderDebitBatch — PCSF first-item ฿50");
     ],
     { userId: "PR124", isCorporate: false },
   );
-  assertClose("first PCSF = 150 (+50)", b.lines[0].price_thb, 150);
+  assertClose("first PCSF = 200 (+100)", b.lines[0].price_thb, 200);
   assertClose("second PCSF = 100 (free transport)", b.lines[1].price_thb, 100);
   assertEq("first flagged pcsf", b.lines[0].isPcsfFirst, true);
   assertEq("second not flagged", b.lines[1].isPcsfFirst, false);
   assertEq("fix-id = 11", b.pcsfTransportFixId, "11");
-  // total = 150 + 100 = 250 — the ฿50 appears exactly ONCE
-  assertClose("batch total = 250 (single ฿50)", b.total_thb, 250);
+  // total = 200 + 100 = 300 — the ฿100 appears exactly ONCE
+  assertClose("batch total = 300 (single ฿100)", b.total_thb, 300);
+}
+// PRF (rebrand alias) is recognised exactly like PCSF.
+{
+  const b = computeForwarderDebitBatch(
+    [row({ id: 13, fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("PRF first = 200 (+100)", b.lines[0].price_thb, 200);
+  assertEq("PRF flagged pcsf", b.lines[0].isPcsfFirst, true);
 }
 
 console.log("computeForwarderDebitBatch — PCSF with a non-zero transport row mixed in");
@@ -129,8 +138,8 @@ console.log("computeForwarderDebitBatch — PCSF with a non-zero transport row m
     ],
     { userId: "PR124", isCorporate: false },
   );
-  assertClose("row21 = 150 (its own 50 transport, no +50)", b.lines[0].price_thb, 150);
-  assertClose("row22 = 150 (first zero-PCSF gets +50)", b.lines[1].price_thb, 150);
+  assertClose("row21 = 150 (its own 50 transport, no เหมาๆ)", b.lines[0].price_thb, 150);
+  assertClose("row22 = 200 (first zero-PCSF gets +100)", b.lines[1].price_thb, 200);
   assertEq("fix-id = 22 (the first zero one)", b.pcsfTransportFixId, "22");
 }
 
@@ -173,8 +182,8 @@ console.log("computeForwarderDebitBatch — corporate but batch < ฿1000 → no
 
 console.log("computeForwarderDebitBatch — corporate + PCSF first-item interplay");
 {
-  // corporate, 2 PCSF-zero rows. First gets +50, batch sum then ≥1000 → 1% each.
-  // bases: row(100+50=150 after pcsf), row(100). pre-corp total = 250 → < 1000 → no corp.
+  // corporate, 2 PCSF-zero rows. First gets +100, batch sum then ≥1000 → 1% each.
+  // bases: row(100+100=200 after เหมาๆ), row(100). pre-corp total = 300 → < 1000 → no corp.
   const b1 = computeForwarderDebitBatch(
     [
       row({ id: 61, fshipby: "PCSF", ftransportprice: 0, ftotalprice: 100 }),
@@ -183,9 +192,9 @@ console.log("computeForwarderDebitBatch — corporate + PCSF first-item interpla
     { userId: "PR900", isCorporate: true },
   );
   assertEq("small PCSF batch — no corp discount", b1.applyCorporateDiscount, false);
-  assertClose("first = 150", b1.lines[0].price_thb, 150);
+  assertClose("first = 200", b1.lines[0].price_thb, 200);
 
-  // now make it cross 1000: row 600 + (pcsf 400+50=450) = 1050 ≥ 1000 → 1% each
+  // now make it cross 1000: row 600 + (เหมาๆ 400+100=500) = 1100 ≥ 1000 → 1% each
   const b2 = computeForwarderDebitBatch(
     [
       row({ id: 71, ftotalprice: 600 }),
@@ -195,10 +204,10 @@ console.log("computeForwarderDebitBatch — corporate + PCSF first-item interpla
   );
   assertEq("big PCSF+corp batch — corp discount fired", b2.applyCorporateDiscount, true);
   assertEq("pcsf fix-id = 72", b2.pcsfTransportFixId, "72");
-  // row71: 600 − 1% = 594 ; row72: (400+50) − 1% = 445.5
+  // row71: 600 − 1% = 594 ; row72: (400+100) − 1% = 495
   assertClose("row71 = 594", b2.lines[0].price_thb, 594);
-  assertClose("row72 = 445.5", b2.lines[1].price_thb, 445.5);
-  assertClose("batch total = 1039.5", b2.total_thb, 1039.5);
+  assertClose("row72 = 495", b2.lines[1].price_thb, 495);
+  assertClose("batch total = 1089", b2.total_thb, 1089);
 }
 
 console.log("computeForwarderDebitBatch — varchar coercion + NaN refusal");
@@ -229,7 +238,7 @@ console.log("computeForwarderDebitBatch — empty batch");
 
 console.log("computeForwarderDebitBatch — itemised breakdown (owner: แจงรายละเอียดค่า)");
 {
-  // PCSF-zero juristic batch ≥1000: freight 1000 + other 200 - disc 100 + PCSF 50 = 1150; 1% off
+  // เหมาๆ-zero juristic batch ≥1000: freight 1000 + other 200 - disc 100 + เหมาๆ 100 = 1200; 1% off
   const b = computeForwarderDebitBatch(
     [row({ id: 90, fshipby: "PCSF", ftransportprice: 0, ftotalprice: "1000", fpriceupdate: "200", fdiscount: "100" })],
     { userId: "PR130", isCorporate: true },
@@ -238,20 +247,20 @@ console.log("computeForwarderDebitBatch — itemised breakdown (owner: แจง
   assertClose("breakdown.freight", bd.freight, 1000);
   assertClose("breakdown.otherCharges", bd.otherCharges, 200);
   assertClose("breakdown.discount", bd.discount, 100);
-  assertEq("breakdown.pcsf50 (first PCSF-zero)", bd.pcsf50, 50);
-  assertClose("breakdown.wht1pct = 1% of 1150", bd.wht1pct, 11.5);
-  assertClose("breakdown.total = 1150 - 11.5", bd.total, 1138.5);
+  assertEq("breakdown.maoFee (first เหมาๆ-zero) = 100", bd.maoFee, 100);
+  assertClose("breakdown.wht1pct = 1% of 1200", bd.wht1pct, 12);
+  assertClose("breakdown.total = 1200 - 12", bd.total, 1188);
   assertClose("breakdown.total === price_thb", bd.total, b.lines[0].price_thb);
-  assertClose("components reconcile to total", bd.freight + bd.otherCharges + bd.pcsf50 - bd.discount - bd.wht1pct, bd.total);
+  assertClose("components reconcile to total", bd.freight + bd.otherCharges + bd.maoFee - bd.discount - bd.wht1pct, bd.total);
 }
 {
-  // non-PCSF personal small order: no pcsf50, no wht
+  // non-PCSF personal small order: no maoFee, no wht
   const b = computeForwarderDebitBatch(
     [row({ id: 91, fshipby: "Flash", ftransportprice: 0, ftotalprice: "45.10" })],
     { userId: "PR131", isCorporate: false },
   );
   const bd = b.lines[0].breakdown;
-  assertEq("no PCSF → pcsf50=0", bd.pcsf50, 0);
+  assertEq("no PCSF → maoFee=0", bd.maoFee, 0);
   assertEq("personal → wht1pct=0", bd.wht1pct, 0);
   assertClose("total = freight", bd.total, 45.1);
 }

@@ -45,6 +45,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -377,10 +378,10 @@ export async function adminApproveWalletHs(
           if ((row.typeservice === "2") && (row.type ?? "") === "4") {
             const { error: pcsfErr } = await admin
               .from("tb_forwarder")
-              .update({ ftransportprice: 50 })
+              .update({ ftransportprice: MAO_FLAT_FEE })
               .eq("id", fid)
               .eq("userid", row.userid)
-              .eq("fshipby", "PCSF")
+              .in("fshipby", ["PCSF", "PRF"])
               .eq("ftransportprice", 0);
             if (pcsfErr) {
               logger.warn("wallet-trans", "PCSF ftransportprice=50 persist failed (non-fatal · money already moved)", {

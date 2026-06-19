@@ -18,6 +18,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -316,10 +317,10 @@ export async function adminBulkApproveWalletHs(
             if ((r.typeservice === "2") && (r.type ?? "") === "4" && !pcsf50AppliedBatches.has(dayKey)) {
               const { data: bumped, error: pcsfErr } = await admin
                 .from("tb_forwarder")
-                .update({ ftransportprice: 50 })
+                .update({ ftransportprice: MAO_FLAT_FEE })
                 .eq("id", fid)
                 .eq("userid", r.userid)
-                .eq("fshipby", "PCSF")
+                .in("fshipby", ["PCSF", "PRF"])
                 .eq("ftransportprice", 0)
                 .select("id")
                 .maybeSingle<{ id: number }>();

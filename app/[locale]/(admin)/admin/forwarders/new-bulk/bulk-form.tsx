@@ -353,7 +353,7 @@ export function AdminForwarderNewBulkForm({
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
                 <option value="">— กรุณาเลือก —</option>
-                {freeShipping && <option value="PCSF">📦 PCSF · เหมาๆ 50 บาท</option>}
+                {freeShipping && <option value="PCSF">📦 PCSF · เหมาๆ 100 บาท</option>}
                 {SHIP_BY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
