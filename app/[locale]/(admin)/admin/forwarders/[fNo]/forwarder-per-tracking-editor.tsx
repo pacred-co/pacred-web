@@ -43,6 +43,8 @@ type Props = {
   customRateCbmInit: number;
   customComparisonInit: "0" | "1";
   customComparisonValueInit: number;
+  /** ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff. */
+  canEditComparison: boolean;
 };
 
 // Per-sibling columns we need to seed each editable row.
@@ -89,6 +91,7 @@ export async function ForwarderPerTrackingEditor({
   customRateCbmInit,
   customComparisonInit,
   customComparisonValueInit,
+  canEditComparison,
 }: Props) {
   const admin = createAdminClient();
 
@@ -249,6 +252,7 @@ export async function ForwarderPerTrackingEditor({
       customRateCbmInit={customRateCbmInit}
       customComparisonInit={customComparisonInit}
       customComparisonValueInit={customComparisonValueInit}
+      canEditComparison={canEditComparison}
     />
   );
 }

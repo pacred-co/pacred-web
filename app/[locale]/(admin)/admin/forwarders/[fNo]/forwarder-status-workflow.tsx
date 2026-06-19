@@ -83,6 +83,9 @@ export type ForwarderPricingInit = {
 type Props = {
   fId: number;
   fNo: string;
+  /** ภูม 2026-06-19 — the MANUAL status dropdown is reserved for Ultra Admin Z.
+   *  Non-ultra staff advance status via the proper flow (scan/bill/ส่งแล้ว). */
+  isUltra: boolean;
   currentStatus: Status;
   currentCabinet: string;
   currentTrackingTh: string;
@@ -196,6 +199,7 @@ export function ForwarderStatusWorkflow(p: Props) {
            ฟอร์มเงื่อนไข pricing/tracking/credit ยังอยู่ด้านล่าง (คนละเรื่อง · เด้งตามสถานะ). ── */}
       {/* owner 2026-06-11 "เอากรอบออก": ฟอร์มสถานะไม่มีกรอบการ์ด (border/rounded/shadow/accent)
           แล้ว — วางแบนๆ ในเซกชัน เหลือแค่ระยะห่างแนวตั้ง. */}
+      {p.isUltra ? (
       <form
         onSubmit={(e) => { e.preventDefault(); onSaveAll(); }}
         className="space-y-3"
@@ -251,6 +255,12 @@ export function ForwarderStatusWorkflow(p: Props) {
           <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">✓ {success}</div>
         )}
       </form>
+      ) : (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          🔒 การเปลี่ยนสถานะแบบ manual สงวนเฉพาะ <b>Ultra Admin Z</b> · สถานะปัจจุบัน:{" "}
+          <b>{STATUS_LABEL[p.currentStatus] ?? p.currentStatus}</b> — พนักงานเลื่อนสถานะผ่านงานปกติ (ยิงเข้าโกดัง · วางบิล · ปิดงานส่งแล้ว)
+        </p>
+      )}
 
       {/* ── รายการสินค้า · @ถึงไทยแล้ว(4): คลิกหัวข้อ "รายการสินค้า" (มี chevron) เพื่อพับ/กาง
            ฟอร์มแก้ไขขนาด/ราคา · default กาง (owner 2026-06-12 "กดที่รายการให้หุบ/กาง · กางเป็น default")

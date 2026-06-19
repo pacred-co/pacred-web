@@ -24,6 +24,12 @@ import {
   computeForwarderDebitBatch,
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
+// 2026-06-19 (owner ภูม #2) — customer-facing import price-breakdown. PURE +
+// DISPLAY-ONLY: turns the ALREADY-STORED rate decision (frefrate/frefprice/
+// ftotalprice) into the same "หาค่าเทียบ / คิดตามน้ำหนัก / คิดตามปริมาตร / ระบบเลือก"
+// lines the admin box shows, so the customer sees Pacred picked the best rate.
+// NO money recompute, NO write.
+import { buildPriceBreakdownDisplay } from "@/lib/forwarder/price-breakdown-display";
 
 /**
  * Customer "รายการฝากนำเข้าสินค้า — รายละเอียด" (forwarder detail) screen —
@@ -474,7 +480,10 @@ export default async function ServiceImportDetailPage({
       "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
       "fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus7, fcredit, fcreditdate, " +
       "reforder, fusercompany, userid, courier_tracking_url, " +
-      "fpriceupdate, customrate, customratekg, customratecbm",
+      "fpriceupdate, customrate, customratekg, customratecbm, " +
+      // per-order ค่าเทียบ override (mig 0187) — DISPLAY-ONLY: drives the
+      // customer price-breakdown "หาค่าเทียบ …" line (no money recompute).
+      "custom_comparison, custom_comparison_value",
     )
     .eq("id", idNum)
     .maybeSingle<{
@@ -539,6 +548,8 @@ export default async function ServiceImportDetailPage({
       customrate: string | null;
       customratekg: number | string;
       customratecbm: number | string;
+      custom_comparison: string | null;
+      custom_comparison_value: number | string | null;
     }>();
 
   // forwarder.php L1669: if ($result->num_rows > 0) { … } else { 404 }
@@ -869,6 +880,42 @@ export default async function ServiceImportDetailPage({
   const fTransportPriceChnThb = Number(row.ftransportpricechnthb ?? 0);
   const priceOther = Number(row.priceother ?? 0);
   const fUserCompany = row.fusercompany ?? "";
+
+  // ── 2026-06-19 (owner ภูม #2) — import price-breakdown (DISPLAY-ONLY) ──
+  // Show the customer HOW the import rate was chosen (น้ำหนัก vs ปริมาตร · ค่าเทียบ
+  // vs ราคามากสุด) from the STORED decision — never a recompute. The "ค่าเทียบ on"
+  // signal: the per-order override (custom_comparison='1', mig 0187) WINS over the
+  // customer's stored userComparison/userComparisonValue (tb_users) — same
+  // precedence the live-rate engine uses (live-rate.ts L234-238). READ-ONLY.
+  const breakdownUserId = (row.userid ?? "").trim();
+  const orderComparisonOn = String(row.custom_comparison ?? "0").trim() === "1";
+  let pbComparisonOn = orderComparisonOn;
+  let pbThreshold = orderComparisonOn ? Number(row.custom_comparison_value ?? 0) : 0;
+  if (!orderComparisonOn && breakdownUserId) {
+    const { data: cmpRow, error: cmpErr } = await admin
+      .from("tb_users")
+      .select("userComparison, userComparisonValue")
+      .eq("userID", breakdownUserId)
+      .maybeSingle<{ userComparison: string | number | null; userComparisonValue: number | string | null }>();
+    if (cmpErr) {
+      console.error(`[service-import/[fNo] price-breakdown userComparison] fid=${idNum}`, { code: cmpErr.code, message: cmpErr.message });
+    }
+    if (String(cmpRow?.userComparison ?? "0").trim() === "1") {
+      pbComparisonOn = true;
+      pbThreshold = Number(cmpRow?.userComparisonValue ?? 0);
+    }
+  }
+  const priceBreakdown = buildPriceBreakdownDisplay({
+    weightKg: fWeight,
+    volume: fVolume,
+    amount: Number(fAmount ?? 0),
+    amountCount: row.famountcount,
+    refRate: Number(row.frefrate ?? 0),
+    refPrice: row.frefprice,
+    totalPrice: fTotalPrice,
+    comparisonOn: pbComparisonOn,
+    comparisonThreshold: pbThreshold,
+  });
 
   // ── ForwarderRow projection for the <ForwarderPayModal> ──
   // The pay-button on this detail page opens the same multi-bill modal
@@ -1658,6 +1705,72 @@ export default async function ServiceImportDetailPage({
                                 </tbody>
                               </table>
                             </div>
+
+                            {/* ── 🧮 ราคานำเข้าจีน-ไทย · how the rate was chosen ──
+                               owner ภูม #2 (2026-06-19). DISPLAY-ONLY: shows the
+                               customer the SAME "หาค่าเทียบ / คิดตาม / ระบบเลือก"
+                               reasoning the admin box renders (per-tracking-editor
+                               L345-383) — from the STORED frefrate/frefprice/
+                               ftotalprice decision. NO money recompute, NO write.
+                               Customer-friendly framing: "เราเลือกเรทที่คุ้มที่สุด". ── */}
+                            {priceBreakdown && (
+                              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                                <div className="flex items-center gap-2">
+                                  <span aria-hidden className="text-base">🧮</span>
+                                  <h5 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                                    {t("priceBreakdownHeading")}
+                                  </h5>
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                                  {t("priceBreakdownIntro")}
+                                </p>
+
+                                <div className="mt-2 space-y-1 text-xs font-mono tabular-nums text-foreground">
+                                  {priceBreakdown.comparisonOn && (
+                                    <p className="text-amber-700 dark:text-amber-400">
+                                      {t("priceBreakdownCompare", {
+                                        weight: numberFormat2(priceBreakdown.weightKg),
+                                        cbm: numberFormat2(priceBreakdown.billableCbm),
+                                        ratio: numberFormat2(priceBreakdown.kgPerCbm),
+                                        threshold: String(priceBreakdown.threshold),
+                                        basis: priceBreakdown.byWeight
+                                          ? t("priceBreakdownByWeight")
+                                          : t("priceBreakdownByVolume"),
+                                      })}
+                                    </p>
+                                  )}
+                                  {priceBreakdown.basis === "kg" ? (
+                                    <p>
+                                      {t("priceBreakdownLineWeight", {
+                                        weight: numberFormat2(priceBreakdown.weightKg),
+                                      })}{" "}
+                                      × {numberFormat2(priceBreakdown.rate)} ={" "}
+                                      <strong>฿{numberFormat2(priceBreakdown.transport)}</strong>
+                                    </p>
+                                  ) : (
+                                    <p>
+                                      {t("priceBreakdownLineVolume", {
+                                        cbm: numberFormat2(priceBreakdown.billableCbm),
+                                      })}{" "}
+                                      × {numberFormat2(priceBreakdown.rate)} ={" "}
+                                      <strong>฿{numberFormat2(priceBreakdown.transport)}</strong>
+                                    </p>
+                                  )}
+                                  <p className="inline-flex flex-wrap items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white">
+                                    {t("priceBreakdownChosen", {
+                                      mode: priceBreakdown.comparisonOn
+                                        ? t("priceBreakdownModeCompare")
+                                        : t("priceBreakdownModeCheapest"),
+                                    })}{" "}
+                                    → ฿{numberFormat2(priceBreakdown.transport)}
+                                  </p>
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                                  ✓ {t("priceBreakdownReassure")}
+                                </p>
+                              </div>
+                            )}
 
                             {/* ── ยอดเก็บจริง (แจงรายละเอียดค่า) — Unit A · owner
                                2026-06-19 "แจงค่าหน้าอื่นด้วย". READ-ONLY. Shown while
