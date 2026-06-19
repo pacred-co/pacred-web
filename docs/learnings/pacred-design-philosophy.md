@@ -113,6 +113,44 @@ Every faithful-port wave from now on must include — IN THE SAME COMMIT, before
 
 ---
 
+## 2026-06-19 — status colors are LOGIC: one vivid SOT per enum, reused everywhere
+
+Owner: *"เราอยากได้สีสันชัดเจนแบบนี้ [report-cnt] เอาไปปรับใช้กับทุกหน้าเลย แต่อย่าให้
+คนงงสับสน"* — the report-cnt vivid palette reads at-a-glance; the other lists were
+จืด (faded `-50/-100` chips) and the status bar "ดูยากมาก". This reinforces the
+`lib/admin/forwarder-status.ts` header rule (chip color = workflow logic, use SOLID
+`-400/-500` weights), with three operational lessons:
+
+1. **One vivid SOT module per status enum — reused across list + detail + dashboard.**
+   The system has TWO status enums: forwarder `fstatus` (`FSTATUS_CFG` in
+   `lib/admin/forwarder-status.ts`) and shop-order `hstatus` (now
+   `lib/admin/service-order-status.ts` `HSTATUS_CFG`, created this turn to mirror it).
+   Every surface imports the SOT chip — never a local `const STATUS_BADGE = {...}` color
+   map. Local maps are how the list/detail drift apart (the forwarder detail header had
+   its own faded `-100/-200` ladder until unified to `fstatusBadge()`). Grep for
+   `bg-*-50.*border` near a status key to find faded drift; **but don't repaint unrelated
+   yellow/amber badges** (customer-pending, accounting-periods) — "อย่าให้คนงงสับสน"
+   means consistency *within an enum*, not "make everything loud".
+
+2. **Collapsed sidebar must keep its count badges (the alert numbers are the point).**
+   The rail-collapse CSS hides every `nav span` with `!important`, which ate the
+   `CountBadge`. Fix: tag the badge `.admin-count-badge`, make the row `relative`, and add
+   a rail-mode rule that **out-specificities** the hide (`.admin-sidebar:not(:hover)
+   .admin-count-badge` has more classes than `… nav span`) AND re-asserts `!important`,
+   then `position:absolute` it as a corner badge over the icon. Pattern: to un-hide one
+   element from a broad `!important` hide, beat it on specificity *and* `!important`.
+
+3. **"แก้ไขได้ทุกจุด" = every lifecycle state needs an edit path.** The driver-batch detail
+   only had delete. The owner wanted edit/update/restart everywhere → added
+   `updateBatchEndtime` · `reassignBatchDriver` · `reopenDriverBatch` (เริ่มใหม่, resets
+   failed stops) · `removeItemFromBatch`, each TOCTOU-guarded by re-asserting the state in
+   the `.update().eq("fdstatus", …)` WHERE, and a self-deciding client toolbar
+   (`BatchManage`) that shows the right controls per `fdstatus`. When auditing a
+   workflow object: list its states (open/closed/delivered) and confirm each has the
+   mutate it needs — a delete-only detail page fails "แก้ได้ทุกจุด".
+
+---
+
 ## Cross-links
 
 - [`AGENTS.md`](../../AGENTS.md) — should reference this file in §0
