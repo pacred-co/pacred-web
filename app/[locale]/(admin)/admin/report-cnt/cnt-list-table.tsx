@@ -168,6 +168,51 @@ function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
 
+// ── ETD/ETA cell (report-cnt #4) — แต้ม (iTAM) PRIMARY · MOMO fallback ──
+// Owner 2026-06-19/20: "ETD/ETA เอาของ MOMO มาเทียบ แต่ยึดของ iTAM (แต้ม) เป็นหลัก".
+// A small source dot distinguishes the two; when the displayed value is แต้ม's but
+// MOMO carries a DIFFERENT date, the tooltip surfaces MOMO's value for comparison.
+function EtdEtaCell({
+  value,
+  source,
+  momoValue,
+  label,
+}: {
+  value: string | null;
+  source: "taem" | "momo" | null;
+  momoValue: string | null;
+  label: "ETD" | "ETA";
+}) {
+  if (!value) {
+    return (
+      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} (รอ packing list ของแต้ม)`}>
+        —
+      </td>
+    );
+  }
+  const v = value.slice(0, 10);
+  const m = momoValue?.slice(0, 10) ?? null;
+  const isTaem = source === "taem";
+  const momoDiffers = isTaem && m != null && m !== v;
+  const title = isTaem
+    ? momoDiffers
+      ? `${label} จากแต้ม (iTAM · ยึดเป็นหลัก) · MOMO เทียบ = ${m}`
+      : `${label} จากแต้ม (iTAM · ยึดเป็นหลัก)`
+    : `${label} จาก MOMO (แต้มยังไม่ส่ง · ใช้ค่า MOMO ชั่วคราว)`;
+  return (
+    <td className="px-2 py-2 text-right" title={title}>
+      <span className="inline-flex items-center justify-end gap-1">
+        <span
+          aria-hidden
+          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : "bg-gray-400"}`}
+        />
+        <span className={isTaem ? "text-foreground" : "text-muted"}>{v}</span>
+        {momoDiffers && <span className="text-[9px] text-amber-600" aria-hidden>≠MOMO</span>}
+      </span>
+    </td>
+  );
+}
+
 // Number with thousand separators (ลูกน้ำ) + fixed decimals — owner 2026-06-19
 // ("ใส่ลูกน้ำ ตัวเลขอ่านยาก"). e.g. fmtNum(999838.15, 2) → "999,838.15".
 function fmtNum(n: number, digits: number): string {
@@ -557,9 +602,22 @@ export function CntListTable({
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
-                  {/* ETD/ETA (report-cnt #4 · A) — from MOMO/แต้ม; "—" until wired. */}
-                  <td className="px-2 py-2 text-right text-muted" title={momo?.etd ? undefined : "ยังไม่มีข้อมูล ETD (รอ packing list ของแต้ม)"}>{momo?.etd ? fmtDate(momo.etd) : "—"}</td>
-                  <td className="px-2 py-2 text-right text-muted" title={momo?.eta ? undefined : "ยังไม่มีข้อมูล ETA (รอ packing list ของแต้ม)"}>{momo?.eta ? fmtDate(momo.eta) : "—"}</td>
+                  {/* ETD/ETA (report-cnt #4 · A) — แต้ม (iTAM) PRIMARY · MOMO fallback.
+                      Source dot: green = แต้ม (ยึดเป็นหลัก) · gray = MOMO (มาเทียบ).
+                      Tooltip notes MOMO's value when it disagrees with แต้ม. "—" when
+                      no source has it yet. */}
+                  <EtdEtaCell
+                    value={momo?.etd ?? null}
+                    source={momo?.etdSource ?? null}
+                    momoValue={momo?.momoEtd ?? null}
+                    label="ETD"
+                  />
+                  <EtdEtaCell
+                    value={momo?.eta ?? null}
+                    source={momo?.etaSource ?? null}
+                    momoValue={momo?.momoEta ?? null}
+                    label="ETA"
+                  />
                   <td className="px-2 py-2 text-center">{transportLabel[resolveTransportMode(r.fcabinetnumber, r.ftransporttype)] ?? r.ftransporttype}</td>
                   <td className="px-2 py-2 text-right">
                     {r.diffDay == null ? "-" : `${r.diffDay} วัน`}

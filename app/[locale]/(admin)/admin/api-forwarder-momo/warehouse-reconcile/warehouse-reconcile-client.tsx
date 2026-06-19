@@ -50,6 +50,7 @@ export function TaemReconcileClient() {
       setMsg({
         kind: "ok",
         text: `อัปเดตแล้ว ${d.basisUpdated} แทรคกิ้ง · คิดราคาใหม่ ${d.repriced}` +
+          (d.etdEtaUpserted > 0 ? ` · บันทึก ETD/ETA ${d.etdEtaUpserted} ตู้` : "") +
           (d.repriceFailed > 0 ? ` · ⚠ ไม่มีเรท ${d.repriceFailed} (ตั้งราคาเอง)` : "") +
           (d.skippedBilled > 0 ? ` · ข้าม(วางบิลแล้ว) ${d.skippedBilled}` : ""),
       });
@@ -65,7 +66,7 @@ export function TaemReconcileClient() {
         <label className="block text-sm font-medium">วางข้อมูลจากชีตแต้ม (MOMO Pacred)</label>
         <p className="text-xs text-muted">
           เปิด Google ชีต → เลือกแถว (รวมหัวตารางก็ได้) → คัดลอก → วางที่นี่ ระบบจะอ่านคอลัมน์
-          ftrackingchn · Container Name · Trans · Code · Total Parcel · Total Wt. · Total Vol.
+          ftrackingchn · Container Name · Trans · etd · eta · Code · Total Parcel · Total Wt. · Total Vol.
         </p>
         <textarea
           value={text}
@@ -121,6 +122,7 @@ export function TaemReconcileClient() {
                   <th className="px-2 py-2 text-right">นน. ระบบ→แต้ม</th>
                   <th className="px-2 py-2 text-right">คิว ระบบ→แต้ม</th>
                   <th className="px-2 py-2 text-right">กล่อง</th>
+                  <th className="px-2 py-2 text-right">ETD/ETA (แต้ม)</th>
                   <th className="px-2 py-2 text-center">ผล</th>
                 </tr>
               </thead>
@@ -145,6 +147,13 @@ export function TaemReconcileClient() {
                       </td>
                       <td className={`px-2 py-1.5 text-right ${r.amtDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
                         {r.isData ? `${r.curAmt ?? "—"}→${r.taemParcel ?? "—"}` : "—"}
+                      </td>
+                      {/* ETD/ETA จากแต้ม — preview shows what will be stored per-container.
+                          "—" when แต้ม's packing list has no date for this row. */}
+                      <td className="px-2 py-1.5 text-right text-[11px] text-muted">
+                        {r.taemEtd || r.taemEta
+                          ? `${r.taemEtd ?? "—"} / ${r.taemEta ?? "—"}`
+                          : "—"}
                       </td>
                       <td className="px-2 py-1.5 text-center">
                         <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${v.cls}`}>{v.label}</span>

@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { parseTaemReconcile } from "./taem-reconcile-parser";
+import { parseTaemReconcile, parseTaemDate } from "./taem-reconcile-parser";
 
 let pass = 0;
 const ok = (c: boolean, m: string) => { assert.ok(c, m); pass++; };
@@ -78,6 +78,42 @@ const ok = (c: boolean, m: string) => { assert.ok(c, m); pass++; };
 {
   const { rows } = parseTaemReconcile("\n\t\tGZS260528-1\tSEA\n\n");
   ok(rows.length === 0, "row without tracking skipped");
+}
+
+// ── parseTaemDate: formats + blanks + invalid ──
+{
+  ok(parseTaemDate("2026-05-23") === "2026-05-23", "ISO yyyy-mm-dd");
+  ok(parseTaemDate("2026/5/3") === "2026-05-03", "slash year-first + zero-pad");
+  ok(parseTaemDate("23/05/2026") === "2026-05-23", "day-first slash");
+  ok(parseTaemDate("3-5-2026") === "2026-05-03", "day-first dash + zero-pad");
+  ok(parseTaemDate("") === null, "blank → null");
+  ok(parseTaemDate(null) === null, "null → null");
+  ok(parseTaemDate("ยังไม่ปิดตู้") === null, "note text → null");
+  ok(parseTaemDate("2026-02-30") === null, "Feb-30 rejected (real calendar check)");
+  ok(parseTaemDate("2026-13-01") === null, "month 13 rejected");
+}
+
+// ── etd/eta captured by HEADER NAME (the authoritative path) ──
+{
+  const header = ["ftrackingchn","Container Name","Trans","SM Date","etd","eta","Type","Code","Total Parcel","Total Wt.","Total Vol."].join("\t");
+  const r1 = ["0004065","GZS260528-1","SEA","2026-05-20","2026-05-23","2026-06-05","A","PR040","1","869","2.51712"].join("\t");
+  // continuation row: etd/eta blank → null (no garbage)
+  const r2 = ["616035273","","SEA","","","","A","PR041","2","36","0.13"].join("\t");
+  const { rows } = parseTaemReconcile([header, r1, r2].join("\n"));
+  ok(rows[0].etd === "2026-05-23", "etd mapped by header name");
+  ok(rows[0].eta === "2026-06-05", "eta mapped by header name");
+  ok(rows[0].isData === true, "etd/eta row still isData");
+  ok(rows[1].etd === null && rows[1].eta === null, "blank etd/eta → null");
+}
+
+// ── no header: canonical etd/eta indices (4/5) date-guarded ──
+{
+  // Container Name · Trans · SM Date · etd · eta … (canonical positions)
+  const line = ["1780559528","GZS260605-1","SEA","2026-06-01","2026-06-02","2026-06-18","","","普通货物/ทั่วไป/A","PR040","","","","","1","","","1770","8.22528"].join("\t");
+  const { rows, headerSeen } = parseTaemReconcile(line);
+  ok(!headerSeen, "no header (etd/eta canonical)");
+  ok(rows[0].etd === "2026-06-02", "canonical etd at index 4");
+  ok(rows[0].eta === "2026-06-18", "canonical eta at index 5");
 }
 
 console.log(`taem-reconcile-parser.test.ts — ${pass} passed`);
