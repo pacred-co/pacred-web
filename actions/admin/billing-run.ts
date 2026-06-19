@@ -945,7 +945,13 @@ export async function createBillingRunInvoice(
       // Refuse unless the admin explicitly acknowledged (the form shows a ⚠️ badge
       // + a confirm that sets allowUnmeasured). Server-side backstop — a client
       // can't bypass it (the count is recomputed here from the DB rows).
-      const zeroTransport = fwd.filter((f) => (Number(f.ftotalprice) || 0) <= 0);
+      // D2 reconcile — a ฿0-transport row that the admin POSITIVELY OVERRODE
+      // (typed a correct amount) is handled → not an under-charge risk.
+      const zeroTransport = fwd.filter((f) => {
+        const ov = v.overrides?.[String(f.id)];
+        const positiveOverride = typeof ov === "number" && ov > 0;
+        return (Number(f.ftotalprice) || 0) <= 0 && !positiveOverride;
+      });
       if (zeroTransport.length > 0 && !v.allowUnmeasured) {
         return {
           ok: false,
@@ -1077,14 +1083,37 @@ export async function createBillingRunInvoice(
       // are NOT inside calcForwarderOutstanding, so no double-count.
       const outstandingByID = new Map<number, number>();
       for (const f of fwd) outstandingByID.set(f.id, calcForwarderOutstanding(f));
-      const subtotal = v.forwarderIds.reduce(
-        (sum, id) => sum + (outstandingByID.get(id) ?? 0),
-        0,
-      );
+      // Build A D2 — per-line override: an admin-typed amount wins over the auto
+      // calcForwarderOutstanding for THAT row. Only ids being billed are read;
+      // stray override keys are ignored. The override is bounded by the Zod schema
+      // (positiveMoney) + audit-logged below so a manual amount is deliberate +
+      // traceable. Un-overridden rows keep the canonical composite outstanding.
+      const overrideAmt = (id: number): number | null => {
+        const raw = v.overrides?.[String(id)];
+        return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+      };
+      // money-review fix — quantize EACH line to satang BEFORE summing, so the
+      // header subtotal_thb == Σ item amount_thb exactly (the mig 0138 invariant).
+      // An override can carry >2dp (z.number isn't 2dp-quantized); round-each-then-
+      // sum keeps header + items identical to the satang.
+      const lineAmount = (id: number): number =>
+        Math.round((overrideAmt(id) ?? outstandingByID.get(id) ?? 0) * 100) / 100;
+      const overriddenIds = v.forwarderIds.filter((id) => overrideAmt(id) != null);
+      const subtotal = v.forwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
       const total = Math.max(
         0,
         subtotal + v.deliveryChnThb + v.deliveryThThb + v.otherThb - v.discountThb,
       );
+      // money-review fix — per-line override is capped (positiveMoney ≤9,999,999,999.99)
+      // but the AGGREGATE subtotal/total over up to 500 rows can exceed the
+      // NUMERIC(12,2) header ceiling. Reject with a Thai message instead of letting
+      // Postgres raise a raw 22003 overflow.
+      if (subtotal > 9_999_999_999.99 || total > 9_999_999_999.99) {
+        return {
+          ok: false,
+          error: "ยอดรวมทั้งใบเกินขีดจำกัด (สูงสุด 9,999,999,999.99 บาท) — กรุณาตรวจสอบยอดที่แก้ไข หรือแยกออกเป็นหลายใบ",
+        };
+      }
 
       // (e) Mint doc-no + INSERT header (3-retry on unique collision)
       const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
@@ -1144,7 +1173,10 @@ export async function createBillingRunInvoice(
       const itemsToInsert = v.forwarderIds.map((fid) => ({
         invoice_id:   invoiceId!,
         forwarder_id: fid,
-        amount_thb:   Math.round((outstandingByID.get(fid) ?? 0) * 100) / 100,
+        // D2 — the line bill amount: admin override if present, else the auto
+        // composite outstanding. Same value the subtotal summed, so header +
+        // items always reconcile to satang.
+        amount_thb:   Math.round(lineAmount(fid) * 100) / 100,
       }));
       const { error: itemErr } = await admin
         .from("tb_forwarder_invoice_item")
@@ -1175,6 +1207,17 @@ export async function createBillingRunInvoice(
         // be told apart from a correctly-billed one.
         ...(zeroTransport.length > 0
           ? { zero_transport_override: true, zero_transport_ids: zeroTransport.map((f) => f.id) }
+          : {}),
+        // D2 — record any per-line bill-amount overrides (the manual figure that
+        // replaced the auto outstanding) for the same forensic reason.
+        ...(overriddenIds.length > 0
+          ? {
+              line_amount_overrides: overriddenIds.map((id) => ({
+                forwarder_id: id,
+                auto_thb: Math.round((outstandingByID.get(id) ?? 0) * 100) / 100,
+                billed_thb: Math.round(lineAmount(id) * 100) / 100,
+              })),
+            }
           : {}),
       });
 

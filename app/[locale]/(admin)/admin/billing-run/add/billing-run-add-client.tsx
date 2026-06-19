@@ -73,6 +73,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const [selectedUserid, setSelectedUserid] = useState<string>(preselectUserid);
   const [eligible, setEligible] = useState<EligibleForwarderRow[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Build A D2 — per-line bill-amount override (forwarder id → typed ฿ string;
+  // "" / absent = use the auto outstanding). Cleared on customer change.
+  const [amountEdit, setAmountEdit] = useState<Map<number, string>>(new Map());
   const [loadingFwd, setLoadingFwd] = useState(!!preselectUserid);
   // 2026-06-03 ภูม flag — round-1 swallowed listEligibleForwarders errors
   // and just showed "ลูกค้านี้ไม่มีรายการ". Surface the real action error here
@@ -157,8 +160,17 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     setSelectedUserid(uid);
     setEligible(null);
     setSelectedIds(new Set());
+    setAmountEdit(new Map());
     setFwdErr(null);
     setLoadingFwd(uid !== "");
+  }
+
+  // D2 — the bill amount of a row: the admin-typed override (when a valid number)
+  // else the auto composite outstanding. Single source for the subtotal + submit.
+  function lineAmountOf(f: EligibleForwarderRow): number {
+    const raw = amountEdit.get(f.id);
+    if (raw != null && raw.trim() !== "" && Number.isFinite(Number(raw))) return Number(raw);
+    return f.outstanding_thb;
   }
 
   // Subtotal = Σ outstanding_thb of selected forwarders (BUG A fix 2026-06-14).
@@ -170,10 +182,18 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     if (!eligible) return 0;
     let sum = 0;
     for (const f of eligible) {
-      if (selectedIds.has(f.id)) sum += f.outstanding_thb;
+      if (!selectedIds.has(f.id)) continue;
+      // D2 — admin-typed override wins over the auto outstanding for this row.
+      // Round each line to satang BEFORE summing so the displayed subtotal equals
+      // the server's persisted subtotal_thb (= Σ rounded item amounts).
+      const raw = amountEdit.get(f.id);
+      const amt = raw != null && raw.trim() !== "" && Number.isFinite(Number(raw))
+        ? Number(raw)
+        : f.outstanding_thb;
+      sum += Math.round(amt * 100) / 100;
     }
     return sum;
-  }, [eligible, selectedIds]);
+  }, [eligible, selectedIds, amountEdit]);
 
   const numChn = Number(deliveryChn) || 0;
   const numTh  = Number(deliveryTh)  || 0;
@@ -201,11 +221,22 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       return;
     }
 
+    // D2 — collect per-line bill-amount overrides (only rows whose typed amount
+    // differs from the auto outstanding). The server uses these for the line +
+    // subtotal + audit.
+    const overrides: Record<string, number> = {};
+    for (const f of eligible ?? []) {
+      if (!selectedIds.has(f.id)) continue;
+      const amt = lineAmountOf(f);
+      if (amt !== f.outstanding_thb) overrides[String(f.id)] = amt;
+    }
+
     // Build A guard — SELECTED rows whose import transport SELL is ฿0
-    // (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด). Names the ids in the confirm
-    // so the human ack matches the per-row badge + the server error.
+    // (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด). A row the admin POSITIVELY
+    // overrode (typed a correct amount) is handled → not "at risk". Names the
+    // remaining ids in the confirm so the ack matches the badge + server error.
     const zeroIds = (eligible ?? [])
-      .filter((f) => selectedIds.has(f.id) && isZeroTransport(f))
+      .filter((f) => selectedIds.has(f.id) && isZeroTransport(f) && !((overrides[String(f.id)] ?? 0) > 0))
       .map((f) => f.id);
 
     // §0f confirm-before-mutate (money action · ออกเอกสารวางบิลจริง).
@@ -233,6 +264,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         discountThb:      numDiscount,
         noteForCustomer:  note,
         allowUnmeasured:  zeroIds.length > 0,
+        overrides,
       });
       if (res.ok) {
         const id = res.data!.invoiceId;
@@ -401,6 +433,11 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                 {visibleForwarders.map((f) => {
                   const zeroTransport = isZeroTransport(f);
                   const selected = selectedIds.has(f.id);
+                  // Match lineAmountOf exactly — a blank/cleared input means "use
+                  // auto", so the chip must NOT read as edited (it would bill auto).
+                  const editedRaw = amountEdit.get(f.id);
+                  const edited = editedRaw != null && editedRaw.trim() !== "" &&
+                    Number.isFinite(Number(editedRaw)) && Number(editedRaw) !== f.outstanding_thb;
                   return (
                   <tr
                     key={f.id}
@@ -437,7 +474,30 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                     <td className="px-3 py-2 text-right">{f.famount ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fvolume ?? "—"}</td>
-                    <td className={`px-3 py-2 text-right font-medium ${zeroTransport ? "text-amber-700" : ""}`}>{thbFmt(f.outstanding_thb)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {/* D2 — editable line amount ("แก้มือได้ทุกจุด"). Default = the
+                          auto outstanding; typing overrides just this row. */}
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        inputMode="decimal"
+                        value={amountEdit.get(f.id) ?? String(f.outstanding_thb)}
+                        onChange={(e) => setAmountEdit((prev) => new Map(prev).set(f.id, e.target.value))}
+                        onFocus={(e) => e.currentTarget.select()}
+                        title="แก้ยอดเรียกเก็บของรายการนี้ได้ (ค่าเริ่มต้น = ยอดคำนวณอัตโนมัติ)"
+                        className={`w-28 rounded-md border px-2 py-1 text-right text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-300 ${
+                          edited
+                            ? "border-amber-300 bg-amber-50/60"
+                            : zeroTransport
+                              ? "border-amber-200 bg-transparent text-amber-700"
+                              : "border-border/40 bg-transparent"
+                        }`}
+                      />
+                      {edited && (
+                        <div className="text-[9px] text-amber-600 mt-0.5">แก้เอง · auto ฿{thbFmt(f.outstanding_thb)}</div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
                   </tr>
                   );
