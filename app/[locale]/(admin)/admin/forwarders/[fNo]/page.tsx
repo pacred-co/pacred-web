@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -676,15 +677,13 @@ async function tryRenderTbForwarder(
           <div className="md:text-right shrink-0 space-y-1.5">
             <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
               <b className="font-bold">สถานะ :</b>
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
-                currentStatusInt >= 7 ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                currentStatusInt === 99 ? "bg-violet-100 text-violet-700 border-violet-200" :
-                currentStatusInt === 6 ? "bg-indigo-100 text-indigo-700 border-indigo-200" :
-                currentStatusInt === 5 ? "bg-red-100 text-red-700 border-red-200" :
-                currentStatusInt === 4 ? "bg-amber-200 text-amber-900 border-amber-300" :
-                currentStatusInt === 3 ? "bg-pink-100 text-pink-700 border-pink-200" :
-                currentStatusInt === 2 ? "bg-sky-100 text-sky-700 border-sky-200" :
-                "bg-amber-100 text-amber-700 border-amber-200"
+              {/* 2026-06-19 — header pill now reads the VIVID FSTATUS_CFG SOT so the
+                  detail matches the list 1:1 (was a faded -100/-200 ladder). 99
+                  (พิเศษ · outside the 1-7 journey) keeps a solid orange. */}
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                currentStatusInt === 99
+                  ? "bg-orange-400 text-orange-950 border border-orange-600"
+                  : fstatusBadge(r.fstatus).chip
               }`}>
                 {STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`}
               </span>
