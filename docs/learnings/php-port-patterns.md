@@ -584,3 +584,17 @@ vs the preserved `adminPass` passTam hash + auto-provisions the role on first lo
 **Companion fix — the customer-visibility half:** because fstatus is overloaded, drive the CUSTOMER timeline's PHYSICAL steps off the real per-stage date stamps (`fdatestatus2/3/4`, `hasRealStamp` rejects null/''/0000-00-00), NOT the fstatus integer — so a credit order at fstatus=6 with null fdatestatus4 correctly shows "still in transit", not a fake "arrived". The date stamps already exist → no migration needed to decouple the DISPLAY (the owner's "ตาม legacy → single fstatus, no new column" call).
 
 **1%-WHT-locus discipline (owner: "ตาม legacy · อย่ามั่ว · หาไม่เจอก็บอก"):** when asked to match legacy, GREP every locus + cite exact lines before answering. The juristic 1% is the single canonical allowance in `calPriceForwarderMain()` (= Pacred `calcForwarderOutstanding`), applied at the outstanding-balance helper + credit-grant (forwarder.php:1427) + receipt (create-f-receipt.php `$Dis1per`) — NOT on the วางบิล. All loci compute 99% from gross INDEPENDENTLY → consistent, NOT a double-deduction (the feared double only happens if one locus's 99%-output feeds another locus that deducts 1% again — it doesn't). Cross-links: [[verify-deep-flow]] dead-write traps · the §0e overloaded-column family.
+
+---
+
+## [2026-06-19] A faithful port can silently downgrade a BLOCKING legacy guard to advisory — that's a money-safety regression
+
+**Symptom (owner):** *"process ตรวจสลิป legacy เขามีสองชั้นนะ นายทำหายไปชั้นนึง"* — the legacy slip-verify (`w-s-deposit-detail.php`) gated a top-up in **two layers**: (1) a date + same-day/same-amount **duplicate detector** that forced a human review, then (2) confirm + settle (credit the wallet). Pacred's port kept layer 2 (the approve) and rendered layer 1's dup match only as an **advisory red banner** — so a one-click approve sailed straight past a double-submitted slip → a double wallet credit.
+
+**Root pattern:** when porting, a guard that legacy *enforced* (blocked on) is easy to re-implement as something that merely *informs* (a banner, a console.warn, a disabled-looking-but-not-disabled control) because the happy path still works and the demo looks identical. The downgrade is invisible until the bad case happens. This is the mirror image of the [[php-port-patterns]] "port-ADDED a guard legacy never had" trap — here the port DROPPED a guard legacy always had.
+
+**Fix:** restore layer 1 as a true **blocking** gate, shared by all approve paths via one SOT (`lib/admin/duplicate-slip-check.ts findDuplicateSlips`), **overridable** by an explicit human confirm (`acknowledgeDuplicate`) — which is exactly the legacy intent (force a review, don't hard-forbid). Make it **fail-CLOSED** (a money guard that can't complete its query must hold, not silently allow).
+
+**Sharpen-when-making-advisory-into-blocking:** the legacy dup match was `amount + day` only — affordable because a banner false-positive is harmless. The moment you make it BLOCK, a cross-customer coincidence (two people paying ฿500 the same day) would hard-block a legit approve = a new "งานหาย" bug. So tightening the predicate (scope to the same `userid`) is *required* when promoting advisory→blocking, not optional. **Rule: when you turn an advisory signal into an enforced gate, re-derive the predicate for precision — the old loose match was only safe because nothing depended on it.**
+
+Cross-links: [[verify-deep-flow]] (a surface can 200 + render + still no-op) · [[audit-discipline]] (verify from legacy source, not the rendered HTML).
