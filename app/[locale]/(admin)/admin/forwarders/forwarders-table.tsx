@@ -172,7 +172,7 @@ const STATUS_BADGE: Record<string, string> = {
   "5":  FSTATUS_CFG["5"].chip,
   "6":  FSTATUS_CFG["6"].chip,
   "7":  FSTATUS_CFG["7"].chip,
-  "99": "bg-orange-400 text-orange-950 border border-orange-600",
+  "99": "bg-orange-100 text-orange-800 border border-orange-300",
 };
 
 // Bulk-update target options. The dropdown intentionally excludes "6.1"

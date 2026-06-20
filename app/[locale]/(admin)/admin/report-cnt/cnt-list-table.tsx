@@ -660,14 +660,14 @@ export function CntListTable({
                       <span className="text-[10px] text-muted">-</span>
                     ) : r.completenessScanned >= r.completenessExpected ? (
                       <span
-                        className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 px-2 py-0.5 text-[10px] font-medium"
+                        className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[10px] font-medium"
                         title={`ยิงครบทุกกล่อง — ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ`}
                       >
                         {r.completenessScanned}/{r.completenessExpected}
                       </span>
                     ) : (
                       <span
-                        className="inline-block rounded-full bg-red-500 text-red-50 border border-red-700 px-2 py-0.5 text-[10px] font-medium"
+                        className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[10px] font-medium"
                         title={`ของยังขาด ${r.completenessExpected - r.completenessScanned} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
                         {r.completenessScanned}/{r.completenessExpected}
@@ -682,9 +682,9 @@ export function CntListTable({
                   </td>
                   <td className="px-2 py-2 text-center">
                     {r.isPaid ? (
-                      <span className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 px-2 py-0.5 text-[10px] font-medium">จ่ายแล้ว</span>
+                      <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[10px] font-medium">จ่ายแล้ว</span>
                     ) : (
-                      <span className="inline-block rounded-full bg-red-500 text-red-50 border border-red-700 px-2 py-0.5 text-[10px] font-medium">ยังไม่จ่าย</span>
+                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[10px] font-medium">ยังไม่จ่าย</span>
                     )}
                   </td>
                 </tr>
