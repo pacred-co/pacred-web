@@ -463,6 +463,40 @@ export async function submitCartOrder(input: {
     if (!mao.maoApplied) fShippingService = 0; // promo dropped → no เหมาๆ fee
   }
 
+  // ── Money-ceiling guard (no silent overflow) ────────────────────────
+  // Every baht/yuan total in the legacy schema is numeric(10,2) → caps at
+  // 99,999,999.99. Reject an over-cap order BEFORE inserting the header so
+  // a giant cart fails with a clear message instead of silently recording
+  // ฿0 (the rollup UPDATE below otherwise throws a swallowed Postgres
+  // 22003). THB ≈ ¥ × rate overflows first. ⬆ raise the cap once migration
+  // 0196 (widen money cols → numeric(14,2)) is applied to prod.
+  {
+    const MONEY_COL_MAX = 99_999_999.99;
+    const { data: guardRows, error: guardErr } = await admin
+      .from("tb_cart")
+      .select("cprice, camount")
+      .in("id", input.ids)
+      .eq("userid", userID);
+    if (guardErr) console.error(`[cart guard tb_cart] failed`, { code: guardErr.code, message: guardErr.message });
+    if (guardRows && guardRows.length > 0) {
+      const projectedCNY = (guardRows as Array<{ cprice: number; camount: number }>).reduce(
+        (s, r) => s + Number(r.cprice ?? 0) * Number(r.camount ?? 0),
+        0,
+      );
+      const { data: guardRate, error: guardRateErr } = await admin
+        .from("tb_settings").select("rsdefault").eq("id", 1)
+        .maybeSingle<{ rsdefault: number | string | null }>();
+      if (guardRateErr) console.error(`[cart guard rate] failed`, { code: guardRateErr.code, message: guardRateErr.message });
+      const rate = Number(guardRate?.rsdefault ?? 5.0) || 5.0;
+      if (projectedCNY > MONEY_COL_MAX || projectedCNY * rate > MONEY_COL_MAX) {
+        return {
+          ok: false,
+          error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedCNY * rate).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿99,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
+        };
+      }
+    }
+  }
+
   // shops.php L96-97 — INSERT tb_header_order.
   // ⚠️ Postgres-vs-MySQL parity: the legacy INSERT only lists 16 columns and
   // relies on MySQL's non-strict mode auto-filling every other NOT-NULL-

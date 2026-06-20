@@ -65,6 +65,16 @@ import {
 // RBAC union for admin cart flows — see file-level comment.
 const CART_ROLES = ["super", "ops", "sales_admin"] as const;
 
+// Money-column ceiling. Every baht/yuan total + payment amount in the
+// legacy schema (tb_header_order / tb_order / tb_payment / tb_cart, mig
+// 0081) is numeric(10,2) → max 99,999,999.99. We reject an order whose
+// grand total would overflow this BEFORE writing any rows, so a giant
+// order fails with a clear message instead of silently recording ฿0 (the
+// rollup UPDATE otherwise throws a Postgres 22003 that the code swallows).
+// ⬆ When migration 0196 (widen money cols → numeric(14,2)) is applied to
+// prod, raise this to 999_999_999_999.99.
+const MONEY_COL_MAX = 99_999_999.99;
+
 // Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
 // ADDRESSES.warehouseTh — the SAME depot the customer shop path writes in
 // actions/cart.ts). Legacy shops.php L26-36 hard-coded the old Bangkok PCS
@@ -182,7 +192,7 @@ export async function adminAddItemToCart(
 // types qty per SKU, submit calls this action with the array.
 //
 // Single atomic INSERT — either all rows land or the batch fails (no
-// half-cart). Cap-gates the whole batch against the legacy 151 ceiling.
+// half-cart). No item-count cap (owner ปอน 2026-06-20 — สั่งได้ไม่จำกัด).
 
 const adminAddItemsToCartBulkSchema = z.object({
   userid: z.string().trim().min(1, "ระบุ userid").max(20),
@@ -197,7 +207,7 @@ const adminAddItemsToCartBulkSchema = z.object({
     camount:   z.number().int().positive().max(99999),
     ccolor:    z.string().max(120).default(""),
     csize:     z.string().max(120).default(""),
-  })).min(1, "ต้องมีอย่างน้อย 1 รายการ").max(50, "เกิน 50 รายการ"),
+  })).min(1, "ต้องมีอย่างน้อย 1 รายการ"),
 });
 
 export async function adminAddItemsToCartBulk(
@@ -212,18 +222,10 @@ export async function adminAddItemsToCartBulk(
   return withAdmin<{ count: number }>([...CART_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Cap-gate the whole batch: existing count + new rows must stay ≤ 151
-    // (legacy cart.php L17/L76). Refuse the batch rather than partial-insert.
-    const { count: cartCount, error: countErr } = await admin
-      .from("tb_cart")
-      .select("id", { count: "exact", head: true })
-      .eq("userid", userid);
-    if (countErr) {
-      console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
-    }
-    if ((cartCount ?? 0) + items.length > 151) {
-      return { ok: false, error: "cart cap reached (151 items)" };
-    }
+    // 2026-06-20 (owner ปอน): cart caps LIFTED — staff can add unlimited
+    // SKU rows per submit + unlimited total cart size. The legacy 151
+    // ceiling (cart.php L17/L76) and the 50-rows-per-batch guard are both
+    // removed; per-field guards (positive-int qty, length caps) stay.
 
     const payload = items.map((it) => ({
       cdetails:  it.cdetails,
@@ -488,6 +490,30 @@ export async function adminSubmitCartAsOrder(
       const validRows = rows.filter((r) => r.camount > 0);
       if (validRows.length === 0) {
         return { ok: false, error: "ไม่มีสินค้าที่มีจำนวนมากกว่า 0" };
+      }
+
+      // ── Step b''. Money-ceiling guard (no silent overflow) ──────────
+      // The grand total lands in numeric(10,2) columns (cap MONEY_COL_MAX).
+      // Reject an over-cap order up-front so we never create a half/zeroed
+      // order. THB (htotalpriceuser / tb_payment.paythb) ≈ ¥ × rate, so it
+      // overflows first — guard both axes.
+      {
+        const projectedCNY = validRows.reduce(
+          (s, r) => s + Math.ceil(r.cprice * r.camount * 100) / 100,
+          0,
+        );
+        const { data: rateRow, error: rateErr } = await admin
+          .from("tb_settings").select("rsdefault").eq("id", 1)
+          .maybeSingle<{ rsdefault: number | string | null }>();
+        if (rateErr) console.error(`[cart guard tb_settings] failed`, { code: rateErr.code, message: rateErr.message });
+        const rate = Number(rateRow?.rsdefault ?? 5.0) || 5.0;
+        const projectedTHB = projectedCNY * rate;
+        if (projectedCNY > MONEY_COL_MAX || projectedTHB > MONEY_COL_MAX) {
+          return {
+            ok: false,
+            error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedTHB).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿99,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
+          };
+        }
       }
 
       // ── Step b'. Resolve address ────────────────────────────────────
