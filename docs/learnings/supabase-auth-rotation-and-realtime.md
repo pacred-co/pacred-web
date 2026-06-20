@@ -99,3 +99,17 @@ historical backlog is safe because the store **re-captures** anything that still
 fires. Close path: `resolved` needs `acknowledged_at` + `assigned_to` (0077
 CHECK); `ignored` is terminal (transient/external — network, Google-Translate DOM
 `removeChild`/`insertBefore`, chunk-load).
+
+---
+
+## [2026-06-20] A new auth GATE with no fallback locks out accounts provisioned under the OLD convention
+
+**Symptom (owner):** "login ไม่ได้ · admin_dev / admin_poom / admin_got / admin_pop · คนอื่นไม่มีปัญหา."
+
+**Root cause:** ปอน's new dedicated admin entrance `/admin/login` (`signInAdmin`, actions/auth.ts) accepts ONLY an `admin_*` username → maps it to `admin_<name>@pacred.co.th` → `signInWithPassword({email})`. Unlike the normal `/login` (`signIn`), it has **no employee_code / phone / member-code fallback**. The 18 office admins all have a real `admin_<name>@pacred.co.th` auth email (provisioned via /admin/admins/new), so they work. But the 4 TEAM accounts predate that convention and authenticate other ways — 2 by phone (email NULL · PR112 admin_dev · PR038 admin_got), 1 by personal gmail (PR009 admin_poom), 1 by the legacy bridge (`…@users.pacred.invalid` · PR321 admin_pop). The new gate's email path can't resolve any of them → "invalid_credentials" → locked out of /admin.
+
+**The trap:** a brand-new auth gate that's stricter than the old one (no fallback) silently breaks exactly the accounts that relied on the old flexibility — and they're often the dev/owner accounts, so it surfaces as "WE can't log in" right after a deploy. The leak-hunt validated the gate's SECURITY (HMAC, 2-stage, role agreement) but a static review can't catch "these specific real accounts lack the email the gate now requires" — that needs a DB probe of the actual account rows.
+
+**Fix (data, owner "ใช้รหัสเดียวกับ PR เหมือนทุกคน"):** set `admin_<name>@pacred.co.th` + `email_confirm:true` on each EXISTING auth user via the GoTrue admin API (`updateUserById` — keeps auth.users + auth.identities consistent; direct `auth.users` SQL would desync the identities table). **KEEP each account's existing password** (= their PR password) — only a legacy-bridge account (no usable native `encrypted_password`) needs a password set. Script: `scripts/fix-team-admin-logins-2026-06-20.mjs` (dry-run default · refuses unless .env.local is prod). Verified with a real `signInWithPassword` against prod (not just "the row looks right").
+
+**Rule:** when you add an auth gate that REQUIRES a specific identifier shape, first probe the real accounts that must pass it — confirmed-working peers prove the happy path, but the accounts provisioned before the convention are the ones that break. And a credential write isn't "done" until a real `signInWithPassword` succeeds — a correct-looking `auth.users` row can still fail login (placeholder password / unconfirmed email / identities desync). Cross-links: [[verify-deep-flow]] · `lib/auth/admin-session.ts` · `actions/auth.ts::signInAdmin`.
