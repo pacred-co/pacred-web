@@ -66,7 +66,21 @@ const TRANSITION_OWNERS: Record<string, readonly AdminRole[]> = {
   "1->2":   ["warehouse", "ops"],            // China warehouse confirms receipt (sync handler / manual)
   "1->3":   ["warehouse", "ops"],            // China warehouse + container sealed (sync handler / manual)
   "2->3":   ["warehouse", "ops"],            // Container sealed + leaving China
-  "3->4":   ["warehouse"],                   // TH warehouse confirms receipt (barcode parity / relink)
+  // ── TH-arrival flip → '4' (warehouse barcode scan / relink / shipment-flip) ──
+  // Legacy's arrival writers (forwarder.php:2231 · forwarder-import-warehouse.php:29
+  // · gateway.php type=4) re-stamped fStatus='4' with NO from-status guard — the
+  // goods physically arrived in TH, so the prior physical status (1 รอเข้าจีน · 2
+  // ถึงโกดังจีน · 3 กำลังส่งมาไทย) is irrelevant. Pacred's matrix originally listed
+  // ONLY 3→4, so a warehouse/ops scan whose COMPLETING box sat on a 1- or 2-status
+  // row was silently blocked → the shipment stuck mixed (ภูม 2026-06-20: order
+  // 1780103566 ยิงครบ 15/15 แต่สถานะมั่ว 2/3 · the shipment-flip in barcode-import.ts
+  // gates on the SCANNED row's status, so one un-listed from-status blocks the whole
+  // group). Mirror the 6→4 credit-arrival fix (2026-06-14): allow the arrival flip
+  // from ANY physical status for warehouse/ops. (super/ultra/manager already pass
+  // via the god-role/override path — a677fde4 2026-06-19.)
+  "1->4":   ["warehouse", "ops"],            // arrival skips the China-side stamps
+  "2->4":   ["warehouse", "ops"],            // arrival from ถึงโกดังจีน (was missing → the bug)
+  "3->4":   ["warehouse", "ops"],            // arrival from กำลังส่งมาไทย (the common path)
   "4->5":   ["accounting"],                  // Bulk-bill — Accounting / Manager / CEO (manager handled by override)
   "5->6":   ["accounting"],                  // Wallet pay confirmed (system observer + admin manual)
   "6->7":   ["driver", "warehouse"],         // Driver delivered (mobile photo) / warehouse force-complete

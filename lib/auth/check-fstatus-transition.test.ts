@@ -53,6 +53,22 @@ assert("warehouse: 2→3 (sync)",    canFlipFstatus("warehouse", "2", "3"));
 assert("warehouse: 1→2 (sync)",    canFlipFstatus("warehouse", "1", "2"));
 assert("warehouse: 6→7 (driver fallback)", canFlipFstatus("warehouse", "6", "7"));
 
+// ── TH-arrival flip from ANY physical status (ภูม 2026-06-20 · order 1780103566) ──
+// The warehouse barcode scan / shipment-flip re-stamps → '4' regardless of the
+// prior physical status; the matrix originally listed only 3→4, so a completing
+// scan on a 1- or 2-status row blocked the whole shipment for warehouse/ops.
+assert("warehouse: 1→4 (arrival)",  canFlipFstatus("warehouse", "1", "4"));
+assert("warehouse: 2→4 (arrival · was the bug)", canFlipFstatus("warehouse", "2", "4"));
+assert("ops: 2→4 (arrival)",        canFlipFstatus("ops", "2", "4"));
+assert("ops: 3→4 (arrival)",        canFlipFstatus("ops", "3", "4"));
+// The exact shipment-flip path: completing scan on a status-2 row.
+assert("anyRole [warehouse]: 2→4 (the stuck-shipment path)",
+  canAnyRoleFlipFstatus(["warehouse"], "2", "4"));
+// Still gated: a non-arrival role must NOT get the arrival flip.
+assert("sales: 2→4 DENIED",   !canFlipFstatus("sales", "2", "4"));
+assert("driver: 2→4 DENIED",  !canFlipFstatus("driver", "2", "4"));
+assert("accounting: 2→4 DENIED", !canFlipFstatus("accounting", "2", "4"));
+
 // ── Warehouse cannot do Accounting transitions ──
 assert("warehouse: 4→5 DENIED",  !canFlipFstatus("warehouse", "4", "5"));
 assert("warehouse: 5→6 DENIED",  !canFlipFstatus("warehouse", "5", "6"));
