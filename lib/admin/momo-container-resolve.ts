@@ -23,8 +23,11 @@
  *    (actions/admin/taem-reconcile.ts). Keyed by the SAME container code report-cnt
  *    groups by (real GZS… or the SEA0x placeholder) → covers BOTH closed + open
  *    containers (the MOMO lookup below only covered placeholders).
- *  - FALLBACK = MOMO's own `momo_import_tracks.etd/eta` (only when แต้ม has none for
- *    that container). MOMO is "ชอบมั่ว" so it never overrides แต้ม.
+ *  - FALLBACK = MOMO's `momo_container_details.etd_cn_kodang / estimate_date` (the
+ *    Container Closed sync · migration 0120), used only when แต้ม has none for that
+ *    container. MOMO is "ชอบมั่ว" so it never overrides แต้ม. (NOT momo_import_tracks
+ *    — that per-tracking endpoint never carries dates; reading it for etd/eta was a
+ *    dead read that left the report blank · ภูม 2026-06-20.)
  *  - `momoEtd`/`momoEta` are kept separately so the UI can show MOMO's value as a
  *    compare note when it disagrees with แต้ม.
  *
@@ -76,6 +79,25 @@ type TaemEtdEtaRow = {
   eta: string | null;
 };
 
+/**
+ * A row from `momo_container_details` (migration 0120) — the MOMO "Container
+ * Closed" sync explodes `raw.container_details` into this table (one row per
+ * closed container · keyed by the 3 MOMO identifiers). This is the REAL MOMO
+ * ETD/ETA source: ETD = etd_cn_kodang (เรือออกจากจีน) · ETA = estimate_date
+ * (ถึงไทยโดยประมาณ · eta_th_kodang is usually NULL). The old momo_import_tracks.
+ * etd/eta read was a DEAD READ — that per-tracking endpoint never carries dates
+ * (ภูม 2026-06-20: the sync page showed ETD/ETA but report-cnt didn't, because
+ * the data lives here, not on momo_import_tracks).
+ */
+type ContainerDetailRow = {
+  momo_container_ref: string | null;
+  container_batch_no: string | null;
+  real_container_no: string | null;
+  etd_cn_kodang: string | null;
+  estimate_date: string | null;
+  eta_th_kodang: string | null;
+};
+
 /** Normalize a timestamptz/date value to yyyy-mm-dd for display (UI shows date only). */
 function dateOnly(v: string | null): string | null {
   if (!v) return null;
@@ -105,6 +127,43 @@ export function foldMomoContainerInfo(
     if (!info.sackNo && r.momo_sack_no?.trim()) info.sackNo = r.momo_sack_no.trim();
     if (!info.momoEtd && r.etd) info.momoEtd = dateOnly(r.etd);
     if (!info.momoEta && r.eta) info.momoEta = dateOnly(r.eta);
+  }
+  return out;
+}
+
+/**
+ * Pure — set the MOMO etd/eta (the FALLBACK layer) from `momo_container_details`
+ * (the REAL MOMO source · see ContainerDetailRow). For each detail row, match its
+ * container code (any of container_batch_no / momo_container_ref / real_container_no)
+ * to a cabinet code report-cnt groups by, and set that cabinet's momoEtd/momoEta:
+ *   ETD = etd_cn_kodang  ·  ETA = estimate_date ?? eta_th_kodang
+ * (estimate_date = "ถึงไทยโดยประมาณ" · eta_th_kodang is usually NULL). Overrides the
+ * dead momo_import_tracks etd/eta (always NULL). แต้ม still wins over this in
+ * mergeTaemEtdEta. Cabinets only in momo_container_details get a fresh info entry.
+ */
+export function mergeContainerDetailsEtdEta(
+  base: Record<string, MomoContainerInfo>,
+  cdRows: ContainerDetailRow[],
+  cabCodes: string[],
+): Record<string, MomoContainerInfo> {
+  const out: Record<string, MomoContainerInfo> = { ...base };
+  const cabSet = new Set(cabCodes.map((c) => c.trim()).filter(Boolean));
+  for (const r of cdRows) {
+    const etd = dateOnly(r.etd_cn_kodang);
+    const eta = dateOnly(r.estimate_date) ?? dateOnly(r.eta_th_kodang);
+    if (!etd && !eta) continue;
+    // A detail row may match more than one cabinet code (rare) — set all.
+    for (const code of [r.container_batch_no, r.momo_container_ref, r.real_container_no]) {
+      const k = code?.trim();
+      if (!k || !cabSet.has(k)) continue;
+      const info = (out[k] ??= {
+        realContainer: null, sackNo: null,
+        etd: null, eta: null, etdSource: null, etaSource: null,
+        momoEtd: null, momoEta: null,
+      });
+      if (etd) info.momoEtd = etd;   // momo_container_details is authoritative over
+      if (eta) info.momoEta = eta;   // the (null) momo_import_tracks etd/eta
+    }
   }
   return out;
 }
@@ -172,6 +231,35 @@ export async function resolveMomoContainerInfo(
     } else {
       base = foldMomoContainerInfo((data ?? []) as ImportTrackRow[]);
     }
+  }
+
+  // ── momo_container_details layer (the REAL MOMO etd/eta · 0120) — ALL codes ──
+  // The Container Closed sync persists ETD_CN_KODANG / ESTIMATE_DATE here (keyed by
+  // container_batch_no / momo_container_ref / real_container_no) — NOT on
+  // momo_import_tracks (which is per-tracking + etd/eta always NULL). This is the
+  // MOMO fallback the report shows when แต้ม hasn't sent a packing list.
+  if (allCabs.length > 0) {
+    // Match the cabinet code against the 2 columns it can be: container_batch_no
+    // (real GZS… code · the closed-container case · most report-cnt rows) or
+    // momo_container_ref (the SEA0x placeholder · open containers). Per-column
+    // `.in()` is robust (no fragile PostgREST `.or()` string); the table is one
+    // row per closed container. mergeContainerDetailsEtdEta only applies rows whose
+    // code is in allCabs, so over-fetch is harmless.
+    const cdRows: ContainerDetailRow[] = [];
+    for (const col of ["container_batch_no", "momo_container_ref"] as const) {
+      const { data, error } = await admin
+        .from("momo_container_details")
+        .select("momo_container_ref, container_batch_no, real_container_no, etd_cn_kodang, estimate_date, eta_th_kodang")
+        .in(col, allCabs)
+        .limit(50_000);
+      if (error) {
+        // momo_container_details may not exist on an env where 0120 isn't applied → fail soft.
+        console.error("[resolveMomoContainerInfo · momo_container_details] failed", { code: error.code, message: error.message, col });
+        continue;
+      }
+      if (data) cdRows.push(...(data as ContainerDetailRow[]));
+    }
+    base = mergeContainerDetailsEtdEta(base, cdRows, allCabs);
   }
 
   // ── แต้ม layer (ETD/ETA · AUTHORITATIVE) — ALL cabinet codes ──

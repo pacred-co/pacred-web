@@ -185,7 +185,7 @@ function EtdEtaCell({
 }) {
   if (!value) {
     return (
-      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} (รอ packing list ของแต้ม)`}>
+      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} (รอจากแต้ม หรือ MOMO ปิดตู้)`}>
         —
       </td>
     );
@@ -242,6 +242,20 @@ function diffDateCNT(closeDate: string | null, arrivedDate: string | null): numb
   return days;
 }
 
+// T/T (transit time · owner ภูม 2026-06-20: "เอาวันที่ ETD มาลบ ETA จะได้วัน T/T").
+// = ETA − ETD in whole days. Both are date-only (yyyy-mm-dd) → clean integer diff.
+// null when either date is missing (renders "—") or ETA precedes ETD (bad data).
+// NOTE: distinct from the "เดินทาง" column (= วันถึงไทยจริง − วันปิดตู้, the ACTUAL
+// transit); T/T is the carrier's ESTIMATED transit from ETD/ETA.
+function transitTT(etd: string | null, eta: string | null): number | null {
+  if (!etd || !eta) return null;
+  const e = new Date(etd.slice(0, 10)).getTime();
+  const a = new Date(eta.slice(0, 10)).getTime();
+  if (!Number.isFinite(e) || !Number.isFinite(a)) return null;
+  const days = Math.round((a - e) / 86_400_000);
+  return days >= 0 ? days : null;
+}
+
 export function CntListTable({
   rows,
   showMoney,
@@ -257,9 +271,9 @@ export function CntListTable({
   const canSelect = showMoney;
 
   // Total column count — drives the expanded box-detail row's colSpan.
-  // checkbox(canSelect) + 13 base cols (incl. ETD + ETA · #4) + 3 money cols
+  // checkbox(canSelect) + 14 base cols (incl. ETD + ETA + T/T) + 3 money cols
   // (showMoney) + 2 status cols.
-  const colCount = (canSelect ? 1 : 0) + 13 + (showMoney ? 3 : 0) + 2;
+  const colCount = (canSelect ? 1 : 0) + 14 + (showMoney ? 3 : 0) + 2;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -463,11 +477,12 @@ export function CntListTable({
               <SortableTH sortKeyValue="fwarehousename"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>โกดัง</SortableTH>
               <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
               {/* ETD/ETA (report-cnt #4) — sea-departure (ETD) + Thailand-arrival
-                  (ETA) per container. Plain (non-sortable) headers: the data
-                  source is แต้ม's packing list, NOT yet wired (etd/eta are NULL in
-                  prod today), so they render "—" until the feed lands. */}
-              <th className="px-2 py-2 text-right" title="วันเรือออกจากจีน (ETD) — ข้อมูลจาก packing list ของแต้ม (ยังไม่เชื่อม)">ETD</th>
-              <th className="px-2 py-2 text-right" title="วันถึงไทย (ETA) — ข้อมูลจาก packing list ของแต้ม (ยังไม่เชื่อม)">ETA</th>
+                  (ETA) per container · แต้ม (iTAM) PRIMARY · MOMO fallback (from
+                  momo_container_details · the Container Closed sync · 0120).
+                  T/T = ETA − ETD (carrier-estimated transit). Plain headers. */}
+              <th className="px-2 py-2 text-right" title="วันเรือออกจากจีน (ETD) — แต้มเป็นหลัก · MOMO มาเทียบ">ETD</th>
+              <th className="px-2 py-2 text-right" title="วันถึงไทยโดยประมาณ (ETA) — แต้มเป็นหลัก · MOMO มาเทียบ">ETA</th>
+              <th className="px-2 py-2 text-right" title="ระยะเวลาเดินทางโดยประมาณ (T/T) = ETA − ETD (วัน)">T/T</th>
               <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
               <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>
@@ -490,8 +505,8 @@ export function CntListTable({
                 a heavier top/bottom border instead of a loud fill. */}
             <tr className="bg-white dark:bg-surface text-foreground font-bold border-y-2 border-border">
               {canSelect && <td className="px-2 py-2"></td>}
-              {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + ขนส่ง (6) */}
-              <td className="px-2 py-2 font-semibold" colSpan={6}>รวม ({rows.length} ตู้)</td>
+              {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (7) */}
+              <td className="px-2 py-2 font-semibold" colSpan={7}>รวม ({rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
@@ -618,6 +633,15 @@ export function CntListTable({
                     momoValue={momo?.momoEta ?? null}
                     label="ETA"
                   />
+                  {/* T/T (transit time) = ETA − ETD · owner ภูม 2026-06-20 */}
+                  {(() => {
+                    const tt = transitTT(momo?.etd ?? null, momo?.eta ?? null);
+                    return (
+                      <td className="px-2 py-2 text-right" title="ระยะเวลาเดินทางโดยประมาณ (T/T) = ETA − ETD">
+                        {tt == null ? "—" : `${tt} วัน`}
+                      </td>
+                    );
+                  })()}
                   <td className="px-2 py-2 text-center">{transportLabel[resolveTransportMode(r.fcabinetnumber, r.ftransporttype)] ?? r.ftransporttype}</td>
                   <td className="px-2 py-2 text-right">
                     {r.diffDay == null ? "-" : `${r.diffDay} วัน`}

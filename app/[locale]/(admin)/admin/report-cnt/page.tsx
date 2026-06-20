@@ -111,6 +111,17 @@ type Grouped = {
   isPaid: boolean; // join into tb_cnt_item — has payment record
 };
 
+// T/T (transit time) for the CSV — ETA − ETD in whole days (owner ภูม 2026-06-20).
+// Mirrors cnt-list-table.tsx::transitTT. "" when either date is missing/invalid.
+function transitDaysCsv(etd: string | null, eta: string | null): string {
+  if (!etd || !eta) return "";
+  const e = new Date(etd.slice(0, 10)).getTime();
+  const a = new Date(eta.slice(0, 10)).getTime();
+  if (!Number.isFinite(e) || !Number.isFinite(a)) return "";
+  const d = Math.round((a - e) / 86_400_000);
+  return d >= 0 ? String(d) : "";
+}
+
 // Group at the application layer (PostgREST has no SUM/GROUP BY in select)
 function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
   const byContainer = new Map<string, Grouped>();
@@ -337,11 +348,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   // cabinets (the "SEA0x" rows like PR20260605-SEA03 / MO20260523-SEA02 that
   // MOMO generates BEFORE the container closes) → the REAL container code
   // (container_batch_no · GZS260601-1) or, while the container is still open, the
-  // sack number (เลขกระสอบ · CBX260523-EK01). Also pulls etd/eta from the same
-  // momo_import_tracks rows so the ETD/ETA columns auto-fill the day MOMO/แต้ม
-  // pushes them. One round-trip; only the placeholder cabinets are looked up.
-  // See lib/admin/momo-container-resolve.ts for the data-state caveat (etd/eta
-  // are 100% NULL in prod today — pending the แต้ม packing-list feed).
+  // sack number (เลขกระสอบ · CBX260523-EK01). ALSO pulls ETD/ETA — แต้ม-primary
+  // (taem_container_etd_eta) + MOMO-fallback from momo_container_details (the
+  // Container Closed sync · 0120 · ETD_CN_KODANG / ESTIMATE_DATE). The old
+  // momo_import_tracks.etd/eta read was DEAD (per-tracking · always NULL) — that's
+  // why ETD/ETA showed "—" even though the MOMO sync page had them (ภูม 2026-06-20).
   const momoInfoByCab: Record<string, MomoContainerInfo> =
     grouped.length > 0
       ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
@@ -371,10 +382,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
       "ขนส่ง":             TRANSPORT_LABEL[resolveTransportMode(g.fcabinetnumber, g.ftransporttype)] ?? g.ftransporttype,
       "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
-      // ETD/ETA — sourced from MOMO/แต้ม when available (NULL in prod today · see
-      // momo-container-resolve.ts). Empty string keeps the CSV column stable.
+      // ETD/ETA — แต้ม-primary · MOMO-fallback (momo_container_details · 0120).
+      // T/T (transit time) = ETA − ETD in whole days. Empty keeps the column stable.
       "ETD (เรือออกจีน)":  momo?.etd ?? "",
       "ETA (ถึงไทย)":      momo?.eta ?? "",
+      "T/T (วัน)":         transitDaysCsv(momo?.etd ?? null, momo?.eta ?? null),
       "วันที่ถึงไทย":       g.fdatestatus4 ?? "",
       "จำนวนแทร็คกิ้ง":    g.trackCount,
       "ปริมาตรรวม (CBM)":  g.volumeSum.toFixed(4),
