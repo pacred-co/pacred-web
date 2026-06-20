@@ -14,7 +14,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Settings, Save, AlertTriangle, X, BadgeCheck, FileText, Scale, Trash2 } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, Scale, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { SellFloorCbmConfig } from "@/lib/admin/sell-floor-config";
+import { QuoteTab } from "./quote-tab";
 
 type Measure = "kg" | "cbm";
 
@@ -364,7 +365,7 @@ export function CustomerRateEditor({
         )}
 
         {/* ใบเสนอราคา */}
-        {tab === "quote" && <QuoteTab />}
+        {tab === "quote" && <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} />}
 
         {/* Info + cost floor (ultra can edit the floor inline here) */}
         {tab === "info" && (
@@ -575,20 +576,7 @@ function ComparisonTab({
   );
 }
 
-// ── ใบเสนอราคา tab (โครง — รอสเปกเนื้อหาจาก owner) ─────────────────────────
-function QuoteTab() {
-  return (
-    <div className="rounded-xl border border-dashed border-border bg-gradient-to-br from-surface to-white dark:from-surface dark:to-background p-8 md:p-10 text-center">
-      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)]">
-        <FileText className="h-7 w-7" />
-      </div>
-      <h3 className="text-base font-black text-foreground">ใบเสนอราคา</h3>
-      <p className="mx-auto mt-1.5 max-w-[440px] text-[13px] leading-relaxed text-muted">
-        ส่วนสร้าง / แสดงใบเสนอราคาขนส่งจากเรทของลูกค้ารายนี้ — กำลังจัดทำ
-      </p>
-    </div>
-  );
-}
+// ── ใบเสนอราคา tab → extracted to ./quote-tab.tsx (QuoteTab) ───────────────
 
 // ── info + cost-floor tab (legacy tab 3) ──────────────────────────────────
 // Shows the system explainer + the CBM ราคาขายขั้นต่ำ table. The floor is
