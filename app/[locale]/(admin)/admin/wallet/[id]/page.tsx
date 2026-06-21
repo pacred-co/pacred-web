@@ -74,6 +74,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -634,8 +635,7 @@ export default async function AdminWalletDetail({
                   rel="noopener noreferrer"
                   className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[420px] mx-auto object-contain" />
+                  <SlipImage src={slipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
                 </a>
               ) : row.imagesslip ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -661,8 +661,7 @@ export default async function AdminWalletDetail({
                     rel="noopener noreferrer"
                     className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={partnerSlipUrl} alt="สลิป" className="max-w-full max-h-[420px] mx-auto object-contain" />
+                    <SlipImage src={partnerSlipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
                   </a>
                 </div>
               ) : partnerSlipFilename ? (
