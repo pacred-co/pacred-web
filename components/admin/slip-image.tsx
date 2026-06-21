@@ -46,10 +46,12 @@ export function SlipImage({
       </div>
     );
     if (pdfMode === "tile") return tile;
+    // Detail view — embed the PDF inline. <iframe> renders PDFs far more
+    // reliably than <object> in Chrome (the slips are served content-type
+    // application/pdf with no X-Frame-Options, so they DO embed); min-h
+    // guarantees a visible viewport. The parent <a> still opens it full-screen.
     return (
-      <object data={src} type="application/pdf" aria-label={alt} className={className}>
-        {tile}
-      </object>
+      <iframe src={src} title={alt} className={`w-full min-h-[360px] ${className}`} />
     );
   }
 
