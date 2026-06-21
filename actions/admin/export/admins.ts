@@ -168,7 +168,7 @@ export async function exportAdminsAll(
     : await Promise.all([
         admin.from("profiles")
           .select(
-            "id, member_code, first_name, last_name, email, phone, employee_code",
+            "id, member_code, first_name, last_name, email, phone, employee_code, is_active",
           )
           .in("id", profileIds),
         admin.from("admin_contact_extras")
@@ -226,8 +226,11 @@ export async function exportAdminsAll(
     );
   }
 
-  // Drop rows with no profile (FK should prevent · defensive · matches page).
-  merged = merged.filter((r) => r.profile !== null);
+  // Drop rows with no profile + soft-deleted profiles (is_active=false = retired/
+  // merged identity, e.g. the old dup PR034 · matches the page).
+  merged = merged.filter(
+    (r) => r.profile !== null && (r.profile as { is_active?: boolean }).is_active !== false,
+  );
 
   // ── DEDUPE to ONE row per PERSON (byte-identical to the page) ───────────────
   // A person holds several (profile_id, role) grants; collapse to one — effective

@@ -350,8 +350,15 @@ export default async function AdminTablePage({
     rawRows = rawRows.filter((r) => r.extras?.section?.toLowerCase().includes(needle) ?? false);
   }
 
-  // Drop rows with no profile (FK should prevent · defensive).
-  const grantRows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
+  // Drop rows with no profile (FK should prevent · defensive) AND soft-deleted
+  // profiles (`profiles.is_active = false` = a retired/merged identity, e.g. the
+  // old duplicate พี่ป๊อป PR034 — NOT a real employee · owner 2026-06-21 "ทำไม
+  // พี่ป๊อปไปอยู่ทั้งทำงานและลาออก"). A genuinely-resigned staffer keeps
+  // profiles.is_active=true + carries ended_at / an off grant → still shows in
+  // the ลาออก tab. Only the deleted identity is excluded here.
+  const grantRows: AdminRow[] = rawRows.filter(
+    (r) => r.profile !== null && r.profile.is_active !== false,
+  );
 
   // ── DEDUPE to ONE row per PERSON (owner 2026-06-21: "ซ้ำซ้อน · เปลี่ยน role
   //    แล้วเบิ้ลเพิ่มแถว · ขึ้นปิดสิทธิ์มั่ว · มีพนักงานไม่กี่คน แถวเพียบ"). The `admins`
