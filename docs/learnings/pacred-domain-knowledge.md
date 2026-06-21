@@ -674,3 +674,34 @@ not auto-connected); biggest manual burden = the PCS↔Pacred tracking leak (no 
 **The real gap = VISIBILITY, not the model.** The owner's "per-container" mental model was outdated; the system was already per-tracking underneath. The right deliverable was to make it EXPLICIT (label the ค่าตู้ amount as "ต้นทุนต่อแทรคกิ้ง รวมตามตู้ · ตรงกับใบแจ้งหนี้ MOMO" + show แทรคกิ้ง count), NOT to "rewrite" a working money model — which would have risked breaking the live cost/profit/P&L chain for zero gain ("ห้ามทำบัค งานหาย").
 
 **Rule:** when an owner asks to "change X from per-A to per-B" on a money flow, FIRST map what the code actually does (a workflow + read the write paths + the consuming reports). The model may already be per-B; the perception gap is often a VISIBILITY/labeling gap, and the safe fix is to surface the existing per-B granularity, not re-architect a working ledger. Cross-links: `lib/admin/momo-invoice-parser.ts` · `actions/admin/report-cnt-cost-update.ts` · `app/[locale]/(admin)/admin/report-cnt/cnt-payment-modal.tsx` · the [[verify-deep-flow]] discipline.
+
+## [2026-06-21] The "เติม-แล้วจ่าย" import-payment pair = 2 tb_wallet_hs rows for ONE payment
+
+An import (ฝากนำเข้า / forwarder) payment in the legacy wallet model writes a PAIR of
+`tb_wallet_hs` rows, NOT one:
+- **TOPUP** row — `type='1'`, `amount=+X`, **carries the slip** (`imagesslip`), `reforder2=null`,
+  note "ชำระเงินพร้อมชำระฝากนำเข้า (เจ้าหน้าที่ทำรายการแทนลูกค้า)".
+- **PAY** row — `type='4'`, `typeservice='2'`, `amount=X` (debit-half), **no slip**,
+  `reforder=<forwarder fid>`, `reforder2=<the topup row id>`, note "ชำระฝากนำเข้า #<fid> (เติม-แล้วจ่าย)".
+
+Both have `status='1'` + `amount>0`, so a naïve pending-slip queue (`status='1' AND amount>0`)
+lists BOTH → the SAME customer + amount appears on 2 rows. The owner reported this 3–4× as
+"ทำไมขึ้น 2 แถว · แถวเดียวดิ" — it kept being "fixed" with thumbnails/detail/guards AROUND it
+while the 2 rows remained.
+
+**The fix that actually moves the symptom (admin/page.tsx topup case):** collapse the pair to
+ONE row = the slip-bearing TOPUP; DROP the pay-half (`type==='4' && reforder2`); tag the kept row
+with the pay-half's forwarder# ("ชำระค่าฝากนำเข้า #F…"). Dedupe the badge count too
+(`.or("type.neq.4,reforder2.is.null")`). Same-amount pairs collapse; a customer's two
+*different-amount* payments correctly stay separate.
+
+**Bigger picture (owner "ถอด wallet ทุกจุด"):** the whole topup+pay pair is the legacy
+wallet-pass-through (credit then debit = net 0). The new model is direct-cut: import payment =
+ONE `type='8'`-style slip (delta-0, no wallet). Converting `submitForwarderPayment` to emit a
+single direct-cut row (not the pair) is the upstream fix; the pending pairs + PR130's −646
+unbalanced wallet need a dry-run + accounting (see `docs/research/pay-and-accounting-gap-2026-06-21.md` §A1).
+
+**Process lesson (→ skill `session-continuity`):** when the owner points at a screenshot, the
+deliverable is THAT screenshot changing. Reproduce the exact visible symptom on the LIVE page +
+probe the prod data to find WHY (here: 2 rows = a wallet_hs pair) BEFORE coding, and re-verify on
+the live page AFTER deploy. A green build is not "done"; the owner seeing 1 row is.
