@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Phone, MessageCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -36,39 +36,6 @@ const CURATED_SALES: SalesPerson[] = [
   // CONTACT.phoneCs / sidebar CS fallback stay; only the rendered card is gone.
 ];
 
-// Tracks the card nearest the viewport centre while the MOBILE carousel scrolls,
-// so the centred card can get a slight zoom. No-op on md+ (it's a static grid).
-function useActiveCard(initialIdx: number) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [activeIdx, setActiveIdx] = useState(initialIdx);
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    const isMobile = () => !window.matchMedia("(min-width: 768px)").matches;
-    const update = () => {
-      if (!isMobile()) return;
-      const centre = scroller.scrollLeft + scroller.clientWidth / 2;
-      const cards = Array.from(scroller.children) as HTMLElement[];
-      let idx = 0;
-      let best = Infinity;
-      cards.forEach((c, i) => {
-        const cc = c.offsetLeft + c.clientWidth / 2;
-        const d = Math.abs(cc - centre);
-        if (d < best) { best = d; idx = i; }
-      });
-      setActiveIdx(idx);
-    };
-    requestAnimationFrame(update);
-    scroller.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      scroller.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-  return { scrollRef, activeIdx };
-}
-
 interface ContactSalesProps {
   /** Hide the bottom assurance strip (ตอบไว · ปรึกษาฟรี · 14+ ปี) */
   hideAssuranceStrip?: boolean;
@@ -78,7 +45,6 @@ interface ContactSalesProps {
 
 export function ContactSales({ hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
   const t = useTranslations("contactSales");
-  const { scrollRef, activeIdx } = useActiveCard(0);
 
   // Live roster (owner 2026-06-15: "ลูกค้าด้วย … ผูกกันออโต้") — the displayed
   // team = the REAL flagged sales reps. Start from the curated cards (SSR/SEO +
@@ -130,26 +96,22 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
           </p>
         </div>
 
-        {/* Team cards — mobile = swipe carousel (centred card zooms slightly),
-            md+ = static 3-up grid. No red active state. */}
-        <div
-          ref={scrollRef}
-          className="mt-4 md:mt-10 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-[10px] px-[10px] items-stretch [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-5 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none"
-        >
-          {displaySales.map((s, i) => (
+        {/* Team cards — ONE horizontal row on mobile showing 2 cards at a time,
+            swipe for the rest (ปอน 2026-06-21 "แถวเดียว แสดงผล 2 การ์ด เลื่อนได้");
+            3-up static grid on desktop. Internals scale down on mobile so the
+            narrow 2-up card never clips the phone pill (verified 360 + 320px). */}
+        <div className="mt-4 md:mt-10 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-[10px] px-[10px] items-stretch [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-5 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
+          {displaySales.map((s) => (
             <div
               key={s.id}
-              className={[
-                "shrink-0 w-[82%] max-w-[300px] snap-center md:w-auto md:max-w-none rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface shadow-[0_8px_20px_rgba(15,23,42,0.06)] transition-all duration-300 md:hover:scale-[1.03] md:hover:z-10 md:hover:shadow-[0_16px_36px_rgba(15,23,42,0.13)]",
-                i === activeIdx ? "max-md:scale-[1.03] max-md:z-10" : "",
-              ].join(" ")}
+              className="shrink-0 w-[46%] max-w-[300px] snap-start md:w-auto md:max-w-none rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface shadow-[0_8px_20px_rgba(15,23,42,0.06)] transition-all duration-300 md:hover:scale-[1.03] md:hover:z-10 md:hover:shadow-[0_16px_36px_rgba(15,23,42,0.13)]"
             >
               {/* LINE-OA-style card (ปอน 2026-06-20): vertical + centred — big
                   circular avatar → name → role → red phone pill → tagline →
                   ติดต่อ (LINE). Same on desktop + mobile. */}
-              <div className="flex h-full flex-col items-center p-4 md:p-6 text-center">
+              <div className="flex h-full flex-col items-center p-3 md:p-6 text-center">
                 {/* Big circular avatar */}
-                <div className="relative w-[104px] h-[104px] md:w-[124px] md:h-[124px] rounded-full overflow-hidden shrink-0 border-4 border-white bg-white shadow-[0_10px_24px_rgba(179,0,0,0.20)] ring-2 ring-primary-200 dark:ring-primary-900/40">
+                <div className="relative w-[84px] h-[84px] md:w-[124px] md:h-[124px] rounded-full overflow-hidden shrink-0 border-4 border-white bg-white shadow-[0_10px_24px_rgba(179,0,0,0.20)] ring-2 ring-primary-200 dark:ring-primary-900/40">
                   <Image
                     src={s.image}
                     alt={t(s.altKey)}
@@ -161,18 +123,18 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                 </div>
 
                 {/* Name + ONLINE */}
-                <div className="mt-3 flex items-center justify-center gap-1.5">
-                  <h3 className="text-[20px] md:text-[23px] font-black leading-none tracking-tight text-[#111827] dark:text-white">
+                <div className="mt-2.5 md:mt-3 flex items-center justify-center gap-1 md:gap-1.5">
+                  <h3 className="text-[16px] md:text-[23px] font-black leading-none tracking-tight text-[#111827] dark:text-white">
                     {s.name}
                   </h3>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 text-[8.5px] font-black tracking-[0.08em]">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 text-[8px] md:text-[8.5px] font-black tracking-[0.08em]">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                     ONLINE
                   </span>
                 </div>
 
                 {/* Role */}
-                <div className="mt-1 text-[10px] md:text-[11px] font-black uppercase tracking-[0.10em] text-primary-600">
+                <div className="mt-1 text-[9px] md:text-[11px] font-black uppercase tracking-[0.08em] md:tracking-[0.10em] text-primary-600">
                   {t(s.roleKey)}
                 </div>
 
@@ -180,14 +142,14 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                 <a
                   href={`tel:${s.phone.replace(/-/g, "")}`}
                   onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.roleKey })}
-                  className="mt-2.5 inline-flex items-center justify-center gap-1.5 rounded-full bg-primary-600 px-4 py-1.5 text-[13px] md:text-[14px] font-black tracking-tight text-white shadow-[0_6px_16px_rgba(179,0,0,0.28)] hover:bg-primary-700 transition-colors"
+                  className="mt-2 inline-flex items-center justify-center gap-1 md:gap-1.5 rounded-full bg-primary-600 px-2.5 py-1.5 md:px-4 text-[11.5px] md:text-[14px] font-black tracking-tight text-white shadow-[0_6px_16px_rgba(179,0,0,0.28)] hover:bg-primary-700 transition-colors"
                 >
-                  <Phone className="w-3.5 h-3.5" strokeWidth={2.8} />
+                  <Phone className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" strokeWidth={2.8} />
                   {s.phone}
                 </a>
 
                 {/* Tagline */}
-                <p className="mt-2.5 text-[12px] md:text-[13px] leading-[1.5] font-medium text-muted line-clamp-2 min-h-[36px]">
+                <p className="mt-2 md:mt-2.5 text-[11px] md:text-[13px] leading-[1.45] md:leading-[1.5] font-medium text-muted line-clamp-2 min-h-[32px] md:min-h-[36px]">
                   {t(s.taglineKey)}
                 </p>
 
@@ -197,10 +159,10 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                   cta="line_consult"
                   surface="contact_sales"
                   ctaProps={{ rep: s.name, role: s.roleKey }}
-                  className="mt-auto pt-3 w-full"
+                  className="mt-auto pt-2.5 md:pt-3 w-full"
                 >
-                  <span className="inline-flex w-full items-center justify-center gap-1.5 h-11 rounded-xl text-[13px] md:text-[13.5px] font-black bg-[#06C755] text-white hover:bg-[#05a548] shadow-[0_8px_18px_rgba(6,199,85,0.30)] transition-all duration-300">
-                    <MessageCircle className="w-4 h-4" strokeWidth={2.6} fill="currentColor" />
+                  <span className="inline-flex w-full items-center justify-center gap-1.5 h-10 md:h-11 rounded-xl text-[12px] md:text-[13.5px] font-black bg-[#06C755] text-white hover:bg-[#05a548] shadow-[0_8px_18px_rgba(6,199,85,0.30)] transition-all duration-300">
+                    <MessageCircle className="w-4 h-4 shrink-0" strokeWidth={2.6} fill="currentColor" />
                     {t("chatLine")}
                   </span>
                 </TrackedExternalLink>
