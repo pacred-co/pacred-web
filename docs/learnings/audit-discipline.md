@@ -182,3 +182,19 @@ as sell-basis — a latent bug; the data fix touched only `fcosttotalprice`, nev
 Aside: that row's cbm 0.0022 for 4.10 kg = 1,863 kg/cbm (denser than steel) → the CBM
 itself is likely a placeholder from before the China packing-list ingestion. The
 cost-basis fix is correct regardless; the cost re-derives when the real cbm lands.
+
+---
+
+## [2026-06-20] A count computed in N places WILL drift — make one SOT helper, route every caller through it (delivery-day dept sweep)
+
+**Context:** a 4-department adversarial audit (คลัง → ลูกค้า → บัญชี → คนขับ, each: 2-3 parallel finders → adversarial verifiers → confirmed-safe list). Hit rate was low-but-real: customer 17→0 confirmed (clean), accounting 17→1 (a stale JSDoc), warehouse 10→1 (a silent error-swallow), **driver 10→5** — the richest, and they all had ONE root.
+
+**The driver root cause (the owner's "badge อย่ามั่ว"):** the "งานรอจัดรถ / มอบงานคนขับ" count was computed in THREE places with THREE different predicates:
+- `lib/admin/pending-dispatch.ts countPendingDispatch` — fstatus=6 minus open-batch (omitted `paydeposit<>'1'`).
+- `actions/admin/sidebar-counts.ts driverItems` — a byte-identical DUPLICATE of `forwarderDelivery` (all fstatus=6, ignored both filters).
+- `logistics-board/page.tsx` — its own inline fstatus=6 minus open-batch (omitted paydeposit).
+Meanwhile the ACTUAL assign form (`drivers/new`) + the legacy `forwarder-driver.php` both gate on `fstatus=6 AND paydeposit<>'1' AND not-in-open-batch`. So the 3 badges over-counted (showed "3 รอจัดรถ" while the form listed 0) — a customer-facing "ค่าไม่ขึ้น/ผิด" right after a demo.
+
+**Fix pattern (the reusable lesson):** when the same business count/figure appears on ≥2 surfaces (a sidebar badge, a banner, a dashboard card, a list footer), it is a SOT candidate — make ONE pure/async helper that encodes the predicate (here `countPendingDispatch` with the full legacy filter) and have EVERY surface call it. A duplicated `.eq("fstatus","6")` in a Promise.all is the smell; it drifts the moment one site adds a filter. The faithful predicate lives in the legacy SQL + the real action that consumes the rows — derive the helper from THOSE, not from the badge that happens to be wrong.
+
+**Audit-method note:** the adversarial verify step earned its keep — across the 4 depts it dismissed the large majority of finder claims as false-positives (misread comments, claims about non-existent code, already-guarded paths) and the 0-confirmed customer dept proved the finders weren't just rubber-stamping. Trust the *verified* list, not the raw finder count. Cross-links: [[verify-deep-flow]] · `lib/admin/pending-dispatch.ts` · the §0f badge-accuracy rule.
