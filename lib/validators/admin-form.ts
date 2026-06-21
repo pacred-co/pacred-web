@@ -200,7 +200,12 @@ const optionalUrl = z
 export const AdminCreateSchema = z
   .object({
     // ── required ─────────────────────────────────────────────────
-    email:        emailAddress,
+    // login_id = the staff login USERNAME (owner 2026-06-21: separate from email).
+    // The action derives the auth key admin_<login_id>@pacred.co.th. `email` is now
+    // the staffer's REAL email (optional · NOT the login key).
+    login_id:     z.string().trim().min(1, "กรุณากรอก User ID (ไอดีเข้าระบบ)").max(64)
+                    .regex(/^[a-z0-9_]+$/i, "User ID ใช้ได้เฉพาะ a-z 0-9 _"),
+    email:        optionalEmail,
     password:     adminPasswordSchema,
     first_name:   z.string().trim().min(1, "กรุณากรอกชื่อ").max(200),
     last_name:    z.string().trim().min(1, "กรุณากรอกนามสกุล").max(200),
@@ -255,6 +260,9 @@ export const AdminUpdateSchema = z
     // identity
     first_name:    z.string().trim().min(1, "กรุณากรอกชื่อ").max(200).optional(),
     last_name:     z.string().trim().min(1, "กรุณากรอกนามสกุล").max(200).optional(),
+    // REAL email (owner 2026-06-21: separate from the login-id). Editable here so
+    // existing staff can replace the old synthetic email with their real one.
+    email:         optionalEmail,
     phone:         optionalText(50),
     avatar_url:    optionalUrl,
     birthday:      optionalDate,

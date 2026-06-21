@@ -70,6 +70,8 @@ export function AdminCreateNewForm({
   // `admin_*@pacred.co.th` convention that signIn already resolves — so staff
   // log in by this User ID, never by typing an email.
   const [userId, setUserId]       = useState<string>("");
+  // REAL email (owner 2026-06-21: separate from the login User ID). Optional.
+  const [realEmail, setRealEmail] = useState<string>("");
   const [password, setPassword]   = useState<string>("");
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName]   = useState<string>("");
@@ -150,6 +152,7 @@ export function AdminCreateNewForm({
 
   function resetForm() {
     setUserId("");
+    setRealEmail("");
     setPassword("");
     setFirstName("");
     setLastName("");
@@ -195,7 +198,8 @@ export function AdminCreateNewForm({
 
     startTransition(async () => {
       const result = await adminCreateNew({
-        email: derivedEmail,
+        login_id: loginId,                       // the staff login USERNAME
+        email: realEmail.trim() || undefined,    // REAL email (optional · NOT the login key)
         password,
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
@@ -334,6 +338,27 @@ export function AdminCreateNewForm({
             />
             <p className="mt-1 text-[11px] text-muted">
               ลง <code className="font-mono">auth.users</code> ให้เอง — พนักงาน login ด้วย User ID ไม่ต้องพิมพ์อีเมลนี้.
+            </p>
+          </div>
+
+          {/* REAL email — separate from the login User ID (owner 2026-06-21) */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              อีเมลจริง (สำหรับติดต่อ){" "}
+              <span className="text-[10px] text-muted">— ไม่บังคับ · คนละช่องกับ User ID</span>
+            </label>
+            <input
+              type="email"
+              value={realEmail}
+              onChange={(e) => setRealEmail(e.target.value)}
+              maxLength={200}
+              placeholder="เช่น somchai@gmail.com"
+              disabled={pending}
+              autoComplete="off"
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              อีเมลจริงของพนักงาน — เก็บไว้ใช้ติดต่อ ไม่เกี่ยวกับการ login.
             </p>
           </div>
 

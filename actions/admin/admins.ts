@@ -920,9 +920,19 @@ export async function adminCreateNew(
         }
       }
 
+      // ── Login identity (owner 2026-06-21: login-id separate from email) ──
+      // login_id is the staff USERNAME; the auth key is the synthetic
+      // admin_<login_id>@pacred.co.th (what signInAdmin computes). The staffer's
+      // REAL email (d.email · optional) goes to profiles.email, NOT the auth key.
+      const loginId = d.login_id.trim().toLowerCase().startsWith("admin_")
+        ? d.login_id.trim().toLowerCase()
+        : `admin_${d.login_id.trim().toLowerCase()}`;
+      const loginEmail = `${loginId}@pacred.co.th`;
+      const realEmail = d.email?.trim() || null;
+
       // ── 1. Provision Supabase auth.user ────────────────────────
       const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-        email:         d.email,
+        email:         loginEmail,
         password:      d.password,
         email_confirm: true,                  // skip Supabase's confirmation email
         user_metadata: {
@@ -963,19 +973,20 @@ export async function adminCreateNew(
         const staffEmployeeCode =
           d.employee_code?.trim() || `STAFF-${profileId.replace(/-/g, "").slice(0, 12)}`;
         const { error: profErr } = await admin.from("profiles").insert({
-          id:            profileId,
-          email:         d.email,
-          first_name:    d.first_name,
-          last_name:     d.last_name,
-          phone:         d.phone ?? null,
-          avatar_url:    d.avatar_url ?? null,
-          birthday:      d.birthday ?? null,
-          sex:           d.sex ?? null,
-          employee_code: staffEmployeeCode,
-          account_type:  "personal",
-          status:        "active",
-          is_active:     true,
-          register_with: "email",
+          id:             profileId,
+          email:          realEmail,            // REAL email (or null) — NOT the login key
+          admin_login_id: loginId,              // the staff login username (owner 2026-06-21)
+          first_name:     d.first_name,
+          last_name:      d.last_name,
+          phone:          d.phone ?? null,
+          avatar_url:     d.avatar_url ?? null,
+          birthday:       d.birthday ?? null,
+          sex:            d.sex ?? null,
+          employee_code:  staffEmployeeCode,
+          account_type:   "personal",
+          status:         "active",
+          is_active:      true,
+          register_with:  "email",
         });
         if (profErr) {
           throw new Error(`profiles insert: ${profErr.message}`);
@@ -1038,7 +1049,8 @@ export async function adminCreateNew(
         }
 
         await logAdminAction(adminId, "admin.create", "profiles", profileId, {
-          email:           d.email,
+          login_id:        loginId,
+          email:           realEmail,
           role:            d.role,
           legacy_admin_id: d.legacy_admin_id ?? null,
           has_hr_fields:   hasAnyHRField(d),
@@ -1110,6 +1122,10 @@ export async function adminUpdateProfileFields(
     const profileUpdate: Record<string, unknown> = {};
     if (d.first_name !== undefined) profileUpdate.first_name = d.first_name;
     if (d.last_name  !== undefined) profileUpdate.last_name  = d.last_name;
+    // REAL email (owner 2026-06-21) — separate from the login-id. Never written
+    // to auth.users (the login key stays admin_<login_id>@pacred.co.th), so
+    // editing it here can't change how the staffer signs in.
+    if (d.email      !== undefined) profileUpdate.email      = d.email ?? null;
     if (d.phone      !== undefined) profileUpdate.phone      = d.phone ?? null;
     if (d.avatar_url !== undefined) profileUpdate.avatar_url = d.avatar_url ?? null;
     if (d.birthday   !== undefined) profileUpdate.birthday   = d.birthday ?? null;
@@ -1337,6 +1353,7 @@ export async function adminChangeRole(
 export type AdminEditLoad = {
   profile_id:       string;
   email:            string | null;
+  admin_login_id:   string | null;
   first_name:       string | null;
   last_name:        string | null;
   phone:            string | null;
@@ -1371,11 +1388,11 @@ export async function loadAdminForEdit(
       admin
         .from("profiles")
         .select(
-          "id, email, first_name, last_name, phone, avatar_url, birthday, sex, employee_code, member_code, is_active",
+          "id, email, admin_login_id, first_name, last_name, phone, avatar_url, birthday, sex, employee_code, member_code, is_active",
         )
         .eq("id", profileId)
         .maybeSingle<{
-          id: string; email: string | null; first_name: string | null; last_name: string | null;
+          id: string; email: string | null; admin_login_id: string | null; first_name: string | null; last_name: string | null;
           phone: string | null; avatar_url: string | null; birthday: string | null;
           sex: "male" | "female" | "other" | null; employee_code: string | null; member_code: string | null; is_active: boolean;
         }>(),
@@ -1431,6 +1448,7 @@ export async function loadAdminForEdit(
         row: {
           profile_id:       p.id,
           email:            p.email,
+          admin_login_id:   p.admin_login_id,
           first_name:       p.first_name,
           last_name:        p.last_name,
           phone:            p.phone,
