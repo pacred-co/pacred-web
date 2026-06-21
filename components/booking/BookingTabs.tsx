@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, LayoutGrid } from "lucide-react";
 import type { TabMode } from "@/types/booking";
 
 interface BookingTabsProps {
@@ -37,6 +37,8 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
   // Scroll-affordance state: show arrows only when there's overflow on that side
   const [canScrollLeft, setCanScrollLeft]   = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  // Mobile: services collapse behind an "อื่นๆ" toggle; tap reveals the row.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (twoRow) return; // no horizontal scroll in the 2-row layout → no arrows
@@ -83,6 +85,8 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
   const tabs = only
     ? only.map((m) => allTabs.find((tab) => tab.mode === m)).filter((tab): tab is TabItem => Boolean(tab))
     : allTabs;
+  const transportTabs = tabs.filter((tb) => tb.group === "transport");
+  const serviceTabs = tabs.filter((tb) => tb.group === "service");
 
   // Scroll the active tab into view (so users see it even after layout switch)
   useEffect(() => {
@@ -187,7 +191,7 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
       >
         <span
           className={[
-            "flex h-14 w-14 items-center justify-center rounded-full text-[24px] leading-none transition-all",
+            "flex h-12 w-12 items-center justify-center rounded-full text-[20px] leading-none transition-all",
             // ปอน 2026-06-19: row 1 (transport เรือ/รถ/แอร์) = RED circle + WHITE icon ·
             // row 2 (service) = WHITE circle + RED icon. Active adds a ring.
             tab.disabled
@@ -227,11 +231,42 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
               "ทำให้เป็นไอคอนกลมๆแบบ trip เฉพาะมือถือ"). Transport row (3) over the
               services row (4). Desktop is untouched (hidden here). */}
           <div className="px-3 pt-2 pb-1.5 md:hidden">
-            <div className="grid grid-cols-3 gap-2">
-              {tabs.filter((tb) => tb.group === "transport").map(renderCircle)}
+            {/* Row 1 (4-up): 3 transport circles + an "อื่นๆ" toggle. Tapping
+                "อื่นๆ" slides the service row open below (ปอน 2026-06-21). */}
+            <div className="grid grid-cols-4 gap-2">
+              {transportTabs.map(renderCircle)}
+              {serviceTabs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  aria-expanded={expanded}
+                  aria-controls="booking-more-services"
+                  className="flex flex-col items-center gap-1.5 py-1 transition-transform active:scale-95"
+                >
+                  <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white border border-gray-200 shadow-sm text-red-600">
+                    {expanded
+                      ? <ChevronUp className="h-5 w-5" strokeWidth={2.5} />
+                      : <LayoutGrid className="h-5 w-5" strokeWidth={2.5} />}
+                    {!expanded && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                        +{serviceTabs.length}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-center text-[11px] font-semibold leading-tight text-gray-600">
+                    {expanded ? "ย่อ" : "อื่นๆ"}
+                  </span>
+                </button>
+              )}
             </div>
-            <div className="mt-2.5 grid grid-cols-4 gap-1">
-              {tabs.filter((tb) => tb.group === "service").map(renderCircle)}
+            {/* Row 2 (services) — collapsed by default, slides open on "อื่นๆ" */}
+            <div
+              id="booking-more-services"
+              className={`grid grid-cols-4 gap-1 overflow-hidden transition-all duration-300 ease-out ${
+                expanded ? "mt-2.5 max-h-40 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+              }`}
+            >
+              {serviceTabs.map(renderCircle)}
             </div>
           </div>
 

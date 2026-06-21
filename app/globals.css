@@ -63,10 +63,12 @@ body {
    --background token (#ffffff) on every viewport. Footer carries the
    light-gray surface tint to delineate the page edge. */
 
-/* Mobile bottom-nav clearance */
+/* Mobile bottom-nav clearance — the FloatingTabs bottom bar is ~75px tall and
+   the centre call-FAB protrudes ~11px above it, so clear 90px + safe-area so
+   page content never sits under the bar (ปอน 2026-06-21). */
 @media (max-width: 767px) {
   body {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: calc(90px + env(safe-area-inset-bottom));
   }
   /* Auth/admin routes where FloatingTabs is hidden — kill the clearance gap
      (the bottom nav isn't there, so the 64px would just push content down). */

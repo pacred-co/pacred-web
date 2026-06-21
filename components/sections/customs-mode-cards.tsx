@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import {
   Ship,
@@ -12,11 +12,22 @@ import {
   Sparkles,
   ArrowRight,
   Lock,
+  ChevronDown,
+  MapPin,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
 const PATH = "/customs-clearance-shipping-suvarnabhumi";
+
+// Mobile 2-row grid placement (ปอน 2026-06-21): AIR full-width on top, then
+// TRUCK + SEA on the second row. `order-*` reorders within the grid (DOM order
+// is SEA, AIR, TRUCK); reset to DOM order + single-col on desktop (md+).
+const MOBILE_GRID: Record<string, string> = {
+  แอร์: "order-1 col-span-2 md:order-none md:col-span-1",
+  รถ: "order-2 md:order-none",
+  เรือ: "order-3 md:order-none",
+};
 
 type Stat = { icon: typeof Clock; label: string; value: string };
 
@@ -116,92 +127,21 @@ export function CustomsModeCards() {
     },
   ];
 
-  // On mobile (<768px), the carousel snaps to centre and locks the AIR
-  // (recommended) card as the default — per ปอน 2026-05-20 night: AIR is the
-  // recommended service, so on load AIR is centred and SEA + TRUCK peek
-  // in from the sides. Swipes snap-center to whichever card is closest.
-  // Desktop stays as a 3-col grid (no scroll).
-  const scrollRef   = useRef<HTMLDivElement | null>(null);
-  const featuredRef = useRef<HTMLElement   | null>(null);
-
-  // Active card index — the one displayed in the red gradient style.
-  // Updates on mobile swipe (closest to viewport centre) + desktop hover
-  // (onMouseEnter). Initial value = the MODES index marked `featured: true`
-  // (AIR) so first paint matches the previous static layout. Per ปอน
-  // 2026-05-20: "ในคอมเป็นเอาเมาส์ไปชี้ สีจะย้ายไปที่ชี้, ในมือถือเลื่อนแล้ว
-  // สีไปตกที่การ์ดที่เลื่อนไป".
+  // Mobile layout (ปอน 2026-06-21): a 2-row grid — AIR full-width on top, then
+  // TRUCK + SEA side-by-side below (see MOBILE_GRID order/span classes). No more
+  // swipe carousel. `activeIdx` now drives the DESKTOP hover-zoom only; it starts
+  // on the AIR (featured) card so AIR is emphasised on first desktop paint.
   const initialActiveIdx = Math.max(0, MODES.findIndex((m) => m.featured));
   const [activeIdx, setActiveIdx] = useState(initialActiveIdx);
 
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    const card     = featuredRef.current;
-    if (!scroller || !card) return;
-
-    const isMobile = () => !window.matchMedia("(min-width: 768px)").matches;
-
-    const centerAirCard = () => {
-      if (!isMobile()) return;
-      // Centre the featured card within the visible viewport. We avoid
-      // scrollIntoView() because it scrolls the WHOLE PAGE Y — we only want
-      // the horizontal scroller. scrollLeft= is the simplest reliable form
-      // (no behavior arg → instant, no smooth-scroll → no visible jump on
-      // first paint).
-      const target = card.offsetLeft - (scroller.clientWidth - card.clientWidth) / 2;
-      scroller.scrollLeft = Math.max(0, target);
-    };
-
-    const updateActive = () => {
-      // Mobile only — on desktop the active card is driven by mouse hover.
-      if (!isMobile()) return;
-      const viewportCentre = scroller.scrollLeft + scroller.clientWidth / 2;
-      const cards = Array.from(scroller.children) as HTMLElement[];
-      let closestIdx = 0;
-      let closestDist = Infinity;
-      cards.forEach((c, idx) => {
-        const cardCentre = c.offsetLeft + c.clientWidth / 2;
-        const dist = Math.abs(cardCentre - viewportCentre);
-        if (dist < closestDist) {
-          closestDist = dist;
-          closestIdx = idx;
-        }
-      });
-      setActiveIdx(closestIdx);
-    };
-
-    // 1) First pass — after current layout. requestAnimationFrame ensures
-    //    we run AFTER the browser has computed widths.
-    requestAnimationFrame(centerAirCard);
-
-    // 2) Re-run after the banner images load — Next/Image fills the 128px
-    //    header on mount but card height + offsets can still shift a tick.
-    const imgs = Array.from(card.querySelectorAll("img"));
-    const onLoad = () => requestAnimationFrame(centerAirCard);
-    imgs.forEach((img) => {
-      if (!img.complete) img.addEventListener("load", onLoad, { once: true });
-    });
-
-    // 3) Mobile swipe → red follows the centred card.
-    scroller.addEventListener("scroll", updateActive, { passive: true });
-
-    // 4) Re-centre on viewport changes (rotation, browser chrome toggle).
-    const onResize = () => requestAnimationFrame(centerAirCard);
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-      scroller.removeEventListener("scroll", updateActive);
-      imgs.forEach((img) => img.removeEventListener("load", onLoad));
-    };
-  }, []);
+  // Per-card "เงื่อนไข เพิ่มเติม" collapse state (mobile only · keyed by mode).
+  // Like the warehouse cards: the details (services + partners) hide behind a
+  // toggle on mobile so the 2-up cards stay compact; always shown on desktop.
+  const [openTerms, setOpenTerms] = useState<Record<string, boolean>>({});
 
   return (
     <div className="relative">
-      <div
-        ref={scrollRef}
-        className="flex overflow-x-auto gap-3 -mx-4 px-[8%] pt-2 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pt-3 md:pb-2 md:snap-none md:items-stretch"
-      >
+      <div className="grid grid-cols-2 gap-3 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch">
         {MODES.map((c, i) => {
           const Icon = c.badgeIcon;
           // `isRecommended` = the card flagged in MODES data (AIR) — controls
@@ -209,25 +149,26 @@ export function CustomsModeCards() {
           // `isFeatured` = the card the user is currently looking at (active)
           // — controls the red gradient styling. Updates on swipe / hover.
           const isRecommended = c.featured;
-          // Cards stay white — the active card (hover desktop · scroll-centre mobile)
-          // gets a slight zoom instead of turning red (owner 2026-06-16).
+          // Cards stay white — the active card (hover desktop) gets a slight zoom
+          // instead of turning red (owner 2026-06-16).
           const active        = i === activeIdx;
           const isFeatured    = false;
+          const showTerms     = !!openTerms[c.mode];
           return (
             <article
               key={c.mode}
-              ref={isRecommended ? featuredRef : undefined}
               onMouseEnter={() => {
-                // Desktop hover — mobile is driven by the scroll listener instead
+                // Desktop hover drives the active-card zoom (mobile = static grid)
                 if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) {
                   setActiveIdx(i);
                 }
               }}
               className={[
-                "group relative flex flex-col shrink-0 w-[84%] sm:w-[400px] md:w-auto snap-center md:snap-none rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
+                "group relative flex flex-col rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
+                MOBILE_GRID[c.mode] ?? "",
                 "bg-white dark:bg-surface text-foreground border border-border shadow-[0_8px_22px_rgba(15,23,42,0.06)]",
-                // active card (scroll-centred mobile · hover desktop) zooms — no red
-                active ? "scale-[1.02] md:scale-[1.03] z-10" : "",
+                // active card (desktop hover) zooms slightly — desktop only
+                active ? "md:scale-[1.03] md:z-10" : "",
               ].join(" ")}
             >
               {/* "แนะนำ" tag — content-meaningful, stays only on the AIR card.
@@ -254,17 +195,20 @@ export function CustomsModeCards() {
                 />
               )}
 
-              {/* Banner image header with title overlay */}
+              {/* Banner image — MOBILE = clean, sharp photo (FreightCard pattern ·
+                  ปอน 2026-06-21 "รูปชัดๆ ไม่เบลอ เฉพาะมือถือ") with the title + price
+                  in the white body below · DESKTOP = the original overlay design. */}
               <div className="relative h-32 md:h-40 overflow-hidden">
                 <Image
                   src={c.image}
                   alt={c.imageAlt}
                   fill
-                  sizes="(max-width: 768px) 88vw, 440px"
+                  sizes="(max-width: 768px) 92vw, 440px"
                   className="object-cover"
                 />
-                <div className={`absolute inset-0 bg-gradient-to-br ${c.accent} mix-blend-multiply`} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                {/* Dark gradients — DESKTOP only; the mobile photo stays clean & sharp. */}
+                <div className={`absolute inset-0 hidden md:block bg-gradient-to-br ${c.accent} mix-blend-multiply`} />
+                <div className="absolute inset-0 hidden md:block bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 <div className="absolute top-3 left-3">
                   <span
                     className={[
@@ -278,64 +222,69 @@ export function CustomsModeCards() {
                     {c.badge}
                   </span>
                 </div>
-                <div className="absolute bottom-3 left-3 right-3">
-                  <h3 className="text-[20px] md:text-[24px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                {/* Title + price OVERLAY — DESKTOP only (mobile shows them in the
+                    white body below, over the clean image · ปอน 2026-06-21). */}
+                <div className="absolute bottom-3 left-3 right-3 hidden md:block">
+                  {/* Title is smaller on the narrow (TRUCK/SEA) cards so it never
+                      overflows the banner; the full-width AIR hero keeps it big. */}
+                  <h3 className={`${isRecommended ? "text-[18px]" : "text-[14px]"} md:text-[23px] font-black text-white leading-[1.1] tracking-tight line-clamp-2 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]`}>
                     {c.title}
                   </h3>
-                  <p className="mt-0.5 text-[12px] md:text-[13px] text-white/95 font-bold drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)]">
-                    {c.ports}
-                  </p>
+                  {/* Price — white strip on the banner, right with the title
+                      (ปอน 2026-06-21: "เอาราคาไปอยู่ข้างๆ ทางรถ/เรือ/แอร์ · แถบขาว").
+                      The ports list moved into the เงื่อนไข details below so the banner
+                      stays clean. The pill holds the number only; "+ ค่าใช้จ่ายอื่น"
+                      sits beside it as a white caption (nowrap → never char-wraps). */}
+                  <div className="mt-2 flex items-end gap-1.5 flex-wrap">
+                    <span className="inline-flex items-baseline gap-1 rounded-lg bg-white px-2.5 py-1 shadow-[0_3px_10px_rgba(0,0,0,0.32)]">
+                      <span className="text-[18px] md:text-[21px] font-black leading-none tracking-tight text-primary-600">{c.price}</span>
+                      <span className="text-[10px] font-black text-primary-600">{t("baht")}</span>
+                    </span>
+                    <span className="pb-1 text-[8.5px] font-bold leading-none text-white/85 whitespace-nowrap drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">{t("plusOtherFees")}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="relative z-10 flex-1 flex flex-col gap-2.5 p-3.5 md:p-4">
-                {/* Price block — big bold number */}
-                <div
-                  className={[
-                    "rounded-xl px-3.5 py-2.5 border",
-                    isFeatured
-                      ? "bg-white/12 border-white/20 backdrop-blur-sm"
-                      : "bg-primary-50/60 border-primary-100 dark:bg-primary-900/20 dark:border-primary-800",
-                  ].join(" ")}
-                >
-                  <div
-                    className={[
-                      "text-[10px] md:text-[10.5px] font-bold tracking-[0.10em] uppercase leading-none",
-                      isFeatured ? "text-yellow-200/90" : "text-primary-700/80 dark:text-primary-300/80",
-                    ].join(" ")}
-                  >
-                    {t("priceLabel")}
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1.5">
-                    <span
-                      className={[
-                        "text-[30px] md:text-[34px] font-black leading-none tracking-tight",
-                        isFeatured ? "text-yellow-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)]" : "text-primary-600 dark:text-primary-300",
-                      ].join(" ")}
-                    >
-                      {c.price}
+              <div className="relative z-10 flex-1 flex flex-col gap-2 md:gap-2.5 p-3 md:p-4">
+                {/* MOBILE title + price — one row below the clean image (ปอน 2026-06-21
+                    "ชื่อ กับ ราคา 2,800 อยู่บรรทัดเดียวกัน"). Desktop renders these on
+                    the image overlay instead, so this row is md:hidden. */}
+                <div className="md:hidden flex items-center justify-between gap-2">
+                  <h3 className="flex-1 min-w-0 text-[12px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2">
+                    {c.title}
+                  </h3>
+                  <div className="shrink-0 text-right leading-none">
+                    <span className="inline-flex items-baseline gap-0.5">
+                      <span className="text-[17px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
+                      <span className="text-[8.5px] font-black text-primary-600">{t("baht")}</span>
                     </span>
-                    <span
-                      className={[
-                        "text-[14px] md:text-[15px] font-bold",
-                        isFeatured ? "text-yellow-200" : "text-primary-700 dark:text-primary-300",
-                      ].join(" ")}
-                    >
-                      {t("baht")}
-                    </span>
-                    <span
-                      className={[
-                        "ml-auto text-[10px] md:text-[10.5px] font-medium",
-                        isFeatured ? "text-white/70" : "text-muted",
-                      ].join(" ")}
-                    >
-                      {t("plusOtherFees")}
-                    </span>
+                    <div className="mt-0.5 text-[7px] font-medium text-muted leading-none">{t("plusOtherFees")}</div>
                   </div>
                 </div>
 
-                {/* Spec row — 3 mini cards */}
-                <div className="grid grid-cols-3 gap-1.5 md:gap-2">
+                {/* "เงื่อนไข เพิ่มเติม / ย่อ" — light-bordered bar (ปอน 2026-06-21
+                    "ข้างล่างเป็นขอบขาวๆ เงื่อนไข"), mobile only. Reveals the details
+                    below; desktop shows everything so the toggle is hidden there. */}
+                <button
+                  type="button"
+                  onClick={() => setOpenTerms((prev) => ({ ...prev, [c.mode]: !prev[c.mode] }))}
+                  aria-expanded={showTerms}
+                  className="md:hidden w-full inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-white/15 bg-white dark:bg-surface py-1.5 text-[11.5px] font-bold text-slate-600 dark:text-white/75 active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                >
+                  {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2.6} />
+                </button>
+
+                {/* Ports / จุดให้บริการ — moved here from the banner (ปอน 2026-06-21
+                    "เอาพวกนี้เข้ามาใส่ในเงื่อนไข"). Collapsed on mobile · always desktop. */}
+                <div className={`items-start gap-1.5 text-[11.5px] md:text-[12px] leading-snug text-foreground/85 ${showTerms ? "flex" : "hidden md:flex"}`}>
+                  <MapPin className="w-3.5 h-3.5 mt-px shrink-0 text-primary-600" strokeWidth={2.5} />
+                  <span>{c.ports}</span>
+                </div>
+
+                {/* Spec row — 3 mini cards · hidden on collapsed mobile (folds in
+                    with the details so the card stays short), always on desktop. */}
+                <div className={`grid grid-cols-3 gap-1.5 md:gap-2 ${showTerms ? "" : "hidden md:grid"}`}>
                   {c.stats.map((s) => {
                     const SIcon = s.icon;
                     return (
@@ -374,59 +323,64 @@ export function CustomsModeCards() {
                   })}
                 </div>
 
-                {/* Services — compact 3 bullets */}
-                <ul
-                  className={[
-                    "flex flex-col gap-1 text-[11.5px] md:text-[12px] leading-snug",
-                    isFeatured ? "text-white/95" : "text-foreground/90",
-                  ].join(" ")}
-                >
-                  {c.services.map((s) => (
-                    <li key={s} className="flex items-start gap-1.5">
-                      <span
-                        className={[
-                          "mt-1 inline-block w-1.5 h-1.5 rounded-full shrink-0",
-                          isFeatured ? "bg-yellow-300" : "bg-primary-600",
-                        ].join(" ")}
-                      />
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Partner logos — kept compact */}
-                <div className="mt-auto pt-1">
-                  <div
+                {/* Details (services + partners) — mobile: collapsed behind the
+                    "เงื่อนไข เพิ่มเติม" toggle · desktop: always shown. `contents`
+                    is layout-transparent, so desktop renders exactly as before. */}
+                <div className={showTerms ? "contents" : "hidden md:contents"}>
+                  {/* Services — compact 3 bullets */}
+                  <ul
                     className={[
-                      "text-[9.5px] md:text-[10px] font-bold tracking-[0.10em] uppercase mb-1.5",
-                      isFeatured ? "text-white/65" : "text-foreground/55",
+                      "flex flex-col gap-1 text-[11.5px] md:text-[12px] leading-snug",
+                      isFeatured ? "text-white/95" : "text-foreground/90",
                     ].join(" ")}
                   >
-                    {t("partners")}
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5 items-center">
-                    {c.carriers.map((carrier) => (
-                      <a
-                        key={carrier.name}
-                        href={carrier.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={t("openWebsite", { name: carrier.name })}
-                        title={carrier.name}
-                        className={[
-                          "relative h-7 md:h-8 rounded-md flex items-center justify-center p-1 transition-all hover:scale-110",
-                          isFeatured ? "bg-white/95 hover:bg-white" : "bg-white border border-border/50 hover:border-primary-300 hover:shadow-md",
-                        ].join(" ")}
-                      >
-                        <Image
-                          src={carrier.logo}
-                          alt={carrier.name}
-                          fill
-                          sizes="80px"
-                          className="object-contain p-1"
+                    {c.services.map((s) => (
+                      <li key={s} className="flex items-start gap-1.5">
+                        <span
+                          className={[
+                            "mt-1 inline-block w-1.5 h-1.5 rounded-full shrink-0",
+                            isFeatured ? "bg-yellow-300" : "bg-primary-600",
+                          ].join(" ")}
                         />
-                      </a>
+                        <span>{s}</span>
+                      </li>
                     ))}
+                  </ul>
+
+                  {/* Partner logos — kept compact */}
+                  <div className="mt-auto pt-1">
+                    <div
+                      className={[
+                        "text-[9.5px] md:text-[10px] font-bold tracking-[0.10em] uppercase mb-1.5",
+                        isFeatured ? "text-white/65" : "text-foreground/55",
+                      ].join(" ")}
+                    >
+                      {t("partners")}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 items-center">
+                      {c.carriers.map((carrier) => (
+                        <a
+                          key={carrier.name}
+                          href={carrier.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={t("openWebsite", { name: carrier.name })}
+                          title={carrier.name}
+                          className={[
+                            "relative h-7 md:h-8 rounded-md flex items-center justify-center p-1 transition-all hover:scale-110",
+                            isFeatured ? "bg-white/95 hover:bg-white" : "bg-white border border-border/50 hover:border-primary-300 hover:shadow-md",
+                          ].join(" ")}
+                        >
+                          <Image
+                            src={carrier.logo}
+                            alt={carrier.name}
+                            fill
+                            sizes="80px"
+                            className="object-contain p-1"
+                          />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
