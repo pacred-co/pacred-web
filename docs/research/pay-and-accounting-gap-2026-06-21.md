@@ -22,12 +22,19 @@ value to represent "round-1-done, awaiting round-2." This is the biggest account
 
 ## (A) PAYMENT-FLOW FIXES — by severity
 
-- **A1 — import-bill settle can drive the wallet NEGATIVE (latent).** `submitForwarderPayment`
-  inserts `tb_wallet_hs type='4'` without crediting `tb_wallet`; `adminApproveWalletHs`
-  (`actions/admin/wallet-trans.ts:263`) + bulk twin (`tb-bulk.ts:186`) debit `-amt` on approve.
-  **VERIFIED DORMANT 2026-06-21:** prod has only **1** negative wallet in 8,966 (PR130 −646, a
-  separate one-off) and **0** type='4' rows ever approved. Real-in-code, unexercised. Fix =
-  force `delta=0` for `typeservice='2'` direct-cut on approve. Fold into the wallet-removal (D1).
+- **A1 — import-bill settle drives the wallet NEGATIVE (REAL · matched-pair).** Re-grounded
+  2026-06-21 from prod: the 4 pending `type='4' typeservice='2'` import-pay rows are the legacy
+  **"เติม-แล้วจ่าย" PAIRED shape** — each has `paydeposit='1'` + `reforder2` → a paired `type='1'`
+  topup (credit) that is ALSO pending. Net = 0 ONLY if both approve together; the admin queue
+  shows them as TWO separate rows, so approving the `type='4'` debit alone / first (wallet at ฿0)
+  → negative. `adminApproveWalletHs` (`wallet-hs.ts:788` branch) debits `-amount`; bulk twin
+  `tb-bulk.ts:186`. Prod evidence: **PR130 wallettotal = −646.10** (1 already went negative);
+  #105491/#105487/#105489/#105485 are 4 armed pairs. **FIX (owner-decision · money-mutation,
+  needs prod dry-run):** for a paired import-pay row (paydeposit='1' + reforder2), approve must
+  NET-0 — skip BOTH wallet moves + auto-settle the paired topup + advance `tb_forwarder` 5→6
+  (net is 0 anyway, so skipping = identical balance, no negative-risk). + data-fix PR130 −646→0.
+  Do NOT zero only the debit (would leave the paired credit as a phantom +balance). The NEW
+  direct-cut model (D1) avoids creating these pairs going forward.
 - **A2 — `payServiceOrderFromWallet` self-settles with NO slip/admin review** (the #1 wallet
   leak). Reachable from 5 surfaces (detail btn, modal full-wallet btn, list row, list bulk-bar,
   /add bulk-bar). `actions/service-order.ts:921` debits `tb_wallet` + flips `hstatus 2→3` on the
