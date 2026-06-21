@@ -926,6 +926,20 @@ export async function payServiceOrderFromWallet(
   // call-sites pass no opts → cashback unused → behaviour unchanged.
   opts?: { cashBackApplied?: number },
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  // ── CHOKEPOINT (owner 2026-06-21 "ถอดกระเป๋าออกทุกจุด") — customer pay-from-wallet
+  //    is RETIRED. Every payment now goes QR + slip → accounting verify → ตัดจ่าย.
+  //    This backstop refuses at the action so NO UI path (modal/bulk/list) can settle
+  //    from the wallet even if a button is missed; the bulk-bar buttons are removed
+  //    separately. Behaviour gate (const so eslint keeps the legacy body reachable —
+  //    kept for reference / a possible future admin-only reinstatement).
+  const WALLET_PAY_RETIRED = true;
+  if (WALLET_PAY_RETIRED) {
+    return {
+      ok: false,
+      error: "ชำระจากกระเป๋าเงินถูกปิดใช้งานแล้ว — กรุณาชำระด้วย QR + แนบสลิป (ทีมบัญชีตรวจสอบ)",
+    };
+  }
+
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
