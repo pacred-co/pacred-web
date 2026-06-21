@@ -492,7 +492,7 @@ async function recomputeSackAggregates(
     weight += Number(it.productweightall ?? 0);
     cbm += Number(it.productcbmall ?? 0);
   }
-  await admin
+  const { error: aggErr } = await admin
     .from("warehouse_sack")
     .update({
       weight_kg: Math.round(weight * 100) / 100,
@@ -500,6 +500,11 @@ async function recomputeSackAggregates(
       parcel_count: list.length,
     })
     .eq("id", sackId);
+  if (aggErr) {
+    // Best-effort (parent stays ok:true) but never silent — a failed agg write
+    // leaves the sack's weight/cbm/parcel_count STALE on the sacks list.
+    console.error(`[warehouse_sack agg update] failed`, { sackId, code: aggErr.code, message: aggErr.message });
+  }
 }
 
 // ════════════════════════════════════════════════════════════

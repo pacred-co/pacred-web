@@ -165,8 +165,9 @@ export function SacksPanel({ sacks, isSupervisor }: { sacks: Sack[]; isSuperviso
                     <td className="px-3 py-2">{s.warehouse || "—"}</td>
                     <td className="px-3 py-2">{s.container || "—"}</td>
                     <td className="px-3 py-2 text-right">{s.count}</td>
-                    <td className="px-3 py-2 text-right">{s.weight}</td>
-                    <td className="px-3 py-2 text-right">{s.cbm}</td>
+                    {/* empty sack (nothing packed) → "—" not 0, matching measure-panel */}
+                    <td className="px-3 py-2 text-right">{s.count > 0 ? s.weight : "—"}</td>
+                    <td className="px-3 py-2 text-right">{s.count > 0 ? s.cbm : "—"}</td>
                     <td className="px-3 py-2">
                       {s.sealed
                         ? <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700"><Lock className="h-3 w-3" /> ซีลแล้ว</span>
