@@ -657,3 +657,20 @@ not auto-connected); biggest manual burden = the PCS↔Pacred tracking leak (no 
 **Why this matters next time:** any "the price shows ฿0 / ไม่มีเรท" report → check whether the surface is RESOLVING the profile rate (live-rate engine) or only echoing a stored/manual field. Any "floor / ขั้นต่ำ" task → confirm you're flooring the RATE (per cell) vs the SUBTOTAL, and which of the 3 numbers (cost 2500 / sell-floor 2900+ / min_sell_floor) is meant. Any container-number bug → SEA0x is a batch, not a container; the real one is in `momo_import_tracks` after close. Any hard-block on existing data → grandfather it or you break legacy-row edits.
 
 **Cross-links:** `lib/admin/customer-rate-tables.ts` (COST_FLOOR per-warehouse) · `actions/admin/customer-rate.ts` (hard-block+grandfather) · `lib/forwarder/live-rate.ts` (the resolver the preview re-uses) · `lib/admin/momo-container-resolve.ts` (SEA0x→real) · mig 0194 (MOMO cost 2500) · the [[domain_pricing_cbm_kg_model]] memory · `docs/research/cargo-pricing-spec-2026-06-16.md`.
+
+---
+
+## [2026-06-20] MOMO cost is ALREADY per-tracking — the "เก็บเป็นตู้→แทรคกิ้ง" ask was already the model (verify before rewriting a money model)
+
+**Owner ask:** "เปลี่ยนจากเก็บเงินเป็นตู้เป็นเก็บเป็นแทรคกิ้งแทน" (change MOMO cost collection from per-container to per-tracking) + dropped the ฮุย-ไท่-ต๋า invoice `INV-20260618-0003` (which bills Pacred PER-TRACKING — each line = one ftrackingchn · KG/CBM/qty/total · 2,500/CBM · sub-total − WHT 1% = grand total).
+
+**What a workflow map (3 readers) + reading the actual code proved:** the per-tracking cost model is **already the ONLY cost model** — there was nothing to rewrite:
+- `tb_forwarder.fcosttotalprice` = the cost, **per forwarder row = per tracking**. ALL profit/margin/P&L reports read it (never a per-container aggregate).
+- MOMO invoice ingestion (`actions/admin/momo-invoice-ingest.ts` + `/admin/api-forwarder-momo/invoice-cost`) parses the invoice per-tracking, matches `ftrackingchn`, writes `fcosttotalprice` per row.
+- `lib/forwarder/resolve-cost.ts` computes per-tracking from the `tb_settings` 2,500/CBM matrix (mig 0194).
+- The container ค่าตู้ payment modal (`cnt-payment-modal.tsx`) **already** pre-fills the amount from `Σ costSum` (= Σ per-tracking `fcosttotalprice` of the selected cabinets) — container is just the grouping label (`fcabinetnumber`).
+- `tb_cnt`/`tb_cnt_item`/`tb_cnt_pay_*` = a DISPLAY/REGISTER of out-of-band batch payments (cntAmount = a manual "ยอดเบิก" header, NOT the cost source) — consistent with the 2026-06-14 disbursement-cluster audit.
+
+**The real gap = VISIBILITY, not the model.** The owner's "per-container" mental model was outdated; the system was already per-tracking underneath. The right deliverable was to make it EXPLICIT (label the ค่าตู้ amount as "ต้นทุนต่อแทรคกิ้ง รวมตามตู้ · ตรงกับใบแจ้งหนี้ MOMO" + show แทรคกิ้ง count), NOT to "rewrite" a working money model — which would have risked breaking the live cost/profit/P&L chain for zero gain ("ห้ามทำบัค งานหาย").
+
+**Rule:** when an owner asks to "change X from per-A to per-B" on a money flow, FIRST map what the code actually does (a workflow + read the write paths + the consuming reports). The model may already be per-B; the perception gap is often a VISIBILITY/labeling gap, and the safe fix is to surface the existing per-B granularity, not re-architect a working ledger. Cross-links: `lib/admin/momo-invoice-parser.ts` · `actions/admin/report-cnt-cost-update.ts` · `app/[locale]/(admin)/admin/report-cnt/cnt-payment-modal.tsx` · the [[verify-deep-flow]] discipline.
