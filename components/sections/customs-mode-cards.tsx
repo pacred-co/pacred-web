@@ -262,17 +262,17 @@ export function CustomsModeCards() {
                   </div>
                 </div>
 
-                {/* "เงื่อนไข เพิ่มเติม / ย่อ" — light-bordered bar (ปอน 2026-06-21
-                    "ข้างล่างเป็นขอบขาวๆ เงื่อนไข"), mobile only. Reveals the details
-                    below; desktop shows everything so the toggle is hidden there. */}
+                {/* "เงื่อนไข เพิ่มเติม / ย่อ" — plain light text, NO border (ปอน
+                    2026-06-21 "ไม่ต้องตีกรอบ · ตัวอักษรบางๆ"), mobile only. Reveals the
+                    details below; desktop shows everything so the toggle is hidden there. */}
                 <button
                   type="button"
                   onClick={() => setOpenTerms((prev) => ({ ...prev, [c.mode]: !prev[c.mode] }))}
                   aria-expanded={showTerms}
-                  className="md:hidden w-full inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-white/15 bg-white dark:bg-surface py-1.5 text-[11.5px] font-bold text-slate-600 dark:text-white/75 active:bg-slate-50 dark:active:bg-white/5 transition-colors"
+                  className="md:hidden w-full inline-flex items-center justify-start gap-1 py-1 text-[11.5px] font-normal text-slate-500 dark:text-white/55 active:opacity-60 transition-opacity"
                 >
                   {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2.6} />
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2} />
                 </button>
 
                 {/* Ports / จุดให้บริการ — moved here from the banner (ปอน 2026-06-21
