@@ -357,15 +357,12 @@ export default async function AdminTablePage({
     rawRows = rawRows.filter((r) => r.extras?.section?.toLowerCase().includes(needle) ?? false);
   }
 
-  // Drop rows with no profile (FK should prevent · defensive) AND soft-deleted
-  // profiles (`profiles.is_active = false` = a retired/merged identity, e.g. the
-  // old duplicate พี่ป๊อป PR034 — NOT a real employee · owner 2026-06-21 "ทำไม
-  // พี่ป๊อปไปอยู่ทั้งทำงานและลาออก"). A genuinely-resigned staffer keeps
-  // profiles.is_active=true + carries ended_at / an off grant → still shows in
-  // the ลาออก tab. Only the deleted identity is excluded here.
-  const grantRows: AdminRow[] = rawRows.filter(
-    (r) => r.profile !== null && r.profile.is_active !== false,
-  );
+  // Drop rows with no profile (FK should prevent · defensive). We do NOT exclude
+  // `profiles.is_active=false` here — that flag is NOT a reliable "retired" signal
+  // (e.g. ก๊อต/admin_got is a real active Ultra Admin yet carries is_active=false).
+  // The stale-identity exclusion happens at the PERSON level below, gated on
+  // BOTH no-active-grant AND is_active=false (owner 2026-06-21 พี่ป๊อป dup PR034).
+  const grantRows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
 
   // ── DEDUPE to ONE row per PERSON (owner 2026-06-21: "ซ้ำซ้อน · เปลี่ยน role
   //    แล้วเบิ้ลเพิ่มแถว · ขึ้นปิดสิทธิ์มั่ว · มีพนักงานไม่กี่คน แถวเพียบ"). The `admins`
@@ -385,10 +382,18 @@ export default async function AdminTablePage({
     // ACTIVE grant as the effective role (so the row shows the role they actually have).
     if (!cur.is_active && g.is_active) byProfile.set(g.profile_id, g);
   }
-  const allPeople: AdminRow[] = [...byProfile.values()].map((g) => ({
+  const allPeopleRaw: AdminRow[] = [...byProfile.values()].map((g) => ({
     ...g,
     is_active: anyActiveByProfile.get(g.profile_id) ?? g.is_active, // person-level active
   }));
+
+  // Hide ONLY truly-stale identities: a soft-deleted profile (profiles.is_active=false)
+  // that ALSO has no active grant = a retired/merged duplicate (e.g. พี่ป๊อป's old PR034).
+  // A real admin who carries is_active=false but still has an active grant (e.g. ก๊อต)
+  // is KEPT; a genuinely-resigned staffer keeps is_active=true → shows in the ลาออก tab.
+  const allPeople: AdminRow[] = allPeopleRaw.filter(
+    (r) => !(r.is_active === false && r.profile?.is_active === false),
+  );
 
   // Person status — only TWO buckets (owner: ตัดแท็บ "ทั้งหมด" ออก · เหลือแค่
   // ยังทำงานอยู่ + ลาออก/หมดเวลา). Resigned = ended_at set OR no active grant at all.
