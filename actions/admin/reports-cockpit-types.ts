@@ -41,7 +41,8 @@ export type CockpitProfitRow = {
   label: string;
   /** Orders in this bucket (MTD). */
   count: number;
-  /** Σ revenue (ftotalprice+ftransportprice+fpriceupdate · THB). */
+  /** Σ revenue (ftotalprice ONLY · THB · audit SF-4 — NOT +ftransportprice/fpriceupdate,
+   *  so the cockpit margin reconciles 1:1 with the full profit report). */
   revenue: number;
   /** Σ profit (fprofittotal when non-zero, else ftotalprice−fdiscount−cost). */
   profit: number;
@@ -77,7 +78,7 @@ export type CockpitSlaSummary = {
 export type CockpitReport = {
   /** First day of the current month (ISO YYYY-MM-DD) — echoed for the caption. */
   monthStart: string;
-  /** MTD forwarder revenue (Σ ftotalprice+ftransportprice+fpriceupdate). */
+  /** MTD forwarder revenue (Σ ftotalprice ONLY · audit SF-4 — reconciles with the profit report). */
   mtdRevenue: number;
   /** MTD forwarder profit (Σ fprofittotal, else ftotalprice−fdiscount−cost). */
   mtdProfit: number;

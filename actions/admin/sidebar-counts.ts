@@ -22,6 +22,7 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { type BadgeCounts, ADMIN_SIDEBAR_COUNTS_TAG } from "@/lib/admin/sidebar-menu";
 import { logger } from "@/lib/logger";
 
@@ -127,9 +128,11 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       // is NULL — scanned at the TH warehouse but unpaired to a forwarder.
       admin.from("tb_forwarder_import2").select("id", { count: "exact", head: true })
         .is("fid", null),
-      // มอบงานคนขับ — forwarders ready to assign. Legacy fstatus=6 (เตรียมส่ง).
-      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
-        .eq("fstatus", "6"),
+      // มอบงานคนขับ — forwarders READY TO ASSIGN (not all fstatus=6). Route through
+      // the single SOT countPendingDispatch (fstatus=6 · paydeposit<>'1' settled ·
+      // NOT already in an open driver batch) so this badge == the /admin/drivers
+      // banner == the logistics-board card (§0f · was a duplicate of forwarderDelivery).
+      countPendingDispatch(admin),
       // ── ฝากโอน/ชำระ (yuan) ──────────────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_payment.
       // paystatus '1'=pending '2'=completed '3'=failed/refunded.
@@ -215,7 +218,7 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       forwarderCredit:   n(forwarderCredit),
       forwarderNote:     n(forwarderNote),
       forwarderWhError:  n(forwarderWhError),
-      driverItems:       n(driverItems),
+      driverItems:       driverItems, // already a number (countPendingDispatch)
       yuanPending:       n(yuanPending),
       cntDrawMoney:      cnt,
       shopPayout,
