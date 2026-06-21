@@ -65,15 +65,12 @@ import {
 // RBAC union for admin cart flows — see file-level comment.
 const CART_ROLES = ["super", "ops", "sales_admin"] as const;
 
-// Money-column ceiling. Every baht/yuan total + payment amount in the
-// legacy schema (tb_header_order / tb_order / tb_payment / tb_cart, mig
-// 0081) is numeric(10,2) → max 99,999,999.99. We reject an order whose
-// grand total would overflow this BEFORE writing any rows, so a giant
-// order fails with a clear message instead of silently recording ฿0 (the
-// rollup UPDATE otherwise throws a Postgres 22003 that the code swallows).
-// ⬆ When migration 0196 (widen money cols → numeric(14,2)) is applied to
-// prod, raise this to 999_999_999_999.99.
-const MONEY_COL_MAX = 99_999_999.99;
+// Money-column ceiling. The order→pay→receipt→cnt→wallet→forwarder money
+// chain is numeric(14,2) (mig 0196, applied prod+dev 2026-06-20 · was 10,2)
+// → max ~1 trillion. We still reject an order whose grand total would overflow
+// this BEFORE writing any rows, so a giant order fails with a clear message
+// instead of a swallowed Postgres 22003 on the rollup.
+const MONEY_COL_MAX = 999_999_999_999.99; // numeric(14,2) cap (mig 0196)
 
 // Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
 // ADDRESSES.warehouseTh — the SAME depot the customer shop path writes in
@@ -511,7 +508,7 @@ export async function adminSubmitCartAsOrder(
         if (projectedCNY > MONEY_COL_MAX || projectedTHB > MONEY_COL_MAX) {
           return {
             ok: false,
-            error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedTHB).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿99,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
+            error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedTHB).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿999,999,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
           };
         }
       }
