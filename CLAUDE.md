@@ -3,6 +3,18 @@
 
 ---
 
+# 🧑‍💼 2026-06-21 — เดฟ: /admin/admins de-duplication (1 row/person · 2 tabs · replace-not-add role) + mig 0196 v2 applied note → ALL BRANCHES · read FIRST
+
+> **🏁 ON ALL BRANCHES (owner: "role/แผนก/ตำแหน่ง ซ้ำซ้อน บัคมั่ว · เปลี่ยน role แล้วเบิ้ลเพิ่มแถว · ขึ้นปิดสิทธิ์มั่ว · ต่อ chrome ดูดิ้ว่าเช็คจริง").** **dave-pacred = main = Poom-pacred = InwPond007 = `654524d6`** (pushed · Vercel prod). Gate green: **typecheck 0 · lint 0 · i18n 0 · md 0 · build 0**. 🔑 prod DB pw (chat-only, NEVER persist) `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (lozntlidlqqzzcaathnm) · prod ref yzljakczhwrpbxflnmco · `.env.local` = **PROD**.
+>
+> **🧑‍💼 `/admin/admins` was showing 29 rows for 24 people (ROOT: `admins` = one row PER `(profile_id, role)` GRANT, not per person — `adminChangeRole` soft-deletes the old role [kept as an inactive history row] + a person can hold several roles → the list rendered one row per grant; the no-`?s` default also showed ALL while the tab said ยังทำงานอยู่).** FIX (verified LIVE via Chrome on prod: **23 rows · 23 distinct · 0 duplicates · 2 tabs**): (1) **`page.tsx` DEDUPE** to one row per `profile_id` — effective role = most-recent ACTIVE grant; person `is_active` = ANY active grant · person-status only TWO buckets (active / `ended_at`-or-no-active) · **dropped the "ทั้งหมด" tab** (keep ยังทำงานอยู่ + ลาออก/หมดเวลา, default active) · all sorts → JS on the deduped set. (2) **`actions/admin/export/admins.ts`** mirrors the same dedupe + 2-bucket filter (CSV ทั้งหมด stays byte-identical) + `nameRole` += ultra/manager/pricing (was raw "ultra"). (3) **DATA cleanup APPLIED prod** (`scripts/collapse-multiactive-admins-2026-06-21.mjs` · dry-run+backup `/tmp/collapse-multiactive-admins-backup-2026-06-21.json`): 3 people had 2 ACTIVE grants → soft-deactivated the redundant one (aom/jane ultra+super→keep **ultra** = super superset, zero access loss · tam fim+super→keep fim). Prod now **24 people · 0 multi-active · 23 active · 1 resigned** (the stale disabled "ป๊อบ" no-emp placeholder, hidden in the resigned tab). Learning → [[role-god-and-money-visibility]] §7. **adminChangeRole/adminToggleActive UNCHANGED** — with one active grant per person they now act per-person cleanly (replace, no new visible row).
+>
+> **🗃 MIGRATION LEDGER CORRECTION:** the block below says "0196 DRAFT-not-applied" — that is **STALE**. **mig 0196 v2 (widen the full order/money column chain → numeric(14,2)) was APPLIED prod+dev** (§0e sink audit done · tb_receipt.ramount + tb_cnt.cntAmount included · MONEY_COL_MAX bumped to 999,999,999,999.99 in cart.ts + admin/cart.ts). **NEXT FREE = 0197.**
+>
+> **🔴 CARRYOVER (owner-deferred):** F (in-Thailand เหมาๆ eligibility — UI hide out-of-zone + admin-create gate + full PRF rename · task #25) · #52089 (616035273) BILLED under-bill (owner decision).
+
+---
+
 # 🏁 2026-06-20 — เดฟ: DELIVERY-DAY DEPARTMENT SWEEP (คลัง→ลูกค้า→บัญชี→คนขับ + freight/sales/crosscut) + color-soften + MOMO per-tracking + login fix → ALL BRANCHES · read FIRST
 
 > **🏁 DELIVERY-DAY CLOSE (owner: "ของจริงแล้ว · ลูกค้าจริงไม่ใช่หนูทดลอง · จบทุกแผนกทุกฝ่ายจริงๆ · allow all bypass · run long · ไปนอน").** **dave-pacred = main = Poom-pacred = InwPond007 = `<HEAD>`** (all pushed · Vercel prod). Gate green every push: **typecheck 0 · lint 0 · test:unit 0 · build 0**. Migrations **through 0195 applied prod+dev · 0196 DRAFT-not-applied** (widen money cols — §0e sink audit DONE = INCOMPLETE, code fail-closed keeps >100M orders safely rejected · NEXT FREE 0197). 🔑 prod DB pw (chat-only, NEVER persist) `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (lozntlidlqqzzcaathnm) · prod ref yzljakczhwrpbxflnmco. ⚠️ `.env.local` on this Mac = **PROD**.
