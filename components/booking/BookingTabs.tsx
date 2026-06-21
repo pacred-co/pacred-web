@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, ChevronUp, LayoutGrid } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import type { IconType } from "react-icons";
+import { PiBoatDuotone, PiTruckDuotone, PiAirplaneDuotone, PiShoppingCartDuotone, PiBankDuotone, PiShieldCheckDuotone, PiMotorcycleDuotone } from "react-icons/pi";
 import type { TabMode } from "@/types/booking";
 
 interface BookingTabsProps {
@@ -17,6 +19,9 @@ type TabItem = {
   /** "domestic" = placeholder service (no calculator mode yet → disabled). */
   mode: TabMode | "domestic";
   emoji: string;
+  /** Phosphor DUOTONE icon for the mobile chips — one currentColor renders two tones
+   *  (full + a 0.2-opacity fill), so red → red + light-red (ปอน 2026-06-21: "ไล่เฉด"). */
+  Icon: IconType;
   label: string;
   /** short label shown in the 2-row mobile grid (full `label` on desktop). */
   short: string;
@@ -71,15 +76,15 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
 
   const allTabs: TabItem[] = [
     // row 1 — transport modes
-    { mode: "sea",      emoji: "🚢", label: t("tabSeaTitle"),      short: t("tabSeaShort"),      sub: t("tabSeaSub"),      group: "transport" },
-    { mode: "truck",    emoji: "🚛", label: t("tabTruckTitle"),    short: t("tabTruckShort"),    sub: t("tabTruckSub"),    group: "transport" },
-    { mode: "air",      emoji: "✈️", label: t("tabAirTitle"),      short: t("tabAirShort"),      sub: t("tabAirSub"),      group: "transport" },
+    { mode: "sea",      emoji: "🚢", Icon: PiBoatDuotone,         label: t("tabSeaTitle"),      short: t("tabSeaShort"),      sub: t("tabSeaSub"),      group: "transport" },
+    { mode: "truck",    emoji: "🚛", Icon: PiTruckDuotone,        label: t("tabTruckTitle"),    short: t("tabTruckShort"),    sub: t("tabTruckSub"),    group: "transport" },
+    { mode: "air",      emoji: "✈️", Icon: PiAirplaneDuotone,     label: t("tabAirTitle"),      short: t("tabAirShort"),      sub: t("tabAirSub"),      group: "transport" },
     // row 2 — services
-    { mode: "sourcing", emoji: "🛒", label: t("tabSourcingTitle"), short: t("tabSourcingShort"), sub: t("tabSourcingSub"), group: "service" },
-    { mode: "remit",    emoji: "🏦", label: t("tabRemitTitle"),    short: t("tabRemitShort"),    sub: t("tabRemitSub"),    group: "service" },
-    { mode: "customs",  emoji: "👮", label: t("tabCustomsTitle"),  short: t("tabCustomsShort"),  sub: t("tabCustomsSub"),  group: "service" },
+    { mode: "sourcing", emoji: "🛒", Icon: PiShoppingCartDuotone, label: t("tabSourcingTitle"), short: t("tabSourcingShort"), sub: t("tabSourcingSub"), group: "service" },
+    { mode: "remit",    emoji: "🏦", Icon: PiBankDuotone,         label: t("tabRemitTitle"),    short: t("tabRemitShort"),    sub: t("tabRemitSub"),    group: "service" },
+    { mode: "customs",  emoji: "👮", Icon: PiShieldCheckDuotone,  label: t("tabCustomsTitle"),  short: t("tabCustomsShort"),  sub: t("tabCustomsSub"),  group: "service" },
     // ขนส่งในประเทศ — not built yet → greyed-out disabled placeholder
-    { mode: "domestic", emoji: "🛵", label: t("tabDomesticTitle"), short: t("tabDomesticShort"), sub: t("tabDomesticSub"), group: "service", disabled: true },
+    { mode: "domestic", emoji: "🛵", Icon: PiMotorcycleDuotone,   label: t("tabDomesticTitle"), short: t("tabDomesticShort"), sub: t("tabDomesticSub"), group: "service", disabled: true },
   ];
   // Optional allow-list (preserves the `only` array's order).
   const tabs = only
@@ -191,27 +196,20 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
       >
         <span
           className={[
-            "flex h-12 w-12 items-center justify-center rounded-full text-[20px] leading-none transition-all",
-            // ปอน 2026-06-19: row 1 (transport เรือ/รถ/แอร์) = RED circle + WHITE icon ·
-            // row 2 (service) = WHITE circle + RED icon. Active adds a ring.
-            tab.disabled
-              ? "bg-gray-100"
-              : tab.group === "transport"
-                ? "bg-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.30)]"
-                : "bg-white border border-gray-200 shadow-sm",
-            isActive ? "ring-2 ring-red-600 ring-offset-2" : "",
+            "flex h-12 w-12 items-center justify-center rounded-full transition-all",
+            tab.disabled ? "text-gray-400" : "text-red-600",
+            // ปอน 2026-06-21: transport (เรือ/รถ/แอร์) = pale-red disc · the service row
+            // (สั่งซื้อ/โอนชำระ/เคลียร์ของ/ขนส่ง) shows the red line-icon WITHOUT a circle.
+            tab.group === "service"
+              ? ""
+              : tab.disabled
+                ? "bg-gray-100"
+                : isActive
+                  ? "bg-red-100 ring-2 ring-red-600 ring-offset-2"
+                  : "bg-red-50",
           ].join(" ")}
         >
-          <span
-            className="leading-none"
-            style={{
-              filter: tab.disabled
-                ? "grayscale(1) brightness(0.85) opacity(0.5)"
-                : tab.group === "transport"
-                  ? "brightness(0) invert(1)" // white icon on the red circle
-                  : "brightness(0) invert(11%) sepia(91%) saturate(6932%) hue-rotate(2deg) brightness(96%) contrast(116%)", // red icon on the white circle
-            }}
-          >{tab.emoji}</span>
+          <tab.Icon className={`[&_path[opacity]]:opacity-50 ${tab.group === "service" ? "h-7 w-7" : "h-6 w-6"}`} />
         </span>
         <span
           className={[
@@ -243,10 +241,10 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
                   aria-controls="booking-more-services"
                   className="flex flex-col items-center gap-1.5 py-1 transition-transform active:scale-95"
                 >
-                  <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white border border-gray-200 shadow-sm text-red-600">
+                  <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
                     {expanded
-                      ? <ChevronUp className="h-5 w-5" strokeWidth={2.5} />
-                      : <LayoutGrid className="h-5 w-5" strokeWidth={2.5} />}
+                      ? <ChevronUp className="h-6 w-6" strokeWidth={1.9} />
+                      : <ChevronDown className="h-6 w-6" strokeWidth={1.9} />}
                     {!expanded && (
                       <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
                         +{serviceTabs.length}
