@@ -3,28 +3,57 @@
 import { useState } from "react";
 
 /**
- * SlipImage — a slip <img> with a graceful onError fallback (owner 2026-06-21
- * "รูปก็ไม่ขึ้น"). A signed Supabase URL can still 404 on GET when the legacy
- * slip file was never migrated into the bucket; a raw <img> then shows a
- * confusing broken-image icon. This renders a clear "เปิดสลิปไม่ได้" placeholder
- * instead, so the admin knows the slip is recorded but the file is missing.
- *
- * Server components pass a resolved (signed) `src`; this client wrapper only
- * adds the error state.
+ * SlipImage — render a slip of ANY format (owner 2026-06-21/22 "รูปก็ไม่ขึ้น").
+ * Slips are uploaded as image OR **PDF** (e.g. SCB "ใบแจ้งการชำระเงิน" PYMTADV_*.pdf).
+ * A plain <img src=.pdf> can't render a PDF → it fired onError → a confusing
+ * "เปิดสลิปไม่ได้" even though the file is perfectly valid. So:
+ *   - PDF  → <object> inline preview (shows the actual PDF · scales to className),
+ *            with a 📄 tile fallback if the browser won't embed.
+ *   - image→ <img> with onError → "เปิดสลิปไม่ได้" (only for a genuinely missing
+ *            legacy file).
+ * The parent usually wraps this in an <a href={src} target=_blank> so a click
+ * always opens the full slip regardless of inline-render support.
  */
 export function SlipImage({
   src,
   alt = "สลิป",
   className = "",
   fallbackClassName = "",
+  pdfMode = "embed",
 }: {
   src: string;
   alt?: string;
   className?: string;
   fallbackClassName?: string;
+  /** "embed" (large detail) → inline <object> preview · "tile" (small list
+   *  thumbnail) → a clean 📄 tile, since a cramped 64px PDF embed looks bad.
+   *  Both rely on the parent <a> to open the full slip on click. */
+  pdfMode?: "embed" | "tile";
 }) {
   const [failed, setFailed] = useState(false);
+  // .pdf possibly followed by ?token=… (signed URL) or #fragment.
+  const isPdf = /\.pdf(\?|#|$)/i.test(src);
 
+  // ── PDF — a clear 📄 tile (thumbnail) or inline <object> preview (detail) ──
+  if (isPdf) {
+    const tile = (
+      <div
+        className={`flex flex-col items-center justify-center gap-0.5 bg-rose-50 text-rose-700 text-center text-[10px] leading-tight ${className} ${fallbackClassName}`}
+        title="สลิป PDF — คลิกเพื่อเปิด"
+      >
+        <span aria-hidden>📄</span>
+        <span>สลิป PDF</span>
+      </div>
+    );
+    if (pdfMode === "tile") return tile;
+    return (
+      <object data={src} type="application/pdf" aria-label={alt} className={className}>
+        {tile}
+      </object>
+    );
+  }
+
+  // ── image — onError fallback (a genuinely missing legacy file) ──
   if (failed) {
     return (
       <div

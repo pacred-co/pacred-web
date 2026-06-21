@@ -44,6 +44,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { Link } from "@/i18n/navigation";
 import { YuanPaymentActions } from "../actions-cell";
 import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
@@ -402,8 +403,7 @@ export default async function AdminYuanPaymentDetail({
                 rel="noopener noreferrer"
                 className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[480px]" />
+                <SlipImage src={slipUrl} alt="สลิป" className="max-w-full max-h-[480px] min-w-[140px] min-h-[140px]" />
               </a>
               <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslip}</p>
             </div>
@@ -417,8 +417,7 @@ export default async function AdminYuanPaymentDetail({
                 rel="noopener noreferrer"
                 className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[480px]" />
+                <SlipImage src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[480px] min-w-[140px] min-h-[140px]" />
               </a>
               <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslipadmin}</p>
             </div>

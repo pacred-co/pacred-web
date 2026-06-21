@@ -17,6 +17,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { SlipImage } from "@/components/admin/slip-image";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { getSalesPayoutDetailTb } from "@/actions/admin/sales-payouts-tb";
@@ -146,11 +147,10 @@ export default async function AdminSalesPayoutDetail({
               <p className="text-sm font-semibold mb-3">หลักฐานการโอน (จ่ายแล้ว)</p>
               {slipUrl ? (
                 <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <SlipImage
                     src={slipUrl}
                     alt="สลิปการจ่ายเงิน"
-                    className="max-h-[260px] rounded-md border border-border bg-white object-contain"
+                    className="max-h-[260px] min-w-[140px] min-h-[140px] rounded-md border border-border bg-white object-contain"
                   />
                 </a>
               ) : (

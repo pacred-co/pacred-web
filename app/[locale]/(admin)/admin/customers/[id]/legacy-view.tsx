@@ -25,6 +25,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { getBusinessConfig } from "@/lib/business-config";
 import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY } from "@/actions/admin/profile-cover-keys";
@@ -979,9 +980,8 @@ export async function renderLegacyCustomerView(
                     <Td>{WHS_TYPE_LABEL[r.type ?? ""] ?? (r.type ? `type ${r.type}` : "-")}</Td>
                     <Td>
                       {slipUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
                         <a href={slipUrl} target="_blank" rel="noreferrer" className="inline-block">
-                          <img src={slipUrl} alt="สลิป" className="h-10 w-10 rounded border border-border object-cover" loading="lazy" />
+                          <SlipImage src={slipUrl} alt="สลิป" pdfMode="tile" className="h-10 w-10 rounded border border-border object-cover" />
                         </a>
                       ) : (
                         <span className="text-muted">-</span>

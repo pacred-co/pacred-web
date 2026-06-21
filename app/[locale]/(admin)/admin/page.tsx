@@ -926,6 +926,7 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                       <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="เปิดสลิปเต็ม">
                         <SlipImage
                           src={r.slipUrl}
+                          pdfMode="tile"
                           className="h-16 w-16 rounded-lg border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300"
                         />
                       </a>
