@@ -999,7 +999,7 @@ async function recomputeQuoteTotals(quoteId: string): Promise<void> {
     vat_pct,
   });
 
-  await admin
+  const { error: totErr } = await admin
     .from("freight_quotes")
     .update({
       subtotal:   totals.subtotal,
@@ -1007,6 +1007,12 @@ async function recomputeQuoteTotals(quoteId: string): Promise<void> {
       total:      totals.total,
     })
     .eq("id", quoteId);
+  if (totErr) {
+    // Best-effort recompute, but never silent (the two reads above already log) —
+    // a swallowed failure leaves the header subtotal/vat/total stale until the next
+    // recompute/submit. Derived display fields; line items stay the source of truth.
+    console.error(`[freight_quotes totals update] failed`, { quoteId, code: totErr.code, message: totErr.message });
+  }
 }
 
 function revalidateOne(quoteId: string): void {

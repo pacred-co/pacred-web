@@ -46,7 +46,10 @@ export default async function TransferSalesRepPage({
   // Build the customer list query.
   let q = admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel, adminidsale")
+    // mig 0113 renamed these tb_users cols to quoted camelCase → a lowercase SELECT
+    // 400s and the form renders EMPTY. Alias camelCase→lowercase so the rows keep the
+    // keys transfer-form.tsx reads (userid/username/…), no consumer change. (verified prod)
+    .select("userid:userID, username:userName, userlastname:userLastName, usertel:userTel, adminidsale:adminIDSale")
     .eq("userStatus", "1")
     .order("userRegistered", { ascending: false })
     .limit(100);
@@ -62,7 +65,8 @@ export default async function TransferSalesRepPage({
       q = q.eq("userID", qFree.toUpperCase());
     } else {
       const pat = `%${qFree.replace(/[%_]/g, "\\$&")}%`;
-      q = q.or(`username.ilike.${pat},userlastname.ilike.${pat},usertel.ilike.${pat}`);
+      // camelCase column names (mig 0113) — a lowercase .or filter 400s like the SELECT did.
+      q = q.or(`userName.ilike.${pat},userLastName.ilike.${pat},userTel.ilike.${pat}`);
     }
   }
 
@@ -75,7 +79,8 @@ export default async function TransferSalesRepPage({
   // Active admins from tb_admin for the target dropdown.
   const { data: adminsRaw, error: adminsRawErr } = await admin
     .from("tb_admin")
-    .select("adminid, adminnickname, adminname, adminlastname, department, section")
+    // mig 0113 camelCase rename — alias back to the lowercase keys transfer-form.tsx reads.
+    .select("adminid:adminID, adminnickname:adminNickname, adminname:adminName, adminlastname:adminLastName, department, section")
     .eq("adminStatusA", "1")
     .order("adminNickname", { ascending: true })
     .limit(500);
