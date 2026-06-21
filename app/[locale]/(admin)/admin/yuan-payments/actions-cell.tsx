@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { adminUpdateYuanPayment } from "@/actions/admin/yuan-payments";
+import { adminUpdateYuanPayment, adminReviewYuanRound1 } from "@/actions/admin/yuan-payments";
 import { YuanRefundModal } from "./refund-modal";
 import { confirm } from "@/components/ui/confirm";
 
@@ -18,6 +18,8 @@ type Props = {
   customer_name?: string;
   phone?:         string | null;
   paid_via_wallet?: boolean;
+  // A4 two-round verify (owner 2026-06-21) — round-1 stamp (null = not yet).
+  reviewedAt?:    string | null;
 };
 
 export function YuanPaymentActions(props: Props) {
@@ -47,6 +49,16 @@ export function YuanPaymentActions(props: Props) {
   }
 
   const canRefund = status === "pending" || status === "processing" || status === "completed";
+  const round1Done = Boolean(props.reviewedAt);
+
+  function reviewRound1() {
+    setErr(null);
+    startTransition(async () => {
+      const res = await adminReviewYuanRound1({ id });
+      if (res.ok) router.refresh();
+      else setErr(res.error);
+    });
+  }
 
   return (
     <div className="space-y-1">
@@ -58,7 +70,12 @@ export function YuanPaymentActions(props: Props) {
             bulk-bar — wallet was already debited at submit). Reject → failed. */}
         {status === "pending" && (
           <>
-            <Button size="sm" type="button" onClick={async () => { if (await confirm("ยืนยันอนุมัติรายการฝากโอนนี้ (สำเร็จ)?")) set("completed"); }} disabled={pending}>อนุมัติ (สำเร็จ)</Button>
+            {/* A4 two-round (owner 2026-06-21): ROUND 1 ตรวจสลิป → ROUND 2 อนุมัติ. */}
+            {!round1Done ? (
+              <Button size="sm" type="button" onClick={async () => { if (await confirm("ยืนยันว่าตรวจสลิป รอบ 1 แล้ว?")) reviewRound1(); }} disabled={pending}>✓ ตรวจสลิป รอบ 1</Button>
+            ) : (
+              <Button size="sm" type="button" onClick={async () => { if (await confirm("ยืนยันอนุมัติ + ตัดจ่าย (รอบ 2)?")) set("completed"); }} disabled={pending}>อนุมัติ + ตัดจ่าย (รอบ 2)</Button>
+            )}
             <Button size="sm" variant="outline" type="button" onClick={async () => { if (await confirm("ยืนยันปฏิเสธรายการฝากโอนนี้?")) set("failed"); }} disabled={pending}>ปฏิเสธ</Button>
           </>
         )}

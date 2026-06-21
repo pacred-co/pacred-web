@@ -122,7 +122,7 @@ export default async function AdminYuanPaymentDetail({
   // ภูม #2: also pulled `payratecost` for the right-column price breakdown
   // (cost columns added to the SELECT ONLY when showCostProfit).
   const baseCols =
-    "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit";
+    "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit,reviewed_at";
   const costCols = ",payratecost,paythbcost,payprofitthb";
   const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
@@ -438,6 +438,7 @@ export default async function AdminYuanPaymentDetail({
           customer_name={customerName}
           phone={user?.userTel ?? null}
           paid_via_wallet={paidViaWallet}
+          reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
         />
         <p className="text-[10px] text-muted mt-2">
           P0-11 · ปุ่มเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)

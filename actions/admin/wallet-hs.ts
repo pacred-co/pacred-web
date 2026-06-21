@@ -677,6 +677,46 @@ type ApproveResult = {
  * (Withdraw approve = different function · scope out — ADR-0018 D-2 rule 3
  *  paragraph 3 will be a follow-up — task explicitly limits us to type='1'.)
  */
+// ─────────────────────────────────────────────────────────────
+// A4 (owner 2026-06-21) — ROUND-1 slip review. Stamps `reviewed_at` +
+// `reviewed_by_admin_id` on a pending (status='1') slip so the approve
+// (round-2) is allowed to settle. Does NOT move money or change status —
+// it only records that round-1 happened. Same admin may then do round-2 (D2).
+// ─────────────────────────────────────────────────────────────
+export async function adminReviewSlipRound1(
+  input: { id: number | string },
+): Promise<AdminActionResult> {
+  const idNum = Number(input?.id);
+  if (!Number.isFinite(idNum) || idNum <= 0) return { ok: false, error: "invalid_id" };
+
+  return withAdmin(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
+    // Stamp round-1 ONLY on a still-pending row (atomic guard on status='1').
+    const { data: claimed, error: updErr } = await admin
+      .from("tb_wallet_hs")
+      .update({ reviewed_at: new Date().toISOString(), reviewed_by_admin_id: legacyAdminId })
+      .eq("id", idNum)
+      .eq("status", "1")
+      .select("id")
+      .maybeSingle();
+    if (updErr) {
+      console.error("[adminReviewSlipRound1] failed", { code: updErr.code, message: updErr.message, id: idNum });
+      return { ok: false, error: updErr.message };
+    }
+    if (!claimed) {
+      return { ok: false, error: "ตรวจรอบ 1 ไม่ได้ — รายการนี้ไม่ได้อยู่สถานะ 'รอตรวจสอบ' แล้ว (อาจถูกอนุมัติ/ปฏิเสธไปแล้ว)" };
+    }
+
+    await logAdminAction(adminId, "tb_wallet_hs.review_round1", "tb_wallet_hs", String(idNum), {});
+    revalidatePath(`/admin/wallet/${idNum}`);
+    revalidatePath("/admin/wallet");
+    revalidatePath("/admin");
+    return { ok: true };
+  });
+}
+
 export async function adminApproveWalletDeposit(
   input: AdminApproveWalletDepositInput,
 ): Promise<AdminActionResult<ApproveResult>> {
@@ -702,7 +742,7 @@ export async function adminApproveWalletDeposit(
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note, typeservice, reforder, dateslip, wusercredit")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, dateslip, wusercredit, reviewed_at")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -715,6 +755,7 @@ export async function adminApproveWalletDeposit(
           reforder: string | null;
           dateslip: string | null;
           wusercredit: string | null;
+          reviewed_at: string | null;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
@@ -742,6 +783,16 @@ export async function adminApproveWalletDeposit(
       }
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+
+      // ── A4 TWO-ROUND verify (owner 2026-06-21 · D2 same admin OK). The approve
+      //    is ROUND 2 — it refuses to settle until ROUND 1 (adminReviewSlipRound1)
+      //    stamped `reviewed_at`. Scoped to the customer-payment slip flows
+      //    (type '1' topup · '4' import-pay · '8' shop-slip); admin-internal rows
+      //    (type 2/3/5/6/7) carry no customer slip to review → exempt.
+      const NEEDS_ROUND1 = rowRaw.type === "1" || rowRaw.type === "4" || rowRaw.type === "8";
+      if (NEEDS_ROUND1 && !rowRaw.reviewed_at) {
+        return { ok: false, error: "ต้องตรวจสลิป รอบ 1 ก่อน แล้วจึงกดอนุมัติ + ตัดจ่าย (รอบ 2)" };
       }
 
       // ── ชั้น-1 BLOCKING dup gate (owner 2026-06-19 · the dropped legacy layer).

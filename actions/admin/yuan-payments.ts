@@ -85,6 +85,36 @@ const updateSchema = z.object({
 });
 export type AdminUpdateYuanPaymentInput = z.input<typeof updateSchema>;
 
+// A4 (owner 2026-06-21) — ROUND-1 yuan-slip review. Stamps reviewed_at +
+// reviewed_by_admin_id on a pending (paystatus='1') tb_payment row so the
+// approve (round-2) may settle. No money/status change. Same admin may do both.
+export async function adminReviewYuanRound1(
+  input: { id: number | string },
+): Promise<AdminActionResult> {
+  const idNum = Number(input?.id);
+  if (!Number.isFinite(idNum) || idNum <= 0) return { ok: false, error: "invalid_id" };
+  return withAdmin(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+    const { data: claimed, error: updErr } = await admin
+      .from("tb_payment")
+      .update({ reviewed_at: new Date().toISOString(), reviewed_by_admin_id: legacyAdminId })
+      .eq("id", idNum)
+      .eq("paystatus", "1")
+      .select("id")
+      .maybeSingle();
+    if (updErr) {
+      console.error("[adminReviewYuanRound1] failed", { code: updErr.code, message: updErr.message, id: idNum });
+      return { ok: false, error: updErr.message };
+    }
+    if (!claimed) return { ok: false, error: "ตรวจรอบ 1 ไม่ได้ — รายการไม่ได้อยู่สถานะ 'รอตรวจสอบ' แล้ว" };
+    await logAdminAction(adminId, "tb_payment.review_round1", "tb_payment", String(idNum), {});
+    revalidatePath("/admin/yuan-payments");
+    revalidatePath("/admin");
+    return { ok: true };
+  });
+}
+
 export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput): Promise<AdminActionResult> {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -97,7 +127,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     // ── Read the existing tb_payment row.
     const { data: existing, error: existingErr } = await admin
       .from("tb_payment")
-      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref, paydate")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref, paydate, reviewed_at")
       .eq("id", d.id)
       .maybeSingle<{
         id: number;
@@ -108,6 +138,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         paydeposit: string | null;
         tax_doc_pref: string | null;
         paydate: string | null;
+        reviewed_at: string | null;
       }>();
     if (existingErr) {
       console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
@@ -154,6 +185,13 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         // L644 + L659 — set on both approve '2' and reject '3').
         update.paydateadmin = new Date().toISOString();
         update.adminid = legacyAdminId;
+      }
+
+      // ── A4 (owner 2026-06-21) — TWO-ROUND verify: the yuan approve (round-2)
+      //    refuses to settle until round-1 (adminReviewYuanRound1) stamped
+      //    reviewed_at. Same admin may do both rounds (D2).
+      if (newPaystatus === "2" && !existing.reviewed_at) {
+        return { ok: false, error: "ต้องตรวจสลิป รอบ 1 ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)" };
       }
 
       // ── A5 (owner 2026-06-21) — ชั้น-1 BLOCKING dup-gate on the yuan APPROVE.

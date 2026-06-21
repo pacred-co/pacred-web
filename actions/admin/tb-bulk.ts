@@ -121,7 +121,7 @@ export async function adminBulkApproveWalletHs(
       //    fStatus 5→6 settle below can pick the credit vs non-credit branch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit")
+        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit, reviewed_at")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -140,6 +140,7 @@ export async function adminBulkApproveWalletHs(
         dateslip: string | null;
         note: string | null;
         wusercredit: string | null;
+        reviewed_at: string | null;
       };
       const candidates = rows as Row[];
 
@@ -160,6 +161,16 @@ export async function adminBulkApproveWalletHs(
 
       for (const r of candidates) {
         const amt = Number(r.amount);
+
+        // A4 TWO-ROUND verify (owner 2026-06-21) — bulk approve is ROUND 2; it
+        // only settles rows already ROUND-1 reviewed (reviewed_at set). Customer
+        // payment slips (type 1/4/8) not yet reviewed are SKIPPED + reported so
+        // the accountant does round-1 first (single view), then bulk-approves.
+        if ((r.type === "1" || r.type === "4" || r.type === "8") && !r.reviewed_at) {
+          failed++;
+          errors.push(`id=${r.id}: ยังไม่ได้ตรวจสลิป รอบ 1 — ตรวจรอบ 1 ที่หน้ารายละเอียดก่อน แล้วค่อยอนุมัติ`);
+          continue;
+        }
 
         // ชั้น-1 dup gate (legacy w-s-deposit-detail.php) — a SAME-CUSTOMER
         // same-day same-amount pending/approved twin = a likely double-paid slip.
@@ -497,7 +508,7 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       const { data: rows, error: readErr } = await admin
         .from("tb_payment")
-        .select("id, userid, payyuan, paythb, paystatus, tax_doc_pref")
+        .select("id, userid, payyuan, paythb, paystatus, tax_doc_pref, reviewed_at")
         .in("id", ids)
         .eq("paystatus", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -509,7 +520,7 @@ export async function adminBulkApproveYuanPaymentsTb(
       const approvedRows = rows as unknown as Array<{
         id: number; userid: string | null;
         payyuan: number | string | null; paythb: number | string | null;
-        tax_doc_pref: string | null;
+        tax_doc_pref: string | null; reviewed_at: string | null;
       }>;
 
       // ── Legacy approve cost-capture (payment.php L613-625) ──────────────
@@ -537,6 +548,12 @@ export async function adminBulkApproveYuanPaymentsTb(
       const errors: string[] = [];
       const okIds: number[] = [];
       for (const r of approvedRows) {
+        // A4 two-round (owner 2026-06-21): bulk is ROUND 2 — only settle yuan
+        // slips already ROUND-1 reviewed. Skip un-reviewed rows + report them.
+        if (!r.reviewed_at) {
+          errors.push(`id=${r.id}: ยังไม่ได้ตรวจสลิป รอบ 1 — ตรวจรอบ 1 ที่หน้ารายละเอียดก่อน`);
+          continue;
+        }
         const payThbCost   = Math.round(Number(r.payyuan ?? 0) * payRateCost * 100) / 100;
         const payProfitThb = Math.round((Number(r.paythb ?? 0) - payThbCost) * 100) / 100;
         const { data: upRow, error: upErr } = await admin

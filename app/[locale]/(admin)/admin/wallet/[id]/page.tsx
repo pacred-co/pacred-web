@@ -190,7 +190,7 @@ export default async function AdminWalletDetail({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder",
+      "id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reviewed_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -612,6 +612,10 @@ export default async function AdminWalletDetail({
                 hasDuplicate={similar.some(
                   (s) => s.status === "1" || s.status === "2",
                 )}
+                // A4 two-round verify — customer payment slips (type 1/4/8) must
+                // be round-1 reviewed before approve (round-2). reviewed_at = stamp.
+                needsRound1={row.type === "1" || row.type === "4" || row.type === "8"}
+                reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
               />
             ) : (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
