@@ -522,16 +522,24 @@ export async function getLeadStats(): Promise<AdminActionResult<LeadStats>> {
     // Closed leads — distinct userids whose LATEST call-state = 'closed'.
     // Approximated by counting distinct userids among 'closed' rows (a lead is
     // rarely re-opened after a close; exact "latest=closed" needs an RPC).
-    const { data: closedRows, error: closedErr } = await admin
-      .from("lead_call_log")
-      .select("userid")
-      .eq("status", "closed")
-      .limit(5000);
-    if (closedErr) {
-      console.error(`[lead_call_log closed] failed`, { code: closedErr.code, message: closedErr.message });
-    }
+    // Page through ALL closed rows (was a silent .limit(5000) cap → the KPI
+    // under-counted once >5000 closed rows accrued · this card claims an exact count).
     const closedSet = new Set<string>();
-    for (const r of (closedRows ?? []) as { userid: string }[]) closedSet.add(r.userid);
+    for (let from = 0; ; from += 1000) {
+      const { data: closedRows, error: closedErr } = await admin
+        .from("lead_call_log")
+        .select("userid")
+        .eq("status", "closed")
+        .order("id", { ascending: true })
+        .range(from, from + 999);
+      if (closedErr) {
+        console.error(`[lead_call_log closed] failed`, { code: closedErr.code, message: closedErr.message });
+        break;
+      }
+      const batch = (closedRows ?? []) as { userid: string }[];
+      for (const r of batch) closedSet.add(r.userid);
+      if (batch.length < 1000) break; // last page
+    }
 
     return {
       ok: true,

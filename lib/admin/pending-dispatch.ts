@@ -7,10 +7,13 @@
  * so warehouse/planning don't have to poll.
  *
  * A forwarder is "pending dispatch" when it is fstatus='6' (เตรียมส่ง · ชำระแล้ว ·
- * ready to ship) AND it is NOT already in an OPEN driver batch (an existing
- * tb_forwarder_driver_item with fdistatus ''/1 = ยังไม่ขึ้นรถ/กำลังส่ง). The plain
- * `driverItems` sidebar badge counts ALL fstatus='6' (incl. already-assigned), so
- * this is the accurate "new work" count.
+ * ready to ship) AND `paydeposit <> '1'` (NOT a settled-credit row — legacy
+ * forwarder-driver.php gates the assignable list on `(paydeposit<>1 OR paydeposit
+ * IS NULL) AND fStatus='6'`; drivers/new applies the same `paydeposit !== '1'`)
+ * AND it is NOT already in an OPEN driver batch (an existing tb_forwarder_driver_item
+ * with fdistatus ''/1 = ยังไม่ขึ้นรถ/กำลังส่ง). This is the SINGLE source of truth for
+ * "งานรอจัดรถ" — the /admin/drivers banner, the sidebar "มอบงานคนขับ" badge, AND the
+ * logistics-board card all route through it so the three numbers always agree (§0f).
  *
  * READ-ONLY · no writes · best-effort (a sub-query failure yields 0/empty, never throws).
  */
@@ -33,14 +36,18 @@ export async function countPendingDispatch(
   if (!readyIds) {
     const { data, error } = await admin
       .from("tb_forwarder")
-      .select("id")
+      .select("id, paydeposit")
       .eq("fstatus", "6")
       .limit(5000);
     if (error) {
       console.error("[countPendingDispatch] ready read failed", { code: error.code, message: error.message });
       return 0;
     }
-    readyIds = (data ?? []).map((r) => (r as { id: number }).id);
+    // Exclude settled-credit rows (paydeposit='1') — they're fstatus='6' but NOT
+    // assignable (legacy + drivers/new both drop them). Keep null/''/'0'.
+    readyIds = (data ?? [])
+      .filter((r) => (r as { paydeposit: string | null }).paydeposit !== "1")
+      .map((r) => (r as { id: number }).id);
   }
   if (readyIds.length === 0) return 0;
 

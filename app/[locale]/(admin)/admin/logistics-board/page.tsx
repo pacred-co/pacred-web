@@ -43,6 +43,7 @@ type Row = {
   fusercompany: string | number | null;
   tax_doc_pref: string | null;
   fdatestatus4: string | null;
+  paydeposit: string | null;
 };
 
 const STAGES: { codes: string[]; key: string; label: string; dept: string; action: string; href: string; tone: string }[] = [
@@ -61,7 +62,7 @@ export default async function LogisticsBoardPage() {
   // Pull recent live forwarder rows (the active pipeline). Small table — JS-aggregate.
   const { data, error } = await admin
     .from("tb_forwarder")
-    .select("id, ftrackingchn, userid, fcabinetnumber, fstatus, ftransporttype, fweight, fvolume, ftotalprice, fcosttotalprice, fcredit, fusercompany, tax_doc_pref, fdatestatus4")
+    .select("id, ftrackingchn, userid, fcabinetnumber, fstatus, ftransporttype, fweight, fvolume, ftotalprice, fcosttotalprice, fcredit, fusercompany, tax_doc_pref, fdatestatus4, paydeposit")
     .neq("fstatus", "99")
     .order("id", { ascending: false })
     .limit(2000);
@@ -91,7 +92,12 @@ export default async function LogisticsBoardPage() {
   // 🚐 Pending-dispatch alert (owner 2026-06-19): fstatus=6 (เตรียมส่ง · ชำระแล้ว) not
   // yet in an OPEN driver batch → planning/warehouse goes to /admin/drivers/new and
   // confirm-saves (เฟิมบันทึก). Auto-surfaced; the dispatch itself stays a human action.
-  const readyIds = rows.filter((r) => String(r.fstatus ?? "") === "6").map((r) => r.id);
+  // Same SOT predicate as countPendingDispatch / drivers/new / legacy: fstatus=6
+  // AND paydeposit<>'1' (drop settled-credit) AND not in an open driver batch — so
+  // this card's number matches the sidebar badge + the /admin/drivers banner (§0f).
+  const readyIds = rows
+    .filter((r) => String(r.fstatus ?? "") === "6" && r.paydeposit !== "1")
+    .map((r) => r.id);
   const assignedFids = await loadAssignedFids(admin, readyIds);
   const pendingDispatch = readyIds.filter((id) => !assignedFids.has(id)).length;
 

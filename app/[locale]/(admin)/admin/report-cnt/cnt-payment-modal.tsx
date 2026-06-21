@@ -66,6 +66,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
   if (!open) return null;
 
   const totalSelectedAmount = selected.reduce((s, c) => s + c.costSum, 0);
+  const totalTrackCount = selected.reduce((s, c) => s + c.trackCount, 0);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -137,7 +138,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
               💸 ทำรายการจ่ายเงินตู้
             </h2>
             <p className="text-xs text-muted mt-0.5">
-              {selected.length} ตู้ที่เลือก · ยอดต้นทุนรวม{" "}
+              {selected.length} ตู้ที่เลือก · {totalTrackCount.toLocaleString()} แทรคกิ้ง · ยอดต้นทุนรวม (ต่อแทรคกิ้ง){" "}
               <b className="text-foreground">
                 ฿{totalSelectedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </b>
@@ -171,8 +172,8 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
                       <tr>
                         <th className="px-2 py-1.5 text-left">หมายเลขตู้</th>
                         <th className="px-2 py-1.5 text-left">โกดัง</th>
-                        <th className="px-2 py-1.5 text-right">รายการ</th>
-                        <th className="px-2 py-1.5 text-right">ต้นทุน</th>
+                        <th className="px-2 py-1.5 text-right">แทรคกิ้ง</th>
+                        <th className="px-2 py-1.5 text-right">ต้นทุน (รวมต่อแทรค)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -221,6 +222,9 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
                   defaultValue={totalSelectedAmount.toFixed(2)}
                   className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm disabled:bg-surface-alt/50"
                 />
+                <span className="mt-1 block text-[10px] text-muted">
+                  คิดจากผลรวม <b>ต้นทุนต่อแทรคกิ้ง</b> ของตู้ที่เลือก (ตรงกับใบแจ้งหนี้ MOMO ที่คิดเป็นรายแทรคกิ้ง) — แก้ไขได้ถ้า MOMO เรียกเก็บต่างจากนี้
+                </span>
               </label>
               <div className="block">
                 <span className="text-xs text-muted">ไฟล์สลิป — ไม่บังคับ</span>

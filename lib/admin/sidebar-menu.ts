@@ -1456,8 +1456,10 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.listAll",     href: "/admin/forwarders",                   icon: "Package" },
           { labelKey: "forwarder.whHistory",   href: "/admin/forwarders/warehouse-history", icon: "PackageCheck", badge: "forwarderWhError" },
           { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?status=6",           icon: "Truck", badge: "forwarderDelivery" },
-          // Phase 2 — driver-runs sales-only side not yet live.
-          { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
+          // 2026-06-20 — driver dispatch IS live; warehouse staff must reach it
+          // (drivers/page.tsx + the route gate already permit warehouse). The stale
+          // phase:2 hid the link from the very role that does the dispatch (§0d).
+          { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems" },
           // 2026-06-03 (ภูม flag · R-2 close-out): รวมบิลสินค้า + ใบวางบิล ย้ายไป
           // "ระบบบัญชี → รายรับ" topmenubar (CARGO_MENUBAR · accounting-menubar.ts).
           // ตาม PEAK pattern · ภูม flag screenshot 2026-06-03. The leaves are
