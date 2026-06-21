@@ -89,6 +89,7 @@ export default async function Home({
 }) {
   const { locale } = await params;
   const localeTyped = (locale === "en" ? "en" : "th") as "th" | "en";
+  const tc = await getTranslations({ locale, namespace: "customsClearancePage" });
 
   const services = HOME_SERVICES.map((s) =>
     serviceSchema({
@@ -126,6 +127,20 @@ export default async function Home({
         <OurService />
         <ProductCategories />
         <PricingSection />
+        {/* เคลียร์ของติดด่าน heading — lifted from the customs page so the home
+            clearance block (banner + mode cards) gets a proper intro
+            (ปอน 2026-06-21 "เอาหัวข้อหน้าเคลียร์มาขึ้นก่อนแบนเนอร์"). */}
+        <section className="relative pt-3 md:pt-6 pb-1 md:pb-2">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
+              {tc("modeEyebrow")}
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              {tc("modeH2Before")} <span className="text-primary-600">{tc("modeH2Highlight")}</span> {tc("modeH2After")}<span className="md:hidden"> {tc("modeH2Mobile")}</span>
+            </h2>
+          </div>
+        </section>
         <GuaranteeBanner />
         <section className="relative pt-1.5 md:pt-5 pb-1 md:pb-2">
           <div className="mx-auto w-full max-w-[1140px] px-[10px] md:px-5">

@@ -334,7 +334,7 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
               aria-expanded={showTerms}
               className="md:hidden relative z-30 self-start inline-flex items-center gap-0.5 py-0.5 text-[11px] font-bold text-slate-500 dark:text-white/70 active:opacity-70 transition-opacity"
             >
-              {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
+              {showTerms ? "ย่อ" : "เพิ่มเติม"}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2.6} />
             </button>
           </>
@@ -381,7 +381,7 @@ export function WarehouseRateGroup() {
         className="group relative block mb-3 md:mb-4 overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
       >
         <Image
-          src="/images/mainpage/banner/import-export/warehousec2.png"
+          src="/images/mainpage/banner/import-export/warehousec3.png"
           alt="โกดังรับสินค้า จีน-ไทย Pacred — Cargo / LCL นำเข้า-ส่งออก"
           width={2280}
           height={440}
@@ -632,7 +632,7 @@ type FreightCard = {
   freight?: string;  // FOB freight-only price · omit = "สอบถามเรท"
   unit?: string;     // "฿/ตู้" | "฿/CBM" | "฿/กก."
   size?: string;     // container-size tag — "20'" | "40'" (sea FCL, from the rate sheet)
-  carrier?: { name: string; url: string }; // shipping line — the tag links to its website
+  carrier?: { name: string; logo: string; url: string }; // shipping line — tag shows the brand logo + links to its website
   image?: string;        // นำเข้า cover photo (China port) · defaults to MODE_IMAGE
   exportImage?: string;  // ส่งออก cover photo (Thai port = the export origin)
 };
@@ -643,19 +643,19 @@ const FREIGHT_MODES: FreightMode[] = [
   { mode: "sea", heading: "เรือ", types: [
     // FOB sea-freight (40HQ · เริ่มต้น/ถูกสุด) from "Pricing - FRE IM SEA FCL" (owner 2026-06-17)
     { type: "SEA FREIGHT", cards: [
-      { route: "เซินเจิ้น → แหลมฉบัง", freight: "13,825", unit: "฿/ตู้", size: "40'", carrier: { name: "KMTC", url: "https://www.ekmtc.com" },   image: "/images/mainpage/card/freight/Zenshen.png", exportImage: "/images/mainpage/card/freight/LaemChabang.png" },
-      { route: "หนิงโบ → คลองเตย",     freight: "10,500", unit: "฿/ตู้", size: "40'", carrier: { name: "CNC", url: "https://www.cnc-line.com" }, image: "/images/mainpage/card/freight/Ningbou.png", exportImage: "/images/mainpage/card/freight/Klongtoey.png" },
-      { route: "เซี่ยงไฮ้ → ลาดกระบัง", freight: "15,400", unit: "฿/ตู้", size: "40'", carrier: { name: "OOCL", url: "https://www.oocl.com" },   image: "/images/mainpage/card/freight/Xianghai.png", exportImage: "/images/mainpage/card/freight/ICDLADKRABANG.png" },
-      { route: "กวางโจว → แหลมฉบัง",  freight: "9,100",  unit: "฿/ตู้", size: "40'", carrier: { name: "CUL", url: "https://www.culines.com" },  image: "/images/mainpage/card/freight/GwangZhou.png", exportImage: "/images/mainpage/card/freight/Laemchabang2.png" },
+      { route: "เซินเจิ้น → แหลมฉบัง", freight: "13,825", unit: "฿/ตู้", size: "40'", carrier: { name: "KMTC", logo: "/images/partners/kmtc.svg", url: "https://www.ekmtc.com" },   image: "/images/mainpage/card/freight/Zenshen.png", exportImage: "/images/mainpage/card/freight/LaemChabang.png" },
+      { route: "หนิงโบ → คลองเตย",     freight: "10,500", unit: "฿/ตู้", size: "40'", carrier: { name: "CNC", logo: "/images/partners/cnc.svg", url: "https://www.cnc-line.com" }, image: "/images/mainpage/card/freight/Ningbou.png", exportImage: "/images/mainpage/card/freight/Klongtoey.png" },
+      { route: "เซี่ยงไฮ้ → ลาดกระบัง", freight: "15,400", unit: "฿/ตู้", size: "40'", carrier: { name: "OOCL", logo: "/images/partners/oocl.png", url: "https://www.oocl.com" },   image: "/images/mainpage/card/freight/Xianghai.png", exportImage: "/images/mainpage/card/freight/ICDLADKRABANG.png" },
+      { route: "กวางโจว → แหลมฉบัง",  freight: "9,100",  unit: "฿/ตู้", size: "40'", carrier: { name: "CUL", logo: "/images/partners/culines.svg", url: "https://www.culines.com" },  image: "/images/mainpage/card/freight/GwangZhou.png", exportImage: "/images/mainpage/card/freight/Laemchabang2.png" },
     ] },
   ] },
   { mode: "air", heading: "แอร์", types: [
     // AIR CARGO rates — บาท/กก. + min-weight tier (owner 2026-06-18). UPS = Shenzhen/Guangzhou, China Cargo = Shanghai/Beijing · ส่งออก = swapRoute ย้อนทาง
     { type: "AIR CARGO", cards: [
-      { route: "กว่างโจว → สุวรรณภูมิ", freight: "114", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/gwangzhouairport.png" },
-      { route: "เซินเจิ้น → สุวรรณภูมิ", freight: "131", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/zenshenairport.png" },
-      { route: "เซี่ยงไฮ้ → ดอนเมือง", freight: "229", unit: "฿/กก.", size: "45kg+",  carrier: { name: "China Cargo", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/Xianghaiairport.png" },
-      { route: "ปักกิ่ง → สุวรรณภูมิ", freight: "213", unit: "฿/กก.", size: "300kg+", carrier: { name: "China Cargo", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/beijingairport.png" },
+      { route: "กว่างโจว → สุวรรณภูมิ", freight: "114", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/gwangzhouairport.png" },
+      { route: "เซินเจิ้น → สุวรรณภูมิ", freight: "131", unit: "฿/กก.", size: "100kg+", carrier: { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com" },        image: "/images/mainpage/card/freight/air/zenshenairport.png" },
+      { route: "เซี่ยงไฮ้ → ดอนเมือง", freight: "229", unit: "฿/กก.", size: "45kg+",  carrier: { name: "China Cargo", logo: "/images/partners/chinacargo.png", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/Xianghaiairport.png" },
+      { route: "ปักกิ่ง → สุวรรณภูมิ", freight: "213", unit: "฿/กก.", size: "300kg+", carrier: { name: "China Cargo", logo: "/images/partners/chinacargo.png", url: "https://www.ckair.com" }, image: "/images/mainpage/card/freight/air/beijingairport.png" },
     ] },
   ] },
   { mode: "road", heading: "รถ", types: [
@@ -664,10 +664,10 @@ const FREIGHT_MODES: FreightMode[] = [
     { type: "TRUCK FREIGHT", cards: [
       // China border → Thai border — overland checkpoints (ปอน 2026-06-20 · "เอา
       // ด่าน ออก มันล้น"). Thai = สะเดา/มุกดาหาร/เบตง/นครพนม · จีน = โหย่วอี้กวน/ตงซิง/โม่ฮาน.
-      { route: "โหย่วอี้กวน → สะเดา" },
-      { route: "ตงซิง → มุกดาหาร" },
-      { route: "โม่ฮาน → เบตง" },
-      { route: "โม่ฮาน → นครพนม" },
+      { route: "โหย่วอี้กวน → สะเดา", image: "/images/mainpage/card/freight/truck/yoiguan.png", exportImage: "/images/mainpage/card/freight/truck/sadao.png" },
+      { route: "ตงซิง → มุกดาหาร", image: "/images/mainpage/card/freight/truck/tongsin.png", exportImage: "/images/mainpage/card/freight/truck/mukdahan.png" },
+      { route: "โม่ฮาน → เบตง", image: "/images/mainpage/card/freight/truck/mohan1.png", exportImage: "/images/mainpage/card/freight/truck/betong.png" },
+      { route: "โม่ฮาน → นครพนม", image: "/images/mainpage/card/freight/truck/mohan2.png", exportImage: "/images/mainpage/card/freight/truck/nakhonpanom.png" },
     ] },
   ] },
 ];
@@ -740,11 +740,15 @@ function FreightRouteCard({ mode, card, index, total }: {
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); window.open(carrier.url, "_blank", "noopener,noreferrer"); } }}
               aria-label={`เปิดเว็บไซต์สายเรือ ${carrier.name}`}
               title={`สายเรือ ${carrier.name} — เปิดเว็บไซต์`}
-              className="cursor-pointer inline-flex items-center gap-1 rounded-full bg-white/95 text-primary-700 px-2 py-0.5 text-[9.5px] font-black tracking-[0.04em] shadow-[0_2px_6px_rgba(0,0,0,0.15)] transition-colors hover:bg-primary-600 hover:text-white"
+              className="cursor-pointer inline-flex items-center gap-1 rounded-full bg-white px-1.5 py-1 shadow-[0_2px_6px_rgba(0,0,0,0.18)] transition-all hover:shadow-[0_3px_11px_rgba(0,0,0,0.28)] hover:scale-[1.06]"
             >
-              <Icon className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
-              {carrier.name}
-              <ArrowRight className="w-2.5 h-2.5 shrink-0 -rotate-45" strokeWidth={2.6} />
+              {/* carrier BRAND LOGO in the tag (ปอน 2026-06-21 · "เอาโลโก้สายเรือ/ups มาเป็นไอคอนใน tag").
+                  Mixed PNG/SVG sources → a plain <img> (next/image can't optimise a local SVG without
+                  the global dangerouslyAllowSVG flag); the logos are tiny + already crisp here. The pill
+                  stays white on hover so the coloured logos never wash out. A plain <img> (not
+                  next/image) keeps PNG+SVG uniform; lint's no-img-element warning is accepted here. */}
+              <img src={carrier.logo} alt={`สายเรือ ${carrier.name}`} loading="lazy" className="h-4 w-auto max-w-[78px] object-contain" />
+              <ArrowRight className="w-2.5 h-2.5 shrink-0 -rotate-45 text-primary-600" strokeWidth={2.6} />
             </span>
           )}
           {/* FOB = sea incoterm — not shown on air cards (rate is ฿/กก., owner 2026-06-18) */}

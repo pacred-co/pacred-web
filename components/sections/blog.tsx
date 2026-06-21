@@ -29,7 +29,7 @@ type Video = {
 };
 
 const BIG_VIDEO: Video = {
-  id: "0kK32T-6wHw",
+  id: "rwVrOZ6lI0k",
   title: "ชิปปิ้ง เคลียร์สินค้าติดด่าน เคลียร์ภาษี พิธีการศุลกากร",
   sub: "เคลียร์สินค้าติดด่าน · พิธีการกรมศุลกากร Pacred Shipping",
   badge: "แนะนำ",
@@ -255,8 +255,9 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
         className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
       />
 
-      {/* Dark gradient — bottom for text + top for badge */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+      {/* Dark gradient — DESKTOP ONLY (ปอน 2026-06-21 "เอาเงาออกในมือถือ"): the title
+          text is hidden on mobile, so the dark fade is just a shadow on a clean thumbnail. */}
+      <div className="absolute inset-0 hidden md:block bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       {/* Big play button center */}
       <div className="absolute inset-0 flex items-center justify-center">
@@ -272,8 +273,9 @@ function VideoCardBig({ video, isActive, onPlay }: { video: Video; isActive: boo
         </div>
       )}
 
-      {/* Title + subtitle */}
-      <div className="absolute left-4 right-4 bottom-4 z-10">
+      {/* Title + subtitle — hidden on mobile (ปอน 2026-06-21 "ในมือถือเอา text ออก"),
+          shown on desktop. The thumbnail/cover speaks for itself on small screens. */}
+      <div className="absolute left-4 right-4 bottom-4 z-10 hidden md:block">
         <h3 className="text-white text-[20px] md:text-[26px] font-black leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
           {video.title}
         </h3>
@@ -316,8 +318,8 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
 
-      {/* Dark gradient — bottom for text */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+      {/* Dark gradient — DESKTOP ONLY (ปอน 2026-06-21 "เอาเงาออกในมือถือ"). */}
+      <div className="absolute inset-0 hidden md:block bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
 
       {/* Play button center */}
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -333,8 +335,8 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
         </div>
       )}
 
-      {/* Title */}
-      <div className="absolute left-2.5 right-2.5 bottom-2 z-10">
+      {/* Title — hidden on mobile (ปอน 2026-06-21 "ในมือถือเอา text ออก"), shown on desktop. */}
+      <div className="absolute left-2.5 right-2.5 bottom-2 z-10 hidden md:block">
         <h3 className="text-white text-[11px] md:text-[12px] font-black leading-[1.25] line-clamp-2 drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
           {video.title}
         </h3>

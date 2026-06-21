@@ -756,139 +756,27 @@ export default async function CustomsClearancePage({
              • ทั้งกล่องกดได้ → LINE (overlay anchor + content pointer-events-none) */}
         <section className="relative pt-2 md:pt-4 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <div className="relative max-w-[1100px] mx-auto group">
-              <div
-                className="relative overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(179,0,0,0.5)] group-hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #DC1F1F 0%, #B30000 45%, #7F0000 100%)" }}
-              >
-                {/* Decorative sheen */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
-                  style={{ background: "radial-gradient(circle at 25% 50%, rgba(255,200,100,0.30) 0%, transparent 55%)" }}
-                />
-                {/* Dot pattern */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 opacity-[0.10]"
-                  style={{
-                    backgroundImage:
-                      "radial-gradient(circle, white 1px, transparent 1.4px)",
-                    backgroundSize: "16px 16px",
-                  }}
-                />
-
-                {/* LINE click overlay — sits behind partner logos (z-10 < logos z-20) */}
-                <TrackedExternalLink
-                  href={LINE_URL}
-                  cta="line_consult"
-                  surface="customs_guarantee_banner"
-                  aria-label={tp("scopeBannerAriaLabel")}
-                  className="absolute inset-0 z-10"
-                >
-                  <span className="sr-only">{tp("scopeBannerSrOnly")}</span>
-                </TrackedExternalLink>
-
-                <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
-                  <div className="min-w-0 py-3 md:py-3">
-                    {/* Desktop headline — single-line at lg+ per เดฟ 2026-05-18:
-                        ของติดด่าน? + แค่  ·  2,800 + บาท  ·  Pacred Shipping pill + arrow
-                        ("เคลียร์ไวกับ" dropped to free horizontal space for bigger text) */}
-                    <p className="hidden md:flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 tracking-tight lg:whitespace-nowrap">
-                      <span className="inline-flex items-baseline gap-x-2 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                        <span className="text-[48px] font-black leading-none whitespace-nowrap">{tp("guaranteeStuck")}</span>
-                        <span className="text-[18px] font-bold">{tp("guaranteeOnly")}</span>
-                      </span>
-                      <span className="inline-flex items-baseline gap-x-2 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
-                        <span className="text-[72px] font-black leading-none whitespace-nowrap">2,800</span>
-                        <span className="text-[18px] font-bold">{tp("guaranteeBaht")}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-white">
-                        <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
-                          Pacred Shipping
-                        </span>
-                        <ArrowRight className="w-7 h-7 transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
-                      </span>
-                    </p>
-
-                    {/* Mobile headline — minimal 2-row per เดฟ 2026-05-18:
-                        L1: ของติดด่าน? (26px) + แค่ (14px)
-                        L2: 2,800 (48px focal) + บาท (14px) + arrow (clickable affordance) */}
-                    <div className="md:hidden flex flex-col gap-1">
-                      <p className="flex items-baseline gap-1.5 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                        <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">{tp("guaranteeStuck")}</span>
-                        <span className="text-[14px] font-bold">{tp("guaranteeOnly")}</span>
-                      </p>
-                      <p className="flex items-baseline gap-1.5 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
-                        <span className="text-[48px] font-black leading-none tracking-tight whitespace-nowrap">2,800</span>
-                        <span className="text-[14px] font-bold">{tp("guaranteeBaht")}</span>
-                        <ArrowRight className="self-center shrink-0 ml-1 w-6 h-6 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
-                      </p>
-                    </div>
-
-                    {/* Partner logos — clickable strip below headline (visible on all viewports) */}
-                    <div className="mt-2.5 md:mt-3 flex items-center gap-2 md:gap-3 pointer-events-auto relative z-20">
-                      {[
-                        { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com/th-th/home.html" },
-                        { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com/th-en/home.html" },
-                        { name: "TNT", logo: "/images/partners/tntpartner.png", url: "https://www.tnt.com/express/th_th/site/home.html" },
-                        { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com/th/en/Home.page" },
-                      ].map((c) => (
-                        <a
-                          key={c.name}
-                          href={c.url}
-                          target="_blank"
-                          rel="noopener noreferrer sponsored"
-                          aria-label={c.name}
-                          className="relative h-7 md:h-11 w-[46px] md:w-[78px] bg-white rounded-md md:rounded-lg flex items-center justify-center p-1 md:p-1.5 shadow-sm shrink-0 hover:scale-110 hover:shadow-md transition-transform"
-                        >
-                          <Image
-                            src={c.logo}
-                            alt={c.name}
-                            fill
-                            sizes="(max-width: 768px) 46px, 78px"
-                            className="object-contain p-0.5 md:p-1"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Visit photo — square 1:1 source (1080×1080). Photo box also 1:1
-                      (150×150 mobile, 180×180 desktop) so object-contain fills cleanly.
-                      `md:mr-6` shifts the desktop photo left so "คลิ๊กเลย!" badge in
-                      the top-right corner doesn't overlap. */}
-                  <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
-                    <Image
-                      src="/images/visit/Visit04.png"
-                      alt={tp("guaranteeTeamAlt")}
-                      fill
-                      sizes="(max-width: 768px) 150px, 180px"
-                      className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
-                    />
-                  </div>
-
-                  {/* Document overlay — desktop only, sits left of พี่ป็อป (clear space, no overlap) per เดฟ 2026-05-18 */}
-                  <div className="hidden md:block pointer-events-none absolute right-[240px] bottom-3 w-[110px] h-[110px] z-10 -rotate-[6deg]">
-                    <Image
-                      src="/images/documenter.png"
-                      alt=""
-                      fill
-                      sizes="110px"
-                      className="object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.4)]"
-                    />
-                  </div>
-
-                  {/* คลิ๊กเลย! corner badge */}
-                  <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
-                    <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">
-                      {tp("clickBadge")}
-                    </span>
-                    <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* ของติดด่าน (clearance) banner — image clearance3.png, same as the home page
+                (ปอน 2026-06-21 "เอา clearance3 แบบหน้าหลักมาใส่แทน"). Replaced the inline
+                CSS-gradient build (headline + ฿2,800 + partner logos + Visit photo). */}
+            <TrackedExternalLink
+              href={LINE_URL}
+              cta="line_consult"
+              surface="customs_guarantee_banner"
+              aria-label={tp("scopeBannerAriaLabel")}
+              className="group relative block max-w-[1100px] mx-auto overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
+            >
+              <Image
+                src="/images/mainpage/banner/import-export/clearance3.png"
+                alt="เคลียร์สินค้าติดด่าน เริ่มต้น 2,800 บาท — Pacred Shipping พิธีการศุลกากร"
+                width={2280}
+                height={440}
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 1100px"
+                className="w-full h-auto transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+              />
+              <span className="sr-only">{tp("scopeBannerSrOnly")}</span>
+            </TrackedExternalLink>
 
             {/* 2 CTA image banners — สมัคร + ปรึกษาไลน์ (per ปอน 2026-05-18) */}
             <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2 md:gap-4">

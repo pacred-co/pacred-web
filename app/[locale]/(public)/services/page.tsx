@@ -52,8 +52,6 @@ export async function generateMetadata({
   return buildPageMetadata({ locale, path: PATH, namespace: NS, ogKey: "services" });
 }
 
-const LINE_URL = "/line";
-
 type ServiceCard = {
   icon: typeof Ship;
   title: string;
@@ -314,59 +312,11 @@ export default async function ServicesIndexPage({
               {t("heroSubtitleMain")}<span className="text-primary-600/80 font-bold">{t("heroSubtitleHighlight")}</span>
             </h2>
 
-            {/* LINE attention banner */}
-            <TrackedExternalLink
-              href={LINE_URL}
-              cta="line_cta"
-              surface={SURFACE}
-              ctaProps={{ position: "hero_banner" }}
-              aria-label={t("lineBannerAriaLabel")}
-              className="group block mt-4 md:mt-6 relative pt-3 md:pt-4 pr-4 md:pr-8 max-w-[1100px] no-underline"
-            >
-              <span className="absolute top-0 left-3 md:left-5 z-20 inline-flex items-center gap-1.5 bg-slate-900 dark:bg-black text-white text-[11.5px] md:text-[13px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.45)] tracking-tight transition-transform duration-300 group-hover:-translate-y-0.5">
-                <span className="relative flex w-2 h-2">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-red-500" />
-                </span>
-                {t("lineBannerBadge")}
-              </span>
-              <div
-                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
-              >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-50 mix-blend-overlay"
-                  style={{ background: "radial-gradient(circle at 75% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
-                />
-                <div className="relative grid grid-cols-[auto_1fr] items-center gap-2 md:gap-5 pl-3 md:pl-6 pr-3 md:pr-6 pt-7 md:pt-7 pb-4 md:pb-5">
-                  <div className="leading-none shrink-0">
-                    <p className="text-[16px] md:text-[32px] font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
-                      <span className="text-yellow-300">P</span>
-                      <span className="text-white">acred</span>
-                    </p>
-                    <p className="mt-0.5 text-[7.5px] md:text-[12px] font-bold tracking-[0.30em]">
-                      <span className="text-yellow-300">S</span>
-                      <span className="text-white">HIPPING</span>
-                    </p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[12px] md:text-[28px] font-bold text-white leading-snug">
-                      {t("lineBannerHeadline")}
-                    </p>
-                    <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
-                      {t("lineBannerSub")}
-                    </p>
-                    <p className="mt-1.5 md:mt-2 inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold tracking-wide">
-                      <MessageCircle className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300" strokeWidth={2.6} />
-                      <span className="text-yellow-300">{t("lineBannerCtaLine")}</span>
-                      <span className="text-white/85">{t("lineBannerCtaReply")}</span>
-                      <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </TrackedExternalLink>
+            {/* Rotating v3 service banner — replaced the dark-red "ปรึกษาฟรี"
+                CTA card with banner set3 (ปอน 2026-06-21 · same as site-wide). */}
+            <div className="mt-4 md:mt-6">
+              <ImportExportBanner />
+            </div>
 
             {/* Phone + LINE row */}
             <div className="mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[640px]">

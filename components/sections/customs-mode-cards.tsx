@@ -206,9 +206,8 @@ export function CustomsModeCards() {
                   sizes="(max-width: 768px) 92vw, 440px"
                   className="object-cover"
                 />
-                {/* Dark gradients — DESKTOP only; the mobile photo stays clean & sharp. */}
-                <div className={`absolute inset-0 hidden md:block bg-gradient-to-br ${c.accent} mix-blend-multiply`} />
-                <div className="absolute inset-0 hidden md:block bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                {/* Image is clean/bright on BOTH viewports now — desktop gradients removed
+                    (ปอน 2026-06-21 "ภาพสว่างขึ้น"). Title + price live in the white body. */}
                 <div className="absolute top-3 left-3">
                   <span
                     className={[
@@ -222,58 +221,50 @@ export function CustomsModeCards() {
                     {c.badge}
                   </span>
                 </div>
-                {/* Title + price OVERLAY — DESKTOP only (mobile shows them in the
-                    white body below, over the clean image · ปอน 2026-06-21). */}
-                <div className="absolute bottom-3 left-3 right-3 hidden md:block">
-                  {/* Title is smaller on the narrow (TRUCK/SEA) cards so it never
-                      overflows the banner; the full-width AIR hero keeps it big. */}
-                  <h3 className={`${isRecommended ? "text-[18px]" : "text-[14px]"} md:text-[23px] font-black text-white leading-[1.1] tracking-tight line-clamp-2 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]`}>
-                    {c.title}
-                  </h3>
-                  {/* Price — white strip on the banner, right with the title
-                      (ปอน 2026-06-21: "เอาราคาไปอยู่ข้างๆ ทางรถ/เรือ/แอร์ · แถบขาว").
-                      The ports list moved into the เงื่อนไข details below so the banner
-                      stays clean. The pill holds the number only; "+ ค่าใช้จ่ายอื่น"
-                      sits beside it as a white caption (nowrap → never char-wraps). */}
-                  <div className="mt-2 flex items-end gap-1.5 flex-wrap">
-                    <span className="inline-flex items-baseline gap-1 rounded-lg bg-white px-2.5 py-1 shadow-[0_3px_10px_rgba(0,0,0,0.32)]">
-                      <span className="text-[18px] md:text-[21px] font-black leading-none tracking-tight text-primary-600">{c.price}</span>
-                      <span className="text-[10px] font-black text-primary-600">{t("baht")}</span>
-                    </span>
-                    <span className="pb-1 text-[8.5px] font-bold leading-none text-white/85 whitespace-nowrap drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">{t("plusOtherFees")}</span>
-                  </div>
-                </div>
+                {/* (Title + price moved OFF the image into the white body — see below.) */}
               </div>
 
               <div className="relative z-10 flex-1 flex flex-col gap-2 md:gap-2.5 p-3 md:p-4">
-                {/* MOBILE title + price — one row below the clean image (ปอน 2026-06-21
-                    "ชื่อ กับ ราคา 2,800 อยู่บรรทัดเดียวกัน"). Desktop renders these on
-                    the image overlay instead, so this row is md:hidden. */}
-                <div className="md:hidden flex items-center justify-between gap-2">
-                  <h3 className="flex-1 min-w-0 text-[12px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2">
+                {/* DESKTOP title + price — in the white body, ONE row (title left · price
+                    right · no "+ ค่าใช้จ่ายอื่น" caption) so the photo stays clean/bright
+                    (ปอน 2026-06-21 "ราคาแถวเดียวกับหัวข้อ · ลบ+ค่าใช้จ่ายอื่น"). md:flex only. */}
+                <div className="hidden md:flex items-baseline justify-between gap-2">
+                  <h3 className="flex-1 min-w-0 text-[18px] font-black text-[#111827] dark:text-white leading-[1.15] tracking-tight line-clamp-2">
                     {c.title}
                   </h3>
-                  <div className="shrink-0 text-right leading-none">
-                    <span className="inline-flex items-baseline gap-0.5">
-                      <span className="text-[17px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
-                      <span className="text-[8.5px] font-black text-primary-600">{t("baht")}</span>
+                  <span className="shrink-0 inline-flex items-baseline gap-1">
+                    <span className="text-[24px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
+                    <span className="text-[12px] font-black text-primary-600">{t("baht")}</span>
+                  </span>
+                </div>
+                {/* MOBILE title + price (md:hidden — desktop uses the white-body block above).
+                    Narrow TRUCK/SEA cards STACK (title, then a big price below — a big
+                    price squeezes the title on a 2-col card). The full-width AIR card has
+                    room → title LEFT + price RIGHT, side-by-side (ปอน 2026-06-21
+                    "ในมือถือ เฉพาะของแอร์ ขยับไปด้านขวา"). isRecommended = the AIR card. */}
+                <div className={`md:hidden flex ${isRecommended ? "items-center justify-between gap-3" : "flex-col gap-1"}`}>
+                  <h3 className={`text-[13px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2${isRecommended ? " flex-1 min-w-0" : ""}`}>
+                    {c.title}
+                  </h3>
+                  {/* price + the "เพิ่มเติม / ย่อ" toggle appended right after it (ปอน
+                      2026-06-21 "เหลือแค่ เพิ่มเติม · เอาไปต่อท้ายราคา · มือถือ"). The
+                      toggle reveals ports/specs/details below; desktop always shows them. */}
+                  <div className={`flex items-baseline flex-wrap gap-x-1.5 gap-y-0 leading-none${isRecommended ? " shrink-0 justify-end" : ""}`}>
+                    <span className="inline-flex items-baseline gap-1">
+                      <span className="text-[22px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
+                      <span className="text-[12px] font-black text-primary-600">{t("baht")}</span>
                     </span>
-                    <div className="mt-0.5 text-[7px] font-medium text-muted leading-none">{t("plusOtherFees")}</div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenTerms((prev) => ({ ...prev, [c.mode]: !prev[c.mode] }))}
+                      aria-expanded={showTerms}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-normal text-slate-500 dark:text-white/55 active:opacity-60 transition-opacity"
+                    >
+                      {showTerms ? "ย่อ" : "เพิ่มเติม"}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2} />
+                    </button>
                   </div>
                 </div>
-
-                {/* "เงื่อนไข เพิ่มเติม / ย่อ" — plain light text, NO border (ปอน
-                    2026-06-21 "ไม่ต้องตีกรอบ · ตัวอักษรบางๆ"), mobile only. Reveals the
-                    details below; desktop shows everything so the toggle is hidden there. */}
-                <button
-                  type="button"
-                  onClick={() => setOpenTerms((prev) => ({ ...prev, [c.mode]: !prev[c.mode] }))}
-                  aria-expanded={showTerms}
-                  className="md:hidden w-full inline-flex items-center justify-start gap-1 py-1 text-[11.5px] font-normal text-slate-500 dark:text-white/55 active:opacity-60 transition-opacity"
-                >
-                  {showTerms ? "ย่อ" : "เงื่อนไข เพิ่มเติม"}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2} />
-                </button>
 
                 {/* Ports / จุดให้บริการ — moved here from the banner (ปอน 2026-06-21
                     "เอาพวกนี้เข้ามาใส่ในเงื่อนไข"). Collapsed on mobile · always desktop. */}
@@ -388,22 +379,22 @@ export function CustomsModeCards() {
               {/* CTA footer — featured gets yellow CTA, side cards get red */}
               <div
                 className={[
-                  "relative z-10 px-3.5 md:px-4 py-2.5 md:py-3 border-t",
+                  "relative z-10 px-3.5 md:px-4 py-2 md:py-2.5 border-t",
                   isFeatured ? "border-white/15 bg-black/15 backdrop-blur-sm" : "border-border bg-surface/60 dark:bg-background/60",
                 ].join(" ")}
               >
                 <Link
                   href={`${PATH}/${c.slug}`}
                   className={[
-                    "inline-flex w-full items-center justify-center gap-1.5 h-11 rounded-lg font-black text-[13px] md:text-[13.5px] transition-all duration-300 shadow-[0_4px_14px_rgba(0,0,0,0.15)] hover:scale-[1.02]",
+                    "inline-flex w-full items-center justify-center gap-1 py-1.5 rounded-lg font-black text-[11.5px] md:text-[12px] leading-none tracking-tight transition-all duration-300 shadow-[0_4px_14px_rgba(0,0,0,0.15)] hover:scale-[1.02]",
                     isFeatured
                       ? "bg-yellow-300 text-primary-800 hover:bg-yellow-200 shadow-[0_6px_18px_rgba(255,213,0,0.45)]"
                       : "bg-primary-600 text-white hover:bg-primary-700",
                   ].join(" ")}
                 >
-                  <Lock className="w-3.5 h-3.5" strokeWidth={2.6} />
+                  <Lock className="w-3 h-3" strokeWidth={2.6} />
                   {t("requestPrice", { mode: t(`mode_${c.slug}`) })}
-                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
+                  <ArrowRight className="w-3 h-3" strokeWidth={2.6} />
                 </Link>
               </div>
             </article>
