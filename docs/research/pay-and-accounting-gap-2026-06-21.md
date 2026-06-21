@@ -91,19 +91,31 @@ value to represent "round-1-done, awaiting round-2." This is the biggest account
 - **B7 — tax returns ภพ.30 + ภงด.53 + outbound 50-ทวิ** (large): build on `computeTaxForMode`/
   `computeBillWht`; needs B5's supplier-WHT first.
 
-## 🚩 OWNER DECISIONS (do not guess)
-- **D1 — wallet retirement scope.** Hard-remove all wallet pay paths now (A1/A2/A3), or keep wallet
-  read-only for customers with existing legacy/cashback balances during transition?
-- **D2 — 2-round verify shape (A4).** Round-1 a *different human* than round-2 (segregation of
-  duties), or the same admin doing two deliberate passes? Determines the `reviewed_by` constraint.
-- **D3 — amount-bound QR (A6).** EMVCo PromptPay encoding the exact amount everywhere, or keep
-  static QR + typed amount + slip? (A 2026-06-08 note deliberately chose static.)
-- **D4 — legacy admin/credit wallet tools (A7).** Keep `customerPayCreditFromWallet`,
-  `recordFreightPayment method='wallet'`, `adminCreateYuanPaymentManual`, or retire with the wallet?
-- **D5 — ใบขน VAT base.** Brief says ใบขน = VAT7% **from กำไร (margin)**; current code (`tax-doc-mode.ts:213`)
-  flags service-only-vs-service+transport+rental unresolved. Accountant sign-off before B1/B7.
-- **D6 — freight customer self-pay.** No customer freight pay surface today (admin-recorded only).
-  If "EVERY service" needs the slip flow, freight needs B-phase work — confirm scope.
+## 🚩 OWNER DECISIONS — RESOLVED 2026-06-21
+- **D1 ✅ — wallet retirement: ถอดกระเป๋าออกทุกจุดเลย.** Remove the wallet from ALL pay paths
+  (A1 force-delta-0, A2 route the 5 bulk surfaces to the slip flow + delete `payServiceOrderFromWallet`,
+  A3 drop the `walletApplied` partial input). Folds D4 = retire the legacy wallet tools too.
+- **D2 ✅ — 2-round verify: คนเดียวกันก็ได้ ตรวจ 2 รอบ.** Same admin MAY do both rounds → NO
+  segregation-of-duties / no `reviewed_by`-uniqueness constraint. Just a real ROUND-1 (status='4'
+  "ตรวจรอบ1แล้ว") → ROUND-2 (settle '4'→'2') state machine + 2-button UI. Migration needed.
+- **D3 🔴 BLOCKED — amount-bound QR: ผูกยอดอัตโนมัติทุกที่** — but `PROMPTPAY_ID` is commented out
+  in env + `lib/promptpay.ts` was deliberately switched to the static K-Shop QR because the env held
+  "the WRONG number (ก๊อต's personal id)". **NEEDS the company's real PromptPay ID** (phone or tax-ID
+  registered for PromptPay) before `buildPromptPayQrDataUrl` can encode the amount. Owner to provide.
+- **D5 ✅ — ใบขน/Non VAT base = VAT7% from กำไร (margin), ตามบรีฟ.** Lock `computeTaxForMode`/
+  `computeMarginVat` to the margin base for ใบขน + ไม่เอาเอกสาร (Non); ใบกำกับ stays VAT on the full
+  service. Build B1/B7 on this.
+- **D6 — freight customer self-pay** (still open): no customer freight pay surface today. Confirm if
+  "EVERY service" must include a customer freight slip flow (B-phase) or admin-recorded is fine.
+
+## Build sequence (post-decision · next focused turns · money-path → gate + money-review each, no prod-mutation test)
+1. **A5** — yuan dup-gate (tb_payment variant + block-with-override UI). Safe.
+2. **D1 wallet removal** — A2/A3 (route bulk → slip, drop walletApplied, retire payServiceOrderFromWallet
+   + legacy wallet tools) + A1 (delta=0). Money-review the 5 surfaces; keep slip type='8' delta-0 path.
+3. **A4/D2 two-round verify** — migration 0198 (status='4' + reviewed_at) + `adminReviewRound1*` +
+   require round-1 before settle + 2-button UI on slip-review + wallet/[id].
+4. **D5 VAT margin** — lock the ใบขน/Non base to margin; then B1 (wire VAT into AR billing-run).
+5. **D3** — once the owner supplies the company PromptPay ID: amount-bound QR everywhere (incl. yuan).
 
 ## Recommended sequencing
 Money-correctness first: **A5 (safe, do now)** → A1+A2+A3 (after D1) → A4 (after D2 + mig). Then
