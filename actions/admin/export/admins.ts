@@ -59,9 +59,12 @@ function nameEmployeeType(t: string | null | undefined): string {
 
 function nameRole(role: string): string {
   switch (role) {
+    case "ultra":       return "Ultra Admin Z";
     case "super":       return "Super Admin";
+    case "manager":     return "Cargo Manager";
     case "ops":         return "Ops";
     case "accounting":  return "Accounting";
+    case "pricing":     return "Pricing";
     case "sales_admin": return "Sales Mgr (Cargo)";
     case "sales":       return "Sales (Cargo)";
     case "qa":          return "QA / QC";
@@ -130,17 +133,13 @@ export async function exportAdminsAll(
 
   const admin = createAdminClient();
 
-  // ── Query 1 — admin role grants (is_active filter applied here) ────────────
-  let adminQ = admin
+  // ── Query 1 — ALL admin role grants (dedupe to one row per PERSON below,
+  //    byte-identical to the page · per-PERSON status filter applied after the
+  //    merge). granted_at desc so the most-recent active grant is the effective
+  //    role picked at dedupe. ─────────────────────────────────────────────────
+  const adminQ = admin
     .from("admins")
-    .select("profile_id, role, is_active, granted_at, granted_by");
-  switch (filter.s) {
-    case "1":   adminQ = adminQ.eq("is_active", true);  break;
-    case "2":   adminQ = adminQ.eq("is_active", false); break;
-    case "all": break;
-    default:    break; // not set — render all (matches the page)
-  }
-  adminQ = adminQ
+    .select("profile_id, role, is_active, granted_at, granted_by")
     .order("granted_at", { ascending: false, nullsFirst: false })
     .range(0, EXPORT_CAP); // 0..EXPORT_CAP = up to EXPORT_CAP+1 rows
 
@@ -230,8 +229,32 @@ export async function exportAdminsAll(
   // Drop rows with no profile (FK should prevent · defensive · matches page).
   merged = merged.filter((r) => r.profile !== null);
 
+  // ── DEDUPE to ONE row per PERSON (byte-identical to the page) ───────────────
+  // A person holds several (profile_id, role) grants; collapse to one — effective
+  // grant = most-recent active (merged is granted_at desc), else most-recent; the
+  // person is "active" iff any grant is active.
+  const anyActive = new Map<string, boolean>();
+  const effective = new Map<string, Merged>();
+  for (const m of merged) {
+    const pid = m.grant.profile_id;
+    anyActive.set(pid, (anyActive.get(pid) ?? false) || m.grant.is_active);
+    const cur = effective.get(pid);
+    if (!cur) { effective.set(pid, m); continue; }
+    if (!cur.grant.is_active && m.grant.is_active) effective.set(pid, m);
+  }
+  let people: Merged[] = [...effective.values()].map((m) => ({
+    ...m,
+    grant: { ...m.grant, is_active: anyActive.get(m.grant.profile_id) ?? m.grant.is_active },
+  }));
+
+  // Person status filter — two buckets (matches the page's 2 tabs).
+  const isResigned = (m: Merged) => !!m.extras?.ended_at || !m.grant.is_active;
+  if (filter.s === "2")      people = people.filter((m) => isResigned(m));
+  else if (filter.s === "1") people = people.filter((m) => !isResigned(m));
+  // (no `s` → all people · matches the page's default-active is handled by the UI)
+
   // ── Map to CSV rows — columns mirror the <thead> 1:1 ───────────────────────
-  const rows: CsvRow[] = merged.map(({ grant, profile, extras }) => {
+  const rows: CsvRow[] = people.map(({ grant, profile, extras }) => {
     const p = profile ?? {};
     const x = extras ?? {};
     const firstName = (p.first_name as string | null) ?? "";

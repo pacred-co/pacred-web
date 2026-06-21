@@ -252,44 +252,20 @@ export default async function AdminTablePage({
   // matter the schema-cache state. Dataset is tiny (~15 admin rows after
   // ภูม recreates), so 3 small queries + JS merge is the clean shape.
 
-  // Query 1 — admin role grants (with is_active filter applied here)
-  let adminQ = admin.from("admins").select("profile_id, role, is_active, granted_at, granted_by");
-  switch (sp.s) {
-    case "1":   adminQ = adminQ.eq("is_active", true);  break;
-    case "2":   adminQ = adminQ.eq("is_active", false); break;
-    case "all": /* no action */ break;
-    default:    /* not set — render all (matches legacy "no `s` → unfiltered") */ break;
-  }
-  // Lane C 2026-06-02 — resolve sort/dir from URL. Only granted_at/role/is_active
-  // can be ordered server-side (admins-table columns); the rest are sorted in JS.
+  // Query 1 — ALL admin role grants. We DEDUPE to one row per PERSON in JS below
+  // (a person legitimately has several `admins` grant rows: role-change soft-deletes
+  // the old grant + adds the new one · or several roles were granted) — so the list
+  // must group by profile_id, not render one row per grant. Status is computed
+  // per-PERSON (active = has any active grant). Ordered granted_at desc so the
+  // "first active grant" picked as the effective role is the most-recent one.
   const sortKeyRaw = sp.sort && ADMINS_SORT_KEYS.has(sp.sort) ? sp.sort : "granted_at";
   const sortDir: "asc" | "desc" = sp.dir === "asc" ? "asc" : "desc";
-  const dbSortable: Record<string, string> = {
-    granted_at: "granted_at",
-    role:       "role",
-    is_active:  "is_active",
-  };
-  if (dbSortable[sortKeyRaw]) {
-    adminQ = adminQ.order(dbSortable[sortKeyRaw], { ascending: sortDir === "asc", nullsFirst: false });
-  } else {
-    // post-JS sort columns still need a stable secondary order from DB
-    adminQ = adminQ.order("granted_at", { ascending: false, nullsFirst: false });
-  }
+  const adminQ = admin
+    .from("admins")
+    .select("profile_id, role, is_active, granted_at, granted_by")
+    .order("granted_at", { ascending: false, nullsFirst: false });
 
-  // ── Status overview counts (admins table only — fast) ──────────
-  const buildCountQ = (statusVal: "active" | "inactive" | "all") => {
-    let cq = admin.from("admins").select("profile_id", { count: "exact", head: true });
-    if (statusVal === "active")   cq = cq.eq("is_active", true);
-    if (statusVal === "inactive") cq = cq.eq("is_active", false);
-    return cq;
-  };
-
-  const [adminRes, sAllRes, s1Res, s2Res] = await Promise.all([
-    adminQ,
-    buildCountQ("all"),
-    buildCountQ("active"),
-    buildCountQ("inactive"),
-  ]);
+  const adminRes = await adminQ;
 
   // §0c — surface real errors instead of swallowing into empty list.
   if (adminRes.error) {
@@ -303,9 +279,6 @@ export default async function AdminTablePage({
       `admins: failed to load admins — ${adminRes.error.code ?? "unknown"}: ${adminRes.error.message}`,
     );
   }
-  if (sAllRes.error) console.error("[admins list] count(all) failed", sAllRes.error);
-  if (s1Res.error)   console.error("[admins list] count(active) failed", s1Res.error);
-  if (s2Res.error)   console.error("[admins list] count(inactive) failed", s2Res.error);
 
   const adminGrants = adminRes.data ?? [];
   const profileIds = [...new Set(adminGrants.map((r) => r.profile_id))];
@@ -378,23 +351,56 @@ export default async function AdminTablePage({
   }
 
   // Drop rows with no profile (FK should prevent · defensive).
-  const rows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
+  const grantRows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
 
-  // Lane C 2026-06-02 — post-JS sort for columns derived from profiles / extras.
-  if (sortKeyRaw === "name" || sortKeyRaw === "company" || sortKeyRaw === "type") {
+  // ── DEDUPE to ONE row per PERSON (owner 2026-06-21: "ซ้ำซ้อน · เปลี่ยน role
+  //    แล้วเบิ้ลเพิ่มแถว · ขึ้นปิดสิทธิ์มั่ว · มีพนักงานไม่กี่คน แถวเพียบ"). The `admins`
+  //    table holds one row PER (profile_id, role) grant — a role-change soft-deletes
+  //    the old grant (is_active=false) + adds the new (active), and a person can hold
+  //    several roles → without grouping, one person renders as many rows. We collapse
+  //    to one row per profile_id: the EFFECTIVE grant = the most-recent ACTIVE grant
+  //    (grantRows are granted_at desc), else the most-recent grant; the person is
+  //    "active" iff ANY grant is active. ─────────────────────────────────────────
+  const byProfile = new Map<string, AdminRow>();
+  const anyActiveByProfile = new Map<string, boolean>();
+  for (const g of grantRows) {
+    anyActiveByProfile.set(g.profile_id, (anyActiveByProfile.get(g.profile_id) ?? false) || g.is_active);
+    const cur = byProfile.get(g.profile_id);
+    if (!cur) { byProfile.set(g.profile_id, g); continue; }
+    // grantRows are granted_at desc → first-seen is most-recent. Prefer the first
+    // ACTIVE grant as the effective role (so the row shows the role they actually have).
+    if (!cur.is_active && g.is_active) byProfile.set(g.profile_id, g);
+  }
+  const allPeople: AdminRow[] = [...byProfile.values()].map((g) => ({
+    ...g,
+    is_active: anyActiveByProfile.get(g.profile_id) ?? g.is_active, // person-level active
+  }));
+
+  // Person status — only TWO buckets (owner: ตัดแท็บ "ทั้งหมด" ออก · เหลือแค่
+  // ยังทำงานอยู่ + ลาออก/หมดเวลา). Resigned = ended_at set OR no active grant at all.
+  const isResigned = (r: AdminRow) => !!r.extras?.ended_at || !r.is_active;
+  const s1 = allPeople.filter((r) => !isResigned(r)).length; // ยังทำงานอยู่
+  const s2 = allPeople.filter((r) => isResigned(r)).length;  // ลาออก/หมดเวลา
+
+  // Active tab — defaults to "1" (ยังทำงานอยู่). No "ทั้งหมด" tab anymore.
+  const activeTab: "1" | "2" = sp.s === "2" ? "2" : "1";
+  const rows: AdminRow[] = allPeople.filter((r) => (activeTab === "2" ? isResigned(r) : !isResigned(r)));
+
+  // Post-JS sort on the deduped person rows (dataset tiny — all sorts in JS now).
+  {
     const dir = sortDir === "asc" ? 1 : -1;
-    rows.sort((a, b) => {
-      let av = "", bv = "";
-      if (sortKeyRaw === "name") {
-        av = `${a.profile?.first_name ?? ""} ${a.profile?.last_name ?? ""}`.toLowerCase().trim();
-        bv = `${b.profile?.first_name ?? ""} ${b.profile?.last_name ?? ""}`.toLowerCase().trim();
-      } else if (sortKeyRaw === "company") {
-        av = (a.extras?.company ?? "").toLowerCase();
-        bv = (b.extras?.company ?? "").toLowerCase();
-      } else if (sortKeyRaw === "type") {
-        av = (a.extras?.employee_type ?? "").toLowerCase();
-        bv = (b.extras?.employee_type ?? "").toLowerCase();
+    const keyOf = (r: AdminRow): string => {
+      switch (sortKeyRaw) {
+        case "name":    return `${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.toLowerCase().trim();
+        case "company": return (r.extras?.company ?? "").toLowerCase();
+        case "type":    return (r.extras?.employee_type ?? "").toLowerCase();
+        case "role":    return (r.role ?? "").toLowerCase();
+        case "is_active": return r.is_active ? "1" : "0";
+        default:        return r.granted_at ?? ""; // granted_at
       }
+    };
+    rows.sort((a, b) => {
+      const av = keyOf(a), bv = keyOf(b);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
@@ -415,14 +421,9 @@ export default async function AdminTablePage({
     sortHrefs[k] = `/admin/admins?${params.toString()}`;
   }
 
-  const sAll = sAllRes.count ?? 0;
-  const s1   = s1Res.count   ?? 0;
-  const s2   = s2Res.count   ?? 0;
+  const sAll = s1 + s2;
 
-  // Active tab — defaults to "1" (ยังทำงานอยู่) to match legacy default view.
-  const activeTab = sp.s === "all" ? "all" : sp.s === "2" ? "2" : "1";
-
-  const buildStatusUrl = (s: "all" | "1" | "2") => {
+  const buildStatusUrl = (s: "1" | "2") => {
     const params = new URLSearchParams();
     params.set("s", s);
     if (sp.c)        params.set("c", sp.c);
@@ -553,9 +554,8 @@ export default async function AdminTablePage({
       {/* Status overview tabs — ทั้งหมด · ยังทำงานอยู่ · ลาออก */}
       <div className="flex flex-wrap gap-0 border-b border-border -mx-1">
         {([
-          { v: "all", l: "ทั้งหมด",                   n: sAll },
-          { v: "1",   l: "ยังทำงานอยู่",                n: s1 },
-          { v: "2",   l: "ลาออกแล้ว/หมดเวลาทำงาน",  n: s2 },
+          { v: "1", l: "ยังทำงานอยู่",               n: s1 },
+          { v: "2", l: "ลาออกแล้ว/หมดเวลาทำงาน", n: s2 },
         ] as const).map((t) => {
           const active = activeTab === t.v;
           return (
