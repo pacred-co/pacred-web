@@ -2,20 +2,28 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Advance the ฝากสั่งซื้อ shop order linked to a forwarder that reached the china
- * warehouse or beyond — tb_header_order.hstatus '4' (รอร้านจีนจัดส่ง) → '40'
- * (ถึงโกดังจีน · migration 0185). This is the fix for the recurring "ของถึงโกดังจีน
- * แล้ว แต่สถานะฝากสั่งยังค้างที่รอร้านจีน" bug.
+ * Complete the ฝากสั่งซื้อ shop order whose goods have become a ฝากนำเข้า import.
+ *
+ * Owner 2026-06-22 (the recurring "มี Tracking ฝากนำเข้าแล้ว แต่งานฝากสั่งยังค้าง"
+ * complaint): once a shop order's goods reach Pacred's China warehouse AND a
+ * linked forwarder import exists (the caller fires this only when the forwarder
+ * is at fstatus ≥ 2 = ถึงโกดังจีนแล้ว / beyond), the ฝากสั่งซื้อ has done its job —
+ * order from China + reach the China warehouse + hand off to import. So it
+ * COMPLETES to tb_header_order.hstatus '5' (สำเร็จ); the import (tb_forwarder)
+ * fstatus then carries the tracking forward (ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย →
+ * ส่งแล้ว), which the customer follows via the "ฝากนำเข้าที่เชื่อมโยง" card on the
+ * shop-order detail. Advancing from BOTH '4' (รอร้านจีนจัดส่ง) and '40'
+ * (ถึงโกดังจีน · the old intermediate that left orders looking stuck) → '5'.
  *
  * The link is resolved two ways (a MOMO-created forwarder has reforder=""):
  *   1. reforder = hno   — set by the spawn-from-order path (service-orders-spawn).
  *   2. tb_order.ctrackingnumber = the forwarder ftrackingchn → that order's hno
  *      — for forwarders MOMO created from the tracking the shop order recorded.
  *
- * FORWARD-ONLY + idempotent (.eq("hstatus","4") → 0-row no-op on 40/5/6) and
- * status-only (no money). Returns the advanced hno, or null (no link / already
- * advanced / error). Best-effort: a caller must NOT let its failure roll back
- * the forwarder write.
+ * FORWARD-ONLY + idempotent (.in("hstatus",["4","40"]) → 0-row no-op once at
+ * 5/6) and status-only (no money). Returns the completed hno, or null (no link /
+ * already completed / cancelled / error). Best-effort: a caller must NOT let its
+ * failure roll back the forwarder write.
  */
 export async function advanceLinkedShopOrder(
   admin: SupabaseClient,
@@ -42,15 +50,16 @@ export async function advanceLinkedShopOrder(
   }
   if (!hno) return null;
 
-  // 2. Forward-only advance.
+  // 2. Forward-only complete — from '4' (รอร้านจีนจัดส่ง) OR '40' (ถึงโกดังจีน) → '5'
+  //    (สำเร็จ). The .in(...) guard makes it idempotent (0-row no-op once at 5/6).
   const { data: advRows, error } = await admin
     .from("tb_header_order")
-    .update({ hstatus: "40", hdateupdate: nowIso })
+    .update({ hstatus: "5", hdateupdate: nowIso })
     .eq("hno", hno)
-    .eq("hstatus", "4")
+    .in("hstatus", ["4", "40"])
     .select("hno");
   if (error) {
-    console.error("[advanceLinkedShopOrder] header update failed", { hno, code: error.code, message: error.message });
+    console.error("[advanceLinkedShopOrder] header complete failed", { hno, code: error.code, message: error.message });
     return null;
   }
   return advRows && advRows.length > 0 ? hno : null;

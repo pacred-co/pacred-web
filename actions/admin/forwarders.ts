@@ -819,14 +819,15 @@ export async function adminBulkUpdateForwarderTbStatus(
       }
     }
 
-    // ─── Shop-order advance (2026-06-19 · unstick ฝากสั่งซื้อ on the MANUAL path) ──
-    // When a forwarder LINKED to a ฝากสั่งซื้อ order reaches the china warehouse or
-    // beyond (fstatus ≥ 2), advance the linked tb_header_order 4 (รอร้านจีนจัดส่ง)
-    // → 40 (ถึงโกดังจีน) so the shop order doesn't stay stuck. The helper links by
-    // reforder OR by the recorded China tracking (MOMO-created rows have
-    // reforder=""). UNGATED here — unlike the MOMO cron's Option-B statusGate —
-    // because this is a DELIBERATE admin status change + status-only (no money).
-    // Best-effort (errors are logged inside the helper; never roll back).
+    // ─── Shop-order COMPLETE (2026-06-22 · the owner's "มี Tracking ฝากนำเข้าแล้ว →
+    // ควรสำเร็จ" fix · MANUAL path) ── When a forwarder LINKED to a ฝากสั่งซื้อ order
+    // reaches the china warehouse or beyond (fstatus ≥ 2 = ถึงโกดังจีนแล้ว), the
+    // ฝากสั่งซื้อ has handed off to ฝากนำเข้า → complete the linked tb_header_order
+    // {4 รอร้านจีนจัดส่ง, 40 ถึงโกดังจีน} → 5 (สำเร็จ); the import fstatus carries the
+    // tracking forward. The helper links by reforder OR by the recorded China
+    // tracking (MOMO-created rows have reforder=""). UNGATED here — unlike the MOMO
+    // cron's Option-B statusGate — because this is a DELIBERATE admin status change
+    // + status-only (no money). Best-effort (errors logged inside; never roll back).
     const shopOrdersAdvanced: string[] = [];
     if (rankFs(derivedFstatus) >= rankFs("2")) {
       const seenKey = new Set<string>();

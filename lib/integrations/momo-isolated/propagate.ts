@@ -356,13 +356,14 @@ export async function propagateMomoToForwarders(
       }
       result.updated += 1;
 
-      // 4. Shop-order advance (2026-06-16 · the fix that unsticks ฝากสั่งซื้อ).
-      //    When a forwarder reaches the china warehouse or beyond (fstatus >= 2),
-      //    advance the linked tb_header_order 4 (รอร้านจีนจัดส่ง) → 40 (ถึงโกดังจีน).
-      //    The shared helper links by reforder OR by the recorded China tracking
-      //    (MOMO-created rows have reforder="" — 2026-06-19 fix). FORWARD-ONLY +
-      //    idempotent + best-effort. Gated with the SAME statusGate (Option B —
-      //    dormant until the owner flips the env after a dry-run).
+      // 4. Shop-order COMPLETE (2026-06-22 · owner "มี Tracking ฝากนำเข้าแล้ว → สำเร็จ").
+      //    When a forwarder reaches the china warehouse or beyond (fstatus >= 2 =
+      //    ถึงโกดังจีนแล้ว), the linked ฝากสั่งซื้อ has handed off to ฝากนำเข้า → complete
+      //    the linked tb_header_order {4 รอร้านจีนจัดส่ง, 40 ถึงโกดังจีน} → 5 (สำเร็จ);
+      //    the import fstatus then carries the tracking. The shared helper links by
+      //    reforder OR by the recorded China tracking (MOMO rows have reforder="").
+      //    FORWARD-ONLY + idempotent + best-effort. Gated with the SAME statusGate
+      //    (Option B — dormant until the owner flips the env after a dry-run).
       const newFstatus = updates.fstatus ?? f.fstatus;
       if (statusGate && fstatusRank(newFstatus) >= fstatusRank("2")) {
         const advanced = await advanceLinkedShopOrder(

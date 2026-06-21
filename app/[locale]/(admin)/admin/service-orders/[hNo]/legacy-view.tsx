@@ -40,6 +40,7 @@ import {
   ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck, Warehouse,
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
@@ -226,6 +227,31 @@ export async function renderLegacyServiceOrderView(hno: string) {
   }
   const corporateName = corp?.corporatename ?? null;
 
+  // ฝากนำเข้า imports linked to this shop order (owner 2026-06-22 · "คนทำงาน งง").
+  // Once the goods become an import, the shop order completes (สำเร็จ) and the
+  // import (tb_forwarder) carries the tracking — so staff need the SAME handoff
+  // link the customer detail shows. Linked by reforder=hno OR forwarder.ftrackingchn
+  // = a recorded China tracking (MOMO rows have reforder="").
+  type AdminLinkedImport = { id: number; ftrackingchn: string | null; fstatus: string | null };
+  let linkedImports: AdminLinkedImport[] = [];
+  {
+    const trackings = Array.from(new Set(
+      ((itemsRaw ?? []) as Array<{ ctrackingnumber: string | null }>)
+        .map((t) => (t.ctrackingnumber ?? "").trim()).filter((t) => t.length > 0)));
+    const orParts = [`reforder.eq.${r.hno}`];
+    if (trackings.length > 0) orParts.push(`ftrackingchn.in.(${trackings.join(",")})`);
+    const { data: imports, error: impErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, fstatus")
+      .eq("userid", r.userid)
+      .or(orParts.join(","))
+      .neq("fstatus", "99")
+      .order("id", { ascending: false });
+    if (impErr) console.error(`[admin service-order linked imports] failed`, { code: impErr.code, message: impErr.message });
+    const seen = new Set<number>();
+    linkedImports = ((imports ?? []) as AdminLinkedImport[]).filter((x) => !seen.has(x.id) && seen.add(x.id));
+  }
+
   // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane — reflect the
   // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
@@ -348,6 +374,44 @@ export async function renderLegacyServiceOrderView(hno: string) {
         <div className="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">
           ออเดอร์นี้ถูกยกเลิก — ยังแก้ราคา/ตั้งราคาใหม่ได้ (จะเปลี่ยนสถานะกลับเป็น &ldquo;รอชำระเงิน&rdquo;)
         </div>
+      )}
+
+      {/* ── ฝากนำเข้าที่เชื่อมโยง (owner 2026-06-22) — when the goods became an import,
+          this shop order completes (สำเร็จ) + the work CONTINUES in the import below.
+          Lets staff jump straight to the active ฝากนำเข้า instead of wondering where
+          a "สำเร็จ" order went. ── */}
+      {linkedImports.length > 0 && (
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 p-4 sm:p-5 shadow-sm space-y-2">
+          <h2 className="font-bold text-sm flex items-center gap-2">
+            🚢 ฝากนำเข้าที่เชื่อมโยง ({linkedImports.length})
+            {status === "5" && (
+              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] px-2 py-0.5 font-medium">
+                ฝากสั่งซื้อสำเร็จ — ส่งต่อขั้นตอนนำเข้าแล้ว
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-muted">
+            สินค้าเข้าสู่ขั้นตอนฝากนำเข้าแล้ว — ติดตามสถานะการนำเข้าต่อได้ที่รายการด้านล่าง
+          </p>
+          <ul className="space-y-1.5">
+            {linkedImports.map((f) => {
+              const b = fstatusBadge(f.fstatus ?? "");
+              return (
+                <li key={f.id}>
+                  <a
+                    href={`/admin/forwarders/${f.id}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
+                  >
+                    <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
+                    <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium whitespace-nowrap ${b.chip}`}>
+                      {b.label}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {/* ── 2-column header: customer + price ── */}

@@ -38,12 +38,16 @@ const STATUS_CLS: Record<string, string> = {
 // here, so customer withdraw requests were INVISIBLE in this list — a P0-7
 // reachability bug). type='7' is "ชำระเงินรอตรวจสอบการเติม" (a top-up sibling),
 // NOT a withdraw — it was mislabeled "ถอนเงิน". Both corrected below.
+// ประเภทรายการ — plain Thai, ONE clear label per type (no raw "type N" fallback,
+// no dev notation). type 8 = ฝากสั่งซื้อ QR+slip (ADR-0028) — was missing → rendered
+// "type 8". type 2 = admin-added credit (was "เติม (manual)" — dev notation dropped).
 const TYPE_LABEL: Record<string, string> = {
-  "1": "ชำระเงิน",
-  "2": "เติม (manual)",
+  "1": "ชำระเงิน (เข้ากระเป๋า)",
+  "2": "เติมเงินโดยแอดมิน",
   "3": "ถอนเงิน",
-  "4": "ชำระจากกระเป๋า",
-  "7": "รอตรวจการเติม",
+  "4": "ตัดจากกระเป๋า",
+  "7": "รอตรวจการเติมเงิน",
+  "8": "ชำระฝากสั่งซื้อ",
 };
 const TYPE_CLS: Record<string, string> = {
   "1": "bg-green-50 text-green-700 border-green-200",
@@ -51,15 +55,18 @@ const TYPE_CLS: Record<string, string> = {
   "3": "bg-red-50 text-red-700 border-red-200",
   "4": "bg-blue-50 text-blue-700 border-blue-200",
   "7": "bg-amber-50 text-amber-700 border-amber-200",
+  "8": "bg-violet-50 text-violet-700 border-violet-200",
 };
 
+// Tabs filter by TYPE only — clean nouns, no status descriptors (status is the
+// separate STATUS_TABS row below). Owner 2026-06-22: "หัวข้องงซ้ำซ้อน".
 const KIND_TABS: { key: string | null; label: string; types: string[] | null }[] = [
   { key: null,       label: "ทั้งหมด", types: null },
-  { key: "topup",    label: "ชำระเงิน (รอตรวจ + manual)", types: ["1", "2"] },
+  { key: "topup",    label: "ชำระเงิน / เติมเงิน", types: ["1", "2"] },
   { key: "withdraw", label: "ถอนเงิน", types: ["3"] },
-  { key: "orderpay", label: "ชำระจากกระเป๋า", types: ["4"] },
-  // ADR-0028 — ฝากสั่งซื้อ QR+slip payments (type='8', pending slip-verify).
-  { key: "shoppay",  label: "ชำระฝากสั่งซื้อ (รอตรวจสลิป)", types: ["8"] },
+  { key: "orderpay", label: "ตัดจากกระเป๋า", types: ["4"] },
+  // ADR-0028 — ฝากสั่งซื้อ QR+slip payments (type='8').
+  { key: "shoppay",  label: "ชำระฝากสั่งซื้อ", types: ["8"] },
 ];
 
 const STATUS_TABS: { key: string | null; label: string }[] = [
@@ -462,7 +469,7 @@ function TxRow({
           {isGroup ? (
             <div className="space-y-0.5">
               <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                💳 ชำระเงิน (รวมเป็นรายการเดียว)
+                💳 ชำระค่าฝากนำเข้า (รวมเติม+ตัด เป็นรายการเดียว)
               </span>
               {row.note ? (
                 <div className="text-muted text-[10px] line-clamp-2 max-w-[16rem]">{row.note}</div>
@@ -474,7 +481,7 @@ function TxRow({
                 TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
               }`}
             >
-              {TYPE_LABEL[type] ?? `type ${type}`}
+              {TYPE_LABEL[type] ?? "รายการอื่นๆ"}
             </span>
           )}
         </td>
@@ -494,7 +501,7 @@ function TxRow({
               STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
             }`}
           >
-            {STATUS_LABEL[rowStatus] ?? `status ${rowStatus}`}
+            {STATUS_LABEL[rowStatus] ?? "—"}
           </span>
           {(row.adminid || row.adminidcrate) ? (
             <div className="text-muted text-[10px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>
@@ -514,7 +521,7 @@ function TxRow({
           <td colSpan={9} className="px-3 pb-3 pt-0">
             <details className="text-xs">
               <summary className="cursor-pointer select-none py-1 text-muted hover:text-foreground">
-                รายการเดินบัญชี (log หลังบ้าน) · {groupContext!.ledgerCount} รายการ
+                ดูรายการย่อย (เติมเงิน + ตัดชำระ) · {groupContext!.ledgerCount} รายการ
               </summary>
               <div className="mt-2 overflow-x-auto rounded-lg border border-border bg-white dark:bg-surface">
                 <table className="w-full text-[11px]">
@@ -555,7 +562,7 @@ function TxRow({
                                 TYPE_CLS[lrType] ?? "bg-gray-100 text-gray-600 border-gray-200"
                               }`}
                             >
-                              {TYPE_LABEL[lrType] ?? `type ${lrType}`}
+                              {TYPE_LABEL[lrType] ?? "รายการอื่นๆ"}
                             </span>
                           </td>
                           <td className={`px-2 py-1.5 text-right font-mono ${lrNeg ? "text-red-600" : "text-foreground"}`}>
@@ -567,7 +574,7 @@ function TxRow({
                                 STATUS_CLS[lrStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
                               }`}
                             >
-                              {STATUS_LABEL[lrStatus] ?? `status ${lrStatus}`}
+                              {STATUS_LABEL[lrStatus] ?? "—"}
                             </span>
                           </td>
                           <td className="px-2 py-1.5 text-muted max-w-[18rem] truncate" title={lr.note ?? ""}>

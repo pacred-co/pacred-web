@@ -165,8 +165,8 @@ export default async function AdminWalletPage({
             </div>
             <p className="text-xs text-muted mt-1">
               {view === "balance"
-                ? "Wave 15 · ยอดเงินคงเหลือต่อลูกค้า — เรียงจากยอดสูงสุด (รวม Cash Back)"
-                : "Wave 7.2 · อ่านจาก tb_wallet_hs · approve/reject bulk + slip-time editor → Wave 8"}
+                ? "ยอดเงินคงเหลือในกระเป๋าของลูกค้าแต่ละราย — เรียงจากยอดสูงสุด (รวม Cash Back)"
+                : "รายการเงินเข้า–ออกของลูกค้า — ตรวจสลิป แล้วกดอนุมัติหรือปฏิเสธได้จากหน้านี้"}
               {view === "tx" && sp.status === "1" && (
                 <>
                   {" · "}
