@@ -836,6 +836,10 @@ export function ForwardersTable({
                   const sLabel = r.fcredit === "1"
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
+                  // next-action hint (self-explaining-row §0g) — what staff does NOW.
+                  const fsCfg = FSTATUS_CFG[r.status as keyof typeof FSTATUS_CFG];
+                  const fsNext = fsCfg?.next ?? "";
+                  const fsAct = fsCfg?.act ?? false;
                   const isOn = group ? groupAllOn : selected.has(r.id);
                   // Wave 19 BUG #2 fix — port forwarder.php L623-624 logic
                   // EXACTLY (ภูม catch · "ฝากนำเข้า : ระบบ" wording was wrong ·
@@ -1260,11 +1264,15 @@ export function ForwardersTable({
                         {/* Sibling group with mixed member statuses: show the
                             main row's pill + a hint so the operator expands
                             to see the per-member states. */}
-                        {group && !sameStatus && (
+                        {group && !sameStatus ? (
                           <div className="mt-0.5 text-[9px] text-gray-500 whitespace-nowrap">
                             (สถานะต่างกัน)
                           </div>
-                        )}
+                        ) : fsNext ? (
+                          <div className={`mt-1 text-[9px] whitespace-nowrap ${fsAct ? "font-semibold text-rose-600" : "text-muted"}`}>
+                            {fsAct ? "🔔 " : ""}{fsNext}
+                          </div>
+                        ) : null}
                         {r.cabinet_number && (
                           isMomoRoutingBatch(r.cabinet_number) ? (
                             <div

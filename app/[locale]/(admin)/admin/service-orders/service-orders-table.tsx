@@ -327,6 +327,9 @@ export function ServiceOrdersTable({
                   const dateCol = showUpdateDate ? r.hdateupdate : r.hdate;
                   const sLabel = STATUS_LABEL[r.hstatus] ?? r.hstatus;
                   const badgeCls = STATUS_BADGE[r.hstatus] ?? "bg-gray-50 text-gray-600 border-gray-200";
+                  // next-action hint (self-explaining-row §0g) — what staff does NOW.
+                  const sNext = HSTATUS_CFG[r.hstatus]?.next ?? "";
+                  const sAct = HSTATUS_CFG[r.hstatus]?.act ?? false;
                   const sDate = statusDate(r);
                   const isPrinted = r.hprintbill === "1";
                   const isInvoicePrinted = r.hprintbill2 === "1";
@@ -485,6 +488,11 @@ export function ServiceOrdersTable({
                         <span className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
                           {sLabel}
                         </span>
+                        {sNext && r.hstatus !== "6" ? (
+                          <div className={`mt-1 text-[9px] whitespace-nowrap ${sAct ? "font-semibold text-rose-600" : "text-muted"}`}>
+                            {sAct ? "🔔 " : ""}{sNext}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         {sDate ? (

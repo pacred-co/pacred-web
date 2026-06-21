@@ -138,6 +138,14 @@ Gate discipline (learned 2026-06-04): NEVER pipe a gate through `| tail` — the
 
 ---
 
+## 0g. Self-explaining rows — every list row analyzable at a glance (2026-06-22 · owner directive)
+
+Owner praised the `/admin/wallet?view=tx` row style and wants it **across the whole platform** (adapt per surface). Every list/table row must be understandable the instant it's seen — no studying, no mental table-joins. The reader should see at a glance: **คืออะไร** (clear Thai label, never a raw code) · **ของใคร** (owner + code, GROUPED when rows share an owner/shipment/order) · **ทำอะไร** · **สถานะไหน** (a readable state-encoding pill from the status SOTs) · **รายละเอียดที่เกี่ยวข้อง** (order#/container/tracking/amount) · **รูปภาพ** (pull a thumbnail if one exists — slip/cover/profile · use `components/admin/slip-image.tsx`) · **ให้พนักงานทำอะไร** (the next action, ≤1 click) · **เปิดมาวันที่เท่าไร** (`formatThaiDateTime`).
+
+**Group what belongs together** (same customer / container `fcabinetnumber` / shipment / order) into ONE row with an expandable detail — never N near-identical repeats, and never double-count money when aggregating. When you touch ANY list surface, bring its rows up to this standard. Full standard + the 8-point checklist + anti-patterns: [`docs/learnings/self-explaining-row-design.md`](docs/learnings/self-explaining-row-design.md). This is the at-a-glance arm of §0f.
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

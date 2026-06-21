@@ -41,21 +41,24 @@ export type FStatus = "1" | "2" | "3" | "4" | "5" | "6" | "7";
  *   6 = blue    #2196f3 = เตรียมส่ง
  *   7 = green   #37bc9b = ส่งแล้ว
  */
+// `next` = the "ให้พนักงานทำอะไรต่อ" hint (self-explaining-row standard §0g · owner
+// 2026-06-22) · `act:true` = needs a staff action NOW. Shown under the status pill
+// wherever this SOT renders, so a worker scans the queue + knows the next step.
 export const FSTATUS_CFG: Record<
   FStatus,
-  { label: string; chip: string; rowBg: string }
+  { label: string; chip: string; rowBg: string; next: string; act: boolean }
 > = {
-  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-100 text-yellow-800 border border-yellow-300",  rowBg: "bg-yellow-50" },
-  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-100 text-cyan-800 border border-cyan-300",        rowBg: "bg-cyan-50" },
-  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-100 text-pink-700 border border-pink-300",        rowBg: "bg-pink-50" },
-  "4": { label: "ถึงไทยแล้ว",       chip: "bg-amber-100 text-amber-800 border border-amber-300",     rowBg: "bg-amber-50" },
-  "5": { label: "รอชำระเงิน",       chip: "bg-red-100 text-red-700 border border-red-300",           rowBg: "bg-red-50" },
-  "6": { label: "เตรียมส่ง",        chip: "bg-blue-100 text-blue-700 border border-blue-300",        rowBg: "bg-blue-50" },
-  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-100 text-emerald-700 border border-emerald-300", rowBg: "bg-emerald-50" },
+  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-100 text-yellow-800 border border-yellow-300",  rowBg: "bg-yellow-50",  next: "รอสินค้าเข้าโกดังจีน",  act: false },
+  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-100 text-cyan-800 border border-cyan-300",        rowBg: "bg-cyan-50",    next: "รอส่งมาไทย",          act: false },
+  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-100 text-pink-700 border border-pink-300",        rowBg: "bg-pink-50",    next: "กำลังมา — รอถึงไทย",   act: false },
+  "4": { label: "ถึงไทยแล้ว",       chip: "bg-amber-100 text-amber-800 border border-amber-300",     rowBg: "bg-amber-50",   next: "ตรวจ/แจ้งเก็บเงิน",     act: true  },
+  "5": { label: "รอชำระเงิน",       chip: "bg-red-100 text-red-700 border border-red-300",           rowBg: "bg-red-50",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
+  "6": { label: "เตรียมส่ง",        chip: "bg-blue-100 text-blue-700 border border-blue-300",        rowBg: "bg-blue-50",    next: "มอบงานคนขับ/จัดรถ",     act: true  },
+  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-100 text-emerald-700 border border-emerald-300", rowBg: "bg-emerald-50", next: "เสร็จสิ้น",            act: false },
 };
 
-export function fstatusBadge(fstatus: string): { label: string; chip: string; rowBg: string } {
-  return FSTATUS_CFG[fstatus as FStatus] ?? { label: fstatus, chip: "bg-gray-100 text-gray-600 border border-gray-300", rowBg: "" };
+export function fstatusBadge(fstatus: string): { label: string; chip: string; rowBg: string; next: string; act: boolean } {
+  return FSTATUS_CFG[fstatus as FStatus] ?? { label: fstatus, chip: "bg-gray-100 text-gray-600 border border-gray-300", rowBg: "", next: "", act: false };
 }
 
 /**
