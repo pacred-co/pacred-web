@@ -926,6 +926,20 @@ export async function payServiceOrderFromWallet(
   // call-sites pass no opts → cashback unused → behaviour unchanged.
   opts?: { cashBackApplied?: number },
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  // ── CHOKEPOINT (owner 2026-06-21 "ถอดกระเป๋าออกทุกจุด") — customer pay-from-wallet
+  //    is RETIRED. Every payment now goes QR + slip → accounting verify → ตัดจ่าย.
+  //    This backstop refuses at the action so NO UI path (modal/bulk/list) can settle
+  //    from the wallet even if a button is missed; the bulk-bar buttons are removed
+  //    separately. Behaviour gate (const so eslint keeps the legacy body reachable —
+  //    kept for reference / a possible future admin-only reinstatement).
+  const WALLET_PAY_RETIRED = true;
+  if (WALLET_PAY_RETIRED) {
+    return {
+      ok: false,
+      error: "ชำระจากกระเป๋าเงินถูกปิดใช้งานแล้ว — กรุณาชำระด้วย QR + แนบสลิป (ทีมบัญชีตรวจสอบ)",
+    };
+  }
+
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -1286,7 +1300,7 @@ export async function uploadShopOrderSlip(
  */
 export async function submitShopOrderSlipPayment(
   hNo: string,
-  opts: { slipPath: string; slipDate?: string; walletApplied?: number },
+  opts: { slipPath: string; slipDate?: string },
 ): Promise<ActionResult<{ tx_id: string; already_submitted: boolean }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -1357,51 +1371,11 @@ export async function submitShopOrderSlipPayment(
   const nowIso = new Date().toISOString();
   const slipDate = (opts.slipDate ?? "").trim();
 
-  // ── ADR-0028 Phase 2 — optional wallet discount ("หักจาก wallet เท่าไหร่") ──
-  // The customer may apply part of their wallet (cashback) balance; the slip
-  // covers the rest. DEBIT-AT-SUBMIT (reserve it now so the balance can't drop
-  // below it before approval) · REFUND-ON-REJECT (adminRejectWalletHs re-credits
-  // the [WALLET:x] tag). Clamp to the LIVE balance + leave ≥0.01 for the slip
-  // (a full-wallet pay should use the "ชำระจากกระเป๋า" button, not this flow).
-  let walletApplied = Math.max(0, Math.round((Number(opts.walletApplied) || 0) * 100) / 100);
-  if (walletApplied > 0) {
-    const { data: wRow, error: wErr } = await admin
-      .from("tb_wallet")
-      .select("wallettotal")
-      .eq("userid", memberCode)
-      .maybeSingle<{ wallettotal: number | string | null }>();
-    if (wErr) {
-      console.error(`[submitShopOrderSlipPayment wallet read] failed`, { code: wErr.code, message: wErr.message, hNo });
-      return { ok: false, error: `db_error:${wErr.code ?? "unknown"}` };
-    }
-    const bal = Number(wRow?.wallettotal ?? 0);
-    walletApplied = Math.round(Math.min(walletApplied, Math.max(0, bal), priceToPay - 0.01) * 100) / 100;
-    if (walletApplied > 0) {
-      const { error: debErr } = await admin
-        .from("tb_wallet")
-        .update({ wallettotal: Math.round((bal - walletApplied) * 100) / 100 })
-        .eq("userid", memberCode);
-      if (debErr) {
-        console.error(`[submitShopOrderSlipPayment wallet debit] failed`, { code: debErr.code, message: debErr.message, hNo });
-        return { ok: false, error: "wallet_debit_failed — กรุณาลองใหม่" };
-      }
-    }
-  }
-  const slipAmount = Math.round((priceToPay - walletApplied) * 100) / 100;
-  // Re-credit helper for any post-debit failure (the slip leg never recorded).
-  const refundWallet = async () => {
-    if (walletApplied <= 0) return;
-    const { data: w2, error: w2Err } = await admin.from("tb_wallet").select("wallettotal").eq("userid", memberCode).maybeSingle<{ wallettotal: number | string | null }>();
-    if (w2Err) console.error(`[submitShopOrderSlipPayment refundWallet read] failed`, { message: w2Err.message });
-    const { error: rcErr } = await admin.from("tb_wallet").update({ wallettotal: Math.round((Number(w2?.wallettotal ?? 0) + walletApplied) * 100) / 100 }).eq("userid", memberCode);
-    // A silent re-credit failure leaves the customer debited with no slip row +
-    // no audit trail — must be loud so it can be reconciled manually.
-    if (rcErr) console.error(`[submitShopOrderSlipPayment refundWallet recredit] FAILED — customer left debited`, { code: rcErr.code, message: rcErr.message, memberCode, walletApplied });
-  };
-  if (!(slipAmount > 0)) {
-    await refundWallet();
-    return { ok: false, error: "wallet_covers_all — ยอดกระเป๋าพอจ่ายเต็มแล้ว ใช้ปุ่ม 'ชำระจากกระเป๋า' ได้เลย" };
-  }
+  // Owner 2026-06-21 "ถอดกระเป๋าออกทุกจุด" — the wallet is fully removed from the
+  // pay loop. The slip ALWAYS covers the FULL bill (no wallet-discount, no
+  // debit-at-submit, no refund-on-reject). The slip row is type='8' → approve
+  // does delta=0 (never touches tb_wallet).
+  const slipAmount = priceToPay;
 
   // INSERT the PENDING shop-slip row. type='8' → approve does delta=0 (no
   // wallet move). status='1' → admin verifies the slip, then flips the order.
@@ -1420,7 +1394,7 @@ export async function submitShopOrderSlipPayment(
       depositnamebank: `KBANK-${BANK.accountNumber}`,
       nameuserbank:    "",
       nouserbank:      "",
-      note:            `ชำระเงิน ฝากสั่งสินค้า #${header.hno} (QR+สลิป โดยลูกค้า · รอตรวจสอบ)${walletApplied > 0 ? ` [WALLET:${walletApplied}]` : ""}`,
+      note:            `ชำระเงิน ฝากสั่งสินค้า #${header.hno} (QR+สลิป โดยลูกค้า · รอตรวจสอบ)`,
       adminid:         "",
       adminidupdate:   "",
       session:         "customer-self",
@@ -1433,7 +1407,6 @@ export async function submitShopOrderSlipPayment(
     .select("id")
     .single<{ id: number }>();
   if (insErr || !hsRow) {
-    await refundWallet();   // the slip leg never recorded → give the discount back
     console.error(`[submitShopOrderSlipPayment insert] failed`, { code: insErr?.code, message: insErr?.message, hNo });
     return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
   }

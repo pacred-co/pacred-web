@@ -168,7 +168,7 @@ export async function exportAdminsAll(
     : await Promise.all([
         admin.from("profiles")
           .select(
-            "id, member_code, first_name, last_name, email, phone, employee_code",
+            "id, member_code, first_name, last_name, email, phone, employee_code, is_active",
           )
           .in("id", profileIds),
         admin.from("admin_contact_extras")
@@ -226,7 +226,8 @@ export async function exportAdminsAll(
     );
   }
 
-  // Drop rows with no profile (FK should prevent · defensive · matches page).
+  // Drop rows with no profile (the stale-identity exclusion happens per-PERSON
+  // below — profiles.is_active=false alone is NOT a reliable retired signal).
   merged = merged.filter((r) => r.profile !== null);
 
   // ── DEDUPE to ONE row per PERSON (byte-identical to the page) ───────────────
@@ -246,6 +247,13 @@ export async function exportAdminsAll(
     ...m,
     grant: { ...m.grant, is_active: anyActive.get(m.grant.profile_id) ?? m.grant.is_active },
   }));
+
+  // Hide ONLY truly-stale identities: no active grant AND profiles.is_active=false
+  // (e.g. the old dup PR034). A real admin with is_active=false but an active grant
+  // (ก๊อต) stays; a genuinely-resigned staffer keeps is_active=true. (matches the page)
+  people = people.filter(
+    (m) => !(m.grant.is_active === false && (m.profile as { is_active?: boolean } | null)?.is_active === false),
+  );
 
   // Person status filter — two buckets (matches the page's 2 tabs).
   const isResigned = (m: Merged) => !!m.extras?.ended_at || !m.grant.is_active;

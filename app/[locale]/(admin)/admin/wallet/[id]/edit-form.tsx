@@ -31,6 +31,7 @@ import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
 import {
   adminApproveWalletDeposit,
   adminRejectWalletDeposit,
+  adminReviewSlipRound1,
   // P1-25/26 (ADR-0018 D-2 rule 1 + rule 3 ¶3-4): customer-withdraw (type='3')
   // approve = no balance change · reject = refund the held money. The detail
   // page renders ONE <ApproveRejectForm> for every pending tb_wallet_hs row;
@@ -139,6 +140,8 @@ export function ApproveRejectForm({
   hasDateSlip,
   kind = "deposit",
   hasDuplicate = false,
+  needsRound1 = false,
+  reviewedAt = null,
 }: {
   id: number;
   hasDateSlip: boolean;
@@ -157,6 +160,13 @@ export function ApproveRejectForm({
    * the server ALSO re-checks and blocks unless acknowledgeDuplicate=true.
    */
   hasDuplicate?: boolean;
+  /**
+   * A4 two-round verify (owner 2026-06-21): does this row's type require a
+   * ROUND-1 review before the approve (round-2) may settle? (true for customer
+   * payment slips: type 1/4/8.) `reviewedAt` = the round-1 stamp (null = not yet).
+   */
+  needsRound1?: boolean;
+  reviewedAt?: string | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
@@ -165,6 +175,21 @@ export function ApproveRejectForm({
   const [error, setError] = useState<string | null>(null);
 
   const isWithdraw = kind === "withdraw";
+  // Round-1 is pending when the row needs it + hasn't been reviewed yet.
+  const round1Pending = !isWithdraw && needsRound1 && !reviewedAt;
+
+  function reviewRound1() {
+    setError(null);
+    if (!hasDateSlip) {
+      setError("กรุณากรอกวันที่ในสลิปก่อนตรวจรอบ 1");
+      return;
+    }
+    startTransition(async () => {
+      const res = await adminReviewSlipRound1({ id });
+      if (res.ok) router.refresh();
+      else setError(res.error);
+    });
+  }
 
   function approve() {
     setError(null);
@@ -240,28 +265,52 @@ export function ApproveRejectForm({
       )}
 
       {mode === "idle" && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={approve}
-            disabled={pending}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {pending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> {isWithdraw ? "กำลังจ่าย…" : "กำลังอนุมัติ…"}</>
+        <>
+          {/* A4 — show the 2 rounds explicitly (owner 2026-06-21). Round-1 done
+              shows a green ✓ banner; the approve becomes the round-2 button. */}
+          {!isWithdraw && needsRound1 && (
+            <div className={`rounded-lg border px-3 py-1.5 text-[11px] mb-2 ${reviewedAt ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+              {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ตรวจสลิป (รอบ 1) ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {round1Pending ? (
+              <button
+                type="button"
+                onClick={reviewRound1}
+                disabled={pending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {pending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก…</>
+                ) : (
+                  <><CheckCircle2 className="h-4 w-4" /> ตรวจสลิป รอบ 1</>
+                )}
+              </button>
             ) : (
-              <><CheckCircle2 className="h-4 w-4" /> {isWithdraw ? "ยืนยันจ่ายเงิน" : "ยืนยันทำรายการ"}</>
+              <button
+                type="button"
+                onClick={approve}
+                disabled={pending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {pending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {isWithdraw ? "กำลังจ่าย…" : "กำลังอนุมัติ…"}</>
+                ) : (
+                  <><CheckCircle2 className="h-4 w-4" /> {isWithdraw ? "ยืนยันจ่ายเงิน" : (needsRound1 ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "ยืนยันทำรายการ")}</>
+                )}
+              </button>
             )}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode("reject"); setError(null); }}
-            disabled={pending}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            <XCircle className="h-4 w-4" /> {isWithdraw ? "ปฏิเสธ + คืนเงิน" : "ปฏิเสธรายการ"}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => { setMode("reject"); setError(null); }}
+              disabled={pending}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" /> {isWithdraw ? "ปฏิเสธ + คืนเงิน" : "ปฏิเสธรายการ"}
+            </button>
+          </div>
+        </>
       )}
 
       {mode === "reject" && (

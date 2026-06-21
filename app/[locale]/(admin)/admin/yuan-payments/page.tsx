@@ -156,7 +156,7 @@ export default async function AdminYuanPaymentsPage({
   let q = admin
     .from("tb_payment")
     .select(
-      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,imagesslip",
+      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,imagesslip,reviewed_at",
       { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })

@@ -75,26 +75,26 @@ const shopParts: ModeTaxableParts = {
   eq("ใบกำกับ: netPayable = 12449-21", t.netPayable, 12428);
 }
 
-// ── customs (ใบขน): VAT on SERVICE FEE only — goods EXCLUDED from VAT base ──
+// ── customs (ใบขน) = "Non" per D5 (owner 2026-06-21): NO customer VAT line.
+//    The 7% VAT is internal margin-VAT (computeMarginVat), not on the bill. ──
 {
   const t = computeTaxForMode("customs", shopParts, { isJuristic: true });
-  // VAT base = service(200) + dom transport(500) = 700 (goods 10000 & intl 1000 excluded)
   eq("ใบขน: base.total unchanged (11700)", t.base.total, 11700);
-  eq("ใบขน: vatable = 700 (service+dom, goods+intl excluded)", t.base.vatable, 700);
-  eq("ใบขน: VAT 7% of 700 = 49", t.vat, 49);
+  // vatable base is still computed (informational) but NO VAT is charged (vat=0,
+  // like `none`) — the customer ใบขน has no VAT line; 7% is internal margin-VAT.
+  eq("ใบขน: VAT = 0 (Non · margin-VAT internal · D5)", t.vat, 0);
   // WHT identical to ใบกำกับ — WHT does not depend on doc mode
   eq("ใบขน: WHT total = 21 (same as ใบกำกับ)", t.wht.total, 21);
-  // gross = base.total(11700) + customs VAT(49)
-  eq("ใบขน: grossBeforeWht = 11700+49", t.grossBeforeWht, 11749);
-  eq("ใบขน: netPayable = 11749-21", t.netPayable, 11728);
+  eq("ใบขน: grossBeforeWht = base.total (no VAT)", t.grossBeforeWht, 11700);
+  eq("ใบขน: netPayable = 11700-21", t.netPayable, 11679);
 }
 
-// ── customs VAT < tax_invoice VAT (goods excluded) — the load-bearing diff ──
+// ── customs has NO customer VAT (0) — ใบขน=Non per D5; ใบกำกับ keeps its VAT ──
 {
   const ti = computeTaxForMode("tax_invoice", shopParts, { isJuristic: true });
   const cu = computeTaxForMode("customs", shopParts, { isJuristic: true });
-  const ok = cu.vat < ti.vat;
-  console.log(`${ok ? "✓" : "✗"} customs VAT (${cu.vat}) < tax_invoice VAT (${ti.vat})`);
+  const ok = cu.vat === 0 && ti.vat > 0;
+  console.log(`${ok ? "✓" : "✗"} customs VAT (${cu.vat}) = 0 · tax_invoice VAT (${ti.vat}) > 0`);
   if (ok) pass++;
   else fail++;
 }
@@ -123,15 +123,16 @@ eq("marginVat(0) = 0", computeMarginVat(0), 0);
 eq("marginVat(-500) = 0 (no VAT on a loss)", computeMarginVat(-500), 0);
 eq("marginVat(2120*5.01 profit≈?) sanity: marginVat(3000)=210", computeMarginVat(3000), 210);
 
-// ── customs with NO goods (pure service order) == tax_invoice (no goods to exclude) ──
+// ── customs (ใบขน) = Non per D5: NO customer VAT even on a pure-service order;
+//    ใบกำกับ charges the customer VAT. ──
 {
   const svcOnly: ModeTaxableParts = {
     transportDomestic: 0, transportIntl: 0, service: 1000, rental: 0, goods: 0, discount: 0,
   };
   const ti = computeTaxForMode("tax_invoice", svcOnly, { isJuristic: true });
   const cu = computeTaxForMode("customs", svcOnly, { isJuristic: true });
-  eq("no-goods: tax_invoice VAT == customs VAT (70)", ti.vat, cu.vat);
-  eq("no-goods: customs VAT 7% of 1000", cu.vat, 70);
+  eq("svc-only: tax_invoice VAT = 70 (customer doc)", ti.vat, 70);
+  eq("svc-only: customs VAT = 0 (ใบขน=Non · margin-VAT internal)", cu.vat, 0);
 }
 
 // ── mapTaxDocColumns (GAP 3 · the form→tb_payment.tax_doc_* capture mapper) ──

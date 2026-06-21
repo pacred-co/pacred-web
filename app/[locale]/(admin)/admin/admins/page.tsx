@@ -131,6 +131,12 @@ function diffDateNow(iso: string | null | undefined): string {
   return `${y} ปี ${m} เดือน ${d} วัน`;
 }
 
+/** The auth-key email admin_<login_id>@pacred.co.th is NOT a real email (owner
+ *  2026-06-21: login-id separate from email) → hide it in the email columns. */
+function isSyntheticAdminEmail(email: string | null | undefined): boolean {
+  return !!email && /^admin_[a-z0-9_]+@pacred\.co\.th$/i.test(email);
+}
+
 function Pill({ label, color }: { label: string; color: string }) {
   return (
     <span
@@ -185,6 +191,7 @@ type AdminRow = {
   profile: {
     id: string;
     member_code: string | null;
+    admin_login_id: string | null;
     first_name: string | null;
     last_name: string | null;
     email: string | null;
@@ -294,7 +301,7 @@ export default async function AdminTablePage({
     : await Promise.all([
         admin.from("profiles")
           .select(
-            "id, member_code, first_name, last_name, email, phone, avatar_url, " +
+            "id, member_code, admin_login_id, first_name, last_name, email, phone, avatar_url, " +
             "birthday, sex, employee_code, last_login_at, is_active, migrated_from_pcs, legacy_pcs_user_id",
           )
           .in("id", profileIds),
@@ -350,7 +357,11 @@ export default async function AdminTablePage({
     rawRows = rawRows.filter((r) => r.extras?.section?.toLowerCase().includes(needle) ?? false);
   }
 
-  // Drop rows with no profile (FK should prevent · defensive).
+  // Drop rows with no profile (FK should prevent · defensive). We do NOT exclude
+  // `profiles.is_active=false` here — that flag is NOT a reliable "retired" signal
+  // (e.g. ก๊อต/admin_got is a real active Ultra Admin yet carries is_active=false).
+  // The stale-identity exclusion happens at the PERSON level below, gated on
+  // BOTH no-active-grant AND is_active=false (owner 2026-06-21 พี่ป๊อป dup PR034).
   const grantRows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
 
   // ── DEDUPE to ONE row per PERSON (owner 2026-06-21: "ซ้ำซ้อน · เปลี่ยน role
@@ -371,10 +382,18 @@ export default async function AdminTablePage({
     // ACTIVE grant as the effective role (so the row shows the role they actually have).
     if (!cur.is_active && g.is_active) byProfile.set(g.profile_id, g);
   }
-  const allPeople: AdminRow[] = [...byProfile.values()].map((g) => ({
+  const allPeopleRaw: AdminRow[] = [...byProfile.values()].map((g) => ({
     ...g,
     is_active: anyActiveByProfile.get(g.profile_id) ?? g.is_active, // person-level active
   }));
+
+  // Hide ONLY truly-stale identities: a soft-deleted profile (profiles.is_active=false)
+  // that ALSO has no active grant = a retired/merged duplicate (e.g. พี่ป๊อป's old PR034).
+  // A real admin who carries is_active=false but still has an active grant (e.g. ก๊อต)
+  // is KEPT; a genuinely-resigned staffer keeps is_active=true → shows in the ลาออก tab.
+  const allPeople: AdminRow[] = allPeopleRaw.filter(
+    (r) => !(r.is_active === false && r.profile?.is_active === false),
+  );
 
   // Person status — only TWO buckets (owner: ตัดแท็บ "ทั้งหมด" ออก · เหลือแค่
   // ยังทำงานอยู่ + ลาออก/หมดเวลา). Resigned = ended_at set OR no active grant at all.
@@ -459,9 +478,11 @@ export default async function AdminTablePage({
     const legacyAdminId = x?.legacy_admin_id;
     const emailUser =
       p?.email && p.email.endsWith("@pacred.co.th") ? p.email.split("@")[0] : null;
-    const idCodeDisplay = legacyAdminId ?? emailUser ?? memberCode;
+    // Owner 2026-06-21: show the login USERNAME (admin_login_id) as รหัส; the
+    // synthetic admin_*@pacred.co.th email is the auth key, NOT a real email.
+    const idCodeDisplay = p?.admin_login_id ?? legacyAdminId ?? emailUser ?? memberCode;
     const deptSection = [x?.department, x?.section].filter(Boolean).join(" / ");
-    const personalEmail = p?.email;
+    const personalEmail = isSyntheticAdminEmail(p?.email) ? null : p?.email;
     const personalPhone = p?.phone ?? x?.direct_phone;
     const isEnded = !!x?.ended_at;
     const isSuspended = !!x?.suspended_at;
@@ -650,7 +671,8 @@ export default async function AdminTablePage({
                   // fall back to the PR member-code only as a last resort.
                   const emailUser =
                     p?.email && p.email.endsWith("@pacred.co.th") ? p.email.split("@")[0] : null;
-                  const idCodeDisplay = legacyAdminId ?? emailUser ?? memberCode;
+                  // Owner 2026-06-21: prefer the login username (admin_login_id).
+                  const idCodeDisplay = p?.admin_login_id ?? legacyAdminId ?? emailUser ?? memberCode;
 
                   const roleBadge    = nameRole(row.role);
                   const companyBadge = nameCompany(x?.company);
@@ -668,7 +690,7 @@ export default async function AdminTablePage({
 
                   // Personal vs work contact (legacy split: profiles cols = personal,
                   // admin_contact_extras = work).
-                  const personalEmail = p?.email;
+                  const personalEmail = isSyntheticAdminEmail(p?.email) ? null : p?.email;
                   const personalPhone = p?.phone ?? x?.direct_phone;
                   const workEmail     = x?.work_email;
                   const workPhone     = x?.work_phone;

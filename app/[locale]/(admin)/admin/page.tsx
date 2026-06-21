@@ -32,6 +32,8 @@
  *   tb_settings       — hratecostdefault (เรทสั่งซื้อ/ต้นทุน), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
@@ -183,7 +185,10 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
     // Pending queues (tab badge counts).
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0),
+    // topup badge counts the DEDUPED queue (owner 2026-06-21) — exclude the
+    // "เติม-แล้วจ่าย" pay-half (type='4' with reforder2 → it collapses into its topup
+    // row), so the badge matches the 1-row-per-payment list. `or` = NOT(type=4 AND reforder2 set).
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0).or("type.neq.4,reforder2.is.null"),
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").lt("amount", 0),
     // sales_payouts — Pacred-original module (no legacy equivalent).
     // Keep the rebuilt-app read; on prod the table is empty so the badge = 0.
@@ -441,6 +446,25 @@ function formatTHB(n: number, compact = false): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Wallet-history type → human label (legacy semantics · see wallet/[id]/page.tsx).
+const WALLET_TYPE_LABEL: Record<string, string> = {
+  "1": "ชำระเงิน / เติมเงิน",
+  "2": "เติมเงิน (แอดมิน)",
+  "3": "ถอนเงิน",
+  "4": "ชำระค่าฝากนำเข้า",
+  "5": "ปรับยอดมือ",
+  "6": "ชำระค่าบริการ",
+  "7": "ชำระค่าบริการ",
+  "8": "ชำระฝากสั่งซื้อ",
+};
+
+// Escape a DB string before it goes into a dangerouslySetInnerHTML detail blob.
+function escapeHtmlInline(s: string): string {
+  return s
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 type RowShape = {
   id: string;
   created_at: string;
@@ -450,6 +474,9 @@ type RowShape = {
   detail: string;
   link: string;
   status: string;
+  // Owner 2026-06-21: show a slip thumbnail inline on the queue so the admin sees
+  // at a glance that a slip is attached + it renders (signed URL · null = no slip).
+  slipUrl?: string | null;
 };
 
 type RawUserRow = {
@@ -496,9 +523,13 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // (legacy stores the two as same table, signed on `amount`).
     case "topup":
     case "withdraw": {
+      // Owner 2026-06-21: the slip-verify queue was too thin (ยอด/ชื่อซ้ำ · ไม่รู้
+      // ค่าอะไร · รูปไม่ขึ้น). Pull the note (what it's paying — F#/H#/service),
+      // type + dateslip, AND resolve imagesslip → a SIGNED URL so the row shows a
+      // real thumbnail (the bare filename was used as a broken href before).
       let q = admin
         .from("tb_wallet_hs")
-        .select("id,date,amount,status,imagesslip,userid")
+        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder,reforder2")
         .eq("status", "1")
         .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -507,23 +538,47 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       if (error) {
         console.warn(`[tb_wallet_hs list] failed (soft-fail · returning empty rows)`, error);
       }
-      const rows = (data ?? []) as unknown as RawWalletHsRow[];
+      const rawRows = (data ?? []) as unknown as Array<RawWalletHsRow & {
+        dateslip: string | null; note: string | null; type: string | null;
+        reforder: string | null; reforder2: string | number | null;
+      }>;
+      // ── COLLAPSE the "เติม-แล้วจ่าย" pair to ONE row (owner 2026-06-21: "คนเดียวกัน
+      //    ยอดเดียวกัน → แถวเดียว · ก็แค่รอตรวจสลิป"). Each import payment makes a
+      //    slip-bearing TOPUP (type='1') + a no-slip PAY (type='4', reforder2→topup).
+      //    Show ONLY the slip row; drop the pay-half + tag the topup with the
+      //    forwarder# it pays (so the single row reads "ชำระค่าฝากนำเข้า #F…").
+      const paidFwdByTopup = new Map<string, string>();
+      for (const r of rawRows) {
+        if (r.type === "4" && r.reforder2) paidFwdByTopup.set(String(r.reforder2), r.reforder ?? "");
+      }
+      const rows = rawRows.filter((r) => !(r.type === "4" && r.reforder2));
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
-      return rows.map((r) => {
+      return await Promise.all(rows.map(async (r) => {
         const u = users.get(r.userid);
+        const slipUrl = await resolveLegacyUrl(r.imagesslip, "slip");
+        // "what it's paying" — for a collapsed import-pay pair use the paired
+        // forwarder#; else the note; else type label + ref. Never a bare amount.
+        const paidFwd = paidFwdByTopup.get(String(r.id));
+        const what = paidFwd
+          ? `ชำระค่าฝากนำเข้า #${paidFwd}`
+          : (r.note && r.note.trim())
+            ? r.note.trim()
+            : `${WALLET_TYPE_LABEL[r.type ?? ""] ?? "ชำระเงิน"}${r.reforder ? ` #${r.reforder}` : ""}`;
+        const slipNote = slipUrl
+          ? `📎 แนบสลิปแล้ว`
+          : (r.imagesslip ? `⚠️ มีสลิปแต่เปิดไม่ได้ (${escapeHtmlInline(r.imagesslip)})` : `— ไม่มีสลิป`);
         return {
           id: String(r.id),
           created_at: r.date ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Math.abs(Number(r.amount ?? 0)),
-          detail: r.imagesslip
-            ? `สลิป: <a class="text-blue-600 underline" href="${r.imagesslip}" target="_blank">ดูสลิป</a>`
-            : "ไม่มีสลิป",
+          detail: `${escapeHtmlInline(what)} · <span class="${slipUrl ? "text-emerald-600" : "text-amber-600"}">${slipNote}</span>`,
           link: `/admin/wallet/${r.id}`,
           status: r.status ?? "1",
+          slipUrl,
         };
-      });
+      }));
     }
 
     // ── ฝากสั่งซื้อ (tb_header_order) ──────────────────────────────────────
@@ -864,16 +919,30 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">
-                    {r.member_code ?? "—"}
-                  </Link>{" "}
-                  <span className="text-foreground">{r.customer_name}</span>
-                  <p className="mt-1 text-xs text-muted" dangerouslySetInnerHTML={{ __html: r.detail }} />
-                  {tab !== "inactiveCustomers" && r.amount > 0 && (
-                    <p className="mt-1 text-sm font-bold text-red-600">
-                      ยอดเงิน: ฿{formatTHB(r.amount)}
-                    </p>
-                  )}
+                  <div className="flex items-start gap-3">
+                    {/* Slip thumbnail (owner 2026-06-21) — proves a slip is attached
+                        + renders; click opens the full slip in a new tab. */}
+                    {r.slipUrl ? (
+                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="เปิดสลิปเต็ม">
+                        <SlipImage
+                          src={r.slipUrl}
+                          className="h-16 w-16 rounded-lg border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300"
+                        />
+                      </a>
+                    ) : null}
+                    <div className="min-w-0">
+                      <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">
+                        {r.member_code ?? "—"}
+                      </Link>{" "}
+                      <span className="text-foreground">{r.customer_name}</span>
+                      <p className="mt-1 text-xs text-muted" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                      {tab !== "inactiveCustomers" && r.amount > 0 && (
+                        <p className="mt-1 text-sm font-bold text-red-600">
+                          ยอดเงิน: ฿{formatTHB(r.amount)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-center">
                   <span className="inline-flex rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5 text-[11px] font-bold">

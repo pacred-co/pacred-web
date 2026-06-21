@@ -77,8 +77,8 @@ export const TAX_DOC_MODE_META: Record<
     pref: "customs",
     title: "ใบขนสินค้า",
     short: "ใบขน",
-    hint: "บริการเคลียร์ศุลกากร · VAT 7% เฉพาะค่าบริการ · ลูกค้าเป็นเจ้าของสินค้า",
-    vatBase: "ค่าบริการ (service fee)",
+    hint: "บริการเคลียร์ศุลกากร · ไม่มี VAT ในบิลลูกค้า (Non) · VAT 7% จากกำไรภายใน · ลูกค้าเป็นเจ้าของสินค้า",
+    vatBase: "ไม่มีในบิล (VAT 7% จากกำไรภายใน · D5)",
   },
   none: {
     pref: "receipt",
@@ -110,7 +110,10 @@ export function prefFromMode(mode: TaxDocMode): TaxDocPref {
   return TAX_DOC_MODE_META[mode].pref;
 }
 
-/** True when the mode produces a VAT-bearing customer document (ใบกำกับ/ใบขน). */
+/** True when the mode produces a customer document needing billing details
+ *  (ใบกำกับ has a customer VAT line · ใบขน is a customs declaration needing the
+ *  consignee/billing snapshot — even though, per D5, ใบขน carries NO customer
+ *  VAT line; its 7% is internal margin-VAT). 'none' = receipt only. */
 export function modeRequiresBillingSnapshot(mode: TaxDocMode): boolean {
   return mode === "tax_invoice" || mode === "customs";
 }
@@ -202,37 +205,15 @@ export function computeTaxForMode(
   }
 
   if (mode === "customs") {
-    // ใบขน — VAT only on our SERVICE base; goods value belongs to the customer
-    // (not on our invoice). We move goods OUT of the VAT base by passing
-    // goods:0 to the VAT computation while keeping the underlying charges for
-    // WHT. Because the engine couples WHT to the same `parts`, we compute in
-    // two passes and stitch: (1) WHT/base from the REAL parts (goods present
-    // for completeness, though goods WHT = 0 anyway), (2) VAT from a goods-
-    // stripped copy.
-    //
-    // ⚠⚠ MONEY/TAX TODO (เดฟ review before prod) — ใบขน VAT base policy.
-    //   Legacy has NO ใบขน generator (customs declaration was never a
-    //   customer VAT doc in PCS). The Global Trade Group doc §3 says "VAT 7%
-    //   on the SERVICE FEE". We interpret "service fee" = service + domestic
-    //   transport + rental (all our taxable services), EXCLUDING goods +
-    //   zero-rated intl transport. If accounting rules that ใบขน VAT should be
-    //   ONLY the pure `service` bucket (excluding domestic transport), change
-    //   the `vatableOverride` below. No legacy file:line proves either way —
-    //   this is a policy call, flagged per the task's money-math rule.
-    const real = computeTax(parts, { isJuristic: opts.isJuristic, withVat: false, rates: opts.rates });
-    const goodsStripped: ModeTaxableParts = { ...parts, goods: 0 };
-    const vatPass = computeTax(goodsStripped, { isJuristic: opts.isJuristic, withVat: true, rates: opts.rates });
-    return {
-      ...real,
-      // VAT base + amount come from the goods-stripped pass; everything else
-      // (per-class base, WHT) from the real pass. grossBeforeWht / netPayable
-      // recomputed off the real base + the customs VAT.
-      base: { ...real.base, vatable: vatPass.base.vatable },
-      vat: vatPass.vat,
-      grossBeforeWht: round2(real.base.total + vatPass.vat),
-      netPayable: Math.max(0, round2(real.base.total + vatPass.vat - real.wht.total)),
-      withVat: true,
-    };
+    // ใบขน — RESOLVED (owner 2026-06-21 · D5): ใบขน is a "Non" doc, same as
+    // ไม่เอาเอกสาร — there is NO customer-facing VAT line. The 7% VAT is paid by
+    // Pacred on its MARGIN (กำไร) internally to สรรพากร (computeMarginVat below),
+    // NOT charged to the customer. Owner brief verbatim: "ใบขน Non (Vat7% จากกำไร
+    // เสียภาษี)". (Previously this put customer VAT on the service base — wrong;
+    // that was flagged as an unresolved policy call. Now decided = margin VAT.)
+    // The customer ใบขน shows the goods/declared value + the brokerage charges,
+    // with NO VAT line; WHT still applies per class (ADR-0015). Mirrors `none`.
+    return computeTax(parts, { isJuristic: opts.isJuristic, withVat: false, rates: opts.rates });
   }
 
   // none (ไม่รับเอกสาร) — no customer-facing VAT. WHT still applies for juristic

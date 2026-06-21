@@ -74,6 +74,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -189,7 +190,7 @@ export default async function AdminWalletDetail({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder",
+      "id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reviewed_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -611,6 +612,10 @@ export default async function AdminWalletDetail({
                 hasDuplicate={similar.some(
                   (s) => s.status === "1" || s.status === "2",
                 )}
+                // A4 two-round verify — customer payment slips (type 1/4/8) must
+                // be round-1 reviewed before approve (round-2). reviewed_at = stamp.
+                needsRound1={row.type === "1" || row.type === "4" || row.type === "8"}
+                reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
               />
             ) : (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
@@ -634,8 +639,7 @@ export default async function AdminWalletDetail({
                   rel="noopener noreferrer"
                   className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[420px] mx-auto object-contain" />
+                  <SlipImage src={slipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
                 </a>
               ) : row.imagesslip ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -661,8 +665,7 @@ export default async function AdminWalletDetail({
                     rel="noopener noreferrer"
                     className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={partnerSlipUrl} alt="สลิป" className="max-w-full max-h-[420px] mx-auto object-contain" />
+                    <SlipImage src={partnerSlipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
                   </a>
                 </div>
               ) : partnerSlipFilename ? (

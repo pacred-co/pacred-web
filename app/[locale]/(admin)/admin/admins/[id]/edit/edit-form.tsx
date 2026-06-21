@@ -62,6 +62,11 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
   // ─── identity (editable) ─────────────────────────────────────────
   const [firstName, setFirstName] = useState<string>(initial.first_name ?? "");
   const [lastName, setLastName]   = useState<string>(initial.last_name ?? "");
+  // REAL email (owner 2026-06-21: separate from the login User ID). Init blank
+  // when the stored value is still the synthetic auth key admin_*@pacred.co.th
+  // (that is NOT a real email — it's the login key, edited via Supabase).
+  const isSyntheticEmail = !!initial.email && /^admin_[a-z0-9_]+@pacred\.co\.th$/i.test(initial.email);
+  const [email, setEmail]         = useState<string>(isSyntheticEmail ? "" : (initial.email ?? ""));
   const [phone, setPhone]         = useState<string>(initial.phone ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string>(initial.avatar_url ?? "");
   const [employeeCode, setEmployeeCode] = useState<string>(initial.employee_code ?? "");
@@ -121,6 +126,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
 
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
+        email:      email.trim() || undefined,   // REAL email (login key unchanged)
         phone:      phone.trim() || undefined,
         avatar_url: avatarUrl.trim() || undefined,
         birthday:   birthday || undefined,
@@ -224,8 +230,11 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
         </h2>
         <div className="grid gap-3 md:grid-cols-2 text-sm">
           <div>
-            <p className="text-xs text-muted">อีเมล (login)</p>
-            <p className="font-mono break-all">{initial.email ?? "—"}</p>
+            <p className="text-xs text-muted">User ID (ไอดีเข้าระบบ)</p>
+            <p className="font-mono break-all">
+              {initial.admin_login_id
+                ?? (isSyntheticEmail ? initial.email!.split("@")[0] : "—")}
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted">member_code</p>
@@ -233,8 +242,8 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
           </div>
         </div>
         <p className="mt-3 text-[11px] text-muted">
-          เปลี่ยน email/password ต้องไปทำที่ Supabase Dashboard.
-          {" "}<span className="opacity-75">(/admin reset-password flow — Wave 23.)</span>
+          พนักงาน login ด้วย User ID นี้ + รหัสผ่าน — เปลี่ยน User ID/รหัสผ่าน ต้องทำที่ Supabase Dashboard.
+          {" "}<span className="opacity-75">อีเมลจริงแก้ได้ในฟอร์มด้านล่าง (คนละช่องกับ login).</span>
         </p>
       </section>
 
@@ -264,6 +273,21 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 maxLength={200}
+                disabled={pending}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                อีเมลจริง (สำหรับติดต่อ){" "}
+                <span className="text-[10px] text-muted">— คนละช่องกับ User ID login</span>
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                maxLength={200}
+                placeholder="เช่น somchai@gmail.com"
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />

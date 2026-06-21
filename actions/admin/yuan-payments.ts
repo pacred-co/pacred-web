@@ -10,6 +10,7 @@ import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { issueYuanTaxInvoice } from "@/lib/admin/yuan-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { findDuplicateYuanSlips } from "@/lib/admin/duplicate-slip-check";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { logger } from "@/lib/logger";
 import {
@@ -77,8 +78,42 @@ const updateSchema = z.object({
   // flow (see actions/admin/yuan-payments-tb.ts:130 for the create-side pattern).
   admin_proof_url:  z.string().max(500).optional(),
   note:             z.string().trim().max(1000).optional(),
+  // A5 (owner 2026-06-21) — ชั้น-1 dup-gate override: when a same-customer/same-day/
+  // same-amount yuan slip already exists, the approve is BLOCKED until the accountant
+  // eyeballs it + re-submits with this flag (mirrors the wallet dup-gate).
+  acknowledgeDuplicate: z.boolean().optional(),
 });
 export type AdminUpdateYuanPaymentInput = z.input<typeof updateSchema>;
+
+// A4 (owner 2026-06-21) — ROUND-1 yuan-slip review. Stamps reviewed_at +
+// reviewed_by_admin_id on a pending (paystatus='1') tb_payment row so the
+// approve (round-2) may settle. No money/status change. Same admin may do both.
+export async function adminReviewYuanRound1(
+  input: { id: number | string },
+): Promise<AdminActionResult> {
+  const idNum = Number(input?.id);
+  if (!Number.isFinite(idNum) || idNum <= 0) return { ok: false, error: "invalid_id" };
+  return withAdmin(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+    const { data: claimed, error: updErr } = await admin
+      .from("tb_payment")
+      .update({ reviewed_at: new Date().toISOString(), reviewed_by_admin_id: legacyAdminId })
+      .eq("id", idNum)
+      .eq("paystatus", "1")
+      .select("id")
+      .maybeSingle();
+    if (updErr) {
+      console.error("[adminReviewYuanRound1] failed", { code: updErr.code, message: updErr.message, id: idNum });
+      return { ok: false, error: updErr.message };
+    }
+    if (!claimed) return { ok: false, error: "ตรวจรอบ 1 ไม่ได้ — รายการไม่ได้อยู่สถานะ 'รอตรวจสอบ' แล้ว" };
+    await logAdminAction(adminId, "tb_payment.review_round1", "tb_payment", String(idNum), {});
+    revalidatePath("/admin/yuan-payments");
+    revalidatePath("/admin");
+    return { ok: true };
+  });
+}
 
 export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput): Promise<AdminActionResult> {
   const parsed = updateSchema.safeParse(input);
@@ -92,7 +127,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     // ── Read the existing tb_payment row.
     const { data: existing, error: existingErr } = await admin
       .from("tb_payment")
-      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref, paydate, reviewed_at")
       .eq("id", d.id)
       .maybeSingle<{
         id: number;
@@ -102,6 +137,8 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         paythb: number;
         paydeposit: string | null;
         tax_doc_pref: string | null;
+        paydate: string | null;
+        reviewed_at: string | null;
       }>();
     if (existingErr) {
       console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
@@ -148,6 +185,29 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         // L644 + L659 — set on both approve '2' and reject '3').
         update.paydateadmin = new Date().toISOString();
         update.adminid = legacyAdminId;
+      }
+
+      // ── A4 (owner 2026-06-21) — TWO-ROUND verify: the yuan approve (round-2)
+      //    refuses to settle until round-1 (adminReviewYuanRound1) stamped
+      //    reviewed_at. Same admin may do both rounds (D2).
+      if (newPaystatus === "2" && !existing.reviewed_at) {
+        return { ok: false, error: "ต้องตรวจสลิป รอบ 1 ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)" };
+      }
+
+      // ── A5 (owner 2026-06-21) — ชั้น-1 BLOCKING dup-gate on the yuan APPROVE.
+      //    Yuan slips live in tb_payment (not tb_wallet_hs), so the wallet dup-gate
+      //    never covered them. Block settle when a same-customer/same-day/same-amount
+      //    yuan slip already exists unless the accountant ticked acknowledgeDuplicate.
+      if (newPaystatus === "2" && !d.acknowledgeDuplicate) {
+        const dups = await findDuplicateYuanSlips(admin, {
+          id: existing.id, userid: existing.userid, paythb: existing.paythb, paydate: existing.paydate,
+        });
+        if (dups.length > 0) {
+          return {
+            ok: false,
+            error: `พบสลิปโอนหยวนที่อาจซ้ำ (ลูกค้าเดียวกัน วันเดียวกัน ยอดเท่ากัน ${dups.length} รายการ) — ตรวจสอบแล้วยืนยันว่าไม่ใช่รายการซ้ำก่อนอนุมัติ`,
+          };
+        }
       }
     }
 
