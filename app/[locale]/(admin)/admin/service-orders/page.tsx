@@ -518,19 +518,6 @@ export default async function AdminServiceOrdersPage({
           </div>
         </div>
 
-        {/* Wave 26.2 status banner — proactive transparency per AGENTS.md §0a. */}
-        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
-          <span aria-hidden>ℹ️</span>
-          <div className="flex-1">
-            <span className="font-medium">Wave 26.2 status:</span>{" "}
-            ✅ 7 status tabs with counts · date range filter · sort arrows · action button cluster ·
-            cover image · VIP/นิติ/sale badges · bulk-print bar · keyword search ·
-            page-size dropdown · &ldquo;ผ่านมา&rdquo; relative time ·{" "}
-            ✅ พิมพ์ใบเสร็จ/แจ้งหนี้ → admin-auth print route /admin/service-orders/print
-            (no customer-userID pin · staff print any order · row + bulk + detail links wired)
-          </div>
-        </div>
-
         {headerErr && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             โหลดข้อมูลไม่สำเร็จ: {headerErr.message}
