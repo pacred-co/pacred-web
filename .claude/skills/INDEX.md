@@ -8,7 +8,7 @@ Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px cust
 
 ---
 
-## The skill set (16 skills — all `.claude/skills/<name>/SKILL.md`)
+## The skill set (17 skills — all `.claude/skills/<name>/SKILL.md`)
 
 | Skill | Trigger keywords / context | One-line purpose |
 |---|---|---|
@@ -28,6 +28,7 @@ Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px cust
 | **mobile-first-verify** | "check this on mobile" · "is this responsive" · "phone QA" · "ดูบนมือถือ" · before pushing a customer surface | Render a page at the 360/390px reference viewports + assert no horizontal scroll · tap targets ≥ 44px · text ≥ 16px · CTA thumb-reachable |
 | **legacy-fidelity-check** | "fidelity check" · "เหมือนของเดิมไหม" · "ตรงกับ PCS เก่าไหม" · before pushing a D1 Phase-B rework | Audit a port screen element-by-element against its legacy PCS original — the owner's "copy 100% first" gate |
 | **landing-conversion-audit** | "พร้อมยิงแอดยัง" · "conversion audit" · "CRO check" · before ads point at a page | Pre-flight a landing for CONVERT + TRACK + Quality-Score so paid traffic converts AND is measured |
+| **session-continuity** | LONG / "run long / ยาวๆ / ทำหมดเลย" sessions · context filling · before saying "done/เสร็จ" · session close | No "เสร็จ" without live-surface proof + a durable save-point so work survives context compaction within ONE session (the anti-"บอกผ่านๆ พอดูจริงบัคเหมือนเดิม" gate) |
 
 ---
 

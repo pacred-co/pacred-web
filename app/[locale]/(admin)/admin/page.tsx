@@ -185,7 +185,10 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
     // Pending queues (tab badge counts).
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0),
+    // topup badge counts the DEDUPED queue (owner 2026-06-21) — exclude the
+    // "เติม-แล้วจ่าย" pay-half (type='4' with reforder2 → it collapses into its topup
+    // row), so the badge matches the 1-row-per-payment list. `or` = NOT(type=4 AND reforder2 set).
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0).or("type.neq.4,reforder2.is.null"),
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").lt("amount", 0),
     // sales_payouts — Pacred-original module (no legacy equivalent).
     // Keep the rebuilt-app read; on prod the table is empty so the badge = 0.
@@ -526,7 +529,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // real thumbnail (the bare filename was used as a broken href before).
       let q = admin
         .from("tb_wallet_hs")
-        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder")
+        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder,reforder2")
         .eq("status", "1")
         .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -535,19 +538,32 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       if (error) {
         console.warn(`[tb_wallet_hs list] failed (soft-fail · returning empty rows)`, error);
       }
-      const rows = (data ?? []) as unknown as Array<RawWalletHsRow & {
-        dateslip: string | null; note: string | null; type: string | null; reforder: string | null;
+      const rawRows = (data ?? []) as unknown as Array<RawWalletHsRow & {
+        dateslip: string | null; note: string | null; type: string | null;
+        reforder: string | null; reforder2: string | number | null;
       }>;
+      // ── COLLAPSE the "เติม-แล้วจ่าย" pair to ONE row (owner 2026-06-21: "คนเดียวกัน
+      //    ยอดเดียวกัน → แถวเดียว · ก็แค่รอตรวจสลิป"). Each import payment makes a
+      //    slip-bearing TOPUP (type='1') + a no-slip PAY (type='4', reforder2→topup).
+      //    Show ONLY the slip row; drop the pay-half + tag the topup with the
+      //    forwarder# it pays (so the single row reads "ชำระค่าฝากนำเข้า #F…").
+      const paidFwdByTopup = new Map<string, string>();
+      for (const r of rawRows) {
+        if (r.type === "4" && r.reforder2) paidFwdByTopup.set(String(r.reforder2), r.reforder ?? "");
+      }
+      const rows = rawRows.filter((r) => !(r.type === "4" && r.reforder2));
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       return await Promise.all(rows.map(async (r) => {
         const u = users.get(r.userid);
         const slipUrl = await resolveLegacyUrl(r.imagesslip, "slip");
-        // "what it's paying" — the note carries the human description
-        // (e.g. "ชำระฝากนำเข้า #52093 (เติม-แล้วจ่าย · รออนุมัติสลิป)"); fall back to the
-        // type label + the F#/H# reference so a row is never just a bare amount.
-        const what = (r.note && r.note.trim())
-          ? r.note.trim()
-          : `${WALLET_TYPE_LABEL[r.type ?? ""] ?? "ชำระเงิน"}${r.reforder ? ` #${r.reforder}` : ""}`;
+        // "what it's paying" — for a collapsed import-pay pair use the paired
+        // forwarder#; else the note; else type label + ref. Never a bare amount.
+        const paidFwd = paidFwdByTopup.get(String(r.id));
+        const what = paidFwd
+          ? `ชำระค่าฝากนำเข้า #${paidFwd}`
+          : (r.note && r.note.trim())
+            ? r.note.trim()
+            : `${WALLET_TYPE_LABEL[r.type ?? ""] ?? "ชำระเงิน"}${r.reforder ? ` #${r.reforder}` : ""}`;
         const slipNote = slipUrl
           ? `📎 แนบสลิปแล้ว`
           : (r.imagesslip ? `⚠️ มีสลิปแต่เปิดไม่ได้ (${escapeHtmlInline(r.imagesslip)})` : `— ไม่มีสลิป`);
