@@ -112,10 +112,11 @@ export default async function Home({
       <SearchBar hideOnMobile />
       <main>
         <BookingCalculator />
-        {/* Mobile-only inline search bar, right after the บริการ (BookingTabs). */}
-        <div className="md:hidden">
-          <SearchBar inline />
-        </div>
+        {/* Mobile-only search bar — placed right after the บริการ so it starts BELOW
+            the services, then sticks to the top on scroll (ปอน 2026-06-21). Must be a
+            DIRECT child of <main> (not wrapped in a short div) so `position: sticky`
+            can span the whole page rather than being clipped to a tiny wrapper. */}
+        <SearchBar mobileOnly />
         {/* Stats strip — hidden on mobile (ปอน 2026-06-19), shown on desktop.
             Promotion stays visible on BOTH (ปอน asked to bring it back on mobile). */}
         <div className="hidden md:block">
