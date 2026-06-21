@@ -705,3 +705,32 @@ unbalanced wallet need a dry-run + accounting (see `docs/research/pay-and-accoun
 deliverable is THAT screenshot changing. Reproduce the exact visible symptom on the LIVE page +
 probe the prod data to find WHY (here: 2 rows = a wallet_hs pair) BEFORE coding, and re-verify on
 the live page AFTER deploy. A green build is not "done"; the owner seeing 1 row is.
+
+## [2026-06-22] ฝากสั่งซื้อ → ฝากนำเข้า handoff: the shop order COMPLETES (สำเร็จ) when its import is linked
+
+The ฝากสั่งซื้อ (shop order · tb_header_order) and ฝากนำเข้า (import · tb_forwarder) are TWO
+services with a handoff, not one long status track:
+- **ฝากสั่งซื้อ** = order from the China shop + get the goods to Pacred's China warehouse. Its
+  lifecycle ends THERE. hstatus: 1 รอดำเนินการ · 2 รอชำระเงิน · 3 สั่งสินค้า · 4 รอร้านจีนจัดส่ง ·
+  40 ถึงโกดังจีน · **5 สำเร็จ** · 6 ยกเลิก (SOT: `lib/admin/service-order-status.ts`).
+- **ฝากนำเข้า** = take the goods China→Thailand→delivery. fstatus: 1 รอเข้าโกดังจีน · 2 ถึงโกดังจีนแล้ว ·
+  3 กำลังส่งมาไทย · 4 ถึงไทยแล้ว · 5 รอชำระเงิน · 6 เตรียมส่ง · 7 ส่งแล้ว (SOT:
+  `lib/admin/forwarder-status.ts`).
+
+**The recurring bug (owner reported 3-4×): the shop order sat stuck at "ถึงโกดังจีน (40)" forever**
+even though its goods had already become an active import. Root: `advanceLinkedShopOrder` only ever
+advanced 4→40, never →5. There was NO 40→5 transition anywhere (the warehouse barcode scan can set 5,
+but the forwarder-link path never did).
+
+**Fix (owner-aligned):** once the linked forwarder import reaches China warehouse (fstatus ≥ 2 =
+ถึงโกดังจีนแล้ว), the ฝากสั่งซื้อ has handed off → it COMPLETES `{4,40}→5 (สำเร็จ)`; the import's own
+fstatus then carries the tracking (the shop detail shows a "ฝากนำเข้าที่เชื่อมโยง" card linking to it,
+on BOTH customer + admin now). The link resolves two ways: `tb_forwarder.reforder = hno` (spawn path)
+OR `tb_forwarder.ftrackingchn = tb_order.ctrackingnumber` (MOMO-created rows have reforder=""). Both
+callers (manual `actions/admin/forwarders.ts` + MOMO `propagate.ts`, statusGate default-ON) already
+gate fstatus≥2 → only the helper changed.
+
+**Lesson:** when two services hand off, the upstream one must COMPLETE at the handoff, not mirror the
+downstream's full status — else it looks "stuck" while the work is actually progressing elsewhere.
+Surface the bridge (a linked-card with a click-through) on every role's detail so nobody wonders
+"where did the order go?".
