@@ -10,6 +10,7 @@ import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { issueYuanTaxInvoice } from "@/lib/admin/yuan-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { findDuplicateYuanSlips } from "@/lib/admin/duplicate-slip-check";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { logger } from "@/lib/logger";
 import {
@@ -77,6 +78,10 @@ const updateSchema = z.object({
   // flow (see actions/admin/yuan-payments-tb.ts:130 for the create-side pattern).
   admin_proof_url:  z.string().max(500).optional(),
   note:             z.string().trim().max(1000).optional(),
+  // A5 (owner 2026-06-21) — ชั้น-1 dup-gate override: when a same-customer/same-day/
+  // same-amount yuan slip already exists, the approve is BLOCKED until the accountant
+  // eyeballs it + re-submits with this flag (mirrors the wallet dup-gate).
+  acknowledgeDuplicate: z.boolean().optional(),
 });
 export type AdminUpdateYuanPaymentInput = z.input<typeof updateSchema>;
 
@@ -92,7 +97,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     // ── Read the existing tb_payment row.
     const { data: existing, error: existingErr } = await admin
       .from("tb_payment")
-      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref")
+      .select("id, userid, paystatus, payyuan, paythb, paydeposit, tax_doc_pref, paydate")
       .eq("id", d.id)
       .maybeSingle<{
         id: number;
@@ -102,6 +107,7 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         paythb: number;
         paydeposit: string | null;
         tax_doc_pref: string | null;
+        paydate: string | null;
       }>();
     if (existingErr) {
       console.error(`[tb_payment mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
@@ -148,6 +154,22 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
         // L644 + L659 — set on both approve '2' and reject '3').
         update.paydateadmin = new Date().toISOString();
         update.adminid = legacyAdminId;
+      }
+
+      // ── A5 (owner 2026-06-21) — ชั้น-1 BLOCKING dup-gate on the yuan APPROVE.
+      //    Yuan slips live in tb_payment (not tb_wallet_hs), so the wallet dup-gate
+      //    never covered them. Block settle when a same-customer/same-day/same-amount
+      //    yuan slip already exists unless the accountant ticked acknowledgeDuplicate.
+      if (newPaystatus === "2" && !d.acknowledgeDuplicate) {
+        const dups = await findDuplicateYuanSlips(admin, {
+          id: existing.id, userid: existing.userid, paythb: existing.paythb, paydate: existing.paydate,
+        });
+        if (dups.length > 0) {
+          return {
+            ok: false,
+            error: `พบสลิปโอนหยวนที่อาจซ้ำ (ลูกค้าเดียวกัน วันเดียวกัน ยอดเท่ากัน ${dups.length} รายการ) — ตรวจสอบแล้วยืนยันว่าไม่ใช่รายการซ้ำก่อนอนุมัติ`,
+          };
+        }
       }
     }
 

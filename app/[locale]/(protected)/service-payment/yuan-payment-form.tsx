@@ -249,17 +249,28 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           slip; accounting verifies (2 layers) → ตัดจ่าย). */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-foreground">{t("paymentSection")}</h2>
-        {/* Bank-account block — owner 2026-06-08: customers transfer to the
-            company account, type the amount, attach slip (staff verify). No
-            dynamic/amount-encoded PromptPay. */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1">
-          <p className="text-sm font-bold text-foreground">โอนเข้าบัญชีบริษัท</p>
-          <p className="text-sm text-foreground">
-            บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
-          </p>
-          <p className="text-xs text-muted">
-            โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> เข้าบัญชีด้านบน แล้วแนบสลิป (ทีมงานตรวจสอบ)
-          </p>
+        {/* Bank-account + QR block. Owner 2026-06-21: show the SAME company QR on
+            every pay surface (ฝากโอนหยวนเคยไม่มี → เพิ่มให้เหมือนกัน). The QR is the
+            static company QR (`STATIC_PAYMENT_QR_PATH` in lib/promptpay.ts) — the ONE
+            swap point: when the real company PromptPay ID is set, lib/promptpay.ts
+            flips to an amount-encoded QR and every surface (shop/forwarder/yuan)
+            switches at once. Customer scans/transfers + attaches slip (staff verify). */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="space-y-1 flex-1">
+            <p className="text-sm font-bold text-foreground">สแกน QR หรือโอนเข้าบัญชีบริษัท</p>
+            <p className="text-sm text-foreground">
+              บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
+            </p>
+            <p className="text-xs text-muted">
+              โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> แล้วแนบสลิป (ทีมงานตรวจสอบ)
+            </p>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/payment/pacred-qr.png"
+            alt="QR ชำระเงิน บริษัท แพคเรด"
+            className="w-36 h-36 rounded-lg border border-amber-300 bg-white object-contain shrink-0 mx-auto sm:mx-0"
+          />
         </div>
         <div className="space-y-1">
           <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>

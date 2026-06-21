@@ -63,3 +63,40 @@ export async function findDuplicateSlips(
   }
   return (data ?? []) as DuplicateSlipMatch[];
 }
+
+/**
+ * The yuan (ฝากโอน) twin of findDuplicateSlips (owner 2026-06-21 · A5). Customer
+ * yuan slips land in `tb_payment` (direct-cut, createYuanPayment) — NOT tb_wallet_hs
+ * — so the wallet dup-gate never covered them. Same rule, tb_payment columns: same
+ * customer (userid) + same calendar day of `paydate` + same `paythb` + paystatus ∈
+ * {pending '1', approved '2'} + exclude self. Fail-CLOSED on query error.
+ */
+export async function findDuplicateYuanSlips(
+  admin: SupabaseClient,
+  row: { id: number; userid?: string | null; paythb: number | string | null; paydate: string | null },
+): Promise<DuplicateSlipMatch[]> {
+  if (!row.paydate) return [];
+  const d = new Date(row.paydate);
+  if (Number.isNaN(d.getTime())) return [];
+  const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(d); dayEnd.setHours(23, 59, 59, 999);
+
+  let q = admin
+    .from("tb_payment")
+    .select("id, paystatus, paythb")
+    .eq("paythb", row.paythb)
+    .neq("id", row.id)
+    .in("paystatus", ["1", "2"])
+    .gte("paydate", dayStart.toISOString())
+    .lte("paydate", dayEnd.toISOString());
+  if (row.userid) q = q.eq("userid", row.userid);
+  const { data, error } = await q;
+  if (error) {
+    console.error("[findDuplicateYuanSlips] failed", { code: error.code, message: error.message, id: row.id });
+    return [{ id: -1, status: "?", amount: row.paythb }];
+  }
+  return (data ?? []).map((r) => {
+    const rr = r as { id: number; paystatus: string | null; paythb: number | string | null };
+    return { id: rr.id, status: rr.paystatus, amount: rr.paythb };
+  });
+}

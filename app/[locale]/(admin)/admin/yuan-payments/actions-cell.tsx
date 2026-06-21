@@ -27,12 +27,22 @@ export function YuanPaymentActions(props: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
 
-  function set(newStatus: "completed" | "failed") {
+  function set(newStatus: "completed" | "failed", opts?: { acknowledgeDuplicate?: boolean }) {
     setErr(null);
     startTransition(async () => {
-      const res = await adminUpdateYuanPayment({ id, status: newStatus });
-      if (res.ok) router.refresh();
-      else setErr(res.error);
+      const res = await adminUpdateYuanPayment({
+        id, status: newStatus, acknowledgeDuplicate: opts?.acknowledgeDuplicate,
+      });
+      if (res.ok) { router.refresh(); return; }
+      // A5 ชั้น-1 dup-gate (owner 2026-06-21): a same-customer/day/amount yuan slip
+      // exists → let the accountant eyeball it + re-confirm to override.
+      if (res.error?.includes("อาจซ้ำ") && !opts?.acknowledgeDuplicate) {
+        if (await confirm(`${res.error}\n\nตรวจสอบแล้วยืนยันว่าไม่ใช่รายการซ้ำ — อนุมัติต่อ?`)) {
+          set(newStatus, { acknowledgeDuplicate: true });
+        }
+        return;
+      }
+      setErr(res.error);
     });
   }
 
