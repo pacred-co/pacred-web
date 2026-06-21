@@ -99,3 +99,37 @@ grep that finds §1's ~75 sites does NOT find them:
    stripping super from a money WRITE is a separate owner decision, don't fold it in.
    Leave pure-cosmetic role labels (a "ผู้ดูแลระบบ" badge, incident actorRole tag) — flag,
    don't churn. Leave functional-role head-counts (`GO_LIVE_ROLE_KEYS`) — super isn't in them.
+
+---
+
+## 7. `/admin/admins` renders one row PER GRANT — dedupe to one row per PERSON (2026-06-21)
+
+Owner: "ซ้ำซ้อน บัคมั่ว · เปลี่ยน role แล้วเบิ้ลเพิ่มแถว · ขึ้นปิดสิทธิ์มั่ว · มีพนักงานไม่กี่คน แถวเพียบ" (29 rows
+for 24 people). Root cause is the `admins` table shape: **one row per `(profile_id, role)`
+grant**, NOT one per person. Two ways a person accumulates rows:
+- **Role change** — `adminChangeRole` UPSERTs the new role active + **soft-deletes the old**
+  (`is_active=false`, kept for history). So after a change the person has 2 rows: new (active)
+  + old (ปิดสิทธิ์). The list showed BOTH.
+- **Multiple active grants** — `adminGrantRole`/`adminChangeRole` upsert on `(profile_id,role)`,
+  so granting a *different* role never conflicts with the old → both stay active. 3 people had
+  2 active roles (aom/jane ultra+super, tam fim+super).
+
+The list (`page.tsx`) mapped one display row per grant → duplication. Also the default `?s`-unset
+query showed ALL while the tab UI defaulted to "ยังทำงานอยู่" (count/display mismatch).
+
+**Fix pattern (one row per person):**
+1. Fetch ALL grants ordered `granted_at desc`, **dedupe by `profile_id` in JS** — effective role =
+   the most-recent ACTIVE grant (else most-recent); person `is_active` = ANY grant active.
+2. Person-level status, only TWO buckets: ยังทำงานอยู่ (active) + ลาออก/หมดเวลา (`ended_at` set OR no
+   active grant). Drop the "ทั้งหมด" tab. Default active.
+3. Mirror the SAME dedupe in the CSV export (`actions/admin/export/admins.ts`) so "CSV ทั้งหมด"
+   stays byte-identical to the on-screen list.
+4. **Data cleanup** (so the dropdown/toggle act per-person + display==reality): collapse people
+   with >1 ACTIVE grant — keep the most-recent active, soft-deactivate the rest. Keep ultra over
+   super (ultra ⊇ super → zero access loss). Dry-run + backup first
+   (`scripts/collapse-multiactive-admins-2026-06-21.mjs`).
+
+**Why the page-only dedupe isn't enough:** the per-row dropdown calls `adminChangeRole(old=effective)`
+— if the person still has another hidden active grant, they keep that access invisibly. The data
+cleanup makes "one active role per person" true, so the controls behave per-person. After: 24 people,
+0 multi-active, 23 active, 1 resigned (a stale disabled placeholder profile, hidden in the resigned tab).

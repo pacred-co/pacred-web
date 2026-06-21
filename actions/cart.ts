@@ -464,14 +464,12 @@ export async function submitCartOrder(input: {
   }
 
   // ── Money-ceiling guard (no silent overflow) ────────────────────────
-  // Every baht/yuan total in the legacy schema is numeric(10,2) → caps at
-  // 99,999,999.99. Reject an over-cap order BEFORE inserting the header so
-  // a giant cart fails with a clear message instead of silently recording
-  // ฿0 (the rollup UPDATE below otherwise throws a swallowed Postgres
-  // 22003). THB ≈ ¥ × rate overflows first. ⬆ raise the cap once migration
-  // 0196 (widen money cols → numeric(14,2)) is applied to prod.
+  // The order→pay→receipt→cnt→wallet→forwarder money chain is numeric(14,2)
+  // (mig 0196, applied prod+dev 2026-06-20 · was 10,2/~100M) → caps at
+  // ~1 trillion. Still guard so an over-cap order fails with a clear message
+  // instead of a swallowed Postgres 22003 on the rollup. THB ≈ ¥ × rate.
   {
-    const MONEY_COL_MAX = 99_999_999.99;
+    const MONEY_COL_MAX = 999_999_999_999.99; // numeric(14,2) cap (mig 0196)
     const { data: guardRows, error: guardErr } = await admin
       .from("tb_cart")
       .select("cprice, camount")
@@ -491,7 +489,7 @@ export async function submitCartOrder(input: {
       if (projectedCNY > MONEY_COL_MAX || projectedCNY * rate > MONEY_COL_MAX) {
         return {
           ok: false,
-          error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedCNY * rate).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿99,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
+          error: `ยอดรวมออเดอร์นี้ (¥${projectedCNY.toLocaleString()} ≈ ฿${Math.round(projectedCNY * rate).toLocaleString()}) เกินเพดานที่ระบบรองรับต่อ 1 ออเดอร์ (฿999,999,999,999.99) — กรุณาแบ่งเป็นหลายออเดอร์`,
         };
       }
     }
