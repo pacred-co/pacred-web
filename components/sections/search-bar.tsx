@@ -12,9 +12,13 @@ interface SearchBarProps {
   hideOnMobile?: boolean;
   /** Start in collapsed state (bar hidden); user can toggle open with the NavBar chevron. */
   defaultCollapsed?: boolean;
+  /** When `mobileOnly`, the sticky bar shows ONLY < md (mirror of `hideOnMobile`) — used to
+   *  place the sticky bar after the services on the mobile home so it starts below them then
+   *  sticks to the top on scroll (ปอน 2026-06-21). Ignores the NavBar collapse toggle. */
+  mobileOnly?: boolean;
 }
 
-export function SearchBar({ embedded = false, hideOnMobile = false, defaultCollapsed = false }: SearchBarProps) {
+export function SearchBar({ embedded = false, hideOnMobile = false, defaultCollapsed = false, mobileOnly = false }: SearchBarProps) {
   const t = useTranslations("searchBar");
   // Embedded mode starts collapsed (trigger button only); full mode renders straight away
   const [expanded, setExpanded] = useState(false);
@@ -32,11 +36,11 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
     !!pathname && /^(?:\/[a-z]{2})?\/m\/dashboard(?:\/|$)/.test(pathname);
 
   useEffect(() => {
-    if (embedded) return;
+    if (embedded || mobileOnly) return;
     const handler = () => setCollapsed((v) => !v);
     window.addEventListener("toggle-search-bar", handler);
     return () => window.removeEventListener("toggle-search-bar", handler);
-  }, [embedded]);
+  }, [embedded, mobileOnly]);
 
   // When starting collapsed, notify NavBar so its chevron starts in the correct orientation
   useEffect(() => {
@@ -88,9 +92,10 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
     );
   }
 
+  const visibility = mobileOnly ? "block md:hidden" : hideOnMobile ? "hidden md:block" : "block";
   const rootClass = embedded
     ? "w-full bg-white dark:bg-surface overflow-hidden"
-    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden transition-[max-height,padding,opacity] duration-300 ease-in-out ${collapsed ? "max-h-0 opacity-0 !py-0 !border-0 !shadow-none xl:max-h-[200px] xl:opacity-100 xl:!border-b xl:!shadow-[0_4px_15px_rgba(0,0,0,0.04)]" : "max-h-[200px] opacity-100"}`;
+    : `${visibility} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden transition-[max-height,padding,opacity] duration-300 ease-in-out ${collapsed ? "max-h-0 opacity-0 !py-0 !border-0 !shadow-none xl:max-h-[200px] xl:opacity-100 xl:!border-b xl:!shadow-[0_4px_15px_rgba(0,0,0,0.04)]" : "max-h-[200px] opacity-100"}`;
 
   return (
     <div className={rootClass}>

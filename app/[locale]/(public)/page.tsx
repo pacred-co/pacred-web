@@ -105,9 +105,18 @@ export default async function Home({
       <JsonLd data={services} />
       <ExperimentBeacon experimentKey="home_hero_cta" />
       <NavBar />
-      <SearchBar />
+      {/* Search bar — DESKTOP = sticky at the top (unchanged). On MOBILE it moves
+          below the บริการ (ปอน 2026-06-21: "เฉพาะมือถือ เอา search bar ไปถัดจากบริการ"):
+          this top instance is desktop-only, the inline one below the BookingCalculator
+          is mobile-only. */}
+      <SearchBar hideOnMobile />
       <main>
         <BookingCalculator />
+        {/* Mobile-only search bar — placed right after the บริการ so it starts BELOW
+            the services, then sticks to the top on scroll (ปอน 2026-06-21). Must be a
+            DIRECT child of <main> (not wrapped in a short div) so `position: sticky`
+            can span the whole page rather than being clipped to a tiny wrapper. */}
+        <SearchBar mobileOnly />
         {/* Stats strip — hidden on mobile (ปอน 2026-06-19), shown on desktop.
             Promotion stays visible on BOTH (ปอน asked to bring it back on mobile). */}
         <div className="hidden md:block">
