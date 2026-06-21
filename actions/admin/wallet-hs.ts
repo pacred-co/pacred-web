@@ -790,6 +790,29 @@ export async function adminApproveWalletDeposit(
         const userid = rowRaw.userid;
         const cascadedRows: CascadedRow[] = [];
 
+        // ── NEGATIVE-WALLET GUARD (owner 2026-06-21) — the legacy "เติม-แล้วจ่าย"
+        //    pair (a +topup row + this −pay row) goes NEGATIVE when this debit is
+        //    approved before the paired topup credited (prod evidence: PR130 −646
+        //    + 4 armed pairs). Refuse BEFORE any mutation (the row stays pending)
+        //    so the accountant approves the paired topup first — or, under the new
+        //    direct-cut model, the import-pay never debits the wallet at all.
+        {
+          const { data: wPre, error: wPreErr } = await admin
+            .from("tb_wallet").select("wallettotal").eq("userid", userid)
+            .maybeSingle<{ wallettotal: number | string | null }>();
+          if (wPreErr) {
+            console.error(`[approve type=4 wallet pre-check] failed`, { code: wPreErr.code, message: wPreErr.message });
+            return { ok: false, error: `db_error:${wPreErr.code ?? "unknown"}` };
+          }
+          const bal0 = Number(wPre?.wallettotal ?? 0);
+          if (bal0 - amount < -0.01) {
+            return {
+              ok: false,
+              error: `ยอดกระเป๋าลูกค้าไม่พอหักรายการนี้ (มี ฿${bal0.toFixed(2)} · ต้องหัก ฿${amount.toFixed(2)}) — ถ้าเป็นการ "เติม-แล้วจ่าย" กรุณาอนุมัติรายการเติมเงินคู่กันก่อน แล้วค่อยอนุมัติรายการจ่ายนี้`,
+            };
+          }
+        }
+
         // (i) Flip the slip row 1→2 — ATOMIC CLAIM. The `.eq("status","1")` is
         //     folded into the UPDATE and we check the affected row: a 0-row
         //     result means a CONCURRENT path already approved this slip (the

@@ -187,6 +187,28 @@ export async function adminBulkApproveWalletHs(
                     : (r.type === "4" || r.type === "7") ? -amt
                     : 0;
 
+        // NEGATIVE-WALLET GUARD (owner 2026-06-21) — mirror of the single-row
+        // approve: never let a debit (type 4/7) drive the wallet below 0 (the
+        // legacy "เติม-แล้วจ่าย" pair bug · PR130 −646). Pre-check BEFORE the claim
+        // so the row stays pending (the accountant approves the paired topup first).
+        if (delta < 0) {
+          const { data: wPre, error: wPreErr } = await admin
+            .from("tb_wallet").select("wallettotal").eq("userid", r.userid)
+            .maybeSingle<{ wallettotal: number | string | null }>();
+          if (wPreErr) {
+            // Fail-safe: a money guard we can't complete must hold (skip the row).
+            failed++;
+            errors.push(`id=${r.id} ${r.userid}: wallet pre-check failed: ${wPreErr.message}`);
+            continue;
+          }
+          const bal0 = Number(wPre?.wallettotal ?? 0);
+          if (bal0 + delta < -0.01) {
+            failed++;
+            errors.push(`id=${r.id} ${r.userid}: ยอดกระเป๋าไม่พอหัก (มี ฿${bal0.toFixed(2)} · หัก ฿${(-delta).toFixed(2)}) — อนุมัติรายการเติมเงินคู่กันก่อน`);
+            continue;
+          }
+        }
+
         // Approve the wallet_hs row first — ATOMIC CLAIM. Folding the
         // `.eq("status","1")` into the UPDATE + checking the affected row makes
         // this TOCTOU-safe: a 0-row result means a concurrent path (the
