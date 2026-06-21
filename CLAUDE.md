@@ -3,6 +3,18 @@
 
 ---
 
+# 🏁 2026-06-20 — เดฟ: DELIVERY-DAY DEPARTMENT SWEEP (คลัง→ลูกค้า→บัญชี→คนขับ + freight/sales/crosscut) + color-soften + MOMO per-tracking + login fix → ALL BRANCHES · read FIRST
+
+> **🏁 DELIVERY-DAY CLOSE (owner: "ของจริงแล้ว · ลูกค้าจริงไม่ใช่หนูทดลอง · จบทุกแผนกทุกฝ่ายจริงๆ · allow all bypass · run long · ไปนอน").** **dave-pacred = main = Poom-pacred = InwPond007 = `<HEAD>`** (all pushed · Vercel prod). Gate green every push: **typecheck 0 · lint 0 · test:unit 0 · build 0**. Migrations **through 0195 applied prod+dev · 0196 DRAFT-not-applied** (widen money cols — §0e sink audit DONE = INCOMPLETE, code fail-closed keeps >100M orders safely rejected · NEXT FREE 0197). 🔑 prod DB pw (chat-only, NEVER persist) `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (lozntlidlqqzzcaathnm) · prod ref yzljakczhwrpbxflnmco. ⚠️ `.env.local` on this Mac = **PROD**.
+>
+> **🔎 Per-department adversarial sweep (Ultracode · find→verify→confirmed-safe · money-mutations FLAGGED not blind-applied · "ห้ามทำบัค งานหาย"):** **คลัง** (silent sack-aggregate UPDATE error→logged · empty-sack "—") · **ลูกค้า** (17→0 confirmed · portal clean) · **บัญชี** (cockpit-revenue stale JSDoc · money findings all false-positive) · **คนขับ** (5 confirmed → made `countPendingDispatch` the SINGLE SOT for "งานรอจัดรถ" — added missing `paydeposit<>'1'` settled-exclusion; sidebar driverItems [was a dup of forwarderDelivery] + logistics-board inline now route through it; warehouse "มอบงานคนขับ" link un-hidden) · **freight/sales/crosscut** (🔴 **transfer-rep form was NON-FUNCTIONAL** — lowercase SELECT vs mig-0113 camelCase → 400 → empty; fixed via SELECT aliasing, verified prod · freight-quote silent-error logged · leads closed-KPI silent .limit(5000)→paginated). Learning [[audit-discipline]]: a count on ≥2 surfaces drifts → one SOT helper, route all callers through it. **Verdict: platform is delivery-healthy** (most audits low-hit; adversarial verify dismissed the majority as false-positives).
+>
+> **🎨 + 🔒 earlier same session:** color-soften (status chips/rows แสบตา→soft pill, same hue) · MOMO "เก็บเป็นตู้→แทรคกิ้ง" = **already the model** (made payment modal explicitly per-tracking, no rewrite) · wallet direct-cut + dropped-dup-gate restored · yuan slip-only · เติมเงิน removed · **login fix** for admin_dev/poom/got/pop (set admin_<name>@pacred.co.th) · integrated ภูม(mig 0195 prod)+ปอน(quote/cart, admin-login).
+>
+> **🔴 CARRYOVER:** mig 0196 (enable >100M orders — needs full-chain widen receipt+cnt+wallet + format audit before apply) · F (in-Thailand เหมาๆ eligibility UI) · #52089 under-bill.
+
+---
+
 # 🌙 2026-06-20 — เดฟ: INTEGRATION CLOSE — wallet direct-cut + dup-gate + integrate ภูม(8c·mig0195)+ปอน(admin-login) + 21-agent leak-hunt (0 confirmed) + mig 0195 PROD → ALL BRANCHES · read FIRST
 
 > **🏁 CLOSE (owner: "ตรวจงานน้องๆ · รวมที่เรา · ทำเลินนิ่ง · อุดรอยรั่ว/จุดบอด · จบงานส่งงานได้เลย · อัพเดทเอกสาร+memory · push ทุก branch · ดึกแล้ว").** **dave-pacred = main = Poom-pacred = InwPond007 = `<HEAD>`** (all pushed · Vercel deploying prod). Gate green: **typecheck 0 · lint 0 · test:unit 0 (full) · i18n 7198/7198 · md links 0 · build 0**. **mig 0195 `taem_container_etd_eta` APPLIED PROD (verified live, 0 rows) + dev** → **NEXT FREE = 0196**. 🔑 prod DB pw (chat-only, NEVER persist to file) `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (ref lozntlidlqqzzcaathnm) · prod ref yzljakczhwrpbxflnmco.
