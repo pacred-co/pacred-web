@@ -29,7 +29,7 @@ export function PurchaseBanner() {
           className="group relative block overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
         >
           <Image
-            src="/images/mainpage/banner/import-export/purchase2.png"
+            src="/images/mainpage/banner/import-export/purchase3.png"
             alt="ฝากสั่งซื้อสินค้าจากจีน 1688 Taobao Tmall Alibaba กับ Pacred Shipping"
             width={2280}
             height={440}

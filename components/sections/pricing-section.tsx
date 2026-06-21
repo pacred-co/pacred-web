@@ -384,7 +384,7 @@ export function PricingSection({
                   className="group relative block mb-3 md:mb-4 overflow-hidden rounded-xl md:rounded-2xl shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
                 >
                   <Image
-                    src="/images/mainpage/banner/import-export/freight2.png"
+                    src="/images/mainpage/banner/import-export/freight3.png"
                     alt="บริการนำเข้า-ส่งออก เอกสารถูกต้อง Pacred — Freight FCL / LCL"
                     width={2280}
                     height={440}

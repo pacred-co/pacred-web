@@ -25,11 +25,11 @@ interface BookingHeroProps {
 // need a richer hero than the shared `HERO_IMGS` registry in `lib/booking-data.ts`.
 const BG_OVERRIDES_MOBILE: Record<string, string> = {
   default: "/images/bannermobile/bannermainmobilde04.png",
-  customs: "/images/bannermobile/clearancebanne13.png",
+  customs: "/images/bannermobile/clearmobile6.png",
 };
 const BG_OVERRIDES_DESKTOP: Record<string, string> = {
   default: "/images/bannerdesktop/maindesktop01.png",
-  customs: "/images/bannerdesktop/cleardesktop004.png",
+  customs: "/images/bannerdesktop/cleardesktop008.png",
   truck:   "/images/bannerdesktop/truckdesktop01.png",
   lcl:     "/images/bannerdesktop/bannershipdesktop01.png",
   fcl:     "/images/bannerdesktop/bannershipdesktop01.png",
@@ -76,9 +76,13 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
   // bottom padding on mobile to avoid cramping the 160px aspect-ratio banner at 360px.
   const mobilePb    = isDefault ? "pb-[64px]" : "pb-[28px]";
   // Both mobile + desktop: centred container, flex row splits เคลียร์ภาษี|พิธีศุลกากร around the person
+  // Customs hero: BOTH banners (mobile clearmobile6 + desktop cleardesktop007) have the
+  // headline + ฿2,800 + partner logos baked into the artwork, so the HTML text overlay is
+  // hidden on EVERY viewport (ปอน 2026-06-21 "เอา text ออก · ใช้รูปนี้แทน ทั้งมือถือ+คอม").
+  const isCustoms = !isDefault && contentKey === "customs";
   const contentCls  = isDefault
     ? "relative z-10 w-full max-w-[1000px] mx-auto text-center text-white"
-    : "relative z-10 max-w-[1000px] mx-auto text-center text-white";
+    : `relative z-10 max-w-[1000px] mx-auto text-center text-white${isCustoms ? " hidden" : ""}`;
 
   // Custom headline variant — default banner image + a page-specific title
   // (overrides the i18n hero text). Used by import-china-lcl.
