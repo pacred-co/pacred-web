@@ -679,6 +679,16 @@ export function CntListTable({
                   {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.profitSum, 2)}</td>}
                   <td className="px-2 py-2 text-center">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.chip}`}>{badge.label}</span>
+                    {/* Next-action hint (self-explaining-row standard §0g · owner
+                        2026-06-22) — "ให้พนักงานทำอะไรต่อ" under the สถานะตู้ pill.
+                        Reuses the SOT FSTATUS_CFG.next/act via `badge` (same display
+                        status as the pill: "3" on the waiting tab · r.fstatus on the
+                        arrived tab). 🔔 + rose when an action is due. */}
+                    {badge.next ? (
+                      <div className={`mt-1 text-[9px] whitespace-nowrap ${badge.act ? "font-semibold text-rose-600" : "text-muted"}`}>
+                        {badge.act ? "🔔 " : ""}{badge.next}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-2 py-2 text-center">
                     {r.isPaid ? (

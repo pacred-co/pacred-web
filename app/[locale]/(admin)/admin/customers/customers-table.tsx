@@ -57,6 +57,8 @@ export type JuristicBundle = {
 
 export type CustomerTableRow = {
   userID: string;
+  /** Profile avatar signed URL (tb_users.userimage → "profile" bucket). null = no image. */
+  avatarUrl: string | null;
   isJuristic: boolean;
   status: DerivedStatus;
   fullName: string;
@@ -189,7 +191,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                       className={`cursor-pointer border-t border-border align-top ${isOpen ? "bg-primary-50/40 dark:bg-primary-900/10" : "hover:bg-surface-alt/30"}`}
                     >
                       <td className="px-4 py-3 font-mono text-xs">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); toggle(); }}
@@ -199,6 +201,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                           >
                             {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </button>
+                          <CustomerAvatar src={r.avatarUrl} name={r.fullName} code={r.userID} />
                           <Link href={`/admin/customers/${r.userID}`} onClick={(e) => e.stopPropagation()} className="text-primary-600 hover:underline">{r.userID}</Link>
                         </div>
                       </td>
@@ -270,6 +273,52 @@ function FragmentRow({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Profile avatar thumbnail (self-explaining-row standard · owner 2026-06-22).
+ * Renders a small rounded avatar from the resolved signed URL; on a missing /
+ * broken image (or no URL at all) falls back to a neutral initials circle —
+ * never a broken <img>. Deterministic tint per member-code so the same
+ * customer always gets the same colour.
+ */
+const AVATAR_TINTS = [
+  "bg-rose-100 text-rose-700",
+  "bg-amber-100 text-amber-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-sky-100 text-sky-700",
+  "bg-violet-100 text-violet-700",
+  "bg-teal-100 text-teal-700",
+];
+function CustomerAvatar({ src, name, code }: { src: string | null; name: string; code: string }) {
+  const [failed, setFailed] = useState(false);
+  const initials =
+    (name.trim() ? name.trim() : code).slice(0, 2).toUpperCase() || "?";
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+  const tint = AVATAR_TINTS[hash % AVATAR_TINTS.length];
+
+  if (!src || failed) {
+    return (
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-semibold ${tint}`}
+        title={name || code}
+        aria-hidden
+      >
+        {initials}
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name || code}
+      className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
+      onError={() => setFailed(true)}
+      loading="lazy"
+    />
+  );
+}
+
+/**
  * One read-only detail field — label above, value below. Keeps the expand grid
  * scannable for the "อ่านๆ ดูๆ ตรวจ" review pass.
  */
@@ -295,6 +344,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
       <div className="rounded-lg border border-border bg-white dark:bg-surface p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
+            <CustomerAvatar src={r.avatarUrl} name={r.fullName} code={r.userID} />
             <span className="font-mono text-sm font-semibold text-primary-700">{r.userID}</span>
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span>
             {r.vip && <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">VIP</span>}

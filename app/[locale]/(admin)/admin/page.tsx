@@ -62,6 +62,25 @@ type TabKey =
   | "payment"             // tb_payment paystatus='1' (รอตรวจสอบ)
   | "inactiveCustomers";  // tb_users useractive='0'
 
+// next-action hint per queue (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ" so a
+// glance at the dashboard says what to do, not just "รอดำเนินการ".
+const TAB_NEXT: Record<TabKey, string> = {
+  topup:             "ตรวจสลิป → อนุมัติ/ตัดจ่าย",
+  withdraw:          "ตรวจ → จ่ายเงินคืน",
+  payShop:           "ตรวจ → จ่ายค่าคอม/ร้านค้า",
+  shop1:             "ตรวจ/เปิดราคา",
+  shop2:             "รอลูกค้าชำระ/ตรวจสลิป",
+  shop3:             "สั่งซื้อจากจีน",
+  shop4:             "รอร้านจีนจัดส่งเข้าโกดัง",
+  forwarder1:        "รอสินค้าเข้าโกดังจีน",
+  forwarder5:        "รอลูกค้าชำระ/ตรวจสลิป",
+  forwarderC:        "ติดตามเครดิต/เก็บเงิน",
+  forwarder6:        "ตรวจ/แจ้งเก็บเงิน",
+  forwarder62:       "มอบงานคนขับ/จัดรถ",
+  payment:           "ตรวจสลิป → อนุมัติ/ตัดจ่าย",
+  inactiveCustomers: "ติดตามลูกค้า",
+};
+
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   // 2026-05-28 — Driver landing redirect (G12 — Driver mobile UI parity sprint).
   // Drivers logging into /admin used to hit notFound() because the office
@@ -949,6 +968,11 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                   <span className="inline-flex rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5 text-[11px] font-bold">
                     รอดำเนินการ
                   </span>
+                  {TAB_NEXT[tab] ? (
+                    <div className="mt-1 text-[10px] font-semibold text-rose-600 whitespace-nowrap">
+                      🔔 {TAB_NEXT[tab]}
+                    </div>
+                  ) : null}
                   <div className="mt-2">
                     <Link
                       href={r.link}

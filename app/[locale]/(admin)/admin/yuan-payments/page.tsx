@@ -25,6 +25,8 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -44,6 +46,12 @@ const STATUS_CLS: Record<string, string> = {
   "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
   "2": "bg-green-100 text-green-700 border-green-200",
   "3": "bg-red-100 text-red-700 border-red-200",
+};
+// next-action hint (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ".
+const STATUS_NEXT: Record<string, { next: string; act: boolean }> = {
+  "1": { next: "ตรวจสลิป → อนุมัติ/ตัดจ่าย", act: true },
+  "2": { next: "เสร็จสิ้น", act: false },
+  "3": { next: "—", act: false },
 };
 const PAYTYPE_LABEL: Record<string, string> = {
   "1": "Alipay",
@@ -176,6 +184,13 @@ export default async function AdminYuanPaymentsPage({
 
   const { data: rowsRaw, error, count: totalPayments } = await q;
   const rows = (rowsRaw ?? []) as unknown as PaymentRow[];
+
+  // Resolve each slip → signed URL (self-explaining-row §0g · show a thumbnail,
+  // not a bare "ดู" link). SlipImage is PDF-aware (yuan slips are often SCB PDFs).
+  const slipUrlMap = await resolveLegacyUrlMap(
+    rows.map((r) => ({ id: r.id, filename: r.imagesslip })),
+    "slip",
+  );
 
   // 2nd query — merge customer names from tb_users
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
@@ -487,8 +502,13 @@ export default async function AdminYuanPaymentsPage({
                             STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
                           }`}
                         >
-                          {STATUS_LABEL[status] ?? `status ${status}`}
+                          {STATUS_LABEL[status] ?? "—"}
                         </span>
+                        {STATUS_NEXT[status]?.next && status !== "3" ? (
+                          <div className={`mt-1 text-[9px] whitespace-nowrap ${STATUS_NEXT[status]!.act ? "font-semibold text-rose-600" : "text-muted"}`}>
+                            {STATUS_NEXT[status]!.act ? "🔔 " : ""}{STATUS_NEXT[status]!.next}
+                          </div>
+                        ) : null}
                         {r.paydateadmin ? (
                           <div className="text-muted text-[10px] mt-1">
                             {new Date(r.paydateadmin).toLocaleDateString("th-TH")}
@@ -497,15 +517,12 @@ export default async function AdminYuanPaymentsPage({
                         ) : null}
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        {r.imagesslip ? (
-                          <a
-                            href={r.imagesslip}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary-600 hover:underline"
-                          >
-                            ดู
+                        {slipUrlMap[String(r.id)] ? (
+                          <a href={slipUrlMap[String(r.id)]!} target="_blank" rel="noopener noreferrer" className="inline-block" title="เปิดสลิปเต็ม">
+                            <SlipImage src={slipUrlMap[String(r.id)]!} pdfMode="tile" className="h-12 w-12 rounded-md border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300" />
                           </a>
+                        ) : r.imagesslip ? (
+                          <span className="text-amber-600 text-[10px]" title={`มีสลิปแต่เปิดไม่ได้: ${r.imagesslip}`}>⚠ ไม่พบ</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}

@@ -190,6 +190,60 @@ export default async function AdminDriversPage({
     );
   }
 
+  // ── GROUP the visible batches BY DRIVER (self-explaining-row standard) ──────
+  // Pure-JS grouping over the already-fetched `rows`. No new DB query.
+  // Group key = `fdadminid` (the legacy text driver id each batch carries).
+  // Each group renders a header (driver name/code + per-status batch counts +
+  // delivery progress) over its own batches in an expandable <details>.
+  type Group = {
+    key:        string;                       // fdadminid, or "__none__" when unassigned
+    driverId:   string | null;
+    driverName: string;
+    batches:    BatchRow[];
+    counts:     { s1: number; s2: number; s3: number }; // กำลังดำเนินการ / สำเร็จ / ไม่สำเร็จ
+    doneStops:  number;                       // delivered stops across the group
+    totalStops: number;                       // tracked items across the group
+    boxSum:     number;
+    hasExpired: boolean;                      // any open batch past its endtime
+  };
+  const groupMap = new Map<string, Group>();
+  for (const r of rows) {
+    const key = r.fdadminid ?? "__none__";
+    let g = groupMap.get(key);
+    if (!g) {
+      const dir = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
+      g = {
+        key,
+        driverId:   r.fdadminid ?? null,
+        driverName: dir?.name ?? (r.fdadminid ? r.fdadminid : "ยังไม่ระบุคนขับ"),
+        batches:    [],
+        counts:     { s1: 0, s2: 0, s3: 0 },
+        doneStops:  0,
+        totalStops: 0,
+        boxSum:     0,
+        hasExpired: false,
+      };
+      groupMap.set(key, g);
+    }
+    g.batches.push(r);
+    const fdstatus = (r.fdstatus ?? "1") as FdStatus;
+    if (fdstatus === "1") g.counts.s1 += 1;
+    else if (fdstatus === "2") g.counts.s2 += 1;
+    else if (fdstatus === "3") g.counts.s3 += 1;
+    const agg = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
+    g.doneStops  += agg.doneCount;
+    g.totalStops += agg.itemCount;
+    g.boxSum     += agg.boxSum;
+    if (r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1") g.hasExpired = true;
+  }
+  // Order: drivers with open (กำลังดำเนินการ) batches first, then by batch count.
+  const groups = Array.from(groupMap.values()).sort((a, b) => {
+    if ((b.counts.s1 > 0 ? 1 : 0) !== (a.counts.s1 > 0 ? 1 : 0)) {
+      return (b.counts.s1 > 0 ? 1 : 0) - (a.counts.s1 > 0 ? 1 : 0);
+    }
+    return b.batches.length - a.batches.length;
+  });
+
   // Pending forwarders ready for assignment for the CTA badge + the alert banner.
   // 2026-06-19 (owner): the accurate "รอจัดรถ" = fstatus=6 (เตรียมส่ง · ชำระแล้ว) NOT
   // already in an open driver batch (the plain fstatus=6 count over-counted by
@@ -241,7 +295,7 @@ export default async function AdminDriversPage({
             รายการขนส่งสินค้า
           </h1>
           <p className="mt-1 text-sm text-muted">
-            แต่ละแถว = หนึ่งรอบจัดส่ง (1 คนขับ · N จุดส่ง). คลิกแถวเพื่อดูรายละเอียดและถ่ายภาพส่งของ
+            จัดกลุ่มตามคนขับ — กดที่ชื่อคนขับเพื่อกาง/ยุบรอบจัดส่ง (1 รอบ = 1 คนขับ · N จุดส่ง). คลิกแถวเพื่อดูรายละเอียดและถ่ายภาพส่งของ
           </p>
         </div>
 
@@ -309,88 +363,135 @@ export default async function AdminDriversPage({
         </Chip>
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="p-12 text-center">
+      {/* Grouped by driver — one block per คนขับ, batches expandable beneath. */}
+      <div className="space-y-3">
+        {groups.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-white shadow-sm p-12 text-center">
             <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
             <p className="text-sm text-muted">ยังไม่มีรอบจัดส่งในช่วงนี้</p>
           </div>
         ) : (
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-3 py-2.5 whitespace-nowrap">เลขที่</th>
-                  <th className="px-3 py-2.5 whitespace-nowrap">วันที่/ส่งก่อน</th>
-                  <th className="px-3 py-2.5">ชื่อรายการ</th>
-                  <th className="px-3 py-2.5">คนขับ</th>
-                  <th className="px-3 py-2.5">ผู้สร้าง</th>
-                  <th className="px-3 py-2.5 whitespace-nowrap text-right">รายการ</th>
-                  <th className="px-3 py-2.5 whitespace-nowrap">สถานะ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const fdstatus = (r.fdstatus ?? "1") as FdStatus;
-                  const agg     = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
-                  const driver  = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
-                  const expired = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
-                  return (
-                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <Link
-                          href={`/admin/drivers/${r.id}`}
-                          className="font-mono text-primary-600 hover:underline font-semibold"
-                        >
-                          #{r.id}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                        {r.fddate && (
-                          <div>{formatThaiDate(r.fddate)}</div>
-                        )}
-                        {r.endtime && (
-                          <div className={expired ? "text-rose-600 font-medium" : ""}>
-                            → {formatThaiDateTime(r.endtime)}
-                            {expired ? " (เลย)" : ""}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <Link
-                          href={`/admin/drivers/${r.id}`}
-                          className="text-primary-600 hover:underline"
-                        >
-                          {r.fdname ?? `รอบ #${r.id}`}
-                        </Link>
-                        <div className="text-[11px] text-muted">
-                          แทรคกิ้ง {agg.itemCount} · กล่อง {agg.boxSum} · จุดส่ง {r.fdamount ?? 0}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-xs">
-                        <div className="font-mono">{r.fdadminid ?? "—"}</div>
-                        {driver && <div className="text-muted">{driver.name}</div>}
-                      </td>
-                      <td className="px-3 py-3 text-xs text-muted">{r.fdadmincreator ?? "—"}</td>
-                      <td className="px-3 py-3 text-xs text-right">
-                        <div className="font-medium">{agg.doneCount} / {agg.itemCount}</div>
-                        <div className="text-[10px] text-muted">ส่งแล้ว</div>
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}
-                        >
-                          {STATUS_ICON[fdstatus]}
-                          {STATUS_LABEL[fdstatus]}
+          groups.map((g) => (
+            <details
+              key={g.key}
+              open={g.counts.s1 > 0}
+              className="group rounded-2xl border border-border bg-white shadow-sm overflow-hidden"
+            >
+              {/* Driver header = at-a-glance summary (whose · counts · progress) */}
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-surface-alt/30 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                    <Truck className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold truncate">{g.driverName}</span>
+                      {g.driverId && (
+                        <span className="font-mono text-[11px] text-muted">{g.driverId}</span>
+                      )}
+                      {g.hasExpired && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                          <AlertCircle className="h-3 w-3" /> มีงานเลยเวลา
                         </span>
-                      </td>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      {g.batches.length} รอบ · ส่งแล้ว {g.doneStops}/{g.totalStops} จุด · กล่อง {g.boxSum}
+                    </div>
+                  </div>
+                </div>
+                {/* Per-status batch counts */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {g.counts.s1 > 0 && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["1"]}`}>
+                      {STATUS_ICON["1"]} {STATUS_LABEL["1"]} {g.counts.s1}
+                    </span>
+                  )}
+                  {g.counts.s2 > 0 && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["2"]}`}>
+                      {STATUS_ICON["2"]} {STATUS_LABEL["2"]} {g.counts.s2}
+                    </span>
+                  )}
+                  {g.counts.s3 > 0 && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["3"]}`}>
+                      {STATUS_ICON["3"]} {STATUS_LABEL["3"]} {g.counts.s3}
+                    </span>
+                  )}
+                  <span className="ml-1 text-xs text-muted transition-transform group-open:rotate-90">▸</span>
+                </div>
+              </summary>
+
+              {/* The driver's batches */}
+              <div className="overflow-x-auto scrollbar-x-visible border-t border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                    <tr>
+                      <th className="px-3 py-2.5 whitespace-nowrap">เลขที่</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">วันที่/ส่งก่อน</th>
+                      <th className="px-3 py-2.5">ชื่อรายการ</th>
+                      <th className="px-3 py-2.5">ผู้สร้าง</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap text-right">ส่งแล้ว</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">สถานะ</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {g.batches.map((r) => {
+                      const fdstatus = (r.fdstatus ?? "1") as FdStatus;
+                      const agg     = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
+                      const expired = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
+                      return (
+                        <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <Link
+                              href={`/admin/drivers/${r.id}`}
+                              className="font-mono text-primary-600 hover:underline font-semibold"
+                            >
+                              #{r.id}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                            {r.fddate && (
+                              <div>{formatThaiDate(r.fddate)}</div>
+                            )}
+                            {r.endtime && (
+                              <div className={expired ? "text-rose-600 font-medium" : ""}>
+                                → {formatThaiDateTime(r.endtime)}
+                                {expired ? " (เลย)" : ""}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <Link
+                              href={`/admin/drivers/${r.id}`}
+                              className="text-primary-600 hover:underline"
+                            >
+                              {r.fdname ?? `รอบ #${r.id}`}
+                            </Link>
+                            <div className="text-[11px] text-muted">
+                              แทรคกิ้ง {agg.itemCount} · กล่อง {agg.boxSum} · จุดส่ง {r.fdamount ?? 0}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-muted">{r.fdadmincreator ?? "—"}</td>
+                          <td className="px-3 py-3 text-xs text-right">
+                            <div className="font-medium">{agg.doneCount} / {agg.itemCount}</div>
+                            <div className="text-[10px] text-muted">ส่งแล้ว</div>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}
+                            >
+                              {STATUS_ICON[fdstatus]}
+                              {STATUS_LABEL[fdstatus]}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))
         )}
       </div>
 

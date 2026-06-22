@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
-import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -217,7 +217,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     .select(`
       userID, userName, userLastName, userCompany,
       userTel, userEmail, userActive, userStatus, adminIDSale, userRegistered,
-      coID, userLineID, userFacebook, userBirthday
+      coID, userLineID, userFacebook, userBirthday, userimage
     `, { count: "exact" })
     .order("userRegistered", { ascending: false })
     .range(from, to);
@@ -268,11 +268,24 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     userLineID: string | null;
     userFacebook: string | null;
     userBirthday: string | null;
+    userimage: string | null;
   };
   const rows = (data ?? []) as Row[];
 
   // Wallet balances — legacy tb_wallet keyed by userid (lowercase).
   const userIds = rows.map((r) => r.userID);
+
+  // Self-explaining-row standard (owner 2026-06-22): a profile avatar
+  // thumbnail as the leftmost element of each row. tb_users.userimage stores
+  // a bare legacy filename (e.g. "PCS06_169...jpg") → resolve to a 1h signed
+  // URL via the "profile" bucket. Only the current page's rows (≤50) are
+  // resolved (server-side pagination · resolveLegacyUrlMap fans the storage
+  // round-trips out concurrently so it doesn't serialize the render).
+  const avatarByUser = await resolveLegacyUrlMap(
+    rows.map((r) => ({ id: r.userID, filename: r.userimage })),
+    "profile",
+  );
+
   const walletByUser = new Map<string, number>();
   if (userIds.length > 0) {
     const { data: wallets, error: walletsErr } = await admin
@@ -455,6 +468,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     const displayName = personalName || companyName || "—";
     return {
       userID: r.userID,
+      avatarUrl: avatarByUser[r.userID] ?? null,
       isJuristic: r.userCompany === "1" || juristicByMember.has(r.userID),
       status: deriveStatus(r),
       fullName: displayName,
