@@ -62,12 +62,14 @@ The GOLD reference = `/admin/wallet?view=tx` (done). Rollout, prioritized:
 | Surface | Priority | Has now | Next applied / TODO |
 |---|---|---|---|
 | `/admin/wallet?view=tx` | — | GOLD (thumbnail · plain labels · pair-collapse · status) | ✅ reference |
-| `/admin/forwarders` (รายการนำเข้า) | P0 | MOMO-sibling group · thumbnail · FSTATUS pill | ✅ **next-action hint** (SOT `FSTATUS_CFG.next/act`) · TODO: cabinet-group · thumbnail at row-start |
-| `/admin/service-orders` (ฝากสั่งซื้อ) | P1 | hstatus pill · cover thumbnail · date | ✅ **next-action hint** (SOT `HSTATUS_CFG.next/act`) · TODO: thumbnail-left · group same-customer pending |
-| `/admin/yuan-payments` (โอนหยวน) | P1 | paystatus pill · ¥ amount | TODO: **slip thumbnail** (SlipImage · resolveLegacyUrlMap) · group same-customer |
-| `/admin/customers` (ลูกค้า) | P0 | code · tier · status | TODO: **profile avatar** · last-activity · order-count signal |
-| `/admin/report-cnt` (รายการตู้) | P1 | grouped-by-cabinet · fstatus + pay pill | TODO: owner name/phone · cabinet photo · next-action |
-| `/admin/drivers` + `logistics-board` | P0 | board grouped-by-stage | TODO: **group drivers list by driver** (counts + collapsible batches) · transport icon already |
-| `/admin` dashboard queue tabs | P0 | slip queue = GOLD | TODO: bring the OTHER tabs (forwarder/shop queues) up to the same row (thumbnail + type + next-action) |
+| `/admin/forwarders` (รายการนำเข้า) | P0 | MOMO-sibling group · thumbnail · FSTATUS pill | ✅ **next-action hint** (verified) · TODO: cabinet-group · thumbnail at row-start |
+| `/admin/service-orders` (ฝากสั่งซื้อ) | P1 | hstatus pill · cover thumbnail · date | ✅ **next-action hint** (verified) · TODO: thumbnail-left · group same-customer pending |
+| `/admin/yuan-payments` (โอนหยวน) | P1 | paystatus pill · ¥ amount | ✅ **slip thumbnail** (SlipImage PDF-aware) + next-action hint (shipped · prod list empty in default view → not data-verified) · TODO: group same-customer |
+| `/admin/customers` (ลูกค้า) | P0 | code · tier · status | ✅ **profile avatar** (CustomerAvatar · initials fallback · verified 50 rows) · TODO: last-activity · order-count signal |
+| `/admin/report-cnt` (รายการตู้) | P1 | grouped-by-cabinet · fstatus + pay pill | ✅ **next-action hint** (verified 11 rows) · owner-name N/A (1 container = many owners) · TODO: cabinet photo |
+| `/admin/drivers` | P0 | flat batch list | ✅ **group-by-driver** (`<details>` per driver · counts pills · verified-built · prod near-empty → not data-verified) |
+| `/admin` dashboard queue tabs | P0 | slip queue = GOLD | ✅ **per-tab next-action hint** (`TAB_NEXT` · 14 queues · verified topup tab) |
+
+**Status (2026-06-22):** all 8 surfaces upgraded + pushed. Verified-with-data live: forwarders · service-orders · customers · report-cnt · dashboard. Shipped+gated but no prod data to render right now (early-stage): yuan list (empty default view) · drivers (near-empty). Remaining polish noted per row (cabinet-group, thumbnail-left, same-customer grouping, cabinet photo) — incremental.
 
 **Pattern applied this round:** the `next`/`act` fields on the status SOTs (`HSTATUS_CFG` / `FSTATUS_CFG`) — the "ให้พนักงานทำอะไรต่อ" hint rendered under the status pill (🔔 + rose when an action is due). Because it lives in the SOT, it surfaces on every list/detail that reads the status — extend the same way for the remaining surfaces.
