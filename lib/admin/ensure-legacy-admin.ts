@@ -100,6 +100,11 @@ export async function ensureLegacyAdminRow(
     adminStatusCS: "0",
     adminDel: "0",
     adminIDCreate: opts.createdBy || "system",
+    // never inherit the template row's avatar — a new staff has no photo, and a
+    // bare legacy filename ("user.jpg" or another admin's upload) is what crashed
+    // next/image on 2026-06-22. Empty = "no photo" → UI fallback (see
+    // lib/admin/usable-image-src.ts).
+    adminPicture: "",
     // clear every secret / personal / numeric-org field copied from the template
     adminPass: "",
     bearer_token: "",

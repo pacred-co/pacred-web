@@ -72,6 +72,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { usableImageSrcOr } from "@/lib/admin/usable-image-src";
 
 export const dynamic = "force-dynamic";
 
@@ -332,9 +333,9 @@ export default async function AdminProfilePage({
   // ── Derived display values ──────────────────────────────────────
   const fullName = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || "(ยังไม่มีชื่อ)";
   const nickname = x?.nickname ?? x?.display_name ?? null;
-  const avatar   = p.avatar_url && p.avatar_url.trim() !== ""
-    ? p.avatar_url
-    : "/legacy/pcs/admin/images/user.jpg";
+  // Coerce a bare/typo'd avatar_url (legacy "user.jpg", or a filename typed into
+  // the edit form) to the real placeholder PATH so the <img> never breaks.
+  const avatar   = usableImageSrcOr(p.avatar_url, "/legacy/pcs/admin/images/user.jpg");
 
   const companyBadge = nameCompany(x?.company);
   const typeBadge    = nameEmployeeType(x?.employee_type);

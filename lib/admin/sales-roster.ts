@@ -17,6 +17,7 @@
  */
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isUsableImageSrc } from "@/lib/admin/usable-image-src";
 import { logger } from "@/lib/logger";
 
 const SCOPE = "sales-roster";
@@ -32,7 +33,10 @@ export type SalesRep = {
   phone: string;
   /** Display phone (0xx-xxx-xxxx). */
   phoneDisplay: string;
-  /** `tb_admin.adminPicture` when set, else null (UI supplies a fallback). */
+  /** `tb_admin.adminPicture` ONLY when it's a usable next/image src (a "/" path
+   *  or an http(s) URL); null otherwise — a bare legacy filename like "user.jpg"
+   *  is coerced to null so no consumer can crash next/image. UI supplies the
+   *  fallback (logo / character art / initial). */
   photo: string | null;
 };
 
@@ -87,7 +91,11 @@ export async function getActiveSalesReps(): Promise<SalesRep[]> {
       fullName: `${first} ${last}`.trim() || nick || id,
       phone: tel,
       phoneDisplay: tel ? displayPhone(tel) : "",
-      photo: pic && pic !== "" ? pic : null,
+      // Null anything next/image can't load. The old `pic !== ""` guard let a
+      // bare legacy filename ("user.jpg") through → it crashed every roster
+      // consumer's <Image> (contact-sales, sales-carousel) → home `/` error
+      // boundary on 2026-06-22. Now EVERY consumer is safe at the source.
+      photo: isUsableImageSrc(pic) ? pic : null,
     });
   }
   return reps;

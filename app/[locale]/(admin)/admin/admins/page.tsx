@@ -44,6 +44,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { usableImageSrcOr } from "@/lib/admin/usable-image-src";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAdminsAll } from "@/actions/admin/export/admins";
 import { AdminRowManage } from "./admins-row-manage-client";
@@ -661,7 +662,10 @@ export default async function AdminTablePage({
                   const x = row.extras;
                   const fullName = [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "(ยังไม่มีชื่อ)";
                   const nickname = x?.nickname ?? x?.display_name ?? null;
-                  const avatar   = p?.avatar_url && p.avatar_url.trim() !== "" ? p.avatar_url : "/legacy/pcs/admin/images/user.jpg";
+                  // Coerce a bare/typo'd avatar_url (e.g. legacy "user.jpg", or
+                  // a filename someone typed into the edit form) to the real
+                  // placeholder PATH so the <img> never shows a broken image.
+                  const avatar   = usableImageSrcOr(p?.avatar_url, "/legacy/pcs/admin/images/user.jpg");
                   const memberCode = p?.member_code ?? "—";
                   const legacyAdminId = x?.legacy_admin_id;
                   // Show the staff username (e.g. "admin_toey") so every admin reads
