@@ -90,8 +90,12 @@ value to represent "round-1-done, awaiting round-2." This is the biggest account
 - **B2 ✅ DONE (2026-06-22)** — shop AP pay-out completion: `markShopDisbursementPaid` shipped
   (actions/admin/shop-disbursement.ts · atomic '1'→'2' + slip + rollback) + pay-form + slip display on
   history/[id]. No migration. Gate 0. (0 rows on prod = flow unused yet · completes the create→pay loop.)
-- **B3 — per-order document registry** (med): read-only "เอกสารของออเดอร์" panel joining
-  `tb_receipt` + `tb_*_tax_invoice` + `customs_declarations` + slips by order key. No new stores.
+- **B3 ✅ DONE (2026-06-22)** — per-order document registry: `lib/admin/order-documents.ts`
+  (`getShopOrderDocuments` by hno→tb_shop_tax_invoice + receipt_id→tb_receipt · `getForwarderDocuments`
+  by cargo_forwarder_id→customs_declarations) + read-only `<OrderDocumentsPanel>` on the shop-order
+  admin detail. No new stores · no migration · soft-fail []. Renders clean empty-state today
+  (issuance dormant · all stores 0-row) → lights up when issuance enabled. Gate 0 · verified live.
+  FOLLOW-UP: wire `getForwarderDocuments` into forwarders/[fNo] detail (helper ready).
 - **B4 — repoint `/admin/accounting/reconcile`** off dead twins → `tb_forwarder`/`tb_wallet_hs`.
 - **B5 — generic supplier AP + expense taxonomy** (large): re-point the `disbursements.ts` stub to
   a live AP table (legacy `tb_bill`/`tb_bill_item`); capture supplier-WHT (feeds B7).
