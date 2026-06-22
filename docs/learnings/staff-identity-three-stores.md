@@ -33,6 +33,13 @@ New reusable helper **`lib/admin/ensureLegacyAdminRow(admin, {adminID, name…, 
 - UNIQUE on `adminEmail`, `adminID`, **`adminTel`** → a blank tel can collide; pick a free placeholder.
 - Many NOT-NULL-no-default columns + at least one (`bearer_token`) that `information_schema` listing missed → **cloning a template row is safer than enumerating columns**, but then you MUST override every secret/per-staff field so you don't share a token/national-id.
 
+## Follow-up (2026-06-22): admin code separated from customer PR (mig 0199)
+Owner then asked to give admins their OWN code, separate from the customer PR pool (reverses 0184). Done via:
+- **mig 0199** — `generate_member_code()` gains a staff branch: `employee_code` non-empty → mint `AD###` from its own advisory-lock + lowest-vacant scan; customer PR path kept byte-identical.
+- **re-code script** — 22 existing staff PR→AD001–AD022 (ordered by employee_code, so AD001 = พี่ป๊อป), cascading the few stored refs: `tb_forwarder_driver.fdadminid`/`fdadmincreator` (driver batch ownership) + the 2 vestigial `tb_users` stubs. Verified driver ownership stays consistent (member_code == fdadminid post-recode).
+
+**Landmine handled:** 2 staff (admin_poom, admin_pop=พี่ป๊อป-the-owner) had `tb_users` rows — but **0 customer transactional data** (probed orders/forwarder/wallet/payment/credit all = 0), so they were vestigial stubs, safe to re-code. **If a staff had been a real dual customer+staff account with orders, re-coding their member_code would have orphaned that customer data** — always probe the full customer footprint of an identity before changing its code. The freed PR slots (PR009 etc.) return to the customer pool via lowest-vacant.
+
 ## Rule to carry forward
 When a faithful-port flow "moves off" a legacy table, **grep who still READS that table before dropping the WRITE** (§0e dead-write trap, inverted). Here the readers were never migrated, so dropping the `tb_admin` write created hollow staff. A staff/identity record must be written to **every store its consumers read**, or wired so the readers union the stores.
 

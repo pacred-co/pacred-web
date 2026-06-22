@@ -13,7 +13,7 @@
 
 ## Shared anchors (the "แผนเดียวกัน / โค้ดเดียวกัน")
 - **Trunk:** everyone bases on `dave-pacred` (= the integration branch); เดฟ promotes to `main` on the owner's go.
-- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0199.**
+- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0200.** (0199 = admin AD#### code scheme — applied prod+dev 2026-06-22.)
 - **Plans:** the accounting build = [`docs/research/pay-and-accounting-gap-2026-06-21.md`](research/pay-and-accounting-gap-2026-06-21.md) (B1-B7). Port plan = [`docs/PORT_PLAN.md`](PORT_PLAN.md). UX standard = [`docs/learnings/self-explaining-row-design.md`](learnings/self-explaining-row-design.md) + AGENTS §0g/§0h.
 
 ---
@@ -26,6 +26,7 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Admin code SEPARATE from customer PR** — staff get own AD#### scheme (trigger gates on employee_code). Re-coded 22 existing staff PR→AD001–AD022 + cascaded fdadminid/fdadmincreator/tb_users. Customer PR stays clean; freed slots reclaimed. | `supabase/migrations/0199_admin_code_scheme_ad.sql` · `scripts/recode-staff-to-ad-2026-06-22.mjs` · **mig 0199 prod+dev** | main · verified (0 staff on PR · driver ownership intact · new staff→AD023) | 2026-06-22 |
 | เดฟ | **Sales-rep data CONNECT** — staff↔sales-roster across the 3 stores (profiles/admins/tb_admin). `adminCreateNew`+`adminChangeRole`+`adminSetSalesRepFlag` now mirror every staff into `tb_admin` (no hollow accounts) + auto-flag sales-role. Data-fix: pupu→rep + 4 hollow staff backfilled (0 hollow left). | `lib/admin/ensure-legacy-admin.ts` (new) · `actions/admin/admins.ts` · `tb_admin` (data) · no mig | main · verified pupu live (dropdown + public card) | 2026-06-22 |
 | ภูม | **P0 sweep** — platform-wide `tb_users` lowercase→camelCase (42703 · 16+ surfaces: reports/wallet/cron/sales-payout/notifications/customers) | reports/* · wallet · cron/refresh-active-customers · sales-payouts-tb · etc. | main · verified (user-all 158 rows) | 2026-06-22 |
 | เดฟ | Team skills: keep-context · team-collision-check + worklog | `.claude/skills/*` · this file | main | 2026-06-22 |
