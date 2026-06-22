@@ -234,7 +234,7 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 19 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
 - `debug-mantra` — every bug session starts here: reproduce → fail path → falsify → breadcrumb (no fix before reliable repro)
 - `management-talk` — translate engineer-to-engineer content for the channel (JIRA / Slack / standup / email / meeting) — for "report ส่งพี่ป๊อป"
@@ -252,6 +252,9 @@ The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.m
 - `mobile-first-verify` — render a customer surface at 360/390px + assert it's mobile-clean before pushing
 - `legacy-fidelity-check` — audit a D1 port screen against its legacy PCS original before shipping (the owner's "copy 100% first" gate)
 - `landing-conversion-audit` — pre-flight a landing page for conversion + tracking + Quality-Score before ads point at it
+- `session-continuity` — no "เสร็จ" without live-surface proof + a durable save-point so work survives context compaction within ONE session
+- `keep-context` — keep the CHAT coherent end-to-end: enumerate every part of a multi-part ask, never re-ask what's answered, run a session ledger, resurface earlier decisions
+- `team-collision-check` — before starting a build, know who's building what + catch a REAL collision (same file/table/migration#/feature) — registry `docs/team-worklog.md`
 
 When a situation matches a skill's description → invoke via the Skill tool (`skill: <name>`). Or describe the situation and let the harness match.
 
