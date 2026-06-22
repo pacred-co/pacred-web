@@ -50,15 +50,15 @@ export function LeadTriageClient({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  function saveStatus() {
+  async function saveStatus() {
     setMsg(null);
     setErr(null);
+    const ok = await confirm(
+      `ปรับสถานะ RFQ ${leadRef} เป็น "${statusLabel(nextStatus)}"${note.trim() ? " พร้อมบันทึก" : ""}?`,
+      { title: "ปรับสถานะ", confirmLabel: "บันทึก", cancelLabel: "ยกเลิก" },
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        `ปรับสถานะ RFQ ${leadRef} เป็น "${statusLabel(nextStatus)}"${note.trim() ? " พร้อมบันทึก" : ""}?`,
-        { title: "ปรับสถานะ", confirmLabel: "บันทึก", cancelLabel: "ยกเลิก" },
-      );
-      if (!ok) return;
       const res = await setFreightLeadStatus(leadRef, nextStatus, note.trim() || undefined);
       if (res.ok) {
         setMsg("บันทึกสถานะแล้ว");
@@ -70,17 +70,17 @@ export function LeadTriageClient({
     });
   }
 
-  function saveAssignee() {
+  async function saveAssignee() {
     setMsg(null);
     setErr(null);
+    const ok = await confirm(
+      assignee.trim()
+        ? `มอบหมาย RFQ ${leadRef} ให้ "${assignee.trim()}"?`
+        : `ยกเลิกการมอบหมาย RFQ ${leadRef}?`,
+      { title: "มอบหมายผู้ดูแล", confirmLabel: "บันทึก", cancelLabel: "ยกเลิก" },
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        assignee.trim()
-          ? `มอบหมาย RFQ ${leadRef} ให้ "${assignee.trim()}"?`
-          : `ยกเลิกการมอบหมาย RFQ ${leadRef}?`,
-        { title: "มอบหมายผู้ดูแล", confirmLabel: "บันทึก", cancelLabel: "ยกเลิก" },
-      );
-      if (!ok) return;
       const res = await assignFreightLead(leadRef, assignee.trim());
       if (res.ok) {
         setMsg("บันทึกผู้ดูแลแล้ว");
@@ -91,16 +91,16 @@ export function LeadTriageClient({
     });
   }
 
-  function convert() {
+  async function convert() {
     setMsg(null);
     setErr(null);
+    const ok = await confirm(
+      `สร้างใบเสนอราคา (ร่าง) จาก RFQ ${leadRef}? ` +
+        `ระบบจะสร้างใบเสนอราคาฉบับร่างให้ทีมเซลส์ตรวจ/ตั้งราคาก่อนส่ง — ยังไม่มีการส่งให้ลูกค้าหรือเรียกเก็บเงิน`,
+      { title: "แปลงเป็นใบเสนอราคา", confirmLabel: "สร้างใบร่าง", cancelLabel: "ยกเลิก" },
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        `สร้างใบเสนอราคา (ร่าง) จาก RFQ ${leadRef}? ` +
-          `ระบบจะสร้างใบเสนอราคาฉบับร่างให้ทีมเซลส์ตรวจ/ตั้งราคาก่อนส่ง — ยังไม่มีการส่งให้ลูกค้าหรือเรียกเก็บเงิน`,
-        { title: "แปลงเป็นใบเสนอราคา", confirmLabel: "สร้างใบร่าง", cancelLabel: "ยกเลิก" },
-      );
-      if (!ok) return;
       const res = await convertLeadToQuote(leadRef);
       if (res.ok && res.data) {
         await alert(

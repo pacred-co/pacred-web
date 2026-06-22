@@ -51,17 +51,17 @@ export function NotPortageCombinePanel({ rows }: { rows: NotPortageRow[] }) {
     setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
   }
 
-  function submit() {
+  async function submit() {
     setMsg(null);
     const priceNum = Number(price);
     if (selected.size === 0) { setMsg({ ok: false, text: "เลือกอย่างน้อย 1 รายการ" }); return; }
     if (!Number.isFinite(priceNum) || priceNum < 0) { setMsg({ ok: false, text: "กรอกค่าขนส่ง (บาท) ให้ถูกต้อง" }); return; }
     if (priceNum > 100_000) { setMsg({ ok: false, text: "ค่าขนส่งเกินเพดาน ฿100,000" }); return; }
+    const ok = await confirm(
+      `ยืนยันรวมค่าขนส่ง ${selected.size} รายการ เป็น ฿${priceNum.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ?`,
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        `ยืนยันรวมค่าขนส่ง ${selected.size} รายการ เป็น ฿${priceNum.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ?`,
-      );
-      if (!ok) return;
       const res = await adminCombineForwarderTransport({ fIds: [...selected], fTransportPrice: priceNum });
       if (res.ok) {
         setMsg({ ok: true, text: `รวมบิลขนส่งสำเร็จ ${res.data?.combined ?? 0} รายการ (บิล #${res.data?.batchId})` });

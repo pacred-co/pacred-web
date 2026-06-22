@@ -87,15 +87,15 @@ export function FreightThWithdrawalList({
     [rows, filter],
   );
 
-  function approve(row: CommissionWithdrawalRow) {
+  async function approve(row: CommissionWithdrawalRow) {
     if (!approvalEnabled) return;
+    const ok = await confirm(
+      `อนุมัติรายการเบิกของ ${row.earnerName}?\n` +
+        `ยอดสุทธิ ฿${baht(row.netThb)} (gross ฿${baht(row.grossThb)} · หัก ณ ที่จ่าย ฿${baht(row.whtThb)})\n\n` +
+        `การอนุมัติยังไม่จ่ายเงิน — ขั้นจ่ายจริง (โอน+สลิป) ทำที่หน้าค่าคอม Freight โดย super`,
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        `อนุมัติรายการเบิกของ ${row.earnerName}?\n` +
-          `ยอดสุทธิ ฿${baht(row.netThb)} (gross ฿${baht(row.grossThb)} · หัก ณ ที่จ่าย ฿${baht(row.whtThb)})\n\n` +
-          `การอนุมัติยังไม่จ่ายเงิน — ขั้นจ่ายจริง (โอน+สลิป) ทำที่หน้าค่าคอม Freight โดย super`,
-      );
-      if (!ok) return;
       setBusyId(row.id);
       const res = await adminApproveCommissionWithdrawal({ id: row.id });
       setBusyId(null);
@@ -107,13 +107,13 @@ export function FreightThWithdrawalList({
     });
   }
 
-  function reject(row: CommissionWithdrawalRow) {
+  async function reject(row: CommissionWithdrawalRow) {
+    const ok = await confirm(
+      `ปฏิเสธรายการเบิกของ ${row.earnerName} (฿${baht(row.netThb)})?\n` +
+        `รายการสะสมที่ผูกไว้จะถูกปล่อยกลับไปสถานะพร้อมเบิกอีกครั้ง`,
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        `ปฏิเสธรายการเบิกของ ${row.earnerName} (฿${baht(row.netThb)})?\n` +
-          `รายการสะสมที่ผูกไว้จะถูกปล่อยกลับไปสถานะพร้อมเบิกอีกครั้ง`,
-      );
-      if (!ok) return;
       setBusyId(row.id);
       const res = await adminRejectCommissionWithdrawal({
         id: row.id,

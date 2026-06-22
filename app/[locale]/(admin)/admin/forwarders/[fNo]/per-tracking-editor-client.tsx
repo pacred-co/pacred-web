@@ -242,10 +242,32 @@ export function PerTrackingEditorClient({
     let byWeight: boolean;
     let transport: number;
     if (cr) {
-      pKg = w * rateKg;
-      pCbm = v * rateCbm;
-      byWeight = comparisonOn ? kgPerCbm > threshold : pKg >= pCbm;
-      transport = comparisonOn ? (byWeight ? pKg : pCbm) : Math.max(pKg, pCbm);
+      pKg = w * rateKg;     // whole-order reference: Σweight × rate
+      pCbm = v * rateCbm;   // whole-order reference: Σcbm × rate
+      if (comparisonOn) {
+        // ค่าเทียบ forces ONE basis on the whole order → single-basis whole-order
+        // total == the per-line sum on that basis, so this is already correct.
+        byWeight = kgPerCbm > threshold;
+        transport = byWeight ? pKg : pCbm;
+      } else {
+        // NO ค่าเทียบ → EACH tracking picks its own higher basis, then summed.
+        // This is what the bill ACTUALLY charges (resolve-rate per-line · legacy
+        // forwarder.php:558 accumulates per-row fTotalPrice) — it differs from the
+        // whole-order max(Σkg×rate, Σcbm×rate) whenever trackings have mixed
+        // winning bases (Σ max(a,b) ≥ max(Σa, Σb)). Computing it per-row here makes
+        // this preview EQUAL the saved per-line total shown at the top of the page
+        // (was the 4,324.05-vs-4,083.96 mismatch the owner hit · 2026-06-22).
+        transport = rows.reduce(
+          (s, r) =>
+            s +
+            Math.max(
+              (parseFloat(r.weight) || 0) * rateKg,
+              (parseFloat(r.cbm) || 0) * rateCbm,
+            ),
+          0,
+        );
+        byWeight = pKg >= pCbm; // label hint only
+      }
     } else if (useProfile) {
       // BOTH amounts from the server (computed by the SAME engine the save runs).
       pKg = profileKgAmount;
@@ -267,6 +289,10 @@ export function PerTrackingEditorClient({
       cr, useProfile, profileRate, profileBasis,
       rateKg, rateCbm, comparisonOn, threshold, count: rows.length,
       label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
+      // perLineMax = the custom-rate, no-ค่าเทียบ, multi-tracking case where each
+      // tracking picks its own basis → the chosen total is the per-line SUM, not a
+      // single Σkg/Σcbm line (so the label must say so · 2026-06-22).
+      perLineMax: cr && !comparisonOn && rows.length > 1,
       w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
   }, [
@@ -343,9 +369,13 @@ export function PerTrackingEditorClient({
         setError(`บันทึกไม่สำเร็จ ${fails.length}/${rows.length} แถว — ${fails[0]}`);
         return;
       }
-      setSuccess(`✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่ให้แต่ละแทคแล้ว`);
+      // The save itself auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side
+      // (adminUpdateForwarderDimensions · ภูม 2026-06-22) — forward-only, only when
+      // grandTotal>0. router.refresh re-renders with the new status pill + the
+      // "สร้างใบวางบิล" button (which shows at fstatus 5/6).
+      setSuccess(`✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่ + อัปเดตสถานะให้แล้ว 🧾`);
       router.refresh();
-      setTimeout(() => setSuccess(null), 6000);
+      setTimeout(() => setSuccess(null), 8000);
     });
   }
 
@@ -476,7 +506,7 @@ export function PerTrackingEditorClient({
               <strong>{calc.pCbm == null ? "—" : baht(calc.pCbm)}</strong>
             </p>
             <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-1">
-              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : calc.useProfile ? (calc.byWeight ? "น้ำหนัก" : "ปริมาตร") : "ราคามากสุด"} → {baht(calc.transport)}
+              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : calc.perLineMax ? "ราคาสูงสุดต่อแทรคกิง (รวมทุกแทค)" : calc.useProfile ? (calc.byWeight ? "น้ำหนัก" : "ปริมาตร") : "ราคามากสุด"} → {baht(calc.transport)}
             </p>
             {/* Only fall back to the "คำนวณตอนบันทึก" note when system pricing
                 couldn't resolve a profile rate (no rate card for the tuple). */}
@@ -506,7 +536,7 @@ export function PerTrackingEditorClient({
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
 
       <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-        {pending ? "กำลังบันทึก..." : `บันทึกทุกแถว (${rows.length} แทรคกิง)`}
+        {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
       </button>
     </div>
   );

@@ -17,11 +17,22 @@
 
 name: CI
 
+# Cost-minimised (owner 2026-06-22 · GitHub Actions spending-limit pressure):
+#   - runs ONLY on the `main` release gate (PRs into main + pushes to main). The
+#     integration trunk `dave-pacred` + teammate branches rely on the local
+#     `pnpm verify` + `pnpm build` discipline (AGENTS.md §11) before every push, so
+#     gating every trunk push too would just burn minutes. Nothing reaches `main`
+#     without this job.
+#   - `paths-ignore` skips doc-only changes (the frequent docs/learnings/memory/
+#     worklog/migration-note commits don't need lint/tsc/build).
+#   - draft PRs are skipped; `concurrency` cancels superseded runs.
 on:
   pull_request:
-    branches: [main, dave]
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
   push:
-    branches: [main, dave]
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
 
 # Cancel in-flight runs when a new commit lands on the same branch/PR
 concurrency:
@@ -33,6 +44,8 @@ jobs:
     name: Lint + typecheck + unit tests + build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Skip draft PRs (still runs on every push to main + ready PRs).
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
 
     steps:
       - name: Checkout

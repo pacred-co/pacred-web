@@ -37,6 +37,7 @@ type SeedRow = {
   id: number;
   userid?: string | null;
   ftrackingchn?: string | null;
+  fstatus?: string | null;
 };
 
 type Props = {

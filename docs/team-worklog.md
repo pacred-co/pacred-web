@@ -13,7 +13,7 @@
 
 ## Shared anchors (the "แผนเดียวกัน / โค้ดเดียวกัน")
 - **Trunk:** everyone bases on `dave-pacred` (= the integration branch); เดฟ promotes to `main` on the owner's go.
-- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0199.**
+- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0201.** (0199 = admin AD#### code scheme · 0200 = customer_quotations [was ภูม's 0199, renamed on merge] — both applied prod+dev 2026-06-22.)
 - **Plans:** the accounting build = [`docs/research/pay-and-accounting-gap-2026-06-21.md`](research/pay-and-accounting-gap-2026-06-21.md) (B1-B7). Port plan = [`docs/PORT_PLAN.md`](PORT_PLAN.md). UX standard = [`docs/learnings/self-explaining-row-design.md`](learnings/self-explaining-row-design.md) + AGENTS §0g/§0h.
 
 ---
@@ -26,6 +26,12 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Integrated ภูม + ปอน** — Poom-pacred 8c (quotation /q share-link + PEAK shop-doc toggle + billing-run show-already-billed + ภูม's price-save 4→5) + InwPond007 (quote receipt-style + รหัสลูกค้า). Resolved 0199 migration collision (→0200) + auto-advance dup + quote-tab conflict (kept both). gate typecheck/lint/build/test 0 | many · mig 0200 prod+dev | main | 2026-06-22 |
+| เดฟ | **Forwarder price→bill flow** — บันทึกทุกแถว auto-advances fstatus 4→5 (รอชำระเงิน · `adminAdvanceForwarderToWaitPayment`, 4→5-only idempotent) + page-level "🧾 สร้างใบวางบิล" button at fstatus 5/6 (`createForwarderOrderBill` derives the tracking group → reuses `createBillingRunInvoice`) | `actions/admin/forwarder-step.ts` · `billing-run.ts` · `create-order-bill-button.tsx` · per-tracking editor · no mig | main | 2026-06-22 |
+| เดฟ | **Task F — zone-aware in-Thailand delivery selector** — เหมาๆ in-zone ฿100/PRF · ต่างจังหวัด/นอกเขต Flash-by-weight + J&T/ไปรษณีย์ ALL **บังคับ COD** · รับเอง ฿0. Composes existing flash-price/bkk-zip/thai-shipby-rules. | `lib/forwarder/domestic-shipping.ts`(+test) · `actions/admin/forwarder-domestic-ship.ts` · `domestic-shipping-selector.tsx` · forwarders/[fNo]/page.tsx · no mig | main | 2026-06-22 |
+| เดฟ | **Forwarder billing preview fix** — ราคานำเข้าจีน-ไทย preview now sums per-line (= the real bill 4324.05, was whole-shipment 4083.96) | `per-tracking-editor-client.tsx` · no mig | main | 2026-06-22 |
+| เดฟ | **Confirm-dialog fix** — `await confirm()` was INSIDE `startTransition` → dialog never opened → buttons silently dead (forwarder step ถอย/ขยับ + 11 more handlers: cnt-cost · freight quote/lead · withdrawal · mark-ordered · lead-kanban · tag-chips…). Moved confirm BEFORE the transition. Live-verified dialog opens. | `forwarder-step-revert.tsx` + 9 files · no mig | main · verified live | 2026-06-22 |
+| เดฟ | **Admin code SEPARATE from customer PR** — staff get own AD#### scheme (trigger gates on employee_code). Re-coded 22 existing staff PR→AD001–AD022 + cascaded fdadminid/fdadmincreator/tb_users. Customer PR stays clean; freed slots reclaimed. | `supabase/migrations/0199_admin_code_scheme_ad.sql` · `scripts/recode-staff-to-ad-2026-06-22.mjs` · **mig 0199 prod+dev** | main · verified (0 staff on PR · driver ownership intact · new staff→AD023) | 2026-06-22 |
 | เดฟ | **Sales-rep data CONNECT** — staff↔sales-roster across the 3 stores (profiles/admins/tb_admin). `adminCreateNew`+`adminChangeRole`+`adminSetSalesRepFlag` now mirror every staff into `tb_admin` (no hollow accounts) + auto-flag sales-role. Data-fix: pupu→rep + 4 hollow staff backfilled (0 hollow left). | `lib/admin/ensure-legacy-admin.ts` (new) · `actions/admin/admins.ts` · `tb_admin` (data) · no mig | main · verified pupu live (dropdown + public card) | 2026-06-22 |
 | ภูม | **P0 sweep** — platform-wide `tb_users` lowercase→camelCase (42703 · 16+ surfaces: reports/wallet/cron/sales-payout/notifications/customers) | reports/* · wallet · cron/refresh-active-customers · sales-payouts-tb · etc. | main · verified (user-all 158 rows) | 2026-06-22 |
 | เดฟ | Team skills: keep-context · team-collision-check + worklog | `.claude/skills/*` · this file | main | 2026-06-22 |
@@ -36,9 +42,10 @@
 | เดฟ | Payment-loop closure (D1 wallet-removal · A4 2-round · slip-queue 1-row · PDF slips) | `actions/admin/wallet-hs.ts` · `tb-bulk.ts` · mig 0197/0198 | main | 2026-06-22 |
 
 ## 🟡 NEXT / QUEUED (reserved so no one else starts it)
+> **OWNER WORK-SPLIT 2026-06-22:** "บัญชี + โกดัง ให้ภูมิทำ" → **accounting (Phase B · 7 menus · task #43) + warehouse (โกดัง) are ภูม's lane.** เดฟ does NOT start them (hand off cleanly · no collision). NEXT FREE migration = **0201**.
+>
 | Dev | Feature | Will touch (files / tables / migration#) | Note |
 |---|---|---|---|
-| เดฟ | Accounting **B1** — wire VAT into AR billing-run | `actions/admin/billing-run.ts` · `tb_forwarder_invoice` (extend) · **mig 0199** | money+migration · D5-gated (done) · do FRESH-CONTEXT (money path) |
-| เดฟ | Accounting **B3+** — wire `getForwarderDocuments` into the forwarder/[fNo] detail | `forwarders/[fNo]/page.tsx` (faithful customer-port · light add) | helper ready · small follow-up |
-| 🔴 **COLLISION** | Accounting **B4** — reconcile repoint off dead twins | `accounting/reconcile/page.tsx` | **IN ภูม's ACTIVE dead-twin/column sweep lane** — coordinate with ภูม BEFORE touching (don't both rewrite the same money-reconcile queries · 42703 risk). |
-| _open_ | B5 supplier AP · B6 bank reconcile · B7 ภพ.30/ภงด.53 | per the gap doc | large · multi-session |
+| **ภูม** | **Accounting Phase B (ALL)** — B1 VAT→AR billing-run (`computeTaxForMode` → billing-run · tb_forwarder_invoice extend · **mig 0201**) · B3+ wire `getForwarderDocuments` into forwarder/[fNo] · B4 reconcile repoint off dead twins · B5 supplier AP · B6 bank reconcile · B7 ภพ.30/ภงด.53 | `actions/admin/billing-run.ts` · `accounting/*` · `lib/admin/order-documents.ts` (helper ready) · gap doc `docs/research/pay-and-accounting-gap-2026-06-21.md` | owner-assigned · money+migration · the helpers B2/B3 already shipped (reuse) |
+| **ภูม** | **Warehouse (โกดัง)** — `/admin/warehouse/*` · intake/measure/sack/ship flows | `admin/warehouse/*` · `tb_*` warehouse tables | owner-assigned |
+| _open_ | ปอน's quotation receipt palette → fold into `components/quote/quote-paper.tsx` (cosmetic) | `quote-paper.tsx` | low-pri cosmetic follow-up from the merge |

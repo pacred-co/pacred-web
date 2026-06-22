@@ -4,6 +4,9 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { ForwarderStepRevert } from "./forwarder-step-revert";
+import { DomesticShippingSelector } from "./domestic-shipping-selector";
+import { domesticShippingOptions } from "@/lib/forwarder/domestic-shipping";
+import { CreateOrderBillButton } from "./create-order-bill-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -1048,6 +1051,43 @@ async function tryRenderTbForwarder(
             <ForwarderStepRevert fid={r.id} fstatus={r.fstatus} />
           </div>
         )}
+
+        {/* ── สร้างใบวางบิล รายตัว (owner 2026-06-22) — shows at รอชำระเงิน/เตรียมส่ง
+           (fstatus 5/6) · mints the bill for the whole tracking group → send to
+           collect. Self-gates by fstatus. ── */}
+        <div className="mt-3">
+          <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} />
+        </div>
+
+        {/* ── จัดส่งในไทย — zone-aware smart selector (task F · owner 2026-06-22):
+           เหมาๆ in-zone · ต่างจังหวัด/นอกเขต บังคับเก็บปลายทาง · รับเอง. Options
+           computed server-side from THIS order's delivery address; the save
+           re-derives + validates (action gates RBAC ops/accounting/super/warehouse). ── */}
+        {(() => {
+          const dom = domesticShippingOptions({
+            addressID: isSelfPickup ? "PCS" : null,
+            zip: r.faddresszipcode,
+            province: r.faddressprovince,
+            amphoe: r.faddressdistrict,
+            weightKg: Number(r.fweight) || 0,
+            width: Number(r.fwidth) || 0,
+            length: Number(r.flength) || 0,
+            height: Number(r.fheight) || 0,
+          });
+          const addrText = [r.faddresssubdistrict, r.faddressdistrict, r.faddressprovince, r.faddresszipcode]
+            .map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
+          return (
+            <div className="mt-4">
+              <DomesticShippingSelector
+                fId={r.id}
+                zone={dom.zone}
+                options={dom.options}
+                currentCarrier={r.fshipby}
+                addressText={addrText}
+              />
+            </div>
+          );
+        })()}
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}

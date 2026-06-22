@@ -39,14 +39,14 @@ export function CntCostEditor({ cntId, rows, cntAmount }: { cntId: number; rows:
   const diff = cntAmount - totalCost;
   const dirty = rows.filter((r) => Number(costs[r.id]) !== r.fcosttotalprice && Number.isFinite(Number(costs[r.id])));
 
-  function submit() {
+  async function submit() {
     setMsg(null);
     const changed = dirty.map((r) => ({ fid: r.id, cost: Number(costs[r.id]) }))
       .filter((u) => Number.isFinite(u.cost) && u.cost >= 0);
     if (changed.length === 0) { setMsg({ ok: false, text: "ไม่มีรายการที่แก้ไข" }); return; }
+    const ok = await confirm(`ยืนยันปรับต้นทุน ${changed.length} รายการ ในตู้นี้ (ตู้จ่ายค่าตู้แล้ว)?`);
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(`ยืนยันปรับต้นทุน ${changed.length} รายการ ในตู้นี้ (ตู้จ่ายค่าตู้แล้ว)?`);
-      if (!ok) return;
       const res = await adminUpdatePaidContainerCost({ cntId, updates: changed });
       if (res.ok) {
         setMsg({ ok: true, text: `ปรับต้นทุนสำเร็จ ${res.data?.updated ?? 0} รายการ${res.data?.failed ? ` · ล้มเหลว ${res.data.failed}` : ""}` });

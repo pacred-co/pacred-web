@@ -105,17 +105,17 @@ function RateCardAutoFill({
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  function fire() {
+  async function fire() {
     setErr(null);
     setDone(null);
+    const ok = await confirm(
+      replaceExisting && itemCount > 0
+        ? `จะ "ล้าง" รายการเดิม ${itemCount} รายการ แล้วเติมราคาใหม่จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) — ยืนยัน?`
+        : `เติม line items จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) เข้าใบเสนอราคานี้?`,
+      { title: "เติมราคาจาก rate card", confirmLabel: "เติมราคา", cancelLabel: "ยกเลิก" },
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        replaceExisting && itemCount > 0
-          ? `จะ "ล้าง" รายการเดิม ${itemCount} รายการ แล้วเติมราคาใหม่จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) — ยืนยัน?`
-          : `เติม line items จาก rate card (${incoterm} · ${TRANSPORT_MODE_LABEL[mode]}) เข้าใบเสนอราคานี้?`,
-        { title: "เติมราคาจาก rate card", confirmLabel: "เติมราคา", cancelLabel: "ยกเลิก" },
-      );
-      if (!ok) return;
       const res = await adminComposeQuoteFromRateCard({
         freight_quote_id: quoteId,
         mode, incoterm, deliveryTruck: truck, tier,

@@ -36,18 +36,18 @@ export function MissingItemReportCard({ fid }: { fid: number }) {
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function onSubmit() {
+  async function onSubmit() {
     setError(null);
     const trimmed = detail.trim();
     if (trimmed.length < 5) {
       setError("กรุณาอธิบายปัญหาอย่างน้อย 5 ตัวอักษร");
       return;
     }
+    const ok = await confirm(
+      "ส่งเรื่องแจ้งของไม่ครบ/เสียหายให้ทีมงานตรวจสอบ?\nทีมงานจะติดต่อกลับโดยเร็วที่สุด",
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await confirm(
-        "ส่งเรื่องแจ้งของไม่ครบ/เสียหายให้ทีมงานตรวจสอบ?\nทีมงานจะติดต่อกลับโดยเร็วที่สุด",
-      );
-      if (!ok) return;
       const res = await submitMissingItemReport({ fid, kind, detail: trimmed });
       if (res.ok) {
         setDone(true);

@@ -982,3 +982,17 @@ The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `
 **Why this matters next time:** RUN this live-query sweep whenever a wave touches many admin pages, before declaring "พร้อมใช้งานจริง". A green gate ≠ working queries. When you ADD a `tb_users` column to a select, alias it (`x:realName`) and verify the real case (`select("*").limit(1)`→keys). And destructure+surface list-query errors (the §0c banner) so the next one screams instead of looking like data loss.
 
 **Cross-links:** the `pacred-live-query-sweep` workflow · the userimage→userPicture entry above · AGENTS.md §0c/§0e · the camelCase tb_admin sweep (Wave 25).
+
+## [2026-06-22] Heavy dev-HMR churn emits a WRONG-LENGTH HMAC token → capability link 404s (NOT a code bug)
+
+**Context:** Live-verifying the new ใบเสนอราคา public share-link `/q/[token]` (mirrors receipt `/r/[token]`). Clicking "คัดลอกลิงก์ให้ลูกค้า" produced `…/q/2-f650b0b0bc0a0022426fefb256359c5f3c`; opening it → **404 (notFound)**.
+
+**Symptom:** the token's hmac segment was **34 hex chars** when `signQuoteToken` slices to exactly 32 (`createHmac(...).digest("hex").slice(0,32)`), and `verifyQuoteToken`'s regex requires `[0-9a-f]{32}` → rejected the 34-char token → `notFound()` → 404. The bad hmac shared the right secret's prefix/suffix with a 2-char "0b" inserted mid-string (a *different* secret would give a totally different digest — so the secret was correct, the output was just corrupted).
+
+**Root cause:** the dev server had compiled `quote-token.ts` / `save-quotation.ts` **out of sync** under this session's heavy churn (2 cherry-picks + a CSS edit + ~10 rapid reloads). On-disk code was correct (slice 32, confirmed by hand-replicating the HMAC = 32 hex); the *running compiled module* emitted 34. Same class as the transient `No intl context at LocaleSwitcher` **500s** that became **200s** a few requests later on the PEAK print page — both are dev Fast-Refresh compiling provider/consumer (or sign/verify) at different moments.
+
+**Fix / answer:** **restart the dev server** (`preview_stop` + `preview_start`); the fresh compile produced the correct 32-hex token and `/q/<correct-token>` → **200**, rendered the quotation. NO code change — the code was always right. A prod build (single compile) is immune; this only bites long dev sessions with many HMR cycles.
+
+**Why this matters next time:** when a freshly-generated **capability link** (HMAC `{id}-{hex}` token: receipts, quotations, any `/r//q/` style) 404s in dev, FIRST check the token's hex length against the `slice(0,N)` in the token module. Wrong length = **stale-compile artifact, not a bug** → restart the dev server + regenerate before touching code. Verify the real module logic by hand-replicating the HMAC (tsx can't import a `server-only` module). Don't "fix" correct code chasing a dev-HMR ghost.
+
+**Cross-links:** `lib/quote/quote-token.ts` (mirror of `lib/receipt/receipt-token.ts`) · the PEAK-print `.shop-peak-gutter` fullscreen fix same day (commit `7da3c989`) · session-continuity skill (the 404 was caught precisely because of "no เสร็จ without a live-surface render").

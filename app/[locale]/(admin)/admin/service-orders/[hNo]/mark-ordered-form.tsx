@@ -36,22 +36,22 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     setError(null);
 
     const ship = cShippingNumber.trim();
 
+    if (
+      !(await confirm(
+        ship.length > 0
+          ? `ยืนยันสั่งซื้อ + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nจะเขียนเลขสั่งซื้อ "${ship}" ลงทุกรายการ + แจ้งลูกค้า`
+          : `ยืนยันสั่งซื้อครบทุกร้าน + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nใช้เลขสั่งซื้อ ราย ร้าน ที่กรอกไว้ด้านบน + แจ้งลูกค้า`,
+      ))
+    )
+      return;
     startTransition(async () => {
-      if (
-        !(await confirm(
-          ship.length > 0
-            ? `ยืนยันสั่งซื้อ + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nจะเขียนเลขสั่งซื้อ "${ship}" ลงทุกรายการ + แจ้งลูกค้า`
-            : `ยืนยันสั่งซื้อครบทุกร้าน + เปลี่ยนสถานะเป็น "รอจีนจัดส่ง" (3→4)?\nใช้เลขสั่งซื้อ ราย ร้าน ที่กรอกไว้ด้านบน + แจ้งลูกค้า`,
-        ))
-      )
-        return;
       const res = await adminMarkShopOrderOrdered({
         hNo,
         cshippingnumber: ship,   // "" → flip-only (per-shop numbers kept)

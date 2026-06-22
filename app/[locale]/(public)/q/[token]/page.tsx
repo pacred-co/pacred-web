@@ -1,22 +1,26 @@
 /**
- * Public quotation view — `/q/[token]` (owner 2026-06-22).
+ * Public quotation page — `/q/[token]` (owner ภูม 2026-06-22).
  *
- * The shareable read-only render of a ใบเสนอราคา. The `[token]` is a stateless
- * base64url blob of the quote inputs (lib/quote/quote-share.ts) — the link IS
- * the quote, no DB row (matches the editor's pure-client design). A sales rep
- * builds the link from the customer-360 quote tab's "แชร์ลิงก์" button and
- * sends it to the customer, who opens this mobile-friendly page (and can print
- * / save a PDF themselves).
+ * The login-free surface a customer opens from the share-link the sales rep sent
+ * them. The ใบเสนอราคา twin of the public receipt `/r/[token]`: NO auth — the
+ * `[token]` is an unguessable HMAC capability link (`{id}-{32hex}`, see
+ * lib/quote/quote-token.ts) so the row id stays non-enumerable while the link
+ * holder can open their own quotation directly.
  *
- * No auth: the quote is customer-facing document data the rep chose to share.
- * noindex so a quotation is never search-indexed.
+ * Renders the EXACT same `<QuoteCard>` the admin tool renders, from the STORED
+ * `QuoteModel` payload (no recompute) → the customer sees the same numbers the
+ * sales rep saw. The only extra here is a print/download toolbar (print-hidden).
  */
 
-import { PublicQuoteView } from "./public-quote-view";
+import { notFound } from "next/navigation";
+import { QuoteCard } from "@/components/quote/quote-paper";
+import { loadQuotation } from "@/lib/quote/load-quotation";
+import { verifyQuoteToken } from "@/lib/quote/quote-token";
+import PublicQuoteToolbar from "./public-quote-toolbar";
 
-// Renders under the (public) layout (NavBar reads cookies) → force-dynamic.
 export const dynamic = "force-dynamic";
 
+// A quotation (price + customer PII) must never be indexed.
 export const metadata = {
   title: "ใบเสนอราคา — Pacred",
   robots: { index: false, follow: false },
@@ -28,5 +32,22 @@ export default async function PublicQuotePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  return <PublicQuoteView token={token} />;
+
+  // Capability gate: a valid HMAC token resolves to a quotation id; anything
+  // malformed / forged / tampered → 404 (no enumeration, no info leak).
+  const id = verifyQuoteToken(token);
+  if (id === null) notFound();
+
+  const quote = await loadQuotation(id);
+  if (!quote) notFound();
+
+  return (
+    <div className="min-h-screen bg-slate-100 print:bg-white">
+      <div id="publicQuoteDoc" className="mx-auto max-w-3xl px-2 py-4 sm:px-4 print:max-w-none print:p-0">
+        <QuoteCard model={quote.model} />
+      </div>
+
+      <PublicQuoteToolbar model={quote.model} />
+    </div>
+  );
 }

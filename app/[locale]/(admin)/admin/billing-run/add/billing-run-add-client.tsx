@@ -98,8 +98,13 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     [customers, selectedUserid],
   );
 
-  // Hide already-billed rows by default (legacy hid them implicitly)
-  const visibleForwarders = useMemo(
+  // Show EVERY eligible row — incl. ones already on an invoice — so staff SEE the
+  // billed status (no more "ขึ้นบ้างไม่ขึ้นบ้าง") and can RE-BILL a wrongly-issued one
+  // (ภูม 2026-06-22 "เผื่อวางบิลผิดต้องวางใหม่"). Already-billed rows are badged + NOT
+  // auto-selected; ticking one re-bills (warned at confirm).
+  const visibleForwarders = useMemo(() => eligible ?? [], [eligible]);
+  // The default-selectable set = rows NOT yet on an invoice (toggle-all + auto-tick).
+  const billableForwarders = useMemo(
     () => (eligible ?? []).filter((f) => !f.already_billed),
     [eligible],
   );
@@ -116,7 +121,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
 
   function toggleAll(checked: boolean) {
     if (checked) {
-      setSelectedIds(new Set(visibleForwarders.map((f) => f.id)));
+      // "เลือกทั้งหมด" ticks only NOT-yet-billed rows — re-billing an already-billed
+      // row must be a deliberate per-row tick (it creates a 2nd invoice).
+      setSelectedIds(new Set(billableForwarders.map((f) => f.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -238,12 +245,21 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     const zeroIds = (eligible ?? [])
       .filter((f) => selectedIds.has(f.id) && isZeroTransport(f) && !((overrides[String(f.id)] ?? 0) > 0))
       .map((f) => f.id);
+    // Re-bill guard (ภูม 2026-06-22) — selected rows ALREADY on a non-cancelled
+    // invoice. Allowed (เผื่อวางบิลผิดต้องวางใหม่) but a new invoice does NOT void
+    // the old one, so warn explicitly to avoid an accidental double-bill.
+    const rebillIds = (eligible ?? [])
+      .filter((f) => selectedIds.has(f.id) && f.already_billed)
+      .map((f) => f.id);
 
     // §0f confirm-before-mutate (money action · ออกเอกสารวางบิลจริง).
     const warn =
-      zeroIds.length > 0
+      (rebillIds.length > 0
+        ? `🧾 มี ${rebillIds.length} รายการที่ "ออกใบวางบิลแล้ว" (${rebillIds.map((id) => `#${id}`).join(", ")}) — ออกใหม่จะได้ใบเพิ่มอีก 1 ใบ (ใบเก่าไม่ถูกยกเลิกอัตโนมัติ) · ถ้าใบเก่าผิดควรไปยกเลิกก่อน\n\n`
+        : "") +
+      (zeroIds.length > 0
         ? `⚠️ มี ${zeroIds.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ${zeroIds.map((id) => `#${id}`).join(", ")}\nควรตรวจสอบ/วัดที่โกดังก่อน — ถ้าจะออกบิลทั้งที่ค่าขนส่งเป็น ฿0 กดตกลง\n\n`
-        : "";
+        : "");
     const ok = await confirm(
       `${warn}ยืนยันออกใบวางบิล?\n` +
         `ลูกค้า: ${selectedCustomer?.display_name ?? selectedUserid}\n` +
@@ -416,7 +432,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                   <th className="px-3 py-2 w-8 text-center">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === visibleForwarders.length}
+                      checked={billableForwarders.length > 0 && billableForwarders.every((f) => selectedIds.has(f.id))}
                       onChange={(e) => toggleAll(e.target.checked)}
                     />
                   </th>
@@ -467,6 +483,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                           title="ค่านำเข้า/ขนส่งเป็น ฿0 — ยังไม่ได้วัด หรือยังไม่ตั้งราคา · อาจเก็บเงินขาด · ตรวจสอบก่อนออกบิล"
                         >
                           ⚠️ ค่าขนส่ง ฿0
+                        </span>
+                      )}
+                      {f.already_billed && (
+                        <span
+                          className="ml-1 inline-block rounded bg-orange-200 px-1 py-0.5 text-[11px] font-semibold text-orange-900 align-middle"
+                          title="รายการนี้ออกใบวางบิลไปแล้ว — ติ๊กเพื่อออกใบใหม่ได้ (เผื่อใบเก่าผิด) · ควรยกเลิกใบเก่าก่อนเพื่อกันออกซ้ำ"
+                        >
+                          🧾 ออกใบแล้ว
                         </span>
                       )}
                     </td>
