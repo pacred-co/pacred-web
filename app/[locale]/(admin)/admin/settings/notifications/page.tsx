@@ -43,15 +43,20 @@ export default async function AdminNotificationsSettingsPage() {
 
   // Look up the role badges so the page can show "you'll receive the
   // sales digest because you have role X" hint.
-  const { data: adminRow, error: adminRowErr } = await admin
+  // `admins` is one row PER (profile_id, role) grant — fetch all active
+  // roles for this admin so the digest hint can name any role that opts
+  // them into a notification. (Column is `role` singular, not `roles`.)
+  const { data: adminRows, error: adminRowErr } = await admin
     .from("admins")
-    .select("roles")
+    .select("role")
     .eq("profile_id", user.id)
-    .maybeSingle<{ roles: string[] }>();
+    .eq("is_active", true);
   if (adminRowErr) {
     console.error(`[admins list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
   }
-  const roles = adminRow?.roles ?? [];
+  const roles = ((adminRows ?? []) as { role: string | null }[])
+    .map((r) => r.role)
+    .filter((r): r is string => !!r);
 
   const initial = {
     line:         profile.notify_channels?.line         ?? true,
