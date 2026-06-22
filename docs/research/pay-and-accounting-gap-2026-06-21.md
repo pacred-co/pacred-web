@@ -87,8 +87,9 @@ value to represent "round-1-done, awaiting round-2." This is the biggest account
   the billing-run create form, computed via `computeTaxForMode`. Migration: extend
   `tb_forwarder_invoice` (service_type/goods_amount/service_amount/vat7_amount) — don't fork a new
   table. **D5-gated** (ใบขน VAT base: service-only vs margin).
-- **B2 — shop AP pay-out completion** (small, unblocks): add `markShopDisbursementPaid` by copying
-  `adminMarkSalesPayoutPaidTb` (atomic '1'→'2' + slip). No migration. **SAFE / decision-free.**
+- **B2 ✅ DONE (2026-06-22)** — shop AP pay-out completion: `markShopDisbursementPaid` shipped
+  (actions/admin/shop-disbursement.ts · atomic '1'→'2' + slip + rollback) + pay-form + slip display on
+  history/[id]. No migration. Gate 0. (0 rows on prod = flow unused yet · completes the create→pay loop.)
 - **B3 — per-order document registry** (med): read-only "เอกสารของออเดอร์" panel joining
   `tb_receipt` + `tb_*_tax_invoice` + `customs_declarations` + slips by order key. No new stores.
 - **B4 — repoint `/admin/accounting/reconcile`** off dead twins → `tb_forwarder`/`tb_wallet_hs`.
