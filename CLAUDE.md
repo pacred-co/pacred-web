@@ -3,6 +3,23 @@
 
 ---
 
+# 🚚 2026-06-23 (ภูม) — โกดัง/คนขับ fidelity: รับเองหน้าโกดัง tab + batch สถานะไหลตามงาน (auto-complete) + รูป1 กางข้อมูล/tab-4 → Poom-pacred · read FIRST
+
+> **🏁 SAVE-POINT (ภูม: "เซฟ Poom-pacred · พรุ่งนี้ไปทำต่อที่คอมที่ทำงาน · อัพเดตต่อเนื่อง").** Branch **Poom-pacred = `8a643a89`** (= HEAD · pushed · clean · local==origin). คอมที่ทำงาน resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · ห้าม `| tail` — pipe กลบ exit code). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod pw อยู่ใน chat เท่านั้น · **prod = เดฟ จัดการ (ผม read-only)** · mig DEV เท่านั้น · NEXT FREE = 0201. **กฎ: push เฉพาะ Poom-pacred · ห้ามทำงานบัค งานหาย · อ่าน legacy จาก source จริงก่อนเคลม fidelity (§0b · legacy = `C:\xampp\htdocs\pcscargo\member\pcs-admin\`).**
+>
+> **✅ งานวันนี้ (owner lane = โกดัง/คนขับ · พี่ป๊อปบ่น "ไม่เหมือน pcs ทำงานไม่ได้"):**
+> - **(1) รับเองหน้าโกดัง tab** (`7d82ee1c`) — `/admin/drivers/new` เพิ่มแท็บที่ขาด (legacy `forwarder-driver.php?page=add&q=pcs` · `fShipBy IN ('PCS','2','4')` = รับเอง/ไปรษณีย์/J&T). action ใหม่ `actions/admin/forwarder-self-pickup.ts markForwarderSelfPickupDelivered` ปิดงาน fstatus 6→7 + รูป (`fphotoend`/`fdatestatus7`) + earn-trigger + status-log (legacy SQL :1328) · gate `canAnyRoleFlipFstatus('6','7')` ตรงกับ path คนขับ (กัน ops bypass). **แก้บั๊ก:** หน้าเดิมเอา PCS/2/4 ไปปนในลิสต์มอบคนขับ → แยก 2 แท็บตาม filter legacy (line 726/729) แบ่งครบ ไม่ทับ ไม่หาย.
+> - **(2) 🔴 batch สถานะไม่ sync (รูป2 bug)** (`8a643a89`) — คนขับส่งครบ 2/2 (item ส่งสำเร็จ · fwd fstatus 7) แต่ batch header ค้าง "กำลังดำเนินการ" → ต้องปรับมือ. เพิ่ม `lib/admin/driver-batch-complete.ts maybeAutoCompleteDriverBatch()` — ทุก item ในรอบ `fdistatus='2'` → batch `fdstatus 1→2` **อัตโนมัติ** (legacy `forwarder-driver-w.php:959-968` + `forwarder-driver.php:1416-1424` · ใช้ `fdistatus='2'` แทน legacy `fPhotoEnd<>''` เพราะเราให้ส่งโดยไม่บังคับรูป). wire เข้า `markDriverItemDelivered` (driver-work.ts) + `removeItemFromBatch` (driver-batches.ts) · TOCTOU `.eq('fdstatus','1')` · best-effort. **สถานะไหลตามงานแล้ว — ปรับมือ = ฉุกเฉินเท่านั้น.**
+> - **(3) รูป1 PCS-style** (`8a643a89`) — driver-tab + pickup-tab **กางแทรคกิ้งออกเต็มทุกกลุ่ม** (เลิกซ่อนหลังปุ่ม "ดูแทรคกิ้ง") · เพิ่ม **tab 4 "เตรียมส่ง · อนุมัติจ่ายแล้ว X/Y"** (legacy line 762 = reconciliation indicator · numerator=ยังไม่มอบ+ออกส่งแล้ว · denom=fstatus6 paydeposit-ok · ปกติ X==Y) ลิงก์ `/admin/forwarders?status=6` + badge "กำลังจัดส่ง N" (out-for-delivery).
+>
+> **🔎 Status-flow audit (ภูม "เช็คสถานะค้าง/บัค"):** **driver-batch flow ครบแล้ว** = `1` กำลังดำเนินการ → `2` สำเร็จ (auto · my fix) / → `3` ไม่สำเร็จ (existing cron `expire-driver-assignments` flip 1→3 เมื่อ endtime ผ่าน · guard `.eq('1')` ไม่ชน auto-complete) · item→fwd `7` flip มีอยู่แล้ว (driver-work.ts). **edge case เหลือ (faithful = legacy ไม่ auto · รอ ภูม เคาะ):** รอบที่ส่งบาง-fail บาง (ไม่มี pending) ค้าง '1' จน deadline → cron flip '3' (legacy ก็ทำงี้). fstatus อื่น (4→5 price-save · 5→6 paid sync · scan arrival 1/2/3→4) แก้ไป session ก่อนแล้ว.
+>
+> **⚠️ ยังไม่ browser-test สด (ผม login admin ไม่ได้):** ให้ ภูม เทสบน DEV — (a) `/admin/drivers/new?tab=pickup` โชว์เฉพาะ PCS/2/4 · driver-tab ไม่มี PCS/2/4 · กางข้อมูลเต็ม · tab-4 X/Y · (b) คนขับส่งครบรอบ → batch เด้งเป็น "สำเร็จ" เอง (ไม่ต้องปรับมือ) · (c) ติ๊กรับเอง+กดบันทึกส่งสำเร็จ → fwd เป็น "ส่งแล้ว" 7.
+>
+> **➡️ NEXT (เลน ภูม):** Accounting Phase B (B1 VAT→AR billing-run · mig 0201 · เงิน · B4 ซ่อม `/admin/accounting/reconcile` repoint `tb_forwarder`/`tb_wallet_hs`) · warehouse report "ยอดพนักขับรถ" (legacy `report-driver.php` · read-only) · ปุ่ม "บันทึกการโอน+แนบสลิปแทนลูกค้า" (รอ ภูม เคาะ). 🔴 carryover เดฟ prod-backfill: บิล paid ก่อน fix sync → forwarder ค้าง 5 + ใบเสร็จ ค้าง 3.
+
+---
+
 # 🧾 2026-06-22 (ภูม session · ย้ายไปทำต่อที่บ้าน) — billing-run UX fixes + merge dave (task F · admin-code AD#### · quote) + ⚠️ warehouse/driver fidelity-audit OVER-COUNTS (verify ก่อน build) → Poom-pacred · read FIRST
 
 > **🏁 SAVE-POINT (ภูม: "เซฟขึ้น Poom-pacred · ไปทำต่อที่บ้าน · สรุปให้คอมบ้านทำงานต่อเนื่อง").** Branch **Poom-pacred = `fc039bc9`** (= HEAD · pushed · clean). คอมบ้าน resume: `git fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · eslint 0** (อ่าน exit จริง · ห้าม `| tail`). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · 🔑 **prod pw อยู่ใน chat เท่านั้น ห้ามเขียนลงไฟล์** · prod ref yzljakczhwrpbxflnmco · **prod = เดฟ จัดการ (ผม read-only diagnosis)** · **mig apply DEV เท่านั้น · NEXT FREE = 0201** (เดฟ ใช้ 0199 admin-code-AD#### + 0200 customer_quotations ไปแล้ว). **กฎ: push เฉพาะ Poom-pacred · ห้ามทำงานบัค งานหาย · อธิบายเป็นภาษาพูด.**
