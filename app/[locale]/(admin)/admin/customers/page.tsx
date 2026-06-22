@@ -218,7 +218,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     .select(`
       userID, userName, userLastName, userCompany,
       userTel, userEmail, userActive, userStatus, adminIDSale, userRegistered,
-      coID, userLineID, userFacebook, userBirthday, userimage
+      coID, userLineID, userFacebook, userBirthday, userPicture
     `, { count: "exact" })
     .order("userRegistered", { ascending: false })
     .range(from, to);
@@ -269,7 +269,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     userLineID: string | null;
     userFacebook: string | null;
     userBirthday: string | null;
-    userimage: string | null;
+    userPicture: string | null;
   };
   const rows = (data ?? []) as Row[];
 
@@ -277,13 +277,14 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const userIds = rows.map((r) => r.userID);
 
   // Self-explaining-row standard (owner 2026-06-22): a profile avatar
-  // thumbnail as the leftmost element of each row. tb_users.userimage stores
+  // thumbnail as the leftmost element of each row. tb_users.userPicture stores
   // a bare legacy filename (e.g. "PCS06_169...jpg") → resolve to a 1h signed
-  // URL via the "profile" bucket. Only the current page's rows (≤50) are
-  // resolved (server-side pagination · resolveLegacyUrlMap fans the storage
-  // round-trips out concurrently so it doesn't serialize the render).
+  // URL via the "profile" bucket. (Column is `userPicture` — NOT `userimage`;
+  // selecting the wrong name 42703-errors the whole list = blank "ไม่พบลูกค้า".)
+  // Only the current page's rows (≤50) are resolved (server-side pagination ·
+  // resolveLegacyUrlMap fans the storage round-trips out concurrently).
   const avatarByUser = await resolveLegacyUrlMap(
-    rows.map((r) => ({ id: r.userID, filename: r.userimage })),
+    rows.map((r) => ({ id: r.userID, filename: r.userPicture })),
     "profile",
   );
 

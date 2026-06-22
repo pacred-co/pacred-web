@@ -132,7 +132,7 @@ type HRow = {
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
-  userTel: string | null; userEmail: string | null; userImage: string | null;
+  userTel: string | null; userEmail: string | null; userPicture: string | null;
   adminIDSale: string | null; userCompany: string | null;
 };
 type ORow = {
@@ -174,7 +174,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
-    .select("userID,userName,userLastName,userTel,userEmail,userImage,adminIDSale,userCompany")
+    .select("userID,userName,userLastName,userTel,userEmail,userPicture,adminIDSale,userCompany")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userErr) {
@@ -256,7 +256,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
   const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
-  const userAvatar = await resolveLegacyUrl(u?.userImage, "profile").catch(() => null);
+  const userAvatar = await resolveLegacyUrl(u?.userPicture, "profile").catch(() => null);
   const addr = [r.haddressno, r.haddresssubdistrict ? `ต.${r.haddresssubdistrict}` : "", r.haddressdistrict ? `อ.${r.haddressdistrict}` : "", r.haddressprovince ? `จ.${r.haddressprovince}` : "", r.haddresszipcode]
     .filter(Boolean).join(" ");
 
