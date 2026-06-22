@@ -24,6 +24,12 @@ import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
 
+// NOTE (verified live against prod 2026-06-22): container_hs_lines has NO FK to
+// containers/hs_codes (PostgREST embed → PGRST200) → the page swallowed the
+// error → the report rendered permanently EMPTY. Also `containers` has NO `code`
+// column (it's `container_no`) and `hs_codes`'s key is `code` (NOT `hs_code`).
+// We fetch lines, then the container + hs metadata in SEPARATE queries and merge
+// in JS (robust 2-query join, no FK dependency).
 type HsLine = {
   hs_code:    string;
   qty:        number;
@@ -31,9 +37,8 @@ type HsLine = {
   value_thb:  number;
   duty_pct_used: number | null;
   container_id: string;
-  container: { code: string | null; status: string | null } | { code: string | null; status: string | null }[] | null;
-  hs:        { description: string | null; description_en: string | null } | { description: string | null; description_en: string | null }[] | null;
 };
+type ContainerMeta = { id: string; container_no: string | null; status: string | null };
 
 function thb(n: number): string {
   return "฿" + Number(n || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 });
@@ -56,19 +61,42 @@ export default async function HsCodeRevenueReport({
   const from = daysAgoIso(days);
 
   const admin = createAdminClient();
+  // 1) Fetch the HS lines (no embed — container_hs_lines has no usable FK).
   const { data, error } = await admin
     .from("container_hs_lines")
-    .select(`
-      hs_code, qty, weight_kg, value_thb, duty_pct_used, container_id,
-      container:containers!container_id ( code, status ),
-      hs:hs_codes!hs_code ( description, description_en )
-    `)
+    .select(`hs_code, qty, weight_kg, value_thb, duty_pct_used, container_id`)
     .gte("created_at", from)
     .limit(20000);
   if (error) {
     console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
   }
   const lines = (data ?? []) as unknown as HsLine[];
+
+  // 2) Container metadata (container_no / status) in a SEPARATE query, merged in JS.
+  const containerIds = Array.from(new Set(lines.map((l) => l.container_id).filter((x): x is string => !!x)));
+  const containerMap = new Map<string, ContainerMeta>();
+  if (containerIds.length > 0) {
+    const { data: ctData, error: ctErr } = await admin
+      .from("containers")
+      .select("id, container_no, status")
+      .in("id", containerIds);
+    if (ctErr) console.error(`[containers meta] failed`, { code: ctErr.code, message: ctErr.message });
+    for (const c of (ctData ?? []) as ContainerMeta[]) containerMap.set(c.id, c);
+  }
+
+  // 3) HS-code descriptions (key column = `code`, joined to line.hs_code).
+  const hsCodes = Array.from(new Set(lines.map((l) => l.hs_code).filter((x): x is string => !!x)));
+  const hsDescMap = new Map<string, string>();
+  if (hsCodes.length > 0) {
+    const { data: hsData, error: hsErr } = await admin
+      .from("hs_codes")
+      .select("code, description")
+      .in("code", hsCodes);
+    if (hsErr) console.error(`[hs_codes meta] failed`, { code: hsErr.code, message: hsErr.message });
+    for (const h of (hsData ?? []) as Array<{ code: string; description: string | null }>) {
+      hsDescMap.set(h.code, h.description ?? "");
+    }
+  }
 
   // Aggregate per HS code.
   type HsAgg = {
@@ -83,11 +111,10 @@ export default async function HsCodeRevenueReport({
   };
   const aggMap = new Map<string, HsAgg>();
   for (const l of lines) {
-    const hsMeta = Array.isArray(l.hs) ? l.hs[0] ?? null : l.hs;
-    const ctMeta = Array.isArray(l.container) ? l.container[0] ?? null : l.container;
+    const ctMeta = l.container_id ? containerMap.get(l.container_id) ?? null : null;
     const a = aggMap.get(l.hs_code) ?? {
       hs_code:         l.hs_code,
-      description:     hsMeta?.description ?? "—",
+      description:     hsDescMap.get(l.hs_code) || "—",
       line_count:      0,
       total_qty:       0,
       total_kg:        0,
@@ -102,7 +129,7 @@ export default async function HsCodeRevenueReport({
     if (l.duty_pct_used != null) {
       a.duty_pct_max = Math.max(a.duty_pct_max ?? 0, Number(l.duty_pct_used));
     }
-    if (ctMeta?.code) a.container_codes.add(ctMeta.code);
+    if (ctMeta?.container_no) a.container_codes.add(ctMeta.container_no);
     aggMap.set(l.hs_code, a);
   }
   const aggregates = Array.from(aggMap.values()).sort((a, b) => b.total_value - a.total_value);

@@ -62,18 +62,24 @@ type ShopRow = { userid: string | null; htotalpriceuser: number | string | null;
 type ForRow = { userid: string | null; ftotalprice: number | string | null; fdate: string | null };
 type PayRow = { userid: string | null; paythb: number | string | null; paydate: string | null };
 
+// NOTE on table casing (verified live against prod 2026-06-22):
+//   tb_users columns are camelCase (userID, userName, …) — a lowercase select
+//   throws 42703 "column does not exist", which the page swallows → the report
+//   renders permanently EMPTY. The three money tables (tb_header_order /
+//   tb_forwarder / tb_payment) ARE lowercase (userid, htotalpriceuser, …),
+//   so those reads + the foldByUser helper stay lowercase. Only tb_users is camelCase.
 type UserRow = {
-  userid: string | null;
-  username: string | null;
-  userlastname: string | null;
-  userstatus: string | null;
-  userregistered: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  coid: string | null;
-  shopuser: string | null;
+  userID: string | null;
+  userName: string | null;
+  userLastName: string | null;
+  userStatus: string | null;
+  userRegistered: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  coID: string | null;
+  shopUser: string | null;
   channel: string | null;
-  adminidsale: string | null;
+  adminIDSale: string | null;
 };
 
 type SP = {
@@ -109,11 +115,11 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
   const usersQ = admin
     .from("tb_users")
     .select(
-      "userid, username, userlastname, userstatus, userregistered, usertel, useremail, coid, shopuser, channel, adminidsale",
+      "userID, userName, userLastName, userStatus, userRegistered, userTel, userEmail, coID, shopUser, channel, adminIDSale",
     )
-    .gte("userregistered", `${signupFrom} 00:00:00`)
-    .lte("userregistered", `${signupTo} 23:59:59`)
-    .order("userregistered", { ascending: false, nullsFirst: false })
+    .gte("userRegistered", `${signupFrom} 00:00:00`)
+    .lte("userRegistered", `${signupTo} 23:59:59`)
+    .order("userRegistered", { ascending: false, nullsFirst: false })
     .limit(5000);
 
   const { data: usersData, error: usersErr } = await usersQ;
@@ -165,7 +171,7 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
 
   // ── 3) Build per-customer rows ────────────────────────────────────────────
   const rows = users.map((u) => {
-    const uid = u.userid ?? "";
+    const uid = u.userID ?? "";
     const shop = shopBuckets.get(uid) ?? emptyBucket();
     const imp = forBuckets.get(uid) ?? emptyBucket();
     const pay = payBuckets.get(uid) ?? emptyBucket();
@@ -198,11 +204,11 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
   // ── CSV ───────────────────────────────────────────────────────────────────
   const csvRows = rows.map((r) => ({
     userid: r.uid,
-    fullname: `${r.u.username ?? ""} ${r.u.userlastname ?? ""}`.trim(),
-    registered: r.u.userregistered ?? "",
-    shopUser: shopUserLabel(r.u.shopuser),
+    fullname: `${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim(),
+    registered: r.u.userRegistered ?? "",
+    shopUser: shopUserLabel(r.u.shopUser),
     channel: channelUserLabel(r.u.channel),
-    sale: r.u.adminidsale ?? "",
+    sale: r.u.adminIDSale ?? "",
     shop: r.shopVal,
     shopLast: r.shop.lastDate ?? "",
     import: r.impVal,
@@ -391,16 +397,16 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
                       >
                         {r.uid}
                       </Link>
-                      {r.u.userstatus === "0" && (
+                      {r.u.userStatus === "0" && (
                         <span className="ml-1 text-[11px] text-red-600">(ถูกลบ)</span>
                       )}
                       <div className="mt-0.5 text-muted">
-                        {`${r.u.username ?? ""} ${r.u.userlastname ?? ""}`.trim() || "—"}
+                        {`${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim() || "—"}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-[11px] text-muted">
-                      <div>{r.u.userregistered ?? "—"}</div>
-                      <div>{shopUserLabel(r.u.shopuser)}</div>
+                      <div>{r.u.userRegistered ?? "—"}</div>
+                      <div>{shopUserLabel(r.u.shopUser)}</div>
                       <div>{channelUserLabel(r.u.channel)}</div>
                     </td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{fmt(r.shopVal)}</td>

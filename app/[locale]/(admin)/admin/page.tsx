@@ -750,31 +750,32 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // Phase C decides whether to retire the tab or re-wire it.
     // TODO Phase C — see file header.
     case "payShop": {
+      // NOTE (verified live against prod 2026-06-22): sales_payouts has NO
+      // `amount` column (it's `amount_total`) and NO `profile_id` (so the
+      // `profiles!profile_id` embed threw PGRST200). Both errored the query →
+      // the tab silently showed nothing. The real customer link is via
+      // team_leader_id (a STAFF, not the customer) so there's no customer name
+      // to resolve here; we omit it (the table is empty on prod regardless —
+      // this just makes the query NON-ERRORING). TODO Phase C — see file header.
       const { data, error } = await admin
         .from("sales_payouts")
-        .select(`
-          id, amount, status, created_at,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
+        .select(`id, amount_total, status, created_at`)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) {
         console.warn(`[sales_payouts list] failed (soft-fail · returning empty rows)`, error);
       }
-      return ((data ?? []) as unknown as RawPayoutRow[]).map((r) => {
-        const p = pickProfile(r.profile);
-        return {
-          id: String(r.id),
-          created_at: r.created_at,
-          member_code: p?.member_code ?? null,
-          customer_name: p ? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.company_name || "—" : "—",
-          amount: Number(r.amount),
-          detail: "เบิกค่าคอม / commission",
-          link: `/admin/sales-payouts/${r.id}`,
-          status: r.status,
-        };
-      });
+      return ((data ?? []) as unknown as RawPayoutRow[]).map((r) => ({
+        id: String(r.id),
+        created_at: r.created_at,
+        member_code: null,
+        customer_name: "—",
+        amount: Number(r.amount_total ?? 0),
+        detail: "เบิกค่าคอม / commission",
+        link: `/admin/sales-payouts/${r.id}`,
+        status: r.status,
+      }));
     }
 
     // ── ลูกค้าที่ยังไม่ได้ใช้งาน — ORDER-BASED (migration 0125) ──────────
@@ -813,15 +814,10 @@ type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: st
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
-// sales_payouts (rebuilt schema · the one tab without a legacy equivalent)
-type ProfileShape       = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };
-type ProfileMaybeArray  = ProfileShape | ProfileShape[] | null;
-type RawPayoutRow       = { id: string; amount: number; status: string; created_at: string; profile: ProfileMaybeArray };
-
-function pickProfile(p: ProfileMaybeArray): ProfileShape | null {
-  if (!p) return null;
-  return Array.isArray(p) ? (p[0] ?? null) : p;
-}
+// sales_payouts (rebuilt schema · the one tab without a legacy equivalent).
+// Real cols: amount_total (NOT amount) + team_leader_id (a STAFF, not the
+// customer · no profile_id, no customer-name join here).
+type RawPayoutRow       = { id: string; amount_total: number | string | null; status: string; created_at: string };
 
 // ── Cards ──────────────────────────────────────────────────────────────────
 
