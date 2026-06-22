@@ -22,8 +22,6 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 import { adminAdvanceForwarderToWaitPayment } from "@/actions/admin/forwarder-step";
-import { createForwarderOrderBill } from "@/actions/admin/billing-run";
-import { confirm } from "@/components/ui/confirm";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -69,8 +67,6 @@ type Props = {
   /** ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff. When false
    *  the ค่าเทียบ checkbox + input are read-only and seeded from the STORED value. */
   canEditComparison: boolean;
-  /** head order fstatus — gates the "สร้างใบวางบิล" button (shown at 5/6) · 2026-06-22 */
-  headFstatus?: string;
   // ── 2026-06-19 (#1 revise) — the customer's PROFILE/SYSTEM rate, resolved
   // SERVER-SIDE (the client can't reach the rate cards). Used to show the REAL
   // breakdown when the "คิดราคาแบบกำหนดเอง" toggle is OFF (was ฿0). ─────────────
@@ -125,7 +121,6 @@ export function PerTrackingEditorClient({
   rows: rowsInit,
   customComparisonInit,
   canEditComparison,
-  headFstatus = "",
   profileRate = 0,
   profileBasis = "cbm",
   profileTransportTotal = 0,
@@ -140,7 +135,6 @@ export function PerTrackingEditorClient({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [billMsg, setBillMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Per-row recomputed price (keyed by tb_forwarder id) — surfaced after save so
   // the pricer SEES that each tracking priced on its OWN dims (owner ภูม: "ถ้า
   // แต่ละแทคมีขนาดต่างกัน มันจะคิดผิด" → the proof is a different ฿ per row).
@@ -390,29 +384,6 @@ export function PerTrackingEditorClient({
     });
   }
 
-  // สร้างใบวางบิล — mint the bill for this order's tracking group + send to collect
-  // (owner 2026-06-22). confirm() OUTSIDE startTransition (dialog-open trap).
-  async function onCreateBill() {
-    setBillMsg(null);
-    const ok = await confirm(
-      `สร้างใบวางบิลสำหรับ ${rows.length} แทรคกิง เพื่อส่งเก็บเงินลูกค้า?\n\n` +
-        `(ระบบจะออกเลขใบวางบิล + คิดยอดรวมจากทุกแทค)`,
-      { title: "สร้างใบวางบิล", confirmLabel: "สร้างบิล", cancelLabel: "ยกเลิก" },
-    );
-    if (!ok) return;
-    startTransition(async () => {
-      const res = await createForwarderOrderBill(rows.map((r) => r.id));
-      if (!res.ok) {
-        setBillMsg({ ok: false, text: res.error ?? "สร้างใบวางบิลไม่สำเร็จ" });
-        return;
-      }
-      setBillMsg({ ok: true, text: `✓ สร้างใบวางบิลแล้ว เลขที่ ${res.data?.docNo ?? ""} — ส่งเก็บเงินลูกค้าได้เลย` });
-      router.refresh();
-    });
-  }
-
-  const canBill = headFstatus === "5" || headFstatus === "6";
-
   return (
     <div className="space-y-3">
       {/* ── ORDER-level rate toggles (shared · ใช้ทุกแทค) ──
@@ -568,18 +539,10 @@ export function PerTrackingEditorClient({
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
-      {billMsg && <div className={`rounded-md border px-3 py-2 text-xs ${billMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{billMsg.text}</div>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-          {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
-        </button>
-        {canBill && (
-          <button type="button" onClick={onCreateBill} disabled={pending} className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
-            🧾 สร้างใบวางบิล (เก็บเงินลูกค้า)
-          </button>
-        )}
-      </div>
+      <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
+      </button>
     </div>
   );
 }

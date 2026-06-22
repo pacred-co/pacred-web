@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { baseTracking, filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 import { computeBillWht } from "@/lib/billing/wht";
 import {
   calcForwarderOutstanding,
@@ -1512,26 +1513,54 @@ export async function sendBillingRunNotification(
 // (those are billing-run-level adders, not per-order). Returns the doc-no.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createForwarderOrderBill(
-  fIds: number[],
+  fId: number,
   opts?: { noteForCustomer?: string },
 ): Promise<AdminActionResult<{ invoiceId: number; docNo: string }>> {
-  const ids = Array.from(new Set((fIds ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0)));
-  if (ids.length === 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+  const id = Number(fId);
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
 
-  // Resolve the customer code from the first id (createBillingRunInvoice re-checks
-  // that EVERY id belongs to this userid + is billable, so a stray id is rejected).
   const admin = createAdminClient();
   const { data: head, error: headErr } = await admin
     .from("tb_forwarder")
-    .select("userid")
-    .eq("id", ids[0])
-    .maybeSingle<{ userid: string | null }>();
+    .select("id, userid, ftrackingchn, fweight")
+    .eq("id", id)
+    .maybeSingle<{ id: number; userid: string | null; ftrackingchn: string | null; fweight: number | string | null }>();
   if (headErr) {
-    console.error("[createForwarderOrderBill head read]", { code: headErr.code, message: headErr.message, fid: ids[0] });
+    console.error("[createForwarderOrderBill head read]", { code: headErr.code, message: headErr.message, fid: id });
     return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${headErr.message}` };
   }
-  const userid = (head?.userid ?? "").trim();
+  if (!head) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+  const userid = (head.userid ?? "").trim();
   if (!userid) return { ok: false, error: "ไม่พบรหัสลูกค้าของรายการนี้" };
+
+  // Derive the whole tracking GROUP server-side (same model as the per-tracking
+  // editor: rows sharing (baseTracking, userid), MOMO หัวบิล dropped) so the bill
+  // covers every แทค of this split parcel — not just the viewed row. Falls back to
+  // the single id. createBillingRunInvoice re-validates each id (same customer +
+  // billable), so a stray sibling is rejected, not mis-billed.
+  let ids = [id];
+  const base = baseTracking(head.ftrackingchn);
+  if (base) {
+    const { data: sib, error: sibErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, fweight, userid")
+      .eq("userid", userid)
+      .ilike("ftrackingchn", `${base}%`)
+      .limit(200);
+    if (sibErr) {
+      console.error("[createForwarderOrderBill siblings]", { code: sibErr.code, message: sibErr.message, base });
+    } else {
+      const exact = ((sib ?? []) as Array<{ id: number; ftrackingchn: string | null; fweight: number | string | null; userid: string | null }>)
+        .filter((r) => baseTracking(r.ftrackingchn) === base);
+      const countable = filterCountableForwarderRows(exact, {
+        tracking: (r) => r.ftrackingchn,
+        weight: (r) => Number(r.fweight) || 0,
+        userid: (r) => r.userid ?? "",
+      });
+      const gids = countable.map((r) => r.id).filter((n): n is number => Number.isInteger(n) && n > 0);
+      if (gids.length > 0) ids = Array.from(new Set(gids.includes(id) ? gids : [...gids, id]));
+    }
+  }
 
   const today = new Date();
   const due = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);

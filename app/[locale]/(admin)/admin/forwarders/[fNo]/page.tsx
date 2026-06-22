@@ -6,6 +6,7 @@ import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { ForwarderStepRevert } from "./forwarder-step-revert";
 import { DomesticShippingSelector } from "./domestic-shipping-selector";
 import { domesticShippingOptions } from "@/lib/forwarder/domestic-shipping";
+import { CreateOrderBillButton } from "./create-order-bill-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -1050,6 +1051,13 @@ async function tryRenderTbForwarder(
             <ForwarderStepRevert fid={r.id} fstatus={r.fstatus} />
           </div>
         )}
+
+        {/* ── สร้างใบวางบิล รายตัว (owner 2026-06-22) — shows at รอชำระเงิน/เตรียมส่ง
+           (fstatus 5/6) · mints the bill for the whole tracking group → send to
+           collect. Self-gates by fstatus. ── */}
+        <div className="mt-3">
+          <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} />
+        </div>
 
         {/* ── จัดส่งในไทย — zone-aware smart selector (task F · owner 2026-06-22):
            เหมาๆ in-zone · ต่างจังหวัด/นอกเขต บังคับเก็บปลายทาง · รับเอง. Options

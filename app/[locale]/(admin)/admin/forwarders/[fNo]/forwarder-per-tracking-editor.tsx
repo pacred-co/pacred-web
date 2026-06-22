@@ -399,7 +399,6 @@ export async function ForwarderPerTrackingEditor({
       customComparisonInit={customComparisonInit}
       customComparisonValueInit={customComparisonValueInit}
       canEditComparison={canEditComparison}
-      headFstatus={r.fstatus ?? ""}
       profileRate={profileRate}
       profileBasis={profileBasis}
       profileTransportTotal={Math.round(profileTransportTotal * 100) / 100}
