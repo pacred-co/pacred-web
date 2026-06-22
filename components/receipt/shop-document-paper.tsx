@@ -60,11 +60,28 @@ export function ShopDocumentPaper({
           receipt-paper.tsx print stylesheet so the shop PEAK doc prints with
           the same safe @page margin + no chrome bleed-through. */}
       <style>{`
-        /* screen-only gray gutter so the white A4 paper floats (Peak look) */
+        /* screen-only gray gutter so the white A4 paper floats (Peak look).
+           Must be a FULLSCREEN overlay (like the legacy .print-fullscreen-overlay)
+           so it escapes the admin layout's sidebar+content column — otherwise the
+           A4 paper renders inside the .subpage column and gets squeezed off the
+           right edge (fixed 2026-06-22 · was position:static). overflow:auto (not
+           hidden) because the PEAK A4 paper is full-height and must scroll. */
         .shop-peak-gutter {
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          overflow: auto;
           background: #555;
-          min-height: 100vh;
           padding: 16px 0 64px;
+        }
+        /* float the toggle + print button top-right, always visible while
+           scrolling (mirrors .print-fullscreen-overlay > .no-print). */
+        .shop-peak-gutter > .no-print {
+          position: fixed;
+          top: 1rem;
+          right: 1rem;
+          z-index: 100000;
+          margin-bottom: 0 !important;
         }
         @media print {
           @page { size: A4 portrait; margin: 5mm; }
