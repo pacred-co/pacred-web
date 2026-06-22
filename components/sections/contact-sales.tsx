@@ -134,7 +134,7 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                 </div>
 
                 {/* Role */}
-                <div className="mt-1 text-[9px] md:text-[11px] font-black uppercase tracking-[0.08em] md:tracking-[0.10em] text-primary-600">
+                <div className="mt-1 text-[11px] md:text-[11px] font-black uppercase tracking-[0.08em] md:tracking-[0.10em] text-primary-600">
                   {t(s.roleKey)}
                 </div>
 

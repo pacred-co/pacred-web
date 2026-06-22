@@ -223,7 +223,7 @@ export default async function CustomerFreightQuoteDetailPage({
                     <td className="px-3 py-2 text-xs">{it.position}</td>
                     <td className="px-3 py-2">
                       <p>{it.description}</p>
-                      {it.note && <p className="text-[10px] text-muted mt-0.5">📝 {it.note}</p>}
+                      {it.note && <p className="text-[11px] text-muted mt-0.5">📝 {it.note}</p>}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{Number(it.quantity)}</td>
                     <td className="px-3 py-2 text-xs">{it.unit}</td>

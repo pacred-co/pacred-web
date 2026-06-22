@@ -175,7 +175,7 @@ export function CustomsModeCards() {
                   Not driven by the active-card state. */}
               {isRecommended && (
                 <div className="absolute top-3 right-3 z-20">
-                  <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
+                  <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[11px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
                     <Sparkles className="w-3 h-3" strokeWidth={2.8} />
                     {t("recommended")}
                     <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
@@ -295,7 +295,7 @@ export function CustomsModeCards() {
                         />
                         <div
                           className={[
-                            "text-[9px] md:text-[9.5px] font-bold tracking-tight uppercase",
+                            "text-[11px] md:text-[9.5px] font-bold tracking-tight uppercase",
                             isFeatured ? "text-white/70" : "text-muted",
                           ].join(" ")}
                         >
@@ -342,7 +342,7 @@ export function CustomsModeCards() {
                   <div className="mt-auto pt-1">
                     <div
                       className={[
-                        "text-[9.5px] md:text-[10px] font-bold tracking-[0.10em] uppercase mb-1.5",
+                        "text-[9.5px] md:text-[11px] font-bold tracking-[0.10em] uppercase mb-1.5",
                         isFeatured ? "text-white/65" : "text-foreground/55",
                       ].join(" ")}
                     >

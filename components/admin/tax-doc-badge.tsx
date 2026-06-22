@@ -66,7 +66,7 @@ export function TaxDocBadge({
   const mode = modeFromPref(pref);
   const meta = TAX_DOC_MODE_META[mode];
   const chip = MODE_CHIP[mode];
-  const pad = size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[11px]";
+  const pad = size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]";
 
   return (
     <span
@@ -111,7 +111,7 @@ export function JuristicWhtChip({
   size?: "sm" | "md";
 }) {
   if (!isJuristic) return null;
-  const pad = size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[11px]";
+  const pad = size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]";
   // WHT 1% only kicks in at total ≥ ฿1000 (legacy threshold). When we know the
   // total and it's under the floor, say so — otherwise just show the 1% rule.
   const belowFloor = typeof totalThb === "number" && Number.isFinite(totalThb) && totalThb < 1000;

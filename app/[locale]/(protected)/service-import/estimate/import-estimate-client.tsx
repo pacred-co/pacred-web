@@ -235,9 +235,9 @@ export function ImportEstimateClient() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-foreground">{m.label}</span>
-                      {m.comingSoon && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-bold text-neutral-600">{t("comingSoon")}</span>}
-                      {isCheapest && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><Sparkles className="h-2.5 w-2.5" />{t("cheapest")}</span>}
-                      {m.docDiscountApplied > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><FileText className="h-2.5 w-2.5" />{t("docDiscountBadge", { amount: fmt0(m.docDiscountApplied) })}</span>}
+                      {m.comingSoon && <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-bold text-neutral-600">{t("comingSoon")}</span>}
+                      {isCheapest && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700"><Sparkles className="h-2.5 w-2.5" />{t("cheapest")}</span>}
+                      {m.docDiscountApplied > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700"><FileText className="h-2.5 w-2.5" />{t("docDiscountBadge", { amount: fmt0(m.docDiscountApplied) })}</span>}
                     </div>
                     {!m.comingSoon && m.hasRate ? (
                       <div className="text-[11px] text-muted">

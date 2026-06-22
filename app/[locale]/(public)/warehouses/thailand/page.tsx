@@ -238,7 +238,7 @@ export default async function Page({
                       sizes="(max-width: 768px) 170px, 280px"
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                     />
-                    <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[10px] font-black text-primary-600">
+                    <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[11px] font-black text-primary-600">
                       WAREHOUSE {i + 1}/{PHOTOS.length}
                     </div>
                   </div>

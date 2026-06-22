@@ -285,12 +285,12 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={it.image_path} alt={it.title ?? ""} className="w-16 h-16 rounded-lg object-cover bg-surface-alt" />
                       ) : (
-                        <div className="w-16 h-16 rounded-lg bg-surface-alt flex items-center justify-center text-[10px] text-muted">No img</div>
+                        <div className="w-16 h-16 rounded-lg bg-surface-alt flex items-center justify-center text-[11px] text-muted">No img</div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-sm line-clamp-2">{it.title ?? "—"}</p>
-                          <span className="text-[10px] rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 shrink-0">
+                          <span className="text-[11px] rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 shrink-0">
                             {PROVIDER_LABEL[it.provider] ?? it.provider}
                           </span>
                         </div>
@@ -305,7 +305,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                           </a>
                         )}
                         {it.tracking_number && (
-                          <p className="text-[10px] mt-1 font-mono text-muted">📦 {it.tracking_number}</p>
+                          <p className="text-[11px] mt-1 font-mono text-muted">📦 {it.tracking_number}</p>
                         )}
                         <div className="mt-1 flex items-baseline justify-between">
                           <span className="text-xs text-muted">¥{Number(it.price_cny).toFixed(2)} × {it.amount}</span>
@@ -420,7 +420,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                         className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
                       >
                         <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
-                        <span className="inline-block rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 text-[10px] px-2 py-0.5 font-medium whitespace-nowrap">
+                        <span className="inline-block rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 text-[11px] px-2 py-0.5 font-medium whitespace-nowrap">
                           {IMPORT_STATUS_LABEL[f.fstatus ?? ""] ?? "—"}
                         </span>
                       </Link>

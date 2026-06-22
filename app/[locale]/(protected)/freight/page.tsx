@@ -214,7 +214,7 @@ export default async function CustomerFreightHubPage() {
                     <td className="px-3 py-2 text-xs">{TRANSPORT_MODE_LABEL[q.transport_mode]}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(q.total)}</td>
                     <td className="px-3 py-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${QUOTE_STATUS_BADGE[q.status]}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${QUOTE_STATUS_BADGE[q.status]}`}>
                         {QUOTE_STATUS_LABEL[q.status]}
                       </span>
                     </td>
@@ -273,21 +273,21 @@ export default async function CustomerFreightHubPage() {
                       <td className="px-3 py-2 text-xs">{FREIGHT_TRANSPORT_MODE_LABEL[s.transport_mode]}</td>
                       <td className="px-3 py-2 text-xs">
                         {s.container_code && <p className="font-mono">{s.container_code}</p>}
-                        {s.bl_no && <p className="font-mono text-muted text-[10px]">B/L: {s.bl_no}</p>}
+                        {s.bl_no && <p className="font-mono text-muted text-[11px]">B/L: {s.bl_no}</p>}
                         {!s.container_code && !s.bl_no && "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${SHIPMENT_STATUS_BADGE[s.status]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${SHIPMENT_STATUS_BADGE[s.status]}`}>
                           {FREIGHT_SHIPMENT_STATUS_LABEL[s.status]}
                         </span>
                       </td>
                       <td className="px-3 py-2">
                         {pay ? (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${PAYMENT_STATUS_BADGE[pay]}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${PAYMENT_STATUS_BADGE[pay]}`}>
                             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[pay]}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted">{t("noInvoiceYet")}</span>
+                          <span className="text-[11px] text-muted">{t("noInvoiceYet")}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">

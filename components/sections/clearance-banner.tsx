@@ -168,10 +168,10 @@ export function ClearanceBanner() {
                   {/* Yellow corner accent */}
                   <span aria-hidden className="absolute -top-1 -left-1 w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-yellow-300 shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
                   <div className="flex flex-col leading-none">
-                    <span className="text-[9px] md:text-[10px] font-bold text-gray-500 uppercase tracking-wider leading-none">{t("priceStart")}</span>
+                    <span className="text-[11px] md:text-[11px] font-bold text-gray-500 uppercase tracking-wider leading-none">{t("priceStart")}</span>
                     <div className="flex items-baseline gap-0.5 mt-0.5 leading-none">
                       <span className="text-[20px] md:text-[28px] font-black text-[#dc2626] tracking-tight leading-none tabular-nums">2,800</span>
-                      <span className="text-[10px] md:text-[12px] font-bold text-gray-600">{t("priceUnit")}</span>
+                      <span className="text-[11px] md:text-[12px] font-bold text-gray-600">{t("priceUnit")}</span>
                     </div>
                   </div>
                 </div>
@@ -185,7 +185,7 @@ export function ClearanceBanner() {
                     setOpen(true);
                   }}
                   suppressHydrationWarning
-                  className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[11px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{
                     background: "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)",
                     boxShadow: "0 8px 18px rgba(185,28,28,0.25)",
@@ -202,7 +202,7 @@ export function ClearanceBanner() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => trackCtaClick("banner_line", "home_clearance_banner", { surface: "secondary_cta" })}
-                  className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[11px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
                 >
                   <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

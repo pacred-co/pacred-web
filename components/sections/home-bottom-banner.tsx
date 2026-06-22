@@ -75,7 +75,7 @@ export async function HomeBottomBanner() {
                 className="w-[60px] lg:w-[74px] xl:w-[88px] h-auto block rounded-sm"
               />
               <div className="leading-tight">
-                <p className="text-[9px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
+                <p className="text-[11px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
                   {t("scanQr")}
                 </p>
                 <p className="text-[12.5px] lg:text-[15px] xl:text-[17px] font-black text-primary-700 leading-tight">

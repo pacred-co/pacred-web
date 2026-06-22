@@ -73,7 +73,7 @@ export function ProfileAvatarUpload() {
         {pending ? t("uploading") : t("changeAvatar")}
       </button>
       {error && <p className="mt-1.5 text-[11px] font-medium text-red-600">{error}</p>}
-      <p className="mt-1 text-[10px] text-muted">{t("avatarHint")}</p>
+      <p className="mt-1 text-[11px] text-muted">{t("avatarHint")}</p>
     </div>
   );
 }

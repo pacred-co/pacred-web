@@ -91,7 +91,7 @@ function HolidaysCalendar({ locale }: { locale: Loc }) {
           >
             <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_6px_14px_rgba(179,0,0,0.20)]">
               <span className="text-[20px] font-black leading-none">{h.d}</span>
-              <span className="mt-0.5 text-[10px] font-bold leading-none opacity-90">{monthsAbbr[h.m]}</span>
+              <span className="mt-0.5 text-[11px] font-bold leading-none opacity-90">{monthsAbbr[h.m]}</span>
             </div>
             <div className="min-w-0">
               <p className="text-[13.5px] font-bold leading-snug text-[#111827] dark:text-white md:text-[14px]">

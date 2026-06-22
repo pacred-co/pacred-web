@@ -327,7 +327,7 @@ function CostEditorBody({
       ) : (
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="space-y-0.5">
-            <span className="flex items-center gap-1 text-[10px] text-muted">
+            <span className="flex items-center gap-1 text-[11px] text-muted">
               ต้นทุน/หน่วย ({costUnitSymbol}){costUnitOnAuto && <AutoChip />}
             </span>
             <input
@@ -343,13 +343,13 @@ function CostEditorBody({
             {/* SHOP cost-unit auto = ราคาซื้อจริงทั้งหมด (hcostall) ÷ Σqty — the
                 confirmed real cost averaged per unit. Editable per line. */}
             {costUnitOnAuto && costUnitIsCny && (
-              <span className="block text-[9px] text-sky-600">
+              <span className="block text-[11px] text-sky-600">
                 เฉลี่ยจากราคาซื้อจริงทั้งหมด (จาก Pricing) ÷ จำนวน — แก้ต่อรายการได้
               </span>
             )}
           </label>
           <label className="space-y-0.5">
-            <span className="flex items-center gap-1 text-[10px] text-muted">
+            <span className="flex items-center gap-1 text-[11px] text-muted">
               เรทหยวนต้นทุน{costRateOnAuto && <AutoChip />}
             </span>
             <input
@@ -366,12 +366,12 @@ function CostEditorBody({
           {/* มูลค่าสำแดง ใบขน — declared in a chosen currency × the customs monthly
               FX rate (mig 0179). Amount defaults from the real cost, edit DOWN. */}
           <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-950/10 p-2">
-            <span className="flex items-center gap-1 text-[10px] font-medium text-blue-800">
+            <span className="flex items-center gap-1 text-[11px] font-medium text-blue-800">
               มูลค่าสำแดง ใบขน{declaredOnAuto && <AutoChip />}
             </span>
             <div className="mt-1 grid grid-cols-3 gap-1.5">
               <label className="space-y-0.5">
-                <span className="block text-[9px] text-muted">สกุล</span>
+                <span className="block text-[11px] text-muted">สกุล</span>
                 <select
                   value={declCcy}
                   onChange={(e) => onDeclCcyChange(e.target.value)}
@@ -383,7 +383,7 @@ function CostEditorBody({
                 </select>
               </label>
               <label className="space-y-0.5">
-                <span className="block text-[9px] text-muted">เรทศุลกากร</span>
+                <span className="block text-[11px] text-muted">เรทศุลกากร</span>
                 <input
                   type="number" min={0} step="0.0001" inputMode="decimal"
                   value={declRate}
@@ -393,7 +393,7 @@ function CostEditorBody({
                 />
               </label>
               <label className="space-y-0.5">
-                <span className="block text-[9px] text-muted">มูลค่า ({declCcy})</span>
+                <span className="block text-[11px] text-muted">มูลค่า ({declCcy})</span>
                 <input
                   type="number" min={0} step="0.01" inputMode="decimal"
                   value={declAmt}
@@ -403,13 +403,13 @@ function CostEditorBody({
                 />
               </label>
             </div>
-            <p className="mt-1 text-[10px] text-blue-900 text-right">
+            <p className="mt-1 text-[11px] text-blue-900 text-right">
               = มูลค่าสำแดง <b>฿{fmtNum(declaredThbComputed || null)}</b>
               <span className="text-blue-700/70"> ({declCcy} × เรทกรมศุล · แก้ลงได้)</span>
             </p>
           </div>
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">HS Code</span>
+            <span className="block text-[11px] text-muted">HS Code</span>
             <input
               type="text"
               maxLength={40}
@@ -422,11 +422,11 @@ function CostEditorBody({
           </label>
           <div className="sm:col-span-2">
             {anyOnAuto && (
-              <p className="mb-1 inline-flex items-center gap-1 text-[10px] text-sky-700">
+              <p className="mb-1 inline-flex items-center gap-1 text-[11px] text-sky-700">
                 <AutoChip /> ค่าที่ขึ้น <b>ออโต้</b> เติมจากข้อมูลออเดอร์ — แก้ได้ · จะบันทึกเมื่อกด “บันทึกต้นทุน”
               </p>
             )}
-            <p className="mb-1.5 text-[10px] text-emerald-800/80">
+            <p className="mb-1.5 text-[11px] text-emerald-800/80">
               ภายในเท่านั้น — ต้นทุน (PEAK) + มูลค่าสำแดง (ใบขน) · ไม่กระทบราคาขาย/สถานะ/การแจ้งเตือน · เว้นว่าง = ล้างค่า
             </p>
             <div className="flex gap-2">
@@ -487,13 +487,13 @@ type HsHint = null | "loading" | "notfound" | HsLookupRow;
 function HsLookupHint({ hint }: { hint: HsHint }) {
   if (hint == null) return null;
   if (hint === "loading") {
-    return <span className="block text-[9px] text-muted">กำลังค้นคลัง HS…</span>;
+    return <span className="block text-[11px] text-muted">กำลังค้นคลัง HS…</span>;
   }
   if (hint === "notfound") {
-    return <span className="block text-[9px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
+    return <span className="block text-[11px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
   }
   return (
-    <span className="block text-[9px] text-sky-700">
+    <span className="block text-[11px] text-sky-700">
       อากรปกติ {hint.default_duty_pct}% · Form-E {hint.form_e_duty_pct}%
       {hint.description ? ` · ${hint.description}` : ""}
     </span>
@@ -505,7 +505,7 @@ function AutoChip() {
   return (
     <span
       title="เติมอัตโนมัติจากข้อมูลออเดอร์ — แก้ไขได้ · ยังไม่บันทึกจนกดบันทึก"
-      className="inline-flex items-center rounded-full bg-sky-100 px-1.5 py-px text-[9px] font-semibold leading-none text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+      className="inline-flex items-center rounded-full bg-sky-100 px-1.5 py-px text-[11px] font-semibold leading-none text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
     >
       ออโต้
     </span>
@@ -731,7 +731,7 @@ export function ForwarderImportDutyEditor({
       {editing && (
         <div className="mt-2 grid grid-cols-2 gap-2">
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">อากรขาเข้า (%)</span>
+            <span className="block text-[11px] text-muted">อากรขาเข้า (%)</span>
             <input
               type="number"
               min={0}
@@ -744,7 +744,7 @@ export function ForwarderImportDutyEditor({
             />
           </label>
           <label className="space-y-0.5">
-            <span className="block text-[10px] text-muted">อากรขาเข้า (บาท)</span>
+            <span className="block text-[11px] text-muted">อากรขาเข้า (บาท)</span>
             <input
               type="number"
               min={0}
@@ -773,7 +773,7 @@ export function ForwarderImportDutyEditor({
 
       {editing && (
         <div className="mt-2">
-          <p className="mb-1.5 text-[10px] text-amber-800/80">
+          <p className="mb-1.5 text-[11px] text-amber-800/80">
             ภายในเท่านั้น — ฐานอากรอ้างอิงนโยบาย/HS (กรอกเอง · ไม่กระทบราคาที่ลูกค้าจ่าย) · เว้นว่าง = 0
           </p>
           <div className="flex gap-2">

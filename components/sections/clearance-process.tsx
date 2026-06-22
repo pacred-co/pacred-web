@@ -93,7 +93,7 @@ export async function ClearanceProcess() {
                   <div className="absolute -top-1 -right-1 w-3 h-3 md:w-3.5 md:h-3.5 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 border-2 border-white dark:border-surface shadow-[0_2px_6px_rgba(0,0,0,0.15)] scale-0 group-hover:scale-100 transition-transform duration-300" />
                 </div>
 
-                <div className="relative text-[10px] md:text-[12px] font-black tracking-[0.12em] text-primary-600 mb-0.5 md:mb-1">
+                <div className="relative text-[11px] md:text-[12px] font-black tracking-[0.12em] text-primary-600 mb-0.5 md:mb-1">
                   STEP {num}
                 </div>
                 <h3 className="relative text-[12.5px] md:text-[16px] font-extrabold text-[#111827] dark:text-white leading-[1.3] md:leading-[1.35] mb-1 md:mb-2 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">

@@ -51,7 +51,7 @@ export function WarehouseCard({ warehouse: w }: { warehouse: WarehouseDef }) {
       <header className="px-5 py-4 border-b border-border bg-gradient-to-br from-primary-500/5 to-transparent">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-primary-500">WAREHOUSE · {w.cityEn.toUpperCase()}</p>
+            <p className="text-[11px] uppercase tracking-widest font-bold text-primary-500">WAREHOUSE · {w.cityEn.toUpperCase()}</p>
             <h2 className="mt-0.5 text-lg font-bold text-foreground inline-flex items-center gap-2">
               <span aria-hidden>{w.flag}</span> {t("cardTitle", { city: w.cityTh, cityEn: w.cityEn })}
             </h2>

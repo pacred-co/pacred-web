@@ -1338,7 +1338,7 @@ export default async function ServiceImportDetailPage({
                           WHEN a physical milestone actually happened, so the
                           customer can see where the goods are + when. */}
                       {stepDates[i] && (
-                        <span className="mt-0.5 block text-[10px] font-medium text-muted notranslate">
+                        <span className="mt-0.5 block text-[11px] font-medium text-muted notranslate">
                           {stepDates[i]}
                         </span>
                       )}

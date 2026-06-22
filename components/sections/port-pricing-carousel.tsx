@@ -95,7 +95,7 @@ function PortCard({ port }: { port: CustomsPort }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
         <div className="absolute top-3 left-3">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[10px] md:text-[11px] font-black tracking-[0.10em] shadow-md">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[11px] md:text-[11px] font-black tracking-[0.10em] shadow-md">
             <Icon className="w-3.5 h-3.5" strokeWidth={2.6} />
             {port.modeBadge}
           </span>

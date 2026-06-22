@@ -77,7 +77,7 @@ export function SlipTransferredAtCell(props: Props) {
         <button
           type="button"
           onClick={() => { setEditing(true); setDraft(isoToLocalInput(props.currentValue)); }}
-          className="ml-1 text-[10px] text-primary-500 hover:underline"
+          className="ml-1 text-[11px] text-primary-500 hover:underline"
         >
           ✏️
         </button>
@@ -95,12 +95,12 @@ export function SlipTransferredAtCell(props: Props) {
         autoFocus
         disabled={pending}
       />
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       <div className="flex gap-1">
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-primary-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="rounded bg-primary-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
         >
           {pending ? "..." : "บันทึก"}
         </button>
@@ -108,7 +108,7 @@ export function SlipTransferredAtCell(props: Props) {
           type="button"
           onClick={() => { setEditing(false); setErr(null); }}
           disabled={pending}
-          className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+          className="rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt"
         >
           ยกเลิก
         </button>
@@ -117,7 +117,7 @@ export function SlipTransferredAtCell(props: Props) {
             type="button"
             onClick={() => setDraft("")}
             disabled={pending}
-            className="text-[10px] text-muted hover:underline"
+            className="text-[11px] text-muted hover:underline"
           >
             ล้าง
           </button>

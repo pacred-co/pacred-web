@@ -351,7 +351,7 @@ export default async function ExportWorldwidePage({
                       aria-hidden
                       className={`absolute -top-12 -right-12 w-32 h-32 rounded-full bg-gradient-to-br ${m.accent} opacity-15 group-hover:opacity-25 transition-opacity duration-400`}
                     />
-                    <div className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 text-[10px] md:text-[11px] font-black tracking-[0.10em] dark:bg-primary-900/30 dark:text-primary-200">
+                    <div className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 text-[11px] md:text-[11px] font-black tracking-[0.10em] dark:bg-primary-900/30 dark:text-primary-200">
                       <Icon className="w-3.5 h-3.5" strokeWidth={2.6} />
                       {m.badge}
                     </div>

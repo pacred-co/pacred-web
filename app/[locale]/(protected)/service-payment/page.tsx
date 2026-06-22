@@ -381,7 +381,7 @@ export default async function ServicePaymentPage({
                     <span>{chip.label}</span>
                     {chip.count > 0 && (
                       <span
-                        className={`inline-flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                        className={`inline-flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
                           chip.active ? "bg-white/25 text-white" : chip.chip
                         }`}
                       >

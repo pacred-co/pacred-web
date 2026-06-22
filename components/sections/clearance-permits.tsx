@@ -143,7 +143,7 @@ export async function ClearancePermits() {
               <div className="relative text-[12.5px] md:text-[15px] font-black tracking-[-0.02em] text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">
                 {code}
               </div>
-              <div className="relative text-[10px] md:text-[12px] font-bold text-primary-600 mt-0.5">
+              <div className="relative text-[11px] md:text-[12px] font-bold text-primary-600 mt-0.5">
                 {t(nameKey)}
               </div>
               <p className="relative mt-1 md:mt-2 text-[10.5px] md:text-[12.5px] leading-[1.4] md:leading-[1.45] text-muted">

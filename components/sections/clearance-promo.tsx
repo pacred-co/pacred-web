@@ -108,7 +108,7 @@ async function ContactCard({ className = "" }: { className?: string }) {
               style={{ transitionDelay: `${i * 60}ms` }}
               className="rounded-md md:rounded-lg bg-white/70 dark:bg-surface-alt/60 border border-border group-hover:border-primary-200 dark:group-hover:border-primary-900 group-hover:bg-white dark:group-hover:bg-surface group-hover:-translate-y-0.5 group-hover:shadow-[0_4px_10px_rgba(220,38,38,0.10)] py-1.5 md:py-2 transition-all duration-300"
             >
-              <div className="text-[9px] md:text-[10px] font-bold tracking-wider text-muted uppercase">{t(labelKey)}</div>
+              <div className="text-[11px] md:text-[11px] font-bold tracking-wider text-muted uppercase">{t(labelKey)}</div>
               <div className="mt-0.5 text-[12px] md:text-[13.5px] font-black text-primary-600 leading-none">{valueKey ? t(valueKey) : value}</div>
             </div>
           ))}
@@ -184,7 +184,7 @@ export async function ClearancePromo() {
             <div className="relative flex items-center justify-center bg-black/15 backdrop-blur-sm py-3 md:py-0">
               <div className="relative z-[2] text-center text-white">
                 <div className="text-[22px] md:text-[42px] font-black leading-none">Pacred</div>
-                <div className="mt-0.5 md:mt-1 text-[9px] md:text-[14px] tracking-[0.18em] font-bold text-[#fca5a5]">SHIPPING</div>
+                <div className="mt-0.5 md:mt-1 text-[11px] md:text-[14px] tracking-[0.18em] font-bold text-[#fca5a5]">SHIPPING</div>
               </div>
             </div>
 
@@ -225,7 +225,7 @@ export async function ClearancePromo() {
                     />
 
                     <span className="relative inline-flex h-6 w-6 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-md md:rounded-lg bg-white dark:bg-surface-alt border border-primary-200 dark:border-primary-900/60 shadow-[0_4px_10px_rgba(220,38,38,0.10)] group-hover:bg-gradient-to-br group-hover:from-primary-500 group-hover:to-primary-700 group-hover:border-transparent transition-all duration-300">
-                      <span className="text-[10px] md:text-[12px] font-black text-primary-600 tabular-nums group-hover:hidden">
+                      <span className="text-[11px] md:text-[12px] font-black text-primary-600 tabular-nums group-hover:hidden">
                         {num}
                       </span>
                       <Check className="h-3 w-3 md:h-4 md:w-4 text-white hidden group-hover:block" strokeWidth={3.5} />

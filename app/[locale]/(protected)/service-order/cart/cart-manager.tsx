@@ -513,7 +513,7 @@ function IconRadio({
     >
       <div className={checked ? "text-primary-600" : "text-muted"}>{icon}</div>
       <p className="text-xs font-bold leading-tight">{title}</p>
-      {subtitle && <p className="text-[10px] text-muted">{subtitle}</p>}
+      {subtitle && <p className="text-[11px] text-muted">{subtitle}</p>}
     </button>
   );
 }

@@ -420,7 +420,7 @@ export function ForwarderInteractivity({
 
             {/* Total — stacked on mobile, inline on desktop */}
             <div className="flex-1 min-w-0 leading-tight">
-              <div className="text-[10px] md:text-xs text-muted">
+              <div className="text-[11px] md:text-xs text-muted">
                 {t("countPrefix")} <span className="countPay font-bold text-foreground notranslate">{selectedIds.size}</span> {t("countSuffix")}
               </div>
               <div className="font-bold text-foreground text-xs md:text-sm">
@@ -428,7 +428,7 @@ export function ForwarderInteractivity({
                 <span className="notranslate price-all text-red-600 text-base md:text-lg">
                   {displayTotal}
                 </span>{" "}
-                <span className="text-[10px] md:text-xs text-muted font-normal">{t("bahtAbbr")}</span>
+                <span className="text-[11px] md:text-xs text-muted font-normal">{t("bahtAbbr")}</span>
               </div>
             </div>
 

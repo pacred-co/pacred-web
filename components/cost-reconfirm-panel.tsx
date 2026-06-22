@@ -175,7 +175,7 @@ function ReconfirmCard({ row }: { row: ReconfirmRow }) {
               className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               disabled={pending}
             />
-            <span className="text-[10px] text-amber-700">{note.length}/500</span>
+            <span className="text-[11px] text-amber-700">{note.length}/500</span>
           </label>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -234,7 +234,7 @@ function PriceBox({
     : "text-amber-800";
   return (
     <div className="rounded-xl border border-amber-200 bg-white p-3">
-      <p className="text-[10px] uppercase tracking-wider text-amber-700">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-amber-700">{label}</p>
       <p className={`text-lg font-mono mt-1 ${cls}`}>
         ฿{Number(value).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
       </p>

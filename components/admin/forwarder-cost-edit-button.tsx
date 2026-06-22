@@ -109,7 +109,7 @@ export function ForwarderCostEditButton({
           <>
             <Pencil className="h-3.5 w-3.5" />
             {MODE_SUFFIX[mode] && (
-              <span className="text-[10px] font-bold leading-none">
+              <span className="text-[11px] font-bold leading-none">
                 {MODE_SUFFIX[mode]}
               </span>
             )}

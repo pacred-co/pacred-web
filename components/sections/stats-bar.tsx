@@ -51,12 +51,12 @@ export function StatsBar() {
               />
 
               <div className="flex flex-col justify-center gap-0 md:flex-row md:flex-1 md:items-center md:justify-between md:gap-2 min-w-0">
-                <span className="text-[10px] md:text-sm font-medium text-[#171717] dark:text-white leading-tight">{s.label}</span>
+                <span className="text-[11px] md:text-sm font-medium text-[#171717] dark:text-white leading-tight">{s.label}</span>
                 <div className="flex flex-wrap md:flex-nowrap items-baseline gap-x-0.5 gap-y-0 md:gap-1.5 min-w-0">
                   <span className="text-[13px] md:text-3xl font-bold tracking-tight text-primary-600 leading-none">
                     {s.value}
                   </span>
-                  <span className="text-[9px] md:text-sm text-[#171717] dark:text-white leading-none">{s.unit}</span>
+                  <span className="text-[11px] md:text-sm text-[#171717] dark:text-white leading-none">{s.unit}</span>
                 </div>
               </div>
             </Link>

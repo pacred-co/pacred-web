@@ -138,7 +138,7 @@ export function Promotion() {
                         {b.title}
                       </h3>
                     </div>
-                    <p className={`text-[10px] leading-[1.2] mt-0.5 ${b.first ? "text-white/80" : "text-muted"}`}>
+                    <p className={`text-[11px] leading-[1.2] mt-0.5 ${b.first ? "text-white/80" : "text-muted"}`}>
                       {b.description}
                     </p>
                   </div>
@@ -150,7 +150,7 @@ export function Promotion() {
                       href="/register"
                       onClick={() => trackCtaClick("promotion_claim", "home_promotion", { promo_idx: i, promo_title: b.title })}
                       className={[
-                        "inline-block text-[10px] font-bold px-1.5 py-1 rounded transition-colors relative z-[4]",
+                        "inline-block text-[11px] font-bold px-1.5 py-1 rounded transition-colors relative z-[4]",
                         b.first
                           ? "bg-white text-primary-600"
                           : "bg-red-50 text-primary-600 group-hover:bg-primary-600 group-hover:text-white",

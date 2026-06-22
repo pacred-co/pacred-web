@@ -184,13 +184,13 @@ export function TablePayBar({ isJuristic }: { isJuristic: boolean }) {
               checked={ctx.allChecked}
               onChange={(e) => ctx.toggleAll(e.target.checked)}
             />
-            <span className="text-[10px] md:text-[11px] text-muted whitespace-nowrap leading-none">
+            <span className="text-[11px] md:text-[11px] text-muted whitespace-nowrap leading-none">
               {t("selectAll")}
             </span>
           </label>
 
           <div className="flex-1 min-w-0 leading-tight">
-            <div className="text-[10px] md:text-xs text-muted">
+            <div className="text-[11px] md:text-xs text-muted">
               {t("payBarCountPrefix")}{" "}
               <span className="countPay font-bold text-foreground notranslate">{ctx.count}</span>{" "}
               {t("payBarCountSuffix")}
@@ -200,7 +200,7 @@ export function TablePayBar({ isJuristic }: { isJuristic: boolean }) {
               <span className="notranslate price-all text-red-600 text-base md:text-lg">
                 {numberFormat2(ctx.total)}
               </span>{" "}
-              <span className="text-[10px] md:text-xs text-muted font-normal">{t("bahtUnit")}</span>
+              <span className="text-[11px] md:text-xs text-muted font-normal">{t("bahtUnit")}</span>
             </div>
           </div>
 

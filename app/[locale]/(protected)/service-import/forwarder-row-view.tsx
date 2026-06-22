@@ -129,7 +129,7 @@ function TagPro({ id }: { id: string | null }) {
   if (!id || !TAG_PRO[id]) return null;
   const p = TAG_PRO[id];
   const chip = (
-    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] font-bold px-2 py-0.5 shadow-sm">
+    <span className="inline-flex items-center rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[11px] font-bold px-2 py-0.5 shadow-sm">
       {p.label}
     </span>
   );
@@ -326,7 +326,7 @@ function CancelForwarderButton({ id }: { id: number }) {
         {pending ? t("cancelling") : t("cancelButton")}
       </button>
       {errorMsg && (
-        <span className="text-[10px] text-red-600 max-w-[160px] text-right leading-tight">
+        <span className="text-[11px] text-red-600 max-w-[160px] text-right leading-tight">
           {errorMsg}
         </span>
       )}
@@ -516,13 +516,13 @@ export function ForwarderRowView({
             </span>
           )}
           {row.adminidcreator !== "" && (!row.reforder || row.reforder === "") && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold border border-amber-200">
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[11px] font-semibold border border-amber-200">
               {t("importedByAdmin")}
             </span>
           )}
           {row.reforder && row.reforder !== "" && (
             <a href={`/service-order/${row.reforder}/`}>
-              <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-semibold border border-sky-200 hover:bg-sky-200">
+              <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[11px] font-semibold border border-sky-200 hover:bg-sky-200">
                 {t("fromShopOrder")}: {row.reforder}
               </span>
             </a>
@@ -540,14 +540,14 @@ export function ForwarderRowView({
             <div className="text-right leading-tight">
               {totalPriceNet > 0 && (
                 <>
-                  <span className="text-[9px] md:text-[10px] text-muted uppercase tracking-wide">{t("total")}</span>
+                  <span className="text-[11px] md:text-[11px] text-muted uppercase tracking-wide">{t("total")}</span>
                   <span className="block text-sm md:text-lg font-bold text-red-600 notranslate">
                     {numberFormat2(totalPriceNet)} {t("baht")}
                   </span>
                 </>
               )}
               {(row.fweight > 0 || row.fvolume > 0) && (
-                <span className="block text-[10px] md:text-[11px] text-muted notranslate">
+                <span className="block text-[11px] md:text-[11px] text-muted notranslate">
                   {row.fweight > 0 && `${row.fweight} kg`}
                   {row.fweight > 0 && row.fvolume > 0 && " · "}
                   {row.fvolume > 0 && `${numberFormat2(row.fvolume)} CBM`}
@@ -588,18 +588,18 @@ export function ForwarderRowView({
       {q === "c" && (
         <div className="border-t border-red-200 bg-red-50 px-3 py-2 grid grid-cols-2 gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted">{t("creditDate")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted">{t("creditDate")}</div>
             <div className="text-xs font-medium text-foreground notranslate">
               {row.fdatestatus5 ? dmy(row.fdatestatus5) : "—"}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted">{t("dueDate")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted">{t("dueDate")}</div>
             <div className="text-xs font-medium text-foreground notranslate">
               {row.fcreditdate ? dmy(row.fcreditdate) : "—"}
             </div>
             {row.fcreditdate && diffDateTimeNow(row.fcreditdate) && (
-              <div className="mt-1 inline-flex items-center rounded-full bg-red-600 text-white text-[10px] font-bold px-2 py-0.5">
+              <div className="mt-1 inline-flex items-center rounded-full bg-red-600 text-white text-[11px] font-bold px-2 py-0.5">
                 {diffDateTimeNow(row.fcreditdate)}
               </div>
             )}

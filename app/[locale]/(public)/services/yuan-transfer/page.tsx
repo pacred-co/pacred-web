@@ -363,7 +363,7 @@ export default async function YuanTransferPage({
                         {c.desc}
                       </p>
                       <div className="pt-1 border-t border-border">
-                        <div className="text-[9.5px] md:text-[10px] font-bold text-muted tracking-[0.10em] uppercase mb-1">
+                        <div className="text-[9.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-1">
                           {tp("suitableFor")}
                         </div>
                         <p className="text-[12px] md:text-[12.5px] font-bold text-foreground/85 leading-snug">

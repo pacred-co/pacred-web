@@ -173,7 +173,7 @@ export function ReportShell({
         )}
       </div>
 
-      {sourceNote && <p className="text-[10px] text-muted">{sourceNote}</p>}
+      {sourceNote && <p className="text-[11px] text-muted">{sourceNote}</p>}
     </main>
   );
 }

@@ -118,7 +118,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             <p className="mt-1 text-xl font-bold font-mono text-orange-700">
               ฿{Number(balance?.cashback_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-[10px] text-muted mt-1">{t("cashbackHint")}</p>
+            <p className="text-[11px] text-muted mt-1">{t("cashbackHint")}</p>
           </div>
           {!creditEnrolled && (
             <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50/30 p-4">
@@ -126,7 +126,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
               <p className="mt-1 text-xl font-bold font-mono text-blue-700">
                 ฿{Number(balance?.credit_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-[10px] text-muted mt-1">
+              <p className="text-[11px] text-muted mt-1">
                 {t("creditNotEnrolledHint")}
               </p>
             </div>
@@ -158,7 +158,7 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                   {tab.icon}
                   <span>{t(tab.labelKey)}</span>
                   {count > 0 && (
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
                       isActive ? "bg-primary-100 text-primary-700" : "bg-surface-alt text-muted"
                     }`}>
                       {count}
@@ -216,11 +216,11 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                           <p className="font-medium text-foreground">{t.has(`kind.${tx.kind}`) ? t(`kind.${tx.kind}`) : tx.kind}</p>
                           {tx.note && <p className="mt-0.5 text-xs text-muted line-clamp-2">{tx.note}</p>}
                           {!tx.note && tx.reference_id && (
-                            <p className="mt-0.5 text-[10px] text-muted font-mono">ref: {tx.reference_id}</p>
+                            <p className="mt-0.5 text-[11px] text-muted font-mono">ref: {tx.reference_id}</p>
                           )}
                         </td>
                         <td className="px-4 py-3 align-top">
-                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${BUCKET_BADGE[tx.bucket]}`}>
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${BUCKET_BADGE[tx.bucket]}`}>
                             {t(`bucket.${tx.bucket}`)}
                           </span>
                         </td>

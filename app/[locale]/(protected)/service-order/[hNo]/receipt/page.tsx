@@ -134,7 +134,7 @@ export default async function ShopOrderReceiptPage({
               วันที่: {new Date(dateForHead).toLocaleDateString("th-TH")}
             </p>
             {isPaid && !showAsInvoice && (
-              <p className="mt-1 inline-block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+              <p className="mt-1 inline-block rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                 ชำระเงินแล้ว
               </p>
             )}
@@ -193,13 +193,13 @@ export default async function ShopOrderReceiptPage({
               <tr key={it.id}>
                 <td className="border border-gray-300 px-3 py-2">
                   <div className="font-medium">{it.title ?? "(ไม่มีชื่อสินค้า)"}</div>
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[11px] text-gray-500">
                     {it.shop_name}
                     {it.color && ` · สี: ${it.color}`}
                     {it.size && ` · ขนาด: ${it.size}`}
                   </div>
                   {(it.shipping_number || it.tracking_number) && (
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-[11px] text-gray-500">
                       {it.shipping_number && (
                         <>เลขออเดอร์: <span className="font-mono">{it.shipping_number}</span></>
                       )}
@@ -344,7 +344,7 @@ export default async function ShopOrderReceiptPage({
         )}
 
         {/* Footer */}
-        <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-600">
+        <div className="border-t border-gray-300 pt-3 text-[11px] text-gray-600">
           <p>• เอกสารนี้ออกโดย Pacred โดยอัตโนมัติจากระบบ — ไม่ต้องเซ็นกำกับ</p>
           <p>• สำหรับสอบถามเพิ่มเติม โทร {CONTACT.phoneCompanyDisplay} / LINE @pacred</p>
         </div>

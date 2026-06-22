@@ -201,7 +201,7 @@ export function ProtectedSidebar({
     >
       {expanded && salesRep && (salesRep.display_name || salesRep.phone) && (
         <div className="m-2 mb-1 rounded-xl border border-primary-100 bg-primary-50/60 dark:border-primary-900/40 dark:bg-primary-900/10 px-3 py-2">
-          <p className="text-[10px] font-semibold tracking-widest text-primary-600 uppercase">พนักงานขายของท่าน</p>
+          <p className="text-[11px] font-semibold tracking-widest text-primary-600 uppercase">พนักงานขายของท่าน</p>
           <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground truncate">
             {salesRep.display_name || "—"}
           </p>
@@ -346,14 +346,14 @@ function BadgePill({
   const text = count > 99 ? "99+" : String(count);
   if (floating) {
     return (
-      <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white shadow">
+      <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white shadow">
         {text}
       </span>
     );
   }
   return (
     <span
-      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none ${
+      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
         active ? "bg-white text-primary-600" : "bg-red-600 text-white"
       }`}
     >

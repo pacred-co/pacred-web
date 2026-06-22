@@ -495,7 +495,7 @@ export default async function ImportChinaFclPage({
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-center">
                     <div className="rounded-lg bg-surface dark:bg-background border border-border p-2">
-                      <div className="text-[10px] md:text-[10.5px] font-bold tracking-[0.10em] text-muted uppercase">
+                      <div className="text-[11px] md:text-[10.5px] font-bold tracking-[0.10em] text-muted uppercase">
                         CBM
                       </div>
                       <div className="text-[13px] md:text-[14px] font-black text-foreground mt-0.5">
@@ -503,7 +503,7 @@ export default async function ImportChinaFclPage({
                       </div>
                     </div>
                     <div className="rounded-lg bg-surface dark:bg-background border border-border p-2">
-                      <div className="text-[10px] md:text-[10.5px] font-bold tracking-[0.10em] text-muted uppercase">
+                      <div className="text-[11px] md:text-[10.5px] font-bold tracking-[0.10em] text-muted uppercase">
                         Payload
                       </div>
                       <div className="text-[13px] md:text-[14px] font-black text-foreground mt-0.5">
@@ -512,7 +512,7 @@ export default async function ImportChinaFclPage({
                     </div>
                   </div>
                   <div className="mt-3 rounded-lg bg-white dark:bg-background border border-primary-100 dark:border-primary-900/40 p-2.5">
-                    <div className="text-[10px] font-bold tracking-[0.10em] text-primary-600 uppercase">
+                    <div className="text-[11px] font-bold tracking-[0.10em] text-primary-600 uppercase">
                       {tp("labelSuitableFor")}
                     </div>
                     <p className="text-[11.5px] md:text-[12.5px] font-medium text-foreground mt-0.5 leading-snug">

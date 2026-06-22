@@ -67,7 +67,7 @@ export function WorkNoteField({
         className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground placeholder:text-muted/70 focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-300 disabled:opacity-50 dark:bg-surface"
         placeholder={placeholder}
       />
-      <div className="text-right text-[10px] text-muted/70">
+      <div className="text-right text-[11px] text-muted/70">
         {len}/{maxLength}
       </div>
     </div>

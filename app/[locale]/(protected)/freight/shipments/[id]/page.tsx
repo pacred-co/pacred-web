@@ -351,10 +351,10 @@ export default async function CustomerFreightShipmentDetailPage({
             </tbody>
           </table>
           {header.vat_plan_label && (
-            <p className="mt-2 text-[10px] text-muted">VAT plan: {header.vat_plan_label}</p>
+            <p className="mt-2 text-[11px] text-muted">VAT plan: {header.vat_plan_label}</p>
           )}
           {header.form_e_applied && (
-            <p className="mt-1 text-[10px] text-green-700">✓ Form E (ASEAN-China FTA) applied</p>
+            <p className="mt-1 text-[11px] text-green-700">✓ Form E (ASEAN-China FTA) applied</p>
           )}
         </section>
 
@@ -368,7 +368,7 @@ export default async function CustomerFreightShipmentDetailPage({
                 <span className="font-mono text-xs">{activeInvoice.invoice_no}</span>
               )}
               {activeInvoice && (
-                <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] ${INV_STATUS_BADGE[activeInvoice.status]}`}>
+                <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${INV_STATUS_BADGE[activeInvoice.status]}`}>
                   {FREIGHT_INVOICE_STATUS_LABEL[activeInvoice.status]}
                 </span>
               )}
@@ -436,12 +436,12 @@ export default async function CustomerFreightShipmentDetailPage({
                   <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm font-bold inline-flex items-center gap-2">
                       💰 {t("paymentHeading")}
-                      <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] ${PAYMENT_STATUS_BADGE[paymentStatus]}`}>
+                      <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] ${PAYMENT_STATUS_BADGE[paymentStatus]}`}>
                         {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[paymentStatus]}
                       </span>
                     </p>
                     {activeInvoice.fully_paid_at && (
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         {t("fullyPaidOn", { date: new Date(activeInvoice.fully_paid_at).toLocaleDateString("th-TH") })}
                       </p>
                     )}

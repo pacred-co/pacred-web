@@ -587,7 +587,7 @@ export function WorkItemThread({ workItemId, className }: WorkItemThreadProps) {
                           <AvatarCircle name={pickerLabel(r)} />
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{pickerLabel(r)}</div>
-                            <div className="text-[10px] text-muted truncate">
+                            <div className="text-[11px] text-muted truncate">
                               {r.member_code ?? "—"}
                               {r.role && ` · ${ROLE_LABEL[r.role] ?? r.role}`}
                             </div>
@@ -790,7 +790,7 @@ function MessageRow(props: {
         <Settings className="w-3.5 h-3.5 mt-0.5 shrink-0" />
         <div className="flex-1">
           <span>{isDeleted ? deletedPlaceholder() : row.body}</span>
-          <span className="ml-2 text-[10px]" title={row.createdAt}>
+          <span className="ml-2 text-[11px]" title={row.createdAt}>
             {relativeTimeTh(row.createdAt)}
           </span>
         </div>
@@ -832,7 +832,7 @@ function MessageRow(props: {
               type="button"
               onClick={() => onDelete(row.id)}
               disabled={pending}
-              className="text-[10px] text-muted hover:text-red-600 disabled:opacity-50 shrink-0"
+              className="text-[11px] text-muted hover:text-red-600 disabled:opacity-50 shrink-0"
               // i18n-key: chat.delete
               title="ลบข้อความนี้"
             >
@@ -862,7 +862,7 @@ function MessageRow(props: {
           type="button"
           onClick={() => onDelete(row.id)}
           disabled={pending}
-          className="text-[10px] text-muted hover:text-red-600 disabled:opacity-50 shrink-0"
+          className="text-[11px] text-muted hover:text-red-600 disabled:opacity-50 shrink-0"
           // i18n-key: chat.delete
           title="ลบข้อความนี้"
         >
@@ -968,7 +968,7 @@ function WaitPicker(props: {
           disabled={pending}
           className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs font-mono min-h-[40px]"
         />
-        <p className="text-[10px] text-muted mt-1">
+        <p className="text-[11px] text-muted mt-1">
           {/* i18n-key: chat.wait_picker.person_hint */}
           (เว้นว่างได้ — มี dropdown picker ใน IC-2)
         </p>
@@ -991,7 +991,7 @@ function WaitPicker(props: {
           disabled={pending}
           className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs"
         />
-        <p className="text-[10px] text-muted">{note.length} / 500 · อย่างน้อย 3 ตัวอักษร</p>
+        <p className="text-[11px] text-muted">{note.length} / 500 · อย่างน้อย 3 ตัวอักษร</p>
       </div>
 
       <div className="flex gap-2">
@@ -1021,7 +1021,7 @@ function WaitPicker(props: {
 
 function AvatarCircle({ name, small }: { name: string; small?: boolean }) {
   const letter = (name?.trim().charAt(0) || "?").toUpperCase();
-  const size = small ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs";
+  const size = small ? "w-6 h-6 text-[11px]" : "w-8 h-8 text-xs";
   // Stable colour from name hash
   const palette = [
     "bg-rose-200 text-rose-800",

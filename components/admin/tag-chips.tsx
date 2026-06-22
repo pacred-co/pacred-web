@@ -86,14 +86,14 @@ export function TagChips({
     });
   }
 
-  const sizeChip = compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]";
+  const sizeChip = compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]";
 
   return (
     <div className={compact ? "space-y-1" : "space-y-2"}>
       {/* Current tags */}
       <div className="flex flex-wrap items-center gap-1">
         {tags.length === 0 && !adding ? (
-          <span className={`text-muted ${compact ? "text-[10px]" : "text-[11px]"}`}>
+          <span className={`text-muted ${compact ? "text-[11px]" : "text-[11px]"}`}>
             — ยังไม่มีแท็ก —
           </span>
         ) : (
@@ -183,7 +183,7 @@ export function TagChips({
               ปิด
             </button>
           </div>
-          {err ? <p className="text-[10px] text-red-700">{err}</p> : null}
+          {err ? <p className="text-[11px] text-red-700">{err}</p> : null}
         </div>
       ) : null}
     </div>

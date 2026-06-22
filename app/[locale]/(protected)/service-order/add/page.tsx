@@ -451,7 +451,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{tp("tabAll")}</span>
                               {countStatusAll > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "" ? "bg-white/25 text-white" : "bg-sky-100 text-sky-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "" ? "bg-white/25 text-white" : "bg-sky-100 text-sky-700"}`}>
                                   {numberLimit(countStatusAll)}
                                 </span>
                               )}
@@ -467,7 +467,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{statusLabel("1")}</span>
                               {countStatusF1 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "1" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "1" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
                                   {numberLimit(countStatusF1)}
                                 </span>
                               )}
@@ -483,7 +483,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{statusLabel("2")}</span>
                               {countStatusF2 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "2" ? "bg-white/25 text-white" : "bg-red-100 text-red-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "2" ? "bg-white/25 text-white" : "bg-red-100 text-red-700"}`}>
                                   {numberLimit(countStatusF2)}
                                 </span>
                               )}
@@ -499,7 +499,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{statusLabel("3")}</span>
                               {countStatusF3 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "3" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "3" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
                                   {numberLimit(countStatusF3)}
                                 </span>
                               )}
@@ -515,7 +515,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{statusLabel("4")}</span>
                               {countStatusF4 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "4" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "4" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"}`}>
                                   {numberLimit(countStatusF4)}
                                 </span>
                               )}
@@ -531,7 +531,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{statusLabel("5")}</span>
                               {countStatusF5 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "5" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "5" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>
                                   {numberLimit(countStatusF5)}
                                 </span>
                               )}
@@ -547,7 +547,7 @@ export default async function ServiceOrderAddPage({
                             >
                               <span>{tp("statusCancelled")}</span>
                               {countStatusF6 > 0 && (
-                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${q === "6" ? "bg-white/25 text-white" : "bg-slate-200 text-slate-700"}`}>
+                                <span className={`pcs-badge-pill inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${q === "6" ? "bg-white/25 text-white" : "bg-slate-200 text-slate-700"}`}>
                                   {numberLimit(countStatusF6)}
                                 </span>
                               )}

@@ -518,7 +518,7 @@ export default async function ServiceImportPage({
                       <span>{chip.label}</span>
                       {chip.count > 0 && (
                         <span
-                          className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
+                          className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${
                             isActive ? "bg-white/25 text-white" : chip.chipColor
                           }`}
                         >
@@ -541,7 +541,7 @@ export default async function ServiceImportPage({
                     <span>{t("creditProduct")}</span>
                     {(fCreditCount ?? 0) > 0 && (
                       <span
-                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
+                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${
                           q === "c" ? "bg-white/25 text-white" : "bg-red-100 text-red-700"
                         }`}
                       >

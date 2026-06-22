@@ -47,7 +47,7 @@ export function CancelPendingButton({ txId, kind }: { txId: string; kind: string
         type="button"
         onClick={onClick}
         disabled={pending}
-        className={`text-[10px] rounded border px-2 py-0.5 transition ${
+        className={`text-[11px] rounded border px-2 py-0.5 transition ${
           confirm
             ? "border-red-500 bg-red-50 text-red-700 hover:bg-red-100"
             : "border-border bg-white text-muted hover:bg-surface-alt hover:text-foreground"
@@ -56,7 +56,7 @@ export function CancelPendingButton({ txId, kind }: { txId: string; kind: string
       >
         {pending ? "..." : confirm ? t("cancelConfirmBtn") : t("cancel")}
       </button>
-      {error && <p className="text-[10px] text-red-600">{error}</p>}
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
     </div>
   );
 }

@@ -136,7 +136,7 @@ export function CustomerWhtUploadPanel({ whtEntryId }: Props) {
         </button>
       </div>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         ⚠️ {t("footerNote")}
       </p>
     </div>

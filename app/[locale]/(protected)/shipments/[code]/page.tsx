@@ -128,7 +128,7 @@ export default async function ShipmentDetailPage({
             {/* U1-7: per-shipment freshness — closes chat L-4 (customer trust). */}
             {latestScannedAt && (
               <span
-                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${FRESHNESS_PILL[freshness]}`}
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${FRESHNESS_PILL[freshness]}`}
                 title={t("lastScan", { time: new Date(latestScannedAt).toLocaleString("th-TH") })}
               >
                 🔄 {relativeTimeTh(latestScannedAt)}
@@ -242,7 +242,7 @@ export default async function ShipmentDetailPage({
                 />
               </div>
               {s.received_at_partial && s.received_box_count > 0 && s.received_box_count < s.box_count && (
-                <p className="text-[10px] text-muted">
+                <p className="text-[11px] text-muted">
                   {t("latestPartialReceived")}: {relativeTimeTh(s.received_at_partial)}
                 </p>
               )}
@@ -275,7 +275,7 @@ export default async function ShipmentDetailPage({
                 <p className="text-xs text-muted mt-0.5">
                   {new Date(e.scanned_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                   {e.location && <span> · 📍 {e.location}</span>}
-                  {e.source !== "pacred" && <span className="ml-1 text-[10px] uppercase">[{e.source}]</span>}
+                  {e.source !== "pacred" && <span className="ml-1 text-[11px] uppercase">[{e.source}]</span>}
                 </p>
                 {e.note && <p className="text-xs text-muted mt-1 italic">📝 {e.note}</p>}
               </li>

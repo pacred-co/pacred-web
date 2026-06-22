@@ -130,7 +130,7 @@ function statusForwarderAll4(
   if (!chip) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-1.5 md:px-2.5 py-0.5 text-[9px] md:text-[11px] font-semibold leading-tight whitespace-nowrap ${chip.cls}`}
+      className={`inline-flex items-center rounded-full border px-1.5 md:px-2.5 py-0.5 text-[11px] md:text-[11px] font-semibold leading-tight whitespace-nowrap ${chip.cls}`}
     >
       {t(chip.labelKey)}
     </span>
@@ -759,7 +759,7 @@ export default async function ForwarderTablePage({
                       <span>{chip.label}</span>
                       {chip.count > 0 && (
                         <span
-                          className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${
+                          className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[11px] font-bold px-1.5 ${
                             active ? "bg-red-600 text-white" : chip.chipColor
                           }`}
                         >
@@ -836,7 +836,7 @@ export default async function ForwarderTablePage({
                     "[&_tbody_td]:px-1 [&_tbody_td]:py-0.5 md:[&_tbody_td]:px-1.5 md:[&_tbody_td]:py-1 " +
                     "[&_tbody_td]:text-[10.5px] md:[&_tbody_td]:text-[13px] " +
                     "[&_thead_th]:px-1 [&_thead_th]:py-1.5 md:[&_thead_th]:px-2 md:[&_thead_th]:py-2 " +
-                    "[&_thead_th]:text-[10px] md:[&_thead_th]:text-xs [&_thead_th]:text-center [&_thead_th]:align-middle"
+                    "[&_thead_th]:text-[11px] md:[&_thead_th]:text-xs [&_thead_th]:text-center [&_thead_th]:align-middle"
                   }
                 >
                   {/* Header — single gradient `#ce35a1 → #ee7411` matching

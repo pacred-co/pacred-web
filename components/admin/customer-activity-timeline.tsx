@@ -79,7 +79,7 @@ export function CustomerActivityTimeline({
           {err ? (
             <p className="text-[11px] text-red-700">{err}</p>
           ) : (
-            <span className="text-[10px] text-muted/70">{draft.trim().length}/2000</span>
+            <span className="text-[11px] text-muted/70">{draft.trim().length}/2000</span>
           )}
           <button
             type="button"
@@ -120,14 +120,14 @@ export function CustomerActivityTimeline({
                     </span>
                     {e.kind === "call" && e.callStatus ? (
                       <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
                           CALL_STATUS_BADGE[e.callStatus] ?? "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {CALL_STATUS_LABEL[e.callStatus] ?? e.callStatus}
                       </span>
                     ) : null}
-                    <span className="ml-auto text-[10px] text-muted/80">{relativeTimeTh(e.at)}</span>
+                    <span className="ml-auto text-[11px] text-muted/80">{relativeTimeTh(e.at)}</span>
                   </div>
                   {e.body ? (
                     <p className="mt-1 text-xs whitespace-pre-wrap break-words text-foreground/90">{e.body}</p>
@@ -135,7 +135,7 @@ export function CustomerActivityTimeline({
                     <p className="mt-1 text-xs text-muted italic">— ไม่มีโน้ต —</p>
                   ) : null}
                   {e.by ? (
-                    <p className="mt-1 text-[10px] text-muted/70 font-mono">โดย {e.by}</p>
+                    <p className="mt-1 text-[11px] text-muted/70 font-mono">โดย {e.by}</p>
                   ) : null}
                 </div>
               </div>

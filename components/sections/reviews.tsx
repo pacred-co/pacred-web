@@ -329,7 +329,7 @@ function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; inde
                 P
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white/30 text-[9px] font-black tracking-[0.3em] mt-[110px]">
+                <div className="text-white/30 text-[11px] font-black tracking-[0.3em] mt-[110px]">
                   PACRED
                 </div>
               </div>

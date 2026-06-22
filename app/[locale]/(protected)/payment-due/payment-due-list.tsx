@@ -314,7 +314,7 @@ function PdSection({
           <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
         </span>
         <h3 className="text-[13.5px] font-black text-foreground">{label}</h3>
-        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary-50 text-primary-700 text-[10px] font-black">
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-black">
           {numberLimit(count)}
         </span>
       </div>

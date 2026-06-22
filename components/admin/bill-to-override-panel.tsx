@@ -60,7 +60,7 @@ export function BillToOverridePanel(props: Props) {
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm">🧾 ชื่อบนบิล / ใบเสร็จ</h3>
         {hasOverride && (
-          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700">
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
             กำลังใช้ override
           </span>
         )}
@@ -80,7 +80,7 @@ export function BillToOverridePanel(props: Props) {
           maxLength={200}
           disabled={pending}
         />
-        <span className="text-[10px] text-muted">สูงสุด 200 ตัวอักษร · เก็บ audit ทุกครั้งที่แก้</span>
+        <span className="text-[11px] text-muted">สูงสุด 200 ตัวอักษร · เก็บ audit ทุกครั้งที่แก้</span>
       </label>
 
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</div>}

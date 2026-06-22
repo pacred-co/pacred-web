@@ -83,7 +83,7 @@ export function CardSubComingSoon({ children }: { children: ReactNode }) {
     <div className="flex cursor-not-allowed select-none items-center gap-2 rounded-lg py-2 pl-3 pr-2 text-[13px] text-gray-400">
       <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40" />
       <span className="flex-1">{children}</span>
-      <span className="text-[9px] font-bold uppercase tracking-wide">soon</span>
+      <span className="text-[11px] font-bold uppercase tracking-wide">soon</span>
     </div>
   );
 }

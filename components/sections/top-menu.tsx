@@ -182,7 +182,7 @@ function MenuItem({ item }: { item: Item }) {
             {item.groups!.map((g, gi) => (
               <div key={gi}>
                 {g.title && (
-                  <div className="px-4 pt-2 pb-1 text-[10px] font-black text-primary-600 dark:text-primary-300 tracking-[0.12em] uppercase border-b border-border/50 mb-1">
+                  <div className="px-4 pt-2 pb-1 text-[11px] font-black text-primary-600 dark:text-primary-300 tracking-[0.12em] uppercase border-b border-border/50 mb-1">
                     {g.title}
                   </div>
                 )}
@@ -273,7 +273,7 @@ function MobileMenuItem({ item, onClose }: { item: Item; onClose: () => void }) 
           {item.groups!.map((g, gi) => (
             <div key={gi}>
               {g.title && (
-                <div className="px-3 pt-2 pb-1 text-[10px] font-black text-white/60 tracking-[0.12em] uppercase">
+                <div className="px-3 pt-2 pb-1 text-[11px] font-black text-white/60 tracking-[0.12em] uppercase">
                   {g.title}
                 </div>
               )}

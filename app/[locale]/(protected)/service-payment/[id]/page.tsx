@@ -145,12 +145,12 @@ export default async function YuanPaymentDetailPage({
 
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-border p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted">{t("detailAmountCny")}</p>
+              <p className="text-[11px] uppercase tracking-widest text-muted">{t("detailAmountCny")}</p>
               <p className="mt-1 text-xl font-bold font-mono">¥{Number(yp.yuan_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
-              <p className="text-[10px] text-muted">@ ฿{Number(yp.exchange_rate).toFixed(4)} / ¥</p>
+              <p className="text-[11px] text-muted">@ ฿{Number(yp.exchange_rate).toFixed(4)} / ¥</p>
             </div>
             <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-primary-700">{t("detailAmountThb")}</p>
+              <p className="text-[11px] uppercase tracking-widest text-primary-700">{t("detailAmountThb")}</p>
               <p className="mt-1 text-xl font-bold font-mono text-primary-700">฿{Number(yp.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           </div>

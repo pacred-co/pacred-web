@@ -101,7 +101,7 @@ export function HoverZoomImage({
             }}
           />
         )}
-        <span className="absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white pointer-events-none">
+        <span className="absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[11px] text-white pointer-events-none">
           🔍 {lens.show ? `${zoom}×` : "เลื่อนเมาส์เพื่อขยาย"}
         </span>
       </div>

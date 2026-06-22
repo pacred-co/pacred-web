@@ -330,7 +330,7 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
 
       {/* Badge */}
       {video.badge && (
-        <div className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] md:text-[10px] font-black tracking-wide shadow-[0_2px_6px_rgba(0,0,0,0.25)]">
+        <div className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] md:text-[11px] font-black tracking-wide shadow-[0_2px_6px_rgba(0,0,0,0.25)]">
           {video.badge}
         </div>
       )}
@@ -457,7 +457,7 @@ function KnowledgeCarousel() {
               />
               <div className="absolute top-2.5 left-2.5">
                 <span className={[
-                  "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
+                  "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
                   CATEGORY_BADGE[article.category],
                 ].join(" ")}>
                   {article.category}
@@ -601,7 +601,7 @@ function NewsCarousel() {
               />
               <div className="absolute top-2.5 left-2.5">
                 <span className={[
-                  "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
+                  "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
                   CATEGORY_BADGE[news.category],
                 ].join(" ")}>
                   {news.category}

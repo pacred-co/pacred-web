@@ -80,26 +80,26 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
             {t("creditLineTitle")}
           </h3>
         </div>
-        <span className="text-[10px] font-mono uppercase text-blue-700/60">
+        <span className="text-[11px] font-mono uppercase text-blue-700/60">
           {t("creditTermsDays", { days: credit.credit_terms_days })}
         </span>
       </div>
 
       <div className="mt-4 grid sm:grid-cols-3 gap-3">
         <div>
-          <p className="text-[10px] font-semibold text-blue-700/80">{t("creditLimitTotal")}</p>
+          <p className="text-[11px] font-semibold text-blue-700/80">{t("creditLimitTotal")}</p>
           <p className="mt-0.5 text-lg font-bold font-mono text-blue-900">
             ฿{limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-red-700/80">{t("creditOutstanding")}</p>
+          <p className="text-[11px] font-semibold text-red-700/80">{t("creditOutstanding")}</p>
           <p className="mt-0.5 text-lg font-bold font-mono text-red-700">
             ฿{outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-emerald-700/80">{t("creditRemaining")}</p>
+          <p className="text-[11px] font-semibold text-emerald-700/80">{t("creditRemaining")}</p>
           <p className={`mt-0.5 text-lg font-bold font-mono ${overLimit ? "text-red-700" : "text-emerald-700"}`}>
             ฿{available.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
@@ -113,7 +113,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
             style={{ width: `${owedPct}%` }}
           />
         </div>
-        <p className="mt-1 text-[10px] text-blue-700/70">
+        <p className="mt-1 text-[11px] text-blue-700/70">
           {t("creditUsedPct", { pct: owedPct.toFixed(0) })}
         </p>
       </div>
@@ -146,7 +146,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
             </p>
           )}
           {partial && (
-            <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 font-medium">
+            <span className="text-[11px] text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 font-medium">
               {t("payCreditPartialBadge")}
             </span>
           )}

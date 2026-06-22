@@ -178,7 +178,7 @@ export default async function WalletShopPage() {
                         {new Date(row.created_at).toLocaleString("th-TH")}
                       </div>
                       <div className="mt-1">
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[row.status]}`}>
+                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[row.status]}`}>
                           {t(`status.${row.status}`)}
                         </span>
                       </div>
@@ -219,7 +219,7 @@ export default async function WalletShopPage() {
                           {t(`kind.${KIND_LABEL_KEYS[row.kind]}`)}
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[row.status]}`}>
+                          <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[row.status]}`}>
                             {t(`status.${row.status}`)}
                           </span>
                         </td>
@@ -266,7 +266,7 @@ function StatCard({
         {value}
       </p>
       {subtitle && (
-        <p className="mt-1 text-[10px] sm:text-[11px] text-muted">{subtitle}</p>
+        <p className="mt-1 text-[11px] sm:text-[11px] text-muted">{subtitle}</p>
       )}
     </div>
   );

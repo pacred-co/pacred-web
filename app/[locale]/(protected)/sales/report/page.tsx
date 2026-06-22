@@ -377,19 +377,19 @@ export default async function SalesReportPage({
                       <p className="mt-1 font-mono text-xs text-muted">{row.userID}</p>
                       <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-dashed border-border pt-2 text-center">
                         <div>
-                          <div className="text-[10px] text-muted">CBM</div>
+                          <div className="text-[11px] text-muted">CBM</div>
                           <div className="text-sm font-semibold tabular-nums font-mono">
                             {numberFormat(row.fVolume, 5)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted">Kg</div>
+                          <div className="text-[11px] text-muted">Kg</div>
                           <div className="text-sm font-semibold tabular-nums font-mono">
                             {numberFormat(row.fWeight, 2)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-muted">{t("chinaImportFee")}</div>
+                          <div className="text-[11px] text-muted">{t("chinaImportFee")}</div>
                           <div className="text-sm font-bold tabular-nums font-mono text-red-600">
                             {numberFormat(row.fTotalPrice, 2)}
                           </div>

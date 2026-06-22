@@ -73,7 +73,7 @@ export function RateCardGuide({ defaultOpen = false }: { defaultOpen?: boolean }
                     <td className="py-1">
                       <span className="flex flex-wrap gap-1">
                         {INCOTERM_SCOPE[ic].map((s) => (
-                          <span key={s} className="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">{SCOPE_LABEL[s]}</span>
+                          <span key={s} className="rounded bg-surface-alt px-1.5 py-0.5 text-[11px] text-muted">{SCOPE_LABEL[s]}</span>
                         ))}
                       </span>
                     </td>
@@ -135,7 +135,7 @@ export function RateCardGuide({ defaultOpen = false }: { defaultOpen?: boolean }
               </div>
             );
           })}
-          <p className="text-[10px] text-muted">{SELL_TIER_LABEL.retail} = ลูกค้าใหม่/รายย่อย · {SELL_TIER_LABEL.regular} = ลูกค้าประจำ · {SELL_TIER_LABEL.wholesale} = ลูกค้าส่ง/ปริมาณมาก</p>
+          <p className="text-[11px] text-muted">{SELL_TIER_LABEL.retail} = ลูกค้าใหม่/รายย่อย · {SELL_TIER_LABEL.regular} = ลูกค้าประจำ · {SELL_TIER_LABEL.wholesale} = ลูกค้าส่ง/ปริมาณมาก</p>
         </div>
 
         {/* 4) Policy */}

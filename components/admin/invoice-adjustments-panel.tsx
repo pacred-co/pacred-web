@@ -117,7 +117,7 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm">ปรับยอด invoice (manual ± line)</h3>
-        <span className="text-[10px] text-muted">V-A5</span>
+        <span className="text-[11px] text-muted">V-A5</span>
       </div>
 
       {activeRows.length > 0 && (
@@ -154,7 +154,7 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
                       </span>
                     </p>
                     <p className="text-muted mt-0.5">{r.reason}</p>
-                    <p className="text-[10px] text-muted mt-0.5">
+                    <p className="text-[11px] text-muted mt-0.5">
                       เพิ่มเมื่อ{" "}
                       {new Date(r.created_at).toLocaleString("th-TH", {
                         dateStyle: "short",
@@ -171,13 +171,13 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
                       )}
                     </p>
                     {r.reversal_reason && (
-                      <p className="text-[10px] text-muted mt-0.5">
+                      <p className="text-[11px] text-muted mt-0.5">
                         เหตุผลยกเลิก: {r.reversal_reason}
                       </p>
                     )}
                   </div>
                   <span
-                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}
                   >
                     {STATUS_LABEL[r.status] ?? r.status}
                   </span>
@@ -188,7 +188,7 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
                       type="button"
                       onClick={() => onReverse(r.id, amt)}
                       disabled={pending}
-                      className="rounded border border-red-200 text-red-600 px-2 py-1 text-[10px] hover:bg-red-50 disabled:opacity-50"
+                      className="rounded border border-red-200 text-red-600 px-2 py-1 text-[11px] hover:bg-red-50 disabled:opacity-50"
                     >
                       ยกเลิกรายการนี้
                     </button>
@@ -217,7 +217,7 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
               type="button"
               onClick={() => { setOpen(false); setErr(null); }}
               disabled={pending}
-              className="text-[10px] text-muted hover:underline"
+              className="text-[11px] text-muted hover:underline"
             >
               ปิด
             </button>

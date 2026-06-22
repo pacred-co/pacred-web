@@ -18,7 +18,7 @@ const AGENT_CODES = ["PR888", "PR352", "PR2678", "PR4155"];
 function MenuBadge({ n }: { n: number }) {
   if (n <= 0) return null;
   return (
-    <span className="ml-auto min-w-[18px] rounded-full bg-red-600 px-1.5 text-center text-[10px] font-medium leading-[18px] text-white">
+    <span className="ml-auto min-w-[18px] rounded-full bg-red-600 px-1.5 text-center text-[11px] font-medium leading-[18px] text-white">
       {n}
     </span>
   );

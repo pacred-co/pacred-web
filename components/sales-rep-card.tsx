@@ -56,7 +56,7 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
 
   return (
     <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-50 to-primary-100/30 p-4 shadow-sm">
-      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
+      <p className="text-[11px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
       <div className="mt-2 flex items-center gap-3">
         <div className="relative h-14 w-14 rounded-full overflow-hidden border-2 border-white bg-surface-alt flex items-center justify-center shrink-0 shadow-md">
           {rep.avatar_url ? (
@@ -68,7 +68,7 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
         <div className="min-w-0 flex-1">
           <p className="font-bold text-foreground text-sm leading-tight">{t("repName", { name: displayName })}</p>
           {extras?.department && (
-            <p className="text-[10px] text-muted">{extras.department}</p>
+            <p className="text-[11px] text-muted">{extras.department}</p>
           )}
           {phone && (
             <a
@@ -92,14 +92,14 @@ async function SalesRepFallback() {
   const t = await getTranslations("salesRepCard");
   return (
     <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-50 to-primary-100/30 p-4 shadow-sm">
-      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
+      <p className="text-[11px] uppercase tracking-widest text-primary-700 font-semibold">{t("supervisor")}</p>
       <div className="mt-2 flex items-center gap-3">
         <div className="relative h-14 w-14 rounded-full overflow-hidden border-2 border-white bg-surface-alt flex items-center justify-center shrink-0 shadow-md">
           <span className="text-xl font-bold text-primary-700">P</span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-bold text-foreground text-sm leading-tight">{t("teamName")}</p>
-          <p className="text-[10px] text-muted">{t("customerCare")}</p>
+          <p className="text-[11px] text-muted">{t("customerCare")}</p>
           <a
             href={`tel:${CONTACT.phoneCompany}`}
             className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 font-mono hover:underline"

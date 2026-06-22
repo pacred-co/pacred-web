@@ -327,7 +327,7 @@ export function ForwarderPayModal({
                 <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
                   <div className="min-w-[460px]">
                     {/* Column header — abbreviated (mobile) / full (desktop) */}
-                    <div className="grid grid-cols-[1.3fr_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 bg-surface-alt/60 px-3 py-2 text-[9px] md:text-[10px] font-bold uppercase tracking-wide text-muted md:gap-x-2">
+                    <div className="grid grid-cols-[1.3fr_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 bg-surface-alt/60 px-3 py-2 text-[11px] md:text-[11px] font-bold uppercase tracking-wide text-muted md:gap-x-2">
                       <span>{t("colOrderTrack")}</span>
                       <span className="text-right">
                         <span className="md:hidden">CTN</span>
@@ -381,42 +381,42 @@ export function ForwarderPayModal({
                                 #{row.id}
                               </span>
                               {row.fcredit === "1" && (
-                                <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 text-red-700 text-[9px] font-bold px-1.5 py-0.5">
+                                <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 text-red-700 text-[11px] font-bold px-1.5 py-0.5">
                                   {t("creditItem")}
                                 </span>
                               )}
                               {ptLabel && (
-                                <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-alt text-muted text-[9px] font-semibold px-1.5 py-0.5">
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-alt text-muted text-[11px] font-semibold px-1.5 py-0.5">
                                   {ptLabel}
                                 </span>
                               )}
                             </div>
-                            <div className="truncate font-mono text-[10px] text-muted md:text-[10.5px]">
+                            <div className="truncate font-mono text-[11px] text-muted md:text-[10.5px]">
                               {trackingChn}
                             </div>
                           </div>
                           {/* CTN — จำนวนกล่อง */}
-                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-foreground/80 md:text-[11px]">
                             {row.famount > 0 ? row.famount : "—"}
                           </div>
                           {/* KG — น้ำหนัก */}
-                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-foreground/80 md:text-[11px]">
                             {row.fweight > 0 ? numberFormat2(row.fweight) : "—"}
                           </div>
                           {/* CBM — ปริมาตรรวม */}
-                          <div className="text-right text-[10px] tabular-nums text-foreground/80 md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-foreground/80 md:text-[11px]">
                             {row.fvolume > 0 ? numberFormat2(row.fvolume) : "—"}
                           </div>
                           {/* Rate — เรทนำเข้า */}
-                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-muted md:text-[11px]">
                             {row.ftotalprice > 0 ? numberFormat2(row.ftotalprice) : "—"}
                           </div>
                           {/* Other — ค่าอื่นๆ */}
-                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-muted md:text-[11px]">
                             {other > 0 ? numberFormat2(other) : "—"}
                           </div>
                           {/* Disc — ส่วนลด */}
-                          <div className="text-right text-[10px] tabular-nums text-muted md:text-[11px]">
+                          <div className="text-right text-[11px] tabular-nums text-muted md:text-[11px]">
                             {row.fdiscount > 0 ? `-${numberFormat2(row.fdiscount)}` : "—"}
                           </div>
                           {/* Price — ราคา (per-order net, sums to grand total) */}
@@ -451,7 +451,7 @@ export function ForwarderPayModal({
                     <div className="flex items-baseline gap-2 text-[13px]">
                       <span className="shrink-0 opacity-90">
                         {t("summaryWhtLabel")}{" "}
-                        <span className="inline-flex items-center rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold align-middle">
+                        <span className="inline-flex items-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold align-middle">
                           {bill.totalNiTi > 0 ? "1%" : t("summaryWhtNone")}
                         </span>
                       </span>

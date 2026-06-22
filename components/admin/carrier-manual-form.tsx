@@ -491,7 +491,7 @@ export function CarrierManualForm({
 
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
-              เลข Tracking 2 <span className="text-[10px] text-muted">(ไม่บังคับ)</span>
+              เลข Tracking 2 <span className="text-[11px] text-muted">(ไม่บังคับ)</span>
             </label>
             <input
               type="text"
@@ -597,7 +597,7 @@ export function CarrierManualForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
-              เลขตู้ <span className="text-[10px] text-muted">(ไม่บังคับ)</span>
+              เลขตู้ <span className="text-[11px] text-muted">(ไม่บังคับ)</span>
             </label>
             <input
               type="text"
@@ -612,7 +612,7 @@ export function CarrierManualForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
-              ID / CO ref <span className="text-[10px] text-muted">(ไม่บังคับ)</span>
+              ID / CO ref <span className="text-[11px] text-muted">(ไม่บังคับ)</span>
             </label>
             <input
               type="text"
@@ -669,7 +669,7 @@ export function CarrierManualForm({
           {shipBy === "PCSE" && (
             <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
               💰 ค่าขนส่งไทย (PCSE): <strong>{transportPricePreview.toLocaleString()} ฿</strong>
-              <span className="ml-2 text-[10px] text-blue-700">
+              <span className="ml-2 text-[11px] text-blue-700">
                 ({volumeNum > 0 ? `${volumeNum.toFixed(3)} CBM × 120 = ${(volumeNum * 120).toFixed(2)}; ขั้นต่ำ 50` : "ใส่ปริมาตร CBM ก่อน"})
               </span>
             </div>
@@ -820,7 +820,7 @@ export function CarrierManualForm({
             เปิดสเปรดชีตใน Google Sheets ↗
           </a>
         </p>
-        <p className="mt-1 text-[10px] text-muted">
+        <p className="mt-1 text-[11px] text-muted">
           (สำหรับอ้างอิงเท่านั้น — ฟอร์มนี้ไม่ดึง/แก้ Sheet ระบบบันทึกลง <code>tb_forwarder</code> โดยตรง)
         </p>
       </div>

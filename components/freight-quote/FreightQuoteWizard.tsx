@@ -390,7 +390,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                     active ? "bg-primary-600 text-white" : done ? "text-primary-600" : "text-muted"
                   }`}
                 >
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black ${
+                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-black ${
                     active ? "bg-white/25" : done ? "bg-primary-100 text-primary-600 dark:bg-primary-900/40" : "bg-gray-100 dark:bg-white/10"
                   }`}>
                     {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : n}
@@ -448,7 +448,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[18px] font-black tracking-wide ${sel ? "text-primary-600" : "text-foreground"}`}>{it.val}</span>
-                      {it.tag && <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">{t(`incoterm.${it.val}.tag`)}</span>}
+                      {it.tag && <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">{t(`incoterm.${it.val}.tag`)}</span>}
                     </div>
                     <div className="text-[11.5px] text-muted font-semibold mt-0.5">{it.name}</div>
                     <div className="text-[11.5px] text-foreground/65 leading-snug mt-1">{t(`incoterm.${it.val}.desc`)}</div>
@@ -578,7 +578,7 @@ export function FreightQuoteWizard({ phone, phoneDisplay, lineUrl }: {
                 }`}>
                   <FileCheck2 className={`w-3.5 h-3.5 ${d.req ? "text-primary-600" : "text-muted"}`} />
                   {d.name}
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${d.req ? "bg-primary-600 text-white" : "bg-gray-100 text-muted dark:bg-white/10"}`}>
+                  <span className={`text-[11px] font-black px-1.5 py-0.5 rounded ${d.req ? "bg-primary-600 text-white" : "bg-gray-100 text-muted dark:bg-white/10"}`}>
                     {d.req ? t("doc.required") : t("doc.optional")}
                   </span>
                 </span>

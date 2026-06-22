@@ -246,7 +246,7 @@ export function BookingTabs({ active, onChange, only }: BookingTabsProps) {
                       ? <ChevronUp className="h-6 w-6" strokeWidth={1.9} />
                       : <ChevronDown className="h-6 w-6" strokeWidth={1.9} />}
                     {!expanded && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-white">
                         +{serviceTabs.length}
                       </span>
                     )}

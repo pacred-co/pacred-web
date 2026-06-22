@@ -578,7 +578,7 @@ export default async function ProfilePage() {
                                   className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-[#1877f2]/55 px-3 py-2 text-sm font-medium text-white"
                                 >
                                   <i className="fab fa-facebook-f"></i> Facebook
-                                  <span className="rounded-full bg-white/25 px-1.5 text-[9px] font-medium leading-[15px]">{t("comingSoon")}</span>
+                                  <span className="rounded-full bg-white/25 px-1.5 text-[11px] font-medium leading-[15px]">{t("comingSoon")}</span>
                                 </button>
                                 {/* Google — coming soon */}
                                 <button
@@ -588,7 +588,7 @@ export default async function ProfilePage() {
                                   className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-gray-600"
                                 >
                                   <span className="font-bold text-[#ea4335]">G</span> Google
-                                  <span className="rounded-full bg-gray-100 px-1.5 text-[9px] font-medium leading-[15px] text-gray-500">{t("comingSoon")}</span>
+                                  <span className="rounded-full bg-gray-100 px-1.5 text-[11px] font-medium leading-[15px] text-gray-500">{t("comingSoon")}</span>
                                 </button>
                               </div>
                             </div>
@@ -683,7 +683,7 @@ export default async function ProfilePage() {
                     <h2 className="text-2xl font-bold text-gray-400">0</h2>
                     <h4 className="text-sm text-muted flex items-center gap-1.5">
                       {t("statExport")}
-                      <span className="rounded-full bg-gray-200 px-1.5 text-[9px] font-medium leading-[16px] text-gray-500">{t("comingSoon")}</span>
+                      <span className="rounded-full bg-gray-200 px-1.5 text-[11px] font-medium leading-[16px] text-gray-500">{t("comingSoon")}</span>
                     </h4>
                   </div>
                   <i className="text-gray-400">

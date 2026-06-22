@@ -130,7 +130,7 @@ export default async function NewsListingPage({
                     <div className="absolute top-2 left-2 md:top-3 md:left-3">
                       <span
                         className={[
-                          "inline-flex items-center gap-1 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[9px] md:text-[10.5px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
+                          "inline-flex items-center gap-1 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[11px] md:text-[10.5px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
                           CATEGORY_BADGE[news.category] ?? CATEGORY_BADGE["ข่าวด่วน"],
                         ].join(" ")}
                       >
@@ -139,7 +139,7 @@ export default async function NewsListingPage({
                     </div>
                     {/* Date stamp */}
                     <div className="absolute top-2 right-2 md:top-3 md:right-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[9px] md:text-[10.5px] font-bold tracking-wide">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] md:text-[10.5px] font-bold tracking-wide">
                         <Calendar className="w-2.5 h-2.5" strokeWidth={3} />
                         {formatThaiDate(news.publishedAt)}
                       </span>

@@ -203,7 +203,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             <p className="text-[12px] font-semibold uppercase tracking-wider text-primary-700">
               {t("salesRepLabel")}
             </p>
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold px-1.5 py-0.5 border border-emerald-100">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold px-1.5 py-0.5 border border-emerald-100">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
               ONLINE
             </span>

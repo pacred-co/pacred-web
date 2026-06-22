@@ -186,7 +186,7 @@ export default async function CustomerFreightShipmentsPage({
                 status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
               }`}
             >
-              {t("filterAll")} <span className="ml-1 text-[10px]">({totalAll})</span>
+              {t("filterAll")} <span className="ml-1 text-[11px]">({totalAll})</span>
             </Link>
             {FREIGHT_SHIPMENT_STATUSES.map((s) => {
               const href = q
@@ -201,7 +201,7 @@ export default async function CustomerFreightShipmentsPage({
                   }`}
                 >
                   {FREIGHT_SHIPMENT_STATUS_LABEL[s]}{" "}
-                  <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+                  <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
                 </Link>
               );
             })}
@@ -245,7 +245,7 @@ export default async function CustomerFreightShipmentsPage({
                       <td className="px-3 py-2 text-xs">{FREIGHT_TRANSPORT_MODE_LABEL[s.transport_mode]}</td>
                       <td className="px-3 py-2 text-xs">
                         {s.container_code && <p className="font-mono">{s.container_code}</p>}
-                        {s.bl_no && <p className="font-mono text-muted text-[10px]">B/L: {s.bl_no}</p>}
+                        {s.bl_no && <p className="font-mono text-muted text-[11px]">B/L: {s.bl_no}</p>}
                         {!s.container_code && !s.bl_no && "—"}
                       </td>
                       <td className="px-3 py-2 text-xs">
@@ -254,17 +254,17 @@ export default async function CustomerFreightShipmentsPage({
                         {!s.port_loading && !s.port_discharge && "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[s.status]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[s.status]}`}>
                           {FREIGHT_SHIPMENT_STATUS_LABEL[s.status]}
                         </span>
                       </td>
                       <td className="px-3 py-2">
                         {pay ? (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${PAYMENT_STATUS_BADGE[pay]}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${PAYMENT_STATUS_BADGE[pay]}`}>
                             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[pay]}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted">{t("noInvoiceYet")}</span>
+                          <span className="text-[11px] text-muted">{t("noInvoiceYet")}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">

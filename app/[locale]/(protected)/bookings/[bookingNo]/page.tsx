@@ -352,7 +352,7 @@ export default async function BookingDetailPage({
               );
             })}
           </ul>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             {t("linkExpiryNote")}
           </p>
         </section>

@@ -81,7 +81,7 @@ export function WhyPacred() {
 
                   {/* Number indicator */}
                   <div className="absolute top-4 right-4 md:top-5 md:right-5 flex items-center gap-1 text-muted/40 group-hover:text-primary-600/60 transition-colors duration-300">
-                    <span className="text-[10px] font-bold tracking-[0.2em]">NO.</span>
+                    <span className="text-[11px] font-bold tracking-[0.2em]">NO.</span>
                     <span className="text-[18px] md:text-[20px] font-black tabular-nums leading-none tracking-tight">{num}</span>
                   </div>
 

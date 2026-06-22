@@ -33,7 +33,7 @@ let lastKnownPayDue = 0;
 function TabCountBadge({ n }: { n: number }) {
   if (n <= 0) return null;
   return (
-    <span className="absolute -top-1.5 -right-2 grid min-w-[18px] h-[18px] place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-surface shadow-sm">
+    <span className="absolute -top-1.5 -right-2 grid min-w-[18px] h-[18px] place-items-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-white dark:ring-surface shadow-sm">
       {n > 99 ? "99+" : n}
     </span>
   );
@@ -177,7 +177,7 @@ export function FloatingTabs({
       <div className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-50 flex-col shadow-xl">
         {desktopTabs.map((item, i) => {
           const isAnchor = item.href.startsWith("#");
-          const cls = "group w-[64px] xl:w-[72px] py-3 bg-white dark:bg-surface border border-border flex flex-col items-center justify-center gap-1.5 text-[10px] font-medium text-muted hover:text-foreground transition-colors first:rounded-tl-xl last:rounded-bl-xl";
+          const cls = "group w-[64px] xl:w-[72px] py-3 bg-white dark:bg-surface border border-border flex flex-col items-center justify-center gap-1.5 text-[11px] font-medium text-muted hover:text-foreground transition-colors first:rounded-tl-xl last:rounded-bl-xl";
           const inner = (
             <>
               {item.iconImg && (

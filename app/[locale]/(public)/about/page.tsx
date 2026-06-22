@@ -243,7 +243,7 @@ export default async function AboutPage({
                         sizes="(max-width: 1024px) 50vw, 300px"
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                       />
-                      <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[10px] font-black text-primary-600">
+                      <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[11px] font-black text-primary-600">
                         OFFICE {n}/2
                       </div>
                     </div>
@@ -307,7 +307,7 @@ export default async function AboutPage({
                   <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 dark:bg-surface/95 text-primary-600 text-[10.5px] md:text-[11.5px] font-black shadow-[0_4px_10px_rgba(0,0,0,0.10)] backdrop-blur-sm">
                     🇹🇭 THAILAND HUB
                   </div>
-                  <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[9.5px] md:text-[10px] font-black tracking-wider shadow-md">
+                  <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[9.5px] md:text-[11px] font-black tracking-wider shadow-md">
                     MAIN
                   </div>
                 </div>

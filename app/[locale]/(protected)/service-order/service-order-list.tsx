@@ -286,7 +286,7 @@ export function ServiceOrderList({
                         </Link>
                       ) : <span className="text-muted">—</span>}
                       {o.payment_due_at && o.status === "2" && (
-                        <div className="mt-1 text-[10px] text-amber-700">
+                        <div className="mt-1 text-[11px] text-amber-700">
                           {t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}
                         </div>
                       )}
@@ -323,7 +323,7 @@ export function ServiceOrderList({
                         {Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </div>
                       {o.yuan_rate_locked && (
-                        <div className="text-[10px] text-muted">@ ฿{Number(o.yuan_rate_locked).toFixed(4)}/¥</div>
+                        <div className="text-[11px] text-muted">@ ฿{Number(o.yuan_rate_locked).toFixed(4)}/¥</div>
                       )}
                     </td>
                     <td className="px-4 py-3 align-top">

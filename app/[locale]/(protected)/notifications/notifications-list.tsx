@@ -92,7 +92,7 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
                       {!n.read_at && <span className={`inline-block w-2 h-2 rounded-full mr-2 ${SEVERITY_DOT[n.severity]}`} />}
                       {n.title}
                     </h3>
-                    <span className="text-[10px] text-muted whitespace-nowrap">
+                    <span className="text-[11px] text-muted whitespace-nowrap">
                       {new Date(n.created_at).toLocaleString("th-TH", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
                     </span>
                   </div>

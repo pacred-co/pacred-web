@@ -166,19 +166,19 @@ export function HomeArticle({ locale }: { locale: "th" | "en" }) {
             <div className="mt-3 md:mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-border bg-white dark:bg-surface p-3 md:p-4 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
               <div className="text-center">
                 <div className="text-[18px] md:text-[22px] font-black text-primary-600 leading-none">14+</div>
-                <div className="mt-1 text-[10px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
+                <div className="mt-1 text-[11px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
                   {isTh ? "ปี" : "Years"}
                 </div>
               </div>
               <div className="text-center border-x border-dashed border-border">
                 <div className="text-[18px] md:text-[22px] font-black text-primary-600 leading-none">50K+</div>
-                <div className="mt-1 text-[10px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
+                <div className="mt-1 text-[11px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
                   {isTh ? "ตู้ที่ดูแล" : "Containers"}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-[18px] md:text-[22px] font-black text-primary-600 leading-none">100%</div>
-                <div className="mt-1 text-[10px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
+                <div className="mt-1 text-[11px] md:text-[11px] font-bold text-muted tracking-wider uppercase">
                   {isTh ? "ถูกกฎหมาย" : "Compliant"}
                 </div>
               </div>

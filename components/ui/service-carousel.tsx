@@ -163,7 +163,7 @@ export function ServiceCarousel({
                         {item.badges.map((b) => (
                           <span
                             key={b}
-                            className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                            className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
                           >
                             {b}
                           </span>

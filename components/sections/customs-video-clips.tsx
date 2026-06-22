@@ -229,7 +229,7 @@ function VideoCardSide({ video, isActive, onPlay }: { video: Video; isActive: bo
       </div>
 
       {video.badge && (
-        <div className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] md:text-[10px] font-black tracking-wide shadow-[0_2px_6px_rgba(0,0,0,0.25)]">
+        <div className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-primary-600 text-white text-[9.5px] md:text-[11px] font-black tracking-wide shadow-[0_2px_6px_rgba(0,0,0,0.25)]">
           {t(`${video.id}.badge`)}
         </div>
       )}

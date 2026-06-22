@@ -38,7 +38,7 @@ export function SlipImage({
   if (isPdf) {
     const tile = (
       <div
-        className={`flex flex-col items-center justify-center gap-0.5 bg-rose-50 text-rose-700 text-center text-[10px] leading-tight ${className} ${fallbackClassName}`}
+        className={`flex flex-col items-center justify-center gap-0.5 bg-rose-50 text-rose-700 text-center text-[11px] leading-tight ${className} ${fallbackClassName}`}
         title="สลิป PDF — คลิกเพื่อเปิด"
       >
         <span aria-hidden>📄</span>
@@ -59,7 +59,7 @@ export function SlipImage({
   if (failed) {
     return (
       <div
-        className={`flex flex-col items-center justify-center gap-0.5 bg-amber-50 text-amber-700 text-center text-[10px] leading-tight ${className} ${fallbackClassName}`}
+        className={`flex flex-col items-center justify-center gap-0.5 bg-amber-50 text-amber-700 text-center text-[11px] leading-tight ${className} ${fallbackClassName}`}
         title="ไฟล์สลิปหาไม่เจอในระบบ (อาจเป็นไฟล์เก่าที่ยังไม่ย้าย)"
       >
         <span aria-hidden>🧾</span>

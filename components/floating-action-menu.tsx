@@ -32,7 +32,7 @@ export function FloatingActionMenu() {
             <li key={it.href}>
               <Link
                 href={it.href}
-                className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] ${
+                className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] ${
                   active ? "text-primary-600 font-semibold" : "text-muted hover:text-foreground"
                 }`}
               >

@@ -227,7 +227,7 @@ export default async function CustomerRefundsHubPage() {
                     <td className="px-3 py-2 text-xs">
                       <p>{REFUND_SOURCE_LABEL[r.source]}</p>
                       {r.source_ref && (
-                        <p className="font-mono text-[10px] text-muted">{r.source_ref.slice(0, 24)}</p>
+                        <p className="font-mono text-[11px] text-muted">{r.source_ref.slice(0, 24)}</p>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-700">
@@ -242,7 +242,7 @@ export default async function CustomerRefundsHubPage() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                         {REFUND_STATUS_LABEL[r.status]}
                       </span>
                     </td>

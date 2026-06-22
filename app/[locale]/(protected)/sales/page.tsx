@@ -454,7 +454,7 @@ function BadgeVIP2({
   // Tailwind chip for the VIP/corporate badge cluster (was the legacy
   // `badge badge-vip badge-pill`). Amber tone reads as the "VIP" accent.
   const vipChip =
-    "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700";
+    "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700";
   return (
     <>
       {coLabel ? <span className={vipChip}>{coLabel}</span> : null}

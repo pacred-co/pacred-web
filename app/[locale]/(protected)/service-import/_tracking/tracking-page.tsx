@@ -375,7 +375,7 @@ export default async function TrackingPage({
           <div>
             <label className="flex items-center gap-1.5 text-[15px] font-bold text-foreground mb-2">
               {t("searchLabel")}
-              <span className="w-4 h-4 grid place-items-center rounded-full border border-border text-muted text-[10px] font-bold" title={t("searchHint")}>?</span>
+              <span className="w-4 h-4 grid place-items-center rounded-full border border-border text-muted text-[11px] font-bold" title={t("searchHint")}>?</span>
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
@@ -935,7 +935,7 @@ async function ContainerView({
                 {statusEntries.map(([s, n]) => (
                   <span key={s} className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border ${STATUS_CHIP_TONE[s] ?? "bg-surface-alt text-foreground border-border"}`}>
                     {statusLabel(t, s)}
-                    <span className="bg-white/70 rounded-full px-1 text-[10px] font-bold">{n}</span>
+                    <span className="bg-white/70 rounded-full px-1 text-[11px] font-bold">{n}</span>
                   </span>
                 ))}
               </div>
@@ -1029,7 +1029,7 @@ async function ContainerItemRow({
       <div className="min-w-0">
         <h3 className="text-base md:text-lg font-extrabold leading-tight mb-1 truncate">
           #{row.id}
-          <span className="inline-flex ml-2 align-middle bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-[10px] font-bold">
+          <span className="inline-flex ml-2 align-middle bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-[11px] font-bold">
             {t("statusFallback", { s: row.fstatus ?? "—" })}
           </span>
         </h3>

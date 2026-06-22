@@ -328,7 +328,7 @@ function MenuRow({
         <div className={`flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] text-muted/50 cursor-default select-none`}>
           <Icon name={item.icon} active={false} />
           <span className="truncate">{t(item.labelKey)}</span>
-          <span className="ml-auto text-[10px] text-muted/60 font-medium">{t("comingSoon")}</span>
+          <span className="ml-auto text-[11px] text-muted/60 font-medium">{t("comingSoon")}</span>
         </div>
       </li>
     );
@@ -643,7 +643,7 @@ export function AdminSidebar({
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (
-                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-muted/70 font-bold">
+                <p className="px-3 pt-1.5 pb-1 text-[11px] uppercase tracking-widest text-muted/70 font-bold">
                   {sec.header}
                 </p>
               )}

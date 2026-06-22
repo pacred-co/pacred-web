@@ -177,7 +177,7 @@ export async function TopMenuReport({ activeHref }: { activeHref?: string } = {}
                 <span>{it.label}</span>
                 {count > 0 && (
                   <span
-                    className={`inline-flex items-center justify-center rounded-full text-[10px] font-bold leading-none px-1.5 py-0.5 ${
+                    className={`inline-flex items-center justify-center rounded-full text-[11px] font-bold leading-none px-1.5 py-0.5 ${
                       active ? "bg-white text-primary-600" : "bg-red-500 text-white"
                     }`}
                   >

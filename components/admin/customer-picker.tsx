@@ -226,7 +226,7 @@ export function CustomerPicker({
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-sm truncate">{label}</span>
                         {r.account_type === "juristic" && (
-                          <span className="text-[10px] text-muted shrink-0">นิติบุคคล</span>
+                          <span className="text-[11px] text-muted shrink-0">นิติบุคคล</span>
                         )}
                       </div>
                       {detail && (
@@ -241,7 +241,7 @@ export function CustomerPicker({
         </div>
       )}
 
-      <p className="text-[10px] text-muted mt-1">
+      <p className="text-[11px] text-muted mt-1">
         พิมพ์อย่างน้อย 2 ตัวอักษร — รองรับ PR001 · ชื่อ · เบอร์ · อีเมล · ชื่อบริษัท
       </p>
     </div>

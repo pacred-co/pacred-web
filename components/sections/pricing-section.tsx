@@ -275,7 +275,7 @@ export function PricingSection({
                   >
                     <Anchor className="w-3.5 h-3.5" strokeWidth={2.5} />
                     <span>{t(p.nameKey)}</span>
-                    <span className={`text-[10px] font-bold ${selected ? "text-white/80" : "text-muted/80"}`}>
+                    <span className={`text-[11px] font-bold ${selected ? "text-white/80" : "text-muted/80"}`}>
                       {p.en}
                     </span>
                   </button>
@@ -470,7 +470,7 @@ function CountryChips({
             <span className="text-[18px] leading-none">{c.flag}</span>
             <span>{t(c.nameKey)}</span>
             {c.soon && (
-              <span className="ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/8 dark:bg-white/10 text-muted leading-none">
+              <span className="ml-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-black/8 dark:bg-white/10 text-muted leading-none">
                 เร็วๆนี้
               </span>
             )}
@@ -603,21 +603,21 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
           {/* Top badges */}
           {popular && (
             <div className="absolute top-3 left-3 z-[2]">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.22)]">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[11px] font-black tracking-[0.08em] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.22)]">
                 <Crown className="w-3 h-3" fill="currentColor" strokeWidth={0} />
                 {t("popularBadge")}
               </div>
             </div>
           )}
           {comingSoon && (
-            <div className="absolute top-3 right-3 z-[2] inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 text-white text-[10px] font-black tracking-[0.08em]">
+            <div className="absolute top-3 right-3 z-[2] inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 text-white text-[11px] font-black tracking-[0.08em]">
               <Lock className="w-3 h-3" strokeWidth={3} />
               {t("comingSoon")}
             </div>
           )}
           {card.badgeKey && !popular && !comingSoon && (
             <div className="absolute top-3 left-3 z-[2]">
-              <span className="inline-flex items-center text-[10px] font-black px-2.5 py-1 rounded-full bg-white/20 text-white tracking-[0.08em]">
+              <span className="inline-flex items-center text-[11px] font-black px-2.5 py-1 rounded-full bg-white/20 text-white tracking-[0.08em]">
                 {t(card.badgeKey)}
               </span>
             </div>
@@ -647,7 +647,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
             <div className="px-4 md:px-5 pt-4">
               {/* Capacity badge */}
               <div className={[
-                "inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full tracking-[0.08em]",
+                "inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full tracking-[0.08em]",
                 comingSoon
                   ? "bg-surface text-muted border border-border"
                   : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300",
@@ -711,7 +711,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
                       <Icon className="w-[18px] h-[18px]" strokeWidth={2.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                      <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
                         <span>{modeLabel}</span>
                         <span className="opacity-50">·</span>
                         <span>{t(p.transitKey)}</span>
@@ -721,14 +721,14 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
                           <span className={`text-[22px] md:text-[24px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600"}`}>
                             {p.cbm}
                           </span>
-                          <span className="text-[10px] font-bold text-muted">{t("perCbm")}</span>
+                          <span className="text-[11px] font-bold text-muted">{t("perCbm")}</span>
                         </div>
                         <span className="w-px h-3 bg-border" />
                         <div className="flex items-baseline gap-1">
                           <span className={`text-[17px] md:text-[19px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600/90"}`}>
                             {p.kg}
                           </span>
-                          <span className="text-[10px] font-bold text-muted">{t("perKg")}</span>
+                          <span className="text-[11px] font-bold text-muted">{t("perKg")}</span>
                         </div>
                       </div>
                     </div>
@@ -742,7 +742,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
           <div className="relative mx-4 md:mx-5 mt-4">
             <div className="border-t border-dashed border-border" />
             <div className={[
-              "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-[0.12em]",
+              "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black tracking-[0.12em]",
               comingSoon
                 ? "bg-surface text-muted border border-border"
                 : "bg-white dark:bg-surface text-primary-600 border border-primary-200 dark:border-primary-900",
@@ -768,7 +768,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
 
             {/* Compliance note */}
             {!comingSoon && (
-              <div className="flex items-center gap-1.5 mb-3 text-[10px] font-bold leading-snug text-muted">
+              <div className="flex items-center gap-1.5 mb-3 text-[11px] font-bold leading-snug text-muted">
                 <ShieldCheck className="w-3 h-3 shrink-0" strokeWidth={2.5} />
                 <span>{t("cargoNoticeBadge")} · {t("cargoNoticeTitle")}</span>
               </div>
@@ -877,7 +877,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
           {/* Popular crown badge */}
           {popular && (
             <div className="absolute -top-px left-5 z-[5]">
-              <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
+              <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[11px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
                 <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
                 {t("popularBadge")}
               </div>
@@ -914,11 +914,11 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
             {/* Bottom tags */}
             <div className="absolute left-2.5 right-2.5 bottom-2.5 flex gap-1.5 flex-wrap z-[3]">
               {card.badgeKey && (
-                <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[9px] md:text-[10px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[11px] md:text-[11px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                   {t(card.badgeKey)}
                 </span>
               )}
-              <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[9px] md:text-[10px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+              <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[11px] md:text-[11px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                 DDP รวมภาษี
               </span>
             </div>
@@ -943,7 +943,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
                   key={s.labelKey}
                   className="rounded-xl px-3 py-2 border border-border/60 bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface"
                 >
-                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">{t(s.labelKey)}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{t(s.labelKey)}</div>
                   <div className="text-[13px] font-black mt-0.5 tabular-nums text-[#111827] dark:text-white">{t(s.valueKey)}</div>
                 </div>
               ))}
@@ -1018,7 +1018,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
 
         {popular && (
           <div className="absolute -top-px left-5 z-[2]">
-            <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
+            <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[11px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
               <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
               {t("popularBadge")}
             </div>
@@ -1027,7 +1027,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
 
         <div className="relative p-5 md:p-6 pb-4 md:pb-5">
           {card.badgeKey && !popular && (
-            <span className="inline-flex items-center text-[10px] font-black px-2 py-1 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 tracking-[0.08em] mb-2">
+            <span className="inline-flex items-center text-[11px] font-black px-2 py-1 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 tracking-[0.08em] mb-2">
               {t(card.badgeKey)}
             </span>
           )}
@@ -1042,7 +1042,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
           </div>
 
           <div className="mt-4 flex items-baseline gap-1.5">
-            <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full ${popular ? "bg-white/20 text-white" : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"}`}>
+            <span className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full ${popular ? "bg-white/20 text-white" : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"}`}>
               <Star className="w-2.5 h-2.5" fill="currentColor" strokeWidth={0} />
               {t("startsFrom")}
             </span>
@@ -1055,7 +1055,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
               {t(card.unitKey)}
             </span>
           </div>
-          <div className={`mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${popular ? "bg-white/15 text-white" : "bg-surface text-muted"}`}>
+          <div className={`mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md ${popular ? "bg-white/15 text-white" : "bg-surface text-muted"}`}>
             {t("termPrefix")} <span className={popular ? "text-yellow-200" : "text-primary-600 font-black"}>{term}</span>
           </div>
         </div>
@@ -1064,7 +1064,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
         <div className="relative mx-5 md:mx-6">
           <div className={`border-t border-dashed ${popular ? "border-white/30" : "border-border"}`} />
           <div className={[
-            "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-[0.12em]",
+            "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black tracking-[0.12em]",
             popular
               ? "bg-primary-800 text-yellow-200 border border-white/20"
               : "bg-white dark:bg-surface text-primary-600 border border-primary-200 dark:border-primary-900",
@@ -1086,7 +1086,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
                     : "bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface border-border/60",
                 ].join(" ")}
               >
-                <div className={`text-[10px] font-bold uppercase tracking-[0.08em] ${popular ? "text-white/75" : "text-muted"}`}>
+                <div className={`text-[11px] font-bold uppercase tracking-[0.08em] ${popular ? "text-white/75" : "text-muted"}`}>
                   {t(s.labelKey)}
                 </div>
                 <div className={`text-[13px] font-black mt-0.5 tabular-nums ${popular ? "text-white" : "text-[#111827] dark:text-white"}`}>

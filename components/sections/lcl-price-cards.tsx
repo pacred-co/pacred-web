@@ -246,12 +246,12 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
         />
         <div className="absolute top-2 left-2 right-2 z-10 flex flex-wrap items-center gap-1.5">
           {card.soon ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-slate-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-slate-700 text-[11px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
               <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
               {t("badgeSoon")}
             </span>
           ) : (
-            <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[9px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
+            <span className="inline-flex items-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full backdrop-blur-sm bg-white/95 text-primary-700 text-[11px] md:text-[11px] font-black tracking-[0.06em] md:tracking-[0.08em] shadow-md">
               Term: FOB
             </span>
           )}
@@ -273,7 +273,7 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
                   <div key={m} className="flex items-center gap-1 px-2 py-1.5 md:gap-2 md:px-2.5">
                     <RIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-300 dark:text-white/25 shrink-0" strokeWidth={2.6} />
                     <span className="text-[11px] md:text-[12.5px] font-bold text-slate-400 dark:text-white/50 min-w-[1.6rem] md:min-w-[2.25rem] shrink-0">{t(WH_MODE_KEY[m])}</span>
-                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold text-slate-400 dark:text-white/45">
+                    <span className="ml-auto inline-flex items-center gap-1 text-[11px] md:text-[12px] font-bold text-slate-400 dark:text-white/45">
                       <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={2.6} />
                       {t("badgeSoon")}
                     </span>
@@ -316,7 +316,7 @@ function WarehouseCardView({ card, active, onHover, t }: { card: WarehouseCard; 
 
             {/* เงื่อนไข — mobile: collapsed behind "เพิ่มเติม" · desktop: always shown */}
             <div className={showTerms ? "block" : "hidden md:block"}>
-              <div className="text-[10px] font-black tracking-[0.10em] uppercase text-primary-600 dark:text-primary-300 mb-1">{t("termsLabel")}</div>
+              <div className="text-[11px] font-black tracking-[0.10em] uppercase text-primary-600 dark:text-primary-300 mb-1">{t("termsLabel")}</div>
               <ul className="flex flex-col gap-0.5">
                 {[t("termNote1"), t("termNote2"), t("termNote3")].map((term) => (
                   <li key={term} className="flex items-start gap-1.5 text-[11px] md:text-[11.5px] leading-snug text-slate-600 dark:text-white/75">
@@ -491,7 +491,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
     >
       {isRecommended && (
         <div className="absolute top-3 right-3 z-20">
-          <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
+          <span className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[11px] md:text-[11px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(255,213,0,0.45)]">
             <Sparkles className="w-3 h-3" strokeWidth={2.8} />
             {t("recommendedBadge")}
             <span aria-hidden className="absolute inset-0 rounded-full bg-yellow-300 animate-ping opacity-60" />
@@ -516,7 +516,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
           "rounded-xl px-3.5 py-2.5 border",
           isFeatured ? "bg-white/12 border-white/20 backdrop-blur-sm" : "bg-primary-50/60 border-primary-100 dark:bg-primary-900/20 dark:border-primary-800",
         ].join(" ")}>
-          <div className={`text-[10px] md:text-[10.5px] font-bold tracking-[0.08em] uppercase leading-none ${isFeatured ? "text-yellow-200/90" : "text-primary-700/80 dark:text-primary-300/80"}`}>
+          <div className={`text-[11px] md:text-[10.5px] font-bold tracking-[0.08em] uppercase leading-none ${isFeatured ? "text-yellow-200/90" : "text-primary-700/80 dark:text-primary-300/80"}`}>
             {t("priceLabel")}
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
@@ -524,7 +524,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
               {t(`routePriceText_${card.id}`)}
             </span>
             <span className={[
-              "ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black shrink-0",
+              "ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-black shrink-0",
               isFeatured ? "bg-white/15 text-white border border-white/20" : "bg-blue-50 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300",
             ].join(" ")}>
               <FileText className="w-3 h-3" strokeWidth={2.6} />
@@ -543,7 +543,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
                 isFeatured ? "bg-white/10 border border-white/15" : "bg-surface/60 dark:bg-background/60 border border-border",
               ].join(" ")}>
                 <SIcon className={`w-3.5 h-3.5 mx-auto mb-0.5 ${isFeatured ? "text-yellow-300" : "text-primary-600"}`} strokeWidth={2.6} />
-                <div className={`text-[10px] font-bold tracking-tight uppercase ${isFeatured ? "text-white/70" : "text-muted"}`}>{t(`statLabel${i}`)}</div>
+                <div className={`text-[11px] font-bold tracking-tight uppercase ${isFeatured ? "text-white/70" : "text-muted"}`}>{t(`statLabel${i}`)}</div>
                 <div className={`text-[11.5px] md:text-[12px] font-black leading-tight ${isFeatured ? "text-white" : "text-foreground"}`}>{t(`routeStatValue_${card.id}_${i}`)}</div>
               </div>
             );
@@ -562,7 +562,7 @@ function RouteCardView({ card, isFeatured, isRecommended, onHover, t }: {
 
         {/* Partners */}
         <div className="mt-auto pt-1">
-          <div className={`text-[10px] font-bold tracking-[0.10em] uppercase mb-1.5 ${isFeatured ? "text-white/65" : "text-foreground/55"}`}>
+          <div className={`text-[11px] font-bold tracking-[0.10em] uppercase mb-1.5 ${isFeatured ? "text-white/65" : "text-foreground/55"}`}>
             {t("partnersLabel")}
           </div>
           <div className="grid grid-cols-4 gap-1.5 items-center">
@@ -775,15 +775,15 @@ function FreightRouteCard({ mode, card, index, total }: {
             <>
               <span className="text-[10.5px] font-bold text-muted">เริ่มต้น</span>
               <span className="text-[16px] md:text-[18px] font-black leading-none tabular-nums tracking-tight text-primary-600 dark:text-primary-300">{card.freight}</span>
-              <span className="text-[10px] font-bold text-muted">{card.unit}</span>
-              {card.size && <span className="text-[10px] font-black text-primary-600 dark:text-primary-300">· {card.size}</span>}
+              <span className="text-[11px] font-bold text-muted">{card.unit}</span>
+              {card.size && <span className="text-[11px] font-black text-primary-600 dark:text-primary-300">· {card.size}</span>}
             </>
           )}
         </div>
         {/* Exp — price-valid-until date (only on priced cards · subtle, no clutter).
             min-h reserves the line on SSR so the client fill-in causes no shift. */}
         {!inquire && (
-          <span className="-mt-1 min-h-[13px] text-[10px] font-bold leading-none text-muted/80">
+          <span className="-mt-1 min-h-[13px] text-[11px] font-bold leading-none text-muted/80">
             {exp ? `Exp: ${exp}` : ""}
           </span>
         )}

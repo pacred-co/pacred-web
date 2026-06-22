@@ -115,7 +115,7 @@ export async function ClearanceDocuments() {
                     {/* Yellow accent dot */}
                     <div className="absolute -top-1 -right-1 w-3 h-3 md:w-3.5 md:h-3.5 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 border-2 border-white dark:border-surface shadow-[0_2px_6px_rgba(0,0,0,0.15)] scale-0 group-hover:scale-100 transition-transform duration-300" />
                   </div>
-                  <span className="text-[10px] md:text-[11px] font-black tracking-[0.12em] uppercase text-muted group-hover:text-primary-600 transition-colors duration-300">{t(`${id}Badge`)}</span>
+                  <span className="text-[11px] md:text-[11px] font-black tracking-[0.12em] uppercase text-muted group-hover:text-primary-600 transition-colors duration-300">{t(`${id}Badge`)}</span>
                 </div>
 
                 <h3 className="mt-1 text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">

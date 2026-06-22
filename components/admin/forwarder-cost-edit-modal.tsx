@@ -230,7 +230,7 @@ export function ForwarderCostEditModal({
         {/* Header */}
         <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-widest text-primary-600 uppercase">
+            <p className="text-[11px] font-semibold tracking-widest text-primary-600 uppercase">
               Admin · ต้นทุน
             </p>
             <h2
@@ -326,7 +326,7 @@ export function ForwarderCostEditModal({
             <div className="space-y-1.5">
               <label className="block text-xs font-medium">
                 ประเภทสินค้า 2
-                <span className="ml-1 text-[10px] font-normal text-muted">
+                <span className="ml-1 text-[11px] font-normal text-muted">
                   (ที่คิดเงิน · ไม่เกี่ยวกับเก็บเงินลูกค้า)
                 </span>
               </label>
@@ -343,7 +343,7 @@ export function ForwarderCostEditModal({
                       : "border-border hover:border-primary-300 hover:bg-surface-alt",
                   ].join(" ")}
                 >
-                  <span className="block text-[10px] text-muted">—</span>
+                  <span className="block text-[11px] text-muted">—</span>
                   <span className="block">ว่าง · ไม่ระบุ</span>
                 </button>
                 {PRODUCT_TYPE_2_OPTIONS.map((opt) => (
@@ -359,9 +359,9 @@ export function ForwarderCostEditModal({
                         : "border-border hover:border-primary-300 hover:bg-surface-alt",
                     ].join(" ")}
                   >
-                    <span className="block text-[10px] text-muted">{opt.value}</span>
+                    <span className="block text-[11px] text-muted">{opt.value}</span>
                     <span className="block font-semibold">{opt.label}</span>
-                    <span className="block text-[10px] text-muted">{opt.sub}</span>
+                    <span className="block text-[11px] text-muted">{opt.sub}</span>
                   </button>
                 ))}
               </div>

@@ -222,10 +222,10 @@ export function SearchImagePanel({
                         className="pImages aspect-square object-cover w-full"
                         alt=""
                       />
-                      <div className="jss text-pre absolute top-1.5 left-1.5 rounded-md bg-red-600 text-white text-[10px] font-medium px-1.5 py-0.5">
+                      <div className="jss text-pre absolute top-1.5 left-1.5 rounded-md bg-red-600 text-white text-[11px] font-medium px-1.5 py-0.5">
                         {t("preOrder")}
                       </div>
-                      <div className="absolute top-1.5 right-1.5 rounded-md bg-black/60 text-white text-[10px] font-medium px-1.5 py-0.5">
+                      <div className="absolute top-1.5 right-1.5 rounded-md bg-black/60 text-white text-[11px] font-medium px-1.5 py-0.5">
                         {hit.provider}
                       </div>
                     </div>

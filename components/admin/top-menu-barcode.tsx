@@ -85,7 +85,7 @@ export function TopMenuBarcode({ activeHref }: { activeHref?: string } = {}) {
         {groups.map((g, gi) => (
           <li key={g.key} className="flex items-center gap-1">
             {gi > 0 && <span className="mx-1 text-muted">|</span>}
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted px-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted px-1">
               {g.tag}
             </span>
             {ITEMS.map((it) => {

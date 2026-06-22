@@ -196,7 +196,7 @@ function ShipmentCard({
       )}
 
       {/* Order references (so customer knows which cargo/shop order this came from) */}
-      <div className="flex flex-wrap gap-1.5 text-[10px]">
+      <div className="flex flex-wrap gap-1.5 text-[11px]">
         {s.forwarder_f_no && (
           <span className="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5">
             {t("importRef")}: <span className="font-mono">{s.forwarder_f_no}</span>
