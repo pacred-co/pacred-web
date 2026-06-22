@@ -318,6 +318,57 @@ export async function revertForwarderStep(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// adminAdvanceForwarderToWaitPayment — move fstatus 4 → 5 (รอชำระเงิน) for a GROUP
+// of tracking rows, on price-save (owner 2026-06-22: "ตั้งราคาเสร็จ กดบันทึก →
+// สถานะขยับไปรอเก็บเงินเอง"). Legacy had a dedicated "บันทึกและเปลี่ยนสถานะเป็น
+// รอชำระเงิน" button (forwarder.php update_forwarder_to5_2, fStatus≥4 + perm); we
+// fold it into the price-save. STRICTLY 4→5 ONLY (idempotent — a row already at 5
+// or beyond is a no-op, so re-saving never bumps 5→6) · status-only (no money) ·
+// forward-only · per-row TOCTOU. Safe to call after every onSaveAll.
+// ─────────────────────────────────────────────────────────────────────────────
+const groupSchema = z.object({ fIds: z.array(z.number().int().positive()).min(1).max(50) });
+
+export async function adminAdvanceForwarderToWaitPayment(
+  rawInput: z.infer<typeof groupSchema>,
+): Promise<AdminActionResult<{ advanced: number[]; skipped: number[] }>> {
+  const parsed = groupSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { fIds } = parsed.data;
+
+  return withAdmin<{ advanced: number[]; skipped: number[] }>(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+    const nowIso = new Date().toISOString();
+    const advanced: number[] = [];
+    const skipped: number[] = [];
+
+    for (const fid of fIds) {
+      // Flip ONLY 4 → 5, atomically (WHERE fstatus='4'). Any other status → 0 rows → skip.
+      const { data: updated, error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({ fstatus: "5", fdatestatus5: nowIso, fdateadminstatus: nowIso, adminidupdate: legacyAdminId })
+        .eq("id", fid)
+        .eq("fstatus", "4")
+        .select("id");
+      if (updErr) {
+        console.error("[adminAdvanceForwarderToWaitPayment]", { code: updErr.code, message: updErr.message, fid });
+        skipped.push(fid);
+        continue;
+      }
+      if (updated && updated.length > 0) advanced.push(fid);
+      else skipped.push(fid);
+    }
+
+    if (advanced.length > 0) {
+      await logAdminAction(adminId, "tb_forwarder.advance_to_wait_payment", "tb_forwarder", advanced.join(","), { advanced, skipped });
+      revalidatePath("/admin/forwarders");
+      for (const fid of advanced) revalidatePath(`/admin/forwarders/${fid}`);
+    }
+    return { ok: true, data: { advanced, skipped } };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // advanceForwarderStep — move fstatus N → N+1 (one step forward · status-only).
 // Forward-only · TOCTOU-guarded · Option B (NO money/dispatch side-effect).
 // Owner: "ทำ4เสร็จ→5→6". Used for the 4→5 and 5→6 workflow advances.

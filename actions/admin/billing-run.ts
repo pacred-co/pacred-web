@@ -1501,3 +1501,53 @@ export async function sendBillingRunNotification(
     },
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createForwarderOrderBill — mint a บิลวางบิล for ONE order's tracking group from
+// the forwarder detail page (owner 2026-06-22: "ทำปุ่มสร้างใบวางบิลตรงนั้นเลย").
+// Thin wrapper over createBillingRunInvoice (which gates RBAC, validates every id
+// belongs to the same customer + is billable [fstatus 5 / credit], computes the
+// amount via calcForwarderOutstanding, mints the FRI doc-no, inserts the invoice
+// + items, all atomic). Dates default to today / today+7. Deliveries/discount 0
+// (those are billing-run-level adders, not per-order). Returns the doc-no.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function createForwarderOrderBill(
+  fIds: number[],
+  opts?: { noteForCustomer?: string },
+): Promise<AdminActionResult<{ invoiceId: number; docNo: string }>> {
+  const ids = Array.from(new Set((fIds ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0)));
+  if (ids.length === 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+  // Resolve the customer code from the first id (createBillingRunInvoice re-checks
+  // that EVERY id belongs to this userid + is billable, so a stray id is rejected).
+  const admin = createAdminClient();
+  const { data: head, error: headErr } = await admin
+    .from("tb_forwarder")
+    .select("userid")
+    .eq("id", ids[0])
+    .maybeSingle<{ userid: string | null }>();
+  if (headErr) {
+    console.error("[createForwarderOrderBill head read]", { code: headErr.code, message: headErr.message, fid: ids[0] });
+    return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${headErr.message}` };
+  }
+  const userid = (head?.userid ?? "").trim();
+  if (!userid) return { ok: false, error: "ไม่พบรหัสลูกค้าของรายการนี้" };
+
+  const today = new Date();
+  const due = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  return createBillingRunInvoice({
+    userid,
+    forwarderIds: ids,
+    dateIssued: iso(today),
+    dateDue: iso(due),
+    deliveryChnThb: 0,
+    deliveryThThb: 0,
+    otherThb: 0,
+    discountThb: 0,
+    noteForCustomer: opts?.noteForCustomer ?? "",
+    allowUnmeasured: false,
+    overrides: {},
+  });
+}

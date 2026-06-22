@@ -37,6 +37,7 @@ type SeedRow = {
   id: number;
   userid?: string | null;
   ftrackingchn?: string | null;
+  fstatus?: string | null;
 };
 
 type Props = {
@@ -398,6 +399,7 @@ export async function ForwarderPerTrackingEditor({
       customComparisonInit={customComparisonInit}
       customComparisonValueInit={customComparisonValueInit}
       canEditComparison={canEditComparison}
+      headFstatus={r.fstatus ?? ""}
       profileRate={profileRate}
       profileBasis={profileBasis}
       profileTransportTotal={Math.round(profileTransportTotal * 100) / 100}
