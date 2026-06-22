@@ -32,6 +32,13 @@ const SELLER = {
   taxId: TAX_ID, phone: CONTACT.phoneCompanyDisplay, email: CONTACT.email,
 };
 
+// Receipt palette — matches the Pacred ใบเสร็จ (components/receipt/receipt-paper.tsx):
+// orange title + the warm tan tint on the meta-box · table head · total box.
+const TINT = "rgba(255,163,10,0.165)";
+const TITLE_ORANGE = "#FFA30A";
+const SIG_WANDEE = "/legacy/pcs/assets/images/theme/sin-wandee.jpg";
+const STAMP = "/images/pacred-stamp-tight.png";
+
 const THB = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const BAHT = (n: number) => n.toLocaleString("th-TH");
 const QTY = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 3 });
@@ -42,7 +49,7 @@ type CompareRow = { warehouse: string; isYiwu: boolean; truck: PackageRate; ship
 
 type QuoteModel = {
   view: View;
-  refNo: string; dateLabel: string; validUntil: string;
+  refNo: string; customerCode: string; dateLabel: string; validUntil: string;
   buyerName: string; buyerTaxId: string; buyerAddress: string; buyerPhone: string;
   salesName: string; salesTel: string;
   packageLabel: string; juristic: boolean;
@@ -139,7 +146,7 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
     const totals = calcQuoteTotals(lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), whtRate);
 
     return {
-      view, refNo, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
+      view, refNo, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
       buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel,
       packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
       juristic, compareRows,
@@ -150,7 +157,7 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
       conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: extraNote.trim(),
     };
   }, [view, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, showCustomsInfo]);
+    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, userid, showCustomsInfo]);
 
   const calcEmpty = view === "calc" && model.lines.length === 0;
 
@@ -298,41 +305,53 @@ function Field({ label, v, on, cls }: { label: string; v: string; on: (s: string
   return <label className="block"><span className="block text-[11px] text-muted mb-0.5">{label}</span><input type="text" value={v} onChange={(e) => on(e.target.value)} className={cls} /></label>;
 }
 
-// ── Peak-style quotation card ─────────────────────────────────────────────
+// ── Receipt-style quotation card (mirrors the Pacred ใบเสร็จ palette/layout) ─
 function QuoteCard({ model }: { model: QuoteModel }) {
   const t = model.totals;
   return (
     <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm overflow-hidden">
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-primary-600">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={LOGO} alt="Pacred" className="h-9 w-auto" />
-        <div className="text-right">
-          <div className="text-xl font-black text-primary-700">ใบเสนอราคา</div>
-          <div className="text-[11px] text-slate-400">Quotation</div>
-        </div>
-      </div>
-
-      <div className="p-3 sm:p-5 space-y-3 text-[12px]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-slate-200 p-2.5 leading-relaxed">
-            <p className="font-bold text-slate-800">ผู้ขาย</p>
-            <p>{SELLER.nameTh}</p>
-            <p className="text-slate-500">{SELLER.address}</p>
-            <p className="text-slate-500 font-mono">เลขภาษี {SELLER.taxId}</p>
-            <p className="text-slate-500">โทร {SELLER.phone} · {SELLER.email}</p>
+      <div className="p-4 sm:p-6 space-y-3 text-[12px]" style={{ color: "#111827" }}>
+        {/* Header — logo LEFT · orange title RIGHT (receipt headerFormatOne) */}
+        <div className="flex items-start justify-between gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO} alt="Pacred" className="h-10 w-auto" />
+          <div className="text-right leading-tight">
+            <div className="text-2xl font-extrabold" style={{ color: TITLE_ORANGE }}>ใบเสนอราคา</div>
+            <div className="text-[10px] text-slate-400">Quotation</div>
           </div>
-          <div className="rounded-lg border border-slate-200 p-2.5 leading-relaxed">
-            <div className="grid grid-cols-[auto_1fr] gap-x-2">
-              <span className="text-slate-500">เลขที่</span><span className="font-bold text-primary-700">{model.refNo}</span>
-              <span className="text-slate-500">วันที่</span><span>{model.dateLabel}</span>
-              <span className="text-slate-500">ใช้ได้ถึง</span><span>{model.validUntil}</span>
-              <span className="text-slate-500">ลูกค้า</span><span className="font-semibold">{model.buyerName || "—"}{model.juristic ? " (นิติบุคคล)" : ""}</span>
-              {(model.buyerPhone || model.salesName) && <><span className="text-slate-500">ติดต่อ</span><span>{model.salesName || "—"} {model.salesTel ? `· ${model.salesTel}` : ""}</span></>}
+        </div>
+
+        {/* Info — issuer + customer LEFT · tan meta-box RIGHT (receipt info row) */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 space-y-2">
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-0.5">
+                <InfoRow label="ผู้ขาย :" value={SELLER.nameTh} bold />
+                <InfoRow label="ที่อยู่ :" value={SELLER.address} />
+                <InfoRow label="เลขที่ภาษี :" value={`${SELLER.taxId} (สำนักงานใหญ่)`} />
+              </div>
+              <div className="space-y-0.5 text-[10px] text-slate-600 shrink-0">
+                <div>📞 {SELLER.phone}</div>
+                <div>✉ {SELLER.email}</div>
+                <div>🌐 pacred.co.th</div>
+              </div>
+            </div>
+            <div className="space-y-0.5 pt-1.5 border-t border-slate-100">
+              <InfoRow label="ลูกค้า :" value={`${model.buyerName || "—"}${model.juristic ? " (นิติบุคคล)" : ""}`} bold />
+              <InfoRow label="รหัสลูกค้า :" value={model.customerCode} mono />
+              {model.buyerAddress ? <InfoRow label="ที่อยู่ :" value={model.buyerAddress} /> : null}
+              <InfoRow label="เลขที่ภาษี :" value={model.buyerTaxId || "-"} />
+              {(model.salesName || model.salesTel) ? <InfoRow label="ติดต่อ :" value={`${model.salesName || "—"}${model.salesTel ? ` · ${model.salesTel}` : ""}`} /> : null}
             </div>
           </div>
+          <div className="rounded shrink-0 self-start sm:w-[210px] overflow-hidden" style={{ background: TINT }}>
+            <MetaRow label="เลขที่ :" value={model.refNo} bold />
+            <MetaRow label="วันที่ :" value={model.dateLabel} />
+            <MetaRow label="ใช้ได้ถึง :" value={model.validUntil} />
+          </div>
         </div>
 
-        <p className="text-[11px] font-semibold text-primary-700">{model.packageLabel}</p>
+        <p className="text-[11px] font-semibold" style={{ color: TITLE_ORANGE }}>{model.packageLabel}</p>
 
         {model.view === "compare" ? <CompareTable model={model} /> : <LineItems model={model} t={t} />}
 
@@ -366,6 +385,8 @@ function QuoteCard({ model }: { model: QuoteModel }) {
           <div><p className="font-bold text-slate-800">💳 ชำระเงิน</p><p>{BANK.name} ({BANK.accountType})</p><p className="font-mono font-bold">{BANK.accountNumber}</p><p>{BANK.accountName}</p></div>
           <div className="sm:text-right flex flex-col gap-0.5"><span>📞 CS {CONTACT.phoneCsDisplay} · ☎️ {SELLER.phone}</span><span>✉️ {SELLER.email}</span><span className="text-primary-600">LINE: {SOCIAL.line}</span></div>
         </div>
+
+        <SignatureRow model={model} />
       </div>
     </div>
   );
@@ -375,8 +396,8 @@ function CompareTable({ model }: { model: QuoteModel }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full text-[11px] sm:text-[12px]">
-        <thead className="bg-slate-800 text-white text-[11px]">
-          <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
+        <thead className="text-[11px]" style={{ background: TINT }}>
+          <tr><th className="px-2 sm:px-3 py-1.5 text-left font-bold text-slate-700">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-bold text-slate-700">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-bold text-slate-700">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
           {model.compareRows.map((r, i) => (
@@ -408,8 +429,8 @@ function LineItems({ model, t }: { model: QuoteModel; t: QuoteModel["totals"] })
       <p className="text-[11px] text-slate-500">{model.routeLabel}{model.density != null ? ` · คิดตาม ${model.basisLabel}` : ""}</p>
       <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full text-[11px] sm:text-[12px]">
-          <thead className="bg-slate-800 text-white text-[11px]">
-            <tr><th className="px-2 sm:px-2.5 py-1.5 text-left font-semibold">รายการ</th><th className="px-1.5 sm:px-2 py-1.5 text-right font-semibold whitespace-nowrap">จำนวน</th><th className="hidden sm:table-cell px-2 py-1.5 text-right font-semibold">ราคา/หน่วย</th><th className="px-2 sm:px-2.5 py-1.5 text-right font-semibold">จำนวนเงิน</th><th className="px-1 sm:px-1.5 py-1.5 text-center font-semibold">VAT</th></tr>
+          <thead className="text-[11px]" style={{ background: TINT }}>
+            <tr><th className="px-2 sm:px-2.5 py-1.5 text-left font-bold text-slate-700">รายการ</th><th className="px-1.5 sm:px-2 py-1.5 text-right font-bold text-slate-700 whitespace-nowrap">จำนวน</th><th className="hidden sm:table-cell px-2 py-1.5 text-right font-bold text-slate-700">ราคา/หน่วย</th><th className="px-2 sm:px-2.5 py-1.5 text-right font-bold text-slate-700">จำนวนเงิน</th><th className="px-1 sm:px-1.5 py-1.5 text-center font-bold text-slate-700">VAT</th></tr>
           </thead>
           <tbody>
             {model.lines.map((l, i) => (
@@ -432,7 +453,7 @@ function LineItems({ model, t }: { model: QuoteModel; t: QuoteModel["totals"] })
             <Row label="ภาษีมูลค่าเพิ่ม 7%" v={t.vatAmount} />
             <tr className="border-t border-slate-300"><td className="px-2 py-1.5 font-bold">รวมเป็นเงิน</td><td className="px-2 py-1.5 text-right font-mono font-black text-primary-700 text-[15px]">฿{THB(t.grandTotal)}</td></tr>
             {t.whtAmount > 0 && <Row label="หัก ณ ที่จ่าย 1%" v={-t.whtAmount} />}
-            {t.whtAmount > 0 && <tr className="bg-slate-800 text-white"><td className="px-2 py-1.5 font-bold">ยอดชำระสุทธิ</td><td className="px-2 py-1.5 text-right font-mono font-black text-[15px]">฿{THB(t.netPayable)}</td></tr>}
+            {t.whtAmount > 0 && <tr style={{ background: TINT }}><td className="px-2 py-1.5 font-bold text-slate-700">ยอดชำระสุทธิ</td><td className="px-2 py-1.5 text-right font-mono font-black text-[15px] text-slate-900">฿{THB(t.netPayable)}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -447,12 +468,64 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return <div><p className="text-[12px] font-bold text-slate-900 mb-1">{title}</p><ul className="list-disc pl-5 text-[12px] text-slate-700 space-y-0.5">{children}</ul></div>;
 }
 
+// ── receipt-style helpers (labeled-list info · tan meta-box · signature row) ─
+function InfoRow({ label, value, bold, mono }: { label: string; value: string; bold?: boolean; mono?: boolean }) {
+  return (
+    <div className="flex gap-1.5">
+      <span className="text-[10px] font-bold text-slate-500 shrink-0" style={{ minWidth: 54 }}>{label}</span>
+      <span className={`text-[10.5px] text-slate-800 ${bold ? "font-bold" : ""} ${mono ? "font-mono font-semibold" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function MetaRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex justify-between gap-2 px-2.5 py-1.5">
+      <span className="text-[10px] font-bold text-slate-500">{label}</span>
+      <span className={`text-[10px] text-slate-800 ${bold ? "font-semibold" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function SignatureRow({ model }: { model: QuoteModel }) {
+  const cell = "text-center";
+  const line = "border-t border-slate-400 mt-1 pt-1 text-[9px]";
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-slate-200">
+      <div className={cell}>
+        <p className="text-[9px] font-bold text-slate-600 mb-1">ผู้ออกเอกสาร (ผู้ขาย)</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={SIG_WANDEE} alt="ลายเซ็น" className="h-7 mx-auto object-contain" />
+        <div className={`${line} text-slate-600`}>{model.salesName || " "}</div>
+      </div>
+      <div className={cell}>
+        <p className="text-[9px] font-bold text-slate-600 mb-1">ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={SIG_WANDEE} alt="ลายเซ็น" className="h-7 mx-auto object-contain" />
+        <div className={`${line} text-slate-600`}>{" "}</div>
+      </div>
+      <div className={cell}>
+        <p className="text-[9px] font-bold text-slate-600 mb-1">ตราประทับ (ผู้ขาย)</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={STAMP} alt="ตราประทับ" className="h-9 mx-auto object-contain" />
+        <div className={`${line} text-slate-600`}>{" "}</div>
+      </div>
+      <div className={cell}>
+        <p className="text-[9px] font-bold text-slate-600 mb-1">ผู้รับเอกสาร (ลูกค้า)</p>
+        <div className="h-9 rounded border border-slate-200" />
+        <div className={`${line} font-semibold text-slate-700`}>{model.buyerName || " "}</div>
+      </div>
+    </div>
+  );
+}
+
 // ── plain text (คัดลอก) ───────────────────────────────────────────────────
 function buildQuoteText(m: QuoteModel): string {
   const L: string[] = [];
   L.push(`🚛🚢 ${QUOTE_HEADER}`);
   L.push(`ใบเสนอราคา — PACRED (${m.refNo}) · วันที่ ${m.dateLabel} · ใช้ได้ถึง ${m.validUntil}`);
   L.push(`เรียน: ${m.buyerName || "ลูกค้า"}${m.juristic ? " (นิติบุคคล)" : ""}`);
+  L.push(`รหัสลูกค้า: ${m.customerCode}`);
   L.push(m.packageLabel);
   L.push("");
   if (m.view === "compare") {
@@ -527,43 +600,81 @@ function buildPrintHtml(m: QuoteModel): string {
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun','Prompt',sans-serif}
-body{font-size:11px;color:#1a1a1a;padding:24px}.doc{max-width:760px;margin:0 auto}
-.top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b30000;padding-bottom:10px;margin-bottom:12px}
-.top img{height:44px}.ti{font-size:22px;font-weight:800;color:#b30000;text-align:right}.bs{font-size:9px;color:#666}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
-.box{border:0.5px solid #ccc;border-radius:4px;padding:7px 9px;line-height:1.5}.box .t{font-weight:700;color:#333}
-.mut{color:#777}.mono{font-family:monospace}.b{font-weight:700}.r{text-align:right}.c{text-align:center}.red{color:#b30000}
+body{font-size:11px;color:#111827;padding:24px}.doc{max-width:760px;margin:0 auto;display:flex;flex-direction:column;min-height:273mm}.spacer{flex:1 1 auto;min-height:6px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.top img{height:42px}.ti{font-size:24px;font-weight:800;color:#FFA30A;text-align:right;line-height:1}.bs{font-size:9px;color:#999;text-align:right}
+.info{display:flex;gap:12px;margin-bottom:10px}.idl{flex:1}
+.irow{display:flex;gap:5px;margin-bottom:1px}.ilab{min-width:52px;font-size:9px;font-weight:700;color:#6b7280}.ival{font-size:9.5px;color:#374151}.ival.b{font-weight:700;color:#111827}
+.cust{border-top:0.5px solid #eee;margin-top:5px;padding-top:5px}
+.meta{width:185px;background:#FFE7C2;border-radius:3px;align-self:flex-start}.meta .mr{display:flex;justify-content:space-between;padding:3px 8px;font-size:9px}.meta .mr .ml{font-weight:700;color:#6b7280}
+.mut{color:#777}.mono{font-family:monospace}.b{font-weight:700}.r{text-align:right}.c{text-align:center}.red{color:#b30000}.org{color:#FFA30A}
 table{width:100%;border-collapse:collapse}small{font-size:8px;color:#777}
-.items{margin:6px 0;font-size:10.5px}.items th{background:#1a1a1a;color:#fff;padding:5px 8px;text-align:left;font-size:9.5px}.items td{border:0.5px solid #ddd;padding:5px 8px;vertical-align:top}
+.items{margin:6px 0;font-size:10.5px}.items th{background:#FFE7C2;color:#374151;padding:5px 8px;text-align:left;font-size:9.5px;font-weight:700}.items td{border:0.5px solid #eee;padding:5px 8px;vertical-align:top}
 .cost td{padding:4px 0;border-top:0.5px solid #eee;font-size:10px}
 .sum{width:300px;margin-left:auto;font-size:11px;margin-top:6px}.sum td{padding:4px 8px;border:0.5px solid #eee}
-.sum .gt td{border-top:1px solid #999;font-weight:800;color:#b30000;font-size:14px}.sum .net td{background:#1a1a1a;color:#fff;font-weight:800;font-size:13px}
+.sum .gt td{border-top:1px solid #d1b896;font-weight:800;color:#FFA30A;font-size:14px}.sum .net td{background:#FFE7C2;color:#111827;font-weight:800;font-size:13px}
 .h{font-size:11px;font-weight:800;margin:10px 0 3px}ul{padding-left:18px;margin:3px 0}li{margin:1.5px 0}.lk{color:#b30000}
 .amber{background:#fffbeb;border:0.5px solid #fde68a;border-radius:4px;padding:7px 9px;margin:8px 0;white-space:pre-wrap}
 .blue{background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:4px;padding:6px 9px;margin:8px 0;font-weight:600}
 .pay{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid #eee;margin-top:10px;padding-top:8px;font-size:10px;color:#555}
-.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px}.sign .s{border:0.5px solid #ccc;border-radius:4px;min-height:54px;padding:5px;text-align:center;font-size:8px;color:#888;display:flex;flex-direction:column;justify-content:flex-end}
+.sign{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:14px}.sign .s{text-align:center;font-size:8px;color:#666}.sign .s .sl{font-weight:700;color:#374151;margin-bottom:2px}.sign .s img{height:26px;object-fit:contain;margin:0 auto;display:block}.sign .s .ln{border-top:0.5px solid #555;margin-top:3px;padding-top:2px}.sign .s .bx{height:30px;border:0.5px solid #d1d5db;border-radius:3px}
 @page{size:A4;margin:12mm}@media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body><div class="doc">
-  <div class="top"><img src="${origin}${LOGO}" alt="Pacred"><div><div class="ti">ใบเสนอราคา</div><div class="bs r">Quotation</div></div></div>
-  <div class="grid">
-    <div class="box"><div class="t">ผู้ขาย</div>${esc(SELLER.nameTh)}<br><span class="mut">${esc(SELLER.address)}</span><br><span class="mut mono">เลขภาษี ${esc(SELLER.taxId)}</span><br><span class="mut">โทร ${esc(SELLER.phone)} · ${esc(SELLER.email)}</span></div>
-    <div class="box"><table><tr><td class="mut" style="width:34%">เลขที่</td><td class="b" style="color:#b30000">${esc(m.refNo)}</td></tr>
-      <tr><td class="mut">วันที่</td><td>${esc(m.dateLabel)}</td></tr><tr><td class="mut">ใช้ได้ถึง</td><td>${esc(m.validUntil)}</td></tr>
-      <tr><td class="mut">ลูกค้า</td><td class="b">${esc(m.buyerName || "—")}${m.juristic ? " (นิติบุคคล)" : ""}</td></tr>
-      <tr><td class="mut">ติดต่อ</td><td>${esc(m.salesName || "—")} ${m.salesTel ? "· " + esc(m.salesTel) : ""}</td></tr></table></div>
+  <div class="top"><img src="${origin}${LOGO}" alt="Pacred"><div><div class="ti">ใบเสนอราคา</div><div class="bs">Quotation</div></div></div>
+  <div class="info">
+    <div class="idl">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <div class="irow"><span class="ilab">ผู้ขาย :</span><span class="ival b">${esc(SELLER.nameTh)}</span></div>
+          <div class="irow"><span class="ilab">ที่อยู่ :</span><span class="ival">${esc(SELLER.address)}</span></div>
+          <div class="irow"><span class="ilab">เลขที่ภาษี :</span><span class="ival">${esc(SELLER.taxId)} (สำนักงานใหญ่)</span></div>
+        </div>
+        <div style="min-width:108px">
+          <div class="ival">📞 ${esc(SELLER.phone)}</div>
+          <div class="ival">✉ ${esc(SELLER.email)}</div>
+          <div class="ival">🌐 pacred.co.th</div>
+        </div>
+      </div>
+      <div class="cust">
+        <div class="irow"><span class="ilab">ลูกค้า :</span><span class="ival b">${esc(m.buyerName || "—")}${m.juristic ? " (นิติบุคคล)" : ""}</span></div>
+        <div class="irow"><span class="ilab">รหัสลูกค้า :</span><span class="ival mono b">${esc(m.customerCode)}</span></div>
+        ${m.buyerAddress ? `<div class="irow"><span class="ilab">ที่อยู่ :</span><span class="ival">${esc(m.buyerAddress)}</span></div>` : ""}
+        <div class="irow"><span class="ilab">เลขที่ภาษี :</span><span class="ival">${esc(m.buyerTaxId || "-")}</span></div>
+        ${(m.salesName || m.salesTel) ? `<div class="irow"><span class="ilab">ติดต่อ :</span><span class="ival">${esc(m.salesName || "—")}${m.salesTel ? " · " + esc(m.salesTel) : ""}</span></div>` : ""}
+      </div>
+    </div>
+    <div class="meta">
+      <div class="mr"><span class="ml">เลขที่ :</span><span>${esc(m.refNo)}</span></div>
+      <div class="mr"><span class="ml">วันที่ :</span><span>${esc(m.dateLabel)}</span></div>
+      <div class="mr"><span class="ml">ใช้ได้ถึง :</span><span>${esc(m.validUntil)}</span></div>
+    </div>
   </div>
-  <div class="mut" style="font-size:10px;font-weight:700;color:#b30000;margin-bottom:4px">${esc(m.packageLabel)}</div>
+  <div style="font-size:10px;font-weight:700;color:#FFA30A;margin-bottom:4px">${esc(m.packageLabel)}</div>
   ${body}
   ${juristicNote}
+  <div class="spacer"></div>
   ${conditions}
   <p class="h">📌 หมายเหตุ</p><ul>${li(m.notes)}</ul>
   ${howTo}
   ${extra}
   <div class="pay"><div><b>💳 ชำระเงิน</b><br>${esc(BANK.name)} (${esc(BANK.accountType)})<br><span class="mono b">${esc(BANK.accountNumber)}</span><br>${esc(BANK.accountName)}</div>
     <div class="r">📞 CS ${esc(CONTACT.phoneCsDisplay)} · ☎️ ${esc(SELLER.phone)}<br>✉️ ${esc(SELLER.email)}<br><span class="lk">LINE ${esc(SOCIAL.line)}</span></div></div>
-  <div class="sign"><div class="s">ผู้ออกเอกสาร<br>(ผู้ขาย)</div><div class="s">ผู้อนุมัติ<br>(ผู้ขาย)</div><div class="s">ผู้รับเอกสาร<br>(ลูกค้า)</div></div>
+  <div class="sign">
+    <div class="s"><div class="sl">ผู้ออกเอกสาร (ผู้ขาย)</div><img src="${origin}${SIG_WANDEE}" alt="ลายเซ็น"><div class="ln">${esc(m.salesName || " ")}</div></div>
+    <div class="s"><div class="sl">ผู้อนุมัติเอกสาร (ผู้ขาย)</div><img src="${origin}${SIG_WANDEE}" alt="ลายเซ็น"><div class="ln">&nbsp;</div></div>
+    <div class="s"><div class="sl">ตราประทับ (ผู้ขาย)</div><img src="${origin}${STAMP}" alt="ตราประทับ" style="height:34px"><div class="ln">&nbsp;</div></div>
+    <div class="s"><div class="sl">ผู้รับเอกสาร (ลูกค้า)</div><div class="bx"></div><div class="ln">${esc(m.buyerName || " ")}</div></div>
+  </div>
 </div>
-<script>(function(){var p=false;function go(){if(p)return;p=true;window.focus();window.print();}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go);}setTimeout(go,1200);})();</script>
+<script>(function(){
+  var done=false;
+  function go(){if(done)return;done=true;try{window.focus();}catch(e){}window.print();}
+  function afterFonts(){var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();f.then(go);}
+  var imgs=[].slice.call(document.images||[]);
+  var left=imgs.filter(function(im){return !im.complete;}).length;
+  if(left===0){afterFonts();}
+  else{imgs.forEach(function(im){if(im.complete)return;var t=function(){if(--left<=0)afterFonts();};im.addEventListener('load',t);im.addEventListener('error',t);});}
+  setTimeout(go,5000); // hard fallback so it never hangs waiting on a slow asset
+})();</script>
 </body></html>`;
 }
