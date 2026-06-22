@@ -199,8 +199,9 @@ export async function fireUserSalesEarnTriggerOnDelivery(
   if (customerIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userid, coid")
-      .in("userid", customerIds);
+      // tb_users columns are camelCase on prod+dev; alias to keep the UserRow reads.
+      .select("userid:userID, coid:coID")
+      .in("userID", customerIds);
     if (usersErr) {
       result.errors.push(`tb_users lookup failed: ${usersErr.message}`);
       return result;

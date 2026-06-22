@@ -129,8 +129,9 @@ export default async function TrackingPage({
   // userCompany flag — needed by calPriceForwarderSumCompany (1% WHT)
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("usercompany")
-    .eq("userid", memberCode)
+    // tb_users columns are camelCase on prod+dev; alias to keep the read site + type.
+    .select("usercompany:userCompany")
+    .eq("userID", memberCode)
     .maybeSingle<{ usercompany: string | number | null }>();
   const fUserCompany = userRow?.usercompany != null ? String(userRow.usercompany) : null;
 
