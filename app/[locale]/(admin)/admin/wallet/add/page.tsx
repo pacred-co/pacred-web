@@ -46,7 +46,9 @@ export default async function AdminWalletAddPage({
     const candidate = qRaw.toUpperCase();
     const { data, error } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel, userEmail")
+      // tb_users columns are camelCase on prod+dev; alias back to the lowercase
+      // CustomerLite field names so the form's reads (c.userid/c.username) work.
+      .select("userid:userID, username:userName, userlastname:userLastName, usertel:userTel, useremail:userEmail")
       .eq("userID", candidate)
       .maybeSingle<CustomerLite>();
     if (error) {
@@ -58,7 +60,8 @@ export default async function AdminWalletAddPage({
   // Recent customers — order by registered desc · cap 20 for the dropdown.
   const { data: recentRaw, error: recentRawErr } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel, useremail")
+    // camelCase columns aliased to lowercase CustomerLite field names.
+    .select("userid:userID, username:userName, userlastname:userLastName, usertel:userTel, useremail:userEmail")
     .eq("userStatus", "1")
     .order("userRegistered", { ascending: false })
     .limit(20);

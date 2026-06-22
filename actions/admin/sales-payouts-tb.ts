@@ -271,7 +271,7 @@ export async function getSalesPayoutDetailTb(
     const forwarderIds = [...new Set(usRows.map((u) => u.idf))];
     type FwdRow = {
       id: number;
-      date: string | null;
+      fdate: string | null;
       fdetail: string | null;
       ftrackingchn: string | null;
       fvolume: number | string | null;
@@ -289,7 +289,7 @@ export async function getSalesPayoutDetailTb(
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, date, fdetail, ftrackingchn, fvolume, fweight, fcosttotalprice, ftotalprice, fdiscount, fprofittotal, fshippingservice, fstatus, adminidupdate",
+          "id, fdate, fdetail, ftrackingchn, fvolume, fweight, fcosttotalprice, ftotalprice, fdiscount, fprofittotal, fshippingservice, fstatus, adminidupdate",
         )
         .in("id", forwarderIds);
       if (fwdErr) {
@@ -308,7 +308,7 @@ export async function getSalesPayoutDetailTb(
       return {
         forwarderId: f?.id ?? null,
         usId: u.id,
-        date: f?.date ?? null,
+        date: f?.fdate ?? null,
         fDetail: f?.fdetail ?? null,
         fTrackingCHN: f?.ftrackingchn ?? null,
         fVolume: Number(f?.fvolume ?? 0),

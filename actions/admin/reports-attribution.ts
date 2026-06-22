@@ -86,9 +86,11 @@ export async function getAttributionReport(
     // ── 1) Customers registered in the window ──────────────────────────────
     const { data: userData, error: userErr } = await admin
       .from("tb_users")
-      .select("userid, userregisterwith, userrecom, useractive")
-      .gte("userregistered", fromTs)
-      .lte("userregistered", toTs)
+      // tb_users columns are camelCase on prod+dev; alias back to the lowercase
+      // UserRow field names so the bucket reads work, real camelCase on the filters.
+      .select("userid:userID, userregisterwith:userRegisterWith, userrecom:userRecom, useractive:userActive")
+      .gte("userRegistered", fromTs)
+      .lte("userRegistered", toTs)
       .limit(USER_LIMIT);
 
     if (userErr) {

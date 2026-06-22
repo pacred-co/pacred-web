@@ -675,15 +675,14 @@ export async function adminBulkApproveCustomers(
       };
       const candidates = rows as ApproveRow[];
       const toApprove = candidates.map((r) => r.userID);
-      const nowIso = new Date().toISOString();
 
+      // userActive '0'→'1' is the activation. The who/when is recorded by
+      // logAdminAction below — `adminidupdate`/`userdateactive` are NOT real
+      // tb_users columns (writing them 42703-errored the WHOLE update, so the
+      // member-approve silently failed for every pending signup · 2026-06-22).
       const { error: updErr } = await admin
         .from("tb_users")
-        .update({
-          userActive: "1",
-          adminidupdate: adminId,
-          userdateactive: nowIso,
-        })
+        .update({ userActive: "1" })
         .in("userID", toApprove)
         .eq("userActive", "0");
 

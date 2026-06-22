@@ -116,14 +116,16 @@ export async function GET(request: Request) {
         };
       }
 
-      // Flip only inactive rows (useractive <> '1') → keeps audit clean +
+      // Flip only inactive rows (userActive <> '1') → keeps audit clean +
       // mirrors the legacy idempotent behaviour. PostgREST IN expects an array.
+      // tb_users columns are camelCase on prod+dev — the UPDATE payload + filters
+      // must use the real camelCase names (aliases don't apply to writes).
       const { data: flipped, error: updErr } = await supabase
         .from("tb_users")
-        .update({ useractive: "1" })
-        .in("userid", [...userIds])
-        .neq("useractive", "1")
-        .select("userid");
+        .update({ userActive: "1" })
+        .in("userID", [...userIds])
+        .neq("userActive", "1")
+        .select("userID");
 
       if (updErr) {
         console.error("[cron.refresh-active-customers] update err", updErr.message);

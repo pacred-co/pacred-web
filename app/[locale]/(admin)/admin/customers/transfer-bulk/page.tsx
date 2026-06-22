@@ -64,21 +64,40 @@ export default async function TransferBulkPage({
   const admin = createAdminClient();
 
   // List of active sales admins (filter dropdown source + target source).
-  // Same query as /admin/customers/transfer-rep — keeping the shape
-  // identical so a future refactor can share the rep selector component.
-  const { data: repsRaw, error: repsErr } = await admin
-    .from("admins")
-    .select(`profile_id, role,
-             profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
-             contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
-    .in("role", ["sales_admin", "super", "ultra"])
-    .eq("is_active", true);
+  // `admins` and `admin_contact_extras` both FK to `profiles` but NOT to
+  // each other → a PostgREST cross-embed (`contact:admin_contact_extras
+  // !profile_id`) fails PGRST200 and 500s the whole page. Mirror the
+  // sibling `/admin/customers/[id]/transfer-rep` pattern: fetch the two
+  // tables separately and merge by profile_id in JS (profile via the
+  // real `profiles!profile_id` FK is fine to embed).
+  const [{ data: repsRaw, error: repsErr }, { data: contactsRaw, error: contactsErr }] = await Promise.all([
+    admin
+      .from("admins")
+      .select(`profile_id, role,
+               profile:profiles!profile_id ( member_code, first_name, last_name, phone )`)
+      .in("role", ["sales_admin", "super", "ultra"])
+      .eq("is_active", true),
+    admin
+      .from("admin_contact_extras")
+      .select("profile_id, display_name, direct_phone"),
+  ]);
   if (repsErr) {
     console.error(`[transfer-bulk admins read] failed`, { code: repsErr.code, message: repsErr.message });
     throw new Error(`failed to load sales reps: ${repsErr.message}`);
   }
+  if (contactsErr) {
+    // Non-fatal — contact extras only enrich the display name; fall back
+    // to the profile name when missing.
+    console.error(`[transfer-bulk contact extras read] failed`, { code: contactsErr.code, message: contactsErr.message });
+  }
 
-  const reps: RepOption[] = ((repsRaw ?? []) as unknown as RepRow[]).map(repToOption);
+  const contactById = new Map(
+    ((contactsRaw ?? []) as { profile_id: string; display_name: string | null; direct_phone: string | null }[])
+      .map((c) => [c.profile_id, { display_name: c.display_name, direct_phone: c.direct_phone }]),
+  );
+  const reps: RepOption[] = ((repsRaw ?? []) as unknown as Omit<RepRow, "contact">[]).map((r) =>
+    repToOption({ ...r, contact: contactById.get(r.profile_id) ?? null }),
+  );
   const repsById = new Map(reps.map((r) => [r.profile_id, r]));
 
   // Filter customers. For non-super callers we always scope to their

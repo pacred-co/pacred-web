@@ -12,7 +12,7 @@
  * THE FIX:
  *   Read tb_header_order (hstatus IN '3','4','5') + tb_forwarder (fstatus
  *   IN '6','7','8','9') + tb_payment (paystatus='2'), collect userIDs, then
- *   UPDATE tb_users.useractive='1' for those userIDs.
+ *   UPDATE tb_users.userActive='1' for those userIDs.
  *
  * WHAT THIS TEST ASSERTS (pure-contract level — no real DB / no withAdmin):
  *   A. Source table CONTRACT — the route's three SELECT calls hit exactly
@@ -22,8 +22,8 @@
  *         tb_forwarder     fstatus IN ('6','7','8','9') (legacy fStatus>5)
  *         tb_payment       paystatus = '2'             (legacy payStatus=2)
  *   C. Target table + value CONTRACT — the UPDATE call hits tb_users with
- *      { useractive: '1' } (NOT profiles + { is_active: true }).
- *   D. Idempotency — the UPDATE filters .neq("useractive","1") so already-
+ *      { userActive: '1' } (NOT profiles + { is_active: true }).
+ *   D. Idempotency — the UPDATE filters .neq("userActive","1") so already-
  *      active rows don't get re-written (legacy is one-way: never demotes).
  *   E. Response shape — preserved { ok, scanned, flipped } for monitors.
  *
@@ -192,10 +192,12 @@ async function runRouteLogic(supabase: MockClient): Promise<{
 
   const { data: flipped, error: updErr } = await supabase
     .from("tb_users")
-    .update({ useractive: "1" })
-    .in("userid", [...userIds])
-    .neq("useractive", "1")
-    .select("userid");
+    // tb_users columns are camelCase on prod+dev — the UPDATE payload + filters
+    // must use the real camelCase names (mirrors the route).
+    .update({ userActive: "1" })
+    .in("userID", [...userIds])
+    .neq("userActive", "1")
+    .select("userID");
   if (updErr) return { ok: false, scanned: userIds.size, flipped: 0, stage: "tb_users_update", error: updErr.message };
 
   return { ok: true, scanned: userIds.size, flipped: (flipped ?? []).length };
@@ -259,10 +261,10 @@ assertEq("tb_payment has .eq('paystatus', '2')",
   paystatusFilter?.value, "2");
 
 // ────────────────────────────────────────────────────────────
-// C. Target table + value contract — UPDATE tb_users.useractive='1'
+// C. Target table + value contract — UPDATE tb_users.userActive='1'
 // ────────────────────────────────────────────────────────────
 
-section("C. Target table + value — tb_users.useractive='1'");
+section("C. Target table + value — tb_users.userActive='1'");
 
 const mockC = makeMockClient({
   tb_header_order: { data: [{ userid: "PR0001" }, { userid: "PR0002" }], error: null },
@@ -276,7 +278,7 @@ const cResult = await runRouteLogic(mockC);
 const updateCall = findCall(mockC.calls, (c) => c.kind === "update") as
   | (Call & { kind: "update" })
   | undefined;
-assertEq("UPDATE called with { useractive: '1' }", updateCall?.patch, { useractive: "1" });
+assertEq("UPDATE called with { userActive: '1' }", updateCall?.patch, { userActive: "1" });
 
 const updateFromIdx = mockC.fromCalls.indexOf("tb_users");
 assertEq("UPDATE target is tb_users", updateFromIdx >= 0, true);
@@ -288,15 +290,15 @@ assertEq("Flipped count surfaced from mock response", cResult.flipped, 3);
 assertEq("Response ok=true", cResult.ok, true);
 
 // ────────────────────────────────────────────────────────────
-// D. Idempotency guard — .neq('useractive','1') filter on UPDATE
+// D. Idempotency guard — .neq('userActive','1') filter on UPDATE
 // ────────────────────────────────────────────────────────────
 
-section("D. Idempotency — .neq('useractive','1') on UPDATE");
+section("D. Idempotency — .neq('userActive','1') on UPDATE");
 
-const neqCall = findCall(mockC.calls, (c) => c.kind === "neq" && c.col === "useractive") as
-  | (Call & { kind: "neq"; col: "useractive" })
+const neqCall = findCall(mockC.calls, (c) => c.kind === "neq" && c.col === "userActive") as
+  | (Call & { kind: "neq"; col: "userActive" })
   | undefined;
-assertEq("UPDATE has .neq('useractive', '1')", neqCall?.value, "1");
+assertEq("UPDATE has .neq('userActive', '1')", neqCall?.value, "1");
 
 // ────────────────────────────────────────────────────────────
 // E. Response shape — preserves { ok, scanned, flipped }

@@ -63,15 +63,21 @@ type ShopRow = { userid: string | null; htotalpriceuser: number | string | null;
 type ForRow = { userid: string | null; ftotalprice: number | string | null; fdate: string | null };
 type PayRow = { userid: string | null; paythb: number | string | null; paydate: string | null };
 
+// NOTE on table casing (verified live against prod 2026-06-22):
+//   tb_users columns are camelCase (userID, userName, …) — a lowercase select
+//   throws 42703 "column does not exist", which the page swallows → the report
+//   renders permanently EMPTY. The three money tables (tb_header_order /
+//   tb_forwarder / tb_payment) ARE lowercase (userid, htotalpriceuser, …),
+//   so those reads + the foldByUser helper stay lowercase. Only tb_users is camelCase.
 type UserRow = {
-  userid: string | null;
-  username: string | null;
-  userlastname: string | null;
-  usercompany: string | null;
-  userregistered: string | null;
-  shopuser: string | null;
+  userID: string | null;
+  userName: string | null;
+  userLastName: string | null;
+  userCompany: string | null;
+  userRegistered: string | null;
+  shopUser: string | null;
   channel: string | null;
-  adminidsale: string | null;
+  adminIDSale: string | null;
 };
 
 type SP = {
@@ -97,18 +103,18 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
   // ── 1) Customers (the row set) ────────────────────────────────────────────
   let usersQ = admin
     .from("tb_users")
-    .select("userid, username, userlastname, usercompany, userregistered, shopuser, channel, adminidsale")
-    .order("userregistered", { ascending: true, nullsFirst: false })
+    .select("userID, userName, userLastName, userCompany, userRegistered, shopUser, channel, adminIDSale")
+    .order("userRegistered", { ascending: true, nullsFirst: false })
     .limit(10000);
 
   if (!listAll) {
     usersQ = usersQ
-      .gte("userregistered", `${signupFrom} 00:00:00`)
-      .lte("userregistered", `${signupTo} 23:59:59`);
+      .gte("userRegistered", `${signupFrom} 00:00:00`)
+      .lte("userRegistered", `${signupTo} 23:59:59`);
   }
-  // Customer-type filter: usercompany '1' = นิติบุคคล, else = ทั่วไป.
-  if (userType === "2") usersQ = usersQ.eq("usercompany", "1");
-  else if (userType === "1") usersQ = usersQ.neq("usercompany", "1");
+  // Customer-type filter: userCompany '1' = นิติบุคคล, else = ทั่วไป.
+  if (userType === "2") usersQ = usersQ.eq("userCompany", "1");
+  else if (userType === "1") usersQ = usersQ.neq("userCompany", "1");
 
   const { data: usersData, error: usersErr } = await usersQ;
   if (usersErr) {
@@ -159,7 +165,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
 
   // ── 3) Build per-customer rows (legacy column order) ──────────────────────
   const rows = users.map((u) => {
-    const uid = u.userid ?? "";
+    const uid = u.userID ?? "";
     const shop = shopBuckets.get(uid) ?? emptyBucket();
     const imp = forBuckets.get(uid) ?? emptyBucket();
     const pay = payBuckets.get(uid) ?? emptyBucket();
@@ -188,9 +194,9 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
 
   // ── CSV ───────────────────────────────────────────────────────────────────
   const csvRows = rows.map((r) => ({
-    registered: r.u.userregistered ?? "",
+    registered: r.u.userRegistered ?? "",
     channel: channelUserLabel(r.u.channel),
-    shopUser: shopUserLabel(r.u.shopuser),
+    shopUser: shopUserLabel(r.u.shopUser),
     shopCount: r.shop.count,
     shopAmt: r.shop.amount,
     impCount: r.imp.count,
@@ -198,9 +204,9 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
     payCount: r.pay.count,
     payAmt: r.pay.amount,
     total: r.total,
-    sale: r.u.adminidsale ?? "",
+    sale: r.u.adminIDSale ?? "",
     userid: r.uid,
-    fullname: `${r.u.username ?? ""} ${r.u.userlastname ?? ""}`.trim(),
+    fullname: `${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim(),
   }));
   const csvCols = [
     { key: "registered", label: "วันที่สมัครสมาชิก" },
@@ -352,10 +358,10 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.uid} className="border-t border-border hover:bg-surface-alt/30 align-top">
-                    <td className="px-3 py-3 text-[11px] text-muted">{r.u.userregistered ?? "—"}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted">{r.u.userRegistered ?? "—"}</td>
                     <td className="px-3 py-3 text-[11px] text-muted">
                       <div>{channelUserLabel(r.u.channel)}</div>
-                      <div>{shopUserLabel(r.u.shopuser)}</div>
+                      <div>{shopUserLabel(r.u.shopUser)}</div>
                     </td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{intFmt(r.shop.count)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.shop.amount)}</td>
@@ -364,7 +370,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
                     <td className="px-3 py-3 text-right font-mono text-xs">{intFmt(r.pay.count)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.pay.amount)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs font-semibold text-red-700">{thb(r.total)}</td>
-                    <td className="px-3 py-3 text-[11px] text-muted">{r.u.adminidsale || "—"}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted">{r.u.adminIDSale || "—"}</td>
                     <td className="px-3 py-3 text-xs">
                       <Link
                         href={`/admin/customers/${encodeURIComponent(r.uid)}`}
@@ -373,7 +379,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
                         {r.uid}
                       </Link>
                       <div className="mt-0.5 text-muted">
-                        {`${r.u.username ?? ""} ${r.u.userlastname ?? ""}`.trim() || "—"}
+                        {`${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim() || "—"}
                       </div>
                     </td>
                   </tr>

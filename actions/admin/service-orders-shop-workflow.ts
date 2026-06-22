@@ -1111,7 +1111,8 @@ async function lookupUserContact(
   }
   const { data: u, error } = await admin
     .from("tb_users")
-    .select("usertel, useremail")
+    // tb_users columns are camelCase on prod+dev; alias to keep the read site + type.
+    .select("usertel:userTel, useremail:userEmail")
     .eq("userID", userid)
     .maybeSingle<{ usertel: string | null; useremail: string | null }>();
   if (error) {

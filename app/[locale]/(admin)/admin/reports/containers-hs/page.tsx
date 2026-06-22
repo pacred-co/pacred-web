@@ -9,19 +9,22 @@ import { exportContainersHsAll } from "@/actions/admin/export/report-containers-
 // all containers (or a date-filtered subset). Mirror of legacy
 // report-cnt.php.
 
+// NOTE (verified live against prod 2026-06-22): container_hs_lines has NO FK
+// relationship to `containers` or `hs_codes` in the schema cache, so a
+// PostgREST embed (`containers!container_id(...)`) throws PGRST200 → the page
+// swallows it → the report renders permanently EMPTY. We fetch the lines, then
+// the container + hs_code metadata in SEPARATE queries and merge in JS (a
+// robust 2-query join, no FK dependency). The hs_codes lookup key is `code`
+// (NOT `hs_code`); line.hs_code joins to containers.id / hs_codes.code.
 type LineRow = {
   hs_code:       string;
   qty:           number;
   weight_kg:     number;
   value_thb:     number;
   duty_pct_used: number | null;
-  container:     { id: string; container_no: string | null; created_at: string }
-                 | { id: string; container_no: string | null; created_at: string }[]
-                 | null;
-  hs:            { description: string }
-                 | { description: string }[]
-                 | null;
+  container_id:  string | null;
 };
+type ContainerMeta = { id: string; container_no: string | null; created_at: string };
 
 type Aggregate = {
   hs_code:        string;
@@ -37,10 +40,6 @@ type Aggregate = {
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
-function normSingle<T>(x: T | T[] | null | undefined): T | null {
-  if (!x) return null;
-  return Array.isArray(x) ? (x[0] ?? null) : x;
-}
 
 export default async function ContainerHsReportPage({
   searchParams,
@@ -53,32 +52,52 @@ export default async function ContainerHsReportPage({
 
   const admin = createAdminClient();
 
-  // Fetch all lines + container created_at for date filter + hs description
+  // 1) Fetch all HS lines (no embed — container_hs_lines has no usable FK).
   const { data, error } = await admin
     .from("container_hs_lines")
-    .select(`
-      hs_code, qty, weight_kg, value_thb, duty_pct_used,
-      container:containers!container_id ( id, container_no, created_at ),
-      hs:hs_codes!hs_code ( description )
-    `)
+    .select(`hs_code, qty, weight_kg, value_thb, duty_pct_used, container_id`)
     .limit(10000);
   if (error) {
     console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
   }
+  const lines = (data ?? []) as unknown as LineRow[];
 
-  const rowsRaw = ((data ?? []) as unknown as LineRow[]).map((l) => ({
-    ...l,
-    container: normSingle(l.container),
-    hs:        normSingle(l.hs),
-  }));
+  // 2) Fetch the container metadata (for the date filter + container_no) in a
+  //    SEPARATE query keyed by id, then merge in JS.
+  const containerIds = Array.from(new Set(lines.map((l) => l.container_id).filter((x): x is string => !!x)));
+  const containerMap = new Map<string, ContainerMeta>();
+  if (containerIds.length > 0) {
+    const { data: ctData, error: ctErr } = await admin
+      .from("containers")
+      .select("id, container_no, created_at")
+      .in("id", containerIds);
+    if (ctErr) console.error(`[containers meta] failed`, { code: ctErr.code, message: ctErr.message });
+    for (const c of (ctData ?? []) as ContainerMeta[]) containerMap.set(c.id, c);
+  }
 
-  // Date filter on container.created_at
-  const rows = rowsRaw.filter((r) => {
-    if (!r.container) return false;
-    if (dateFrom && r.container.created_at < dateFrom) return false;
-    if (dateTo   && r.container.created_at > dateTo + "T23:59:59") return false;
-    return true;
-  });
+  // 3) Fetch the HS-code descriptions (key column is `code`, joined to line.hs_code).
+  const hsCodes = Array.from(new Set(lines.map((l) => l.hs_code).filter((x): x is string => !!x)));
+  const hsDescMap = new Map<string, string>();
+  if (hsCodes.length > 0) {
+    const { data: hsData, error: hsErr } = await admin
+      .from("hs_codes")
+      .select("code, description")
+      .in("code", hsCodes);
+    if (hsErr) console.error(`[hs_codes meta] failed`, { code: hsErr.code, message: hsErr.message });
+    for (const h of (hsData ?? []) as Array<{ code: string; description: string | null }>) {
+      hsDescMap.set(h.code, h.description ?? "");
+    }
+  }
+
+  // Merge container meta onto each line + apply the date filter on container.created_at.
+  const rows = lines
+    .map((l) => ({ ...l, container: l.container_id ? containerMap.get(l.container_id) ?? null : null }))
+    .filter((r) => {
+      if (!r.container) return false;
+      if (dateFrom && r.container.created_at < dateFrom) return false;
+      if (dateTo   && r.container.created_at > dateTo + "T23:59:59") return false;
+      return true;
+    });
 
   // Aggregate per HS code
   const buckets = new Map<string, Aggregate>();
@@ -88,7 +107,7 @@ export default async function ContainerHsReportPage({
     if (!b) {
       b = {
         hs_code:     key,
-        description: r.hs?.description ?? "",
+        description: hsDescMap.get(key) ?? "",
         qty:         0,
         weight_kg:   0,
         value_thb:   0,
