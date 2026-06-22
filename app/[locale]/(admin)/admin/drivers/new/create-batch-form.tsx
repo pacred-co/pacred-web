@@ -12,7 +12,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import {
-  MapPin, Phone, Package, ChevronDown, ChevronUp, AlertCircle,
+  MapPin, Phone, Package, AlertCircle,
 } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 
@@ -67,7 +67,6 @@ export function CreateBatchForm({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [driverCode,   setDriverCode]   = useState<string>("");
   const [endTimeHours, setEndTimeHours] = useState<17 | 24 | 30>(17);
-  const [expandedKey,  setExpandedKey]  = useState<string | null>(null);
 
   // Aggregates for the selection summary.
   const summary = useMemo(() => {
@@ -209,7 +208,6 @@ export function CreateBatchForm({
           <ul className="space-y-2">
             {groups.map((g) => {
               const isSelected = selectedKeys.has(g.key);
-              const isExpanded = expandedKey === g.key;
               return (
                 <li
                   key={g.key}
@@ -253,18 +251,9 @@ export function CreateBatchForm({
                           </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedKey(isExpanded ? null : g.key)}
-                        className="mt-2 text-xs text-primary-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {isExpanded ? "ซ่อนรายละเอียด" : "ดูแทรคกิ้งในจุดนี้"}
-                      </button>
                     </div>
                   </div>
-                  {isExpanded && (
-                    <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
+                  <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
                           <tr>
@@ -319,8 +308,7 @@ export function CreateBatchForm({
                           </tr>
                         </tbody>
                       </table>
-                    </div>
-                  )}
+                  </div>
                 </li>
               );
             })}

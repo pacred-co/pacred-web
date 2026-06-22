@@ -42,6 +42,7 @@ import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { fireUserSalesEarnTriggerOnDelivery } from "./earn-trigger-tb-user-sales";
+import { maybeAutoCompleteDriverBatch } from "@/lib/admin/driver-batch-complete";
 import type { AdminRole } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
 
@@ -351,6 +352,18 @@ async function transitionItemStatus(
       }
     }
 
+    // ── (d) AUTO-COMPLETE THE BATCH when this delivery was the last open stop
+    //         (legacy forwarder-driver-w.php:959-968 / forwarder-driver.php:1416-1424
+    //         recount the run on every delivery + flip tb_forwarder_driver.fdstatus
+    //         1→2 when all stops are delivered). WITHOUT this the batch header
+    //         stays "กำลังดำเนินการ" forever even at 2/2 delivered, forcing staff
+    //         to flip it by hand (ภูม 2026-06-23). Best-effort — never rolls back
+    //         the (already-committed) item/forwarder delivery.
+    let batchCompleted = false;
+    if (action === "deliver") {
+      batchCompleted = await maybeAutoCompleteDriverBatch(admin, authz.row.fdid);
+    }
+
     await logAdminAction(
       adminId,
       `tb_forwarder_driver_item.${action}`,
@@ -367,6 +380,7 @@ async function transitionItemStatus(
         // ops can correlate driver-item deliveries with tb_forwarder status
         // changes when investigating "why is this order still showing เตรียมส่ง"
         forwarder_fstatus_flipped_to_7: action === "deliver",
+        batch_completed:               batchCompleted,
       },
     );
 
@@ -378,6 +392,7 @@ async function transitionItemStatus(
     if (action === "deliver") {
       revalidatePath("/admin/forwarders");
       revalidatePath("/admin/drivers");
+      revalidatePath(`/admin/drivers/${authz.row.fdid}`);
     }
     return { ok: true };
   });

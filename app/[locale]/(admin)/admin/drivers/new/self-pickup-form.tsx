@@ -19,7 +19,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import {
-  MapPin, Phone, ChevronDown, ChevronUp, AlertCircle, Camera, CheckCircle2,
+  MapPin, Phone, AlertCircle, Camera, CheckCircle2,
 } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -64,7 +64,6 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
   const [err, setErr] = useState<string | null>(null);
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [expandedKey,  setExpandedKey]  = useState<string | null>(null);
   const [photo,        setPhoto]        = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,7 +157,6 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
           <ul className="space-y-2">
             {groups.map((g) => {
               const isSelected = selectedKeys.has(g.key);
-              const isExpanded = expandedKey === g.key;
               return (
                 <li
                   key={g.key}
@@ -202,18 +200,9 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
                           </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedKey(isExpanded ? null : g.key)}
-                        className="mt-2 text-xs text-primary-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {isExpanded ? "ซ่อนรายละเอียด" : "ดูแทรคกิ้งในรายการนี้"}
-                      </button>
                     </div>
                   </div>
-                  {isExpanded && (
-                    <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
+                  <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
                           <tr>
@@ -260,8 +249,7 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
                           )}
                         </tbody>
                       </table>
-                    </div>
-                  )}
+                  </div>
                 </li>
               );
             })}

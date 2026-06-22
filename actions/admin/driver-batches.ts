@@ -42,6 +42,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
+import { maybeAutoCompleteDriverBatch } from "@/lib/admin/driver-batch-complete";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -773,6 +774,10 @@ export async function removeItemFromBatch(
       console.error("removeItemFromBatch: delete failed", delErr, { itemId });
       return { ok: false, error: delErr.message };
     }
+
+    // Removing the last still-open stop can leave the run all-delivered →
+    // auto-complete it (so it doesn't sit "กำลังดำเนินการ" with nothing pending).
+    await maybeAutoCompleteDriverBatch(admin, item.fdid);
 
     await logAdminAction(adminId, "tb_forwarder_driver_item.remove", "tb_forwarder_driver_item", String(itemId), {
       batch_id: item.fdid, forwarder_id: item.fid,

@@ -25,7 +25,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ArrowLeft, Truck, Package, MapPin, Home, Send } from "lucide-react";
+import { ArrowLeft, Truck, Package, MapPin, Home, Send, CheckCircle2 } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
 
@@ -193,10 +193,17 @@ export default async function CreateDriverBatchPage({
     console.error("/admin/drivers/new: eligible read failed", eligibleErr);
     throw new Error(`ไม่สามารถอ่านรายการรอมอบหมาย: ${eligibleErr.message}`);
   }
-  const allEligible = ((eligibleData ?? []) as unknown as (ForwarderRow & { paydeposit: string | null })[])
-    .filter((r) => r.paydeposit !== "1" && !openFids.has(r.id));
+  // paydeposit-ok ready-to-ship rows (= legacy countWarehousePCSPay, the
+  // "เตรียมส่งอนุมัติจ่ายเงินแล้ว" total). Then split off the ones already
+  // out in an open driver batch (inProgress = legacy status_driver_item).
+  const paydOk = ((eligibleData ?? []) as unknown as (ForwarderRow & { paydeposit: string | null })[])
+    .filter((r) => r.paydeposit !== "1");
+  const totalReadyToShip = paydOk.length;
+  const allEligible = paydOk.filter((r) => !openFids.has(r.id));
+  const inProgress = totalReadyToShip - allEligible.length; // ออกส่งกับคนขับแล้ว
 
-  // 3. Partition into the two legacy tabs (no overlap, no loss).
+  // 3. Partition the still-to-action rows into the two legacy work-tabs
+  //    (no overlap, no loss).
   const driverEligible = allEligible.filter((r) => !isSelfPickup(r.fshipby));
   const pickupEligible = allEligible.filter((r) => isSelfPickup(r.fshipby));
   const driverCount = driverEligible.length;
@@ -271,6 +278,26 @@ export default async function CreateDriverBatchPage({
         >
           <Send className="h-4 w-4" />
           กำลังจัดส่ง / ติดตาม
+          {inProgress > 0 && (
+            <span className="ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold bg-blue-500 text-white">
+              {inProgress.toLocaleString("th-TH")}
+            </span>
+          )}
+        </Link>
+        {/* Legacy tab 4 (forwarder-driver.php:762) — a health/stat indicator:
+            "are all payment-approved ready-to-ship rows accounted for across the
+            queues?" numerator = ยังไม่มอบ (driver+pickup) + ออกส่งแล้ว (inProgress);
+            denominator = total fStatus=6 paydeposit-ok. Normally equal (X/X). */}
+        <Link
+          href="/admin/forwarders?status=6"
+          title="รายการที่อนุมัติจ่ายเงินแล้ว (สถานะเตรียมส่ง) ทั้งหมด — กดดูรายการเต็ม"
+          className="inline-flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-medium text-muted hover:text-primary-600 hover:bg-surface-alt"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          เตรียมส่ง · อนุมัติจ่ายแล้ว
+          <span className="ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold bg-emerald-500 text-white">
+            {(driverCount + pickupCount + inProgress).toLocaleString("th-TH")}/{totalReadyToShip.toLocaleString("th-TH")}
+          </span>
         </Link>
       </div>
 
