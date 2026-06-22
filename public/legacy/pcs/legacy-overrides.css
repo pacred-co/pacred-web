@@ -312,6 +312,16 @@ nav.nav-footer-pcs { display: none !important; }
    a menu toggle, but the toggle UI lives in the dropped Bootstrap CSS). */
 @media (max-width: 767.98px) {
   #pcs-left-menu.main-menu { display: none !important; }
+  /* Mobile bottom clearance — the <FloatingTabs> bottom nav (≈74px bar + the
+     raised FAB) is `position:fixed; bottom:0` and renders NO spacer, so a
+     page's last content was hidden/cramped behind it (owner 2026-06-22
+     "โดนเมนูกินขอบล่าง"). The desktop `.pcs-content-pad` padding (right:88px for
+     the vertical icon rail) is gated to min-width:768px, so mobile had zero
+     clearance. Reserve room here + the iOS safe-area inset. Additive padding —
+     fixed bars ignore it, so pages with their own bottom bar are unaffected. */
+  body.pcs-legacy-body .pcs-content-pad {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ── 1. Carousel banner — constrain to legacy aspect (900x270 = 3.33:1) ─── */

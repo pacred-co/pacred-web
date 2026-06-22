@@ -5,7 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
 import { ProfileAvatarUpload } from "./profile-avatar-upload";
+import { CustomerCoverUpload } from "./customer-cover-upload";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { getBusinessConfig } from "@/lib/business-config";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY, customerCoverKey } from "@/actions/admin/profile-cover-keys";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -267,6 +271,23 @@ export default async function ProfilePage() {
     profile.avatar_url ||
     `/legacy/pcs/images/users/${userPictureFile || "user.jpg"}`;
 
+  // FB-style cover banner — the SAME shared Pacred brand banner the admin
+  // customer-profile uses (global business_config image · signed on read ·
+  // cosmetic/non-sensitive). Read-only here: customers don't edit the cover.
+  // The customer's OWN cover wins (set via the "เปลี่ยนพื้นหลัง" button →
+  // actions/profile-cover-self.ts); falls back to the shared global brand
+  // banner, then the bundled default. `hasMyCover` toggles the dialog's
+  // "คืนค่าเริ่มต้น" (revert) option.
+  const DEFAULT_COVER = "/images/admin/customerprofile/bannertest01g.gif";
+  const myCoverPath = await getBusinessConfig<string>(customerCoverKey(memberCode), "");
+  const globalCoverPath = await getBusinessConfig<string>(PROFILE_COVER_KEY, "");
+  const coverPath = myCoverPath || globalCoverPath;
+  const coverSrc =
+    (coverPath ? await getSignedBucketUrl(PROFILE_COVER_BUCKET, coverPath, 86400) : null) ||
+    DEFAULT_COVER;
+  const hasMyCover = !!myCoverPath;
+  const isJuristic = profile.account_type === "juristic";
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
@@ -300,38 +321,47 @@ export default async function ProfilePage() {
 
         {/* Basic Carousel start — L95-96 */}
         <section id="basic-carousel">
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
-            {/* L102-119 — two corner icon buttons */}
-            <div className="flex items-center justify-end gap-1">
-              {/* L104 — legacy opens the #edit-profile modal via
-                  data-toggle; the modal markup is rendered by
-                  <EditProfileForm> below. Bootstrap-4 vendor JS wires the
-                  toggle — href/data-toggle/data-target kept EXACTLY. */}
-              <a
-                href="#edit-profile"
-                data-toggle="modal"
-                data-target="#edit-profile"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
-                aria-label={t("editProfileAria")}
-                title={t("editProfileAria")}
-              >
-                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </a>
-              {/* L112 — link to the account-settings screen */}
-              <Link
-                href="/account-settings"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground"
-                aria-label={t("accountSettingsAria")}
-                title={t("accountSettingsAria")}
-              >
-                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-              </Link>
+          <div className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
+            {/* FB-style cover banner — matches the admin customer-profile look
+                (ดึงลักษณะหลังบ้านมา · เฉพาะหน้าตา). The shared Pacred brand
+                banner, FLUSH to the card top (-mx/-mt cancel the card padding;
+                the card is overflow-hidden so it clips to the rounded corners).
+                Read-only here: customers don't edit the cover · NO rate / NO
+                admin data is surfaced. */}
+            <div className="relative -mx-4 -mt-4 md:-mx-6 md:-mt-6 h-28 sm:h-36 overflow-hidden bg-primary-600">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={coverSrc} alt="" className="h-full w-full object-cover" />
+              {/* customer's own "เปลี่ยนพื้นหลัง" (bottom-right · FB-style) — sets
+                  THEIR cover, never the global banner */}
+              <CustomerCoverUpload hasCustom={hasMyCover} />
+              {/* actions over the cover (top-right · FB-style) — customer-facing only:
+                  edit profile + account settings. NO rate / NO admin nav. */}
+              <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+                <a
+                  href="#edit-profile"
+                  data-toggle="modal"
+                  data-target="#edit-profile"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-foreground shadow-sm backdrop-blur hover:bg-white"
+                  aria-label={t("editProfileAria")}
+                  title={t("editProfileAria")}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </a>
+                <Link
+                  href="/account-settings"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-foreground shadow-sm backdrop-blur hover:bg-white"
+                  aria-label={t("accountSettingsAria")}
+                  title={t("accountSettingsAria")}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                </Link>
+              </div>
             </div>
 
                         {/* L120-194 — the #edit-profile modal + form.
@@ -351,21 +381,22 @@ export default async function ProfilePage() {
                           }}
                         />
 
-                        {/* L196-255 — avatar + edit-image modals + name */}
-                        <div className="mt-4 flex flex-col items-center text-center">
-                          {/* L197-199 — magnific-popup avatar zoom link */}
-                          <a
-                            className="image-popup-vertical-fit el-link"
-                            href={userPicture}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={userPicture}
-                              className="h-[120px] w-[120px] md:h-[150px] md:w-[150px] rounded-full object-cover border border-border shadow-sm"
-                              width={150}
-                              alt=""
-                            />
-                          </a>
+                        {/* FB-style header row — avatar OVERLAPS the cover (bottom-left),
+                            ชื่อ + รหัส + สถานะ to its right, edit/settings actions far-right.
+                            (Same shape as the admin customer profile · ไม่มีเรท/ข้อมูลหลังบ้าน) */}
+                        <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left gap-2 sm:gap-4 px-1">
+                          {/* avatar column — overlap + the customer's own change-pic control */}
+                          <div className="flex flex-col items-center shrink-0">
+                            {/* L197-199 — magnific-popup avatar zoom link */}
+                            <a className="image-popup-vertical-fit el-link" href={userPicture}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={userPicture}
+                                className="relative z-20 -mt-14 sm:-mt-16 w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover bg-white ring-4 ring-white dark:ring-surface shadow-sm"
+                                width={120}
+                                alt=""
+                              />
+                            </a>
                           {/* 2026-06-04 — WIRED Pacred avatar upload. Replaces
                               the legacy edit-image button, whose #edit-img-profile
                               / #uploadimageModal (dropify + croppie) were
@@ -374,6 +405,9 @@ export default async function ProfilePage() {
                               .avatar_url (no jQuery, no comms). The inert legacy
                               modal markup below is superseded (kept harmless). */}
                           <ProfileAvatarUpload />
+                          </div>
+                          {/* inert legacy avatar modals (superseded by
+                              ProfileAvatarUpload above · hidden shells, kept harmless) */}
                           {/* L205-229 — #edit-img-profile modal (dropify
                               file picker). Markup transcribed 1:1; the
                               dropify plugin + the upload POST are NOT
@@ -481,14 +515,24 @@ export default async function ProfilePage() {
                               </div>
                             </div>
                           </div>
-                          {/* L253-254 — name + member code */}
-                          <h2 className="mt-3 text-xl md:text-2xl font-bold text-foreground">
-                            <span>{fullName}</span>
-                          </h2>
-                          <h5 className="mt-1 text-sm text-muted">
-                            {t("memberCodeLabel")} : <span className="font-medium text-foreground">{userID}</span>
-                            <span></span>
-                          </h5>
+                          {/* name + eyebrow + member code + active status
+                              (FB-style · pulled from the admin look · no rate / no internal rep data) */}
+                          <div className="min-w-0 flex flex-1 flex-col items-center sm:items-start gap-1.5 sm:pt-2">
+                            <div className="flex flex-wrap items-baseline justify-center sm:justify-start gap-x-2 gap-y-0.5">
+                              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground leading-tight break-words">
+                                {fullName}
+                              </h2>
+                              <span className="text-[11px] font-semibold tracking-wide text-primary-600">
+                                {t("myAccountEyebrow")} · {isJuristic ? t("accountJuristic") : t("accountPersonal")}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-base sm:text-lg font-bold font-mono text-foreground">{userID}</span>
+                              <span className="rounded-full border border-green-200 bg-green-50 px-3 py-0.5 text-xs font-medium text-green-700">
+                                {t("statusActive")}
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
                         {/* L257 — divider */}
