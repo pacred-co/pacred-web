@@ -41,6 +41,8 @@ import {
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { getShopOrderDocuments } from "@/lib/admin/order-documents";
+import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
@@ -252,6 +254,10 @@ export async function renderLegacyServiceOrderView(hno: string) {
     linkedImports = ((imports ?? []) as AdminLinkedImport[]).filter((x) => !seen.has(x.id) && seen.add(x.id));
   }
 
+  // B3 (2026-06-22) — per-order document registry (read-only · tax invoices +
+  // receipts issued for this hno). Empty until tax-doc issuance is enabled.
+  const orderDocs = await getShopOrderDocuments(r.hno);
+
   // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane — reflect the
   // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
@@ -413,6 +419,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
           </ul>
         </section>
       )}
+
+      {/* ── B3: เอกสารของออเดอร์ (read-only doc registry) ── */}
+      <OrderDocumentsPanel docs={orderDocs} />
 
       {/* ── 2-column header: customer + price ── */}
       <div className="grid gap-5 lg:grid-cols-2">
