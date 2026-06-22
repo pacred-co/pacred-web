@@ -1,3 +1,6 @@
+// Money/audit surface — never statically cache a per-admin, searchParams-driven view (stale financial/audit data).
+export const dynamic = "force-dynamic";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
