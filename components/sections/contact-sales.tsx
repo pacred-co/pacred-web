@@ -9,6 +9,21 @@ import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { getPublicSalesRoster } from "@/actions/sales-roster";
 
 const LINE_URL = "/line";
+const FALLBACK_IMAGE = "/images/pacred-logo-red.png";
+
+/**
+ * next/image only accepts a leading-slash path or an absolute http(s) URL.
+ * Legacy `tb_admin.adminPicture` can hold a bare filename ("user.jpg") with no
+ * leading slash — that makes next/image throw "Failed to construct 'URL'" and
+ * crash the whole ContactSales section (→ the home page error boundary).
+ * Coerce anything next/image can't load to the brand-logo fallback.
+ */
+function safeImageSrc(src: string | null | undefined): string {
+  if (src && (src.startsWith("/") || src.startsWith("http://") || src.startsWith("https://"))) {
+    return src;
+  }
+  return FALLBACK_IMAGE;
+}
 
 type SalesPerson = {
   id: string;
@@ -61,14 +76,15 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
           const shortId = r.adminID.replace(/^admin_/, "");
           const curated = CURATED_SALES.find((c) => c.name === r.name || c.id === shortId);
           if (curated) return curated;
+          const photo = safeImageSrc(r.photo);
           return {
             id: r.adminID,
             name: r.name,
             roleKey: "roleSales",
             taglineKey: "taglineGeneric",
             phone: r.phone,
-            image: r.photo ?? "/images/pacred-logo-red.png",
-            useContain: !r.photo,
+            image: photo,
+            useContain: photo === FALLBACK_IMAGE,
             altKey: "altGeneric",
           };
         });
@@ -113,7 +129,7 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
                 {/* Big circular avatar */}
                 <div className="relative w-[84px] h-[84px] md:w-[124px] md:h-[124px] rounded-full overflow-hidden shrink-0 border-4 border-white bg-white shadow-[0_10px_24px_rgba(179,0,0,0.20)] ring-2 ring-primary-200 dark:ring-primary-900/40">
                   <Image
-                    src={s.image}
+                    src={safeImageSrc(s.image)}
                     alt={t(s.altKey)}
                     fill
                     sizes="130px"
