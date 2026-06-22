@@ -8,6 +8,12 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { findLegacyUserIdByPhone } from "@/lib/auth/legacy-bridge-tb-users";
 import { normalizePhone } from "@/lib/utils/phone";
+import { ensureLegacyAdminRow } from "@/lib/admin/ensure-legacy-admin";
+
+// Roles that, when granted, should auto-surface the staffer as a sales rep
+// (card หน้าบ้าน + customer-360 dropdown + round-robin). Owner 2026-06-22:
+// "เพิ่มพนักงาน role sales → auto การ์ด + auto ระบบหลังบ้าน".
+const SALES_REP_ROLES = new Set(["sales", "sales_admin"]);
 import {
   AdminCreateSchema,
   AdminUpdateSchema,
@@ -868,7 +874,35 @@ export async function adminSetSalesRepFlag(
       console.error("[adminSetSalesRepFlag] failed", { code: error.code, message: error.message, adminID });
       return { ok: false, error: error.message };
     }
-    if (!updated) return { ok: false, error: "ไม่พบพนักงาน (สถานะ active) รหัสนี้" };
+    if (!updated) {
+      // No active tb_admin row — the staffer is Pacred-native (profiles+admins
+      // only · the hollow-account gap). Connect them: when flagging ON, mirror
+      // them into tb_admin from their profile so they appear as a rep everywhere
+      // (owner 2026-06-22). When flagging OFF a non-existent row, there's nothing
+      // to un-flag → treat as success (idempotent).
+      if (!isSales) {
+        await logAdminAction(adminId, "admin.set_sales_flag", "tb_admin", adminID, { isSales, note: "no_row_noop" });
+        return { ok: true };
+      }
+      const { data: prof, error: profErr } = await admin
+        .from("profiles")
+        .select("first_name, last_name, email, admin_login_id")
+        .eq("admin_login_id", adminID)
+        .maybeSingle<{ first_name: string | null; last_name: string | null; email: string | null; admin_login_id: string | null }>();
+      if (profErr) console.error("[adminSetSalesRepFlag profile lookup]", { adminID, message: profErr.message });
+      const mirror = await ensureLegacyAdminRow(admin, {
+        adminID,
+        adminName:     prof?.first_name ?? adminID,
+        adminLastName: prof?.last_name ?? "",
+        adminEmail:    prof?.email || `${adminID}@pacred.co.th`,
+        isSales:       true,
+        createdBy:     adminId,
+      });
+      if (!mirror.ok) {
+        console.error("[adminSetSalesRepFlag mirror]", { adminID, error: mirror.error });
+        return { ok: false, error: "ไม่พบพนักงาน (สถานะ active) รหัสนี้ และสร้างไม่สำเร็จ" };
+      }
+    }
     await logAdminAction(adminId, "admin.set_sales_flag", "tb_admin", adminID, { isSales });
     revalidatePath("/admin/admins");
     revalidatePath("/admin/admins/sales-team");
@@ -1034,6 +1068,26 @@ export async function adminCreateNew(
           if (extrasErr) {
             throw new Error(`admin_contact_extras insert: ${extrasErr.message}`);
           }
+        }
+
+        // ── 4b. Legacy tb_admin mirror (no hollow accounts · owner 2026-06-22).
+        //   Every staff gets a tb_admin row keyed by their login id, so they're
+        //   visible to all legacy-keyed surfaces (sales roster · round-robin ·
+        //   customer-360 dropdown · sales-team toggle). Sales-eligible roles are
+        //   auto-flagged as a rep → "เพิ่ม role sales → auto card + back-office".
+        //   Best-effort: a failure here NEVER fails staff creation (the staff
+        //   already exists in profiles+admins) — it just logs.
+        const legacyMirror = await ensureLegacyAdminRow(admin, {
+          adminID:      loginId,
+          adminName:    d.first_name,
+          adminLastName: d.last_name,
+          adminEmail:   loginEmail,
+          adminNickname: d.nickname ?? null,
+          isSales:      SALES_REP_ROLES.has(d.role),
+          createdBy:    adminId,
+        });
+        if (!legacyMirror.ok) {
+          console.error("[adminCreateNew tb_admin mirror]", { loginId, error: legacyMirror.error });
         }
 
         // ── 5. Read back member_code (trigger-assigned) for the
@@ -1335,10 +1389,36 @@ export async function adminChangeRole(
       return { ok: false, error: `revoke old role: ${oldErr.message}` };
     }
 
+    // Auto-surface as a sales rep when changed INTO a sales role (owner
+    // 2026-06-22: "เพิ่ม role sales → auto card + back-office"). Best-effort:
+    // mirror them into tb_admin (if hollow) + flag adminStatusSale. A failure
+    // here doesn't undo the role change.
+    if (SALES_REP_ROLES.has(d.new_role)) {
+      const { data: prof, error: profLookupErr } = await admin
+        .from("profiles")
+        .select("admin_login_id, first_name, last_name, email")
+        .eq("id", d.profile_id)
+        .maybeSingle<{ admin_login_id: string | null; first_name: string | null; last_name: string | null; email: string | null }>();
+      if (profLookupErr) console.error("[adminChangeRole profile lookup]", { profile_id: d.profile_id, message: profLookupErr.message });
+      const loginId = prof?.admin_login_id?.trim();
+      if (loginId) {
+        const mirror = await ensureLegacyAdminRow(admin, {
+          adminID:       loginId,
+          adminName:     prof?.first_name ?? loginId,
+          adminLastName: prof?.last_name ?? "",
+          adminEmail:    prof?.email || `${loginId}@pacred.co.th`,
+          isSales:       true,
+          createdBy:     adminId,
+        });
+        if (!mirror.ok) console.error("[adminChangeRole sales mirror]", { loginId, error: mirror.error });
+      }
+    }
+
     await logAdminAction(adminId, "admin.change_role", "admins", `${d.profile_id}`, d);
     revalidatePath("/admin/admins");
     revalidatePath(`/admin/admins/${d.profile_id}`);
     revalidatePath(`/admin/admins/${d.profile_id}/edit`);
+    revalidatePath("/admin/admins/sales-team");
     return { ok: true };
   });
 }
