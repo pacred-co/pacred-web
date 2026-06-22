@@ -48,6 +48,19 @@ export const adminCreateCustomerSchema = z
     companyName: z.string().trim().max(200).optional().or(z.literal("")),
     taxId: z.string().trim().max(20).optional().or(z.literal("")),
     companyAddress: z.string().trim().max(500).optional().or(z.literal("")),
+    // Owning เซลล์ / CS (tb_admin.adminID → tb_users.adminIDSale / adminIDCS).
+    // Blank = let the action's round-robin pick the least-loaded rep/CS (the
+    // legacy default). When set, the action validates the id is in the active
+    // pool and OVERRIDES the round-robin pick.
+    salesRepId: z.string().trim().max(50).optional().or(z.literal("")),
+    csRepId: z.string().trim().max(50).optional().or(z.literal("")),
+    // Services this customer uses — selected as chips, COMPOSED into the note
+    // (tb_users.userNote) by the action as a "บริการที่ใช้: …" line. Free
+    // metadata for staff ("เลือกเพื่อโน๊ต") — not a structured registry.
+    services: z.array(z.string().trim().max(60)).max(20).optional(),
+    // Staff note saved with the customer → tb_users.userNote (the SAME field the
+    // customer profile shows + edits via adminUpdateUserNote · max 2000). Optional.
+    note: z.string().trim().max(2000).optional().or(z.literal("")),
   })
   .superRefine((d, ctx) => {
     if (d.isJuristic) {
@@ -70,6 +83,13 @@ export type AdminCreateCustomerData = {
   password: string;
   /** True when the password was auto-generated (vs admin-chosen). */
   generated: boolean;
+  /**
+   * The customer's OTP-gated magic-login capability token (lib/auth/
+   * customer-magic-link.ts). The success panel builds `/k/<token>` from it — a
+   * non-expiring link the staff sends the customer to log into their own
+   * account (click → request OTP → in).
+   */
+  loginLinkToken: string;
 };
 
 /**

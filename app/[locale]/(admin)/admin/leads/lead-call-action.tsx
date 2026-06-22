@@ -46,7 +46,11 @@ const QUICK: { value: LeadCallStatus; label: string }[] = [
  * Per-row quick-action: log a call outcome (+ optional note) against a lead.
  * Refreshes the queue on success so the new call-state shows immediately.
  */
-export function LeadCallAction({ userid }: { userid: string }) {
+export function LeadCallAction({ userid, tel }: { userid: string; tel?: string | null }) {
+  // The number to actually dial. A `tel:` anchor opens the device dialer on a
+  // phone (the call queue is worked from phones) — owner 2026-06-22 "กดโทรแล้ว
+  // โทรไปที่เบอร์นั้นจริงๆ". Pressing it dials AND opens the outcome logger.
+  const phone = (tel ?? "").trim();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -88,15 +92,38 @@ export function LeadCallAction({ userid }: { userid: string }) {
   return (
     <div className="space-y-1">
       {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100 min-h-[44px] sm:min-h-0 sm:py-1"
-        >
-          {done ? `✓ ${doneMsg}` : "📞 บันทึกผลโทร"}
-        </button>
+        phone ? (
+          // Real dial: native tel: anchor (opens the dialer) + opens the logger
+          // in the same tap so the rep records the outcome right after the call.
+          <a
+            href={`tel:${phone}`}
+            onClick={() => setOpen(true)}
+            title={`โทรหา ${phone}`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 min-h-[44px] sm:min-h-0 sm:py-1.5"
+          >
+            {done ? `✓ ${doneMsg}` : "📞 โทร"}
+          </a>
+        ) : (
+          // No phone on file → can't dial; just open the outcome logger.
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100 min-h-[44px] sm:min-h-0 sm:py-1"
+          >
+            {done ? `✓ ${doneMsg}` : "บันทึกผลโทร"}
+          </button>
+        )
       ) : (
         <div className="space-y-1.5 rounded-lg border border-border bg-white dark:bg-surface p-2 min-w-[180px]">
+          {phone && (
+            <a
+              href={`tel:${phone}`}
+              className="flex items-center justify-center gap-1.5 rounded-md bg-primary-600 px-2 py-2 text-xs font-semibold text-white hover:bg-primary-700"
+            >
+              📞 โทรอีกครั้ง · {phone}
+            </a>
+          )}
+          <p className="text-[11px] text-muted">บันทึกผลโทร:</p>
           <div className="flex flex-wrap gap-1">
             {QUICK.map((s) => (
               <button

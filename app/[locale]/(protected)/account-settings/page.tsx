@@ -4,6 +4,11 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { PasswordForm } from "./password-form";
+import { ProfileAvatarUpload } from "../profile/profile-avatar-upload";
+import { CustomerCoverUpload } from "../profile/customer-cover-upload";
+import { getBusinessConfig } from "@/lib/business-config";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY, customerCoverKey } from "@/actions/admin/profile-cover-keys";
 
 /**
  * Customer account-settings screen — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -51,6 +56,9 @@ import { PasswordForm } from "./password-form";
 
 export default async function AccountSettingsPage() {
   const t = await getTranslations("accountSettingsPage");
+  // Shared FB-header labels (eyebrow / account type / status) live in the
+  // profilePage namespace — reuse them here so the header matches /profile.
+  const tProfile = await getTranslations("profilePage");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -100,6 +108,18 @@ export default async function AccountSettingsPage() {
       ? `/legacy/pcs/images/users/${userRow.userPicture}`
       : "/legacy/pcs/images/users/user.jpg");
 
+  // FB-style cover — same per-customer mechanism as /profile (own cover →
+  // shared global banner → bundled default).
+  const DEFAULT_COVER = "/images/admin/customerprofile/bannertest01g.gif";
+  const myCoverPath = await getBusinessConfig<string>(customerCoverKey(memberCode), "");
+  const globalCoverPath = await getBusinessConfig<string>(PROFILE_COVER_KEY, "");
+  const coverPath = myCoverPath || globalCoverPath;
+  const coverSrc =
+    (coverPath ? await getSignedBucketUrl(PROFILE_COVER_BUCKET, coverPath, 86400) : null) ||
+    DEFAULT_COVER;
+  const hasMyCover = !!myCoverPath;
+  const isJuristic = profile.account_type === "juristic";
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
@@ -128,27 +148,48 @@ export default async function AccountSettingsPage() {
         </div>
 
         {/* L60-123 — content-body · the account card */}
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
-          {/* L68-74 — avatar + name + member code */}
-          <div className="text-center">
+        <section className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 md:p-6">
+          {/* FB-style cover + avatar header — matches /profile (มีพื้นหลัง · แก้พื้นหลังได้ ·
+              แก้รูปโปรไฟล์ได้). Reuses the SAME per-customer cover + avatar controls. */}
+          <div className="relative -mx-4 -mt-4 md:-mx-6 md:-mt-6 h-28 sm:h-36 overflow-hidden bg-primary-600">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={userPicture}
-              className="mx-auto rounded-full object-cover w-[120px] h-[120px] md:w-[150px] md:h-[150px] border border-border"
-              width={150}
-              height={150}
-              alt=""
-            />
-            <h2 className="pt-3 text-lg md:text-xl font-bold text-foreground break-words">
-              {fullName}
-            </h2>
-            <h5 className="text-sm text-muted mt-1">
-              {t("memberCodeLabel")} : <span className="text-foreground font-medium">{userID}</span>
-            </h5>
+            <img src={coverSrc} alt="" className="h-full w-full object-cover" />
+            {/* customer's own "เปลี่ยนพื้นหลัง" (bottom-right) */}
+            <CustomerCoverUpload hasCustom={hasMyCover} />
+          </div>
+          <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left gap-2 sm:gap-4 px-1">
+            {/* avatar column — overlaps the cover + the change-pic control */}
+            <div className="flex flex-col items-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={userPicture}
+                className="relative z-20 -mt-14 sm:-mt-16 w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover bg-white ring-4 ring-white dark:ring-surface shadow-sm"
+                width={120}
+                alt=""
+              />
+              <ProfileAvatarUpload />
+            </div>
+            {/* name + eyebrow + member code + status */}
+            <div className="min-w-0 flex flex-1 flex-col items-center sm:items-start gap-1.5 sm:pt-2">
+              <div className="flex flex-wrap items-baseline justify-center sm:justify-start gap-x-2 gap-y-0.5">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground leading-tight break-words">
+                  {fullName}
+                </h2>
+                <span className="text-[11px] font-semibold tracking-wide text-primary-600">
+                  {tProfile("myAccountEyebrow")} · {isJuristic ? tProfile("accountJuristic") : tProfile("accountPersonal")}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base sm:text-lg font-bold font-mono text-foreground">{userID}</span>
+                <span className="rounded-full border border-green-200 bg-green-50 px-3 py-0.5 text-xs font-medium text-green-700">
+                  {tProfile("statusActive")}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* L75-115 — change-password form (centered, narrower on desktop) */}
-          <div className="mx-auto w-full max-w-[480px] mt-4">
+          <div className="mx-auto w-full max-w-[480px] mt-5 border-t border-border pt-5">
             <PasswordForm />
           </div>
         </section>

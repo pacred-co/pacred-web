@@ -15,11 +15,22 @@
 
 import { useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
-import { Loader2, UserPlus, Copy, Check, ArrowRight, Building2 } from "lucide-react";
+import { Loader2, UserPlus, Copy, Check, ArrowRight, Building2, UserCog, Headphones, StickyNote, Link2 } from "lucide-react";
 import { adminCreateCustomer } from "@/actions/admin/customer-admin";
 import { adminCreateCustomerSchema, type AdminCreateCustomerData } from "@/lib/validators/customer-admin";
 
-export function CreateCustomerForm() {
+/** One assignable staff member (tb_admin.adminID + a friendly label). */
+export type StaffOption = { id: string; label: string };
+
+export function CreateCustomerForm({
+  salesReps = [],
+  csReps = [],
+}: {
+  /** Active เซลล์ pool (tb_admin adminStatusSale='1'). */
+  salesReps?: StaffOption[];
+  /** Active CS pool (tb_admin adminStatusCS='1'). */
+  csReps?: StaffOption[];
+}) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<AdminCreateCustomerData | null>(null);
@@ -30,7 +41,14 @@ export function CreateCustomerForm() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [salesRepId, setSalesRepId] = useState("");
+  const [csRepId, setCsRepId] = useState("");
+  const [services, setServices] = useState<string[]>([]);
+  const [note, setNote] = useState("");
   const [isJuristic, setIsJuristic] = useState(false);
+
+  const toggleService = (s: string) =>
+    setServices((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   const [companyName, setCompanyName] = useState("");
   const [taxId, setTaxId] = useState("");
   const [companyAddress, setCompanyAddress] = useState("");
@@ -45,6 +63,10 @@ export function CreateCustomerForm() {
       phone,
       email,
       password,
+      salesRepId,
+      csRepId,
+      services,
+      note,
       isJuristic,
       companyName,
       taxId,
@@ -74,6 +96,7 @@ export function CreateCustomerForm() {
 
   function resetForm() {
     setFirstName(""); setLastName(""); setPhone(""); setEmail(""); setPassword("");
+    setSalesRepId(""); setCsRepId(""); setServices([]); setNote("");
     setIsJuristic(false); setCompanyName(""); setTaxId(""); setCompanyAddress("");
     setErr(null);
   }
@@ -106,6 +129,75 @@ export function CreateCustomerForm() {
 
       <Field label="รหัสผ่าน" hint="เว้นว่าง = สุ่มให้อัตโนมัติ (จะแสดงครั้งเดียวหลังสร้าง)">
         <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} placeholder="เว้นว่างเพื่อสุ่มรหัส" autoComplete="new-password" />
+      </Field>
+
+      {/* ผู้ดูแล — เลือกเซลล์ + CS เอง (เว้นว่าง = ระบบสุ่มให้คนที่ดูแลน้อยสุด) */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="เซลล์ผู้ดูแล" hint="เว้นว่าง = สุ่มให้อัตโนมัติ">
+          <div className="relative">
+            <UserCog className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <select value={salesRepId} onChange={(e) => setSalesRepId(e.target.value)} className={`${inputCls} pl-9 appearance-none`}>
+              <option value="">อัตโนมัติ — ระบบสุ่มให้ (ดูแลน้อยสุด)</option>
+              {salesReps.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+        </Field>
+        <Field label="CS ผู้ดูแล" hint="เว้นว่าง = สุ่มให้อัตโนมัติ">
+          <div className="relative">
+            <Headphones className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <select value={csRepId} onChange={(e) => setCsRepId(e.target.value)} className={`${inputCls} pl-9 appearance-none`}>
+              <option value="">อัตโนมัติ — ระบบสุ่มให้ (ดูแลน้อยสุด)</option>
+              {csReps.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+        </Field>
+      </div>
+
+      {/* บริการที่ใช้ — multi-select chips · composed into the note ("เลือกเพื่อโน๊ต") */}
+      <div className="block">
+        <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-foreground">
+          บริการที่ใช้
+          <span className="font-normal text-muted">· เลือกได้หลายอย่าง (ใช้โน๊ตว่าลูกค้าสนใจ/ใช้บริการอะไร)</span>
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {SERVICE_OPTIONS.map((s) => {
+            const on = services.includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleService(s)}
+                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  on
+                    ? "border-primary-600 bg-primary-600 text-white"
+                    : "border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt"
+                }`}
+              >
+                {on && <Check className="h-3.5 w-3.5" />}
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* หมายเหตุ — staff note saved with the customer (tb_users.userNote) */}
+      <Field label="หมายเหตุ (พนักงานบันทึก)" hint="ไม่บังคับ · เช่น ที่มาของลูกค้า / สินค้าที่สนใจ / สิ่งที่ต้องตามต่อ">
+        <div className="relative">
+          <StickyNote className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted" />
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className={`${inputCls} min-h-[64px] pl-9`}
+            placeholder="พิมพ์หมายเหตุเกี่ยวกับลูกค้ารายนี้…"
+            maxLength={2000}
+          />
+        </div>
       </Field>
 
       {/* นิติบุคคล toggle */}
@@ -148,6 +240,27 @@ export function CreateCustomerForm() {
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:border-primary-400 focus:outline-none";
 
+// High-level service lines (match the admin sidebar SERVICES + the ecosystem
+// catalogue). Selected chips are composed into the customer note by the action.
+const SERVICE_OPTIONS = [
+  "ฝากสั่งซื้อ",
+  "ฝากโอน/โอนหยวน",
+  "ฝากนำเข้า",
+  "ส่งออก",
+  "พิธีการศุลกากร",
+  "ใบกำกับภาษี/ใบขน",
+  "ขนส่งในประเทศ",
+  "ฝากขาย",
+  "อื่นๆ",
+] as const;
+
+/** Absolute URL of the customer's magic-login page (`/k/<token>`). Client-only
+ *  (CreatedPanel renders after a successful create) — guarded for SSR safety. */
+function customerLoginUrl(token: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/k/${token}`;
+}
+
 function Field({
   label, children, required, hint,
 }: {
@@ -188,6 +301,17 @@ function CreatedPanel({ data, onAddAnother }: { data: AdminCreateCustomerData; o
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
         ⚠️ ส่งรหัสผ่านนี้ให้ลูกค้าทันที — จะไม่แสดงอีก (รีเซ็ตได้ที่หน้ารายละเอียดลูกค้า)
       </p>
+
+      {/* Magic-login link (owner 2026-06-22) — non-expiring, OTP-gated. */}
+      <div className="rounded-lg border border-primary-200 bg-primary-50/50 dark:bg-primary-900/10 p-3 space-y-2">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-primary-700">
+          <Link2 className="h-4 w-4" /> ลิงก์เข้าสู่ระบบสำหรับลูกค้า
+        </div>
+        <p className="text-xs text-muted">
+          ส่งลิงก์นี้ให้ลูกค้า — กดแล้วขอ OTP ทาง SMS เพื่อเข้าบัญชีของตัวเองได้เลย (ลิงก์ไม่มีวันหมดอายุ · ต้องผ่าน OTP ทุกครั้ง)
+        </p>
+        <CopyRow label="ลิงก์เฉพาะลูกค้า" value={customerLoginUrl(data.loginLinkToken)} />
+      </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-green-200 pt-4">
         <Link

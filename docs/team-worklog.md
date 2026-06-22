@@ -26,6 +26,7 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Integrate round-2 (close)** — ภูม Poom-pacred 6c (mark-paid advances forwarder 5→6 + syncs ใบเสร็จ '3'→'1' + links 3 docs + clickable invoice link · ภูม also enhanced my `CreateOrderBillButton`) + ปอน InwPond007 5c (admin/leads รับเอง/CS/SLA/กดโทร · customer profile cover+avatar · create-form CS+magic-login `/k/[token]` · quote share-link). 0 conflicts · 0 new migrations · gate typecheck/lint/build 0 | billing-run.ts · leads · profile · customer-magic-link · no mig | main | 2026-06-22 |
 | เดฟ | **Integrated ภูม + ปอน** — Poom-pacred 8c (quotation /q share-link + PEAK shop-doc toggle + billing-run show-already-billed + ภูม's price-save 4→5) + InwPond007 (quote receipt-style + รหัสลูกค้า). Resolved 0199 migration collision (→0200) + auto-advance dup + quote-tab conflict (kept both). gate typecheck/lint/build/test 0 | many · mig 0200 prod+dev | main | 2026-06-22 |
 | เดฟ | **Forwarder price→bill flow** — บันทึกทุกแถว auto-advances fstatus 4→5 (รอชำระเงิน · `adminAdvanceForwarderToWaitPayment`, 4→5-only idempotent) + page-level "🧾 สร้างใบวางบิล" button at fstatus 5/6 (`createForwarderOrderBill` derives the tracking group → reuses `createBillingRunInvoice`) | `actions/admin/forwarder-step.ts` · `billing-run.ts` · `create-order-bill-button.tsx` · per-tracking editor · no mig | main | 2026-06-22 |
 | เดฟ | **Task F — zone-aware in-Thailand delivery selector** — เหมาๆ in-zone ฿100/PRF · ต่างจังหวัด/นอกเขต Flash-by-weight + J&T/ไปรษณีย์ ALL **บังคับ COD** · รับเอง ฿0. Composes existing flash-price/bkk-zip/thai-shipby-rules. | `lib/forwarder/domestic-shipping.ts`(+test) · `actions/admin/forwarder-domestic-ship.ts` · `domestic-shipping-selector.tsx` · forwarders/[fNo]/page.tsx · no mig | main | 2026-06-22 |
@@ -42,9 +43,10 @@
 | เดฟ | Payment-loop closure (D1 wallet-removal · A4 2-round · slip-queue 1-row · PDF slips) | `actions/admin/wallet-hs.ts` · `tb-bulk.ts` · mig 0197/0198 | main | 2026-06-22 |
 
 ## 🟡 NEXT / QUEUED (reserved so no one else starts it)
+> **OWNER WORK-SPLIT 2026-06-22:** "บัญชี + โกดัง ให้ภูมิทำ" → **accounting (Phase B · 7 menus · task #43) + warehouse (โกดัง) are ภูม's lane.** เดฟ does NOT start them (hand off cleanly · no collision). NEXT FREE migration = **0201**.
+>
 | Dev | Feature | Will touch (files / tables / migration#) | Note |
 |---|---|---|---|
-| เดฟ | Accounting **B1** — wire VAT into AR billing-run | `actions/admin/billing-run.ts` · `tb_forwarder_invoice` (extend) · **mig 0199** | money+migration · D5-gated (done) · do FRESH-CONTEXT (money path) |
-| เดฟ | Accounting **B3+** — wire `getForwarderDocuments` into the forwarder/[fNo] detail | `forwarders/[fNo]/page.tsx` (faithful customer-port · light add) | helper ready · small follow-up |
-| 🔴 **COLLISION** | Accounting **B4** — reconcile repoint off dead twins | `accounting/reconcile/page.tsx` | **IN ภูม's ACTIVE dead-twin/column sweep lane** — coordinate with ภูม BEFORE touching (don't both rewrite the same money-reconcile queries · 42703 risk). |
-| _open_ | B5 supplier AP · B6 bank reconcile · B7 ภพ.30/ภงด.53 | per the gap doc | large · multi-session |
+| **ภูม** | **Accounting Phase B (ALL)** — B1 VAT→AR billing-run (`computeTaxForMode` → billing-run · tb_forwarder_invoice extend · **mig 0201**) · B3+ wire `getForwarderDocuments` into forwarder/[fNo] · B4 reconcile repoint off dead twins · B5 supplier AP · B6 bank reconcile · B7 ภพ.30/ภงด.53 | `actions/admin/billing-run.ts` · `accounting/*` · `lib/admin/order-documents.ts` (helper ready) · gap doc `docs/research/pay-and-accounting-gap-2026-06-21.md` | owner-assigned · money+migration · the helpers B2/B3 already shipped (reuse) |
+| **ภูม** | **Warehouse (โกดัง)** — `/admin/warehouse/*` · intake/measure/sack/ship flows | `admin/warehouse/*` · `tb_*` warehouse tables | owner-assigned |
+| _open_ | ปอน's quotation receipt palette → fold into `components/quote/quote-paper.tsx` (cosmetic) | `quote-paper.tsx` | low-pri cosmetic follow-up from the merge |
