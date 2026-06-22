@@ -613,7 +613,15 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
       <PendingJuristicReviews bundles={pendingJuristic} />
 
-      {rows.length === 0 ? (
+      {error ? (
+        // §0c — a failed list query must NOT look like "data is gone". Surface
+        // the error loudly + reassure the data is intact (the 2026-06-22
+        // userimage→userPicture incident: a wrong column 42703-errored the list
+        // and the blank state read as total data loss).
+        <div className="rounded-2xl border border-red-300 bg-red-50 dark:bg-red-950/30 p-6 text-center text-sm text-red-700 dark:text-red-300">
+          ⚠️ โหลดรายชื่อลูกค้าไม่สำเร็จ ({error.code ?? "error"}) — <strong>ข้อมูลลูกค้ายังอยู่ครบ ไม่ได้หาย</strong> · ลองรีเฟรชหน้า หรือแจ้งทีมพัฒนา
+        </div>
+      ) : rows.length === 0 ? (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">ไม่พบลูกค้า</div>
       ) : (
         <>

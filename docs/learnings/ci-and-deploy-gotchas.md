@@ -954,3 +954,17 @@ The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `
 **Symptom vs signal:** the errors are ALL inside `.next/dev/types/*` (never in `app/`/`lib/`/`actions/`). That location is the tell — it's an environment race, not a code defect.
 
 **Fix:** stop the preview server (`preview_stop`), `rm -rf .next` (PowerShell `Remove-Item -Recurse -Force .next` — the bash `2>$null` redirect is a parse error in PowerShell and silently no-ops the `rmdir`), then re-run `pnpm verify`. With no dev server regenerating and a clean `.next`, the typecheck reflects only real code. (After this, the same run surfaced 3 REAL errors that the corrupt-generated-file noise had masked — so clearing `.next` is also what lets the real gate speak.)
+
+## [2026-06-22] A wrong tb_* column name 42703-errors the whole list → renders as "data is gone" (not a 500)
+
+**Symptom:** `/admin/customers` on prod showed "ไม่พบลูกค้า" (empty) — the owner panicked that all customer data vanished. The sidebar count + the pending-signup banner (6,968) + the juristic-review queue all rendered fine, so the data WAS there.
+
+**Root cause:** the self-explaining-row avatar work added `userimage` to the customers-LIST `tb_users` select (and `userImage` to the shop-order detail select). **`tb_users` has no such column — the real one is `userPicture`.** PostgREST rejects the whole query with `42703 column ... does not exist`. The page destructured + logged the error but SWALLOWED it (`const rows = data ?? []`) → empty list → looked like total data loss. One wrong column name kills the ENTIRE query (not just that field).
+
+**Why it slipped the gate:** `tsc`/`lint`/`build` can't see Supabase column-name strings — they're runtime. `pnpm verify` was green. Only a live query (or a rendered page) catches it.
+
+**Fix:** `userimage`/`userImage` → `userPicture` in both selects + types + the avatar resolve (`a42308e0`). The customer DETAIL page already used `userPicture` (a comment there even warned "col is `userPicture` not `userimage` — fix Wave 19 BUG#1") — the new list code re-introduced the wrong name. + hardened the list to show a loud "โหลดไม่สำเร็จ · ข้อมูลยังอยู่" banner on query error instead of the misleading empty state.
+
+**Why this matters next time:** any "the list/data is suddenly empty/gone" report → FIRST probe the exact query against the DB (a 10-line node script with the real select) — don't assume data loss. A `42703` in the server logs = a column-name typo. When ADDING a column to an existing `tb_*` select, verify the EXACT case-sensitive name (`select("*").limit(1)` → `Object.keys`) — tb_users is camelCase (`userPicture`, `userRegistered`), NOT lowercase. And never let a list-query error fall through to a bare empty state on a money/identity surface — surface it.
+
+**Cross-links:** `app/[locale]/(admin)/admin/customers/page.tsx` · the §0c verify-deep-flow discipline (AGENTS.md) · Wave 19 BUG#1 (same column, customer detail).
