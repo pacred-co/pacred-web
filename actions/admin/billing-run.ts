@@ -1294,8 +1294,64 @@ export async function markBillingRunPaid(
         total_thb: Number(cur.total_thb), paid_at: paidAtIso,
       });
 
+      // ภูม 2026-06-22 — sync the linked ใบเสร็จ to "ออกแล้ว/paid". A receipt issued
+      // manually via adminIssueForwarderInvoice is created at rstatus='3' (รอชำระ);
+      // when its bill is marked paid here it must flip to '1', else the receipt list
+      // shows "รอชำระ" while the bill shows "รับชำระแล้ว" (ภูม flag · FRI2606-00011 paid
+      // but FRG2606-00001 stuck). Link = tb_receipt_item (rid, fid) ↔ the invoice's
+      // forwarders. Flips ONLY a receipt FULLY covered by this paid invoice. Best-effort
+      // — never fails the invoice flip; only '3'→'1' (never touches cancelled/already-paid).
+      try {
+        const { data: invItems, error: invErr } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id")
+          .eq("invoice_id", v.invoiceId);
+        if (invErr) console.error("[markBillingRunPaid receipt-sync invItems]", { code: invErr.code, message: invErr.message });
+        const invFids = new Set(
+          ((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id),
+        );
+        if (invFids.size > 0) {
+          const { data: touch, error: touchErr } = await admin
+            .from("tb_receipt_item")
+            .select("rid")
+            .in("fid", Array.from(invFids));
+          if (touchErr) console.error("[markBillingRunPaid receipt-sync touch]", { code: touchErr.code, message: touchErr.message });
+          const candidateRids = Array.from(
+            new Set(
+              ((touch ?? []) as Array<{ rid: string | null }>)
+                .map((r) => r.rid)
+                .filter((x): x is string => !!x),
+            ),
+          );
+          for (const rid of candidateRids) {
+            const { data: allItems, error: allErr } = await admin
+              .from("tb_receipt_item")
+              .select("fid")
+              .eq("rid", rid);
+            if (allErr) console.error("[markBillingRunPaid receipt-sync allItems]", { code: allErr.code, message: allErr.message, rid });
+            const fids = ((allItems ?? []) as Array<{ fid: number }>).map((r) => r.fid);
+            if (fids.length === 0 || !fids.every((f) => invFids.has(f))) continue; // not fully covered → skip
+            const { error: rcptErr } = await admin
+              .from("tb_receipt")
+              .update({ rstatus: "1" })
+              .eq("rid", rid)
+              .eq("rstatus", "3"); // pending → paid only
+            if (rcptErr) {
+              console.error("[markBillingRunPaid receipt-sync]", { code: rcptErr.code, message: rcptErr.message, rid });
+            } else {
+              await logAdminAction(adminId, "billing_run.receipt_synced_paid", "tb_receipt", rid, {
+                invoice_id: v.invoiceId, doc_no: cur.doc_no,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[markBillingRunPaid receipt-sync] unexpected", { message: String(e), invoiceId: v.invoiceId });
+      }
+
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+      revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
     },
