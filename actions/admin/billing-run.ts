@@ -308,40 +308,14 @@ export async function listEligibleCustomers(): Promise<
         aggById.set(r.id, r);
       }
 
-      // Exclude rows ALREADY on a non-cancelled invoice — MUST mirror
-      // listEligibleForwarders' `already_billed` guard (below, ~L486-512), else the
-      // dropdown count and the picker list disagree: a customer whose only billable
-      // row is already invoiced still shows "N รายการ ฿…" here but the picker (which
-      // DOES drop already-billed rows) is empty → "วางบิลขึ้นบ้างไม่ขึ้นบ้าง · ติ๊กไม่ได้"
-      // (ภูม 2026-06-22 · PR014 #52060 → invoice 8 issued → counted here, hidden there).
-      const allIds = Array.from(aggById.keys());
-      const alreadyBilledIds = new Set<number>();
-      if (allIds.length > 0) {
-        const { data: billed, error: billedErr } = await admin
-          .from("tb_forwarder_invoice_item")
-          .select("forwarder_id, tb_forwarder_invoice!inner(status)")
-          .in("forwarder_id", allIds);
-        if (billedErr) {
-          console.error("[listEligibleCustomers billed-check] failed", {
-            code: billedErr.code, message: billedErr.message,
-          });
-        }
-        for (const row of (billed ?? []) as unknown as Array<{
-          forwarder_id: number;
-          tb_forwarder_invoice?: { status?: string } | { status?: string }[] | null;
-        }>) {
-          const invj = Array.isArray(row.tb_forwarder_invoice)
-            ? row.tb_forwarder_invoice[0]
-            : row.tb_forwarder_invoice;
-          if (invj && invj.status !== "cancelled") alreadyBilledIds.add(row.forwarder_id);
-        }
-      }
-
+      // NOTE: count INCLUDES rows already on an invoice — the picker now SHOWS
+      // already-billed rows (badged · ติ๊กได้เพื่อออกใบใหม่ · ภูม 2026-06-22 "เผื่อวางบิล
+      // ผิดต้องวางใหม่"), so the dropdown count must include them too or the two
+      // disagree again. The picker badges + warns on a re-bill; it no longer hides.
       const aggByUser = new Map<string, { count: number; total: number }>();
       for (const r of aggById.values()) {
         if (!r.userid) continue;
         if (!isBillableForwarder(r)) continue; // defensive — Set B narrows to 5/6
-        if (alreadyBilledIds.has(r.id)) continue; // already on an active invoice → not re-billable
         const cur = aggByUser.get(r.userid) ?? { count: 0, total: 0 };
         cur.count += 1;
         cur.total += calcForwarderOutstanding(r); // BUG A — full composite
