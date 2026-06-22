@@ -3,8 +3,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { getLeadQueue, getLeadStats, exportLeadsAll } from "@/actions/admin/leads";
+import { getLeadQueue, getLeadStats, exportLeadsAll, getMyLeadSlaToday } from "@/actions/admin/leads";
+import { getCrmReps, getCrmCsReps } from "@/actions/admin/crm";
+import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { getTagsBulk } from "@/actions/admin/customer-tags";
+import { LeadRepCell, LeadCsCell } from "./lead-owner-controls";
 import {
   LEAD_CALL_STATUSES,
   type LeadCallStatus,
@@ -28,6 +31,7 @@ export const dynamic = "force-dynamic";
 // ──────────────────────────────────────────────────────────────────────
 
 const LEADS_MENUBAR: MenubarItem[] = [
+  { label: "ลูกค้าของฉัน", href: "/admin/leads?segment=mine" },
   { label: "ลูกค้าที่ต้องโทรตาม (Cold)", href: "/admin/leads?segment=cold" },
   { label: "ลูกค้า PCS รายใหญ่", href: "/admin/leads?segment=big-pcs" },
   { label: "นัดโทรกลับ (ถึงคิว)", href: "/admin/leads?segment=callback" },
@@ -46,6 +50,7 @@ const LEADS_MENUBAR: MenubarItem[] = [
 ];
 
 const SEGMENTS: { key: LeadSegment; label: string; hint: string }[] = [
+  { key: "mine", label: "ลูกค้าของฉัน", hint: "ลูกค้าที่ฉันกดรับไว้ดูแล" },
   { key: "cold", label: "ลูกค้าที่ต้องโทรตาม", hint: "ยังไม่เคยติดต่อ (มีเบอร์โทร)" },
   { key: "big-pcs", label: "PCS รายใหญ่", hint: "ลูกค้าที่สั่งนำเข้าบ่อยที่สุด" },
   { key: "callback", label: "นัดโทรกลับ", hint: "ถึงคิวโทรกลับ · ค้างนานสุดก่อน" },
@@ -69,11 +74,11 @@ export default async function AdminLeadsPage({
   searchParams: Promise<{ segment?: string; status?: string; q?: string; page?: string; view?: string }>;
 }) {
   // The staff who actually call: super + sales + CS/ops.
-  await requireAdmin(["super", "sales_admin", "sales", "ops"]);
+  const { user } = await requireAdmin(["super", "sales_admin", "sales", "ops"]);
 
   const sp = await searchParams;
   const segment: LeadSegment =
-    sp.segment === "big-pcs" || sp.segment === "all" || sp.segment === "callback"
+    sp.segment === "big-pcs" || sp.segment === "all" || sp.segment === "callback" || sp.segment === "mine"
       ? sp.segment
       : "cold";
   const statusFilter: LeadCallStatus | "all" = isStatusFilter(sp.status) ? sp.status : "all";
@@ -95,6 +100,19 @@ export default async function AdminLeadsPage({
   // Bulk-load tags for the visible rows (one query) → chips in both views.
   const tagsRes = await getTagsBulk(rows.map((r) => r.userid));
   const tagsByUser = tagsRes.ok ? (tagsRes.data ?? {}) : {};
+
+  // Ownership controls + same-day SLA banner (owner 2026-06-22): the assignable
+  // เซลล์/CS pools, the viewing admin's own legacy rep id (for "รับเอง" + the
+  // "คุณ" badge), and the current admin's claimed-today-but-not-called count.
+  const [repsRes, csRepsRes, slaRes, myLegacyId] = await Promise.all([
+    getCrmReps(),
+    getCrmCsReps(),
+    getMyLeadSlaToday(),
+    getAdminLegacyId(user.id),
+  ]);
+  const reps = repsRes.ok ? (repsRes.data?.reps ?? []) : [];
+  const csReps = csRepsRes.ok ? (csRepsRes.data?.reps ?? []) : [];
+  const sla = slaRes.ok ? slaRes.data : undefined;
 
   // Preserve filters across the search form + pagination links.
   const carry = (over: Record<string, string | number>) => {
@@ -142,6 +160,20 @@ export default async function AdminLeadsPage({
             <p className="mt-0.5 text-[11px] text-muted">ลูกค้าที่ปิดได้</p>
           </div>
         </div>
+
+        {/* Same-day call SLA — the leads YOU claimed today but haven't logged a
+            call on yet (owner 2026-06-22: "กดรับแล้วต้องโทรภายในวันนั้น"). */}
+        {sla && sla.overdue > 0 ? (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">
+              ⏰ คุณรับลูกค้าวันนี้ {sla.claimedToday.toLocaleString("th-TH")} ราย · ยังไม่ได้โทร {sla.overdue.toLocaleString("th-TH")} ราย
+            </p>
+            <p className="mt-0.5 text-[12px]">
+              ต้องโทร + บันทึกผลภายในวันนี้ — รหัสที่ยังไม่ได้โทร: <span className="font-mono">{sla.sample.join(", ")}</span>
+              {sla.overdue > sla.sample.length ? " …" : ""}
+            </p>
+          </div>
+        ) : null}
 
         {/* Segment tabs + list/board view toggle */}
         <div className="flex flex-wrap items-center gap-2">
@@ -263,7 +295,9 @@ export default async function AdminLeadsPage({
           </div>
         ) : rows.length === 0 ? (
           <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-12 text-center text-sm text-muted">
-            ไม่พบลูกค้าที่ต้องโทรตาม
+            {segment === "mine"
+              ? "คุณยังไม่ได้รับลูกค้ารายไหน — ไปที่แท็บอื่นแล้วกด “รับเอง” เพื่อรับลูกค้ามาดูแล"
+              : "ไม่พบลูกค้าที่ต้องโทรตาม"}
           </div>
         ) : view === "board" ? (
           // CRM depth (2026-06-08) — pipeline kanban view of this page's rows.
@@ -276,7 +310,6 @@ export default async function AdminLeadsPage({
                   <th className="px-3 py-2.5">เบอร์โทร</th>
                   <th className="px-3 py-2.5">ชื่อ</th>
                   <th className="px-3 py-2.5">รหัส</th>
-                  <th className="px-3 py-2.5 text-right">นำเข้า</th>
                   <th className="px-3 py-2.5">แท็ก</th>
                   <th className="px-3 py-2.5">เซลล์ผู้ดูแล</th>
                   <th className="px-3 py-2.5">CS ผู้ดูแล</th>
@@ -304,16 +337,19 @@ export default async function AdminLeadsPage({
                         {r.userid}
                       </Link>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{r.orderCount.toLocaleString("th-TH")}</td>
                     <td className="px-3 py-2.5 min-w-[180px]">
                       <TagChips userid={r.userid} initialTags={tagsByUser[r.userid] ?? []} compact />
                     </td>
-                    <td className="px-3 py-2.5 text-xs">{r.rep || <span className="text-muted">—</span>}</td>
-                    <td className="px-3 py-2.5 text-xs">{r.cs || <span className="text-muted">—</span>}</td>
+                    <td className="px-3 py-2.5 min-w-[190px]">
+                      <LeadRepCell userid={r.userid} currentRep={r.rep} myLegacyId={myLegacyId} reps={reps} />
+                    </td>
+                    <td className="px-3 py-2.5 min-w-[170px]">
+                      <LeadCsCell userid={r.userid} currentCs={r.cs} csReps={csReps} />
+                    </td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap">{fmtDate(r.lastCall)}</td>
                     <td className="px-3 py-2.5"><CallStatusBadge status={r.callStatus} /></td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap">{fmtDate(r.registered)}</td>
-                    <td className="px-3 py-2.5"><LeadCallAction userid={r.userid} /></td>
+                    <td className="px-3 py-2.5"><LeadCallAction userid={r.userid} tel={r.tel} /></td>
                   </tr>
                 ))}
               </tbody>

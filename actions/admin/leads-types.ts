@@ -25,8 +25,11 @@ export type LeadCallStatus = (typeof LEAD_CALL_STATUSES)[number];
  *   callback → นัดโทรกลับ due-queue: leads whose LATEST call outcome is
  *              'callback', oldest promise first (lead_call_log has no
  *              scheduled-date column, so "due" = age of the callback note).
+ *   mine     → ลูกค้าของฉัน: leads the CURRENT admin owns
+ *              (tb_users.adminIDSale = their legacy rep id) — what a rep sees
+ *              after pressing "รับเอง" (owner 2026-06-22).
  */
-export type LeadSegment = "cold" | "big-pcs" | "all" | "callback";
+export type LeadSegment = "cold" | "big-pcs" | "all" | "callback" | "mine";
 
 /** One row in the call-queue table. */
 export type LeadQueueRow = {

@@ -13,8 +13,9 @@
  */
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { CreateCustomerForm } from "./create-customer-form";
+import { CreateCustomerForm, type StaffOption } from "./create-customer-form";
 
 // requireAdmin reads auth cookies → force-dynamic (AGENTS.md §11).
 export const dynamic = "force-dynamic";
@@ -25,10 +26,50 @@ const MENUBAR: MenubarItem[] = [
   { label: "+ เพิ่มลูกค้า", href: "/admin/customers/new" },
 ];
 
+// One tb_admin row used to build the เซลล์/CS dropdown options.
+type TbAdminRow = {
+  adminID: string;
+  adminNickname: string | null;
+  adminName: string | null;
+  adminLastName: string | null;
+};
+
+function toStaffOptions(rows: TbAdminRow[] | null): StaffOption[] {
+  return (rows ?? []).map((a) => {
+    const nick = (a.adminNickname ?? "").trim();
+    const full = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim();
+    const label = nick ? (full ? `${nick} · ${full}` : nick) : full || a.adminID;
+    return { id: a.adminID, label };
+  });
+}
+
 export default async function AdminCustomerNewPage() {
   // Creating a customer is a sales/ops act — gate to the same roles the list
   // uses (super implicit). driver/warehouse refused.
   await requireAdmin(["ops", "sales_admin"]);
+
+  // Fetch the assignable เซลล์ + CS pools (the same legacy tb_admin pools the
+  // round-robin draws from · camelCase per mig 0113 · CS flag per mig 0141) so
+  // the admin can pick the owner explicitly instead of leaving it to auto.
+  const admin = createAdminClient();
+  const [{ data: salesRaw, error: salesErr }, { data: csRaw, error: csErr }] = await Promise.all([
+    admin
+      .from("tb_admin")
+      .select("adminID, adminNickname, adminName, adminLastName")
+      .eq("adminStatusA", "1")
+      .eq("adminStatusSale", "1")
+      .order("adminNickname", { ascending: true }),
+    admin
+      .from("tb_admin")
+      .select("adminID, adminNickname, adminName, adminLastName")
+      .eq("adminStatusA", "1")
+      .eq("adminStatusCS", "1")
+      .order("adminNickname", { ascending: true }),
+  ]);
+  if (salesErr) console.error("[customers/new] เซลล์ pool load failed", { code: salesErr.code, message: salesErr.message });
+  if (csErr) console.error("[customers/new] CS pool load failed", { code: csErr.code, message: csErr.message });
+  const salesReps = toStaffOptions(salesRaw as TbAdminRow[] | null);
+  const csReps = toStaffOptions(csRaw as TbAdminRow[] | null);
 
   return (
     <>
@@ -47,7 +88,7 @@ export default async function AdminCustomerNewPage() {
           </Link>
         </div>
 
-        <CreateCustomerForm />
+        <CreateCustomerForm salesReps={salesReps} csReps={csReps} />
       </main>
     </>
   );

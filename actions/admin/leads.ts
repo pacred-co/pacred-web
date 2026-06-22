@@ -29,7 +29,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { withAdmin, type AdminActionResult } from "./common";
+import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { logAdminExport } from "./export-log";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { pickLeastLoadedCsRep } from "@/lib/admin/assign-cs-rep";
@@ -120,7 +120,7 @@ function toRow(
 export async function getLeadQueue(
   filter: LeadQueueFilter,
 ): Promise<AdminActionResult<LeadQueueResult>> {
-  return withAdmin([...ROLES], async () => {
+  return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
     const segment = filter.segment ?? "cold";
     // "export all" path: one big page (capped) instead of the 200-row window.
@@ -277,6 +277,48 @@ export async function getLeadQueue(
           .in("userid", ids);
         if (fwdErr) {
           console.error(`[tb_forwarder callback page counts] failed`, { code: fwdErr.code, message: fwdErr.message });
+        }
+        for (const r of (fwd ?? []) as { userid: string | null }[]) {
+          const uid = (r.userid ?? "").trim();
+          if (!uid) continue;
+          orderCountByUser.set(uid, (orderCountByUser.get(uid) ?? 0) + 1);
+        }
+      }
+    } else if (segment === "mine") {
+      // 'mine' — ลูกค้าของฉัน: leads the CURRENT admin owns (adminIDSale = their
+      // legacy rep id) · newest-registered first. This is what a rep sees after
+      // pressing "รับเอง" (owner 2026-06-22). Not bridged → owns no legacy rows.
+      const myLegacyId = await getAdminLegacyId(adminId);
+      if (!myLegacyId) {
+        return { ok: true, data: { rows: [], page, hasMore: false } };
+      }
+      let q = admin
+        .from("tb_users")
+        .select(userSelect)
+        .eq("adminIDSale", myLegacyId)
+        .order("userRegistered", { ascending: false })
+        .range(from, to);
+      if (filter.q && filter.q.trim()) {
+        const term = escapeTerm(filter.q.trim());
+        q = q.or(
+          `userID.ilike.%${term}%,userTel.ilike.%${term}%,userName.ilike.%${term}%,userLastName.ilike.%${term}%`,
+        );
+      }
+      const { data, error } = await q;
+      if (error) {
+        console.error(`[tb_users mine queue] failed`, { code: error.code, message: error.message });
+        return { ok: false, error: `query_failed: ${error.message}` };
+      }
+      users = (data ?? []) as unknown as TbUserRow[];
+
+      const ids = users.map((u) => u.userID);
+      if (ids.length > 0) {
+        const { data: fwd, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("userid")
+          .in("userid", ids);
+        if (fwdErr) {
+          console.error(`[tb_forwarder mine page counts] failed`, { code: fwdErr.code, message: fwdErr.message });
         }
         for (const r of (fwd ?? []) as { userid: string | null }[]) {
           const uid = (r.userid ?? "").trim();
@@ -548,6 +590,229 @@ export async function getLeadStats(): Promise<AdminActionResult<LeadStats>> {
         calledToday: todayCount ?? 0,
         closed: closedSet.size,
       },
+    };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Lead OWNERSHIP — self-claim · reassign/release rep · set/clear CS
+// ════════════════════════════════════════════════════════════════════════
+//
+// Owner 2026-06-22: a sales user can "รับลูกค้าเอง" (claim) straight from the
+// queue, the system shows who holds each lead, and the holder can release /
+// change it + pick a CS. These are LEADS-scoped (RBAC = the leads roles, incl.
+// plain `sales`) — unlike the senior-gated crm.ts setters — so a rep can own
+// + hand off their own book. They write the SAME columns (tb_users.adminIDSale
+// / adminIDCS) the rest of the system reads.
+
+const LEADS_NO_LEGACY_HINT =
+  "บัญชีของคุณยังไม่ได้ผูกรหัสเซลล์เดิม (legacy_admin_id) — ติดต่อผู้ดูแลระบบก่อนจึงจะรับลูกค้าได้";
+
+/**
+ * Self-claim: assign the CURRENT admin as the lead's owning rep
+ * (tb_users.adminIDSale = my legacy id) + record a `lead.claim` audit row
+ * (the claim-time the same-day SLA banner reads via getMyLeadSlaToday).
+ */
+export async function claimLead(
+  userid: string,
+): Promise<AdminActionResult<{ rep: string }>> {
+  const id = (userid ?? "").trim().toUpperCase();
+  if (!id) return { ok: false, error: "missing_userid" };
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const legacyId = await getAdminLegacyId(adminId);
+    if (!legacyId) return { ok: false, error: LEADS_NO_LEGACY_HINT };
+
+    const admin = createAdminClient();
+    const { data: cust, error: custErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .eq("userID", id)
+      .maybeSingle<{ userID: string }>();
+    if (custErr) {
+      console.error(`[claimLead customer] failed`, { code: custErr.code, message: custErr.message });
+      return { ok: false, error: `query_failed: ${custErr.message}` };
+    }
+    if (!cust) return { ok: false, error: "customer_not_found" };
+
+    const { error: updErr } = await admin
+      .from("tb_users")
+      .update({ adminIDSale: legacyId })
+      .eq("userID", id);
+    if (updErr) {
+      console.error(`[claimLead update] failed`, { code: updErr.code, message: updErr.message });
+      return { ok: false, error: `update_failed: ${updErr.message}` };
+    }
+
+    // Claim-time anchor for the same-day SLA (getMyLeadSlaToday reads this).
+    void logAdminAction(adminId, "lead.claim", "tb_users", id, { rep: legacyId });
+    revalidatePath("/admin/leads");
+    return { ok: true, data: { rep: legacyId } };
+  });
+}
+
+/**
+ * Set / change / release a lead's owning rep. `legacyId=""` clears it. A
+ * non-empty rep is validated against the active legacy sales pool
+ * (tb_admin adminStatusA='1' AND adminStatusSale='1') so we never strand a
+ * lead on a non-rep.
+ */
+export async function setLeadRep(
+  input: { userid: string; legacyId: string },
+): Promise<AdminActionResult> {
+  const id = (input?.userid ?? "").trim().toUpperCase();
+  const legacyId = (input?.legacyId ?? "").trim();
+  if (!id) return { ok: false, error: "missing_userid" };
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    if (legacyId) {
+      const { data: rep, error: repErr } = await admin
+        .from("tb_admin")
+        .select("adminID, adminStatusA, adminStatusSale")
+        .eq("adminID", legacyId)
+        .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusSale: string | null }>();
+      if (repErr) {
+        console.error(`[setLeadRep rep lookup] failed`, { code: repErr.code, message: repErr.message });
+        return { ok: false, error: `query_failed: ${repErr.message}` };
+      }
+      if (!rep || rep.adminStatusA !== "1" || rep.adminStatusSale !== "1") {
+        return { ok: false, error: "invalid_rep" };
+      }
+    }
+
+    const { data: cust, error: custErr } = await admin
+      .from("tb_users")
+      .select("adminIDSale")
+      .eq("userID", id)
+      .maybeSingle<{ adminIDSale: string | null }>();
+    if (custErr) {
+      console.error(`[setLeadRep customer] failed`, { code: custErr.code, message: custErr.message });
+      return { ok: false, error: `query_failed: ${custErr.message}` };
+    }
+    if (!cust) return { ok: false, error: "customer_not_found" };
+
+    const { error: updErr } = await admin
+      .from("tb_users")
+      .update({ adminIDSale: legacyId })
+      .eq("userID", id);
+    if (updErr) {
+      console.error(`[setLeadRep update] failed`, { code: updErr.code, message: updErr.message });
+      return { ok: false, error: `update_failed: ${updErr.message}` };
+    }
+
+    void logAdminAction(adminId, "lead.set_rep", "tb_users", id, {
+      from: cust.adminIDSale ?? null,
+      to: legacyId || null,
+    });
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/**
+ * Set / change / release a lead's CS. `adminID=""` clears it. A non-empty CS
+ * is validated against the active legacy CS pool (tb_admin adminStatusA='1'
+ * AND adminStatusCS='1' · migration 0141).
+ */
+export async function setLeadCs(
+  input: { userid: string; adminID: string },
+): Promise<AdminActionResult> {
+  const id = (input?.userid ?? "").trim().toUpperCase();
+  const adminID = (input?.adminID ?? "").trim();
+  if (!id) return { ok: false, error: "missing_userid" };
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    if (adminID) {
+      const { data: rep, error: repErr } = await admin
+        .from("tb_admin")
+        .select("adminID, adminStatusA, adminStatusCS")
+        .eq("adminID", adminID)
+        .maybeSingle<{ adminID: string; adminStatusA: string | null; adminStatusCS: string | null }>();
+      if (repErr) {
+        console.error(`[setLeadCs cs lookup] failed`, { code: repErr.code, message: repErr.message });
+        return { ok: false, error: `query_failed: ${repErr.message}` };
+      }
+      if (!rep || rep.adminStatusA !== "1" || rep.adminStatusCS !== "1") {
+        return { ok: false, error: "invalid_cs" };
+      }
+    }
+
+    const { data: cust, error: custErr } = await admin
+      .from("tb_users")
+      .select("adminIDCS")
+      .eq("userID", id)
+      .maybeSingle<{ adminIDCS: string | null }>();
+    if (custErr) {
+      console.error(`[setLeadCs customer] failed`, { code: custErr.code, message: custErr.message });
+      return { ok: false, error: `query_failed: ${custErr.message}` };
+    }
+    if (!cust) return { ok: false, error: "customer_not_found" };
+
+    const { error: updErr } = await admin
+      .from("tb_users")
+      .update({ adminIDCS: adminID })
+      .eq("userID", id);
+    if (updErr) {
+      console.error(`[setLeadCs update] failed`, { code: updErr.code, message: updErr.message });
+      return { ok: false, error: `update_failed: ${updErr.message}` };
+    }
+
+    void logAdminAction(adminId, "lead.set_cs", "tb_users", id, {
+      from: cust.adminIDCS ?? null,
+      to: adminID || null,
+    });
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/**
+ * Same-day call SLA for the CURRENT admin (owner 2026-06-22): leads they
+ * CLAIMED today (admin_audit_log action='lead.claim') that still have NO
+ * lead_call_log entry today → the "ยังไม่ได้โทร" warning banner. No migration:
+ * claim-time comes from the audit log, called-today from lead_call_log.
+ */
+export async function getMyLeadSlaToday(): Promise<
+  AdminActionResult<{ claimedToday: number; overdue: number; sample: string[] }>
+> {
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const iso = startOfDay.toISOString();
+
+    const { data: claims, error: claimsErr } = await admin
+      .from("admin_audit_log")
+      .select("target_id, created_at")
+      .eq("admin_id", adminId)
+      .eq("action", "lead.claim")
+      .gte("created_at", iso);
+    if (claimsErr) {
+      console.error(`[getMyLeadSlaToday claims] failed`, { code: claimsErr.code, message: claimsErr.message });
+      return { ok: true, data: { claimedToday: 0, overdue: 0, sample: [] } };
+    }
+    const claimIds = Array.from(
+      new Set(((claims ?? []) as { target_id: string | null }[]).map((c) => (c.target_id ?? "").trim()).filter(Boolean)),
+    );
+    if (claimIds.length === 0) {
+      return { ok: true, data: { claimedToday: 0, overdue: 0, sample: [] } };
+    }
+
+    const { data: calls, error: callsErr } = await admin
+      .from("lead_call_log")
+      .select("userid")
+      .in("userid", claimIds)
+      .gte("called_at", iso);
+    if (callsErr) {
+      console.error(`[getMyLeadSlaToday calls] failed`, { code: callsErr.code, message: callsErr.message });
+    }
+    const calledToday = new Set(((calls ?? []) as { userid: string }[]).map((c) => c.userid));
+    const overdueIds = claimIds.filter((uid) => !calledToday.has(uid));
+
+    return {
+      ok: true,
+      data: { claimedToday: claimIds.length, overdue: overdueIds.length, sample: overdueIds.slice(0, 8) },
     };
   });
 }
