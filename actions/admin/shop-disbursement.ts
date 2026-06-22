@@ -68,8 +68,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { uploadToBucket } from "@/lib/storage/upload";
 import {
   createShopDisbursementSchema,
+  markShopDisbursementPaidSchema,
   type CreateShopDisbursementInput,
 } from "@/lib/validators/admin-shop-disbursement";
 import {
@@ -854,5 +856,79 @@ export async function getShopPayAccounts(): Promise<
       accountnumber: a.accountnumber,
     }));
     return { ok: true, data: { accounts } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// B2 (2026-06-22 · accounting Phase B) — PAY-OUT COMPLETION
+// Flip a tb_shop_pay_h batch '1' (รอดำเนินการ) → '2' (จ่ายแล้ว) with a
+// transfer-slip. Mirrors the proven `adminMarkSalesPayoutPaidTb`
+// (sales-payouts-tb.ts:358 · atomic flip folded into WHERE + slip upload +
+// orphan-rollback). Legacy `history.php` L134-173 pay handler. No migration —
+// tb_shop_pay_h already has imagesslip/adminidupdate/dateupdate (reserved at
+// create). status-only money-register flip (the cash moved out-of-band; the
+// slip is the audit artifact) — no wallet/ledger side-effect.
+// ════════════════════════════════════════════════════════════
+export async function markShopDisbursementPaid(
+  input: unknown,
+  slipImage: File,
+): Promise<AdminActionResult<{ id: number }>> {
+  const parsed = markShopDisbursementPaidSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+
+  if (!(slipImage instanceof File) || slipImage.size === 0) {
+    return { ok: false, error: "กรุณาแนบหลักฐานการโอน (สลิปจ่ายเงิน)" };
+  }
+
+  return withAdmin<{ id: number }>(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
+    // ── guard pre-read: must still be a pending batch (status='1') ──
+    const { data: row, error: rowErr } = await admin
+      .from("tb_shop_pay_h")
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle<{ id: number; status: string | null }>();
+    if (rowErr) {
+      console.error("[shop-disbursement pay lookup] failed", { id, code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
+    if (!row) return { ok: false, error: "ไม่พบรายการเบิกจ่าย" };
+    if (row.status === "2") return { ok: false, error: "รายการนี้จ่ายเงินไปแล้ว (status=2)" };
+    if (row.status !== "1") return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอดำเนินการ' (status=${row.status})` };
+
+    // ── upload the slip (same `slips` bucket as the wallet/sales-payout slip) ──
+    const up = await uploadToBucket(slipImage, "slips", `admin/shop-pay-slip/${id}`);
+    if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
+    const imagesSlip = up.filename;
+
+    // ── UPDATE '1'→'2' — TOCTOU guard folded into WHERE (.eq("status","1")) ──
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await admin
+      .from("tb_shop_pay_h")
+      .update({ status: "2", imagesslip: imagesSlip, adminidupdate: legacyAdminId, dateupdate: nowIso })
+      .eq("id", id)
+      .eq("status", "1")
+      .select("id")
+      .maybeSingle<{ id: number }>();
+    if (updErr) {
+      console.error("[shop-disbursement pay update] failed", { id, code: updErr.code, message: updErr.message });
+      await admin.storage.from("slips").remove([imagesSlip]);
+      return { ok: false, error: updErr.message };
+    }
+    if (!updated) {
+      // 0 rows — a concurrent pay-out won the race; clean up the orphan slip.
+      await admin.storage.from("slips").remove([imagesSlip]);
+      return { ok: false, error: "รายการถูกจ่ายไปแล้วโดยผู้อื่น (กรุณารีเฟรช)" };
+    }
+
+    await logAdminAction(adminId, "shop_disbursement.pay", "tb_shop_pay_h", String(id), { imagesSlip });
+    revalidatePath("/admin/shop-disbursement/history");
+    revalidatePath(`/admin/shop-disbursement/history/${id}`);
+    return { ok: true, data: { id } };
   });
 }
