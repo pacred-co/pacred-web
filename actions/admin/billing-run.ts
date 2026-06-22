@@ -1519,7 +1519,10 @@ export async function sendBillingRunNotification(
 export async function createForwarderOrderBill(
   fId: number,
   opts?: { noteForCustomer?: string },
-): Promise<AdminActionResult<{ invoiceId: number; docNo: string }>> {
+): Promise<
+  | { ok: true; data?: { invoiceId: number; docNo: string } }
+  | { ok: false; error: string; billedInvoices?: Array<{ forwarderId: number; docNo: string; invoiceId: number }> }
+> {
   const id = Number(fId);
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
 
@@ -1570,7 +1573,7 @@ export async function createForwarderOrderBill(
   const due = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-  return createBillingRunInvoice({
+  const res = await createBillingRunInvoice({
     userid,
     forwarderIds: ids,
     dateIssued: iso(today),
@@ -1583,4 +1586,31 @@ export async function createForwarderOrderBill(
     allowUnmeasured: false,
     overrides: {},
   });
+
+  // ภูม 2026-06-22 — when these rows are already on another (non-cancelled) invoice,
+  // resolve the invoice ids so the button can render a clickable link straight to that
+  // bill instead of a dead "#…→DOC" string. Runs ONLY on the collision case.
+  if (!res.ok && (res.error ?? "").includes("ใบวางบิลอื่น")) {
+    const billedInvoices: Array<{ forwarderId: number; docNo: string; invoiceId: number }> = [];
+    const { data: billed, error: billedErr } = await admin
+      .from("tb_forwarder_invoice_item")
+      .select("forwarder_id, invoice_id, tb_forwarder_invoice!inner(status, doc_no)")
+      .in("forwarder_id", ids);
+    if (billedErr) {
+      console.error("[createForwarderOrderBill billed-link]", { code: billedErr.code, message: billedErr.message });
+    }
+    for (const row of (billed ?? []) as unknown as Array<{
+      forwarder_id: number;
+      invoice_id: number;
+      tb_forwarder_invoice?: { status?: string; doc_no?: string } | Array<{ status?: string; doc_no?: string }> | null;
+    }>) {
+      const inv = Array.isArray(row.tb_forwarder_invoice) ? row.tb_forwarder_invoice[0] : row.tb_forwarder_invoice;
+      if (inv && inv.status !== "cancelled") {
+        billedInvoices.push({ forwarderId: row.forwarder_id, docNo: inv.doc_no ?? "?", invoiceId: row.invoice_id });
+      }
+    }
+    return { ok: false, error: res.error, billedInvoices };
+  }
+
+  return res;
 }
