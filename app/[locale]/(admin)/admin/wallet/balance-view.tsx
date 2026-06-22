@@ -125,11 +125,13 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
 
   return (
     <>
-      {/* ── Metric card: system-wide totals (legacy L107-127 equivalent) ── */}
+      {/* ── Metric card: system-wide totals (legacy L107-127 equivalent).
+          §0h — the ฿ sum is the hero (text-3xl font-bold), the label sits above
+          it as a clear small-caps tier, the source line is muted supporting text. */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-          <p className="text-xs text-muted">ยอดเงินทั้งหมดในระบบ</p>
-          <p className="mt-1 text-2xl font-bold text-green-600">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">ยอดเงินทั้งหมดในระบบ</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-green-600">
             ฿{sumWallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-muted mt-0.5">
@@ -137,8 +139,8 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-          <p className="text-xs text-muted">Cash Back ทั้งหมด</p>
-          <p className="mt-1 text-2xl font-bold text-purple-600">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Cash Back ทั้งหมด</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-purple-600">
             ฿{sumCb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-muted mt-0.5">
@@ -253,7 +255,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                       <td className="px-3 py-3">
                         <Link
                           href={`/admin/customers/${r.userid}`}
-                          className="font-mono text-xs text-primary-600 hover:underline"
+                          className="font-mono text-sm font-semibold text-primary-600 hover:underline"
                         >
                           {r.userid}
                         </Link>
@@ -263,8 +265,8 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-3 py-3 text-xs">{fullName}</td>
-                      <td className="px-3 py-3 text-right font-mono text-sm font-semibold text-foreground">
+                      <td className="px-3 py-3 text-sm text-foreground">{fullName}</td>
+                      <td className="px-3 py-3 text-right font-mono text-base font-bold text-foreground">
                         ฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-3 text-right font-mono text-xs text-purple-600">

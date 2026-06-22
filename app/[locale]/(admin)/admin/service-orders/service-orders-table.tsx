@@ -250,8 +250,8 @@ export function ServiceOrdersTable({
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-[11px] min-w-[1100px]">
-              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+            <table className="w-full text-xs min-w-[1100px]">
+              <thead className="bg-surface-alt/50 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
                     <input
@@ -355,7 +355,7 @@ export function ServiceOrdersTable({
                           aria-label={`เลือก ${r.hno}`}
                         />
                       </td>
-                      <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
+                      <td className="px-2 py-2.5 font-mono text-muted whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         <div className="text-foreground">{fmtDateOnly(dateCol)}</div>
                         <div className="text-muted text-[11px]">{fmtTimeOnly(dateCol)} น.</div>
@@ -373,7 +373,7 @@ export function ServiceOrdersTable({
                       <td className="px-2 py-2.5">
                         <Link
                           href={`/admin/service-orders/${r.hno}`}
-                          className="font-mono font-semibold text-primary-600 hover:underline"
+                          className="font-mono text-sm font-semibold text-primary-600 hover:underline"
                         >
                           {r.hno}
                         </Link>
@@ -386,7 +386,7 @@ export function ServiceOrdersTable({
                       <td className="px-2 py-2.5">
                         <Link
                           href={`/admin/customers/${r.userid}`}
-                          className="font-mono font-semibold text-primary-600 hover:underline"
+                          className="font-mono text-sm font-semibold text-primary-600 hover:underline"
                         >
                           {r.userid}
                         </Link>
@@ -418,7 +418,7 @@ export function ServiceOrdersTable({
                           <div className="min-w-0 flex-1">
                             <Link
                               href={`/admin/service-orders/${r.hno}`}
-                              className="font-semibold text-primary-600 hover:underline"
+                              className="text-sm font-semibold text-primary-600 hover:underline"
                             >
                               {r.htitle ?? "—"}
                             </Link>
@@ -481,7 +481,7 @@ export function ServiceOrdersTable({
                           )}
                         </div>
                       </td>
-                      <td className="px-2 py-2.5 text-right font-mono whitespace-nowrap">
+                      <td className="px-2 py-2.5 text-right font-mono text-sm font-semibold text-foreground whitespace-nowrap">
                         ฿{price.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-2 py-2.5">

@@ -202,7 +202,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                             {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </button>
                           <CustomerAvatar src={r.avatarUrl} name={r.fullName} code={r.userID} />
-                          <Link href={`/admin/customers/${r.userID}`} onClick={(e) => e.stopPropagation()} className="text-primary-600 hover:underline">{r.userID}</Link>
+                          <Link href={`/admin/customers/${r.userID}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-primary-600 hover:underline">{r.userID}</Link>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
@@ -218,7 +218,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs">{r.fullName}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground">{r.fullName}</td>
                       <td className="px-4 py-3 text-xs">
                         <div>{r.tel || "—"}</div>
                         <div className="text-muted">{r.email || "—"}</div>
@@ -240,7 +240,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                       </td>
                       <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
                       <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -414,7 +414,7 @@ export function PendingJuristicReviews({ bundles }: { bundles: JuristicBundle[] 
     <div className="rounded-2xl border border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <Building2 className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-        <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-300">นิติบุคคลรอตรวจสอบ ({bundles.length})</h2>
+        <h2 className="text-base font-bold text-amber-800 dark:text-amber-300">นิติบุคคลรอตรวจสอบ ({bundles.length})</h2>
         <span className="text-[11px] text-muted">ตรวจเอกสาร + เทียบ DBD แล้วอนุมัติได้เลย — ไม่ต้องเข้าหน้าอื่น</span>
       </div>
       <div className="space-y-2">

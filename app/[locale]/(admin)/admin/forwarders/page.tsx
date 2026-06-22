@@ -34,6 +34,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -418,14 +419,17 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     <>
       <PageTopMenubar items={buildForwarderMenubar(counts)} activeHref="/admin/forwarders" />
       <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">
-            ฝากนำเข้า{headerSuffix ? ` · ${headerSuffix}` : ""}
-          </h1>
-          <p className="text-sm text-muted mt-0.5">
-            {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด {counts.total.toLocaleString("th-TH")})
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>: red eyebrow →
+          big bold H1 → muted subtitle (count + ดูทั้งหมด), action buttons on the
+          right. Display-only swap; same content + behaviour as the prior ad-hoc
+          <p>ADMIN</p><h1> markup. */}
+      <PageHeader
+        eyebrow="ADMIN · ฝากนำเข้า"
+        title={`รายการนำเข้า${headerSuffix ? ` · ${headerSuffix}` : ""}`}
+        subtitle={
+          <>
+            <span className="font-semibold text-foreground">{rows.length.toLocaleString("th-TH")}</span> รายการ
+            {" "}(จากทั้งหมด {counts.total.toLocaleString("th-TH")})
             {sp.status && (
               <>
                 {" · "}
@@ -438,35 +442,37 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
                 </Link>
               </>
             )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            href="/admin/forwarders/bulk-search"
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-          >
-            🔍 ค้นหา tracking หลายเลข
-          </Link>
-          {/* Wave 11 — legacy "+ เพิ่มรายการให้ลูกค้า" (forwarder.php L758).
-              Lands on the admin-initiated forwarder create flow ·
-              currently /admin/forwarders/new = redirect to list ·
-              full form is Wave 12 backlog (similar to wallet/add).
-              2026-06-07 ภูม flag: เพิ่มปุ่ม bulk-add คู่กัน. */}
-          <Link
-            href="/admin/forwarders/new"
-            className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
-          >
-            + เพิ่มรายการ (เดี่ยว)
-          </Link>
-          <Link
-            href="/admin/forwarders/new-bulk"
-            className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 inline-flex items-center gap-1"
-          >
-            📦 เพิ่มหลายรายการ
-            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-medium">ใหม่</span>
-          </Link>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Link
+              href="/admin/forwarders/bulk-search"
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+            >
+              🔍 ค้นหา tracking หลายเลข
+            </Link>
+            {/* Wave 11 — legacy "+ เพิ่มรายการให้ลูกค้า" (forwarder.php L758).
+                Lands on the admin-initiated forwarder create flow ·
+                currently /admin/forwarders/new = redirect to list ·
+                full form is Wave 12 backlog (similar to wallet/add).
+                2026-06-07 ภูม flag: เพิ่มปุ่ม bulk-add คู่กัน. */}
+            <Link
+              href="/admin/forwarders/new"
+              className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
+            >
+              + เพิ่มรายการ (เดี่ยว)
+            </Link>
+            <Link
+              href="/admin/forwarders/new-bulk"
+              className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 inline-flex items-center gap-1"
+            >
+              📦 เพิ่มหลายรายการ
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-medium">ใหม่</span>
+            </Link>
+          </>
+        }
+      />
 
       {/* Wave 11 — top tabs (4): ทั้งหมด · จากลูกค้า · จากระบบ · จากแอดมิน
           Legacy `forwarder.php` L267-280. Filter via ?create=. */}

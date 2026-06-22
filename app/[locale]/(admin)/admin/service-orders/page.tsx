@@ -42,6 +42,7 @@ import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader, SectionHeading } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { toLegacyOrderCode } from "@/lib/legacy-status-map";
@@ -497,26 +498,26 @@ export default async function AdminServiceOrdersPage({
     <>
       <PageTopMenubar items={buildPurchasingMenubar(counts)} activeHref="/admin/service-orders" />
       <main className="p-6 lg:p-8 space-y-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-            <h1 className="mt-1 text-2xl font-bold">ฝากสั่งสินค้า</h1>
-            <p className="text-sm text-muted mt-0.5">
+        <PageHeader
+          eyebrow="ADMIN · ฝากสั่งซื้อ"
+          title="รายการฝากสั่งสินค้า"
+          subtitle={
+            <>
               {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด{" "}
-              {counts.total.toLocaleString("th-TH")})
-            </p>
-            <p className="text-xs text-red-600 mt-0.5">{windowMessage}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Legacy L279-285 — &ldquo;+ สั่งสินค้าให้ลูกค้า&rdquo; CTA → /cart/add */}
+              {counts.total.toLocaleString("th-TH")}) ·{" "}
+              <span className="text-red-600">{windowMessage}</span>
+            </>
+          }
+          actions={
+            /* Legacy L279-285 — "+ สั่งสินค้าให้ลูกค้า" CTA → /cart/add */
             <Link
               href="/admin/service-orders/cart/add"
-              className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
+              className="rounded-lg border border-green-500 bg-green-500 px-3 py-2 text-sm font-semibold text-white hover:bg-green-600"
             >
               + สั่งสินค้าให้ลูกค้า
             </Link>
-          </div>
-        </div>
+          }
+        />
 
         {headerErr && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -526,7 +527,7 @@ export default async function AdminServiceOrdersPage({
 
         {/* Status tabs — legacy &ldquo;สถานะรายการ&rdquo; with COUNT badges */}
         <div>
-          <h5 className="text-sm font-semibold mb-2">สถานะรายการ</h5>
+          <SectionHeading className="mb-2">สถานะรายการ</SectionHeading>
           <div className="flex flex-wrap gap-2">
             {filterOpts.map((o) => {
               const href = buildTabHref(o.v);

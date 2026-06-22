@@ -26,6 +26,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
+import { SectionHeading } from "@/components/admin/page-header";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { getBusinessConfig } from "@/lib/business-config";
 import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY } from "@/actions/admin/profile-cover-keys";
@@ -555,7 +556,7 @@ export async function renderLegacyCustomerView(
           )}
           <div className="min-w-0 flex flex-col gap-2 pt-2">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h2 className="text-lg font-semibold">{fullName}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{fullName}</h2>
               <span className="text-[11px] font-semibold tracking-wide text-primary-600">
                 ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
               </span>
@@ -633,7 +634,7 @@ export async function renderLegacyCustomerView(
             with the grid's lg:items-stretch, the two columns end equal-height. */}
         <div className="flex h-full flex-col gap-4">
           <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 space-y-2 text-sm">
-            <h2 className="text-sm font-semibold">ข้อมูลบัญชี</h2>
+            <SectionHeading>ข้อมูลบัญชี</SectionHeading>
             {/* วันที่สมัคร + ล่าสุดล็อกอิน on ONE row (2 cols, label-over-value)
                 so the long date+time strings don't make the card tall (ไม่บวม). */}
             <div className="grid grid-cols-2 gap-x-4 border-b border-border/40 pb-2">
@@ -1049,11 +1050,11 @@ export async function renderLegacyCustomerView(
           manual notes so the next rep can pick up the thread. */}
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
-          <h2 className="text-sm font-semibold">แท็กลูกค้า</h2>
+          <SectionHeading>แท็กลูกค้า</SectionHeading>
           <TagChips userid={u.userID} initialTags={customerTags} />
         </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
-          <h2 className="text-sm font-semibold">กิจกรรม / โน้ต</h2>
+          <SectionHeading>กิจกรรม / โน้ต</SectionHeading>
           <CustomerActivityTimeline userid={u.userID} initialEntries={customerActivity} />
         </div>
       </div>
@@ -1104,7 +1105,7 @@ function Section({
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <SectionHeading>{title}</SectionHeading>
         <div className="flex shrink-0 items-center gap-2.5">
           {headerExtra}
           {viewAllHref ? (

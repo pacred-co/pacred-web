@@ -503,10 +503,10 @@ export function CntListTable({
                 + per-column aggregates. Per owner (2026-06-19): kept WHITE (was
                 an orange→red gradient) — separated from data rows by bold text +
                 a heavier top/bottom border instead of a loud fill. */}
-            <tr className="bg-white dark:bg-surface text-foreground font-bold border-y-2 border-border">
+            <tr className="bg-white dark:bg-surface text-foreground text-sm font-bold border-y-2 border-border">
               {canSelect && <td className="px-2 py-2"></td>}
               {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (7) */}
-              <td className="px-2 py-2 font-semibold" colSpan={7}>รวม ({rows.length} ตู้)</td>
+              <td className="px-2 py-2 text-base font-bold" colSpan={7}>รวม ({rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
@@ -586,7 +586,7 @@ export function CntListTable({
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                            className="text-primary-600 hover:underline"
+                            className="font-semibold text-primary-600 hover:underline"
                             title={`เลขตู้จริง · placeholder MOMO = ${r.fcabinetnumber}`}
                           >
                             {momo.realContainer}
@@ -597,7 +597,7 @@ export function CntListTable({
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                            className="text-primary-600 hover:underline"
+                            className="font-semibold text-primary-600 hover:underline"
                             title={`เลขตู้จริงรอจากแต้ม · ตอนนี้แสดงเลขกระสอบ · placeholder MOMO = ${r.fcabinetnumber}`}
                           >
                             {momo.sackNo}
@@ -607,7 +607,7 @@ export function CntListTable({
                       ) : (
                         <Link
                           href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                          className="text-primary-600 hover:underline"
+                          className="font-semibold text-primary-600 hover:underline"
                           title={isPlaceholder ? "เลขตู้จริงรอจากแต้ม (ตู้ยังไม่ปิด)" : "ดูรายละเอียดตู้นี้"}
                         >
                           {r.fcabinetnumber}
@@ -674,9 +674,9 @@ export function CntListTable({
                       </span>
                     )}
                   </td>
-                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.costSum, 2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.priceSum, 2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.profitSum, 2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtNum(r.costSum, 2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right tabular-nums font-medium text-foreground">{fmtNum(r.priceSum, 2)}</td>}
+                  {showMoney && <td className="px-2 py-2 text-right tabular-nums font-semibold text-foreground">{fmtNum(r.profitSum, 2)}</td>}
                   <td className="px-2 py-2 text-center">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.chip}`}>{badge.label}</span>
                     {/* Next-action hint (self-explaining-row standard §0g · owner

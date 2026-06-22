@@ -457,13 +457,13 @@ function TxRow({
         <td className="px-2 py-3 w-8">
           {rowStatus === "1" ? <TbWalletRowCheckbox id={row.id} /> : null}
         </td>
-        <td className="px-3 py-3 text-xs whitespace-nowrap">
+        <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
           {formatThaiDateTime(row.date)}
         </td>
         <td className="px-3 py-3 text-xs">
-          <div className="font-mono">{row.userid ?? "—"}</div>
-          <div>{customerName}</div>
-          {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
+          <div className="font-mono text-sm font-semibold text-foreground">{row.userid ?? "—"}</div>
+          <div className="text-foreground">{customerName}</div>
+          {u?.userTel ? <div className="text-[11px] text-muted">{u.userTel}</div> : null}
         </td>
         <td className="px-3 py-3 text-xs">
           {isGroup ? (
@@ -485,7 +485,7 @@ function TxRow({
             </span>
           )}
         </td>
-        <td className={`px-3 py-3 text-right font-mono text-xs ${isNeg ? "text-red-600" : "text-foreground"}`}>
+        <td className={`px-3 py-3 text-right font-mono text-sm font-bold ${isNeg ? "text-red-600" : "text-foreground"}`}>
           {isNeg ? "−" : ""}฿{Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
         </td>
         <td className="px-3 py-3 text-xs">

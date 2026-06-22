@@ -43,6 +43,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
@@ -407,13 +408,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     <>
       <TopMenuReport activeHref="/admin/report-cnt" />
       <main className="p-4 lg:p-6 space-y-4">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
-          <h1 className="mt-1 text-2xl font-bold">รายงานตู้</h1>
-          <p className="text-sm text-muted">
-            กลุ่มตามหมายเลขตู้ (fCabinetNumber) — รวมจาก tb_forwarder
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="ADMIN · WAREHOUSE"
+          title="รายงานตู้"
+          subtitle="กลุ่มตามหมายเลขตู้ (fCabinetNumber) — รวมจาก tb_forwarder"
+        />
 
         {/* Tab: รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว */}
         <div className="flex gap-1 border-b border-border">

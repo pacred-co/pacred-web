@@ -748,7 +748,11 @@ export function ForwardersTable({
           // repro). The `scrollbar-x-visible` class (globals.css L155)
           // forces a visible horizontal scrollbar so staff always see it.
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-[11px]">
+            {/* §0h — base table text raised off the 11px floor to text-xs (12px)
+                so secondary cells read comfortably; key identity cells (รหัสลูกค้า ·
+                ออเดอร์# · ยอดค้างชำระ) step UP to text-sm, the smallest detail chips
+                stay text-[11px] = floor. Size now encodes importance, not just weight. */}
+            <table className="w-full text-xs">
               <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
@@ -966,7 +970,9 @@ export function ForwardersTable({
                         )}
                       </td>
                       <td className="px-2 py-2.5">
-                        <div className="font-mono font-semibold">{r.customer?.userid ?? "—"}</div>
+                        {/* §0h — primary identity (รหัสลูกค้า) sized up to text-sm so
+                            the eye lands on "whose row" first; name + phone stay secondary. */}
+                        <div className="font-mono text-sm font-semibold text-foreground">{r.customer?.userid ?? "—"}</div>
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>
@@ -1045,7 +1051,7 @@ export function ForwardersTable({
                           <div className="min-w-0 flex-1">
                             <Link
                               href={`/admin/forwarders/${r.id}`}
-                              className="font-semibold text-primary-600 hover:underline"
+                              className="text-sm font-semibold text-primary-600 hover:underline"
                             >
                               ออเดอร์ #{r.id}
                             </Link>
@@ -1091,7 +1097,8 @@ export function ForwardersTable({
                           // its own row in tb_forwarder — display sum only).
                           <>
                             {agg.outstanding > 0 ? (
-                              <div className="font-mono font-semibold text-red-700">
+                              // §0h — the money number staff chases sized up to text-sm.
+                              <div className="font-mono text-sm font-semibold text-red-700">
                                 ฿{agg.outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                               </div>
                             ) : agg.allPaid ? (
@@ -1116,7 +1123,8 @@ export function ForwardersTable({
                         ) : (
                           <>
                             {r.outstanding_thb > 0 ? (
-                              <div className="font-mono font-semibold text-red-700">
+                              // §0h — the money number staff chases sized up to text-sm.
+                              <div className="font-mono text-sm font-semibold text-red-700">
                                 ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                               </div>
                             ) : r.paydeposit === "1" ? (

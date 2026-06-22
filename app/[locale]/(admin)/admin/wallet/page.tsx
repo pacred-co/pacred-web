@@ -31,6 +31,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { parsePage } from "@/lib/admin/paginate";
 import { WalletBalanceView } from "./balance-view";
@@ -129,18 +130,19 @@ export default async function AdminWalletPage({
     <>
       <PageTopMenubar items={WALLET_MENUBAR} activeHref="/admin/wallet" />
       <main className="p-6 lg:p-8 space-y-5">
-        <div className="flex items-baseline justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-            <div className="mt-1 flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold">
-                กระเป๋าสตางค์ —{" "}
-                {view === "balance" ? "ยอดคงเหลือลูกค้า" : "ประวัติรายการ"}
-              </h1>
+        {/* §0h — one consistent page-title hierarchy via <PageHeader>: red eyebrow →
+            big bold H1 → muted subtitle, with the pending-count chips as `badges`
+            and the manual-topup CTA in the `actions` slot. Display-only swap; same
+            counts + links + behaviour as the prior ad-hoc <p>ADMIN</p><h1> markup. */}
+        <PageHeader
+          eyebrow="ADMIN · กระเป๋าสตางค์"
+          title={`กระเป๋าสตางค์ — ${view === "balance" ? "ยอดคงเหลือลูกค้า" : "ประวัติรายการ"}`}
+          badges={
+            <>
               {totalPending ? (
                 <Link
                   href="/admin/wallet?view=tx&status=1"
-                  className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-100"
+                  className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
                   title="ดูรายการรอตรวจทั้งหมด"
                 >
                   {totalPending.toLocaleString()} รอตรวจรวม
@@ -149,7 +151,7 @@ export default async function AdminWalletPage({
               {pendingTopupCount ? (
                 <Link
                   href="/admin/wallet?view=tx&kind=topup&status=1"
-                  className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                  className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-100"
                 >
                   เติม {pendingTopupCount.toLocaleString()}
                 </Link>
@@ -157,13 +159,15 @@ export default async function AdminWalletPage({
               {pendingWithdrawCount ? (
                 <Link
                   href="/admin/wallet/withdrawals"
-                  className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                  className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
                 >
                   ถอน {pendingWithdrawCount.toLocaleString()}
                 </Link>
               ) : null}
-            </div>
-            <p className="text-xs text-muted mt-1">
+            </>
+          }
+          subtitle={
+            <>
               {view === "balance"
                 ? "ยอดเงินคงเหลือในกระเป๋าของลูกค้าแต่ละราย — เรียงจากยอดสูงสุด (รวม Cash Back)"
                 : "รายการเงินเข้า–ออกของลูกค้า — ตรวจสลิป แล้วกดอนุมัติหรือปฏิเสธได้จากหน้านี้"}
@@ -179,15 +183,17 @@ export default async function AdminWalletPage({
                   </Link>
                 </>
               )}
-            </p>
-          </div>
-          <Link
-            href="/admin/wallet/add"
-            className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-          >
-            + เพิ่ม Topup ด้วยมือ
-          </Link>
-        </div>
+            </>
+          }
+          actions={
+            <Link
+              href="/admin/wallet/add"
+              className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-600"
+            >
+              + เพิ่ม Topup ด้วยมือ
+            </Link>
+          }
+        />
 
         {/* ── View-toggle tabs ── */}
         <div className="flex flex-wrap gap-1 border-b border-border">

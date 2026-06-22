@@ -423,9 +423,10 @@ export default async function AdminWalletDetail({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
           {/* LEFT — info pane */}
           <div className="p-5 space-y-3 border-b md:border-b-0 md:border-r border-border">
-            <h2 className="text-lg font-bold">
-              {/* Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน") */}
-              รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono">#{row.id}</span>
+            <h2 className="text-xl font-bold tracking-tight text-foreground leading-tight">
+              {/* §0h — detail header is a real page-title tier (was text-lg).
+                  Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน") */}
+              รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono text-primary-600">#{row.id}</span>
             </h2>
 
             <KV label="เวลาทำรายการ" value={row.date ? formatThai(row.date) : "—"} />

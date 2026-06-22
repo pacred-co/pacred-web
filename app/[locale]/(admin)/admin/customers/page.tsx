@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -510,26 +511,27 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           </span>
         </Link>
       ) : null}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">
-            ลูกค้า{group ? ` — ${GROUP_CFG[group].label}` : ""}
-          </h1>
-          {group ? (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-              <span>กรอง: {GROUP_CFG[group].label}</span>
-              <Link href="/admin/customers" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างตัวกรองกลุ่มลูกค้า">×</Link>
-            </div>
-          ) : null}
-          {adminidsale ? (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-              <span>{adminidsale === "__none__" ? "⚠️ ยังไม่มีเซลล์ดูแล (กดเข้าลูกค้าเพื่อ set เซลล์/CS)" : `เซลล์ผู้ดูแล: ${adminidsale}`}</span>
-              <Link href="/admin/customers?nofilter=1" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด" title="ดูทั้งหมด">×</Link>
-            </div>
-          ) : null}
-        </div>
-        <div className="flex gap-2 flex-wrap items-center">
+      <PageHeader
+        eyebrow="ADMIN"
+        title={`ลูกค้า${group ? ` — ${GROUP_CFG[group].label}` : ""}`}
+        badges={
+          <>
+            {group ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+                <span>กรอง: {GROUP_CFG[group].label}</span>
+                <Link href="/admin/customers" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างตัวกรองกลุ่มลูกค้า">×</Link>
+              </span>
+            ) : null}
+            {adminidsale ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+                <span>{adminidsale === "__none__" ? "⚠️ ยังไม่มีเซลล์ดูแล (กดเข้าลูกค้าเพื่อ set เซลล์/CS)" : `เซลล์ผู้ดูแล: ${adminidsale}`}</span>
+                <Link href="/admin/customers?nofilter=1" className="rounded-full px-1 leading-none hover:bg-primary-100" aria-label="ล้างฟิลเตอร์เซลล์ผู้ดูแล · ดูทั้งหมด" title="ดูทั้งหมด">×</Link>
+              </span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
           <Link href="/admin/customers/new" className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 inline-flex items-center gap-1.5">+ เพิ่มลูกค้า</Link>
           <Link href="/admin/customers/recently-active" className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100">📈 ลูกค้า active ล่าสุด</Link>
           <Link href="/admin/customers/transfer-rep" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5">⇄ ย้ายเซลล์ผู้ดูแล</Link>
@@ -604,8 +606,9 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           }}
           filename={`customers${group ? `-${group}` : ""}${sp.type ? `-${sp.type}` : ""}${adminidsale ? `-${adminidsale}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
         />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <PendingJuristicReviews bundles={pendingJuristic} />
 
