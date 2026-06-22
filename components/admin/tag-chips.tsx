@@ -65,16 +65,16 @@ export function TagChips({
     });
   }
 
-  function applyRemove(t: string) {
+  async function applyRemove(t: string) {
     setErr(null);
+    // §0f — confirm before the destructive remove.
+    const ok = await confirm(`ลบแท็ก “${t}” ออกจากลูกค้ารายนี้?`, {
+      title: "ลบแท็ก",
+      confirmLabel: "ลบ",
+      cancelLabel: "ยกเลิก",
+    });
+    if (!ok) return;
     startTransition(async () => {
-      // §0f — confirm before the destructive remove.
-      const ok = await confirm(`ลบแท็ก “${t}” ออกจากลูกค้ารายนี้?`, {
-        title: "ลบแท็ก",
-        confirmLabel: "ลบ",
-        cancelLabel: "ยกเลิก",
-      });
-      if (!ok) return;
       setBusyTag(t);
       const res = await removeTag(userid, t);
       if (res.ok) {

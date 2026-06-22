@@ -72,17 +72,17 @@ export function LeadKanban({
   // Local override of a card's column after a successful status set (optimistic).
   const [moved, setMoved] = useState<Record<string, LeadCallStatus>>({});
 
-  function setStatus(userid: string, status: LeadCallStatus) {
+  async function setStatus(userid: string, status: LeadCallStatus) {
+    if (status === "closed") {
+      // §0f — closing a deal triggers a sales→CS handoff; confirm first.
+      const ok = await confirm(`ทำเครื่องหมาย “ปิดการขาย” ให้ลูกค้า ${userid}?`, {
+        title: "ปิดการขาย",
+        confirmLabel: "ยืนยัน",
+        cancelLabel: "ยกเลิก",
+      });
+      if (!ok) return;
+    }
     startTransition(async () => {
-      if (status === "closed") {
-        // §0f — closing a deal triggers a sales→CS handoff; confirm first.
-        const ok = await confirm(`ทำเครื่องหมาย “ปิดการขาย” ให้ลูกค้า ${userid}?`, {
-          title: "ปิดการขาย",
-          confirmLabel: "ยืนยัน",
-          cancelLabel: "ยกเลิก",
-        });
-        if (!ok) return;
-      }
       setBusyId(userid);
       const res = await logLeadCall({ userid, status });
       if (res.ok) {

@@ -62,15 +62,20 @@ export function ForwarderStepRevert({ fid, fstatus }: Props) {
 
   if (!canRevert && !canAdvance) return null;
 
-  function onRevert() {
+  // NOTE: confirm() MUST run OUTSIDE startTransition. Awaiting the dialog inside
+  // a transition makes the host's setReq a deprioritized transition update, so
+  // the dialog never reliably opens → the button silently does nothing (the
+  // owner-reported "ใช้ไม่ได้" 2026-06-22). Canonical pattern: await the UI
+  // confirm first, then wrap ONLY the server action in startTransition.
+  async function onRevert() {
     setError(null);
     const to = String(curInt - 1);
     const msg =
       `ถอยสถานะออเดอร์ #${fid} กลับ 1 ขั้น?\n\n` +
       `จาก “${labelOf(cur)}” → “${labelOf(to)}”\n\n` +
       `(ระบบจะบันทึก log หลังบ้าน · ถ้ารายการชำระเงินแล้ว ระบบจะไม่ให้ถอย)`;
+    if (!(await confirm(msg))) return;
     startTransition(async () => {
-      if (!(await confirm(msg))) return;
       const res = await revertForwarderStep({ fid });
       if (!res.ok) {
         setError(res.error ?? "ถอยสถานะไม่สำเร็จ");
@@ -80,15 +85,15 @@ export function ForwarderStepRevert({ fid, fstatus }: Props) {
     });
   }
 
-  function onAdvance() {
+  async function onAdvance() {
     setError(null);
     const to = String(curInt + 1);
     const msg =
       `ดันสถานะออเดอร์ #${fid} ไปขั้นถัดไป?\n\n` +
       `จาก “${labelOf(cur)}” → “${labelOf(to)}”\n\n` +
       `(เปลี่ยนสถานะอย่างเดียว · ไม่เก็บเงิน/ไม่จัดส่ง · บันทึก log หลังบ้าน)`;
+    if (!(await confirm(msg))) return;
     startTransition(async () => {
-      if (!(await confirm(msg))) return;
       const res = await advanceForwarderStep({ fid });
       if (!res.ok) {
         setError(res.error ?? "ดันสถานะไม่สำเร็จ");
