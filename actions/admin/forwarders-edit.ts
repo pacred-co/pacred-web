@@ -37,6 +37,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveComparisonInput } from "@/lib/forwarder/comparison-guard";
 import {
   resolveLiveForwarderRate,
@@ -279,7 +280,7 @@ export async function adminUpdateForwarderDimensions(
         .from("tb_forwarder")
         .select(
           "id, fidorco, userid, fweight, fwidth, flength, fheight, fvolume, " +
-          "fproductstype, frefprice, fnote, " +
+          "fproductstype, frefprice, fnote, fstatus, fcredit, " +
           // ── pricing-context columns (legacy update_data reads these) ──
           "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
           "customrate, customratekg, customratecbm, fdiscount, " +
@@ -337,6 +338,8 @@ export async function adminUpdateForwarderDimensions(
         tax_doc_pref: string | null;
         adminidcreator: string | null;
         doc_tier_confirmed: boolean | null;
+        fstatus: string | null;
+        fcredit: string | null;
       };
 
       const nowIso = new Date().toISOString();
@@ -552,6 +555,23 @@ export async function adminUpdateForwarderDimensions(
         fdateadminstatus:  nowIso,
       };
 
+      // 2026-06-22 (ภูม · prod URGENT) — auto-advance "ถึงไทยแล้ว" → "รอชำระเงิน"
+      // when the pricer fills the price + saves. The sales rep enters the price
+      // on this form once the goods arrive (fstatus 4); saving must move the
+      // order to 5 (รอชำระเงิน) so the customer is billed — staff were having to
+      // flip the status by hand every time. Forward-only by construction:
+      //   • ONLY from fstatus 4 → a credit-6 (juristic credit) or an already-
+      //     paid/shipped 5/6/7 row is NEVER touched.
+      //   • ONLY when a real bill exists (newGrandTotal > 0).
+      // Mirrors the accounting bulk-bill stamp (forwarder-check.ts → fstatus '5'
+      // + fdatestatus5), so the order shows up correctly in AR aging (which dates
+      // the receivable from fdatestatus5).
+      const advancedToFive = String(before.fstatus ?? "") === "4" && newGrandTotal > 0;
+      if (advancedToFive) {
+        update.fstatus = "5";
+        update.fdatestatus5 = nowIso;
+      }
+
       // 2026-06-05 — write the override block + adders only when the admin
       // actually typed something (each field is optional in the schema). This
       // preserves backwards-compat for callers that still send the old payload.
@@ -583,6 +603,12 @@ export async function adminUpdateForwarderDimensions(
           code: updErr.code, message: updErr.message, id: before.id,
         });
         return { ok: false, error: updErr.message };
+      }
+
+      // Audit the auto-bill flip (4→5) for the status timeline + AR aging trail.
+      // Best-effort — a logging miss must never fail the price save.
+      if (advancedToFive) {
+        await appendStatusLog(admin, before.id, "4", "5", legacyAdminId);
       }
 
       // ─── UPDATE tb_forwarder_item rows ──────────────────────────

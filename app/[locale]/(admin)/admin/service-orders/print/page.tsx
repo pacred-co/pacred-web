@@ -3,6 +3,17 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { MarkPrintedOnMount } from "./mark-printed-on-mount";
+import { ShopFormToggle } from "./shop-form-toggle";
+import { ShopDocumentPaper } from "@/components/receipt/shop-document-paper";
+import type { HeaderRow, OrderRow, PrintDoc } from "./shop-document-types";
+import { computeShopDocument } from "./shop-document-data";
+import {
+  numberFormat,
+  fmtDMYHMS,
+  nameProvider,
+  replaceSpace,
+  convert,
+} from "./shop-document-format";
 
 /**
  * ADMIN ฝากสั่งซื้อ (China-shop) order PRINT document — the staff-side
@@ -84,156 +95,16 @@ export const dynamic = "force-dynamic";
 // ── Legacy PCS theme assets (placeholders pending ปอน's PR swap) ──
 const THEME_BASE = "/legacy/pcs/theme";
 
-/** number_format($n, $d) — the PHP money formatter printShop.php uses
- *  throughout (number_format(...,2)). */
-function numberFormat(n: number, decimals = 2): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-/** MySQL DATE_FORMAT(x,'%d/%m/%Y %T') → 'DD/MM/YYYY HH:MM:SS'. The tb_*
- *  timestamp is read as a literal wall-clock value (no tz shift),
- *  exactly like MySQL. */
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-function fmtDMYHMS(s: string | null): string {
-  if (!s) return "";
-  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return "";
-  return `${m[3]}/${m[2]}/${m[1]} ${pad2(Number(m[4]))}:${pad2(Number(m[5]))}:${pad2(Number(m[6]))}`;
-}
-
-/** nameProvider($cProvider) — member/include/function.php L25-34.
- *  Maps the tb_order.cprovider code → the marketplace name. */
-function nameProvider(cProvider: string): string {
-  switch (cProvider) {
-    case "1": return "1688";
-    case "2": return "Taobao";
-    case "3": return "Tmall";
-    case "4": return "Shops";
-    case "5": return "Nice";
-    default:  return cProvider;
-  }
-}
-
-/** replaceSpace($str) — member/include/function.php L376-378. */
-function replaceSpace(str: string): string {
-  return str.replace(/ /g, "");
-}
-
-/* ── Convert($amount) — the Thai baht-text reader.
- *    member/include/function.php (Convert + ReadNumber).
- *    printShop.php prints Convert($priceShopAll) — the row
- *    "(หนึ่งหมื่น...บาทถ้วน)". Transcribed 1:1 below. ── */
-const POSITION_CALL = ["แสน", "หมื่น", "พัน", "ร้อย", "สิบ", ""];
-const NUMBER_CALL = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
-
-function readNumber(numStr: string): string {
-  let number = Number(numStr) || 0;
-  let ret = "";
-  if (number === 0) return ret;
-  if (number > 1000000) {
-    ret += readNumber(String(Math.trunc(number / 1000000))) + "ล้าน";
-    number = Math.trunc(number % 1000000);
-  }
-  let divider = 100000;
-  let pos = 0;
-  while (number > 0) {
-    const d = Math.trunc(number / divider);
-    ret +=
-      divider === 10 && d === 2
-        ? "ยี่"
-        : divider === 10 && d === 1
-          ? ""
-          : divider === 1 && d === 1 && ret !== ""
-            ? "เอ็ด"
-            : NUMBER_CALL[d];
-    ret += d ? POSITION_CALL[pos] : "";
-    number = number % divider;
-    divider = divider / 10;
-    pos++;
-  }
-  return ret;
-}
-
-function convert(amount: number): string {
-  // number_format($amount, 2, ".", "") — no thousands separator.
-  const amountNumber = (Number(amount) || 0).toFixed(2);
-  const pt = amountNumber.indexOf(".");
-  const numberPart = pt === -1 ? amountNumber : amountNumber.slice(0, pt);
-  const fractionPart = pt === -1 ? "" : amountNumber.slice(pt + 1);
-
-  let ret = "";
-  const baht = readNumber(numberPart);
-  if (baht !== "") ret += baht + "บาท";
-  const satang = readNumber(fractionPart);
-  if (satang !== "") ret += satang + "สตางค์";
-  else ret += "ถ้วน";
-  return ret;
-}
-
-// ── Row types (the columns printShop.php SELECTs + renders) ──────
-type HeaderRow = {
-  usercompany: string | null;
-  userfullname: string | null;
-  userid: string;
-  userpicture: string | null;
-  useremail: string | null;
-  hstatus: string;
-  hno: string;
-  hdate: string | null;
-  hdate2: string | null;
-  htransporttype: string;
-  hrate: number;
-  hdatepayment: string | null;
-  fulladdress: string | null;
-};
-type OrderRow = {
-  cprovider: string;
-  cnameshop: string;
-  cshippingnumber: string;
-  ctrackingnumber: string;
-  ctitle: string;
-  ccolor: string;
-  csize: string;
-  cimages: string;
-  cprice: number;
-  cshippingchn: number;
-  camount: number;
-  crewallet: string;
-};
-
-/** A single fully-resolved order ready to render as one print
- *  document — printShop.php builds one `$content` page per hNo. */
-type PrintDoc = {
-  hNo: string;
-  dataTitleEntry: string; // the raw $_GET['id'][$count0] value
-  nameBill: string;       // ใบเสร็จรับเงิน | ใบแจ้งหนี้
-  classText: string;      // h-title | h-title-danger
-  isReceipt: boolean;     // print==1
-  header: HeaderRow;
-  corporateNumber: string;
-  fName: string;          // 'คุณ' | '' (juristic)
-  dateCreate: string;
-  datePay: string;
-  datePayExp: string;
-  providers: {
-    cProvider: string;
-    shops: {
-      cNameShop: string;
-      cShippingNumber: string;
-      cTrackingNumber: string;
-      items: OrderRow[];
-    }[];
-  }[];
-};
+// number_format / fmtDMYHMS / nameProvider / replaceSpace / convert are now
+// SHARED in `./shop-document-format` so the legacy skin (this file) and the
+// PEAK skin (`components/receipt/shop-document-paper.tsx`) format identically.
+// The row/document types are SHARED in `./shop-document-types`. Imported above.
 
 type SearchParams = {
   print?: string;
   id?: string | string[];
+  /** owner 2026-06-22 — skin selector: legacy/PCS (default) | PEAK. */
+  form?: string;
 };
 
 export default async function AdminServiceOrderPrintPage({
@@ -256,6 +127,10 @@ export default async function AdminServiceOrderPrintPage({
   // printShop.php L46: `if($_GET['print']==1)` — the receipt branch.
   // PHP `==` is loose; "1"==1 is true, anything else is the invoice.
   const isReceipt = sp.print === "1";
+
+  // owner 2026-06-22 — document skin: legacy/PCS (default) | PEAK. Only
+  // "peak" switches; any other value (incl. absent) keeps the legacy form.
+  const form: "legacy" | "peak" = sp.form === "peak" ? "peak" : "legacy";
 
   const admin = createAdminClient();
 
@@ -510,6 +385,28 @@ export default async function AdminServiceOrderPrintPage({
   // notFound() is the faithful Next equivalent of an empty document.
   if (docs.length === 0) notFound();
 
+  // ── PEAK skin (owner 2026-06-22) ──────────────────────────────────────
+  // Render the SAME docs in the PEAK layout. NOT wrapped in the legacy
+  // .print-fullscreen-overlay (the PEAK paper has its own A4 print/screen
+  // CSS). The mark-printed Server Action still fires (same doc, just a
+  // different skin). The toggle + print button float above, print-hidden.
+  if (form === "peak") {
+    return (
+      // `shop-peak-gutter` = the screen-only gray backdrop (Peak look). The
+      // PEAK paper's own <style> resets it to white on print so no gray bleeds
+      // onto the printed page.
+      <div className="shop-peak-gutter">
+        <MarkPrintedOnMount hNos={docs.map((d) => d.hNo)} isReceipt={isReceipt} />
+        <div className="no-print print:hidden" style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+          <ShopFormToggle current="peak" />
+          <PrintButton />
+        </div>
+        <ShopDocumentPaper docs={docs} kind={isReceipt ? "receipt" : "invoice"} />
+      </div>
+    );
+  }
+
+  // ── Legacy / PCS skin (default · UNCHANGED) ───────────────────────────
   return (
     <div className="print-fullscreen-overlay">
       {/* Faithful printShop.php L86-92 — mark hPrintBill/hPrintBill2='1' on print
@@ -520,9 +417,10 @@ export default async function AdminServiceOrderPrintPage({
       <link rel="stylesheet" href="/legacy/pcs/print-shop.css" />
       <link rel="stylesheet" href="/legacy/pcs/print-overlay.css" />
 
-      {/* On-screen print button — staff press this (or Ctrl+P) to save
-          the PDF. Hidden in the printed output. */}
-      <div className="no-print">
+      {/* On-screen toggle + print button — staff press print (or Ctrl+P)
+          to save the PDF. The toggle flips legacy↔PEAK. Hidden when printed. */}
+      <div className="no-print" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <ShopFormToggle current="legacy" />
         <PrintButton />
       </div>
 
@@ -736,12 +634,20 @@ export default async function AdminServiceOrderPrintPage({
  * printing the running total at that point. Reproduced 1:1 here.
  */
 function ShopItemRows({ doc }: { doc: PrintDoc }) {
+  // owner 2026-06-22 — the per-line money + running total are now taken from
+  // the SHARED `computeShopDocument` (the same source the PEAK skin uses), so
+  // both skins print byte-identical numbers. The shared rows are produced in
+  // the SAME nested provider→shop→item order this loop walks, so indexing by
+  // the running `noRow` (1-based) aligns exactly. `runningSum[k]` = Σ of the
+  // first k row totals = the legacy "$priceShopAll up to here".
+  const shared = computeShopDocument(doc);
+  const sharedByNo = new Map(shared.rows.map((r) => [r.no, r]));
+  const runningSum: number[] = [0];
+  for (const r of shared.rows) runningSum[r.no] = runningSum[r.no - 1] + r.rowTotal;
+
   // printShop.php — $noRow increments per item row across the WHOLE
   // order; the zebra uses (($noRow++)%2)!=0 → 'bg-g'.
   let noRow = 0;
-  // $priceShopAll accumulates across every item row of every
-  // provider/shop; the per-provider total row prints its RUNNING value.
-  let priceShopAll = 0;
   const out: React.ReactElement[] = [];
 
   for (const provider of doc.providers) {
@@ -799,11 +705,13 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
       for (const it of shop.items) {
         noRow += 1;
         const nameBG = noRow % 2 !== 0 ? "bg-g" : "bg";
-        // printShop.php — the per-row price + the running sum.
-        const rowTotal =
-          it.camount * (it.cprice * doc.header.hrate) +
-          it.cshippingchn * doc.header.hrate;
-        priceShopAll += rowTotal;
+        // The money for this row = the SHARED computed values (same formula
+        // as before — cAmount×(cPrice×hRate)+cShippingChn×hRate — just sourced
+        // from computeShopDocument so the PEAK skin can't drift from it).
+        const sharedRow = sharedByNo.get(noRow);
+        const unitPriceThb = sharedRow?.unitPriceThb ?? it.cprice * doc.header.hrate;
+        const shippingChnThb = sharedRow?.shippingChnThb ?? it.cshippingchn * doc.header.hrate;
+        const rowTotal = sharedRow?.rowTotal ?? it.camount * unitPriceThb + shippingChnThb;
         // printShop.php — the cImages cell is empty until the own-Shops
         // asset tree is ported (the remote Alicdn URLs failed
         // file_exists() in the legacy too).
@@ -825,10 +733,10 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
             <td style={{ width: "20mm" }}></td>
             <td className="text-right v-a-t">{it.camount}</td>
             <td className="text-right v-a-t">
-              {numberFormat(it.cprice * doc.header.hrate)}
+              {numberFormat(unitPriceThb)}
             </td>
             <td className="text-right v-a-t">
-              {numberFormat(it.cshippingchn * doc.header.hrate)}
+              {numberFormat(shippingChnThb)}
             </td>
             <td className="text-right v-a-t">{numberFormat(rowTotal)}</td>
           </tr>,
@@ -845,7 +753,9 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
     // computed half-up locally. Append the raw full-precision value
     // in grey parens next to the rounded total as a reference, so
     // customers transfer the rounded headline + know it's ceil-safe.
-    const totalRaw = priceShopAll;
+    // The RUNNING cumulative total up to the last item rendered (= the legacy
+    // $priceShopAll at this point in the loop), sourced from the shared sum.
+    const totalRaw = runningSum[noRow] ?? 0;
     const totalRounded = Math.round(totalRaw * 100) / 100;
     const showRaw = Math.abs(totalRaw - totalRounded) > 0.0001;
     out.push(

@@ -309,6 +309,10 @@ export async function listEligibleCustomers(): Promise<
         aggById.set(r.id, r);
       }
 
+      // NOTE: count INCLUDES rows already on an invoice — the picker now SHOWS
+      // already-billed rows (badged · ติ๊กได้เพื่อออกใบใหม่ · ภูม 2026-06-22 "เผื่อวางบิล
+      // ผิดต้องวางใหม่"), so the dropdown count must include them too or the two
+      // disagree again. The picker badges + warns on a re-bill; it no longer hides.
       const aggByUser = new Map<string, { count: number; total: number }>();
       for (const r of aggById.values()) {
         if (!r.userid) continue;
