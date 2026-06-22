@@ -21,7 +21,6 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
-import { adminAdvanceForwarderToWaitPayment } from "@/actions/admin/forwarder-step";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -370,15 +369,11 @@ export function PerTrackingEditorClient({
         setError(`บันทึกไม่สำเร็จ ${fails.length}/${rows.length} แถว — ${fails[0]}`);
         return;
       }
-      // Auto-advance to รอชำระเงิน (fstatus 4→5) after pricing is saved — owner
-      // 2026-06-22 "ตั้งราคาเสร็จ กดบันทึก → เด้งไปรอเก็บเงินเอง". Idempotent (4→5
-      // only · already-5 rows are no-ops · never bumps 5→6).
-      const adv = await adminAdvanceForwarderToWaitPayment({ fIds: rows.map((r) => r.id) });
-      const movedToWait = adv.ok && (adv.data?.advanced.length ?? 0) > 0;
-      setSuccess(
-        `✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่แล้ว` +
-          (movedToWait ? " · เปลี่ยนสถานะเป็น “รอชำระเงิน” แล้ว 🧾" : ""),
-      );
+      // The save itself auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side
+      // (adminUpdateForwarderDimensions · ภูม 2026-06-22) — forward-only, only when
+      // grandTotal>0. router.refresh re-renders with the new status pill + the
+      // "สร้างใบวางบิล" button (which shows at fstatus 5/6).
+      setSuccess(`✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่ + อัปเดตสถานะให้แล้ว 🧾`);
       router.refresh();
       setTimeout(() => setSuccess(null), 8000);
     });
