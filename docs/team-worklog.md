@@ -13,7 +13,7 @@
 
 ## Shared anchors (the "แผนเดียวกัน / โค้ดเดียวกัน")
 - **Trunk:** everyone bases on `dave-pacred` (= the integration branch); เดฟ promotes to `main` on the owner's go.
-- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0200.** (0199 = admin AD#### code scheme — applied prod+dev 2026-06-22.)
+- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0201.** (0199 = admin AD#### code scheme · 0200 = customer_quotations [was ภูม's 0199, renamed on merge] — both applied prod+dev 2026-06-22.)
 - **Plans:** the accounting build = [`docs/research/pay-and-accounting-gap-2026-06-21.md`](research/pay-and-accounting-gap-2026-06-21.md) (B1-B7). Port plan = [`docs/PORT_PLAN.md`](PORT_PLAN.md). UX standard = [`docs/learnings/self-explaining-row-design.md`](learnings/self-explaining-row-design.md) + AGENTS §0g/§0h.
 
 ---
@@ -26,6 +26,7 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Integrated ภูม + ปอน** — Poom-pacred 8c (quotation /q share-link + PEAK shop-doc toggle + billing-run show-already-billed + ภูม's price-save 4→5) + InwPond007 (quote receipt-style + รหัสลูกค้า). Resolved 0199 migration collision (→0200) + auto-advance dup + quote-tab conflict (kept both). gate typecheck/lint/build/test 0 | many · mig 0200 prod+dev | main | 2026-06-22 |
 | เดฟ | **Forwarder price→bill flow** — บันทึกทุกแถว auto-advances fstatus 4→5 (รอชำระเงิน · `adminAdvanceForwarderToWaitPayment`, 4→5-only idempotent) + page-level "🧾 สร้างใบวางบิล" button at fstatus 5/6 (`createForwarderOrderBill` derives the tracking group → reuses `createBillingRunInvoice`) | `actions/admin/forwarder-step.ts` · `billing-run.ts` · `create-order-bill-button.tsx` · per-tracking editor · no mig | main | 2026-06-22 |
 | เดฟ | **Task F — zone-aware in-Thailand delivery selector** — เหมาๆ in-zone ฿100/PRF · ต่างจังหวัด/นอกเขต Flash-by-weight + J&T/ไปรษณีย์ ALL **บังคับ COD** · รับเอง ฿0. Composes existing flash-price/bkk-zip/thai-shipby-rules. | `lib/forwarder/domestic-shipping.ts`(+test) · `actions/admin/forwarder-domestic-ship.ts` · `domestic-shipping-selector.tsx` · forwarders/[fNo]/page.tsx · no mig | main | 2026-06-22 |
 | เดฟ | **Forwarder billing preview fix** — ราคานำเข้าจีน-ไทย preview now sums per-line (= the real bill 4324.05, was whole-shipment 4083.96) | `per-tracking-editor-client.tsx` · no mig | main | 2026-06-22 |
