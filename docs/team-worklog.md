@@ -26,6 +26,8 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| ภูม | **P0 sweep** — platform-wide `tb_users` lowercase→camelCase (42703 · 16+ surfaces: reports/wallet/cron/sales-payout/notifications/customers) | reports/* · wallet · cron/refresh-active-customers · sales-payouts-tb · etc. | main · verified (user-all 158 rows) | 2026-06-22 |
+| เดฟ | Team skills: keep-context · team-collision-check + worklog | `.claude/skills/*` · this file | main | 2026-06-22 |
 | เดฟ | Accounting B2 — shop AP pay-out (`markShopDisbursementPaid`) | `actions/admin/shop-disbursement.ts` · `tb_shop_pay_h` · no mig | main | 2026-06-22 |
 | เดฟ | UX: self-explaining rows + 11px floor + `<PageHeader>` (~50 pages) | `components/admin/page-header.tsx` + many admin pages | main | 2026-06-22 |
 | ภูม | P0: `/admin/customers` blank fix — `tb_users` img col = `userPicture` (not userimage) | `customers/page.tsx` · service-order detail | main | 2026-06-22 |
@@ -34,5 +36,7 @@
 ## 🟡 NEXT / QUEUED (reserved so no one else starts it)
 | Dev | Feature | Will touch (files / tables / migration#) | Note |
 |---|---|---|---|
-| เดฟ | Accounting **B1** — wire VAT into AR billing-run | `actions/admin/billing-run.ts` · `tb_forwarder_invoice` (extend) · **mig 0199** | money+migration · D5-gated (done) · fresh-context |
-| _open_ | Accounting B3 (doc-registry · read-only) · B4 (reconcile repoint) · B5/B6/B7 | per the gap doc | B3/B4 safe-no-mig · B5-B7 large |
+| เดฟ | Accounting **B1** — wire VAT into AR billing-run | `actions/admin/billing-run.ts` · `tb_forwarder_invoice` (extend) · **mig 0199** | money+migration · D5-gated (done) · do FRESH-CONTEXT (money path) |
+| เดฟ | Accounting **B3** — per-order doc registry (read-only) | new panel · `tb_receipt`+`tb_*_tax_invoice`+`customs_declarations` join | safe-no-mig · cleanest next · ⚠️ verify column names (42703 class) |
+| 🔴 **COLLISION** | Accounting **B4** — reconcile repoint off dead twins | `accounting/reconcile/page.tsx` | **IN ภูม's ACTIVE dead-twin/column sweep lane** — coordinate with ภูม BEFORE touching (don't both rewrite the same money-reconcile queries · 42703 risk). |
+| _open_ | B5 supplier AP · B6 bank reconcile · B7 ภพ.30/ภงด.53 | per the gap doc | large · multi-session |
