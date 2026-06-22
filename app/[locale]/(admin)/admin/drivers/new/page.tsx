@@ -268,7 +268,7 @@ export default async function CreateDriverBatchPage() {
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
     <div className="rounded-lg border border-border bg-surface-alt px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted">
         {icon}
         {label}
       </div>

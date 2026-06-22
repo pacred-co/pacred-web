@@ -338,7 +338,7 @@ export default async function AdminApiForwarderMomoPage({
             <BarChart3 className="h-4 w-4" />
             ยอดรวมคิวจาก MOMO {hasFilter ? "(ตามช่วงเวลา)" : "(สะสม)"}
           </h2>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             {hasFilter
               ? `${sp.from ?? "(ไม่ระบุต้น)"} → ${sp.to ?? "(วันนี้)"}`
               : "ตั้งแต่รับลูกค้ามา · นับจากที่ MOMO sync เข้าระบบ"}
@@ -420,19 +420,19 @@ export default async function AdminApiForwarderMomoPage({
           {/* Supplementary: kg + qty + rows */}
           <div className="sm:col-span-2 grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">น้ำหนัก (kg)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">น้ำหนัก (kg)</p>
               <p className="mt-1 font-mono text-xl font-bold text-gray-800">
                 {cbm.totalKgs.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">จำนวนชิ้น</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">จำนวนชิ้น</p>
               <p className="mt-1 font-mono text-xl font-bold text-gray-800">
                 {cbm.totalQty.toLocaleString("th-TH")}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">รายการ tracking</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">รายการ tracking</p>
               <p className="mt-1 font-mono text-xl font-bold text-gray-800">
                 {cbm.totalRows.toLocaleString("th-TH")}
               </p>
@@ -441,7 +441,7 @@ export default async function AdminApiForwarderMomoPage({
         </div>
 
         {cbm.excludedWaiting > 0 && (
-          <p className="mt-3 text-[10px] text-muted">
+          <p className="mt-3 text-[11px] text-muted">
             * ไม่นับ {cbm.excludedWaiting.toLocaleString("th-TH")} รายการที่
             สถานะ &quot;รอต้นทางส่งเข้าโกดัง&quot; (MOMO ยังไม่ได้รับของจริง)
           </p>
@@ -461,20 +461,20 @@ export default async function AdminApiForwarderMomoPage({
             <Activity className="h-4 w-4 text-primary-600" />
             สุขภาพการ sync MOMO
           </h2>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             อัปเดตทุกครั้งที่เปิดหน้านี้ · cron run ทุก 10 นาที
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {/* Card 1: Freshness */}
           <div className={`rounded-xl border ${freshTone.border} ${freshTone.bg} p-3`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
               Sync success ล่าสุด
             </p>
             <p className={`mt-1 text-lg font-bold ${freshTone.fg}`}>
               {freshTone.label}
             </p>
-            <p className="mt-1 text-[10px] text-gray-600">
+            <p className="mt-1 text-[11px] text-gray-600">
               ปกติ ≤ 15 นาที · ช้า 15-60 · ต้องตรวจ {">"} 60
             </p>
           </div>
@@ -488,7 +488,7 @@ export default async function AdminApiForwarderMomoPage({
                   : "border-red-300 bg-red-50"
             }`}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
               จำนวน cron ล่าสุดที่ FAIL ต่อกัน
             </p>
             <p
@@ -516,7 +516,7 @@ export default async function AdminApiForwarderMomoPage({
               )}
             </p>
             {health.lastFailMessage && (
-              <p className="mt-1 text-[10px] text-gray-700 break-words">
+              <p className="mt-1 text-[11px] text-gray-700 break-words">
                 error: <span className="font-mono">{health.lastFailMessage}</span>
               </p>
             )}
@@ -531,7 +531,7 @@ export default async function AdminApiForwarderMomoPage({
                   : "border-red-300 bg-red-50"
             }`}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
               จำนวน tb_forwarder ที่สถานะ DRIFT vs MOMO
             </p>
             <p
@@ -551,7 +551,7 @@ export default async function AdminApiForwarderMomoPage({
                 <>{health.driftCount} รายการ</>
               )}
             </p>
-            <p className="mt-1 text-[10px] text-gray-600">
+            <p className="mt-1 text-[11px] text-gray-600">
               ตู้/พัสดุที่ MOMO บอกถึงไทย แต่ของเรายัง fstatus 1/2/3
               {" · "}
               <span className="text-emerald-700 font-medium">cron ซิงค์สถานะให้อัตโนมัติแล้ว</span>{" "}
@@ -559,7 +559,7 @@ export default async function AdminApiForwarderMomoPage({
             </p>
           </div>
         </div>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           MOMO ทั้งหมดที่ sync แล้ว: {health.totalTracks.toLocaleString()} ·{" "}
           ยังไม่ commit ลง tb_forwarder: {health.uncommitted.toLocaleString()} ({" "}
           <Link href="/admin/api-forwarder-momo/review" className="text-primary-600 hover:underline">
@@ -595,7 +595,7 @@ export default async function AdminApiForwarderMomoPage({
                 กรอกข้อมูลรายการนำเข้า MOMO ทีละรายการ — ใช้เมื่อระบบ API ไม่ได้
                 หรือมีรายการที่ต้องแก้ไขด้วยมือ. INSERT ลง <code className="rounded bg-surface-alt px-1">tb_forwarder</code> โดยตรง.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
                 ✓ พร้อมใช้ใน Wave 17
               </span>
             </div>
@@ -613,7 +613,7 @@ export default async function AdminApiForwarderMomoPage({
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 ภาพรวมรายการรอ-อัปเดต · ยอดส่งผ่าน API วันนี้ · กราฟ.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>
@@ -640,7 +640,7 @@ export default async function AdminApiForwarderMomoPage({
                 <code className="rounded bg-surface-alt px-1">tb_forwarder</code>{" "}
                 · มีปุ่ม &ldquo;สร้างทั้งหมด&rdquo; bulk-commit ด้วย.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <span className="mt-3 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                 ✓ ใหม่ · synthesis G1 (P0)
               </span>
             </div>
@@ -665,7 +665,7 @@ export default async function AdminApiForwarderMomoPage({
                 · normalize + upsert ลง <code className="rounded bg-surface-alt px-1">momo_*</code> tables (isolated).
                 ไม่กระทบ <code className="rounded bg-surface-alt px-1">tb_*</code> เดิม.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
                 ✓ พร้อมใช้ (2026-05-28)
               </span>
             </div>
@@ -683,7 +683,7 @@ export default async function AdminApiForwarderMomoPage({
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 ตรวจ SM Code ในระบบปลายทาง vs ใน PR — ใช้ debug รายการที่ตกหล่น.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>

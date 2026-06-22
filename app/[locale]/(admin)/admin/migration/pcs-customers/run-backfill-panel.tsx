@@ -110,7 +110,7 @@ function Stat({ label, value, ok, bad }: { label: string; value: number; ok?: bo
   const klass = ok ? "text-green-700" : bad ? "text-red-700" : "text-foreground";
   return (
     <div className="rounded border border-border bg-white dark:bg-surface px-2 py-1">
-      <p className="text-[10px] uppercase tracking-wider text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-muted">{label}</p>
       <p className={`mt-0.5 text-base font-bold tabular-nums ${klass}`}>{value}</p>
     </div>
   );

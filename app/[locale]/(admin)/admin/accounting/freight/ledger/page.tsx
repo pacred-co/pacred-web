@@ -117,7 +117,7 @@ export default async function AdminFreightLedgerPage({
           ประวัติเงินเข้า–เงินออก ฝั่ง Freight — เงินเข้าจากการชำระใบแจ้งหนี้ · เงินออกคือต้นทุน shipment ·
           สุทธิ = กำไรในช่วงที่เลือก
         </p>
-        <p className="mt-1 text-[10px] text-muted">
+        <p className="mt-1 text-[11px] text-muted">
           📊 เงินเข้า ←{" "}
           <code className="bg-surface-alt px-1 rounded">freight_invoice_payments</code> (recorded) ·
           เงินออก ←{" "}
@@ -140,7 +140,7 @@ export default async function AdminFreightLedgerPage({
         className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3"
       >
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
           <input
             type="date"
             name="date_from"
@@ -149,7 +149,7 @@ export default async function AdminFreightLedgerPage({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
           <input
             type="date"
             name="date_to"
@@ -172,7 +172,7 @@ export default async function AdminFreightLedgerPage({
           </Link>
         )}
         <div className="ml-auto flex items-center gap-3">
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             {dateFrom} → {dateTo} · default = 90 วันล่าสุด
           </p>
           {csvRows.length > 0 && (
@@ -232,7 +232,7 @@ export default async function AdminFreightLedgerPage({
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
                 <table className="w-full min-w-[760px] text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">วันที่</th>
                       <th className="px-3 py-2">Job</th>
@@ -251,7 +251,7 @@ export default async function AdminFreightLedgerPage({
                         <td className="px-3 py-2 font-mono text-[11px]">{r.invoice_no ?? "—"}</td>
                         <td className="px-3 py-2 text-xs">{r.customer}</td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{METHOD_LABEL[r.method] ?? r.method}</td>
-                        <td className="px-3 py-2 font-mono text-[10px] text-muted">{r.bank_ref ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.bank_ref ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                           ฿{thb(r.amount_thb)}
                         </td>
@@ -286,7 +286,7 @@ export default async function AdminFreightLedgerPage({
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
                 <table className="w-full min-w-[820px] text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">วันที่</th>
                       <th className="px-3 py-2">Job</th>
@@ -397,7 +397,7 @@ function Stat({
     <div className={`rounded-2xl border p-4 shadow-sm ${toneCls}`}>
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className={`mt-1 text-2xl font-bold font-mono ${valueCls}`}>{value}</p>
-      {sub && <p className="mt-1 text-[10px] text-muted">{sub}</p>}
+      {sub && <p className="mt-1 text-[11px] text-muted">{sub}</p>}
     </div>
   );
 }

@@ -245,7 +245,7 @@ export default async function AdminQaPayFwdOver2dPage({
                       </td>
                       <td className="px-3 py-3 text-right text-xs">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             ageDays >= 14
                               ? "bg-red-100 text-red-700 border-red-200"
                               : ageDays >= 7

@@ -188,7 +188,7 @@ export default async function ForwarderSlaCycleTimePage({
                       <td className="px-4 py-3 text-xs">
                         {STAGE_LABEL[s.stage] ?? s.stage}
                         {isSlowest && (
-                          <span className="ml-2 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-red-50">
+                          <span className="ml-2 rounded bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold text-red-50">
                             ช้าสุด
                           </span>
                         )}

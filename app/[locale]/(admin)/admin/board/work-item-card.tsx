@@ -123,7 +123,7 @@ export function WorkItemCard({
       }`}
     >
       {/* Top row: priority dot + type + entity */}
-      <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+      <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
         <span
           className={`inline-block w-2 h-2 rounded-full ${PRIORITY_DOT[item.priority] ?? "bg-gray-300"}`}
           title={`ความสำคัญ: ${WORK_PRIORITY_LABEL[item.priority as WorkPriority] ?? item.priority}`}
@@ -146,7 +146,7 @@ export function WorkItemCard({
       </Link>
 
       {/* Domain ref + due date */}
-      <div className="flex items-center justify-between text-[10px] text-muted">
+      <div className="flex items-center justify-between text-[11px] text-muted">
         <span className="font-mono">{item.entity_ref}</span>
         {item.due_at && (
           <span className={item.overdue ? "text-red-600 font-semibold" : ""}>
@@ -230,7 +230,7 @@ export function WorkItemCard({
         </div>
       )}
 
-      {err && <p className="text-[10px] text-red-700">เกิดข้อผิดพลาด: {err}</p>}
+      {err && <p className="text-[11px] text-red-700">เกิดข้อผิดพลาด: {err}</p>}
 
       {/* Status advance + priority */}
       {nextStatuses.length > 0 && (
@@ -252,7 +252,7 @@ export function WorkItemCard({
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-1.5 text-[10px] text-muted">
+          <label className="flex items-center gap-1.5 text-[11px] text-muted">
             ความสำคัญ:
             <select
               value={item.priority}

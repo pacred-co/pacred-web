@@ -114,7 +114,7 @@ export function TaemReconcileClient() {
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2 text-left">แทรคกิ้ง</th>
                   <th className="px-2 py-2 text-left">ลูกค้า/ตู้ (ระบบ)</th>
@@ -134,7 +134,7 @@ export function TaemReconcileClient() {
                       <td className="px-2 py-1.5 font-mono">{r.tracking}</td>
                       <td className="px-2 py-1.5 text-[11px]">
                         {r.matched ? `${r.userid ?? "-"} / ${r.curCab ?? "-"}` : <span className="text-gray-400">—</span>}
-                        {r.fstatus && <span className="ml-1 text-[10px] text-muted">[{r.fstatus}]</span>}
+                        {r.fstatus && <span className="ml-1 text-[11px] text-muted">[{r.fstatus}]</span>}
                       </td>
                       <td className={`px-2 py-1.5 text-[11px] ${r.cabDiff ? "text-amber-700 font-semibold" : ""}`}>
                         {r.isData ? r.taemContainer : <span className="text-gray-500 italic">{r.note}</span>}
@@ -156,7 +156,7 @@ export function TaemReconcileClient() {
                           : "—"}
                       </td>
                       <td className="px-2 py-1.5 text-center">
-                        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${v.cls}`}>{v.label}</span>
+                        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>{v.label}</span>
                       </td>
                     </tr>
                   );
@@ -164,7 +164,7 @@ export function TaemReconcileClient() {
               </tbody>
             </table>
           </div>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · ⚠ วางบิลแล้ว = ข้าม (ตรวจ/แก้บิลเอง) ·
             ยังไม่มีข้อมูล = แต้มยังไม่ปิดตู้/กระสอบรวม/ซ้ำ → ข้าม
           </p>

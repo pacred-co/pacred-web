@@ -134,7 +134,7 @@ export function DriverCombobox({
           <button
             type="button"
             onClick={clear}
-            className="text-[10px] text-primary-700 hover:underline"
+            className="text-[11px] text-primary-700 hover:underline"
           >
             ล้าง
           </button>
@@ -161,7 +161,7 @@ export function DriverCombobox({
       />
 
       {pending && (
-        <div className="absolute right-3 top-[8px] text-[10px] text-muted">
+        <div className="absolute right-3 top-[8px] text-[11px] text-muted">
           ค้น…
         </div>
       )}
@@ -194,7 +194,7 @@ export function DriverCombobox({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-mono text-xs">{h.member_code ?? "—"}</span>
-                <span className="text-[10px] text-muted">{h.phone ?? "—"}</span>
+                <span className="text-[11px] text-muted">{h.phone ?? "—"}</span>
               </div>
               <div className="text-xs">{h.name}</div>
             </li>

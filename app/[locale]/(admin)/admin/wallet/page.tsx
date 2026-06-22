@@ -205,7 +205,7 @@ export default async function AdminWalletPage({
             {customerCount ? (
               <span
                 className={
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium " +
+                  "rounded-full px-2 py-0.5 text-[11px] font-medium " +
                   (view === "balance"
                     ? "bg-primary-100 text-primary-700"
                     : "bg-surface-alt text-muted")
@@ -229,7 +229,7 @@ export default async function AdminWalletPage({
             {totalPending ? (
               <span
                 className={
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium " +
+                  "rounded-full px-2 py-0.5 text-[11px] font-medium " +
                   (view === "tx"
                     ? "bg-primary-100 text-primary-700"
                     : "bg-yellow-100 text-yellow-700")

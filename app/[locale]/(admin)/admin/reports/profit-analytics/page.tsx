@@ -275,7 +275,7 @@ function BreakdownTable({
       </div>
       <div className="overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-sm">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">{firstColLabel}</th>
               <th className="px-3 py-2.5 text-right">ออเดอร์</th>

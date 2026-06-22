@@ -29,7 +29,7 @@ export function DriverAssignmentActions({ id, status }: { id: string; status: St
 
   const next = NEXT_STATUS[status] ?? [];
   if (next.length === 0) {
-    return <span className="text-[10px] text-muted">—</span>;
+    return <span className="text-[11px] text-muted">—</span>;
   }
 
   function set(newStatus: Status) {
@@ -43,7 +43,7 @@ export function DriverAssignmentActions({ id, status }: { id: string; status: St
 
   return (
     <div className="flex flex-col gap-1 min-w-[130px]">
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       {next.map((n) => (
         <Button
           key={n.value}

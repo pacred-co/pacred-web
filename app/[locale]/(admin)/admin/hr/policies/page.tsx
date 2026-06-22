@@ -76,7 +76,7 @@ export default async function AdminHRPoliciesPage() {
               <ScrollText className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · POLICIES</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · POLICIES</p>
               <h1 className="text-xl sm:text-2xl font-bold">Library นโยบาย</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 ทั้งหมด {policies.length} ฉบับ · เผยแพร่ {totalPublished} · ร่าง {totalDrafts} · บังคับรับทราบ {totalReqAck}
@@ -113,17 +113,17 @@ export default async function AdminHRPoliciesPage() {
                 <header>
                   <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${cat.cls}`}>{cat.label}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${cat.cls}`}>{cat.label}</span>
                       {p.requires_ack && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[10px] font-bold">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[11px] font-bold">
                           <ShieldAlert className="w-3 h-3" /> ต้องรับทราบ
                         </span>
                       )}
                       {!p.is_published && (
-                        <span className="rounded-full border border-amber-300 bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">ร่าง</span>
+                        <span className="rounded-full border border-amber-300 bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-bold">ร่าง</span>
                       )}
                       {isExpired && (
-                        <span className="rounded-full border border-gray-300 bg-gray-100 text-gray-700 px-2 py-0.5 text-[10px] font-bold">หมดอายุ</span>
+                        <span className="rounded-full border border-gray-300 bg-gray-100 text-gray-700 px-2 py-0.5 text-[11px] font-bold">หมดอายุ</span>
                       )}
                     </div>
                   </div>
@@ -170,7 +170,7 @@ export default async function AdminHRPoliciesPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
-                  <span className="text-[10px] text-muted">
+                  <span className="text-[11px] text-muted">
                     {p.is_published && p.published_at
                       ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-3 h-3" /> เผยแพร่ {new Date(p.published_at).toLocaleDateString("th-TH")}</span>
                       : "ยังไม่ได้เผยแพร่"}

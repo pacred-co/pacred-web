@@ -335,15 +335,15 @@ export default async function PendingPaymentsReport({
                       <td className="px-3 py-3 text-xs">
                         <div>{r.customer?.name || "—"}</div>
                         {r.customer?.userid && (
-                          <div className="font-mono text-[10px] text-muted">{r.customer.userid}</div>
+                          <div className="font-mono text-[11px] text-muted">{r.customer.userid}</div>
                         )}
                         {r.customer?.phone && (
-                          <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>
+                          <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>
                         )}
                       </td>
                       <td className="px-3 py-3 text-xs">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
                           }`}
                         >
@@ -389,7 +389,7 @@ export default async function PendingPaymentsReport({
                         })()}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${ageBadge}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${ageBadge}`}>
                           {age} วัน
                         </span>
                       </td>

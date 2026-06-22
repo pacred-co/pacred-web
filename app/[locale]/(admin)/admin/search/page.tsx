@@ -258,13 +258,13 @@ export default async function AdminGlobalSearchPage({
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="font-medium">{customerLabel(p)}</p>
-                  <p className="text-[10px] text-muted">
+                  <p className="text-[11px] text-muted">
                     <span className="font-mono">{p.member_code ?? "—"}</span>
                     {p.phone && <> · ☎ {p.phone}</>}
                     {p.email && <> · ✉ {p.email}</>}
                   </p>
                 </div>
-                <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[10px] uppercase">{p.account_type}</span>
+                <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] uppercase">{p.account_type}</span>
               </div>
             </Link>
           ))}
@@ -277,8 +277,8 @@ export default async function AdminGlobalSearchPage({
             <Link key={f.id} href={`/admin/forwarders/${f.f_no}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{f.f_no}</span>
-                {f.cabinet_number && <span className="text-muted text-[10px]">↳ ตู้: <span className="font-mono">{f.cabinet_number}</span></span>}
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{f.status}</span>
+                {f.cabinet_number && <span className="text-muted text-[11px]">↳ ตู้: <span className="font-mono">{f.cabinet_number}</span></span>}
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{f.status}</span>
                 <span className="font-mono">{thb(f.total_price)}</span>
                 <span className="text-muted">{new Date(f.created_at).toLocaleDateString("th-TH")}</span>
               </div>
@@ -293,7 +293,7 @@ export default async function AdminGlobalSearchPage({
             <Link key={so.id} href={`/admin/service-orders/${so.h_no}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{so.h_no}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{so.status}</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{so.status}</span>
                 <span className="font-mono">{thb(so.total_thb)}</span>
                 <span className="text-muted">{new Date(so.created_at).toLocaleDateString("th-TH")}</span>
               </div>
@@ -308,7 +308,7 @@ export default async function AdminGlobalSearchPage({
             <Link key={fs.id} href={`/admin/freight/shipments/${fs.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{fs.job_no ?? "(no job_no)"}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{fs.status}</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{fs.status}</span>
                 <span className="text-muted">{new Date(fs.created_at).toLocaleDateString("th-TH")}</span>
               </div>
             </Link>
@@ -344,7 +344,7 @@ export default async function AdminGlobalSearchPage({
             <Link key={r.id} href={`/admin/refunds/${r.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{r.request_no ?? r.id.slice(0, 8)}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{r.status}</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{r.status}</span>
                 <span className="font-mono">{thb(Number(r.amount_thb))}</span>
                 <span className="text-muted">{new Date(r.created_at).toLocaleDateString("th-TH")}</span>
               </div>
@@ -359,7 +359,7 @@ export default async function AdminGlobalSearchPage({
             <Link key={fq.id} href={`/admin/freight/quotes/${fq.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{fq.quote_no ?? fq.id.slice(0, 8)}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{fq.status}</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{fq.status}</span>
                 <span className="text-muted">{new Date(fq.created_at).toLocaleDateString("th-TH")}</span>
               </div>
             </Link>

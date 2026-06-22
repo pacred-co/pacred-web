@@ -298,7 +298,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       {/* SECTION 1 — Customer picker */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">1</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">1</span>
           ข้อมูลลูกค้า + วันที่
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -340,7 +340,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               required
               className={inputCls}
             />
-            <p className="text-[10px] text-muted mt-0.5">ค่าเริ่มต้น = วันนี้ + 7 วัน</p>
+            <p className="text-[11px] text-muted mt-0.5">ค่าเริ่มต้น = วันนี้ + 7 วัน</p>
           </label>
         </div>
 
@@ -372,7 +372,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h3 className="font-bold text-sm flex items-center gap-2">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">2</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">2</span>
             รายการฝากนำเข้าที่จะรวมในใบวางบิลนี้
           </h3>
           {visibleForwarders.length > 0 && (
@@ -457,13 +457,13 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                     <td className="px-3 py-2 font-mono text-xs">
                       #{f.id}
                       {f.fcredit === "1" && (
-                        <span className="ml-1 inline-block rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700 align-middle">
+                        <span className="ml-1 inline-block rounded bg-violet-100 px-1 py-0.5 text-[11px] font-semibold text-violet-700 align-middle">
                           เครดิต
                         </span>
                       )}
                       {zeroTransport && (
                         <span
-                          className="ml-1 inline-block rounded bg-amber-200 px-1 py-0.5 text-[9px] font-semibold text-amber-900 align-middle"
+                          className="ml-1 inline-block rounded bg-amber-200 px-1 py-0.5 text-[11px] font-semibold text-amber-900 align-middle"
                           title="ค่านำเข้า/ขนส่งเป็น ฿0 — ยังไม่ได้วัด หรือยังไม่ตั้งราคา · อาจเก็บเงินขาด · ตรวจสอบก่อนออกบิล"
                         >
                           ⚠️ ค่าขนส่ง ฿0
@@ -495,7 +495,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                         }`}
                       />
                       {edited && (
-                        <div className="text-[9px] text-amber-600 mt-0.5">แก้เอง · auto ฿{thbFmt(f.outstanding_thb)}</div>
+                        <div className="text-[11px] text-amber-600 mt-0.5">แก้เอง · auto ฿{thbFmt(f.outstanding_thb)}</div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center text-xs text-muted">{f.fdate ?? "—"}</td>
@@ -525,9 +525,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
           rows have an inline input pinned to the right · final total highlighted. */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">3</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">3</span>
           สรุปยอดเงิน
-          <span className="ml-auto text-[10px] font-normal text-muted">
+          <span className="ml-auto text-[11px] font-normal text-muted">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-200 mr-1 align-middle" /> คำนวณอัตโนมัติ
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-200 ml-3 mr-1 align-middle" /> ใส่เอง
           </span>
@@ -607,9 +607,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h3 className="font-bold text-sm flex items-center gap-2">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">4</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">4</span>
             หมายเหตุสำหรับลูกค้า
-            <span className="text-[10px] font-normal text-muted">(จะปรินต์ใต้ใบวางบิล)</span>
+            <span className="text-[11px] font-normal text-muted">(จะปรินต์ใต้ใบวางบิล)</span>
           </h3>
           {!note.trim() && (
             <button
@@ -648,7 +648,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             <span className="text-base font-bold mt-0.5">
               ยอด{showWht ? "ชำระสุทธิ" : "รวมทั้งสิ้น"}:{" "}
               <span className="text-amber-700">฿{thbFmt(showWht ? netPayable : totalAmount)}</span>
-              {showWht && <span className="ml-1 text-[10px] font-normal text-muted">(หัก WHT 1% ฿{thbFmt(whtAmount)})</span>}
+              {showWht && <span className="ml-1 text-[11px] font-normal text-muted">(หัก WHT 1% ฿{thbFmt(whtAmount)})</span>}
             </span>
           </div>
           <div className="ml-auto flex gap-2">
@@ -694,7 +694,7 @@ function StepPill({
   return (
     <li className={`${base} ${cls}`}>
       <span
-        className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+        className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] font-bold ${
           done
             ? "bg-emerald-600 text-white"
             : active
@@ -763,7 +763,7 @@ function LedgerRow({
         <div className={kind === "net" || kind === "grand" ? "text-sm font-semibold" : "text-sm"}>
           {label}
         </div>
-        {hint && <div className="text-[10px] text-muted">{hint}</div>}
+        {hint && <div className="text-[11px] text-muted">{hint}</div>}
       </div>
       {kind === "input" && onChange ? (
         <div className="flex items-center gap-1.5">

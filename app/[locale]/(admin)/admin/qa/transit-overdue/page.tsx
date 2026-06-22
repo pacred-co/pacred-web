@@ -212,7 +212,7 @@ export default async function TransitOverduePage({
           tb_forwarder · fstatus=&apos;3&apos; (กำลังส่งมาไทย) AND (fdate3 หรือ fdate) &lt; NOW() − 7 วัน ·
           เรียงเก่าสุดก่อน · จำกัด 200 แถว
         </p>
-        <p className="mt-1 text-[10px] text-muted italic">
+        <p className="mt-1 text-[11px] text-muted italic">
           NB: heuristic 7 วัน — Wave 11 จะ join tb_cnt.cntDateETA สำหรับ ETA ตู้จริง
         </p>
       </div>
@@ -233,7 +233,7 @@ export default async function TransitOverduePage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2">ID</th>
                   <th className="px-2 py-2">เริ่ม transit</th>
@@ -267,17 +267,17 @@ export default async function TransitOverduePage({
                       <td className="px-2 py-2 font-mono">{r.id}</td>
                       <td className="px-2 py-2 whitespace-nowrap">
                         {transitStart ? String(transitStart).slice(0, 10) : "—"}
-                        {r.fdatestatus3 ? null : <div className="text-muted text-[10px]">(fallback fdate)</div>}
+                        {r.fdatestatus3 ? null : <div className="text-muted text-[11px]">(fallback fdate)</div>}
                       </td>
                       <td className="px-2 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${severity}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${severity}`}>
                           {daysInTransit} วัน
                         </span>
                       </td>
                       <td className="px-2 py-2">
                         <div className="font-mono text-[11px]">{r.userid ?? "—"}</div>
                         <div>{customerName}</div>
-                        {u?.userTel ? <div className="text-muted text-[10px]">{u.userTel}</div> : null}
+                        {u?.userTel ? <div className="text-muted text-[11px]">{u.userTel}</div> : null}
                       </td>
                       <td className="px-2 py-2">{WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "—"}</td>
                       <td className="px-2 py-2">{TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "—"}</td>
@@ -287,7 +287,7 @@ export default async function TransitOverduePage({
                       <td className="px-2 py-2 font-mono">{r.fcabinetnumber || "—"}</td>
                       <td className="px-2 py-2 text-right font-mono text-[11px]">
                         {r.fweight ? `${Number(r.fweight).toFixed(1)} kg` : "—"}
-                        {r.fvolume ? <div className="text-muted text-[10px]">{Number(r.fvolume).toFixed(3)} cbm</div> : null}
+                        {r.fvolume ? <div className="text-muted text-[11px]">{Number(r.fvolume).toFixed(3)} cbm</div> : null}
                       </td>
                       <td className="px-2 py-2 max-w-[200px] truncate" title={r.fnote ?? ""}>
                         {r.fnote || "—"}

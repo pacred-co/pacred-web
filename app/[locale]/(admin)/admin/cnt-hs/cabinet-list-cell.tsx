@@ -27,7 +27,7 @@ import { PacredDialog } from "@/components/ui/pacred-dialog";
 const VISIBLE = 3;
 
 const CHIP_CLS =
-  "inline-block rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[10px] font-mono text-primary-700";
+  "inline-block rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[11px] font-mono text-primary-700";
 
 export function CabinetListCell({
   cntId,
@@ -40,7 +40,7 @@ export function CabinetListCell({
   const [copied, setCopied] = useState(false);
 
   if (cabinets.length === 0) {
-    return <span className="text-muted text-[10px]">—</span>;
+    return <span className="text-muted text-[11px]">—</span>;
   }
 
   const visible = cabinets.slice(0, VISIBLE);
@@ -73,7 +73,7 @@ export function CabinetListCell({
           <button
             type="button"
             onClick={openDialog}
-            className="inline-block rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-muted hover:bg-surface-alt/70 hover:border-primary-300 hover:text-primary-700 cursor-pointer transition"
+            className="inline-block rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[11px] font-mono text-muted hover:bg-surface-alt/70 hover:border-primary-300 hover:text-primary-700 cursor-pointer transition"
             title={`คลิกเพื่อดูทั้งหมด ${cabinets.length} ตู้`}
           >
             … +{hiddenCount} ตู้

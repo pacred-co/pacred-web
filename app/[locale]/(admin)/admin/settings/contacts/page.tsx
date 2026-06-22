@@ -80,9 +80,9 @@ export default async function AdminOrgContactsPage({
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">ข้อมูลติดต่อองค์กร</h1>
         <p className="text-xs text-muted mt-1">
-          จัดการอีเมล/เบอร์/LINE/Social/ที่อยู่. รายการที่ <code className="font-mono text-[10px]">active=true</code> จะ
+          จัดการอีเมล/เบอร์/LINE/Social/ที่อยู่. รายการที่ <code className="font-mono text-[11px]">active=true</code> จะ
           ไปแสดงที่หน้า <Link href="/contact" className="text-primary-600 hover:underline">/contact</Link> ใต้หัวข้อ
-          &quot;ช่องทางอื่นๆ&quot; ทันที (ค่าที่ซ้ำกับ <code className="font-mono text-[10px]">site.ts</code> ถูก dedupe).
+          &quot;ช่องทางอื่นๆ&quot; ทันที (ค่าที่ซ้ำกับ <code className="font-mono text-[11px]">site.ts</code> ถูก dedupe).
         </p>
       </header>
 
@@ -99,7 +99,7 @@ export default async function AdminOrgContactsPage({
             }`}
           >
             {ORG_CONTACT_KIND_LABEL[k]}
-            <span className={`ml-1.5 text-[10px] ${k === activeKind ? "text-white/80" : "text-muted"}`}>
+            <span className={`ml-1.5 text-[11px] ${k === activeKind ? "text-white/80" : "text-muted"}`}>
               ({counts[k]})
             </span>
           </Link>

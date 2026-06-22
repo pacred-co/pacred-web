@@ -91,7 +91,7 @@ export function CustomerMarginPanel({
         <h3 id="customer-margin-h" className="flex items-center gap-2 text-sm font-bold text-foreground">
           <BarChart3 className="h-4 w-4 text-primary-600" />
           Margin Profile ของลูกค้านี้
-          <span className="text-[10px] font-normal text-muted">
+          <span className="text-[11px] font-normal text-muted">
             (CEO policy ≤ ฿15k/ตู้)
           </span>
         </h3>
@@ -99,13 +99,13 @@ export function CustomerMarginPanel({
           <CostRevealToggle />
           <Link
             href={`/admin/forwarders?q=${encodeURIComponent(userid)}`}
-            className="text-[10px] text-primary-600 hover:underline"
+            className="text-[11px] text-primary-600 hover:underline"
           >
             ดูฝากนำเข้าทั้งหมด →
           </Link>
           <Link
             href="/admin/accounting/margin-monitor"
-            className="text-[10px] text-primary-600 hover:underline"
+            className="text-[11px] text-primary-600 hover:underline"
           >
             Margin Monitor (รวม) →
           </Link>
@@ -117,7 +117,7 @@ export function CustomerMarginPanel({
       {totalDelivered === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-xs text-muted">
           ยังไม่เคยมีตู้ส่งสำเร็จ (fstatus=7) ของลูกค้านี้
-          <p className="mt-1 text-[10px]">
+          <p className="mt-1 text-[11px]">
             ระบบจะแสดง margin profile เมื่อมีตู้แรกส่งสำเร็จ
           </p>
         </div>
@@ -125,7 +125,7 @@ export function CustomerMarginPanel({
         <>
           {/* Headline avg-margin + policy tone */}
           <div className={`rounded-xl border ${avgTone.border} ${avgTone.bg} p-4`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
               กำไรเฉลี่ย / ตู้
             </p>
             <p className={`mt-1 font-mono text-3xl font-bold ${avgTone.fg}`}>
@@ -172,13 +172,13 @@ export function CustomerMarginPanel({
                 <TrendingUp className="h-3 w-3" />
                 ตู้ล่าสุด {Math.min(10, recent.length)} รายการ
               </p>
-              <p className="text-[10px] text-muted">
+              <p className="text-[11px] text-muted">
                 จากทั้งหมด {totalDelivered.toLocaleString("th-TH")} ตู้
               </p>
             </div>
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[640px] text-xs">
-                <thead className="bg-surface-alt/30 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/30 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
                     <th className="px-3 py-2">วันที่</th>
@@ -203,7 +203,7 @@ export function CustomerMarginPanel({
                       <td className="px-3 py-1.5 whitespace-nowrap text-[11px]">
                         {fmtDate(r.fdate)}
                       </td>
-                      <td className="px-3 py-1.5 font-mono text-[10px] text-muted">
+                      <td className="px-3 py-1.5 font-mono text-[11px] text-muted">
                         {r.fcabinetnumber ?? "—"}
                       </td>
                       <td className="px-3 py-1.5 text-right font-mono text-[11px]">
@@ -220,7 +220,7 @@ export function CustomerMarginPanel({
                         ฿{thb(r.margin)}
                       </td>
                       <td className="px-3 py-1.5 text-center">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold border ${BUCKET_CLS[r.bucket]}`}>
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold border ${BUCKET_CLS[r.bucket]}`}>
                           {BUCKET_LABEL[r.bucket]}
                         </span>
                       </td>
@@ -263,14 +263,14 @@ function MiniStat({
                        "text-foreground";
   return (
     <div className={`rounded-lg border ${toneCls} p-2.5`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted flex items-center gap-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted flex items-center gap-1">
         {Icon && <Icon className="h-2.5 w-2.5" />}
         {label}
       </p>
       <p className={`mt-0.5 ${mono ? "font-mono" : ""} text-base font-bold ${fgCls}`}>
         {value}
       </p>
-      {sub && <p className="mt-0.5 text-[10px] text-muted font-mono">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-muted font-mono">{sub}</p>}
     </div>
   );
 }

@@ -187,7 +187,7 @@ export function ShopFieldsBoard({
           {isStatus4 && "🚛 บันทึกเลข Tracking ร้านจีน (สถานะ 4)"}
           {isStatus5 && "✓ ข้อมูลร้านจีน (อ่านอย่างเดียว)"}
         </span>
-        <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+        <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">
           {shops.length} ร้าน
         </span>
       </header>
@@ -326,7 +326,7 @@ export function ShopFieldsBoard({
                 {shopItems.length > 0 && (
                   <div className="overflow-x-auto scrollbar-x-visible">
                     <table className="w-full min-w-[640px] text-xs">
-                      <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+                      <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
                         <tr>
                           <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
                           <th className="px-2 py-2 text-right w-14">จำนวน</th>
@@ -377,7 +377,7 @@ export function ShopFieldsBoard({
                                       </span>
                                     )}
                                     {(it.ccolor || it.csize) && (
-                                      <p className="text-[10px] text-muted">
+                                      <p className="text-[11px] text-muted">
                                         {it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}
                                       </p>
                                     )}
@@ -496,7 +496,7 @@ function InlinePriceUpdateCell({
   }
 
   if (refunded) {
-    return <div className="text-right text-[10px] text-red-500">คืนเงินแล้ว</div>;
+    return <div className="text-right text-[11px] text-red-500">คืนเงินแล้ว</div>;
   }
   return (
     <div className="flex flex-col items-end gap-1">
@@ -522,7 +522,7 @@ function InlinePriceUpdateCell({
           </button>
         )}
       </div>
-      {rowErr && <span className="text-[10px] text-red-600">{rowErr}</span>}
+      {rowErr && <span className="text-[11px] text-red-600">{rowErr}</span>}
     </div>
   );
 }
@@ -581,7 +581,7 @@ function ShippingNumberTypoFixer({
       <button
         type="button"
         onClick={() => { setOpen(true); setVal(currentShippingNumber); setRowErr(null); }}
-        className="inline-flex items-center gap-0.5 text-[10px] text-primary-600 hover:underline"
+        className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 hover:underline"
         title="แก้คำผิดเลขออเดอร์ร้านจีน (E3.5)"
       >
         <Pencil className="h-3 w-3" /> แก้คำผิด
@@ -616,7 +616,7 @@ function ShippingNumberTypoFixer({
           ยกเลิก
         </button>
       </div>
-      {rowErr && <p className="text-[10px] text-red-600">{rowErr}</p>}
+      {rowErr && <p className="text-[11px] text-red-600">{rowErr}</p>}
     </div>
   );
 }
@@ -687,7 +687,7 @@ function TrackingTypoFixer({
       <button
         type="button"
         onClick={() => { setOpen(true); setRowErr(null); }}
-        className="inline-flex items-center gap-0.5 text-[10px] text-primary-600 hover:underline"
+        className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 hover:underline"
         title="แก้คำผิดเลข tracking (E3.17)"
       >
         <Pencil className="h-3 w-3" /> แก้คำผิด
@@ -697,7 +697,7 @@ function TrackingTypoFixer({
   return (
     <div className="space-y-1.5 rounded border border-amber-300 bg-amber-50 p-2">
       <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">เลข tracking เดิม (ที่ผิด)</span>
+        <span className="text-[11px] font-semibold text-muted">เลข tracking เดิม (ที่ผิด)</span>
         <input
           type="text"
           list={`trk-sugg-${hNo}`}
@@ -714,7 +714,7 @@ function TrackingTypoFixer({
         )}
       </label>
       <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold text-muted">เลข tracking ใหม่ (ถูกต้อง)</span>
+        <span className="text-[11px] font-semibold text-muted">เลข tracking ใหม่ (ถูกต้อง)</span>
         <input
           type="text"
           value={newTok}
@@ -742,7 +742,7 @@ function TrackingTypoFixer({
           ยกเลิก
         </button>
       </div>
-      {rowErr && <p className="text-[10px] text-red-600">{rowErr}</p>}
+      {rowErr && <p className="text-[11px] text-red-600">{rowErr}</p>}
     </div>
   );
 }

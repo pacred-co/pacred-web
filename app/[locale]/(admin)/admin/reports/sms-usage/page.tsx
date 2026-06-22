@@ -110,7 +110,7 @@ export default async function SmsUsageReportPage({
           <input type="hidden" name="from" value={range.from} />
           <input type="hidden" name="to"   value={range.to} />
           <div>
-            <label htmlFor="status" className="block text-[10px] uppercase tracking-wide text-muted mb-1">สถานะการส่ง</label>
+            <label htmlFor="status" className="block text-[11px] uppercase tracking-wide text-muted mb-1">สถานะการส่ง</label>
             <select
               id="status"
               name="status"

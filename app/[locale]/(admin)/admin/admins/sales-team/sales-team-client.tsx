@@ -81,7 +81,7 @@ export function SalesTeamManager({ initialRows }: { initialRows: StaffSalesFlagR
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden shadow-sm">
         <div className="overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-sm">
-            <thead className="bg-surface-alt/60 text-left text-[10px] uppercase tracking-wider text-muted font-semibold">
+            <thead className="bg-surface-alt/60 text-left text-[11px] uppercase tracking-wider text-muted font-semibold">
               <tr>
                 <th className="px-4 py-3">พนักงาน</th>
                 <th className="px-4 py-3">รหัส (adminID)</th>

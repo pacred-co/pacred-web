@@ -298,7 +298,7 @@ export default async function AdminFreightInvoiceDetailPage({
                   <td className="px-3 py-2 text-muted">{l.position}</td>
                   <td className="px-3 py-2">
                     {l.description}
-                    {l.hs_code && <span className="ml-2 font-mono text-[10px] text-muted">HS {l.hs_code}</span>}
+                    {l.hs_code && <span className="ml-2 font-mono text-[11px] text-muted">HS {l.hs_code}</span>}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-xs">{l.qty.toLocaleString()} {l.unit}</td>
                   <td className="px-3 py-2 text-right font-mono text-xs">{usd(l.unit_price_usd)}</td>

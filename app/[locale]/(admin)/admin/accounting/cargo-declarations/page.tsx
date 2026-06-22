@@ -145,7 +145,7 @@ export default async function CargoDeclarationsPage() {
             ฝากสั่งซื้อ / ฝากนำเข้า = งาน Freight-LCL ที่ Pacred ออก <b>ใบขนรวมใบเดียวในชื่อบริษัทขนส่ง</b> —
             ลูกค้าเห็นแค่ใบกำกับภาษี. หน้านี้รวม ใบขนรวม CARGO + ออเดอร์ที่ถึงไทยแล้วและยังไม่มีใบขน.
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             ⚠️ P3 — บันทึก/แสดงผลเท่านั้น · ยังไม่ยิงใบขน · ไม่กระทบเงิน/สถานะ/แจ้งเตือน ·
             มูลค่าสำแดง ตั้งค่าเริ่มจาก <b>ต้นทุน</b> (Docs ปรับลดได้)
           </p>
@@ -195,7 +195,7 @@ export default async function CargoDeclarationsPage() {
                           <td className="px-3 py-2 text-right font-mono text-xs">{thb(d.total_declared_value_thb)}</td>
                           <td className="px-3 py-2 text-right font-mono text-xs">{thb(totalTax)}</td>
                           <td className="px-3 py-2">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[d.status]}`}>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_CLS[d.status]}`}>
                               {CUSTOMS_DECLARATION_STATUS_LABEL[d.status]}
                             </span>
                           </td>
@@ -251,7 +251,7 @@ export default async function CargoDeclarationsPage() {
                           {canCreate ? (
                             <CreateCargoDeclarationButton forwarderId={f.id} />
                           ) : (
-                            <span className="text-[10px] text-muted">อ่านอย่างเดียว</span>
+                            <span className="text-[11px] text-muted">อ่านอย่างเดียว</span>
                           )}
                         </td>
                       </tr>
@@ -263,7 +263,7 @@ export default async function CargoDeclarationsPage() {
           </div>
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 ใบขนรวม CARGO ใช้โมเดล customs_declarations ตัวเดียวกับ Freight (mig 0162 bridge) ·
           ดูใบขน Freight ที่ <Link href="/admin/freight/declarations" className="text-primary-600 hover:underline">/admin/freight/declarations</Link>
         </p>

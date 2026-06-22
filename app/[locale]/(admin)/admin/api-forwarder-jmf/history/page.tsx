@@ -200,7 +200,7 @@ export default async function JmfHistoryPage({
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs border-collapse min-w-[1280px]">
-              <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="text-left px-2 py-2 border-b w-12">ที่</th>
                   <th className="text-left px-2 py-2 border-b w-28">วันรับ</th>
@@ -245,7 +245,7 @@ export default async function JmfHistoryPage({
                       <td className="px-2 py-1.5 font-mono">{r.fcabinetnumber || "—"}</td>
                       <td className="px-2 py-1.5">
                         <span
-                          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                             status.ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                           }`}
                         >

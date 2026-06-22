@@ -184,7 +184,7 @@ export default async function AdminFreightShipmentsListPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
         </Link>
         {FREIGHT_SHIPMENT_STATUSES.map((s) => (
           <Link
@@ -194,7 +194,7 @@ export default async function AdminFreightShipmentsListPage({
               s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {FREIGHT_SHIPMENT_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+            {FREIGHT_SHIPMENT_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
           </Link>
         ))}
       </nav>
@@ -248,7 +248,7 @@ export default async function AdminFreightShipmentsListPage({
                       {r.job_no ?? "—"}
                     </Link>
                     {r.source_quote_id && (
-                      <p className="text-[10px] text-muted">↗ มาจาก quotation</p>
+                      <p className="text-[11px] text-muted">↗ มาจาก quotation</p>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -256,11 +256,11 @@ export default async function AdminFreightShipmentsListPage({
                       {r.profile?.company_name ?? `${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() ?? "—"}
                     </p>
                     {r.profile?.member_code && (
-                      <p className="font-mono text-[10px] text-muted">{r.profile.member_code}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.profile.member_code}</p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">{FREIGHT_TRANSPORT_MODE_LABEL[r.transport_mode]}</td>
-                  <td className="px-3 py-2 font-mono text-[10px]">
+                  <td className="px-3 py-2 font-mono text-[11px]">
                     {r.container_code && <p>{r.container_code}</p>}
                     {r.carrier_container_no && <p className="text-muted">{r.carrier_container_no}</p>}
                     {r.bl_no && <p className="text-muted">B/L: {r.bl_no}</p>}
@@ -268,7 +268,7 @@ export default async function AdminFreightShipmentsListPage({
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.commercial_value_thb)}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                       {FREIGHT_SHIPMENT_STATUS_LABEL[r.status]}
                     </span>
                   </td>

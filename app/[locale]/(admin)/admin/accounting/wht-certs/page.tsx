@@ -110,7 +110,7 @@ export default async function AdminWhtCertsPage({
           <p className="text-xs text-muted mt-1">
             ลูกค้านิติบุคคลหัก ณ ที่จ่าย + ต้องส่ง 50-ทวิ มาให้ Pacred · หน้านี้ติดตามว่าได้รับ cert ครบรึยัง
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder_wht_entry</code> (migration 0129) ·
             แอดมินกดยืนยันรับ cert (status pending→received) หรือ waive (รับไม่ได้แล้ว · ลูกค้าตัวเล็ก)
           </p>
@@ -126,7 +126,7 @@ export default async function AdminWhtCertsPage({
             </div>
             <div className="overflow-x-auto scrollbar-x-visible bg-white dark:bg-surface">
               <table className="w-full min-w-[640px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลขที่ใบเสร็จ</th>
                     <th className="px-3 py-2">ลูกค้า</th>
@@ -167,7 +167,7 @@ export default async function AdminWhtCertsPage({
             <h2 className="font-bold text-sm mb-3">🎯 ลูกค้าที่ค้าง cert มากที่สุด (top {queue.byCustomer.length})</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[500px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">รหัสลูกค้า</th>
@@ -229,7 +229,7 @@ export default async function AdminWhtCertsPage({
                     : "bg-white text-foreground border-border hover:bg-surface-alt"
                 }`}
               >
-                {s === "all" ? "ทั้งหมด" : STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({count})</span>
+                {s === "all" ? "ทั้งหมด" : STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({count})</span>
               </Link>
             );
           })}
@@ -252,7 +252,7 @@ export default async function AdminWhtCertsPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">ลูกค้า</th>
                     <th className="px-3 py-2">ใบกำกับ</th>
@@ -282,17 +282,17 @@ export default async function AdminWhtCertsPage({
                       <td className="px-3 py-2 text-right font-mono text-xs">{e.whtRatePct.toFixed(2)}%</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">฿{thb(e.whtAmountThb)}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[e.certStatus]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[e.certStatus]}`}>
                           {STATUS_LABEL[e.certStatus] ?? e.certStatus}
                         </span>
                       </td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted">{e.certNumber ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-muted">{e.certNumber ?? "—"}</td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(e.createdAt)}</td>
                       <td className="px-3 py-2">
                         {e.certStatus === "pending" ? (
                           <WhtCertRowActions entryId={e.id} />
                         ) : (
-                          <span className="text-[10px] text-muted">—</span>
+                          <span className="text-[11px] text-muted">—</span>
                         )}
                       </td>
                     </tr>
@@ -303,7 +303,7 @@ export default async function AdminWhtCertsPage({
           )}
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 50-ทวิ = ใบรับรองหัก ณ ที่จ่าย · ออกโดยลูกค้านิติบุคคลที่หักภาษีจาก Pacred · ใช้ลดหย่อนภาษีตอนยื่นแบบ ภ.ง.ด.
         </p>
       </main>
@@ -318,7 +318,7 @@ function Stat({ label, value, highlight, small }: { label: string; value: string
         ? "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
         : "border-border bg-white dark:bg-surface"
     }`}>
-      <p className="text-[10px] font-medium text-muted">{label}</p>
+      <p className="text-[11px] font-medium text-muted">{label}</p>
       <p className={`mt-1 font-bold font-mono ${highlight ? "text-amber-800" : "text-foreground"} ${small ? "text-sm" : "text-xl"}`}>
         {value}
       </p>

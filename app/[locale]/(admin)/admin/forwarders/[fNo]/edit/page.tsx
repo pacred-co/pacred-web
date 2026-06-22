@@ -556,7 +556,7 @@ export default async function AdminForwarderEditPage({
                   <step.Icon className={`h-5 w-5 mb-1 ${
                     isCurrent ? "text-primary-600" : isVisited ? "text-emerald-600" : "text-gray-400"
                   }`} />
-                  <span className={`text-[10px] leading-tight ${
+                  <span className={`text-[11px] leading-tight ${
                     isCurrent ? "font-bold text-primary-700" : isVisited ? "text-emerald-700" : "text-muted"
                   }`}>
                     {step.label}
@@ -574,7 +574,7 @@ export default async function AdminForwarderEditPage({
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 lg:p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
             <h2 className="font-bold text-sm">ลูกค้า · ที่อยู่ · การขนส่ง</h2>
-            <span className="text-[10px] text-muted">{customerName}</span>
+            <span className="text-[11px] text-muted">{customerName}</span>
           </div>
 
           {/* วันที่สร้าง */}
@@ -724,7 +724,7 @@ export default async function AdminForwarderEditPage({
             ) : (
               <span className="inline-flex flex-col gap-0.5">
                 <span className="font-bold text-base text-primary-700">฿0.00</span>
-                <span className="text-[10px] text-muted leading-tight">
+                <span className="text-[11px] text-muted leading-tight">
                   ยังไม่ใส่ราคา · จะใส่ตอนของถึงโกดังไทย (status 4)
                 </span>
               </span>
@@ -830,7 +830,7 @@ export default async function AdminForwarderEditPage({
         <header className="bg-indigo-500 text-white px-4 py-2.5 flex items-center gap-2">
           <span className="text-base">📝</span>
           <h2 className="text-sm font-bold">กรอกรายละเอียดสินค้า · ขนาด · ราคา · โกดัง</h2>
-          <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">PCS-style</span>
+          <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">PCS-style</span>
         </header>
         <div className="p-3 sm:p-4">
           <AdminForwarderEditForm
@@ -876,7 +876,7 @@ export default async function AdminForwarderEditPage({
         <header className="bg-primary-500 text-white px-4 py-2.5 flex items-center gap-2">
           <Pencil className="h-4 w-4 flex-shrink-0" />
           <h2 className="text-sm font-bold">อัปเดตสถานะ · ตู้ · Tracking · หมายเหตุ</h2>
-          <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
+          <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
         </header>
         <div className="p-4">
           <TbForwarderActionPanel
@@ -898,7 +898,7 @@ export default async function AdminForwarderEditPage({
             <h2 className="text-sm font-bold">
               💰 ชำระเงิน · ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </h2>
-            <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+            <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">
               ยอดในกระเป๋า ฿{walletBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
           </header>

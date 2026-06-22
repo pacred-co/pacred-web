@@ -230,7 +230,7 @@ export default async function AdminNotificationsDispatchPage({
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · notifications · dispatch</p>
           <h1 className="mt-1 text-2xl font-bold">Dispatch supervisor</h1>
           <p className="mt-1 text-sm text-muted">
-            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อรีเซ็ตแถวให้ dispatcher ลองส่งใหม่. ⚠️ 2026-05-26 — cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">/api/cron/dispatch-line-notify</code> ถูกลบ (LINE Notify EOL 2025-03-31); งานนี้รอ task L (LIFF + Messaging API dispatcher) เพื่อกลับมาวิ่งอัตโนมัติ. ระหว่างนี้ใช้ปุ่ม push-now บนรายละเอียดของ notification เพื่อ redeliver ทันที.
+            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อรีเซ็ตแถวให้ dispatcher ลองส่งใหม่. ⚠️ 2026-05-26 — cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">/api/cron/dispatch-line-notify</code> ถูกลบ (LINE Notify EOL 2025-03-31); งานนี้รอ task L (LIFF + Messaging API dispatcher) เพื่อกลับมาวิ่งอัตโนมัติ. ระหว่างนี้ใช้ปุ่ม push-now บนรายละเอียดของ notification เพื่อ redeliver ทันที.
           </p>
         </div>
         <div className="flex gap-2">
@@ -242,24 +242,24 @@ export default async function AdminNotificationsDispatchPage({
       {/* Filter form */}
       <form action="/admin/notifications/dispatch" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">status</span>
+          <span className="text-[11px] text-muted">status</span>
           <select name="status" defaultValue={status} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40">
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">channel</span>
+          <span className="text-[11px] text-muted">channel</span>
           <select name="channel" defaultValue={channel} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40">
             <option value="all">— ทั้งหมด —</option>
             {CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ตั้งแต่</span>
+          <span className="text-[11px] text-muted">ตั้งแต่</span>
           <input type="date" name="from" defaultValue={sp.from ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ถึง</span>
+          <span className="text-[11px] text-muted">ถึง</span>
           <input type="date" name="to" defaultValue={sp.to ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <button type="submit" className="self-end rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
@@ -275,7 +275,7 @@ export default async function AdminNotificationsDispatchPage({
               <span className="ml-2 text-xs font-normal text-muted">(channel: {CHANNEL_LABEL[channel]})</span>
             )}
           </h2>
-          <span className="text-[10px] text-muted">ใหม่ → เก่า · {PAGE_SIZE} ต่อหน้า</span>
+          <span className="text-[11px] text-muted">ใหม่ → เก่า · {PAGE_SIZE} ต่อหน้า</span>
         </div>
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">
@@ -302,25 +302,25 @@ export default async function AdminNotificationsDispatchPage({
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                        <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[10px] font-mono">{r.category}</span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[lineNotifyStatus]}`} title="LINE Notify channel">
+                        <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-mono">{r.category}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[lineNotifyStatus]}`} title="LINE Notify channel">
                           LN · {lineNotifyStatus}
                         </span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[lineMessagingStatus]}`} title="LINE Messaging API channel">
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[lineMessagingStatus]}`} title="LINE Messaging API channel">
                           LM · {lineMessagingStatus}
                         </span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[emailStatus]}`} title="Email channel">
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[emailStatus]}`} title="Email channel">
                           ✉ · {emailStatus}
                         </span>
                         {(r.delivery_attempts ?? 0) > 0 && (
-                          <span className="rounded-full border bg-gray-50 text-gray-700 border-gray-200 px-2 py-0.5 text-[10px]" title="LINE Notify retry counter (cap 5)">
+                          <span className="rounded-full border bg-gray-50 text-gray-700 border-gray-200 px-2 py-0.5 text-[11px]" title="LINE Notify retry counter (cap 5)">
                             attempts: {r.delivery_attempts}/5
                           </span>
                         )}
                       </div>
                       <p className="mt-1 text-sm font-medium truncate">{r.title}</p>
                       <p className="text-xs text-muted line-clamp-2">{r.body}</p>
-                      <p className="mt-0.5 text-[10px] text-muted">
+                      <p className="mt-0.5 text-[11px] text-muted">
                         → <span className="font-medium text-foreground">{recipientLabel}</span>
                         {" · "}
                         {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
@@ -332,7 +332,7 @@ export default async function AdminNotificationsDispatchPage({
                     {canRetry && <RetryDispatchButton notificationId={r.id} />}
                   </div>
                   {errorMsg && (
-                    <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] text-red-700 font-mono break-words">
+                    <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 font-mono break-words">
                       {errorMsg}
                     </p>
                   )}
@@ -355,7 +355,7 @@ export default async function AdminNotificationsDispatchPage({
         )}
       </div>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Retry: รีเซ็ต <code>delivery_attempts</code> + เคลียร์ <code>delivered_line_notify_at</code> ของแถวนั้น → cron <code>dispatch-line-notify</code> เก็บแถวนี้กลับเข้าคิวรอบถัดไป (~2 นาที). ไม่ push ทันทีจาก admin UI เพื่อไม่ให้ผูก UI กับ latency ของ LINE upstream.
       </p>
     </main>

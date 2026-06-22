@@ -463,7 +463,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
             className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 inline-flex items-center gap-1"
           >
             📦 เพิ่มหลายรายการ
-            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-medium">ใหม่</span>
+            <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-medium">ใหม่</span>
           </Link>
         </div>
       </div>
@@ -531,7 +531,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         {service      ? <input type="hidden" name="service"   value={service} /> : null}
         {container    ? <input type="hidden" name="container" value={container} /> : null}
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+          <span className="text-[11px] uppercase tracking-wide text-muted">ตั้งแต่</span>
           <input
             type="date"
             name="date_from"
@@ -540,7 +540,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+          <span className="text-[11px] uppercase tracking-wide text-muted">ถึง</span>
           <input
             type="date"
             name="date_to"

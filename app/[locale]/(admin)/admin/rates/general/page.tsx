@@ -66,9 +66,9 @@ export default async function AdminRatesGeneralPage() {
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · อัตราขนส่ง (General)</p>
           <h1 className="mt-1 text-2xl font-bold">ตารางเรท General — แก้ไขได้</h1>
           <p className="mt-1 text-sm text-muted">
-            เรทลูกค้าทั่วไป (coid <code className="rounded bg-surface-alt px-1 text-[10px]">{GENERAL_COID}</code>) ตาม
+            เรทลูกค้าทั่วไป (coid <code className="rounded bg-surface-alt px-1 text-[11px]">{GENERAL_COID}</code>) ตาม
             (โกดัง × ขนส่ง × ประเภทสินค้า) × 3 tier — เขียน
-            <code className="mx-1 rounded bg-surface-alt px-1 py-0.5 text-[10px]">tb_rate_g_kg / tb_rate_g_cbm</code>
+            <code className="mx-1 rounded bg-surface-alt px-1 py-0.5 text-[11px]">tb_rate_g_kg / tb_rate_g_cbm</code>
             ที่ engine คำนวณราคาใช้จริง
           </p>
         </div>

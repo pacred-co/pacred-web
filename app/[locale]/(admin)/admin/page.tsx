@@ -32,7 +32,7 @@
  *   tb_settings       — hratecostdefault (เรทสั่งซื้อ/ต้นทุน), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
@@ -247,7 +247,17 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const forwarderToday = sumNum(revForwarderToday.data, "ftotalprice");
   const yuanMonth      = sumNum(revYuanMonth.data, "paythb");
   const yuanToday      = sumNum(revYuanToday.data, "paythb");
-  const walletAll      = (await walletTotalsPromise).sumWallet;
+  const walletTotals   = await walletTotalsPromise;
+  const walletAll      = walletTotals.sumWallet;
+  // Explain a negative TOTAL (owner 2026-06-22 "ติดลบ ดูเหมือนบัค"): it's not a code
+  // bug — it's customers whose wallet went negative from an unbalanced legacy
+  // "เติม-แล้วจ่าย" pay (the −pay settled without its +topup). Surface who + how much
+  // so it reads as "รอบัญชีกระทบยอด", not a mystery.
+  const walletNote = walletTotals.negCount > 0
+    ? `มีลูกค้า ${walletTotals.negCount} ราย ยอดติดลบรวม ฿${formatTHB(walletTotals.negSum)}` +
+      (walletTotals.topNegUserid ? ` (เช่น ${walletTotals.topNegUserid} ฿${formatTHB(walletTotals.topNegAmount)})` : "") +
+      ` — รอบัญชีตรวจ/กระทบยอด (ไม่ใช่บัคระบบ)`
+    : undefined;
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
   // Settings rates — default to 5.00 (parity with legacy default constants
@@ -362,6 +372,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           label="กระเป๋าสตางค์ลูกค้ารวม"
           monthValue={walletAll}
           subtitle="ยอด wallet ทั้งหมด"
+          note={walletNote}
           href="/admin/wallet"
         />
       </section>
@@ -443,7 +454,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
             >
               🚛 รายการตู้
               {activeContainersCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold px-1.5">
+                <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold px-1.5">
                   {activeContainersCount}
                 </span>
               )}
@@ -612,7 +623,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop3: "3", shop4: "4" };
       const { data, error } = await admin
         .from("tb_header_order")
-        .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid")
+        .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid,hcover,hcount")
         .eq("hstatus", statusMap[tab])
         .order("hdate", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -621,17 +632,22 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      // Product cover thumbnail (self-explaining-row §0g — "ดึงรูปสินค้ามาโชว์").
+      const coverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.hcover })), "cover");
       return rows.map((r) => {
         const u = users.get(r.userid);
+        const itemCount = Number(r.hcount ?? 0);
+        const title = (r.htitle ?? "").trim() || "ไม่มีชื่อสินค้า";
         return {
           id: String(r.id),
           created_at: r.hdate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.htotalpriceuser ?? 0),
-          detail: `${r.hno ?? "—"} · ${r.htitle ?? "ไม่มีชื่อ"}`,
+          detail: `<span class="font-semibold text-foreground">${escapeHtmlInline(r.hno ?? "—")}</span> · ${escapeHtmlInline(title)}${itemCount > 0 ? ` · ${itemCount} รายการ` : ""}`,
           link: r.hno ? `/admin/service-orders/${encodeURIComponent(r.hno)}` : "/admin/service-orders",
           status: r.hstatus ?? "1",
+          slipUrl: coverMap[String(r.id)] ?? null,
         };
       });
     }
@@ -649,7 +665,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "forwarder62": {
       let q = admin
         .from("tb_forwarder")
-        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,userid,fcabinetnumber,fcredit")
+        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,userid,fcabinetnumber,fcredit,fcover,ftrackingchn")
         .order("fdate", { ascending: false, nullsFirst: false })
         .limit(50);
       if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
@@ -663,6 +679,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawForwarderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const fcoverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.fcover })), "cover");
       return rows.map((r) => {
         const u = users.get(r.userid);
         const transportLabel =
@@ -671,15 +688,20 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : r.ftransporttype === "3" ? "✈️ แอร์"
           : r.ftransporttype ?? "—";
         const fno = r.fidorco ?? String(r.id);
+        const track = (r.ftrackingchn ?? "").trim();
+        const cab = (r.fcabinetnumber ?? "").trim();
         return {
           id: String(r.id),
           created_at: r.fdate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.ftotalprice ?? 0),
-          detail: `${fno} · ${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg`,
+          detail: `<span class="font-semibold text-foreground">#${escapeHtmlInline(fno)}</span> · ${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg` +
+            (track ? ` · 🔖 ${escapeHtmlInline(track)}` : "") +
+            (cab ? ` · 📦 ตู้ ${escapeHtmlInline(cab)}` : ""),
           link: `/admin/forwarders/${encodeURIComponent(fno)}`,
           status: r.fstatus ?? "1",
+          slipUrl: fcoverMap[String(r.id)] ?? null,
         };
       });
     }
@@ -689,7 +711,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "payment": {
       const { data, error } = await admin
         .from("tb_payment")
-        .select("id,paydate,paystatus,paytype,payyuan,paythb,userid")
+        .select("id,paydate,paystatus,paytype,payyuan,paythb,userid,imagesslip")
         .eq("paystatus", "1")
         .order("paydate", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -698,6 +720,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawPaymentRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const paySlipMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip");
       return rows.map((r) => {
         const u = users.get(r.userid);
         const channelLabel =
@@ -705,13 +728,14 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : r.paytype === "2" ? "WeChat"
           : r.paytype === "3" ? "Bank"
           : (r.paytype ?? "—");
+        const slipU = paySlipMap[String(r.id)] ?? null;
         return {
           id: String(r.id),
           created_at: r.paydate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.paythb ?? 0),
-          detail: `${channelLabel} · ¥${Number(r.payyuan ?? 0).toFixed(2)}`,
+          detail: `<span class="font-semibold text-foreground">โอนหยวน</span> · ${escapeHtmlInline(channelLabel)} · ¥${Number(r.payyuan ?? 0).toFixed(2)} · <span class="${slipU ? "text-emerald-600" : "text-amber-600"}">${slipU ? "📎 แนบสลิปแล้ว" : "— ไม่มีสลิป"}</span>`,
           link: `/admin/yuan-payments/${r.id}`,
           status: r.paystatus ?? "1",
         };
@@ -784,9 +808,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 // ── Raw row types ──────────────────────────────────────────────────────────
 
 type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
-type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string };
-type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null };
-type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string };
+type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null };
+type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null };
+type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
 // sales_payouts (rebuilt schema · the one tab without a legacy equivalent)
@@ -802,7 +826,7 @@ function pickProfile(p: ProfileMaybeArray): ProfileShape | null {
 // ── Cards ──────────────────────────────────────────────────────────────────
 
 function RevenueCard({
-  tone, icon, label, monthValue, todayValue, subtitle, href,
+  tone, icon, label, monthValue, todayValue, subtitle, href, note,
 }: {
   tone: "info" | "danger" | "primary" | "success";
   icon: React.ReactNode;
@@ -811,6 +835,8 @@ function RevenueCard({
   todayValue?: number;
   subtitle?: string;
   href: string;
+  /** Explain an anomaly inline (owner 2026-06-22 · e.g. a negative wallet total). */
+  note?: string;
 }) {
   const tones = {
     info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
@@ -830,11 +856,16 @@ function RevenueCard({
             <p className={`font-bold leading-none ${tones.text} text-2xl sm:text-3xl font-mono`}>
               ฿{formatTHB(monthValue)}
             </p>
-            <p className="mt-2 text-xs font-semibold text-foreground line-clamp-2">{label}</p>
+            <p className="mt-2 text-sm font-semibold text-foreground line-clamp-2">{label}</p>
             {todayValue !== undefined ? (
-              <p className="text-[10px] text-muted mt-1">วันนี้: ฿{formatTHB(todayValue)}</p>
+              <p className="text-xs text-muted mt-1">วันนี้: ฿{formatTHB(todayValue)}</p>
             ) : subtitle ? (
-              <p className="text-[10px] text-muted mt-1">{subtitle}</p>
+              <p className="text-xs text-muted mt-1">{subtitle}</p>
+            ) : null}
+            {note ? (
+              <p className="mt-1.5 text-[11px] leading-snug font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
+                ⚠️ {note}
+              </p>
             ) : null}
           </div>
           <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
@@ -856,7 +887,7 @@ function RateChip({ color, label, value }: { color: "cyan" | "red" | "purple" | 
   };
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-widest text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-widest text-muted">{label}</p>
       <p className={`mt-0.5 font-mono text-xl font-bold ${colors[color]}`}>{value}</p>
     </div>
   );
@@ -888,7 +919,7 @@ function UserStatCard({
           <div>
             <p className={`font-bold leading-none ${tones.text} text-3xl font-mono`}>{value.toLocaleString("th-TH")}</p>
             <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
-            <p className="text-[10px] text-muted mt-0.5">{subtitle}</p>
+            <p className="text-[11px] text-muted mt-0.5">{subtitle}</p>
           </div>
           <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
         </div>
@@ -969,7 +1000,7 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                     รอดำเนินการ
                   </span>
                   {TAB_NEXT[tab] ? (
-                    <div className="mt-1 text-[10px] font-semibold text-rose-600 whitespace-nowrap">
+                    <div className="mt-1 text-[11px] font-semibold text-rose-600 whitespace-nowrap">
                       🔔 {TAB_NEXT[tab]}
                     </div>
                   ) : null}

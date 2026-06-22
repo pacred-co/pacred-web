@@ -78,7 +78,7 @@ export default async function AdminQuoteCompareModesPage({
           <p className="text-xs text-muted mt-1">
             เปรียบเทียบ 3 รูปแบบขนส่ง + ค่าบริการเสริม สำหรับเสนอลูกค้า · all-in price ต่อ mode · พร้อมราคาขายขั้นต่ำ + กรอบกำไร CEO
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             เทียบ 9 carriers ของ mode เดียว ดูที่{" "}
             <Link href="/admin/accounting/quote-compare" className="text-primary-600 underline">Sales Quote Comparison</Link>
             {" · "}กำไรเฉลี่ย/ตู้{" "}
@@ -137,7 +137,7 @@ export default async function AdminQuoteCompareModesPage({
           </div>
 
           <fieldset className="rounded-xl border border-border p-3">
-            <legend className="px-1 text-[10px] uppercase tracking-wider text-muted">ค่าบริการเสริม (บวกทุก mode)</legend>
+            <legend className="px-1 text-[11px] uppercase tracking-wider text-muted">ค่าบริการเสริม (บวกทุก mode)</legend>
             <div className="grid sm:grid-cols-5 gap-2">
               <Field label="ตีลัง"><input type="number" step="0.01" name="crate" defaultValue={input.addons.crate || ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="0" /></Field>
               <Field label="QC"><input type="number" step="0.01" name="qc" defaultValue={input.addons.qc || ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="0" /></Field>
@@ -188,7 +188,7 @@ export default async function AdminQuoteCompareModesPage({
               </div>
               <div className="overflow-x-auto scrollbar-x-visible">
                 <table className="w-full min-w-[760px] text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">ขนส่ง</th>
                       <th className="px-3 py-2">คิดตาม</th>
@@ -206,12 +206,12 @@ export default async function AdminQuoteCompareModesPage({
                         <td className="px-3 py-2 font-medium">
                           {m.transportLabel}
                           {report.cheapest?.transport === m.transport && <span className="ml-1">🟢</span>}
-                          {!m.hasRate && <span className="ml-2 text-[10px] text-muted">(no rate)</span>}
+                          {!m.hasRate && <span className="ml-2 text-[11px] text-muted">(no rate)</span>}
                         </td>
                         <td className="px-3 py-2 text-xs text-muted">{m.basisUsed === "cbm" ? "CBM" : "KG"} · {m.rateSource}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs">
                           {m.unitRate > 0 ? `฿${thb(m.unitRate)}` : "—"}
-                          {m.docDiscountApplied > 0 && <span className="ml-1 rounded bg-emerald-100 px-1 py-0.5 text-[10px] font-bold text-emerald-700">−฿{thb(m.docDiscountApplied)}/คิว</span>}
+                          {m.docDiscountApplied > 0 && <span className="ml-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700">−฿{thb(m.docDiscountApplied)}/คิว</span>}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-muted">{m.hasRate ? `฿${thb(m.transportSubtotal)}` : "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(m.addonsTotal)}</td>
@@ -261,7 +261,7 @@ export default async function AdminQuoteCompareModesPage({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-muted">{label}</span>
+      <span className="text-[11px] uppercase tracking-wider text-muted">{label}</span>
       {children}
     </label>
   );
@@ -277,7 +277,7 @@ function ModeCard({ mode, cheapest }: { mode: ModeLine; cheapest: boolean }) {
     <div className={`rounded-2xl border p-4 shadow-sm ${ring}`}>
       <div className="flex items-baseline justify-between">
         <p className="font-bold text-sm">{mode.transportLabel}{cheapest && " 🟢"}</p>
-        <span className="text-[10px] text-muted">{mode.basisUsed === "cbm" ? "CBM" : "KG"}</span>
+        <span className="text-[11px] text-muted">{mode.basisUsed === "cbm" ? "CBM" : "KG"}</span>
       </div>
       {mode.hasRate ? (
         <>

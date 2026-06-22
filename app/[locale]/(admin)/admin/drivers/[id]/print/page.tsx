@@ -331,7 +331,7 @@ export default async function DriverPickingSlipPrintPage({
                   {/* รหัสลูกค้า + box/Kg/CBM/Location (printDriver.php L206) */}
                   <td className="border border-gray-400 px-2 py-1">
                     <div className="font-bold font-mono">{f.userid ?? "—"}</div>
-                    <div className="text-[10px] text-gray-600 leading-tight">
+                    <div className="text-[11px] text-gray-600 leading-tight">
                       box: {fmt(f.famount, 0)}
                       <br />
                       Kg: {fmt(f.fweight, 2)}
@@ -375,7 +375,7 @@ export default async function DriverPickingSlipPrintPage({
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-gray-300 px-2 py-1.5">
-      <div className="text-[10px] text-gray-500">{label}</div>
+      <div className="text-[11px] text-gray-500">{label}</div>
       <div className="text-base font-bold">{value}</div>
     </div>
   );

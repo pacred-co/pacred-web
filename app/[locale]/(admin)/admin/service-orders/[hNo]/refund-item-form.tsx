@@ -104,7 +104,7 @@ export function AdminRefundItemPanel(props: Props) {
         <p className="text-xs font-semibold text-amber-700">
           คืนเงินรายการสินค้า ({refundableItems.length} รายการ)
         </p>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           ใช้กรณีร้านจีนงดสินค้า / สั่งผิด / ลูกค้าเปลี่ยนใจ — เงินคืนเข้ากระเป๋าทันที
         </p>
       </div>
@@ -114,7 +114,7 @@ export function AdminRefundItemPanel(props: Props) {
 
       <div className="rounded-md border border-border bg-white dark:bg-surface overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-1.5">รายการ</th>
               <th className="px-2 py-1.5">ร้าน</th>
@@ -130,7 +130,7 @@ export function AdminRefundItemPanel(props: Props) {
               return (
                 <tr key={it.id} className="border-t border-border hover:bg-surface-alt/30">
                   <td className="px-2 py-1.5 max-w-[300px] truncate" title={it.title}>{it.title || "—"}</td>
-                  <td className="px-2 py-1.5 text-muted text-[10px]">{it.cnameshop || "—"}</td>
+                  <td className="px-2 py-1.5 text-muted text-[11px]">{it.cnameshop || "—"}</td>
                   <td className="px-2 py-1.5 text-right font-mono">{thb(it.cprice)}</td>
                   <td className="px-2 py-1.5 text-right font-mono">{it.camount}</td>
                   <td className="px-2 py-1.5 text-right font-mono">{thb(lineTotal)}</td>
@@ -154,7 +154,7 @@ export function AdminRefundItemPanel(props: Props) {
           </p>
           <div className="grid grid-cols-2 gap-2 items-end">
             <label className="flex flex-col gap-1">
-              <span className="text-muted text-[10px]">จำนวนที่คืน</span>
+              <span className="text-muted text-[11px]">จำนวนที่คืน</span>
               <input
                 type="number"
                 min={1}
@@ -169,7 +169,7 @@ export function AdminRefundItemPanel(props: Props) {
             </p>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-muted text-[10px]">เหตุผลคืนเงิน (จำเป็น · เก็บไว้ใน audit)</span>
+            <span className="text-muted text-[11px]">เหตุผลคืนเงิน (จำเป็น · เก็บไว้ใน audit)</span>
             <input
               className="rounded border px-2 py-1.5 w-full"
               placeholder="เช่น ร้านจีนสินค้าหมด / ลูกค้าเปลี่ยนใจ"

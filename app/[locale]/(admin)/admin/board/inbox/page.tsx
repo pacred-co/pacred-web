@@ -462,7 +462,7 @@ export default async function AdminBoardInboxPage({
                   >
                     <div className="flex items-baseline justify-between flex-wrap gap-2">
                       <p className="text-sm font-semibold">{m.workItemTitle}</p>
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         {new Date(m.createdAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                       </p>
                     </div>
@@ -504,7 +504,7 @@ function TabLink({
       {children}
       {badge > 0 && (
         <span
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
+          className={`rounded-full px-1.5 py-0.5 text-[11px] font-mono ${
             active ? "bg-primary-600 text-white" : "bg-surface-alt border border-border"
           }`}
         >

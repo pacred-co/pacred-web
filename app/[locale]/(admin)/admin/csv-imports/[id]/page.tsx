@@ -116,7 +116,7 @@ export default async function CsvImportDetailPage({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/30 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/30 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">#</th>
                   {headers.map((h) => (

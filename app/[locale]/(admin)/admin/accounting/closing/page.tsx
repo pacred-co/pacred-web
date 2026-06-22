@@ -270,7 +270,7 @@ export default async function ClosingReportPage({
       {/* Table */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-x-auto">
         <table className="w-full text-xs sm:text-sm">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] sm:text-[11px] text-muted">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] sm:text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">เลขใบเสร็จ</th>
               <th className="px-3 py-2.5">อ้างอิง</th>
@@ -301,7 +301,7 @@ export default async function ClosingReportPage({
                     <td className="px-3 py-2.5">
                       <div className="font-medium">{customerLabel(r, u)}</div>
                       {isJuristicReceipt(r) && (
-                        <div className="text-[10px] text-muted">บริษัท</div>
+                        <div className="text-[11px] text-muted">บริษัท</div>
                       )}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs">{r.userid}</td>

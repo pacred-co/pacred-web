@@ -369,7 +369,7 @@ export default async function DriverRunsPage({
         <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between">
             <h2 className="font-bold text-sm">🛻 งานที่ต้องทำ ({openCards.length})</h2>
-            {openCards.length === 0 && <span className="text-[10px] text-muted">ไม่มีงานค้างในระบบ</span>}
+            {openCards.length === 0 && <span className="text-[11px] text-muted">ไม่มีงานค้างในระบบ</span>}
           </div>
           {openCards.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">
@@ -408,7 +408,7 @@ export default async function DriverRunsPage({
                       {[r.forwarder.faddressname, r.forwarder.faddresslastname].filter(Boolean).join(" ") || "—"}
                     </span>
                     {r.driver && (
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         คนขับ: {r.batch.fdadminid}
                         {(r.driver.userName || r.driver.userLastName) && ` · ${[r.driver.userName, r.driver.userLastName].filter(Boolean).join(" ")}`}
                       </p>
@@ -420,11 +420,11 @@ export default async function DriverRunsPage({
                     </p>
                     {/* Prefer the precise per-item delivered-at (0158); fall back to batch date for pre-migration rows. */}
                     {r.item.fdicompletedat ? (
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         ส่ง {new Date(r.item.fdicompletedat).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                       </p>
                     ) : (
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         รอบ {r.batch.fddate ? new Date(r.batch.fddate).toLocaleDateString("th-TH") : "—"}
                       </p>
                     )}
@@ -513,7 +513,7 @@ function RunRow({ row }: { row: {
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[row.item.fdistatus] ?? STATUS_BADGE[""]}`}>
+            <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUS_BADGE[row.item.fdistatus] ?? STATUS_BADGE[""]}`}>
               {STATUS_LABEL[row.item.fdistatus] ?? `?${row.item.fdistatus}?`}
             </span>
             <Link
@@ -523,7 +523,7 @@ function RunRow({ row }: { row: {
               {fNo}
             </Link>
             {F_STATUS_LABEL[fwd.fstatus] && (
-              <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] text-muted">
+              <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] text-muted">
                 {F_STATUS_LABEL[fwd.fstatus]}
               </span>
             )}
@@ -535,11 +535,11 @@ function RunRow({ row }: { row: {
             </p>
           )}
           {fullAddr && <p className="text-xs text-muted">📍 {fullAddr}</p>}
-          {fwd.ftrackingth && <p className="text-[10px] text-muted font-mono">TH tracking: {fwd.ftrackingth}</p>}
+          {fwd.ftrackingth && <p className="text-[11px] text-muted font-mono">TH tracking: {fwd.ftrackingth}</p>}
           {fwd.fcabinetnumber && (
-            <p className="text-[10px] text-muted">📦 ตู้: <span className="font-mono">{fwd.fcabinetnumber}</span></p>
+            <p className="text-[11px] text-muted">📦 ตู้: <span className="font-mono">{fwd.fcabinetnumber}</span></p>
           )}
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             คนขับ: <span className="font-mono">{row.batch.fdadminid}</span>
             {driverName && ` · ${driverName}`}
             {row.driver?.userTel && (
@@ -553,7 +553,7 @@ function RunRow({ row }: { row: {
           <p className="font-bold font-mono text-red-700">
             ฿{Number(fwd.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             {row.batch.fddate
               ? new Date(row.batch.fddate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
               : "—"}

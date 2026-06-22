@@ -83,7 +83,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <label className="block space-y-1">
       <span className="text-xs font-medium">{label}</span>
       {children}
-      {hint && <span className="block text-[10px] text-muted">{hint}</span>}
+      {hint && <span className="block text-[11px] text-muted">{hint}</span>}
     </label>
   );
 }

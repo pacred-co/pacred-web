@@ -345,7 +345,7 @@ export function AdminCreateNewForm({
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
               อีเมลจริง (สำหรับติดต่อ){" "}
-              <span className="text-[10px] text-muted">— ไม่บังคับ · คนละช่องกับ User ID</span>
+              <span className="text-[11px] text-muted">— ไม่บังคับ · คนละช่องกับ User ID</span>
             </label>
             <input
               type="email"
@@ -366,7 +366,7 @@ export function AdminCreateNewForm({
           <div>
             <label className="block text-xs font-medium text-muted mb-1">
               รหัสผ่าน <span className="text-red-500">*</span>{" "}
-              <span className="text-[10px] text-muted">(ขั้นต่ำ 8 ตัว)</span>
+              <span className="text-[11px] text-muted">(ขั้นต่ำ 8 ตัว)</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -651,7 +651,7 @@ export function AdminCreateNewForm({
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-muted mb-1">
                 legacy_admin_id{" "}
-                <span className="text-[10px] text-muted">
+                <span className="text-[11px] text-muted">
                   (กรอกเฉพาะตอน recreate 13 admin เก่า — empty สำหรับพนักงานใหม่)
                 </span>
               </label>

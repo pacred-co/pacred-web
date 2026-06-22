@@ -431,8 +431,8 @@ export default async function AdminReportShopPage({
                         <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
                           {r.customer.name || "—"}
                         </Link>
-                        <div className="font-mono text-[10px] text-muted">{r.userid}</div>
-                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                        <div className="font-mono text-[11px] text-muted">{r.userid}</div>
+                        {r.customer.phone && <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs max-w-xs">
                         <Link href={`/admin/service-orders/${encodeURIComponent(r.hno)}`} className="text-primary-600 hover:underline">
@@ -442,7 +442,7 @@ export default async function AdminReportShopPage({
                       <td className="px-4 py-3 text-right text-xs">{intFmt(r.amount_total)}</td>
                       <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.price_total)}</td>
                       <td className="px-4 py-3 text-xs">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.hstatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_CLS[r.hstatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
                           {legacyOrderStatusThai(r.hstatus) || r.hstatus}
                         </span>
                       </td>

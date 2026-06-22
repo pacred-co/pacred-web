@@ -115,7 +115,7 @@ export default async function AdminEtaxPage({
           <p className="text-xs text-muted mt-1">
             ดาวน์โหลด XML/CSV ของใบกำกับภาษีที่ออกในช่วงเวลาที่เลือก · เตรียมส่งกรมสรรพากร
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder_tax_invoice</code> (migration 0129)
             · per-class WHT engine via <code className="bg-surface-alt px-1 rounded">lib/tax/wht.ts</code>
             · brief §3.4 (PEAK module sub-surface)
@@ -125,11 +125,11 @@ export default async function AdminEtaxPage({
         {/* Date range form */}
         <form method="GET" action="/admin/accounting/etax" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
             <input type="date" name="date_from" defaultValue={dateFrom} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
             <input type="date" name="date_to" defaultValue={dateTo} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <button type="submit" className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
@@ -140,7 +140,7 @@ export default async function AdminEtaxPage({
               ใช้เดือนนี้
             </Link>
           )}
-          <p className="text-[10px] text-muted ml-auto">
+          <p className="text-[11px] text-muted ml-auto">
             ช่วงปัจจุบัน {dateFrom} → {dateTo}
           </p>
         </form>
@@ -180,7 +180,7 @@ export default async function AdminEtaxPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลข</th>
                     <th className="px-3 py-2">วันที่</th>
@@ -200,7 +200,7 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.issued_at)}</td>
                       <td className="px-3 py-2 text-xs">
                         <div className="font-medium">{r.buyer_name || r.userid}</div>
-                        <div className="text-[10px] text-muted font-mono">
+                        <div className="text-[11px] text-muted font-mono">
                           {r.buyer_tax_id || "—"} · {r.is_juristic ? "นิติบุคคล" : "ทั่วไป"}
                         </div>
                       </td>
@@ -209,7 +209,7 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.wht_total)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.net_payable)}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] border ${
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] border ${
                           r.status === "issued"
                             ? "bg-green-50 text-green-700 border-green-200"
                             : "bg-red-50 text-red-700 border-red-200"
@@ -239,7 +239,7 @@ export default async function AdminEtaxPage({
               🧾 ใบกำกับ ฝากสั่งซื้อ / ฝากโอน ({shopBundle.rows.length.toLocaleString("th-TH")})
             </h2>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] border ${
+              className={`rounded-full px-2.5 py-0.5 text-[11px] border ${
                 shopBundle.enabled
                   ? "bg-green-50 text-green-700 border-green-200"
                   : "bg-amber-50 text-amber-700 border-amber-200"
@@ -270,7 +270,7 @@ export default async function AdminEtaxPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[800px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลข</th>
                     <th className="px-3 py-2">ประเภท</th>
@@ -287,11 +287,11 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 font-mono text-xs">{r.serial_no ?? `S-${r.id}`}</td>
                       <td className="px-3 py-2 text-[11px]">
                         {r.service_type === "shop" ? "ฝากสั่งซื้อ" : "ฝากโอน"}
-                        <span className="block text-[9px] text-muted">{r.doc_mode === "customs" ? "ใบขน" : "ใบกำกับ"}</span>
+                        <span className="block text-[11px] text-muted">{r.doc_mode === "customs" ? "ใบขน" : "ใบกำกับ"}</span>
                       </td>
                       <td className="px-3 py-2 text-xs">
                         <div className="font-medium">{r.buyer_name || r.userid}</div>
-                        <div className="text-[10px] text-muted font-mono">
+                        <div className="text-[11px] text-muted font-mono">
                           {r.buyer_tax_id || "—"} · {r.is_juristic ? "นิติบุคคล" : "ทั่วไป"}
                         </div>
                       </td>
@@ -299,7 +299,7 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.vat_amount)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.net_payable)}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] border ${
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] border ${
                           r.status === "issued"
                             ? "bg-green-50 text-green-700 border-green-200"
                             : "bg-red-50 text-red-700 border-red-200"
@@ -333,9 +333,9 @@ export default async function AdminEtaxPage({
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-      <p className="text-[10px] font-medium text-muted">{label}</p>
+      <p className="text-[11px] font-medium text-muted">{label}</p>
       <p className="mt-1 font-bold font-mono text-foreground text-xl">{value}</p>
-      {sub && <p className="text-[10px] text-muted mt-0.5 font-mono">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted mt-0.5 font-mono">{sub}</p>}
     </div>
   );
 }

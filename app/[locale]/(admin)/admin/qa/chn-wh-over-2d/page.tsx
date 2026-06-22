@@ -202,7 +202,7 @@ export default async function ChnWhOver2dPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2">ID</th>
                   <th className="px-2 py-2">วันที่สร้าง</th>
@@ -237,14 +237,14 @@ export default async function ChnWhOver2dPage({
                         {r.fdate ? String(r.fdate).slice(0, 10) : "—"}
                       </td>
                       <td className="px-2 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${severity}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${severity}`}>
                           {daysWaiting} วัน
                         </span>
                       </td>
                       <td className="px-2 py-2">
                         <div className="font-mono text-[11px]">{r.userid ?? "—"}</div>
                         <div>{customerName}</div>
-                        {u?.userTel ? <div className="text-muted text-[10px]">{u.userTel}</div> : null}
+                        {u?.userTel ? <div className="text-muted text-[11px]">{u.userTel}</div> : null}
                       </td>
                       <td className="px-2 py-2">{WAREHOUSE_LABEL[r.fwarehousechina ?? ""] ?? r.fwarehousechina ?? "—"}</td>
                       <td className="px-2 py-2">{TRANSPORT_LABEL[r.ftransporttype ?? ""] ?? "—"}</td>
@@ -252,7 +252,7 @@ export default async function ChnWhOver2dPage({
                       <td className="px-2 py-2 font-mono">{r.fcabinetnumber || "—"}</td>
                       <td className="px-2 py-2 text-right font-mono text-[11px]">
                         {r.fweight ? `${Number(r.fweight).toFixed(1)} kg` : "—"}
-                        {r.fvolume ? <div className="text-muted text-[10px]">{Number(r.fvolume).toFixed(3)} cbm</div> : null}
+                        {r.fvolume ? <div className="text-muted text-[11px]">{Number(r.fvolume).toFixed(3)} cbm</div> : null}
                       </td>
                       <td className="px-2 py-2 max-w-[200px] truncate" title={r.fnote ?? ""}>
                         {r.fnote || "—"}

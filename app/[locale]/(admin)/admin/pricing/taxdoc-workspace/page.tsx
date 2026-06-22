@@ -57,7 +57,7 @@ function StagePill({ label, s }: { label: string; s: TaxdocStageStatus }) {
         : "bg-gray-100 text-gray-400 border-gray-200";
   const dot = s === "done" ? "●" : s === "in_progress" ? "◐" : "○";
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${cls}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${cls}`}>
       <span aria-hidden>{dot}</span>
       {label}
     </span>
@@ -89,7 +89,7 @@ export default async function TaxdocWorkspacePage() {
           งานออกเอกสารภาษี CARGO · ขั้นตอน <b>CS</b> (ขาย) → <b>Pricing</b> (ต้นทุน) → <b>Docs</b> (สำแดง · ใบขน) → <b>Account</b> (PEAK · ปิดงาน).
           3 ราคาแยกกันเสมอ: <span className="text-blue-700">ขาย (SELLING)</span> ≠ <span className="text-emerald-700">ต้นทุน (COST)</span> ≠ <span className="text-purple-700">สำแดง (DECLARED)</span>.
         </p>
-        <p className="text-[10px] text-muted mt-1">
+        <p className="text-[11px] text-muted mt-1">
           ⚠️ P4 workspace — บันทึก/ติดตามสถานะเท่านั้น · ยังไม่ยิงเอกสาร/เงิน/แจ้งเตือน. Account ปิดได้เมื่อ CS + Pricing เสร็จ.
         </p>
       </header>
@@ -115,7 +115,7 @@ export default async function TaxdocWorkspacePage() {
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">ออเดอร์ / ลูกค้า</th>
                     <th className="px-3 py-2">ตู้</th>
@@ -150,7 +150,7 @@ export default async function TaxdocWorkspacePage() {
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">ออเดอร์</th>
                     <th className="px-3 py-2">ลูกค้า</th>
@@ -171,7 +171,7 @@ export default async function TaxdocWorkspacePage() {
                       <td className="px-3 py-2 text-[11px]">{c.userid ?? "—"}</td>
                       <td className="px-3 py-2 text-[11px] font-mono">{c.cabinetNo ?? "—"}</td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${DOC_MODE_CLS[c.docMode] ?? DOC_MODE_CLS.none}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${DOC_MODE_CLS[c.docMode] ?? DOC_MODE_CLS.none}`}>
                           {DOC_MODE_LABEL[c.docMode] ?? c.docMode}
                         </span>
                       </td>
@@ -188,7 +188,7 @@ export default async function TaxdocWorkspacePage() {
         </div>
       </section>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         📌 3-number model: ขาย = ราคาขายลูกค้า (→ ใบกำกับ + VAT) · ต้นทุน = ต้นทุนจริง (→ PEAK stock-in) · สำแดง = มูลค่าสำแดงต่อศุลกากร (→ ใบขนรวม · ตั้งจากต้นทุน · Docs ปรับลง).
         ใบขนรวมที่ <Link href="/admin/accounting/cargo-declarations" className="text-primary-600 hover:underline">/admin/accounting/cargo-declarations</Link>.
       </p>
@@ -207,13 +207,13 @@ export default async function TaxdocWorkspacePage() {
             <span className="font-mono text-xs">{j.source === "forwarder" ? `#${j.fid}` : j.hno}</span>
           )}
           {j.userid && <span className="ml-2 text-muted">{j.userid}</span>}
-          <span className="ml-2 rounded bg-surface-alt px-1 py-0.5 text-[9px] text-muted">
+          <span className="ml-2 rounded bg-surface-alt px-1 py-0.5 text-[11px] text-muted">
             {j.source === "forwarder" ? "ฝากนำเข้า" : "ฝากสั่งซื้อ"}
           </span>
         </td>
         <td className="px-3 py-2 text-[11px] font-mono">{j.cabinetNo ?? "—"}</td>
         <td className="px-3 py-2">
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${DOC_MODE_CLS[j.docMode] ?? DOC_MODE_CLS.none}`}>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${DOC_MODE_CLS[j.docMode] ?? DOC_MODE_CLS.none}`}>
             {DOC_MODE_LABEL[j.docMode] ?? j.docMode}
           </span>
         </td>
@@ -250,7 +250,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "am
     : "text-foreground";
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-surface p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className={`mt-0.5 font-bold tabular-nums text-xl ${cls}`}>{value}</p>
     </div>
   );

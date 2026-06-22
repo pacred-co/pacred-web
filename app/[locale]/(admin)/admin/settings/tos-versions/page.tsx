@@ -55,7 +55,7 @@ export default async function AdminTosVersionsPage() {
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการเวอร์ชัน TOS (ข้อตกลงและเงื่อนไข)</h1>
         <p className="text-xs text-muted mt-1">
-          เพิ่ม/แก้/เปิดใช้เวอร์ชัน TOS. <strong>Active = 1 row</strong> ที่ <code className="font-mono text-[10px]">is_active=true</code> —
+          เพิ่ม/แก้/เปิดใช้เวอร์ชัน TOS. <strong>Active = 1 row</strong> ที่ <code className="font-mono text-[11px]">is_active=true</code> —
           หน้า protected ของลูกค้าจะแสดง gate บังคับยอมรับเวอร์ชันนี้ทันทีในการ load หน้าครั้งถัดไป (V-G4.1 ✅).
         </p>
         <p className="text-xs mt-2">

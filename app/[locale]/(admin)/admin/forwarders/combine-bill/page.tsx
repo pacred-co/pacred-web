@@ -447,7 +447,7 @@ export default async function CombineBillPage({
                                 key={fid}
                                 href={`/admin/forwarders/${fid}`}
                                 target="_blank"
-                                className="rounded-full border border-border bg-surface-alt px-2 py-0.5 font-mono text-[10px] text-primary-600 hover:bg-primary-50 hover:border-primary-200"
+                                className="rounded-full border border-border bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-primary-600 hover:bg-primary-50 hover:border-primary-200"
                               >
                                 #{fid}
                               </Link>

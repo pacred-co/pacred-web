@@ -118,7 +118,7 @@ export default async function AdminHRAuditPage({
               <ClipboardList className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · EMPLOYEE AUDIT</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · EMPLOYEE AUDIT</p>
               <h1 className="text-xl sm:text-2xl font-bold">ออดิทพนักงาน</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 ทั้งหมด {totals.all} บันทึก · ชมเชย {totals.praise} · ตักเตือน {totals.warning} · วินัย {totals.disciplinary} · ประเมิน {totals.review}
@@ -181,8 +181,8 @@ export default async function AdminHRAuditPage({
 
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${t.cls}`}>{t.label}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${SEV_CLS[e.severity]}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${t.cls}`}>{t.label}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${SEV_CLS[e.severity]}`}>
                       {SEV_LABEL[e.severity]}
                     </span>
                   </div>
@@ -201,7 +201,7 @@ export default async function AdminHRAuditPage({
                         เกิดเหตุ {new Date(e.related_at).toLocaleDateString("th-TH")}
                       </span>
                     )}
-                    <span className="text-[10px]">บันทึกเมื่อ {new Date(e.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
+                    <span className="text-[11px]">บันทึกเมื่อ {new Date(e.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
                   </div>
 
                   {e.description && (
@@ -235,7 +235,7 @@ function Avatar({ src, name }: { src: string | null; name: string }) {
     );
   }
   return (
-    <div className="h-5 w-5 rounded-full bg-surface-alt ring-1 ring-border flex items-center justify-center text-[9px] font-bold text-muted shrink-0">
+    <div className="h-5 w-5 rounded-full bg-surface-alt ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-muted shrink-0">
       {name.charAt(0).toUpperCase() || "?"}
     </div>
   );

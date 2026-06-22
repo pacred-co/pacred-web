@@ -505,7 +505,7 @@ export function ReviewGridClient({
                   <th className="text-left px-3 py-3 border-b border-border">ตู้ / Sack</th>
                   <th className="text-center px-3 py-3 border-b border-border w-20">
                     รูปป้าย
-                    <div className="text-[9px] font-normal normal-case tracking-normal text-muted">(คลิกซูม · ตรวจ user_code)</div>
+                    <div className="text-[11px] font-normal normal-case tracking-normal text-muted">(คลิกซูม · ตรวจ user_code)</div>
                   </th>
                   <th className="text-left px-3 py-3 border-b border-border">Phase</th>
                   <th className="text-left px-3 py-3 border-b border-border">Qty</th>
@@ -538,7 +538,7 @@ export function ReviewGridClient({
                           <>
                             <div className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-700">{r.containerBatchNo}</div>
                             {r.momoContainerNo && r.momoContainerNo !== r.containerBatchNo && (
-                              <div className="mt-0.5 text-[10px] text-muted">
+                              <div className="mt-0.5 text-[11px] text-muted">
                                 MOMO batch: {r.momoContainerNo}
                               </div>
                             )}
@@ -547,14 +547,14 @@ export function ReviewGridClient({
                           <>
                             <div className="text-foreground">{r.momoContainerNo ?? "—"}</div>
                             {r.momoContainerNo && (
-                              <div className="mt-0.5 text-[10px] text-amber-600">
+                              <div className="mt-0.5 text-[11px] text-amber-600">
                                 ⏳ ยังไม่ join cabinet (รอ container_closed sync)
                               </div>
                             )}
                           </>
                         )}
                         {r.momoSackNo && (
-                          <div className="mt-0.5 text-[10px] text-muted">sack: {r.momoSackNo}</div>
+                          <div className="mt-0.5 text-[11px] text-muted">sack: {r.momoSackNo}</div>
                         )}
                       </td>
                       {/* 2026-06-04 (ภูม flag) — รูปป้ายแปะ thumbnail ที่
@@ -584,19 +584,19 @@ export function ReviewGridClient({
                               loading="lazy"
                             />
                             {r.imageUrls.length > 1 && (
-                              <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 text-white text-[9px] px-1.5 py-0.5 font-bold shadow-sm">
+                              <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 text-white text-[11px] px-1.5 py-0.5 font-bold shadow-sm">
                                 +{r.imageUrls.length - 1}
                               </span>
                             )}
                           </button>
                         ) : (
-                          <span className="text-[10px] text-muted">—</span>
+                          <span className="text-[11px] text-muted">—</span>
                         )}
                       </td>
                       <td className="px-3 py-3">
                         <div className="font-medium text-foreground">{r.phase ?? "—"}</div>
                         {r.adminStatusText && (
-                          <div className="mt-0.5 text-[10px] text-muted">
+                          <div className="mt-0.5 text-[11px] text-muted">
                             {r.adminStatusText}
                           </div>
                         )}
@@ -625,7 +625,7 @@ export function ReviewGridClient({
                             onClick={() =>
                               setRowField(r.id, "userID", r.guessedUserId ?? "")
                             }
-                            className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 underline underline-offset-2 hover:text-sky-700"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 underline underline-offset-2 hover:text-sky-700"
                           >
                             ใช้ค่าจาก MOMO: {r.guessedUserId}
                           </button>
@@ -636,13 +636,13 @@ export function ReviewGridClient({
                           so admin knows the row will skip / fail.
                         */}
                         {r.userIdValid === false && r.guessedUserId && (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-100 px-1.5 py-0.5 text-[11px] font-bold text-red-700">
                             <AlertCircle className="h-2.5 w-2.5" />
                             ไม่มี {r.guessedUserId} ในระบบ
                           </div>
                         )}
                         {r.userIdValid === true && (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">
                             <CheckCircle2 className="h-2.5 w-2.5" />
                             พบใน tb_users
                           </div>
@@ -719,7 +719,7 @@ export function ReviewGridClient({
                                 : <><CheckCircle2 className="h-3.5 w-3.5" /> สร้างใหม่</>}
                             </button>
                             {result && !result.ok && (
-                              <div className="mt-1.5 flex items-start gap-1 rounded-md bg-red-50 px-1.5 py-1 text-[10px] text-red-700">
+                              <div className="mt-1.5 flex items-start gap-1 rounded-md bg-red-50 px-1.5 py-1 text-[11px] text-red-700">
                                 <AlertCircle className="h-3 w-3 flex-shrink-0 mt-0.5" />
                                 <span>{result.message}</span>
                               </div>
@@ -962,7 +962,7 @@ function ZoomLightbox({
           </div>
         )}
 
-        <p className="text-[10px] text-white/60 text-center">
+        <p className="text-[11px] text-white/60 text-center">
           ⚠️ ตรวจสอบเลข user_code บนป้ายให้ตรงกับ Pacred userID ก่อน commit ·
           ถ้าไม่ตรง → แจ้งเซลให้ MOMO update
           {hasMany && <span className="block">⌨ ใช้ ← / → เปลี่ยนรูปได้</span>}

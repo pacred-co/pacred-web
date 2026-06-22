@@ -379,8 +379,8 @@ export default async function AdminReportPaymentPage({
                         <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
                           {r.customer.name || "—"}
                         </Link>
-                        <div className="font-mono text-[10px] text-muted">{r.userid}</div>
-                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                        <div className="font-mono text-[11px] text-muted">{r.userid}</div>
+                        {r.customer.phone && <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.paydetail ?? ""}>
                         {r.paydetail ?? "—"}
@@ -392,7 +392,7 @@ export default async function AdminReportPaymentPage({
                         -{thb(Number(r.paythb ?? 0))}
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.paystatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_CLS[r.paystatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
                           {STATUS_LABEL[r.paystatus] ?? r.paystatus}
                         </span>
                       </td>

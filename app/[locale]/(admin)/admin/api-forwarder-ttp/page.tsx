@@ -106,7 +106,7 @@ export default async function AdminApiForwarderTtpPage() {
               เรียก <code className="rounded bg-surface-alt px-1">cargothai.tech</code> ดึงรายการตู้ (SM) สด.
               ต้องการ <strong>credentials/token จากเจ้าของ</strong> + retry/backoff design ก่อนเปิดใช้.
             </p>
-            <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
               รอ creds จากเจ้าของ
             </span>
           </div>
@@ -120,7 +120,7 @@ export default async function AdminApiForwarderTtpPage() {
         </header>
         <div className="overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-xs border-collapse min-w-[900px]">
-            <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+            <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
               <tr>
                 {SM_COLUMNS.map((c) => (
                   <th key={c} className="text-left px-3 py-2 border-b whitespace-nowrap">{c}</th>

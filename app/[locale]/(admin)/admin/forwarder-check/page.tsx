@@ -544,7 +544,7 @@ function PageHeader({
               {t.label}
               {t.count > 0 && (
                 <span
-                  className={`ml-1.5 inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 py-0.5 ${
+                  className={`ml-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold px-1.5 py-0.5 ${
                     active ? "bg-primary-600 text-white" : "bg-red-500 text-white"
                   }`}
                 >

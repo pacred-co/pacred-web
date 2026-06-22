@@ -103,7 +103,7 @@ export function IntakeScanPanel() {
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 เลข Tracking / รหัสออเดอร์
-                {keysearch && <span className="ml-1 text-[10px] text-emerald-700">(จากกล้อง · แก้ได้)</span>}
+                {keysearch && <span className="ml-1 text-[11px] text-emerald-700">(จากกล้อง · แก้ได้)</span>}
               </label>
               <input
                 ref={inputRef}

@@ -138,7 +138,7 @@ export default async function AdminPeakExportPage({
           <p className="text-xs text-muted mt-1">
             ดาวน์โหลด AR/AP ledger ของ Pacred เป็น CSV ในช่วงวันที่ที่เลือก · นำไป import เข้า PEAK หรือ FlowAccount ได้ทันที
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_receipt</code> + <code className="bg-surface-alt px-1 rounded">tb_bill</code> + <code className="bg-surface-alt px-1 rounded">tb_withdraw_comm_*_h</code> · brief §3.5
           </p>
         </header>
@@ -146,11 +146,11 @@ export default async function AdminPeakExportPage({
         {/* Date range filter */}
         <form method="GET" action="/admin/accounting/peak-export" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
             <input type="date" name="date_from" defaultValue={dateFrom} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
             <input type="date" name="date_to" defaultValue={dateTo} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <button type="submit" className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
@@ -161,7 +161,7 @@ export default async function AdminPeakExportPage({
               ใช้เดือนนี้
             </Link>
           )}
-          <p className="text-[10px] text-muted ml-auto">
+          <p className="text-[11px] text-muted ml-auto">
             ช่วงปัจจุบัน {dateFrom} → {dateTo}
           </p>
         </form>
@@ -247,7 +247,7 @@ export default async function AdminPeakExportPage({
               (selling / cost · declared = memo เฉยๆ ไม่มี GL posting). โครงสร้าง CSV พร้อมแล้ว — เติมรหัสแล้วใช้ได้ทันที.
             </div>
           )}
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             3 ราคาแยกกันเสมอ: ขาย (→ รายได้/AR + ใบกำกับ) ≠ ต้นทุน (→ COGS/stock-in) ≠ สำแดง (→ ใบขนรวม · memo).
             รายงานนี้สรุปต่องาน (tb_cargo_taxdoc_job) — ดูงานที่{" "}
             <Link href="/admin/pricing/taxdoc-workspace" className="text-primary-600 hover:underline">Tax-doc Workspace</Link>.
@@ -288,7 +288,7 @@ function ExportCard({
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm flex flex-col gap-3">
       <div>
         <h3 className="font-bold text-sm">{title}</h3>
-        <p className="text-[10px] text-muted mt-0.5">{desc}</p>
+        <p className="text-[11px] text-muted mt-0.5">{desc}</p>
       </div>
       <div className="border-t border-border pt-3">
         <p className="text-xs text-muted">ในช่วงที่เลือก</p>
@@ -313,7 +313,7 @@ function RollupStat({ label, value, tone }: { label: string; value: string; tone
     tone === "blue" ? "text-blue-700" : tone === "emerald" ? "text-emerald-700" : tone === "green" ? "text-green-700" : "text-foreground";
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className={`mt-0.5 font-bold tabular-nums text-lg ${cls}`}>{value}</p>
     </div>
   );

@@ -114,7 +114,7 @@ export default async function AdminAuditPage({
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · audit log</p>
           <h1 className="mt-1 text-2xl font-bold">บันทึกการกระทำของแอดมิน</h1>
           <p className="mt-1 text-sm text-muted">
-            ทุก action ที่เรียก <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">logAdminAction()</code> ลงในตาราง <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">admin_audit_log</code>
+            ทุก action ที่เรียก <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">logAdminAction()</code> ลงในตาราง <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">admin_audit_log</code>
           </p>
         </div>
         <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
@@ -123,27 +123,27 @@ export default async function AdminAuditPage({
       {/* Filter form */}
       <form action="/admin/audit" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">แอดมิน (member_code)</span>
+          <span className="text-[11px] text-muted">แอดมิน (member_code)</span>
           <input name="admin" defaultValue={sp.admin ?? ""} placeholder="PR001" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">action prefix</span>
+          <span className="text-[11px] text-muted">action prefix</span>
           <input name="action" defaultValue={sp.action ?? ""} placeholder="rate_general" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">target_type</span>
+          <span className="text-[11px] text-muted">target_type</span>
           <input name="target_type" defaultValue={sp.target_type ?? ""} placeholder="forwarder" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">target_id</span>
+          <span className="text-[11px] text-muted">target_id</span>
           <input name="target_id" defaultValue={sp.target_id ?? ""} placeholder="UUID หรือ slug" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ตั้งแต่ (from)</span>
+          <span className="text-[11px] text-muted">ตั้งแต่ (from)</span>
           <input type="date" name="from" defaultValue={sp.from ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ถึง (to)</span>
+          <span className="text-[11px] text-muted">ถึง (to)</span>
           <input type="date" name="to" defaultValue={sp.to ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <div className="flex flex-col gap-1.5 self-end">
@@ -190,7 +190,7 @@ export default async function AdminAuditPage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="font-bold text-sm">{rows.length} รายการ (limit {limit})</h2>
-          <span className="text-[10px] text-muted">ใหม่ → เก่า</span>
+          <span className="text-[11px] text-muted">ใหม่ → เก่า</span>
         </div>
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่พบ action ตามตัวกรอง</p>
@@ -212,7 +212,7 @@ export default async function AdminAuditPage({
                         <span className="text-muted">:</span>
                         <span className="font-mono">{r.target_id}</span>
                       </p>
-                      <p className="text-[10px] text-muted mt-0.5">
+                      <p className="text-[11px] text-muted mt-0.5">
                         โดย <span className="font-medium text-foreground">{adminLabel}</span>
                         {" · "}
                         {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
@@ -220,15 +220,15 @@ export default async function AdminAuditPage({
                     </div>
                     <Link
                       href={`/admin/audit?target_type=${encodeURIComponent(r.target_type)}&target_id=${encodeURIComponent(r.target_id)}`}
-                      className="text-[10px] text-primary-600 hover:underline shrink-0"
+                      className="text-[11px] text-primary-600 hover:underline shrink-0"
                     >
                       ↗ history of target
                     </Link>
                   </div>
                   {r.payload && Object.keys(r.payload).length > 0 && (
-                    <details className="text-[10px]">
+                    <details className="text-[11px]">
                       <summary className="cursor-pointer text-muted hover:text-foreground">payload</summary>
-                      <pre className="mt-1 rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[10px] whitespace-pre-wrap break-words">
+                      <pre className="mt-1 rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap break-words">
                         {JSON.stringify(r.payload, null, 2)}
                       </pre>
                     </details>

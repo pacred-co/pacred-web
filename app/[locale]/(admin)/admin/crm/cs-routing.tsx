@@ -86,7 +86,7 @@ export function CsRouting({
           <Headphones className="w-3.5 h-3.5" />
           CS ผู้ดูแล: <span className="font-medium text-foreground">{cur?.name ?? currentCsName ?? currentCsId ?? "— ยังไม่มี —"}</span>
         </span>
-        <p className="mt-1 text-[10px] text-muted/80">เฉพาะหัวหน้า/ผู้จัดการเปลี่ยน CS ผู้ดูแลได้</p>
+        <p className="mt-1 text-[11px] text-muted/80">เฉพาะหัวหน้า/ผู้จัดการเปลี่ยน CS ผู้ดูแลได้</p>
       </div>
     );
   }

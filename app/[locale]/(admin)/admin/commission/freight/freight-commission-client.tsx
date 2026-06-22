@@ -255,9 +255,9 @@ export function FreightCommissionClient({
                   <td className="px-3 py-3 text-xs text-muted">{t.effectiveFrom}</td>
                   <td className="px-3 py-3">
                     {t.isOwnerConfirmed ? (
-                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">ยืนยันแล้ว</span>
+                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">ยืนยันแล้ว</span>
                     ) : (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">PENDING owner confirm</span>
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">PENDING owner confirm</span>
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs text-muted max-w-[260px]">{t.notes ?? "—"}</td>
@@ -376,9 +376,9 @@ export function FreightCommissionClient({
                       ) : "—"}
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${st.cls}`}>{st.label}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>{st.label}</span>
                       {w.status === "rejected" && w.rejectedReason && (
-                        <p className="mt-1 text-[10px] text-muted max-w-[180px]">{w.rejectedReason}</p>
+                        <p className="mt-1 text-[11px] text-muted max-w-[180px]">{w.rejectedReason}</p>
                       )}
                     </td>
                     <td className="px-3 py-3 text-xs text-muted">{fmtDate(w.requestedAt)}</td>
@@ -415,10 +415,10 @@ export function FreightCommissionClient({
                           </button>
                         )}
                         {w.status === "approved" && !canPay && (
-                          <span className="text-[10px] text-muted">รอ super จ่าย</span>
+                          <span className="text-[11px] text-muted">รอ super จ่าย</span>
                         )}
                         {(w.status === "paid" || w.status === "rejected") && (
-                          <span className="text-[10px] text-muted">—</span>
+                          <span className="text-[11px] text-muted">—</span>
                         )}
                       </div>
                     </td>

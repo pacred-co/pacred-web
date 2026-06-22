@@ -267,7 +267,7 @@ export default async function AdminRefundDetailPage({
           )}
           {row.profile?.phone && <p className="text-xs">☎ {row.profile.phone}</p>}
           {row.profile?.email && <p className="text-xs">✉ {row.profile.email}</p>}
-          <p className="text-[10px] font-mono text-muted mt-2">profile_id: {row.profile_id}</p>
+          <p className="text-[11px] font-mono text-muted mt-2">profile_id: {row.profile_id}</p>
         </section>
         <section className="rounded-2xl border border-border bg-surface-alt/30 p-5 space-y-1 text-xs">
           <h2 className="font-bold text-sm mb-2">{parentCtx?.label ?? REFUND_SOURCE_LABEL[row.source]}</h2>
@@ -318,7 +318,7 @@ export default async function AdminRefundDetailPage({
           <ul className="space-y-1.5 text-xs">
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
-                <span className="font-mono text-[10px] text-muted whitespace-nowrap">
+                <span className="font-mono text-[11px] text-muted whitespace-nowrap">
                   {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                 </span>
                 <span className="font-medium">{a.action}</span>

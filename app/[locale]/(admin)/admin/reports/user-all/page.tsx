@@ -392,7 +392,7 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
                         {r.uid}
                       </Link>
                       {r.u.userstatus === "0" && (
-                        <span className="ml-1 text-[10px] text-red-600">(ถูกลบ)</span>
+                        <span className="ml-1 text-[11px] text-red-600">(ถูกลบ)</span>
                       )}
                       <div className="mt-0.5 text-muted">
                         {`${r.u.username ?? ""} ${r.u.userlastname ?? ""}`.trim() || "—"}

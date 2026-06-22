@@ -221,7 +221,7 @@ function RateCardAutoFill({
           {pending ? "กำลังเติม…" : "🧮 เติมราคา"}
         </button>
       </div>
-      <p className="text-[10px] text-muted">ราคาอ้างอิงจาก rate card จริง (AXELRA IMPORT) · ตรวจ/แก้ไขได้ก่อนส่งอนุมัติ · ไม่มีการแจ้งลูกค้า</p>
+      <p className="text-[11px] text-muted">ราคาอ้างอิงจาก rate card จริง (AXELRA IMPORT) · ตรวจ/แก้ไขได้ก่อนส่งอนุมัติ · ไม่มีการแจ้งลูกค้า</p>
       {done && <p className="text-xs text-emerald-700">{done}</p>}
       {err && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</p>}
     </section>
@@ -243,7 +243,7 @@ function ItemsTable({
     <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
       <div className="px-5 py-3 border-b border-border flex items-center justify-between">
         <h2 className="font-bold text-sm">รายการ (line items)</h2>
-        {!editable && <span className="text-[10px] text-muted">read-only — สถานะไม่ใช่ draft</span>}
+        {!editable && <span className="text-[11px] text-muted">read-only — สถานะไม่ใช่ draft</span>}
       </div>
       {items.length === 0 && !editable && (
         <p className="p-12 text-center text-sm text-muted">ไม่มี line items</p>
@@ -322,9 +322,9 @@ function ItemRow({ item, editable }: { item: LineItem; editable: boolean }) {
         <td className="px-3 py-2"><input type="number" min={0} step={0.01} value={price} onChange={(e) => setPrice(Number(e.target.value) || 0)} className="w-24 rounded border border-border bg-white px-2 py-1 text-xs text-right font-mono" /></td>
         <td className="px-3 py-2 text-right font-mono text-xs">{thb(qty * price)}</td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
-          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
-          <button type="button" onClick={() => { setEditing(false); setDesc(item.description); setQty(item.quantity); setUnit((item.unit as QuoteUnit)); setPrice(item.unit_price_thb); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
+          <button type="button" onClick={() => { setEditing(false); setDesc(item.description); setQty(item.quantity); setUnit((item.unit as QuoteUnit)); setPrice(item.unit_price_thb); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">×</button>
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       </tr>
     );
@@ -335,7 +335,7 @@ function ItemRow({ item, editable }: { item: LineItem; editable: boolean }) {
       <td className="px-3 py-2 text-xs">{item.position}</td>
       <td className="px-3 py-2">
         <p className="text-sm">{item.description}</p>
-        {item.note && <p className="text-[10px] text-muted">{item.note}</p>}
+        {item.note && <p className="text-[11px] text-muted">{item.note}</p>}
       </td>
       <td className="px-3 py-2 text-right font-mono text-xs">{item.quantity}</td>
       <td className="px-3 py-2 text-xs">{item.unit}</td>
@@ -348,11 +348,11 @@ function ItemRow({ item, editable }: { item: LineItem; editable: boolean }) {
             <button type="button" onClick={() => setConfirmDelete(true)} className="ml-2 text-xs text-red-600 hover:underline">ลบ</button>
           ) : (
             <span className="ml-2">
-              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓ ลบ</button>
-              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-1 text-[10px] text-muted hover:underline">×</button>
+              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓ ลบ</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-1 text-[11px] text-muted hover:underline">×</button>
             </span>
           )}
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       )}
     </tr>

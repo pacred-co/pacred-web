@@ -198,7 +198,7 @@ export default async function CntHsPage({
         : "border-border bg-white text-foreground hover:bg-surface-alt"
     }`;
   const badgeCls = (active: boolean) =>
-    `rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+    `rounded-full px-2 py-0.5 text-[11px] font-semibold ${
       active ? "bg-primary-600 text-white" : "bg-surface-alt text-muted"
     }`;
 

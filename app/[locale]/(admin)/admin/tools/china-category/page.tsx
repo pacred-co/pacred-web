@@ -226,7 +226,7 @@ export default async function AdminChinaCategoryLookupPage({
                       </td>
                       <td className="px-4 py-2.5">
                         <span
-                          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
                             TYPE_TINT[r.type] ?? "bg-surface-alt text-muted"
                           }`}
                         >
@@ -253,11 +253,11 @@ export default async function AdminChinaCategoryLookupPage({
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         {r.status === 0 ? (
-                          <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
+                          <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">
                             ปกติ
                           </span>
                         ) : (
-                          <span className="inline-block rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[10px] font-medium">
+                          <span className="inline-block rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[11px] font-medium">
                             ปิด
                           </span>
                         )}

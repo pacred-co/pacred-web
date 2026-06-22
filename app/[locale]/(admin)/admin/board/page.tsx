@@ -244,7 +244,7 @@ export default async function AdminBoardPage({
       {/* Filters */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">แผนก:</span>
+          <span className="text-[11px] uppercase tracking-widest text-muted font-semibold">แผนก:</span>
           <Chip active={!roleFilter} href={buildHref({ role: null, status: sp.status, overdue: sp.overdue, waiting: sp.waiting })}>
             ทุกแผนก ({totalActive})
           </Chip>
@@ -259,7 +259,7 @@ export default async function AdminBoardPage({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">สถานะ:</span>
+          <span className="text-[11px] uppercase tracking-widest text-muted font-semibold">สถานะ:</span>
           <Chip active={!statusFilter} href={buildHref({ role: sp.role, status: null, overdue: sp.overdue, waiting: sp.waiting })}>
             งานที่เปิดอยู่
           </Chip>
@@ -281,7 +281,7 @@ export default async function AdminBoardPage({
         </div>
         {/* IC-1 — waiting_reason filter chips (one per reason + "ทั้งหมด"). */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">รอ:</span>
+          <span className="text-[11px] uppercase tracking-widest text-muted font-semibold">รอ:</span>
           <Chip active={!waitingFilter} href={buildHref({ role: sp.role, status: sp.status, overdue: sp.overdue, waiting: null })}>
             ทั้งหมด ({totalWaiting})
           </Chip>

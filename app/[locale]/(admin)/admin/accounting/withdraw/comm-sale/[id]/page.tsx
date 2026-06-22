@@ -108,7 +108,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
             <div className="mt-4 text-xs">
               <p className="text-muted">สลิปจ่ายเงิน</p>
               <p className="mt-1 font-mono break-all">{header.imagesslip}</p>
-              <p className="text-[10px] text-muted mt-1">⚠️ Slip download/view เร็วๆ นี้ (storage path mapping)</p>
+              <p className="text-[11px] text-muted mt-1">⚠️ Slip download/view เร็วๆ นี้ (storage path mapping)</p>
             </div>
           )}
         </section>
@@ -129,7 +129,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[800px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
                     <th className="px-3 py-2">Tracking CHN</th>
@@ -153,7 +153,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
                           #{it.fid}
                         </Link>
                       </td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted whitespace-nowrap">
+                      <td className="px-3 py-2 font-mono text-[11px] text-muted whitespace-nowrap">
                         {it.forwarder?.ftrackingchn ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(it.forwarder?.fdate ?? null)}</td>
@@ -165,7 +165,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
                         {it.forwarder ? thb(it.forwarder.ftotalprice - it.forwarder.fdiscount) : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                           {it.forwarder?.fstatus ?? "—"}
                         </span>
                       </td>
@@ -177,7 +177,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
           )}
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 MVP read-only (brief §2 · เก่า 0 Pacred reader) · CREATE batch + PAY slip DEFERRED — money-safe write ต้อง ก๊อต co-sign + ดู legacy
           <code className="bg-surface-alt px-1 rounded ml-1">withdraw-commission-sale.php</code> source ก่อน
         </p>

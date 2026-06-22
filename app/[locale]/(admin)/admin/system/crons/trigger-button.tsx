@@ -35,7 +35,7 @@ export function CronTriggerButton({ cronPath }: { cronPath: string }) {
       >
         {pending ? "กำลังรัน…" : "▶ Trigger now"}
       </button>
-      {msg && <span className="text-[10px] text-muted">{msg}</span>}
+      {msg && <span className="text-[11px] text-muted">{msg}</span>}
     </div>
   );
 }

@@ -67,26 +67,26 @@ export function WhtCertRowActions({ entryId }: { entryId: number }) {
           onChange={(e) => setCertNumber(e.target.value)}
           placeholder="เลขที่ 50-ทวิ"
           autoFocus
-          className="rounded border border-border bg-white px-2 py-1 text-[10px]"
+          className="rounded border border-border bg-white px-2 py-1 text-[11px]"
         />
         <div className="flex gap-1">
           <button
             type="button"
             onClick={handleReceive}
             disabled={pending}
-            className="rounded bg-green-600 text-white px-2 py-1 text-[10px] font-medium hover:bg-green-700 disabled:opacity-40"
+            className="rounded bg-green-600 text-white px-2 py-1 text-[11px] font-medium hover:bg-green-700 disabled:opacity-40"
           >
             ✓ ยืนยัน
           </button>
           <button
             type="button"
             onClick={() => { setShowReceive(false); setErr(null); }}
-            className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+            className="rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt"
           >
             ยกเลิก
           </button>
         </div>
-        {err && <p className="text-[9px] text-red-600">{err}</p>}
+        {err && <p className="text-[11px] text-red-600">{err}</p>}
       </div>
     );
   }
@@ -100,26 +100,26 @@ export function WhtCertRowActions({ entryId }: { entryId: number }) {
           placeholder="เหตุผล (≥10 ตัว)"
           autoFocus
           rows={2}
-          className="rounded border border-border bg-white px-2 py-1 text-[10px]"
+          className="rounded border border-border bg-white px-2 py-1 text-[11px]"
         />
         <div className="flex gap-1">
           <button
             type="button"
             onClick={handleWaive}
             disabled={pending}
-            className="rounded bg-slate-600 text-white px-2 py-1 text-[10px] font-medium hover:bg-slate-700 disabled:opacity-40"
+            className="rounded bg-slate-600 text-white px-2 py-1 text-[11px] font-medium hover:bg-slate-700 disabled:opacity-40"
           >
             ✓ ยกเว้น
           </button>
           <button
             type="button"
             onClick={() => { setShowWaive(false); setErr(null); }}
-            className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+            className="rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt"
           >
             ยกเลิก
           </button>
         </div>
-        {err && <p className="text-[9px] text-red-600">{err}</p>}
+        {err && <p className="text-[11px] text-red-600">{err}</p>}
       </div>
     );
   }
@@ -129,14 +129,14 @@ export function WhtCertRowActions({ entryId }: { entryId: number }) {
       <button
         type="button"
         onClick={() => setShowReceive(true)}
-        className="rounded border border-green-300 bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700 hover:bg-green-100"
+        className="rounded border border-green-300 bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700 hover:bg-green-100"
       >
         ✓ รับ
       </button>
       <button
         type="button"
         onClick={() => setShowWaive(true)}
-        className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] text-slate-600 hover:bg-surface-alt"
+        className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-surface-alt"
       >
         ยกเว้น
       </button>

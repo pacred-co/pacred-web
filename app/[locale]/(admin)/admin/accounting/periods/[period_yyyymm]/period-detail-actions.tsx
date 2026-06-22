@@ -190,7 +190,7 @@ export function PeriodDetailActions({ period_yyyymm, status, canWrite, canReopen
               placeholder="เช่น พบใบกำกับภาษีที่ออกผิด เลขผู้เสียภาษีลูกค้า ABC จำเป็นต้องแก้ไข + ออกใหม่..."
               className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs"
             />
-            <p className="text-[10px] text-muted mt-1">{reopenReason.length} / 500</p>
+            <p className="text-[11px] text-muted mt-1">{reopenReason.length} / 500</p>
           </div>
           <div className="flex gap-2">
             <button

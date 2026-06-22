@@ -317,7 +317,7 @@ export function CntHsTable({ rows }: { rows: CntHsRow[] }) {
                   {/* 9 — สถานะ */}
                   <td className="px-4 py-3 text-center">
                     <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${chip.chip}`}
+                      className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${chip.chip}`}
                     >
                       {chip.label}
                     </span>

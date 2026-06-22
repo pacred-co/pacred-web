@@ -250,7 +250,7 @@ export default async function AdminCustomsDeclarationsListPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
         </Link>
         {CUSTOMS_DECLARATION_STATUSES.map((s) => (
           <Link
@@ -260,7 +260,7 @@ export default async function AdminCustomsDeclarationsListPage({
               s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {CUSTOMS_DECLARATION_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+            {CUSTOMS_DECLARATION_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
           </Link>
         ))}
       </nav>
@@ -332,7 +332,7 @@ export default async function AdminCustomsDeclarationsListPage({
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_declared_value_thb)}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(totalTax)}</td>
                     <td className="px-3 py-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                         {CUSTOMS_DECLARATION_STATUS_LABEL[r.status]}
                       </span>
                     </td>

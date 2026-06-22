@@ -443,13 +443,13 @@ export default async function CombineBillPrintPage({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-gray-100 text-center">
-              <th className="border border-gray-400 px-2 py-1 w-12">ลำดับ<br /><span className="text-[10px] font-normal text-gray-500">No.</span></th>
-              <th className="border border-gray-400 px-2 py-1 w-28">เลขที่ออเดอร์<br /><span className="text-[10px] font-normal text-gray-500">Order No.</span></th>
-              <th className="border border-gray-400 px-2 py-1">รหัสพัสดุ<br /><span className="text-[10px] font-normal text-gray-500">Tracking</span></th>
-              <th className="border border-gray-400 px-2 py-1 w-24">ที่ตั้ง<br /><span className="text-[10px] font-normal text-gray-500">Location</span></th>
-              <th className="border border-gray-400 px-2 py-1 w-20">น้ำหนัก<br /><span className="text-[10px] font-normal text-gray-500">Wt./kg</span></th>
-              <th className="border border-gray-400 px-2 py-1 w-20">ปริมาตร<br /><span className="text-[10px] font-normal text-gray-500">Vol./cbm</span></th>
-              <th className="border border-gray-400 px-2 py-1 w-16">จำนวน<br /><span className="text-[10px] font-normal text-gray-500">Box</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-12">ลำดับ<br /><span className="text-[11px] font-normal text-gray-500">No.</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-28">เลขที่ออเดอร์<br /><span className="text-[11px] font-normal text-gray-500">Order No.</span></th>
+              <th className="border border-gray-400 px-2 py-1">รหัสพัสดุ<br /><span className="text-[11px] font-normal text-gray-500">Tracking</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-24">ที่ตั้ง<br /><span className="text-[11px] font-normal text-gray-500">Location</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-20">น้ำหนัก<br /><span className="text-[11px] font-normal text-gray-500">Wt./kg</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-20">ปริมาตร<br /><span className="text-[11px] font-normal text-gray-500">Vol./cbm</span></th>
+              <th className="border border-gray-400 px-2 py-1 w-16">จำนวน<br /><span className="text-[11px] font-normal text-gray-500">Box</span></th>
             </tr>
           </thead>
           <tbody>

@@ -792,7 +792,7 @@ export default async function AdminAccountingPage({
           </div>
           <div className="grid sm:grid-cols-2 gap-3 text-xs">
             <div className="rounded-xl border border-border bg-white p-4 space-y-2">
-              <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">ลิงก์ด่วน</p>
+              <p className="font-semibold text-muted uppercase tracking-wide text-[11px]">ลิงก์ด่วน</p>
               {[
                 ["/admin/forwarders?status=7", "ฝากนำเข้าที่ส่งแล้ว"],
                 ["/admin/yuan-payments?status=completed", "ฝากโอนหยวนสำเร็จ"],
@@ -802,7 +802,7 @@ export default async function AdminAccountingPage({
               ))}
             </div>
             <div className="rounded-xl border border-border bg-white p-4 space-y-2">
-              <p className="font-semibold text-muted uppercase tracking-wide text-[10px]">กระเป๋าเงิน</p>
+              <p className="font-semibold text-muted uppercase tracking-wide text-[11px]">กระเป๋าเงิน</p>
               {[
                 ["/admin/wallet?kind=deposit&status=pending", "ชำระเงินรอตรวจ"],
                 ["/admin/wallet?kind=withdraw&status=pending", "ถอนเงินรอจ่าย"],
@@ -977,7 +977,7 @@ export default async function AdminAccountingPage({
                   <td className="px-4 py-3 text-xs space-y-0.5">
                     {r.bank_name    && <div>{r.bank_name}</div>}
                     {r.account_name && <div className="text-muted">{r.account_name}</div>}
-                    {r.account_number && <div className="font-mono text-muted text-[10px]">{r.account_number}</div>}
+                    {r.account_number && <div className="font-mono text-muted text-[11px]">{r.account_number}</div>}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">{r.note ?? "—"}</td>
                   <td className="px-4 py-3"><PaymentStatusBadge s={r.status} /></td>
@@ -1006,7 +1006,7 @@ export default async function AdminAccountingPage({
               >
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-foreground">{card.title}</h3>
-                  <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                  <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[11px] font-medium uppercase">
                     {card.badge}
                   </span>
                 </div>
@@ -1129,7 +1129,7 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
 
 function ForwarderStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${FORWARDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${FORWARDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {legacyForwarderStatusThai(s) || s}
     </span>
   );
@@ -1137,7 +1137,7 @@ function ForwarderStatusBadge({ s }: { s: string }) {
 
 function OrderStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${ORDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ORDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {legacyOrderStatusThai(s) || s}
     </span>
   );
@@ -1145,7 +1145,7 @@ function OrderStatusBadge({ s }: { s: string }) {
 
 function PaymentStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYMENT_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${PAYMENT_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {PAYMENT_LABEL[s] ?? s}
     </span>
   );
@@ -1210,21 +1210,21 @@ function RevenueTrendChart({ data }: { data: Array<{ d: string; v: number }> }) 
           <h2 className="text-sm font-bold text-gray-900">
             📈 รายได้ {data.length} วันย้อนหลัง
           </h2>
-          <p className="text-[10px] text-muted mt-0.5">
+          <p className="text-[11px] text-muted mt-0.5">
             ฝากนำเข้า (ส่งแล้ว) + ฝากโอนหยวน (สำเร็จ) + ฝากสั่งซื้อ (สำเร็จ)
           </p>
         </div>
         <div className="flex gap-4 text-xs">
           <div>
-            <p className="text-[10px] text-muted">รวม {data.length} วัน</p>
+            <p className="text-[11px] text-muted">รวม {data.length} วัน</p>
             <p className="font-bold text-primary-700">฿{fmt(total)}</p>
           </div>
           <div>
-            <p className="text-[10px] text-muted">เฉลี่ย/วัน</p>
+            <p className="text-[11px] text-muted">เฉลี่ย/วัน</p>
             <p className="font-bold text-emerald-700">฿{fmt(avg)}</p>
           </div>
           <div>
-            <p className="text-[10px] text-muted">วันสูงสุด ({peakP.d.slice(5)})</p>
+            <p className="text-[11px] text-muted">วันสูงสุด ({peakP.d.slice(5)})</p>
             <p className="font-bold text-blue-700">฿{fmt(peakP.v)}</p>
           </div>
         </div>
@@ -1285,7 +1285,7 @@ function RevenueTrendChart({ data }: { data: Array<{ d: string; v: number }> }) 
           );
         })}
       </svg>
-      <p className="text-[10px] text-muted mt-1 flex items-center gap-3">
+      <p className="text-[11px] text-muted mt-1 flex items-center gap-3">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-2 bg-[#B30000] rounded-sm"></span> รายวัน
         </span>

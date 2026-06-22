@@ -189,37 +189,37 @@ export default async function AdminNotificationsLogPage({
 
       <form action="/admin/system/notifications" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">category</span>
+          <span className="text-[11px] text-muted">category</span>
           <select name="category" defaultValue={sp.category ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40">
             <option value="">— ทั้งหมด —</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">severity</span>
+          <span className="text-[11px] text-muted">severity</span>
           <select name="severity" defaultValue={sp.severity ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40">
             <option value="">— ทั้งหมด —</option>
             {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">delivery</span>
+          <span className="text-[11px] text-muted">delivery</span>
           <select name="delivery_status" defaultValue={sp.delivery_status ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40">
             <option value="">— ทั้งหมด —</option>
             {DELIVERY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
         <label className="space-y-1 md:col-span-1">
-          <span className="text-[10px] text-muted">ผู้รับ (member_code หรือ profile_id)</span>
+          <span className="text-[11px] text-muted">ผู้รับ (member_code หรือ profile_id)</span>
           <input name="recipient" defaultValue={sp.recipient ?? ""} placeholder="PR001 หรือ UUID" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <div className="space-y-1 lg:col-span-1 grid grid-cols-2 gap-1">
           <label className="space-y-1">
-            <span className="text-[10px] text-muted">จาก</span>
+            <span className="text-[11px] text-muted">จาก</span>
             <input type="date" name="from" defaultValue={fromStr} className="w-full rounded-lg border border-border bg-surface-alt/30 px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] text-muted">ถึง</span>
+            <span className="text-[11px] text-muted">ถึง</span>
             <input type="date" name="to" defaultValue={sp.to ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
           </label>
         </div>
@@ -233,7 +233,7 @@ export default async function AdminNotificationsLogPage({
           <h2 className="font-bold text-sm">
             แสดง {rows.length === 0 ? 0 : offset + 1}–{pageEnd} จาก {totalCount.toLocaleString()} รายการ
           </h2>
-          <span className="text-[10px] text-muted">ใหม่ → เก่า · {PAGE_SIZE} ต่อหน้า</span>
+          <span className="text-[11px] text-muted">ใหม่ → เก่า · {PAGE_SIZE} ต่อหน้า</span>
         </div>
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่พบ notifications ตามตัวกรอง</p>
@@ -251,24 +251,24 @@ export default async function AdminNotificationsLogPage({
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${SEVERITY_BADGE[r.severity] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${SEVERITY_BADGE[r.severity] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
                           {r.severity}
                         </span>
-                        <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[10px] font-mono">{r.category}</span>
+                        <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-mono">{r.category}</span>
                         {delivery ? (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${DELIVERY_BADGE[delivery] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${DELIVERY_BADGE[delivery] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
                             {delivery}
                           </span>
                         ) : (
-                          <span className="rounded-full border bg-gray-50 text-gray-500 border-gray-200 px-2 py-0.5 text-[10px]">— legacy —</span>
+                          <span className="rounded-full border bg-gray-50 text-gray-500 border-gray-200 px-2 py-0.5 text-[11px]">— legacy —</span>
                         )}
                         {readAt && (
-                          <span className="text-[10px] text-blue-700">อ่านแล้ว</span>
+                          <span className="text-[11px] text-blue-700">อ่านแล้ว</span>
                         )}
                       </div>
                       <p className="mt-1 text-sm font-medium truncate">{r.title}</p>
                       <p className="text-xs text-muted line-clamp-2">{r.body}</p>
-                      <p className="mt-0.5 text-[10px] text-muted">
+                      <p className="mt-0.5 text-[11px] text-muted">
                         → <span className="font-medium text-foreground">{recipientLabel}</span>
                         {" · "}
                         {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
@@ -277,13 +277,13 @@ export default async function AdminNotificationsLogPage({
                       </p>
                     </div>
                     {r.link_href && (
-                      <code className="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-muted shrink-0">
+                      <code className="rounded bg-surface-alt px-1.5 py-0.5 text-[11px] font-mono text-muted shrink-0">
                         {r.link_href}
                       </code>
                     )}
                   </div>
                   {r.delivery_error && (
-                    <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] text-red-700 font-mono break-words">
+                    <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 font-mono break-words">
                       {r.delivery_error}
                     </p>
                   )}
@@ -306,7 +306,7 @@ export default async function AdminNotificationsLogPage({
         )}
       </div>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Tip: rows สร้างก่อน migration 0070 ไม่มี <code>delivery_status</code> — แสดงเป็น &quot;legacy&quot;; ระบบเดาว่า &quot;ส่งแล้ว&quot; ถ้ามี <code>delivered_line_at</code> หรือ <code>delivered_email_at</code>.
       </p>
     </main>

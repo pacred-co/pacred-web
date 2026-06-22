@@ -151,7 +151,7 @@ export default async function AdminHRLeavesPage({
               <FileText className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · LEAVE RECORDS</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · LEAVE RECORDS</p>
               <h1 className="text-xl sm:text-2xl font-bold">การลางาน</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 ทั้งหมด {totals.all} รายการ · รออนุมัติ {totals.pending} · อนุมัติแล้ว {totals.approved} · ไม่อนุมัติ {totals.rejected}
@@ -199,9 +199,9 @@ export default async function AdminHRLeavesPage({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-bold text-foreground">{fullName(r.adminid)}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${TYPE_CLS[r.type] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{typeLabel}</span>
-                    <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium">{durationLabel}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATUS_CLS[r.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{statusLabel}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${TYPE_CLS[r.type] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{typeLabel}</span>
+                    <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium">{durationLabel}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${STATUS_CLS[r.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>{statusLabel}</span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
@@ -211,12 +211,12 @@ export default async function AdminHRLeavesPage({
                       {r.enddate && r.enddate !== r.startdate ? ` → ${new Date(r.enddate).toLocaleDateString("th-TH")}` : ""}
                     </span>
                     {r.date && (
-                      <span className="inline-flex items-center gap-1 text-[10px]">
+                      <span className="inline-flex items-center gap-1 text-[11px]">
                         <Clock className="w-3 h-3" />
                         ยื่นเมื่อ {new Date(r.date).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
                       </span>
                     )}
-                    {r.adminidcreate && <span className="text-[10px]">บันทึกโดย {r.adminidcreate}</span>}
+                    {r.adminidcreate && <span className="text-[11px]">บันทึกโดย {r.adminidcreate}</span>}
                   </div>
 
                   {r.reason && (
@@ -258,7 +258,7 @@ function TabPill({
       className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${active ? baseActive : idleCls}`}
     >
       {label}
-      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/25" : "bg-surface-alt"}`}>
+      <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${active ? "bg-white/25" : "bg-surface-alt"}`}>
         {count}
       </span>
     </Link>

@@ -363,12 +363,12 @@ export function PerTrackingEditorClient({
           </label>
           {/* PINNED OPEN (ภูม 2026-06-19) — inputs always render so the seller fills the rate. */}
           <div className="mt-1.5 flex flex-wrap items-end gap-2">
-            <label className="block"><span className="block text-[10px] text-muted">เรท ฿/กก.</span>
+            <label className="block"><span className="block text-[11px] text-muted">เรท ฿/กก.</span>
               <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
-            <label className="block"><span className="block text-[10px] text-muted">เรท ฿/CBM</span>
+            <label className="block"><span className="block text-[11px] text-muted">เรท ฿/CBM</span>
               <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
           </div>
-          <p className="mt-1 text-[10px] text-muted">ติ๊ก = ใช้เรทที่กรอก (เซลกรอกเอง) · ไม่ติ๊ก = เรทระบบ</p>
+          <p className="mt-1 text-[11px] text-muted">ติ๊ก = ใช้เรทที่กรอก (เซลกรอกเอง) · ไม่ติ๊ก = เรทระบบ</p>
         </div>
         <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
@@ -377,10 +377,10 @@ export function PerTrackingEditorClient({
           </label>
           {/* PINNED OPEN + เพดาน 350 (ภูม 2026-06-19: "ค่าเทียบ 1 คิว ไม่เกิน 350 กก."). */}
           <div className="mt-1.5 flex items-end gap-2">
-            <label className="block"><span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก. · ไม่เกิน 350)</span>
+            <label className="block"><span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก. · ไม่เกิน 350)</span>
               <input type="number" min={0} max={MAX_COMPARISON} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending || !canEditComparison} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
           </div>
-          <p className="mt-1 text-[10px] text-muted">{canEditComparison ? `ติ๊ก = ใช้ค่าเทียบที่กรอก · 1 คิว ไม่เกิน ${MAX_COMPARISON} กก.` : "🔒 ค่าเทียบสงวนไว้ — พนักงานโกดังแก้ไม่ได้"}</p>
+          <p className="mt-1 text-[11px] text-muted">{canEditComparison ? `ติ๊ก = ใช้ค่าเทียบที่กรอก · 1 คิว ไม่เกิน ${MAX_COMPARISON} กก.` : "🔒 ค่าเทียบสงวนไว้ — พนักงานโกดังแก้ไม่ได้"}</p>
         </div>
       </div>
 
@@ -411,9 +411,9 @@ export function PerTrackingEditorClient({
               <tr key={r.id} className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:border-r [&>td]:border-border">
                 <td className="min-w-[170px] max-w-[260px] text-left">
                   <div className="font-mono text-[11px] font-medium break-words">{r.tracking || "—"}</div>
-                  {r.detail && r.detail !== r.tracking && <div className="text-[10px] text-muted break-words">{r.detail}</div>}
+                  {r.detail && r.detail !== r.tracking && <div className="text-[11px] text-muted break-words">{r.detail}</div>}
                   {results[r.id] && (
-                    <div className="mt-1 inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                    <div className="mt-1 inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700">
                       ✓ ฿{results[r.id].grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                       <span className="text-green-600/70">· คิดตาม{results[r.id].basis === "cbm" ? "ปริมาตร" : "น้ำหนัก"}</span>
                     </div>
@@ -446,11 +446,11 @@ export function PerTrackingEditorClient({
           <div className="space-y-1 text-xs font-mono tabular-nums">
             <p className="font-semibold text-foreground mb-1 font-sans">
               ราคานำเข้าจีน-ไทย : <span className="text-muted font-normal">{calc.label}{calc.count > 1 ? ` (${calc.count} แทค)` : ""}</span>
-              {calc.cr && <span className="ml-1 text-[10px] text-red-600">· เรทแบบกำหนดเอง</span>}
+              {calc.cr && <span className="ml-1 text-[11px] text-red-600">· เรทแบบกำหนดเอง</span>}
               {/* 2026-06-19 (#1 revise) — system pricing now shows the customer's
                   PROFILE rate auto-pulled (no longer ฿0). */}
-              {!calc.cr && calc.useProfile && <span className="ml-1 text-[10px] text-emerald-600">· เรทระบบ (โปรไฟล์ลูกค้า)</span>}
-              {calc.comparisonOn && <span className="ml-1 text-[10px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
+              {!calc.cr && calc.useProfile && <span className="ml-1 text-[11px] text-emerald-600">· เรทระบบ (โปรไฟล์ลูกค้า)</span>}
+              {calc.comparisonOn && <span className="ml-1 text-[11px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
             </p>
             {calc.comparisonOn && (
               <p className="text-amber-700">
@@ -475,12 +475,12 @@ export function PerTrackingEditorClient({
               {" = "}
               <strong>{calc.pCbm == null ? "—" : baht(calc.pCbm)}</strong>
             </p>
-            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
+            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-1">
               ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : calc.useProfile ? (calc.byWeight ? "น้ำหนัก" : "ปริมาตร") : "ราคามากสุด"} → {baht(calc.transport)}
             </p>
             {/* Only fall back to the "คำนวณตอนบันทึก" note when system pricing
                 couldn't resolve a profile rate (no rate card for the tuple). */}
-            {!calc.cr && !calc.useProfile && <p className="text-[10px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
+            {!calc.cr && !calc.useProfile && <p className="text-[11px] text-amber-700 font-sans">* ใช้เรทระบบ — ราคาคำนวณจริงตอนกด “บันทึกทุกแถว”</p>}
           </div>
           {/* RIGHT — price summary (PCS labels, verbatim) */}
           <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-0.5 text-[11px]">

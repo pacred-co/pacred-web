@@ -186,19 +186,19 @@ export default async function AdminShopPayoutsPage({
                       ) : (
                         <div className="text-muted">— (transfer)</div>
                       )}
-                      {r.note && <div className="text-[10px] text-muted">📝 {r.note}</div>}
+                      {r.note && <div className="text-[11px] text-muted">📝 {r.note}</div>}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[r.status]}`}
                       >
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
                       {r.rejected_reason && (
-                        <div className="text-[10px] text-red-700 mt-1">{r.rejected_reason}</div>
+                        <div className="text-[11px] text-red-700 mt-1">{r.rejected_reason}</div>
                       )}
                       {r.reviewed_at && (
-                        <div className="text-[10px] text-muted mt-1">
+                        <div className="text-[11px] text-muted mt-1">
                           ตรวจ: {new Date(r.reviewed_at).toLocaleDateString("th-TH")}
                         </div>
                       )}

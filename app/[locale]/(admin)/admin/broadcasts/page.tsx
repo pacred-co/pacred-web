@@ -177,7 +177,7 @@ export default async function AdminBroadcastsListPage({
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmt(r.dateexp)}</td>
                       <td className="px-3 py-2">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] ${
                             active
                               ? "bg-green-50 text-green-700 border-green-200"
                               : expired
@@ -204,7 +204,7 @@ export default async function AdminBroadcastsListPage({
         />
       </div>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Faithful port ของ legacy <code className="font-mono">popup.php</code> — เขียนลง <code className="font-mono">tb_notify</code> ·
         ลูกค้ากด &quot;รับทราบ&quot; → บันทึก <code className="font-mono">tb_notify_read</code>.
       </p>

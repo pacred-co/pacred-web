@@ -247,7 +247,7 @@ export default async function AdminFreightQuoteDetailPage({
           <ul className="space-y-1.5 text-xs">
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
-                <span className="font-mono text-[10px] text-muted whitespace-nowrap">
+                <span className="font-mono text-[11px] text-muted whitespace-nowrap">
                   {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                 </span>
                 <span className="font-medium">{a.action}</span>

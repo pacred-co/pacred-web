@@ -405,7 +405,7 @@ export default async function AdminYuanPaymentDetail({
               >
                 <SlipImage src={slipUrl} alt="สลิป" className="max-w-full max-h-[480px] min-w-[140px] min-h-[140px]" />
               </a>
-              <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslip}</p>
+              <p className="text-[11px] text-muted mt-2 break-all font-mono">{row.imagesslip}</p>
             </div>
           )}
           {slipAdminUrl && (
@@ -419,7 +419,7 @@ export default async function AdminYuanPaymentDetail({
               >
                 <SlipImage src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[480px] min-w-[140px] min-h-[140px]" />
               </a>
-              <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslipadmin}</p>
+              <p className="text-[11px] text-muted mt-2 break-all font-mono">{row.imagesslipadmin}</p>
             </div>
           )}
         </section>
@@ -439,7 +439,7 @@ export default async function AdminYuanPaymentDetail({
           paid_via_wallet={paidViaWallet}
           reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
         />
-        <p className="text-[10px] text-muted mt-2">
+        <p className="text-[11px] text-muted mt-2">
           P0-11 · ปุ่มเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)
         </p>
       </section>

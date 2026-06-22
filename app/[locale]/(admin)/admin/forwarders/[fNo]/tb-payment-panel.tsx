@@ -156,7 +156,7 @@ export function TbForwarderPaymentPanel(p: Props) {
         {pending ? "กำลังตัดเงิน..." : "💰 ตัดเงินจากกระเป๋า + เลื่อนสถานะ"}
       </button>
 
-      <p className="text-[10px] text-muted text-center leading-relaxed">
+      <p className="text-[11px] text-muted text-center leading-relaxed">
         เขียน <code className="rounded bg-surface-alt px-1 font-mono">tb_wallet</code> +{" "}
         <code className="rounded bg-surface-alt px-1 font-mono">tb_wallet_hs</code> จริง · ผ่าน
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">adminPayForwardersOnBehalf</code>
@@ -185,7 +185,7 @@ export function TbForwarderPaymentPanel(p: Props) {
               💳 ติดเครดิต
             </button>
           </div>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             ตามวงเงิน <code className="rounded bg-surface-alt px-1 font-mono">tb_users.userCreditValue</code> ·
             บันทึกหนี้ <code className="rounded bg-surface-alt px-1 font-mono">tb_credit</code> · ไม่ตัดเงินกระเป๋า
           </p>

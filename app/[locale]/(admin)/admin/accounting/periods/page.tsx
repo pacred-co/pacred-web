@@ -199,15 +199,15 @@ export default async function AdminAccountingPeriodsPage() {
         <h2 className="text-xs font-bold text-muted uppercase tracking-wider mb-2">สถานะ</h2>
         <div className="flex flex-wrap gap-4 text-xs">
           <span className="flex items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE.open}`}>เปิด</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE.open}`}>เปิด</span>
             <span className="text-muted">งวดเปิด · admin แก้ไขได้ปกติ</span>
           </span>
           <span className="flex items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE.closing}`}>กำลังปิด</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE.closing}`}>กำลังปิด</span>
             <span className="text-muted">UI เตือน แต่ยังแก้ได้ (soft barrier)</span>
           </span>
           <span className="flex items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE.closed}`}>ปิดแล้ว</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE.closed}`}>ปิดแล้ว</span>
             <span className="text-muted">DB trigger บล็อก UPDATE/DELETE · เปิดใหม่ต้อง super + เหตุผล</span>
           </span>
         </div>
@@ -249,19 +249,19 @@ export default async function AdminAccountingPeriodsPage() {
                     >
                       {formatYyyymm(yyyymm)}
                     </Link>
-                    {isCurrent && <p className="text-[10px] text-primary-700 font-bold">เดือนปัจจุบัน</p>}
-                    <p className="font-mono text-[10px] text-muted">{yyyymm}</p>
+                    {isCurrent && <p className="text-[11px] text-primary-700 font-bold">เดือนปัจจุบัน</p>}
+                    <p className="font-mono text-[11px] text-muted">{yyyymm}</p>
                   </td>
                   <td className="px-3 py-2">
                     {p ? (
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[p.status]}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[p.status]}`}>
                         {ACCOUNTING_PERIOD_STATUS_LABEL[p.status]}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-muted italic">ยังไม่เปิดงวด</span>
+                      <span className="text-[11px] text-muted italic">ยังไม่เปิดงวด</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-[10px]">
+                  <td className="px-3 py-2 text-right font-mono text-[11px]">
                     {taxRow ? (
                       <>
                         <div>{taxRow.row_count} ใบ</div>
@@ -269,7 +269,7 @@ export default async function AdminAccountingPeriodsPage() {
                       </>
                     ) : <span className="text-muted">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-[10px]">
+                  <td className="px-3 py-2 text-right font-mono text-[11px]">
                     {freightRow ? (
                       <>
                         <div>{freightRow.row_count} ใบ</div>
@@ -277,7 +277,7 @@ export default async function AdminAccountingPeriodsPage() {
                       </>
                     ) : <span className="text-muted">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-[10px]">
+                  <td className="px-3 py-2 text-right font-mono text-[11px]">
                     {payRow ? (
                       <>
                         <div>{payRow.row_count} ครั้ง</div>
@@ -300,7 +300,7 @@ export default async function AdminAccountingPeriodsPage() {
                     {p && (
                       <Link
                         href={`/admin/accounting/periods/${yyyymm}`}
-                        className="text-[10px] text-primary-500 hover:underline"
+                        className="text-[11px] text-primary-500 hover:underline"
                       >
                         จัดการ →
                       </Link>
@@ -313,7 +313,7 @@ export default async function AdminAccountingPeriodsPage() {
         </table>
       </section>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         V1: คลิก &quot;เปิดงวด&quot; ทุกเดือนด้วยตัวเอง · V1.1 cron auto-seed · V1.1 PEAK ERP export · V1.1 closing checklist enforcement
       </p>
     </main>

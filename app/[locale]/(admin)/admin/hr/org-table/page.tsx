@@ -198,7 +198,7 @@ export default async function OrgTablePage() {
                     <td className="px-4 py-3 align-top text-sm font-medium text-foreground">{sec?.name ?? "—"}</td>
                     <td className="px-4 py-3 align-top">
                       <p className="text-sm font-bold text-foreground">{p.name}</p>
-                      <p className="text-[10px] text-muted font-mono">{p.slug}</p>
+                      <p className="text-[11px] text-muted font-mono">{p.slug}</p>
                     </td>
                     <td className="px-4 py-3 text-center align-top">
                       <QuotaCell filled={e} quota={p.quota_employee} />
@@ -218,7 +218,7 @@ export default async function OrgTablePage() {
                             <li key={a.id} className="text-xs">
                               <span className="font-mono text-primary-600">{a.profile?.member_code ?? "—"}</span>{" "}
                               {a.profile?.first_name ?? ""} {a.profile?.last_name ?? ""}
-                              <span className="text-[10px] text-muted ml-1">({a.kind})</span>
+                              <span className="text-[11px] text-muted ml-1">({a.kind})</span>
                             </li>
                           ))}
                         </ul>

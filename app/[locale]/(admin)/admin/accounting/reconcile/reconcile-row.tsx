@@ -83,7 +83,7 @@ export function ReconcileRow({ item, canAutoClear }: { item: Item; canAutoClear:
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {f && (
-            <span className="rounded-full border bg-surface-alt px-2 py-0.5 text-[10px]">
+            <span className="rounded-full border bg-surface-alt px-2 py-0.5 text-[11px]">
               {STATUS_LABEL[f.status] ?? f.status}
             </span>
           )}
@@ -100,8 +100,8 @@ export function ReconcileRow({ item, canAutoClear }: { item: Item; canAutoClear:
 
       <p className="text-muted text-[11px]">{item.hint}</p>
 
-      {msg && <div className="rounded border border-green-200 bg-green-50 p-1.5 text-[10px] text-green-700">{msg}</div>}
-      {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[10px] text-red-700">{err}</div>}
+      {msg && <div className="rounded border border-green-200 bg-green-50 p-1.5 text-[11px] text-green-700">{msg}</div>}
+      {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[11px] text-red-700">{err}</div>}
 
       {canAutoClear && f && (
         <div className="flex gap-2 pt-1">
@@ -109,13 +109,13 @@ export function ReconcileRow({ item, canAutoClear }: { item: Item; canAutoClear:
             type="button"
             onClick={autoClear}
             disabled={pending}
-            className="rounded-lg bg-green-600 text-white px-2.5 py-1 text-[10px] font-medium hover:bg-green-700 disabled:opacity-50"
+            className="rounded-lg bg-green-600 text-white px-2.5 py-1 text-[11px] font-medium hover:bg-green-700 disabled:opacity-50"
           >
             {pending ? "กำลัง..." : "✓ Auto-clear → ออกจีน"}
           </button>
           <Link
             href={`/admin/forwarders/${f.f_no}`}
-            className="rounded-lg border border-border bg-white px-2.5 py-1 text-[10px] hover:bg-surface-alt"
+            className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt"
           >
             ตรวจมือ →
           </Link>

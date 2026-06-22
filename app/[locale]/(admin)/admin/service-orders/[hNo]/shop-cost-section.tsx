@@ -124,7 +124,7 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
           <span className="text-[11px] font-medium opacity-90">({items.length} รายการ)</span>
         )}
         <CostRevealToggle className="ml-auto" />
-        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+        <span className="text-[11px] bg-white/20 rounded px-1.5 py-0.5">
           ultra / accounting / pricing
         </span>
       </header>
@@ -151,7 +151,7 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
             className="rounded-xl border border-border bg-white dark:bg-surface p-2.5 space-y-2"
           >
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-alt text-[10px] font-mono text-muted">
+              <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-alt text-[11px] font-mono text-muted">
                 {idx + 1}
               </span>
               {thumbs[it.id] ? (
@@ -162,7 +162,7 @@ export async function ShopOrderCostSection({ hno }: { hno: string }) {
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium break-words line-clamp-2">{it.ctitle || "—"}</p>
-                <p className="text-[10px] text-muted truncate">
+                <p className="text-[11px] text-muted truncate">
                   {it.cnameshop ? `ร้าน: ${it.cnameshop} · ` : ""}จำนวน {Number(it.camount ?? 0)} · ขาย ¥{Number(it.cprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                 </p>
               </div>

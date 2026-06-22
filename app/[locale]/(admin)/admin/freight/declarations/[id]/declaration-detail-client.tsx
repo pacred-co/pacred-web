@@ -357,9 +357,9 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
         <td className="px-2 py-2 text-right font-mono text-xs">{thb(previewTaxes.vat_thb)}</td>
         <td className="px-2 py-2 text-center"><input type="checkbox" checked={fta} onChange={(e) => setFta(e.target.checked)} /></td>
         <td className="px-2 py-2 text-right whitespace-nowrap">
-          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
-          <button type="button" onClick={() => { setEditing(false); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
+          <button type="button" onClick={() => { setEditing(false); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">×</button>
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       </tr>
     );
@@ -371,7 +371,7 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
       <td className="px-2 py-2 font-mono text-xs">{item.hs_code ?? "—"}</td>
       <td className="px-2 py-2 text-sm">
         {item.description}
-        {item.fta_applied && <span className="ml-1 text-[10px] text-primary-600">(FTA)</span>}
+        {item.fta_applied && <span className="ml-1 text-[11px] text-primary-600">(FTA)</span>}
       </td>
       <td className="px-2 py-2 text-xs">{item.country_of_origin}</td>
       <td className="px-2 py-2 text-right font-mono text-xs">{item.qty}</td>
@@ -389,11 +389,11 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
             <button type="button" onClick={() => setConfirmDelete(true)} className="ml-1 text-xs text-red-600 hover:underline">ลบ</button>
           ) : (
             <span className="ml-1">
-              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
-              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-0.5 text-[10px] text-muted hover:underline">×</button>
+              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-0.5 text-[11px] text-muted hover:underline">×</button>
             </span>
           )}
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       )}
     </tr>

@@ -181,7 +181,7 @@ export function CostUpdateView({
         <SubTab active={mode === "sheet"} onClick={() => setMode("sheet")} icon={<Cloud className="h-3.5 w-3.5" />}>
           เทียบกับ Google Sheet (แสง)
           {hasSheet && (
-            <span className="ml-1.5 rounded-full bg-primary-100 text-primary-700 px-1.5 text-[10px] font-semibold">
+            <span className="ml-1.5 rounded-full bg-primary-100 text-primary-700 px-1.5 text-[11px] font-semibold">
               {sheetParcels.length}
             </span>
           )}
@@ -512,15 +512,15 @@ function SheetDiffMode({
                     <Cell value={rate} dp={2} />
                     <td className="px-2 py-1.5 text-center">
                       {unmatched ? (
-                        <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[11px] font-medium">
                           ไม่พบใน PCS
                         </span>
                       ) : mCost ? (
-                        <span className="inline-flex rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="inline-flex rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 text-[11px] font-medium">
                           ต้นทุนต่าง
                         </span>
                       ) : (
-                        <span className="inline-flex rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="inline-flex rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 text-[11px] font-medium">
                           ตรง
                         </span>
                       )}
@@ -861,11 +861,11 @@ function ManualCostEditor({ fCabinetNumber, warehouseLabel, rows }: { fCabinetNu
                   <tr key={r.id} className={`border-t border-border ${r.changed ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}`}>
                     <td className="px-3 py-2 align-top">
                       <div className="font-mono text-foreground">{r.ftrackingchn ?? "—"}</div>
-                      <div className="text-[10px] text-muted">{r.fidorco ?? ""} · {r.userid}</div>
+                      <div className="text-[11px] text-muted">{r.fidorco ?? ""} · {r.userid}</div>
                     </td>
                     <td className="px-3 py-2 align-top text-right tabular-nums">
                       <div>{r.fvolume?.toLocaleString(undefined, { maximumFractionDigits: 5 }) ?? "0"}</div>
-                      <div className="text-[10px] text-muted">{r.fweight?.toLocaleString(undefined, { maximumFractionDigits: 1 }) ?? "0"} kg</div>
+                      <div className="text-[11px] text-muted">{r.fweight?.toLocaleString(undefined, { maximumFractionDigits: 1 }) ?? "0"} kg</div>
                     </td>
                     <td className="px-3 py-2 align-top text-right tabular-nums text-muted">
                       {r.fcosttotalprice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -895,11 +895,11 @@ function ManualCostEditor({ fCabinetNumber, warehouseLabel, rows }: { fCabinetNu
                     </td>
                     <td className="px-3 py-2 align-top text-center">
                       {r.changed ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[11px] font-medium">
                           แก้ไข
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[10px]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[11px]">
                           เดิม
                         </span>
                       )}
@@ -963,11 +963,11 @@ function Stat({
     hintTone === "red"   ? "text-red-600"   : "text-muted";
   return (
     <div className="rounded-md border border-border bg-white dark:bg-surface px-3 py-2 min-w-32">
-      <div className="text-[10px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>
       <div className="mt-0.5 font-semibold tabular-nums">
         {value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
-      {hint && <div className={`mt-0.5 text-[10px] tabular-nums ${toneClass}`}>{hint}</div>}
+      {hint && <div className={`mt-0.5 text-[11px] tabular-nums ${toneClass}`}>{hint}</div>}
     </div>
   );
 }

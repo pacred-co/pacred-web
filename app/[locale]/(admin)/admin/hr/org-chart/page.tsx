@@ -244,7 +244,7 @@ export default async function OrgChartPage() {
                   <div key={s.id} className="rounded-xl border border-border bg-surface-alt/30 p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="font-bold text-sm text-foreground">{s.name}</p>
-                      <span className="text-[10px] text-muted">{pos.length} ตำแหน่ง</span>
+                      <span className="text-[11px] text-muted">{pos.length} ตำแหน่ง</span>
                     </div>
                     <div className="space-y-2">
                       {pos.map((p) => {
@@ -261,7 +261,7 @@ export default async function OrgChartPage() {
                               {p.quota_internship > 0 && <QuotaPill kind="internship" filled={i}  quota={p.quota_internship} />}
                               {p.quota_partner    > 0 && <QuotaPill kind="partner"    filled={pa} quota={p.quota_partner} />}
                               {p.quota_employee + p.quota_internship + p.quota_partner === 0 && (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-muted">
+                                <span className="inline-flex items-center gap-1 text-[11px] text-muted">
                                   <AlertCircle className="w-2.5 h-2.5" /> ยังไม่ได้ตั้งโควต้า
                                 </span>
                               )}
@@ -269,7 +269,7 @@ export default async function OrgChartPage() {
                             {fills.length > 0 && (
                               <div className="mt-1.5 flex flex-wrap gap-1">
                                 {fills.map((a) => (
-                                  <span key={a.id} className="inline-flex items-center rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                                  <span key={a.id} className="inline-flex items-center rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                                     {a.profile?.first_name ?? "—"} {a.profile?.last_name ?? ""}
                                   </span>
                                 ))}
@@ -328,7 +328,7 @@ function NodeCard({
         )}
       </div>
       <p className={`mt-2 font-bold text-foreground ${big ? "text-sm" : "text-xs"}`}>{title}</p>
-      {subtitle && <p className="text-[10px] text-muted">{subtitle}</p>}
+      {subtitle && <p className="text-[11px] text-muted">{subtitle}</p>}
       <p className="text-[11px] text-muted mt-0.5">{name}</p>
     </div>
   );
@@ -345,7 +345,7 @@ function QuotaPill({ kind, filled, quota }: { kind: "employee" | "internship" | 
   const isFull  = filled === quota;
   const Icon    = isOver ? Plus : isFull ? null : Minus;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${KIND_TONE}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${KIND_TONE}`}>
       {Icon && <Icon className="w-2.5 h-2.5" />}
       {KIND_LABEL} ({filled}/{quota})
     </span>

@@ -221,7 +221,7 @@ export function ShopItemsEditor({
         <h3 className="font-bold text-sm">
           รายการสินค้า — ตั้งราคาต่อรายการ ({items.length})
         </h3>
-        <span className="text-[10px] text-muted">
+        <span className="text-[11px] text-muted">
           กรอกจำนวน · ¥ราคา/ชิ้น · ค่าขนส่งจีน — ราคารวมคำนวณสด
         </span>
       </div>
@@ -235,7 +235,7 @@ export function ShopItemsEditor({
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="w-full min-w-[820px] text-xs">
-          <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-2 text-left w-10">ลำดับ</th>
               <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
@@ -276,7 +276,7 @@ export function ShopItemsEditor({
                               ) : null}
                               <div className="min-w-0">
                                 {refunded && it.cnote ? (
-                                  <p className="mb-1 inline-block rounded bg-red-600 px-1.5 py-0.5 text-[10px] text-white">
+                                  <p className="mb-1 inline-block rounded bg-red-600 px-1.5 py-0.5 text-[11px] text-white">
                                     {it.cnote}
                                   </p>
                                 ) : null}
@@ -296,14 +296,14 @@ export function ShopItemsEditor({
                                   </span>
                                 )}
                                 {(it.ccolor || it.csize) && (
-                                  <p className="text-[10px] text-muted">
+                                  <p className="text-[11px] text-muted">
                                     {it.ccolor}
                                     {it.ccolor && it.csize ? " · " : ""}
                                     {it.csize}
                                   </p>
                                 )}
                                 {it.cdetails && (
-                                  <p className="text-[10px] text-muted">หมายเหตุ: {it.cdetails}</p>
+                                  <p className="text-[11px] text-muted">หมายเหตุ: {it.cdetails}</p>
                                 )}
                               </div>
                             </div>
@@ -453,7 +453,7 @@ export function ShopItemsEditor({
               </span>
             </div>
           )}
-          <p className="text-[10px] text-muted">*เพิ่ม/ลด เงิน คำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
+          <p className="text-[11px] text-muted">*เพิ่ม/ลด เงิน คำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
         </div>
       </div>
 
@@ -464,7 +464,7 @@ export function ShopItemsEditor({
         </Button>
       </div>
 
-      <p className="text-[10px] text-muted leading-relaxed">
+      <p className="text-[11px] text-muted leading-relaxed">
         ✅ UPDATE tb_order (จำนวน/ราคา/ค่าส่งจีน) · recompute hTotalPriceCHN/hShippingCHN ·
         UPDATE tb_header_order: hStatus=2 · hRateCost · hCostAll · hCostAllTH · hCount · hDate2 ·
         hDatePayment=NOW+5d · hTotalPriceUser · 4-CH NOTIFY
@@ -511,7 +511,7 @@ function Line({ label, value }: { label: string; value: string }) {
 function RotateHint({ superAdmin }: { superAdmin: boolean }) {
   if (!superAdmin) return null;
   return (
-    <p className="flex items-center gap-1 text-[10px] text-muted">
+    <p className="flex items-center gap-1 text-[11px] text-muted">
       <RotateCcw className="h-3 w-3" /> คืนเงินรายรายการ ดูแผงด้านล่าง (เฉพาะออเดอร์ที่ชำระแล้ว)
     </p>
   );

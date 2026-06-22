@@ -459,13 +459,13 @@ export function PayUserClient() {
                         <span className="text-xs text-gray-400 truncate max-w-[160px]">{f.ftracking}</span>
                       )}
                       {f.is_credit && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">เครดิต</span>
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">เครดิต</span>
                       )}
                       <span className="ml-auto text-sm font-mono font-semibold text-gray-900">{thb(f.price_thb)}</span>
                     </div>
                     {/* itemised breakdown — owner 2026-06-19 "แจงรายละเอียดค่า" */}
                     {hasExtras && (
-                      <div className="mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                      <div className="mt-1 ml-7 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                         <span>ค่าขนส่งสินค้า {thb(b.freight)}</span>
                         {b.otherCharges > 0 && <span>+ บริการอื่นๆ {thb(b.otherCharges)}</span>}
                         {b.maoFee > 0 && <span className="text-sky-600">+ ค่าส่งเหมาๆ {thb(b.maoFee)}</span>}

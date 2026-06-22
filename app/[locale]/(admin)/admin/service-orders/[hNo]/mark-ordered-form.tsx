@@ -118,7 +118,7 @@ export function AdminMarkShopOrderOrderedForm({ hNo }: { hNo: string }) {
         {pending ? "กำลังบันทึก..." : "📦 ยืนยันสั่งซื้อครบ → รอจีนจัดส่ง + แจ้งลูกค้า"}
       </Button>
 
-      <p className="text-[10px] text-muted leading-relaxed">
+      <p className="text-[11px] text-muted leading-relaxed">
         ✅ UPDATE tb_order.cshippingnumber (ทุกแถว) · UPDATE tb_header_order: hstatus=4 · hdate4 · adminidupdate
         · 3-CH NOTIFY (in-app + LINE OA + email)
       </p>
@@ -210,7 +210,7 @@ export function AdminSpawnToCompletedButton({ hNo }: { hNo: string }) {
         {pending ? "กำลังประมวลผล..." : "📦 ส่งเข้าโกดังจีน + สร้างใบฝากนำเข้า"}
       </button>
 
-      <p className="text-[10px] text-muted leading-relaxed">
+      <p className="text-[11px] text-muted leading-relaxed">
         ✅ INSERT tb_forwarder (idempotent) · INSERT tb_promotion carry · UPDATE tb_header_order: hstatus=5 · hdate5
         · 2-3 CH NOTIFY (in-app + LINE OA + email · SMS flagged P1-11)
       </p>

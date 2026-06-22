@@ -166,7 +166,7 @@ function CreateForm() {
           className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono"
           required
         />
-        <p className="text-[10px] text-muted">{bodyMd.length} / 200,000 ตัวอักษร · Markdown รองรับ (V-G4.1 จะ render เป็น HTML ในหน้าลูกค้า)</p>
+        <p className="text-[11px] text-muted">{bodyMd.length} / 200,000 ตัวอักษร · Markdown รองรับ (V-G4.1 จะ render เป็น HTML ในหน้าลูกค้า)</p>
       </Field>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -327,7 +327,7 @@ function VersionRow({
           <h3 className="font-bold flex items-center gap-2">
             <span className="font-mono text-sm">{version.version_no}</span>
             <span className="text-sm font-normal">{version.title}</span>
-            {version.is_active && <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-[10px] text-green-800">ACTIVE</span>}
+            {version.is_active && <span className="rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-[11px] text-green-800">ACTIVE</span>}
           </h3>
           <p className="text-xs text-muted">
             มีผลตั้งแต่ {new Date(version.effective_from).toLocaleDateString("th-TH")}

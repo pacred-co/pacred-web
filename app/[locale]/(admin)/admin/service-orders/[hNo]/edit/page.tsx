@@ -432,7 +432,7 @@ export default async function AdminServiceOrderEditPage({
                 <step.Icon className={`h-5 w-5 mb-1 ${
                   cur ? "text-primary-600" : visited ? "text-emerald-600" : "text-gray-400"
                 }`} />
-                <span className={`text-[10px] leading-tight ${
+                <span className={`text-[11px] leading-tight ${
                   cur ? "font-bold text-primary-700" : visited ? "text-emerald-700" : "text-muted"
                 }`}>
                   {step.label}
@@ -515,7 +515,7 @@ export default async function AdminServiceOrderEditPage({
           <section className="rounded-2xl border-2 border-primary-300 bg-primary-50/30 dark:bg-primary-950/20 shadow-md overflow-hidden">
             <header className="bg-primary-500 text-white px-4 py-2.5 flex items-center gap-2">
               <span className="text-sm font-bold">🚛 สร้างฝากนำเข้า (tb_forwarder) จากเลข tracking</span>
-              <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
+              <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">ใช้บ่อย</span>
             </header>
             <div className="p-4">
               <SpawnForwarderForm

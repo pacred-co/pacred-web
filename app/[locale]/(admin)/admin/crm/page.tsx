@@ -164,7 +164,7 @@ export default async function AdminCrmPage({
               {ch.key === "line" ? <MessageCircle className="w-4 h-4" /> : <MessagesSquare className="w-4 h-4" />}
               {ch.label}
               {!ch.live && (
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
                   รอ webhook
                 </span>
               )}
@@ -267,13 +267,13 @@ function FunnelStrip({ funnel }: { funnel?: { newLeads: number; contacted: numbe
               <p className={`text-xl font-bold leading-tight ${s.tone}`}>
                 {funnel ? s.value.toLocaleString("th-TH") : "—"}
               </p>
-              <p className="text-[10px] text-muted/70">{s.sub}</p>
+              <p className="text-[11px] text-muted/70">{s.sub}</p>
             </div>
             {i < stages.length - 1 && <ArrowRight className="hidden lg:block w-4 h-4 text-muted/40 shrink-0" />}
           </div>
         ))}
       </div>
-      <p className="mt-2 text-[10px] text-muted/70">
+      <p className="mt-2 text-[11px] text-muted/70">
         * แต่ละขั้นนับแยกกัน (ไม่ใช่ลำดับเดียวกันแบบเป๊ะ) — “ขอใบเสนอราคา” มาจาก freight RFQ
       </p>
     </div>
@@ -343,16 +343,16 @@ function ConversationList({
                     {c.lastMessageText || "— ยังไม่มีข้อความ —"}
                   </p>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-muted/80">{relativeTimeTh(c.lastMessageAt)}</span>
+                    <span className="text-[11px] text-muted/80">{relativeTimeTh(c.lastMessageAt)}</span>
                     {c.repName && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">
                         <Users className="w-3 h-3" />
                         {c.repName}
                       </span>
                     )}
                     {c.status && (
                       <span
-                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
                           STATUS_BADGE[c.status] ?? "bg-gray-50 text-gray-600 border-gray-200"
                         }`}
                       >
@@ -440,7 +440,7 @@ function Bubble({ message }: { message: LineMessage }) {
         }`}
       >
         {message.group_name && (
-          <p className={`text-[10px] font-medium mb-1 ${outbound ? "text-white/80" : "text-primary-600"}`}>
+          <p className={`text-[11px] font-medium mb-1 ${outbound ? "text-white/80" : "text-primary-600"}`}>
             {message.group_name}
           </p>
         )}
@@ -464,7 +464,7 @@ function Bubble({ message }: { message: LineMessage }) {
         ) : (
           <p className="italic opacity-75">[{message.message_type || "ข้อความ"}]</p>
         )}
-        <p className={`mt-1 text-[10px] ${outbound ? "text-white/70 text-right" : "text-muted"}`}>
+        <p className={`mt-1 text-[11px] ${outbound ? "text-white/70 text-right" : "text-muted"}`}>
           {message.sent_at
             ? new Date(message.sent_at).toLocaleString("th-TH", {
                 day: "numeric",
@@ -509,7 +509,7 @@ function Customer360Panel({
           <Link2Off className="inline w-3.5 h-3.5 mr-1" />
           ยังไม่ผูกบทสนทนานี้กับลูกค้าในระบบ (จับคู่ LINE ID ไม่พบ tb_users.userLineID)
         </div>
-        <p className="text-[10px] text-muted/70">
+        <p className="text-[11px] text-muted/70">
           ระบบจับคู่จาก LINE ID อัตโนมัติ — ลูกค้าส่วนใหญ่กรอก “ไอดีไลน์” ตอนสมัคร ซึ่งมักไม่ตรงกับ
           LINE platform id จึงต้องผูกมือในภายหลัง
         </p>
@@ -546,7 +546,7 @@ function Customer360Panel({
               {c360.userid}
             </Link>
             {c360.isCompany && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-700">
+              <span className="ml-2 inline-flex items-center rounded-full bg-purple-50 px-1.5 py-0.5 text-[11px] text-purple-700">
                 นิติบุคคล
               </span>
             )}
@@ -577,7 +577,7 @@ function Customer360Panel({
         />
       </div>
       {c360.lastCallAt && (
-        <p className="text-[10px] text-muted/70 -mt-2">โทรล่าสุด {relativeTimeTh(c360.lastCallAt)}</p>
+        <p className="text-[11px] text-muted/70 -mt-2">โทรล่าสุด {relativeTimeTh(c360.lastCallAt)}</p>
       )}
 
       {/* Rep routing — sales-rep mutation */}
@@ -655,7 +655,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl bg-surface-alt/50 px-3 py-2">
-      <span className="inline-flex items-center gap-1 text-[10px] text-muted">
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted">
         {icon}
         {label}
       </span>

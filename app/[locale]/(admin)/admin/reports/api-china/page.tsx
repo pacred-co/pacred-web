@@ -116,7 +116,7 @@ export default async function ApiChinaReportPage({
             <div>
               <label
                 htmlFor="channel"
-                className="block text-[10px] uppercase tracking-wide text-muted mb-1"
+                className="block text-[11px] uppercase tracking-wide text-muted mb-1"
               >
                 ช่องทางค้นหา
               </label>

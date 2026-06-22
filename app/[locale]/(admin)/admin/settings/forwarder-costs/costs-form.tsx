@@ -315,7 +315,7 @@ export function ForwarderCostsForm({
                 )}
                 <span className="text-base font-bold">{carrier.label}</span>
                 {"weightBased" in carrier && carrier.weightBased && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
                     คิดตามน้ำหนัก (บาท/กก.)
                   </span>
                 )}

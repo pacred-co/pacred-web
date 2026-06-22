@@ -280,7 +280,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
             <div>
               <label className="block text-xs font-medium text-muted mb-1">
                 อีเมลจริง (สำหรับติดต่อ){" "}
-                <span className="text-[10px] text-muted">— คนละช่องกับ User ID login</span>
+                <span className="text-[11px] text-muted">— คนละช่องกับ User ID login</span>
               </label>
               <input
                 type="email"
@@ -396,7 +396,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
             <div>
               <label className="block text-xs font-medium text-muted mb-1">
                 contract_end_date{" "}
-                <span className="text-[10px] text-muted">(probation only)</span>
+                <span className="text-[11px] text-muted">(probation only)</span>
               </label>
               <input
                 type="date"
@@ -463,7 +463,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
             <div>
               <label className="block text-xs font-medium text-muted mb-1">
                 legacy_admin_id{" "}
-                <span className="text-[10px] text-muted">(unique)</span>
+                <span className="text-[11px] text-muted">(unique)</span>
               </label>
               <input
                 type="text"
@@ -518,9 +518,9 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
             <table className="w-full text-xs">
               <thead className="bg-surface-alt/60">
                 <tr className="text-left">
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted font-semibold">Role</th>
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted font-semibold">สถานะ</th>
-                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted font-semibold">ตัวเลือก</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Role</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">สถานะ</th>
+                  <th className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">ตัวเลือก</th>
                 </tr>
               </thead>
               <tbody>
@@ -531,11 +531,11 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
                     </td>
                     <td className="px-3 py-2">
                       {r.is_active ? (
-                        <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px]">
                           active
                         </span>
                       ) : (
-                        <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[11px]">
                           ปิด
                         </span>
                       )}
@@ -547,8 +547,8 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
                         disabled={pending}
                         className={
                           r.is_active
-                            ? "rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] text-red-700 hover:bg-red-100 disabled:opacity-50"
-                            : "rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                            ? "rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            : "rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                         }
                       >
                         {r.is_active ? "ปิด role" : "เปิด role"}

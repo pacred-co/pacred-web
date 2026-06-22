@@ -84,10 +84,10 @@ function useHsHint(code: string): HsHint {
 
 function HsHintLine({ hint }: { hint: HsHint }) {
   if (hint === null) return null;
-  if (hint === "loading") return <span className="text-[10px] text-muted">กำลังค้นคลัง HS…</span>;
-  if (hint === "notfound") return <span className="text-[10px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
+  if (hint === "loading") return <span className="text-[11px] text-muted">กำลังค้นคลัง HS…</span>;
+  if (hint === "notfound") return <span className="text-[11px] text-amber-600">— ไม่พบใน คลัง HS —</span>;
   return (
-    <span className="text-[10px] text-emerald-700">
+    <span className="text-[11px] text-emerald-700">
       อากรปกติ {hint.default_duty_pct}% · Form-E {hint.form_e_duty_pct}% · สถิติปกติ {hint.default_stat_code ?? "000"}
       {hint.description ? ` · ${hint.description}` : ""}
     </span>
@@ -134,13 +134,13 @@ function TriageRow({
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex items-start gap-2 min-w-0 flex-1">
           <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1 h-4 w-4 accent-primary-600" aria-label="เลือก" />
-          <span className="mt-0.5 text-[10px] text-muted tabular-nums w-6 shrink-0">{index}</span>
+          <span className="mt-0.5 text-[11px] text-muted tabular-nums w-6 shrink-0">{index}</span>
           <div className="min-w-0">
             <Link href={row.href} className="text-xs font-medium text-primary-600 hover:underline break-words line-clamp-1">
               {row.title}
             </Link>
-            <p className="text-[10px] text-muted truncate">{row.subtitle}</p>
-            {row.hsCode && <p className="text-[10px] text-emerald-700">พิกัดเดิม {row.hsCode}{row.statCode ? ` · สถิติ ${row.statCode}` : ""}</p>}
+            <p className="text-[11px] text-muted truncate">{row.subtitle}</p>
+            {row.hsCode && <p className="text-[11px] text-emerald-700">พิกัดเดิม {row.hsCode}{row.statCode ? ` · สถิติ ${row.statCode}` : ""}</p>}
           </div>
         </div>
         <div className="sm:w-80 space-y-0.5">
@@ -153,7 +153,7 @@ function TriageRow({
             </button>
           </div>
           <HsHintLine hint={hint} />
-          {err && <span className="block text-[10px] text-red-600">{err}</span>}
+          {err && <span className="block text-[11px] text-red-600">{err}</span>}
         </div>
       </div>
     </div>
@@ -311,7 +311,7 @@ export function HsTriageClient({
         </div>
       )}
 
-      <p className="pt-1 text-[10px] leading-relaxed text-muted">
+      <p className="pt-1 text-[11px] leading-relaxed text-muted">
         แสดงรายการล่าสุด (เรียงใหม่→เก่า · จำกัดจำนวนเพื่อความเร็ว) — ใช้ค้นหาเพื่อหาของซ้ำแล้วเลือกหลายรายการ
         ใส่พิกัดเดียวกันทีเดียว. เขียนเฉพาะ HS + รหัสสถิติ (ไม่กระทบราคา/ต้นทุน/สถานะ).
       </p>

@@ -23,7 +23,7 @@ export function UnlinkButton({ id, fNo }: { id: string; fNo: string }) {
       type="button"
       onClick={unlink}
       disabled={pending}
-      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700 hover:bg-red-100 disabled:opacity-40"
+      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-100 disabled:opacity-40"
     >
       {pending ? "..." : "ปลด"}
     </button>

@@ -244,7 +244,7 @@ export default async function AdminHRPage() {
                         {c?.section && <div className="text-muted">{c.section}</div>}
                       </td>
                       <td className="px-4 py-2 text-xs">
-                        <span className="rounded-full bg-primary-50 text-primary-700 border border-primary-200 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="rounded-full bg-primary-50 text-primary-700 border border-primary-200 px-2 py-0.5 text-[11px] font-medium">
                           {r.role}
                         </span>
                       </td>

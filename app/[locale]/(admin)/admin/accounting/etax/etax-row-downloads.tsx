@@ -37,7 +37,7 @@ export function EtaxRowDownloads({
         type="button"
         onClick={downloadXml}
         title={`Download Code 86 XML preview · invoice #${invoiceId}`}
-        className="rounded border border-border bg-white px-2 py-1 text-[10px] font-medium hover:bg-surface-alt"
+        className="rounded border border-border bg-white px-2 py-1 text-[11px] font-medium hover:bg-surface-alt"
       >
         ⬇ XML
       </button>

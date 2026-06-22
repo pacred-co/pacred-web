@@ -244,7 +244,7 @@ export default async function AgentPayoutsReportPage({
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             STATUS_BADGE[h.status] ?? "bg-gray-50 text-gray-600 border-gray-200"
                           }`}
                         >

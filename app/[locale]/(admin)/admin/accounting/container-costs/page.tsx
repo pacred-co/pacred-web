@@ -249,7 +249,7 @@ export default async function AdminContainerCostsPage({
                           <div className="font-mono font-medium">{r.carrier_name}</div>
                           <div className="text-muted">{r.container_type}</div>
                           {r.source !== "manual" && (
-                            <div className="text-[10px] uppercase text-muted">[{r.source}]</div>
+                            <div className="text-[11px] uppercase text-muted">[{r.source}]</div>
                           )}
                         </td>
                         <td className="px-3 py-3 text-xs">
@@ -271,10 +271,10 @@ export default async function AdminContainerCostsPage({
                         <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                           {new Date(r.effective_from).toLocaleDateString("th-TH")}
                           {r.effective_to && (
-                            <div className="text-[10px]">→ {new Date(r.effective_to).toLocaleDateString("th-TH")}</div>
+                            <div className="text-[11px]">→ {new Date(r.effective_to).toLocaleDateString("th-TH")}</div>
                           )}
-                          {!r.effective_to && <div className="text-[10px] text-green-700">กำลังใช้</div>}
-                          {archived && <div className="text-[10px] text-red-700">ปิดแล้ว</div>}
+                          {!r.effective_to && <div className="text-[11px] text-green-700">กำลังใช้</div>}
+                          {archived && <div className="text-[11px] text-red-700">ปิดแล้ว</div>}
                         </td>
                         <td className="px-3 py-3">
                           <ContainerCostRowControls

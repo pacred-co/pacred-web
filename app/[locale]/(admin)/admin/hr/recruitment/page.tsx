@@ -103,7 +103,7 @@ export default async function AdminHRRecruitmentPage({
               <Megaphone className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · RECRUITMENT</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · RECRUITMENT</p>
               <h1 className="text-xl sm:text-2xl font-bold">ลงประกาศรับสมัครงาน</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 ประกาศทั้งหมด {postings.length} · กำลังประกาศ {totalActive} · หมดเวลาแล้ว {totalExpired} · รับสมัครรวม {totalOpenings} อัตรา
@@ -173,17 +173,17 @@ export default async function AdminHRRecruitmentPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${cfg.cls}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${cfg.cls}`}>
                         <cfg.Icon className="w-3 h-3" />
                         {cfg.label}
                       </span>
-                      <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium">
+                      <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium">
                         {postCompanyLabel(p.companytype)}
                       </span>
-                      <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium">
+                      <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium">
                         {postAdminTypeLabel(p.admintype)}
                       </span>
-                      <span className="rounded-full border border-primary-200 bg-primary-50 text-primary-700 px-2 py-0.5 text-[10px] font-bold">
+                      <span className="rounded-full border border-primary-200 bg-primary-50 text-primary-700 px-2 py-0.5 text-[11px] font-bold">
                         รับ {p.amount} อัตรา
                       </span>
                     </div>
@@ -205,7 +205,7 @@ export default async function AdminHRRecruitmentPage({
                       {new Date(p.startdate).toLocaleDateString("th-TH")} ถึง {new Date(p.enddate).toLocaleDateString("th-TH")}
                     </span>
                   )}
-                  {p.admincreate && <span className="text-[10px]">โดย {p.admincreate}</span>}
+                  {p.admincreate && <span className="text-[11px]">โดย {p.admincreate}</span>}
                 </div>
               </Link>
             );
@@ -238,7 +238,7 @@ function TabPill({
       className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${active ? baseActive : idleCls}`}
     >
       {label}
-      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/25" : "bg-surface-alt"}`}>
+      <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${active ? "bg-white/25" : "bg-surface-alt"}`}>
         {count}
       </span>
     </Link>

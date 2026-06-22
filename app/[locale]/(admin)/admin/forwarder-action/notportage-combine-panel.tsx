@@ -110,7 +110,7 @@ export function NotPortageCombinePanel({ rows }: { rows: NotPortageRow[] }) {
 
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
+          <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
             <tr>
               <th className="px-2 py-2 text-center">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="เลือกทั้งหมด" />

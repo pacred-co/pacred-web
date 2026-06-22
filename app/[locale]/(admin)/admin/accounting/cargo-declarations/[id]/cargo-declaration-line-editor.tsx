@@ -112,7 +112,7 @@ export function CargoDeclarationLineEditor({
       )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <label className="space-y-0.5">
-          <span className="block text-[10px] text-muted">มูลค่าสำแดง (฿)</span>
+          <span className="block text-[11px] text-muted">มูลค่าสำแดง (฿)</span>
           <input
             type="number"
             min={0}
@@ -125,7 +125,7 @@ export function CargoDeclarationLineEditor({
           />
         </label>
         <label className="space-y-0.5">
-          <span className="block text-[10px] text-muted">อัตราอากร (%)</span>
+          <span className="block text-[11px] text-muted">อัตราอากร (%)</span>
           <input
             type="number"
             min={0}
@@ -139,7 +139,7 @@ export function CargoDeclarationLineEditor({
           />
         </label>
         <label className="space-y-0.5">
-          <span className="block text-[10px] text-muted">HS Code</span>
+          <span className="block text-[11px] text-muted">HS Code</span>
           <input
             type="text"
             maxLength={40}
@@ -150,7 +150,7 @@ export function CargoDeclarationLineEditor({
           />
         </label>
       </div>
-      <p className="mt-1.5 text-[10px] text-amber-800/80">
+      <p className="mt-1.5 text-[11px] text-amber-800/80">
         มูลค่าสำแดง ตั้งจากต้นทุน — ปรับลงตามแผนสำแดง · duty = สำแดง × อัตรา% · vat = (สำแดง + duty) × 7%
       </p>
       <div className="mt-1.5 flex gap-2">

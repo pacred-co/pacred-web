@@ -111,7 +111,7 @@ export default async function AdminTranThDetailPage({
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">Forwarder</th>
                   <th className="px-3 py-2">Tracking CHN</th>
@@ -136,18 +136,18 @@ export default async function AdminTranThDetailPage({
                         #{it.fid}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted whitespace-nowrap">{it.forwarder?.ftrackingchn ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted whitespace-nowrap">{it.forwarder?.ftrackingth ?? "—"}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted whitespace-nowrap">{it.forwarder?.ftrackingchn ?? "—"}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted whitespace-nowrap">{it.forwarder?.ftrackingth ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">
                       {it.forwarder ? [it.forwarder.faddressname, it.forwarder.faddresslastname].filter(Boolean).join(" ").trim() || "—" : "—"}
                     </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted whitespace-nowrap">{it.forwarder?.faddresstel ?? "—"}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted whitespace-nowrap">{it.forwarder?.faddresstel ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">{it.forwarder?.faddressprovince ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{it.forwarder?.famount.toLocaleString("th-TH") ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{it.forwarder ? it.forwarder.fweight.toFixed(2) : "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{it.forwarder ? it.forwarder.fvolume.toFixed(5) : "—"}</td>
                     <td className="px-3 py-2">
-                      <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                      <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                         {it.forwarder?.fstatus ? (FSTATUS_LABEL[it.forwarder.fstatus] ?? it.forwarder.fstatus) : "—"}
                       </span>
                     </td>
@@ -159,7 +159,7 @@ export default async function AdminTranThDetailPage({
         )}
       </section>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         📌 MVP read-only · CREATE batch DEFERRED next sitting
       </p>
     </main>

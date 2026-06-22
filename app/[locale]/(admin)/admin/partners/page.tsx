@@ -155,18 +155,18 @@ export default async function AdminPartnersPage({
                       <div className="font-medium">{r.name}</div>
                       {r.name_en && <div className="text-muted">{r.name_en}</div>}
                       <div className="mt-1">
-                        <span className="rounded-full border border-border bg-surface-alt/40 px-2 py-0.5 text-[10px] text-muted">
+                        <span className="rounded-full border border-border bg-surface-alt/40 px-2 py-0.5 text-[11px] text-muted">
                           {PARTNER_TYPE_LABELS_TH[r.partner_type] ?? r.partner_type}
                         </span>
                       </div>
-                      {r.note && <div className="text-[10px] text-muted mt-1">📝 {r.note}</div>}
+                      {r.note && <div className="text-[11px] text-muted mt-1">📝 {r.note}</div>}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {r.contact_name || r.contact_phone || r.contact_email ? (
                         <div className="space-y-0.5">
                           {r.contact_name  && <div className="font-medium">{r.contact_name}</div>}
                           {r.contact_phone && <div className="text-muted">{r.contact_phone}</div>}
-                          {r.contact_email && <div className="text-[10px] text-muted break-all">{r.contact_email}</div>}
+                          {r.contact_email && <div className="text-[11px] text-muted break-all">{r.contact_email}</div>}
                         </div>
                       ) : (
                         <span className="text-muted">—</span>
@@ -174,7 +174,7 @@ export default async function AdminPartnersPage({
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                           r.is_active
                             ? "bg-green-50 text-green-700 border-green-200"
                             : "bg-gray-50 text-gray-600 border-gray-200"

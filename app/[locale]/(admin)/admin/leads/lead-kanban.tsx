@@ -123,13 +123,13 @@ export function LeadKanban({
                         <p className="text-sm font-medium truncate">{r.name}</p>
                         <Link
                           href={`/admin/customers?q=${encodeURIComponent(r.userid)}`}
-                          className="font-mono text-[10px] text-primary-600 hover:underline"
+                          className="font-mono text-[11px] text-primary-600 hover:underline"
                         >
                           {r.userid}
                         </Link>
                       </div>
                       {r.orderCount > 0 ? (
-                        <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] tabular-nums shrink-0">
+                        <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] tabular-nums shrink-0">
                           {r.orderCount.toLocaleString("th-TH")} นำเข้า
                         </span>
                       ) : null}

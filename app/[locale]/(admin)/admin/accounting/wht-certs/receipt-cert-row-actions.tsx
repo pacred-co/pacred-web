@@ -56,7 +56,7 @@ export function ReceiptCertRowActions({ receiptId, certNo }: { receiptId: number
           <button onClick={doApprove} disabled={pending} className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">ยืนยัน</button>
           <button onClick={() => setMode("idle")} className="rounded border border-border px-2 py-1 text-[11px]">ยกเลิก</button>
         </div>
-        {err && <span className="text-[10px] text-red-600">{err}</span>}
+        {err && <span className="text-[11px] text-red-600">{err}</span>}
       </div>
     );
   }
@@ -69,7 +69,7 @@ export function ReceiptCertRowActions({ receiptId, certNo }: { receiptId: number
           <button onClick={doWaive} disabled={pending} className="rounded bg-slate-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-700 disabled:opacity-50">ยกเว้น</button>
           <button onClick={() => setMode("idle")} className="rounded border border-border px-2 py-1 text-[11px]">ยกเลิก</button>
         </div>
-        {err && <span className="text-[10px] text-red-600">{err}</span>}
+        {err && <span className="text-[11px] text-red-600">{err}</span>}
       </div>
     );
   }
@@ -78,7 +78,7 @@ export function ReceiptCertRowActions({ receiptId, certNo }: { receiptId: number
       <button onClick={viewFile} disabled={pending} className="rounded border border-border px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">📎 ดูไฟล์</button>
       <button onClick={() => setMode("approve")} className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700">✓ อนุมัติ</button>
       <button onClick={() => setMode("waive")} className="rounded border border-border px-2 py-1 text-[11px] text-slate-600 hover:bg-surface-alt">ยกเว้น</button>
-      {err && <span className="text-[10px] text-red-600">{err}</span>}
+      {err && <span className="text-[11px] text-red-600">{err}</span>}
     </div>
   );
 }

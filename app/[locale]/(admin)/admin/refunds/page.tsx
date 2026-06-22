@@ -139,7 +139,7 @@ export default async function AdminRefundsListPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({totalAll})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({totalAll})</span>
         </Link>
         {REFUND_STATUSES.map((s) => (
           <Link
@@ -149,7 +149,7 @@ export default async function AdminRefundsListPage({
               s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {REFUND_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+            {REFUND_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
           </Link>
         ))}
       </nav>
@@ -247,22 +247,22 @@ export default async function AdminRefundsListPage({
                       {r.request_no}
                     </Link>
                     {r.created_by_admin_id && (
-                      <p className="text-[9px] text-muted">admin-created</p>
+                      <p className="text-[11px] text-muted">admin-created</p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <p>{[r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" ") || "—"}</p>
                     {r.profile?.member_code && (
-                      <p className="font-mono text-[10px] text-muted">{r.profile.member_code}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.profile.member_code}</p>
                     )}
                     {r.profile?.phone && (
-                      <p className="text-[10px] text-muted">☎ {r.profile.phone}</p>
+                      <p className="text-[11px] text-muted">☎ {r.profile.phone}</p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <p>{REFUND_SOURCE_LABEL[r.source]}</p>
                     {r.source_ref && (
-                      <p className="font-mono text-[10px] text-muted">{r.source_ref.slice(0, 18)}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.source_ref.slice(0, 18)}</p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-700">
@@ -272,7 +272,7 @@ export default async function AdminRefundsListPage({
                     <p className="line-clamp-2" title={r.reason}>{r.reason}</p>
                   </td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                       {REFUND_STATUS_LABEL[r.status]}
                     </span>
                   </td>

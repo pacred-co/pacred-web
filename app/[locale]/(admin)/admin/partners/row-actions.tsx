@@ -56,7 +56,7 @@ export function PartnerRowActions({
         <button
           type="button"
           onClick={() => setEditing(false)}
-          className="text-[10px] text-muted hover:underline"
+          className="text-[11px] text-muted hover:underline"
         >
           ← ปิดฟอร์ม
         </button>
@@ -69,12 +69,12 @@ export function PartnerRowActions({
 
   return (
     <div className="space-y-1.5">
-      {err && <div className="text-[10px] text-red-600">{err}</div>}
+      {err && <div className="text-[11px] text-red-600">{err}</div>}
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="rounded-lg border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+          className="rounded-lg border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt"
           disabled={pending}
         >
           ✏️ แก้
@@ -83,7 +83,7 @@ export function PartnerRowActions({
           type="button"
           onClick={toggleActive}
           disabled={pending}
-          className={`rounded-lg border px-2 py-1 text-[10px] ${
+          className={`rounded-lg border px-2 py-1 text-[11px] ${
             isActive
               ? "border-amber-200 text-amber-700 hover:bg-amber-50"
               : "border-green-200 text-green-700 hover:bg-green-50"
@@ -97,7 +97,7 @@ export function PartnerRowActions({
               type="button"
               onClick={hardDelete}
               disabled={pending}
-              className="rounded-lg border border-red-300 bg-red-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-lg border border-red-300 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
             >
               {pending ? "กำลังลบ..." : "ยืนยันลบถาวร"}
             </button>
@@ -105,7 +105,7 @@ export function PartnerRowActions({
               type="button"
               onClick={() => setConfirmDel(false)}
               disabled={pending}
-              className="rounded-lg border border-border px-2 py-1 text-[10px] hover:bg-surface-alt"
+              className="rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-surface-alt"
             >
               ยกเลิก
             </button>
@@ -115,7 +115,7 @@ export function PartnerRowActions({
             type="button"
             onClick={() => setConfirmDel(true)}
             disabled={pending}
-            className="rounded-lg border border-red-200 px-2 py-1 text-[10px] text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="rounded-lg border border-red-200 px-2 py-1 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50"
           >
             🗑 ลบ
           </button>

@@ -308,7 +308,7 @@ function QuoteCard({ model }: { model: QuoteModel }) {
         <img src={LOGO} alt="Pacred" className="h-9 w-auto" />
         <div className="text-right">
           <div className="text-xl font-black text-primary-700">ใบเสนอราคา</div>
-          <div className="text-[9px] text-slate-400">Quotation</div>
+          <div className="text-[11px] text-slate-400">Quotation</div>
         </div>
       </div>
 
@@ -343,7 +343,7 @@ function QuoteCard({ model }: { model: QuoteModel }) {
             <table className="w-full text-[11.5px]">
               <tbody>
                 {CUSTOMS_ADDON.costs.map((c, i) => (
-                  <tr key={i} className="border-t border-slate-100"><td className="py-1">{c.label}</td><td className="py-1 text-right font-mono font-semibold whitespace-nowrap">฿{BAHT(c.amount)}</td><td className="py-1 pl-2 text-[10px] text-slate-400 whitespace-nowrap">{c.note}</td></tr>
+                  <tr key={i} className="border-t border-slate-100"><td className="py-1">{c.label}</td><td className="py-1 text-right font-mono font-semibold whitespace-nowrap">฿{BAHT(c.amount)}</td><td className="py-1 pl-2 text-[11px] text-slate-400 whitespace-nowrap">{c.note}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -375,7 +375,7 @@ function CompareTable({ model }: { model: QuoteModel }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full text-[11px] sm:text-[12px]">
-        <thead className="bg-slate-800 text-white text-[10px]">
+        <thead className="bg-slate-800 text-white text-[11px]">
           <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
@@ -395,9 +395,9 @@ function CompareTable({ model }: { model: QuoteModel }) {
 function RateCell({ r, extraDays }: { r: PackageRate; extraDays?: string }) {
   return (
     <div>
-      <div className="font-mono font-bold text-primary-700">฿{BAHT(r.cbm)}<span className="text-[10px] font-normal text-slate-500">/คิว</span></div>
-      <div className="font-mono text-[11px]">฿{BAHT(r.kg)}<span className="text-[10px] text-slate-500">/กก.</span></div>
-      <div className="text-[10px] text-slate-500">{r.days}{extraDays ? ` ${extraDays}` : ""}</div>
+      <div className="font-mono font-bold text-primary-700">฿{BAHT(r.cbm)}<span className="text-[11px] font-normal text-slate-500">/คิว</span></div>
+      <div className="font-mono text-[11px]">฿{BAHT(r.kg)}<span className="text-[11px] text-slate-500">/กก.</span></div>
+      <div className="text-[11px] text-slate-500">{r.days}{extraDays ? ` ${extraDays}` : ""}</div>
     </div>
   );
 }
@@ -408,7 +408,7 @@ function LineItems({ model, t }: { model: QuoteModel; t: QuoteModel["totals"] })
       <p className="text-[11px] text-slate-500">{model.routeLabel}{model.density != null ? ` · คิดตาม ${model.basisLabel}` : ""}</p>
       <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full text-[11px] sm:text-[12px]">
-          <thead className="bg-slate-800 text-white text-[10px]">
+          <thead className="bg-slate-800 text-white text-[11px]">
             <tr><th className="px-2 sm:px-2.5 py-1.5 text-left font-semibold">รายการ</th><th className="px-1.5 sm:px-2 py-1.5 text-right font-semibold whitespace-nowrap">จำนวน</th><th className="hidden sm:table-cell px-2 py-1.5 text-right font-semibold">ราคา/หน่วย</th><th className="px-2 sm:px-2.5 py-1.5 text-right font-semibold">จำนวนเงิน</th><th className="px-1 sm:px-1.5 py-1.5 text-center font-semibold">VAT</th></tr>
           </thead>
           <tbody>
@@ -418,7 +418,7 @@ function LineItems({ model, t }: { model: QuoteModel; t: QuoteModel["totals"] })
                 <td className="px-1.5 sm:px-2 py-1.5 text-right text-slate-500 whitespace-nowrap">{l.qtyLabel}</td>
                 <td className="hidden sm:table-cell px-2 py-1.5 text-right font-mono">{THB(l.price)}</td>
                 <td className="px-2 sm:px-2.5 py-1.5 text-right font-mono font-semibold">{THB(l.amount)}</td>
-                <td className="px-1 sm:px-1.5 py-1.5 text-center text-[10px] text-slate-400">{l.vat ? "7%" : "-"}</td>
+                <td className="px-1 sm:px-1.5 py-1.5 text-center text-[11px] text-slate-400">{l.vat ? "7%" : "-"}</td>
               </tr>
             ))}
           </tbody>

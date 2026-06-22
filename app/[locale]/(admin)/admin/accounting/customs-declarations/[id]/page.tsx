@@ -256,7 +256,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
             {customer?.company_name
               ?? `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim()
               ?? "—"}
-            {customer?.member_code && <span className="ml-2 font-mono text-[10px] text-muted">({customer.member_code})</span>}
+            {customer?.member_code && <span className="ml-2 font-mono text-[11px] text-muted">({customer.member_code})</span>}
           </p>
           {customer?.email && <p className="text-muted">✉️ {customer.email}</p>}
           {customer?.phone && <p className="text-muted">📞 {customer.phone}</p>}
@@ -281,7 +281,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
             <p>VAT 7%: <span className="font-mono">{thb(header.total_vat_thb)}</span></p>
             <p>ภาษีอื่นๆ: <span className="font-mono">{thb(header.total_other_taxes_thb)}</span></p>
           </div>
-          <p className="mt-2 text-[10px] text-muted">
+          <p className="mt-2 text-[11px] text-muted">
             ⚠️ คำนวนต่อบรรทัด: duty = declared × duty_rate% · vat = (declared + duty) × 7% (Thai customs convention)
           </p>
         </section>
@@ -313,7 +313,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
             <ul className="space-y-1.5 text-xs">
               {audit.map((a) => (
                 <li key={a.id} className="flex items-baseline gap-2">
-                  <span className="font-mono text-[10px] text-muted whitespace-nowrap">
+                  <span className="font-mono text-[11px] text-muted whitespace-nowrap">
                     {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                   </span>
                   <span className="font-medium">{a.action}</span>

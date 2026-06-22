@@ -74,7 +74,7 @@ export default async function AdminApiForwarderCnPage() {
                 กรอกข้อมูลรายการนำเข้า CargoCenter ทีละรายการ. INSERT ลง{" "}
                 <code className="rounded bg-surface-alt px-1">tb_forwarder</code> โดยตรง.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
                 ✓ พร้อมใช้ใน Wave 17
               </span>
             </div>
@@ -92,7 +92,7 @@ export default async function AdminApiForwarderCnPage() {
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 ภาพรวมรายการรอ-อัปเดต · ยอดส่งผ่าน API วันนี้ · กราฟ.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>
@@ -111,7 +111,7 @@ export default async function AdminApiForwarderCnPage() {
                 เรียก API ปลายทาง (cargothai.tech) ดึงรายการใหม่เข้า{" "}
                 <code className="rounded bg-surface-alt px-1">tb_tmp_forwarder_*</code> · รอ admin confirm.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน · ต้องการ token + retry design
               </span>
             </div>
@@ -129,7 +129,7 @@ export default async function AdminApiForwarderCnPage() {
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 ตรวจ SM Code ในระบบปลายทาง vs ใน PR — ใช้ debug รายการที่ตกหล่น.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>

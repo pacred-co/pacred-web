@@ -353,7 +353,7 @@ export default async function AdminDeliveryFeedbackPage({
                     {f?.ftrackingth && <div className="text-muted">TH: {f.ftrackingth}</div>}
                     {f?.ftrackingchn && <div className="text-muted">CN: {f.ftrackingchn}</div>}
                     {f?.fdatestatus7 && (
-                      <div className="text-[10px] text-muted">
+                      <div className="text-[11px] text-muted">
                         ส่งเมื่อ {fmtDate(f.fdatestatus7)}
                       </div>
                     )}
@@ -412,7 +412,7 @@ export default async function AdminDeliveryFeedbackPage({
                   <td className="px-3 py-3 text-[11px] text-muted whitespace-nowrap">
                     {fmtDate(r.created_at)}
                     {r.updated_at !== r.created_at && (
-                      <div className="text-[10px]">
+                      <div className="text-[11px]">
                         แก้ไข {fmtDate(r.updated_at)}
                       </div>
                     )}

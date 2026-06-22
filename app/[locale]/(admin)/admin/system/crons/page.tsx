@@ -123,7 +123,7 @@ export default async function AdminCronHealthPage() {
           <h1 className="mt-1 text-2xl font-bold">Cron health</h1>
           <p className="mt-1 text-sm text-muted">
             สถานะ cron ทั้ง {CRON_REGISTRY.length} งาน (last fire · 7-day success rate · last error).
-            Logs จาก <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">public.cron_invocations</code>.
+            Logs จาก <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">public.cron_invocations</code>.
           </p>
         </div>
         <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
@@ -150,7 +150,7 @@ export default async function AdminCronHealthPage() {
         </section>
       )}
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Tip: เปลี่ยน schedule ที่ <code>vercel.json</code> แล้วต้อง redeploy ก่อน Vercel ถึงเริ่มใช้ schedule ใหม่.
         Logs ขึ้นที่นี่หลัง cron handler รันเสร็จ (พึ่ง <code>lib/cron/instrument.ts</code>).
       </p>
@@ -178,7 +178,7 @@ function CronCard({
           <p className="font-mono text-[11px] text-muted truncate">{entry.path}</p>
         </div>
         {last && (
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[last.status]}`}>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[last.status]}`}>
             {STATUS_LABEL[last.status]}
           </span>
         )}
@@ -212,7 +212,7 @@ function CronCard({
       </dl>
 
       {last?.result_summary && Object.keys(last.result_summary).length > 0 && (
-        <details className="text-[10px]">
+        <details className="text-[11px]">
           <summary className="cursor-pointer text-muted hover:text-foreground">last summary</summary>
           <pre className="mt-1 rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono whitespace-pre-wrap break-words">
             {JSON.stringify(last.result_summary, null, 2)}
@@ -221,7 +221,7 @@ function CronCard({
       )}
 
       {last?.error_message && (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] text-red-700 font-mono break-words">
+        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 font-mono break-words">
           {last.error_message}
         </p>
       )}

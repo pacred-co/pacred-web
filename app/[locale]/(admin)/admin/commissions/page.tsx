@@ -234,7 +234,7 @@ export default async function AdminCommissionsPage({
               Sales-rep ค่าคอมจาก {topEarners.reduce((s, t) => s + t.unpaidCount, 0).toLocaleString("th-TH")} รายการที่ยังไม่ได้เบิก ·
               workflow: ลูกค้าส่งคำขอ → admin จ่ายเงิน + upload slip ({STATUS_LABEL["2"]} → {STATUS_LABEL["3"]})
             </p>
-            <p className="text-[10px] text-muted mt-1">
+            <p className="text-[11px] text-muted mt-1">
               📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_user_sales</code> + <code className="bg-surface-alt px-1 rounded">tb_user_sales_admin_pay</code> (ADR-0026 repoint จาก dead rebuilt) ·
               คำนวณค่าคอม 1% − WHT 3% per ADR-0020.
             </p>
@@ -264,7 +264,7 @@ export default async function AdminCommissionsPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">ทีม (useridmain)</th>
                     <th className="px-3 py-2 text-right">#รายการ</th>
@@ -286,11 +286,11 @@ export default async function AdminCommissionsPage({
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(t.net)}</td>
                       <td className="px-3 py-2 text-center text-xs">
                         {t.eligible ? (
-                          <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">
+                          <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px]">
                             ≥ ฿1,000
                           </span>
                         ) : (
-                          <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px]">
+                          <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[11px]">
                             &lt; ฿1,000
                           </span>
                         )}
@@ -301,7 +301,7 @@ export default async function AdminCommissionsPage({
               </table>
             </div>
           )}
-          <p className="mt-3 text-[10px] text-muted">
+          <p className="mt-3 text-[11px] text-muted">
             net ≥ ฿1,000 = ทีมเบิกค่าคอมได้แล้ว (legacy <code>getListForwarder.php</code> L174) · ลูกค้าจะเห็นปุ่ม &quot;ทำรายการเบิกเงิน&quot; ใน /sales/report
           </p>
         </section>
@@ -315,7 +315,7 @@ export default async function AdminCommissionsPage({
               status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
             }`}
           >
-            ทั้งหมด <span className="ml-1 text-[10px]">({totalCount})</span>
+            ทั้งหมด <span className="ml-1 text-[11px]">({totalCount})</span>
           </Link>
           {(["2", "3"] as const).map((s) => (
             <Link
@@ -325,7 +325,7 @@ export default async function AdminCommissionsPage({
                 s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
               }`}
             >
-              {STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s] ?? 0})</span>
+              {STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s] ?? 0})</span>
             </Link>
           ))}
         </nav>
@@ -360,7 +360,7 @@ export default async function AdminCommissionsPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลขที่</th>
                     <th className="px-3 py-2">ทีม</th>
@@ -384,10 +384,10 @@ export default async function AdminCommissionsPage({
                         </Link>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">{p.useridmain}</td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted">{p.admincreate ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-muted">{p.admincreate ?? "—"}</td>
                       {showMoney && <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(p.amount)}</td>}
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[p.status]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[p.status]}`}>
                           {STATUS_LABEL[p.status] ?? p.status}
                         </span>
                       </td>
@@ -412,7 +412,7 @@ export default async function AdminCommissionsPage({
           />
         </div>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           🔗 รายละเอียดทุกแถวเปิดที่ <Link href="/admin/sales-payouts" className="underline">/admin/sales-payouts</Link> (faithful detail + pay-out workflow) ·
           earn ทุกครั้งที่ส่งสำเร็จไหลผ่าน <code>earn-trigger-tb-user-sales.ts</code>
         </p>

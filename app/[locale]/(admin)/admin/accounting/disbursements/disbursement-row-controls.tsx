@@ -126,8 +126,8 @@ export function DisbursementRowControls({
           onSubmit={saveEdit}
           className="absolute z-10 mt-8 ml-[-200px] w-72 rounded-lg border border-border bg-white dark:bg-surface p-3 shadow-xl space-y-2"
         >
-          {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[10px] text-red-700">{err}</div>}
-          <label className="block text-[10px] space-y-0.5">
+          {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[11px] text-red-700">{err}</div>}
+          <label className="block text-[11px] space-y-0.5">
             <span>kind</span>
             <select
               value={eKind}
@@ -139,7 +139,7 @@ export function DisbursementRowControls({
               ))}
             </select>
           </label>
-          <label className="block text-[10px] space-y-0.5">
+          <label className="block text-[11px] space-y-0.5">
             <span>amount (฿)</span>
             <input
               type="number" step="0.01" min="0"
@@ -148,7 +148,7 @@ export function DisbursementRowControls({
               className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1 text-xs font-mono"
             />
           </label>
-          <label className="block text-[10px] space-y-0.5">
+          <label className="block text-[11px] space-y-0.5">
             <span>vendor</span>
             <input
               value={eVendor}
@@ -156,7 +156,7 @@ export function DisbursementRowControls({
               className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1 text-xs"
             />
           </label>
-          <label className="block text-[10px] space-y-0.5">
+          <label className="block text-[11px] space-y-0.5">
             <span>invoice_no</span>
             <input
               value={eInvoice}
@@ -164,7 +164,7 @@ export function DisbursementRowControls({
               className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1 text-xs font-mono"
             />
           </label>
-          <label className="block text-[10px] space-y-0.5">
+          <label className="block text-[11px] space-y-0.5">
             <span>paid_at</span>
             <input
               type="date"
@@ -173,7 +173,7 @@ export function DisbursementRowControls({
               className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1 text-xs"
             />
           </label>
-          <label className="block text-[10px] space-y-0.5">
+          <label className="block text-[11px] space-y-0.5">
             <span>note {eKind === "other" && <span className="text-red-700">*</span>}</span>
             <textarea
               value={eNote}

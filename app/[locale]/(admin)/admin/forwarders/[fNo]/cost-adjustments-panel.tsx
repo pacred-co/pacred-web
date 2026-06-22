@@ -130,7 +130,7 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm">ค่าใช้จ่ายเพิ่มเติม (post-delivery)</h3>
-        <span className="text-[10px] text-muted">U2-4</span>
+        <span className="text-[11px] text-muted">U2-4</span>
       </div>
 
       {totalUnpaid > 0 && (
@@ -155,18 +155,18 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
                       ฿{Number(r.amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </span>
                   </p>
-                  {r.note && <p className="text-muted text-[10px] mt-0.5">📝 {r.note}</p>}
-                  <p className="text-[10px] text-muted mt-0.5">
+                  {r.note && <p className="text-muted text-[11px] mt-0.5">📝 {r.note}</p>}
+                  <p className="text-[11px] text-muted mt-0.5">
                     เพิ่มเมื่อ {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                     {r.paid_at && (
                       <> · ชำระเมื่อ {new Date(r.paid_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
                     )}
                   </p>
                   {r.cancellation_reason && (
-                    <p className="text-[10px] text-muted mt-0.5">เหตุผลยกเลิก: {r.cancellation_reason}</p>
+                    <p className="text-[11px] text-muted mt-0.5">เหตุผลยกเลิก: {r.cancellation_reason}</p>
                   )}
                 </div>
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                   {STATUS_LABEL[r.status] ?? r.status}
                 </span>
               </div>
@@ -176,7 +176,7 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
                     type="button"
                     onClick={() => onMarkPaid(r.id, Number(r.amount_thb), false)}
                     disabled={pending}
-                    className="rounded bg-green-600 text-white px-2 py-1 text-[10px] hover:bg-green-700 disabled:opacity-50"
+                    className="rounded bg-green-600 text-white px-2 py-1 text-[11px] hover:bg-green-700 disabled:opacity-50"
                   >
                     💰 หัก wallet
                   </button>
@@ -184,7 +184,7 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
                     type="button"
                     onClick={() => onMarkPaid(r.id, Number(r.amount_thb), true)}
                     disabled={pending}
-                    className="rounded border border-amber-300 text-amber-700 px-2 py-1 text-[10px] hover:bg-amber-50 disabled:opacity-50"
+                    className="rounded border border-amber-300 text-amber-700 px-2 py-1 text-[11px] hover:bg-amber-50 disabled:opacity-50"
                   >
                     💵 รับเงินสด
                   </button>
@@ -192,7 +192,7 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
                     type="button"
                     onClick={() => onCancel(r.id)}
                     disabled={pending}
-                    className="rounded border border-red-200 text-red-600 px-2 py-1 text-[10px] hover:bg-red-50 disabled:opacity-50"
+                    className="rounded border border-red-200 text-red-600 px-2 py-1 text-[11px] hover:bg-red-50 disabled:opacity-50"
                   >
                     ❌ ยกเลิก
                   </button>
@@ -220,7 +220,7 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
               type="button"
               onClick={() => { setOpen(false); setErr(null); }}
               disabled={pending}
-              className="text-[10px] text-muted hover:underline"
+              className="text-[11px] text-muted hover:underline"
             >
               ปิด
             </button>

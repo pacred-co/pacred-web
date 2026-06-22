@@ -147,7 +147,7 @@ export default async function AdminHRTrainingPage() {
               <GraduationCap className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · LEARNING & TRAINING</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · LEARNING & TRAINING</p>
               <h1 className="text-xl sm:text-2xl font-bold">หลักสูตรอบรม</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 {totalCourses} หลักสูตร · บังคับเรียน {mandatoryCount} · เรียนจบ {totalCompleted} ครั้ง · ในกระบวนการ {totalInProgress}
@@ -194,15 +194,15 @@ export default async function AdminHRTrainingPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${cat.cls}`}>{cat.label}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${cat.cls}`}>{cat.label}</span>
                       {c.is_mandatory && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[10px] font-bold">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[11px] font-bold">
                           <Star className="w-3 h-3" />
                           บังคับเรียน
                         </span>
                       )}
                       {!c.is_active && (
-                        <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium">ปิดใช้</span>
+                        <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium">ปิดใช้</span>
                       )}
                     </div>
                     <h2 className="font-bold text-foreground">{c.title}</h2>
@@ -277,13 +277,13 @@ export default async function AdminHRTrainingPage() {
                                 <Avatar src={p?.avatar_url ?? null} name={full} />
                                 <div>
                                   <p className="font-medium text-foreground">{full}</p>
-                                  <p className="font-mono text-[10px] text-muted">{p?.member_code ?? "—"}</p>
+                                  <p className="font-mono text-[11px] text-muted">{p?.member_code ?? "—"}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-4 py-2 text-[11px] text-muted whitespace-nowrap">{new Date(e.enrolled_at).toLocaleDateString("th-TH")}</td>
                             <td className="px-4 py-2">
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.label}</span>
+                              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${st.cls}`}>{st.label}</span>
                             </td>
                             <td className="px-4 py-2 text-xs font-mono">{e.score != null ? `${e.score}` : "—"}</td>
                             <td className="px-4 py-2 text-[11px] text-muted">{e.completed_at ? new Date(e.completed_at).toLocaleDateString("th-TH") : "—"}</td>
@@ -315,7 +315,7 @@ function Avatar({ src, name }: { src: string | null; name: string }) {
     );
   }
   return (
-    <div className="h-7 w-7 rounded-full bg-surface-alt ring-1 ring-border flex items-center justify-center text-[10px] font-bold text-muted shrink-0">
+    <div className="h-7 w-7 rounded-full bg-surface-alt ring-1 ring-border flex items-center justify-center text-[11px] font-bold text-muted shrink-0">
       {name.charAt(0).toUpperCase() || "?"}
     </div>
   );

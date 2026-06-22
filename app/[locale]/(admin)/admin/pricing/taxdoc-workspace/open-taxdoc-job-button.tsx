@@ -52,7 +52,7 @@ export function OpenTaxdocJobButton({ fid, hno }: { fid?: number; hno?: string }
         <ClipboardPlus className="h-3.5 w-3.5" />
         {pending ? "กำลังเปิด…" : "เปิดงาน"}
       </button>
-      {err && <p className="mt-1 text-[10px] text-red-600">⚠ {err}</p>}
+      {err && <p className="mt-1 text-[11px] text-red-600">⚠ {err}</p>}
     </>
   );
 }

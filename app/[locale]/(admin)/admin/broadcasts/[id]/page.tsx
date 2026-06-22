@@ -119,7 +119,7 @@ export default async function AdminBroadcastDetailPage({
           )}
           {row.url && (
             <p className="text-xs">
-              ปุ่ม &quot;ดูรายละเอียด&quot; → <code className="text-[10px] font-mono">{row.url}</code>
+              ปุ่ม &quot;ดูรายละเอียด&quot; → <code className="text-[11px] font-mono">{row.url}</code>
             </p>
           )}
         </div>

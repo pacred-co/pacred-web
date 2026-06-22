@@ -468,16 +468,16 @@ function TxRow({
         <td className="px-3 py-3 text-xs">
           {isGroup ? (
             <div className="space-y-0.5">
-              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                 💳 ชำระค่าฝากนำเข้า (รวมเติม+ตัด เป็นรายการเดียว)
               </span>
               {row.note ? (
-                <div className="text-muted text-[10px] line-clamp-2 max-w-[16rem]">{row.note}</div>
+                <div className="text-muted text-[11px] line-clamp-2 max-w-[16rem]">{row.note}</div>
               ) : null}
             </div>
           ) : (
             <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                 TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
               }`}
             >
@@ -497,14 +497,14 @@ function TxRow({
         </td>
         <td className="px-3 py-3">
           <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
               STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
             }`}
           >
             {STATUS_LABEL[rowStatus] ?? "—"}
           </span>
           {(row.adminid || row.adminidcrate) ? (
-            <div className="text-muted text-[10px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>
+            <div className="text-muted text-[11px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>
           ) : null}
         </td>
         <td className="px-3 py-3 text-xs">
@@ -558,7 +558,7 @@ function TxRow({
                           </td>
                           <td className="px-2 py-1.5">
                             <span
-                              className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                              className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
                                 TYPE_CLS[lrType] ?? "bg-gray-100 text-gray-600 border-gray-200"
                               }`}
                             >
@@ -570,7 +570,7 @@ function TxRow({
                           </td>
                           <td className="px-2 py-1.5">
                             <span
-                              className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                              className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
                                 STATUS_CLS[lrStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
                               }`}
                             >
@@ -626,7 +626,7 @@ function TxSortTh({
         } ${align === "right" ? "flex-row-reverse" : ""}`}
       >
         <span>{label}</span>
-        <span className="text-[9px]" aria-hidden>{arrow}</span>
+        <span className="text-[11px]" aria-hidden>{arrow}</span>
       </Link>
     </th>
   );

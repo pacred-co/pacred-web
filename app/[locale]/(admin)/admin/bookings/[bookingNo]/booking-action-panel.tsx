@@ -189,7 +189,7 @@ export function BookingActionPanel({
                 className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs font-mono"
                 disabled={pending}
               />
-              <p className="text-[10px] text-muted">
+              <p className="text-[11px] text-muted">
                 สร้างใบเสนอราคาจาก{" "}
                 <a href="/admin/freight/quotes/new" target="_blank" rel="noreferrer" className="text-primary-600 hover:underline">
                   /admin/freight/quotes/new
@@ -266,7 +266,7 @@ export function BookingActionPanel({
               className="w-full rounded border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs"
               disabled={pending}
             />
-            <p className="text-[10px] text-muted">{reasonInput.length} / 500 · อย่างน้อย 3 ตัวอักษร</p>
+            <p className="text-[11px] text-muted">{reasonInput.length} / 500 · อย่างน้อย 3 ตัวอักษร</p>
             <div className="flex gap-2">
               <button
                 type="button"

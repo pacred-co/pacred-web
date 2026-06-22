@@ -309,7 +309,7 @@ export default async function PrintAllPage({
                   <p className="text-2xl font-black text-primary-700 leading-none">
                     {SITE_NAME}
                   </p>
-                  <p className="text-[10px] text-gray-600 mt-0.5">
+                  <p className="text-[11px] text-gray-600 mt-0.5">
                     เลขที่ฝากนำเข้า #{f.id}
                     {f.fcabinetnumber ? ` · ตู้ ${f.fcabinetnumber}` : ""}
                     {warehouseName ? ` · โกดัง ${warehouseName}` : ""}
@@ -377,7 +377,7 @@ export default async function PrintAllPage({
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-gray-300 px-1 py-1">
-      <div className="text-[10px] text-gray-500">{label}</div>
+      <div className="text-[11px] text-gray-500">{label}</div>
       <div className="font-semibold">{value}</div>
     </div>
   );

@@ -312,7 +312,7 @@ export default async function FreightShipmentPnlPage({
       <section className="rounded-2xl border border-border bg-surface-alt/30 p-5 space-y-2">
         <div className="flex items-baseline justify-between flex-wrap gap-2">
           <h2 className="font-bold text-sm">🧮 คอมมิชชั่น (อ้างอิง · ก่อนจ่ายจริง)</h2>
-          <span className="text-[10px] text-muted">
+          <span className="text-[11px] text-muted">
             จาก rate engine — บัญชี ledger คอมมิชชั่นจริงอยู่เวฟถัดไป
           </span>
         </div>

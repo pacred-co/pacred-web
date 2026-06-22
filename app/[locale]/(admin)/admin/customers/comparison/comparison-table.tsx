@@ -145,15 +145,15 @@ export function ComparisonTable({ rows, picks }: { rows: ComparisonRow[]; picks:
                 <tr key={r.userID} className="border-t border-border align-top hover:bg-surface-alt/30">
                   <td className="px-4 py-3 font-mono text-xs">
                     <Link href={`/admin/customers/${r.userID}`} className="text-primary-600 hover:underline">{r.userID}</Link>
-                    {r.deleted && <div className="mt-0.5 text-[10px] text-red-600">บัญชีถูกลบ</div>}
+                    {r.deleted && <div className="mt-0.5 text-[11px] text-red-600">บัญชีถูกลบ</div>}
                   </td>
                   <td className="px-4 py-3 text-xs">
                     <div>{r.fullName}</div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[11px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
                         {r.isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </span>
-                      {r.adminIDSale && <span className="text-[10px] text-muted">เซลล์ {r.adminIDSale}</span>}
+                      {r.adminIDSale && <span className="text-[11px] text-muted">เซลล์ {r.adminIDSale}</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs max-w-[260px]"><div className="break-words">{r.address}</div></td>
@@ -315,7 +315,7 @@ function AddComparisonDialog({
                   />
                   <span className="font-mono text-xs text-primary-700">{p.userID}</span>
                   <span className="truncate">{p.fullName || "—"}</span>
-                  {p.coID && <span className="ml-auto rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">{p.coID}</span>}
+                  {p.coID && <span className="ml-auto rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">{p.coID}</span>}
                 </label>
               ))
             )}

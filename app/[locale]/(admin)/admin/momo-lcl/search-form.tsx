@@ -165,11 +165,11 @@ function SackResultView({ data }: { data: CheckMomoSackData }) {
                     </td>
                     <td className="px-4 py-2">
                       {r.matched ? (
-                        <span className="rounded-full border border-green-200 bg-green-50 text-green-700 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="rounded-full border border-green-200 bg-green-50 text-green-700 px-2 py-0.5 text-[11px] font-medium">
                           พบ
                         </span>
                       ) : (
-                        <span className="rounded-full border border-yellow-200 bg-yellow-50 text-yellow-700 px-2 py-0.5 text-[10px] font-medium">
+                        <span className="rounded-full border border-yellow-200 bg-yellow-50 text-yellow-700 px-2 py-0.5 text-[11px] font-medium">
                           ไม่พบ
                         </span>
                       )}
@@ -198,7 +198,7 @@ function SackResultView({ data }: { data: CheckMomoSackData }) {
 function Tile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-surface p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted font-semibold">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted font-semibold">{label}</p>
       <p className={`mt-1 text-base font-bold ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );

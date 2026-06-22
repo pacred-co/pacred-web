@@ -285,7 +285,7 @@ export default async function AdminYuanPaymentsPage({
       <form className="flex gap-2 flex-wrap items-end" action="/admin/yuan-payments">
         {sp.status ? <input type="hidden" name="status" value={sp.status} /> : null}
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted">ค้นหา</span>
+          <span className="text-[11px] uppercase tracking-wide text-muted">ค้นหา</span>
           <input
             name="q"
             defaultValue={sp.q ?? ""}
@@ -294,7 +294,7 @@ export default async function AdminYuanPaymentsPage({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+          <span className="text-[11px] uppercase tracking-wide text-muted">ตั้งแต่</span>
           <input
             type="date"
             name="from"
@@ -303,7 +303,7 @@ export default async function AdminYuanPaymentsPage({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+          <span className="text-[11px] uppercase tracking-wide text-muted">ถึง</span>
           <input
             type="date"
             name="to"
@@ -468,7 +468,7 @@ export default async function AdminYuanPaymentsPage({
                       <td className="px-3 py-3 text-xs">
                         {PAYTYPE_LABEL[r.paytype ?? ""] ?? r.paytype ?? "—"}
                         {r.paydetail ? (
-                          <div className="text-muted text-[10px] max-w-[160px] truncate" title={r.paydetail}>
+                          <div className="text-muted text-[11px] max-w-[160px] truncate" title={r.paydetail}>
                             {r.paydetail}
                           </div>
                         ) : null}
@@ -484,7 +484,7 @@ export default async function AdminYuanPaymentsPage({
                         {Number(r.paythb ?? 0).toLocaleString("th-TH", {
                           minimumFractionDigits: 2,
                         })}
-                        <div className="text-muted text-[10px]">
+                        <div className="text-muted text-[11px]">
                           @ {Number(r.payrate ?? 0).toFixed(2)}
                         </div>
                       </td>
@@ -498,19 +498,19 @@ export default async function AdminYuanPaymentsPage({
                       ) : null}
                       <td className="px-3 py-3">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
                           }`}
                         >
                           {STATUS_LABEL[status] ?? "—"}
                         </span>
                         {STATUS_NEXT[status]?.next && status !== "3" ? (
-                          <div className={`mt-1 text-[9px] whitespace-nowrap ${STATUS_NEXT[status]!.act ? "font-semibold text-rose-600" : "text-muted"}`}>
+                          <div className={`mt-1 text-[11px] whitespace-nowrap ${STATUS_NEXT[status]!.act ? "font-semibold text-rose-600" : "text-muted"}`}>
                             {STATUS_NEXT[status]!.act ? "🔔 " : ""}{STATUS_NEXT[status]!.next}
                           </div>
                         ) : null}
                         {r.paydateadmin ? (
-                          <div className="text-muted text-[10px] mt-1">
+                          <div className="text-muted text-[11px] mt-1">
                             {new Date(r.paydateadmin).toLocaleDateString("th-TH")}
                             {r.adminid ? ` · ${r.adminid}` : ""}
                           </div>
@@ -522,7 +522,7 @@ export default async function AdminYuanPaymentsPage({
                             <SlipImage src={slipUrlMap[String(r.id)]!} pdfMode="tile" className="h-12 w-12 rounded-md border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300" />
                           </a>
                         ) : r.imagesslip ? (
-                          <span className="text-amber-600 text-[10px]" title={`มีสลิปแต่เปิดไม่ได้: ${r.imagesslip}`}>⚠ ไม่พบ</span>
+                          <span className="text-amber-600 text-[11px]" title={`มีสลิปแต่เปิดไม่ได้: ${r.imagesslip}`}>⚠ ไม่พบ</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
@@ -591,7 +591,7 @@ function YuanSortTh({
         } ${align === "right" ? "flex-row-reverse" : ""}`}
       >
         <span>{label}</span>
-        <span className="text-[9px]" aria-hidden>{arrow}</span>
+        <span className="text-[11px]" aria-hidden>{arrow}</span>
       </Link>
     </th>
   );

@@ -98,7 +98,7 @@ export function HsLinesEditor({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/30 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/30 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">HS code</th>
                   <th className="px-3 py-2">รายละเอียด</th>
@@ -115,7 +115,7 @@ export function HsLinesEditor({
                     <td className="px-3 py-2 font-mono">{l.hs_code}</td>
                     <td className="px-3 py-2 max-w-[200px] truncate">
                       {l.description}
-                      {l.note && <div className="mt-0.5 text-[10px] text-muted">📝 {l.note}</div>}
+                      {l.note && <div className="mt-0.5 text-[11px] text-muted">📝 {l.note}</div>}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{l.qty.toLocaleString("th-TH")}</td>
                     <td className="px-3 py-2 text-right font-mono">{l.weight_kg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>

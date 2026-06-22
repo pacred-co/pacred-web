@@ -52,7 +52,7 @@ export function AddTeamLeaderForm({ groups }: { groups: Group[] }) {
       <label className="block space-y-1">
         <span className="text-xs font-medium">Profile UUID</span>
         <input value={profileId} onChange={(e) => setProfileId(e.target.value)} className={inputCls} required placeholder="copy จาก /admin/customers" />
-        <span className="block text-[10px] text-muted">ดู uuid ที่ /admin/customers หรือ Supabase profiles</span>
+        <span className="block text-[11px] text-muted">ดู uuid ที่ /admin/customers หรือ Supabase profiles</span>
       </label>
 
       <label className="block space-y-1">
@@ -67,7 +67,7 @@ export function AddTeamLeaderForm({ groups }: { groups: Group[] }) {
       <label className="block space-y-1">
         <span className="text-xs font-medium">ค่าคอม %</span>
         <input type="number" min="0" max="100" step="0.01" value={pctPct} onChange={(e) => setPctPct(e.target.value)} className={inputCls} required />
-        <span className="block text-[10px] text-muted">เช่น 1 = 1% (เก็บใน DB เป็น 0.01)</span>
+        <span className="block text-[11px] text-muted">เช่น 1 = 1% (เก็บใน DB เป็น 0.01)</span>
       </label>
 
       <Button type="submit" fullWidth disabled={pending}>

@@ -49,7 +49,7 @@ export function RetryDispatchButton({ notificationId }: { notificationId: string
         {pending ? "..." : "↻ retry"}
       </button>
       {feedback?.kind === "err" && (
-        <span className="text-[10px] text-red-600 font-mono">{feedback.msg}</span>
+        <span className="text-[11px] text-red-600 font-mono">{feedback.msg}</span>
       )}
     </div>
   );

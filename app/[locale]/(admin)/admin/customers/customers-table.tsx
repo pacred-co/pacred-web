@@ -206,11 +206,11 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
                           {r.isJuristic ? "นิติบุคคล" : "บุคคล"}
                         </span>
                         {r.juristic && (
-                          <span className={`ml-1 rounded-full border px-1.5 py-0.5 text-[9px] ${
+                          <span className={`ml-1 rounded-full border px-1.5 py-0.5 text-[11px] ${
                             r.juristic.corpStatus === "verified" ? "bg-green-50 text-green-700 border-green-200"
                             : r.juristic.corpStatus === "rejected" ? "bg-red-50 text-red-700 border-red-200"
                             : "bg-amber-50 text-amber-700 border-amber-200"}`}>
@@ -228,7 +228,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                         {r.birthdayDm}{r.birthdayAge !== null && <span className="ml-1 text-muted">({r.birthdayAge} ปี)</span>}
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {r.vip ? <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">VIP</span> : <span className="text-muted">—</span>}
+                        {r.vip ? <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[11px] font-medium uppercase">VIP</span> : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs">{r.lineId ? <span className="font-mono">{r.lineId}</span> : <span className="text-muted">—</span>}</td>
                       <td className="px-4 py-3 text-xs max-w-[180px]">
@@ -239,7 +239,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                         ) : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
-                      <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
+                      <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
                       <td className="px-4 py-3 text-right font-mono text-xs">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -325,7 +325,7 @@ function CustomerAvatar({ src, name, code }: { src: string | null; name: string;
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wide text-muted">{label}</dt>
+      <dt className="text-[11px] uppercase tracking-wide text-muted">{label}</dt>
       <dd className="mt-0.5 text-xs text-foreground break-words">{children}</dd>
     </div>
   );
@@ -346,8 +346,8 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
           <div className="flex items-center gap-2">
             <CustomerAvatar src={r.avatarUrl} name={r.fullName} code={r.userID} />
             <span className="font-mono text-sm font-semibold text-primary-700">{r.userID}</span>
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span>
-            {r.vip && <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">VIP</span>}
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span>
+            {r.vip && <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[11px] font-medium uppercase">VIP</span>}
           </div>
           <Link href={`/admin/customers/${r.userID}`} className="text-xs font-medium text-primary-600 hover:underline">→ ดูโปรไฟล์เต็ม</Link>
         </div>
@@ -356,7 +356,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
           <Field label="รหัสสมาชิก"><span className="font-mono">{r.userID}</span></Field>
           <Field label="ชื่อ">{r.fullName || "—"}</Field>
           <Field label="ประเภท">{r.isJuristic ? "นิติบุคคล" : "บุคคล"}</Field>
-          <Field label="สถานะ"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>{cfg.label}</span></Field>
+          <Field label="สถานะ"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span></Field>
           <Field label="เบอร์โทร">{r.tel || "—"}</Field>
           <Field label="อีเมล">{r.email || "—"}</Field>
           <Field label="วันเกิด / อายุ">{r.birthdayDm || "—"}{r.birthdayAge !== null && <span className="ml-1 text-muted">({r.birthdayAge} ปี)</span>}</Field>
@@ -373,7 +373,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
           <Field label="ยอดกระเป๋า"><span className="font-mono">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></Field>
           <Field label="สมัครเมื่อ">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</Field>
           <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-4">
-            <dt className="text-[10px] uppercase tracking-wide text-muted">ที่อยู่หลัก</dt>
+            <dt className="text-[11px] uppercase tracking-wide text-muted">ที่อยู่หลัก</dt>
             <dd className="mt-0.5 text-xs text-foreground break-words">{r.address || "—"}</dd>
           </div>
         </dl>
@@ -433,7 +433,7 @@ export function PendingJuristicReviews({ bundles }: { bundles: JuristicBundle[] 
                 {b.customerName && b.companyName && <span className="text-xs text-muted">· {b.customerName}</span>}
                 <span className="font-mono text-xs text-muted">{b.taxId}</span>
                 {b.phone && <span className="font-mono text-xs text-muted">📞 {b.phone}</span>}
-                <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">รอตรวจ</span>
+                <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">รอตรวจ</span>
               </button>
               {isOpen && (
                 <div className="border-t border-border p-3">
@@ -538,7 +538,7 @@ function JuristicInlineReview({ bundle }: { bundle: JuristicBundle }) {
               </p>
               <div className="overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs">
-                  <thead className="bg-surface-alt text-left text-[10px] uppercase text-muted">
+                  <thead className="bg-surface-alt text-left text-[11px] uppercase text-muted">
                     <tr><th className="px-2 py-1.5 w-1/4">รายการ</th><th className="px-2 py-1.5">DBD</th><th className="px-2 py-1.5">Pacred</th></tr>
                   </thead>
                   <tbody>
@@ -547,7 +547,7 @@ function JuristicInlineReview({ bundle }: { bundle: JuristicBundle }) {
                         <td className="px-2 py-1.5 text-muted">{row.label}</td>
                         <td className="px-2 py-1.5">
                           {row.isStatus
-                            ? (row.dbdValue ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${isActiveStatus(row.dbdValue) ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{row.dbdValue}</span> : <span className="text-muted/50">—</span>)
+                            ? (row.dbdValue ? <span className={`rounded-full px-1.5 py-0.5 text-[11px] ${isActiveStatus(row.dbdValue) ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{row.dbdValue}</span> : <span className="text-muted/50">—</span>)
                             : (row.dbdValue || <span className="text-muted/50">—</span>)}
                         </td>
                         <td className="px-2 py-1.5">{row.pacredValue ? <span className={row.mismatch ? "font-medium text-red-700" : ""}>{row.pacredValue}</span> : <span className="text-muted/40">{row.pacredValue === null ? "(ไม่ได้เก็บ)" : "—"}</span>}</td>

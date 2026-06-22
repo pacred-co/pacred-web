@@ -215,7 +215,7 @@ export function AdminForwarderUpdateForm(p: Props) {
         </div>
         <div className="flex gap-1 flex-wrap">
           {STATUS_FLOW.map((s, i) => (
-            <span key={s.value} className={`text-[10px] px-2 py-0.5 rounded-full border ${
+            <span key={s.value} className={`text-[11px] px-2 py-0.5 rounded-full border ${
               s.value === status
                 ? "bg-primary-500 text-white border-primary-500"
                 : i < currentIdx

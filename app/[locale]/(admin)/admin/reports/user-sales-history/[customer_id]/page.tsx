@@ -390,7 +390,7 @@ export default async function UserSalesHistoryDrillIn({
             <div className="rounded-xl border border-green-200 bg-green-50/50 p-3 text-center">
               <p className="text-[11px] text-muted">รวมรายได้ตลอดอายุ (บาท)</p>
               <p className="mt-1 text-xl font-bold font-mono text-green-700">{thb(lifetimeTotal)}</p>
-              <p className="mt-1 text-[10px] text-muted">
+              <p className="mt-1 text-[11px] text-muted">
                 นำเข้า {thb(lifetimeForwarderRevenue)} · สั่ง {thb(lifetimeShopRevenue)} · โอน{" "}
                 {thb(lifetimePaymentRevenue)}
               </p>
@@ -438,7 +438,7 @@ export default async function UserSalesHistoryDrillIn({
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${KIND_CLS[ev.kind]}`}
+                          className={`rounded-full border px-2 py-0.5 text-[11px] ${KIND_CLS[ev.kind]}`}
                         >
                           {KIND_LABEL[ev.kind]}
                         </span>

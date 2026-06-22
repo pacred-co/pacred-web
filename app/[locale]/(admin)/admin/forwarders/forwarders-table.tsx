@@ -291,7 +291,7 @@ function CustomerBadges({
     if (isGeneralCoid(coid)) return null;  // general/default tier (PR · legacy PCS) = no chip
     const label = coid;
     return (
-      <span className="rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700">
+      <span className="rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold text-purple-700">
         {label}
       </span>
     );
@@ -301,7 +301,7 @@ function CustomerBadges({
       {tierBadge}
       {isSvip && (
         <span
-          className="rounded-full border border-pink-300 bg-pink-50 px-1.5 py-0.5 text-[9px] font-semibold text-pink-700"
+          className="rounded-full border border-pink-300 bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-700"
           title="ลูกค้าคิดราคาแบบส่วนตัว"
         >
           SVIP
@@ -309,7 +309,7 @@ function CustomerBadges({
       )}
       {isComparison && (
         <span
-          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700"
+          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700"
           title="ลูกค้าคิดราคาตามค่าเทียบ"
         >
           CPS
@@ -317,14 +317,14 @@ function CustomerBadges({
       )}
       {(isCorporate || isJuristic) && (
         <span
-          className="rounded-full border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700"
+          className="rounded-full border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700"
           title="ลูกค้าบริษัท (นิติบุคคล)"
         >
           นิติ
         </span>
       )}
       <span
-        className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+        className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
           saleAdmin
             ? "border-emerald-300 bg-emerald-50 text-emerald-700"
             : "border-gray-200 bg-gray-50 text-gray-500"
@@ -749,7 +749,7 @@ export function ForwardersTable({
           // forces a visible horizontal scrollbar so staff always see it.
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-[11px]">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
                     <input
@@ -904,7 +904,7 @@ export function ForwardersTable({
                             L673 "ผ่านมา : ...") next to fdate. SLA visibility
                             without making operators do mental math. */}
                         {r.created_at && (
-                          <div className="text-[9px] text-amber-700 mt-0.5">
+                          <div className="text-[11px] text-amber-700 mt-0.5">
                             ผ่านมา {diffDateTimeNowThai(r.created_at)}
                           </div>
                         )}
@@ -916,7 +916,7 @@ export function ForwardersTable({
                           <div className="mt-1 flex flex-wrap gap-1">
                             {r.print_status_1 && (
                               <span
-                                className="rounded-full border border-blue-300 bg-blue-50 px-1 py-0.5 text-[9px] text-blue-700"
+                                className="rounded-full border border-blue-300 bg-blue-50 px-1 py-0.5 text-[11px] text-blue-700"
                                 title="พิมพ์เอกสาร #1 แล้ว"
                               >
                                 📄1
@@ -924,7 +924,7 @@ export function ForwardersTable({
                             )}
                             {r.print_status_2 && (
                               <span
-                                className="rounded-full border border-sky-300 bg-sky-50 px-1 py-0.5 text-[9px] text-sky-700"
+                                className="rounded-full border border-sky-300 bg-sky-50 px-1 py-0.5 text-[11px] text-sky-700"
                                 title="พิมพ์เอกสาร #2 แล้ว"
                               >
                                 📄2
@@ -932,7 +932,7 @@ export function ForwardersTable({
                             )}
                             {r.print_status_3 && (
                               <span
-                                className="rounded-full border border-green-300 bg-green-50 px-1 py-0.5 text-[9px] text-green-700"
+                                className="rounded-full border border-green-300 bg-green-50 px-1 py-0.5 text-[11px] text-green-700"
                                 title="พิมพ์เอกสาร #3 แล้ว"
                               >
                                 📄3
@@ -940,7 +940,7 @@ export function ForwardersTable({
                             )}
                             {r.print_status_4 && (
                               <span
-                                className="rounded-full border border-amber-300 bg-amber-50 px-1 py-0.5 text-[9px] text-amber-700"
+                                className="rounded-full border border-amber-300 bg-amber-50 px-1 py-0.5 text-[11px] text-amber-700"
                                 title="พิมพ์เอกสาร #4 แล้ว"
                               >
                                 📄4
@@ -948,7 +948,7 @@ export function ForwardersTable({
                             )}
                             {r.car_on && (
                               <span
-                                className="rounded-full border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] text-amber-800"
+                                className="rounded-full border border-amber-400 bg-amber-50 px-1 py-0.5 text-[11px] text-amber-800"
                                 title="ขึ้นรถแล้ว"
                               >
                                 ↑ ขึ้นรถ
@@ -956,7 +956,7 @@ export function ForwardersTable({
                             )}
                             {r.car_off && (
                               <span
-                                className="rounded-full border border-gray-300 bg-gray-50 px-1 py-0.5 text-[9px] text-gray-700"
+                                className="rounded-full border border-gray-300 bg-gray-50 px-1 py-0.5 text-[11px] text-gray-700"
                                 title="ลงรถแล้ว"
                               >
                                 ↓ ลงรถ
@@ -970,7 +970,7 @@ export function ForwardersTable({
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>
-                        <div className="text-muted text-[10px]">{r.customer?.phone}</div>
+                        <div className="text-muted text-[11px]">{r.customer?.phone}</div>
                         {/* Wave 18-B — VIP/SVIP/SaleAdmin badges (port of
                             legacy badgeVIP3 + badgeAdminSale · L589). */}
                         {r.customer && (
@@ -990,7 +990,7 @@ export function ForwardersTable({
                           const eta = formatEtaRange(r.eta_base, r.transport_type);
                           if (!eta) return null;
                           return (
-                            <div className="mt-1 text-[10px] text-primary-700">
+                            <div className="mt-1 text-[11px] text-primary-700">
                               จะมาถึงไทย: <span className="font-medium">{eta.primary}</span>{" "}
                               <span className="text-muted">{eta.tail}</span>
                             </div>
@@ -1018,7 +1018,7 @@ export function ForwardersTable({
                             // it differently so ops know to investigate.
                             <div
                               aria-hidden
-                              className="h-12 w-12 rounded border border-dashed border-amber-300 bg-amber-50/60 shrink-0 flex items-center justify-center text-[10px] text-amber-700"
+                              className="h-12 w-12 rounded border border-dashed border-amber-300 bg-amber-50/60 shrink-0 flex items-center justify-center text-[11px] text-amber-700"
                               title={`ฝากสั่งซื้อ ${r.ref_order} — รูปสินค้าหาย`}
                             >
                               ⚠️
@@ -1057,7 +1057,7 @@ export function ForwardersTable({
                             <div className="mt-1 flex flex-wrap gap-1 items-center">
                               {/* Block 1: admin OR users (mutually exclusive · only when no refOrder) */}
                               {block1Label && (
-                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${block1Cls}`}>
+                                <span className={`rounded-full border px-1.5 py-0.5 text-[11px] ${block1Cls}`}>
                                   {block1Label}
                                 </span>
                               )}
@@ -1065,7 +1065,7 @@ export function ForwardersTable({
                               {hasRefOrder && (
                                 <Link
                                   href={`/admin/shops/detail/${r.ref_order}`}
-                                  className="rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[9px] hover:bg-sky-100"
+                                  className="rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[11px] hover:bg-sky-100"
                                   title="คลิกดูออเดอร์ฝากสั่งซื้อที่ spawn ฝากนำเข้านี้"
                                 >
                                   ฝากสั่งซื้อ : {r.ref_order}
@@ -1101,14 +1101,14 @@ export function ForwardersTable({
                             ) : (
                               <div className="font-mono text-muted text-[11px]">—</div>
                             )}
-                            <div className="text-muted text-[10px] mt-0.5">
+                            <div className="text-muted text-[11px] mt-0.5">
                               Σ {agg.boxes} กล่อง
                               {agg.weight > 0 && (
                                 <> · {agg.weight.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
                               )}
                             </div>
                             {agg.cbm > 0 && (
-                              <div className="text-muted text-[10px]">
+                              <div className="text-muted text-[11px]">
                                 Σ {agg.cbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
                               </div>
                             )}
@@ -1126,21 +1126,21 @@ export function ForwardersTable({
                             ) : (
                               <div className="font-mono text-muted text-[11px]">—</div>
                             )}
-                            <div className="text-muted text-[10px] mt-0.5">
+                            <div className="text-muted text-[11px] mt-0.5">
                               {r.amount_count} กล่อง
                               {r.weight_kg > 0 && (
                                 <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
                               )}
                             </div>
                             {r.volume_cbm > 0 && (
-                              <div className="text-muted text-[10px]">
+                              <div className="text-muted text-[11px]">
                                 {cbmTotal(r.volume_cbm, r.amount_count, r.amount_count_flag).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
                               </div>
                             )}
                           </>
                         )}
                         {r.measured_by_admin && (
-                          <div className="text-[9px] text-muted/70 font-mono mt-0.5" title="แอดมินที่วัดขนาด/ชั่งน้ำหนัก">
+                          <div className="text-[11px] text-muted/70 font-mono mt-0.5" title="แอดมินที่วัดขนาด/ชั่งน้ำหนัก">
                             วัด: {r.measured_by_admin}
                           </div>
                         )}
@@ -1159,7 +1159,7 @@ export function ForwardersTable({
                               onClick={() => toggleGroupExpand(group.key)}
                               aria-expanded={isExpanded}
                               title={isExpanded ? "ซ่อนเลขพัสดุในกลุ่ม" : "แสดงเลขพัสดุในกลุ่ม"}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-1.5 py-1 font-mono text-[10px] text-blue-800 hover:bg-blue-100 transition-colors"
+                              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-1.5 py-1 font-mono text-[11px] text-blue-800 hover:bg-blue-100 transition-colors"
                             >
                               <span
                                 aria-hidden
@@ -1173,22 +1173,22 @@ export function ForwardersTable({
                               <button
                                 type="button"
                                 onClick={() => toggleGroupExpand(group.key)}
-                                className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white px-1.5 py-0.5 text-[9px] font-medium hover:bg-blue-700"
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-600 text-white px-1.5 py-0.5 text-[11px] font-medium hover:bg-blue-700"
                                 title={`พัสดุกลุ่มเดียวกัน ${aggMembers.length} เลข (MOMO แตกกล่อง · ไม่นับหัวบิล) — คลิกดูรายเลข`}
                               >
                                 📦 {aggMembers.length} เลขพัสดุ
                                 <span aria-hidden>{isExpanded ? "▲" : "▼"}</span>
                               </button>
-                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                                 {modeLabel[r.transport_type] ?? r.transport_type}
                               </span>
                             </div>
                           </>
                         ) : r.tracking_chn && r.tracking_chn !== "-" ? (
                           <>
-                            <div className="font-mono text-[10px]">{r.tracking_chn}</div>
+                            <div className="font-mono text-[11px]">{r.tracking_chn}</div>
                             <div className="mt-0.5">
-                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                                 {modeLabel[r.transport_type] ?? r.transport_type}
                               </span>
                             </div>
@@ -1203,7 +1203,7 @@ export function ForwardersTable({
                             `/admin/report-cnt/[fNo]` (Wave 16 P0-1)
                             keyed by the cabinet code; link straight there. */}
                         {r.cabinet_number && (
-                          <div className="mt-1 text-[10px]">
+                          <div className="mt-1 text-[11px]">
                             <span className="text-muted">เลขตู้: </span>
                             {isMomoRoutingBatch(r.cabinet_number) ? (
                               <span
@@ -1237,7 +1237,7 @@ export function ForwardersTable({
                         {r.pallet && (
                           <div className="mt-1">
                             <span
-                              className="rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[9px] font-mono text-slate-700"
+                              className="rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-mono text-slate-700"
                               title="ตำแหน่งใน warehouse"
                             >
                               loc: {r.pallet}
@@ -1245,7 +1245,7 @@ export function ForwardersTable({
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2.5 font-mono text-[10px]">
+                      <td className="px-2 py-2.5 font-mono text-[11px]">
                         {r.tracking_th && r.tracking_th !== "-" ? r.tracking_th : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
@@ -1258,31 +1258,31 @@ export function ForwardersTable({
                         {fmtDate(r.date_status4)}
                       </td>
                       <td className="px-2 py-2.5">
-                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${badgeCls}`}>
                           {sLabel}
                         </span>
                         {/* Sibling group with mixed member statuses: show the
                             main row's pill + a hint so the operator expands
                             to see the per-member states. */}
                         {group && !sameStatus ? (
-                          <div className="mt-0.5 text-[9px] text-gray-500 whitespace-nowrap">
+                          <div className="mt-0.5 text-[11px] text-gray-500 whitespace-nowrap">
                             (สถานะต่างกัน)
                           </div>
                         ) : fsNext ? (
-                          <div className={`mt-1 text-[9px] whitespace-nowrap ${fsAct ? "font-semibold text-rose-600" : "text-muted"}`}>
+                          <div className={`mt-1 text-[11px] whitespace-nowrap ${fsAct ? "font-semibold text-rose-600" : "text-muted"}`}>
                             {fsAct ? "🔔 " : ""}{fsNext}
                           </div>
                         ) : null}
                         {r.cabinet_number && (
                           isMomoRoutingBatch(r.cabinet_number) ? (
                             <div
-                              className="mt-0.5 text-[9px] text-amber-700 font-mono"
+                              className="mt-0.5 text-[11px] text-amber-700 font-mono"
                               title={`รอ MOMO ปิดตู้ (routing batch: ${r.cabinet_number})`}
                             >
                               ตู้ · รอปิด
                             </div>
                           ) : (
-                            <div className="mt-0.5 text-[9px] text-muted font-mono">ตู้ {r.cabinet_number}</div>
+                            <div className="mt-0.5 text-[11px] text-muted font-mono">ตู้ {r.cabinet_number}</div>
                           )
                         )}
                       </td>
@@ -1304,14 +1304,14 @@ export function ForwardersTable({
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         {r.date_admin_status ? (
                           <>
-                            <div className="text-muted text-[10px]">
+                            <div className="text-muted text-[11px]">
                               {fmtDate(r.date_admin_status, true)}
                             </div>
-                            <div className="text-[9px] text-amber-700">
+                            <div className="text-[11px] text-amber-700">
                               ผ่านมา {relativeAgo(r.date_admin_status)}
                             </div>
                             {r.admin_id_last && (
-                              <div className="text-[9px] text-muted font-mono">{r.admin_id_last}</div>
+                              <div className="text-[11px] text-muted font-mono">{r.admin_id_last}</div>
                             )}
                           </>
                         ) : (
@@ -1322,13 +1322,13 @@ export function ForwardersTable({
                         <div className="flex flex-col gap-1">
                           <Link
                             href={`/admin/forwarders/${r.id}`}
-                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[10px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"
+                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[11px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"
                           >
                             ดูข้อมูล
                           </Link>
                           <Link
                             href={`/admin/forwarders/${r.id}`}
-                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[10px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
+                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[11px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
                           >
                             อัปเดต
                           </Link>
@@ -1339,7 +1339,7 @@ export function ForwardersTable({
                             target="_blank"
                             rel="noopener noreferrer"
                             title="พิมพ์ป้ายสติกเกอร์ติดกล่อง (100×75 มม.)"
-                            className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[10px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
+                            className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[11px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
                           >
                             🖨 พิมพ์ป้าย
                           </a>
@@ -1354,14 +1354,14 @@ export function ForwardersTable({
                       <tr className="border-t border-border bg-slate-50">
                         <td colSpan={15} className="px-3 py-2">
                           <div className="pl-8">
-                            <div className="mb-1.5 text-[10px] font-medium text-slate-600">
+                            <div className="mb-1.5 text-[11px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
                               {aggMembers.length} เลข · ลูกค้า{" "}
                               <span className="font-mono">{r.customer?.userid ?? "—"}</span>
                             </div>
-                            <table className="w-full max-w-4xl text-[10px]">
+                            <table className="w-full max-w-4xl text-[11px]">
                               <thead>
-                                <tr className="text-left text-[9px] uppercase tracking-wide text-slate-500">
+                                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
                                   <th className="px-2 py-1 w-8" aria-label="เลือก" />
                                   <th className="px-2 py-1 w-8">#</th>
                                   <th className="px-2 py-1">เลขพัสดุ (จีน)</th>
@@ -1406,7 +1406,7 @@ export function ForwardersTable({
                                       <td className="px-2 py-1.5 font-mono">
                                         {m.tracking_chn}
                                         {m.id === r.id && (
-                                          <span className="ml-1 text-[9px] text-blue-600">(หลัก)</span>
+                                          <span className="ml-1 text-[11px] text-blue-600">(หลัก)</span>
                                         )}
                                         {/* #259 Option B — lock icon on member row when cabinet is locked */}
                                         {m.cabinet_locked && m.cabinet_number && (
@@ -1442,7 +1442,7 @@ export function ForwardersTable({
                                           : "—"}
                                       </td>
                                       <td className="px-2 py-1.5">
-                                        <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap ${mBadge}`}>
+                                        <span className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${mBadge}`}>
                                           {statusLabel[m.status] ?? m.status}
                                         </span>
                                       </td>
@@ -1461,13 +1461,13 @@ export function ForwardersTable({
                                         <div className="flex flex-wrap gap-1">
                                           <Link
                                             href={`/admin/forwarders/${m.id}`}
-                                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[9px] px-1.5 py-0.5 hover:bg-green-100 whitespace-nowrap"
+                                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[11px] px-1.5 py-0.5 hover:bg-green-100 whitespace-nowrap"
                                           >
                                             ดูข้อมูล
                                           </Link>
                                           <Link
                                             href={`/admin/forwarders/${m.id}`}
-                                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[9px] px-1.5 py-0.5 hover:bg-orange-100 whitespace-nowrap"
+                                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[11px] px-1.5 py-0.5 hover:bg-orange-100 whitespace-nowrap"
                                           >
                                             อัปเดต
                                           </Link>

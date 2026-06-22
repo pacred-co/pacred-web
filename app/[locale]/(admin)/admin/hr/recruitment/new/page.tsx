@@ -31,7 +31,7 @@ export default async function NewRecruitmentPostingPage() {
             <Plus className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold tracking-widest opacity-80">HR · RECRUITMENT</p>
+            <p className="text-[11px] font-bold tracking-widest opacity-80">HR · RECRUITMENT</p>
             <h1 className="text-xl sm:text-2xl font-bold">ลงประกาศรับสมัครงานใหม่</h1>
             <p className="text-xs opacity-80 mt-0.5">กรอกข้อมูลตำแหน่ง — สถานะจะคำนวณจากช่วงเวลาเริ่ม-สิ้นสุดประกาศ</p>
           </div>

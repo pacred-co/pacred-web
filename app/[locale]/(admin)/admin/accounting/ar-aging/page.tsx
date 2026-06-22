@@ -77,12 +77,12 @@ export default async function AdminARAgingPage() {
             <p className="text-xs text-muted mt-1">
               คอกพิทดูเงินที่ต้องตามเก็บ · แบ่งเป็นช่วง 0-30/30-60/60-90/เกิน 90 วัน · ทีมเซลส์เอาไปไล่ตามได้
             </p>
-            <p className="text-[10px] text-muted mt-1">
+            <p className="text-[11px] text-muted mt-1">
               📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder</code> WHERE <code className="bg-surface-alt px-1 rounded">fstatus=&apos;5&apos;</code>{" "}
               (รอชำระเงิน) · ใช้ <code className="bg-surface-alt px-1 rounded">fdatestatus5</code> หรือ <code className="bg-surface-alt px-1 rounded">fdate</code> เป็น issue date ·{" "}
               outstanding = <code className="bg-surface-alt px-1 rounded">ftotalprice − fdiscount</code> · per-rep attribution via <code className="bg-surface-alt px-1 rounded">tb_sales_report</code>
             </p>
-            <p className="text-[10px] text-muted mt-1">As of: {asOfDisplay}</p>
+            <p className="text-[11px] text-muted mt-1">As of: {asOfDisplay}</p>
           </div>
         </header>
 
@@ -103,7 +103,7 @@ export default async function AdminARAgingPage() {
               <p className="text-xs font-semibold">{BUCKET_LABEL[b.bucket]}</p>
               <p className="mt-1 text-xs">{b.count.toLocaleString("th-TH")} รายการ</p>
               <p className="mt-2 text-xl font-bold font-mono">{thb(b.sumOutstanding)}</p>
-              <p className="mt-1 text-[10px] opacity-75">
+              <p className="mt-1 text-[11px] opacity-75">
                 {report.totalSum > 0
                   ? `${((b.sumOutstanding / report.totalSum) * 100).toFixed(1)}% ของยอดค้าง`
                   : "—"}
@@ -143,7 +143,7 @@ export default async function AdminARAgingPage() {
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">รหัสลูกค้า</th>
@@ -202,7 +202,7 @@ export default async function AdminARAgingPage() {
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[600px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">Sales Rep</th>
@@ -228,7 +228,7 @@ export default async function AdminARAgingPage() {
           )}
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 MVP read-only · tb_wallet_hs reconciliation deferred Phase-2 ·
           ใช้ tb_forwarder.fstatus=&apos;5&apos; เป็น outstanding signal (legacy money-of-record) ·
           อ่านอ้างอิงเพิ่ม: <Link href="/admin/reports/pending-payments" className="underline">pending payments</Link>

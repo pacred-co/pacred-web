@@ -203,7 +203,7 @@ export default async function AdminCustomsDeclarationsPage({
           <p className="text-xs text-muted mt-1">
             หนึ่งใน 3 โหมดเอกสารภาษีตาม CEO directive (ใบกำกับ / <strong>ใบขนสินค้า</strong> / ไม่รับเอกสาร)
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">customs_declarations</code> (migration 0057 · V-E11)
             · status workflow: <code>draft → submitted → accepted → released</code>
             {" ↘ "}<code>cancelled</code>
@@ -232,13 +232,13 @@ export default async function AdminCustomsDeclarationsPage({
                 statusFilter === s ? "ring-2 ring-primary-500" : ""
               } ${STATUS_CLS[s]}`}
             >
-              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
+              <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">
                 {STATUS_LABEL[s]}
               </p>
               <p className="mt-1 font-mono text-2xl font-bold">
                 {countByStatus[s].toLocaleString("th-TH")}
               </p>
-              <p className="mt-0.5 text-[10px] opacity-70">
+              <p className="mt-0.5 text-[11px] opacity-70">
                 {totalAll > 0 ? `${((countByStatus[s] / totalAll) * 100).toFixed(1)}%` : "—"}
               </p>
             </Link>
@@ -252,7 +252,7 @@ export default async function AdminCustomsDeclarationsPage({
           className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3"
         >
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
             <input
               type="date"
               name="date_from"
@@ -261,7 +261,7 @@ export default async function AdminCustomsDeclarationsPage({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
             <input
               type="date"
               name="date_to"
@@ -270,7 +270,7 @@ export default async function AdminCustomsDeclarationsPage({
             />
           </label>
           <label className="flex flex-col gap-1 flex-1 min-w-[200px]">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ค้นหา (เลขที่/control-no/broker)</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ค้นหา (เลขที่/control-no/broker)</span>
             <input
               type="text"
               name="q"
@@ -314,7 +314,7 @@ export default async function AdminCustomsDeclarationsPage({
           <div className="px-5 py-3 border-b border-border flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary-600" />
             <h2 className="font-bold text-sm">รายการใบขน</h2>
-            <p className="text-[10px] text-muted ml-auto">เรียงตามวันที่สร้าง · max 200 แถวต่อรอบ</p>
+            <p className="text-[11px] text-muted ml-auto">เรียงตามวันที่สร้าง · max 200 แถวต่อรอบ</p>
           </div>
           {rows.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">
@@ -327,7 +327,7 @@ export default async function AdminCustomsDeclarationsPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[1100px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลขที่ใบขน</th>
                     <th className="px-3 py-2 text-center">ประเภท</th>
@@ -353,7 +353,7 @@ export default async function AdminCustomsDeclarationsPage({
                           {r.declaration_no ?? <span className="italic">(draft)</span>}
                         </Link>
                         {r.customs_control_no && (
-                          <div className="text-[10px] text-muted font-mono">
+                          <div className="text-[11px] text-muted font-mono">
                             control: {r.customs_control_no}
                           </div>
                         )}
@@ -362,7 +362,7 @@ export default async function AdminCustomsDeclarationsPage({
                         {TYPE_LABEL[r.declaration_type] ?? r.declaration_type}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${STATUS_CLS[r.status]}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold border ${STATUS_CLS[r.status]}`}>
                           {STATUS_LABEL[r.status]}
                         </span>
                       </td>
@@ -372,7 +372,7 @@ export default async function AdminCustomsDeclarationsPage({
                           <span>{r.port_of_entry ?? "—"}</span>
                         </div>
                         {r.customs_office && (
-                          <div className="text-[10px] text-muted">{r.customs_office}</div>
+                          <div className="text-[11px] text-muted">{r.customs_office}</div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs">
@@ -392,7 +392,7 @@ export default async function AdminCustomsDeclarationsPage({
                         <div className="inline-flex items-center gap-1">
                           <Link
                             href={`/admin/accounting/customs-declarations/${r.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-[10px] text-foreground hover:bg-surface-alt"
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-[11px] text-foreground hover:bg-surface-alt"
                             title="เปิดดู/แก้ไข"
                           >
                             <FileText className="h-3 w-3" />
@@ -402,7 +402,7 @@ export default async function AdminCustomsDeclarationsPage({
                             href={`/api/customs-declaration/${r.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
+                            className="inline-flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[11px] text-primary-700 hover:bg-primary-100"
                             title="เปิดดู PDF"
                           >
                             PDF
@@ -436,7 +436,7 @@ export default async function AdminCustomsDeclarationsPage({
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-      <p className="text-[10px] font-medium text-muted">{label}</p>
+      <p className="text-[11px] font-medium text-muted">{label}</p>
       <p className={`mt-1 text-lg font-bold ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
@@ -445,11 +445,11 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
 function Step({ Icon, title, desc }: { Icon: React.ComponentType<{ className?: string }>; title: string; desc: string }) {
   return (
     <div className="rounded-lg border border-border bg-white p-2.5">
-      <p className="flex items-center gap-1.5 font-mono font-semibold text-[10px] text-foreground">
+      <p className="flex items-center gap-1.5 font-mono font-semibold text-[11px] text-foreground">
         <Icon className="h-3 w-3" />
         {title}
       </p>
-      <p className="mt-0.5 text-[10px] text-muted">{desc}</p>
+      <p className="mt-0.5 text-[11px] text-muted">{desc}</p>
     </div>
   );
 }

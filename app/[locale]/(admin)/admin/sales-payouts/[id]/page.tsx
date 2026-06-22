@@ -212,14 +212,14 @@ export default async function AdminSalesPayoutDetail({
                       {showMoney && <td className="px-3 py-2 text-right font-mono">{f.netProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>}
                       <td className="px-3 py-2">
                         {fs ? (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${fs.cls}`}>{fs.label}</span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${fs.cls}`}>{fs.label}</span>
                         ) : (
                           <span className="text-muted text-xs">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2">
                         {us ? (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${us.cls}`}>{us.label}</span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${us.cls}`}>{us.label}</span>
                         ) : (
                           <span className="text-muted text-xs">—</span>
                         )}

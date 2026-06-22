@@ -29,11 +29,11 @@ export function OpenPeriodButton({ period_yyyymm }: { period_yyyymm: string }) {
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[10px] font-bold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+        className="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1 text-[11px] font-bold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
       >
         {pending ? "..." : "เปิดงวด"}
       </button>
-      {err && <span className="text-[10px] text-red-700">{err}</span>}
+      {err && <span className="text-[11px] text-red-700">{err}</span>}
     </span>
   );
 }

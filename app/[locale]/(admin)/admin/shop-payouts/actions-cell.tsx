@@ -61,18 +61,18 @@ export function ShopPayoutActions({
 
   return (
     <div className="space-y-1">
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       <input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="เหตุผลถ้าปฏิเสธ"
-        className="w-full text-[10px] rounded border border-border px-1 py-0.5"
+        className="w-full text-[11px] rounded border border-border px-1 py-0.5"
       />
       <input
         value={slipUrl}
         onChange={(e) => setSlipUrl(e.target.value)}
         placeholder="URL สลิป (ถ้าโอนแล้ว)"
-        className="w-full text-[10px] rounded border border-border px-1 py-0.5"
+        className="w-full text-[11px] rounded border border-border px-1 py-0.5"
       />
       <div className="flex flex-wrap gap-1">
         <Button

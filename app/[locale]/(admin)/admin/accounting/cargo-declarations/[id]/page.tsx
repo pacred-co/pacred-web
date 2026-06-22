@@ -237,7 +237,7 @@ export default async function CargoDeclarationDetailPage({
             <p>VAT 7%: <span className="font-mono">{thb(header.total_vat_thb)}</span></p>
             <p>ภาษีอื่นๆ: <span className="font-mono">{thb(header.total_other_taxes_thb)}</span></p>
           </div>
-          <p className="mt-2 text-[10px] text-muted">
+          <p className="mt-2 text-[11px] text-muted">
             ⚠️ มูลค่าสำแดง ตั้งจาก <b>ต้นทุน</b> (ไม่ใช่ราคาขาย) · duty = สำแดง × อัตรา% · vat = (สำแดง + duty) × 7%
           </p>
         </section>
@@ -253,7 +253,7 @@ export default async function CargoDeclarationDetailPage({
           <span className="text-base">📦</span>
           <h2 className="text-sm font-bold">รายการสินค้า + มูลค่าสำแดง (ใบขน)</h2>
           <span className="text-[11px] font-medium opacity-90">({lines.length} รายการ)</span>
-          <span className="ml-auto text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+          <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">
             {canEdit && isDraft ? "Docs แก้สำแดงได้ (ร่าง)" : "อ่านอย่างเดียว"}
           </span>
         </header>
@@ -332,7 +332,7 @@ export default async function CargoDeclarationDetailPage({
           <ul className="space-y-1.5 text-xs">
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
-                <span className="font-mono text-[10px] text-muted whitespace-nowrap">
+                <span className="font-mono text-[11px] text-muted whitespace-nowrap">
                   {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                 </span>
                 <span className="font-medium">{a.action}</span>

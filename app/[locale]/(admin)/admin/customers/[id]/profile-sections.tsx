@@ -1386,7 +1386,7 @@ export function AddressManager({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{recipient}</span>
                         {isMain ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary-500 text-white px-2 py-0.5 text-[10px]">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary-500 text-white px-2 py-0.5 text-[11px]">
                             <Star className="w-3 h-3" /> ที่อยู่หลัก
                           </span>
                         ) : null}

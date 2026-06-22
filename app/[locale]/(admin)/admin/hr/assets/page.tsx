@@ -89,7 +89,7 @@ export default async function AdminHrAssetsHubPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="font-semibold text-foreground">{card.title}</h3>
-                <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[11px] font-medium uppercase">
                   {card.badge}
                 </span>
               </div>

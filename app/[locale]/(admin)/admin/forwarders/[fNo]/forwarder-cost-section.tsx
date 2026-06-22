@@ -327,7 +327,7 @@ export async function ForwarderCostSection({
           <span className="text-[11px] font-medium opacity-90">({lineCount} รายการ)</span>
         )}
         <CostRevealToggle className="ml-auto" />
-        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">
+        <span className="text-[11px] bg-white/20 rounded px-1.5 py-0.5">
           ultra / accounting / pricing
         </span>
         <svg className="w-4 h-4 shrink-0 transition-transform duration-200 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -474,7 +474,7 @@ function CostLineCard({
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-surface p-2.5 space-y-2">
       <div className="flex items-start gap-2">
-        <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-alt text-[10px] font-mono text-muted">
+        <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-alt text-[11px] font-mono text-muted">
           {index}
         </span>
         {thumb ? (
@@ -485,7 +485,7 @@ function CostLineCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium break-words line-clamp-2">{title || "—"}</p>
-          {subtitle && <p className="text-[10px] text-muted truncate">{subtitle}</p>}
+          {subtitle && <p className="text-[11px] text-muted truncate">{subtitle}</p>}
         </div>
       </div>
       {children}
@@ -559,11 +559,11 @@ function ForwarderProfitPanel({
           <p>ต้นทุน ส่วนลด : {baht(0)}</p>
           <p>ต้นทุน เพิ่ม/ลด เงิน : {baht(0)}</p>
           <p>ราคาต้นทุน : <strong>{hasCost ? baht(costTotal) : "— ยังไม่ตั้งเรทต้นทุน"}</strong></p>
-          <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-0.5">
+          <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-0.5">
             ระบบเลือกต้นทุนโดย {usingStored ? "ต้นทุนที่บันทึก (ตู้)" : "เรทต้นทุนระบบหลัก"}
           </p>
           {costDiverged && (
-            <p className="text-[10px] text-amber-700">
+            <p className="text-[11px] text-amber-700">
               ⚠ เรทระบบ(สด) {baht(liveCost)} ≠ ต้นทุนที่บันทึก(ตู้) {baht(storedCost)} — บัญชีใช้ตัวที่บันทึก
             </p>
           )}
@@ -578,11 +578,11 @@ function ForwarderProfitPanel({
           <p className="border-t border-indigo-200 pt-0.5 mt-0.5 font-bold font-sans">
             กำไรสุทธิ : <strong className={`font-mono ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>{hasCost ? baht(profit) : "—"}</strong>
           </p>
-          {hasCost && <p className="text-[10px] text-muted">VAT ณ กำไร 7% (ภายใน) : {baht(marginVat)}</p>}
+          {hasCost && <p className="text-[11px] text-muted">VAT ณ กำไร 7% (ภายใน) : {baht(marginVat)}</p>}
         </div>
       </div>
       {!hasCost && (
-        <p className="mt-1.5 text-[10px] text-amber-700">
+        <p className="mt-1.5 text-[11px] text-amber-700">
           ⚠ ยังไม่มีเรทต้นทุนสำหรับขนส่ง/โหมด/ประเภทนี้ — ตั้งเรทที่ <span className="font-medium">ตั้งค่า › เรทต้นทุนนำเข้า</span> (/admin/settings/forwarder-costs) แล้วต้นทุน + กำไรจะคำนวณเอง
         </p>
       )}

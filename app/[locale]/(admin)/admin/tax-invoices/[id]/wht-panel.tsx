@@ -69,7 +69,7 @@ export function WhtPanel(props: Props) {
       <div className="flex items-baseline justify-between">
         <h2 className="font-bold text-sm">
           🧾 ภาษีหัก ณ ที่จ่าย (WHT)
-          <span className="text-[10px] text-muted font-normal ml-2">— สำหรับลูกค้านิติบุคคล</span>
+          <span className="text-[11px] text-muted font-normal ml-2">— สำหรับลูกค้านิติบุคคล</span>
         </h2>
         {props.entry && (
           <StatusBadge status={props.entry.cert_status} />
@@ -420,7 +420,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className={`rounded-lg border border-amber-200 p-2 ${highlight ? "bg-primary-50" : "bg-white"}`}>
-      <p className="text-[10px] text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
       <p className={`font-mono ${highlight ? "font-bold text-primary-700" : ""}`}>{value}</p>
     </div>
   );
@@ -436,7 +436,7 @@ function StatusBadge({ status }: { status: "pending" | "received" | "waived" }) 
     : status === "waived" ? "ยกเว้น"
     :                       "รอใบหัก (gate ON)";
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
   );
 }
 

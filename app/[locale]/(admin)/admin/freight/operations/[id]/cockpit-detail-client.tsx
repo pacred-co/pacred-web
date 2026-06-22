@@ -255,7 +255,7 @@ export function CockpitDetailClient({
 
               {/* assignment */}
               <div>
-                <label className="block text-[10px] text-muted mb-0.5">ผู้รับผิดชอบ</label>
+                <label className="block text-[11px] text-muted mb-0.5">ผู้รับผิดชอบ</label>
                 {canManage ? (
                   <select
                     disabled={pending}
@@ -332,7 +332,7 @@ export function CockpitDetailClient({
 function RefFig({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-surface-alt/30 px-2.5 py-1.5">
-      <dt className="text-[10px] text-muted">{label}</dt>
+      <dt className="text-[11px] text-muted">{label}</dt>
       <dd className="font-mono tabular-nums text-xs">{value}</dd>
     </div>
   );
@@ -395,7 +395,7 @@ function CostSnapshotEditor({
       ) : (
         <div className="mt-2 space-y-2">
           <label className="block">
-            <span className="block text-[10px] text-muted">รายได้ (฿)</span>
+            <span className="block text-[11px] text-muted">รายได้ (฿)</span>
             <input
               type="number" min={0} step="0.01" inputMode="decimal"
               value={revDraft} onChange={(e) => setRevDraft(e.target.value)}
@@ -404,7 +404,7 @@ function CostSnapshotEditor({
             />
           </label>
           <label className="block">
-            <span className="block text-[10px] text-muted">ต้นทุน (฿)</span>
+            <span className="block text-[11px] text-muted">ต้นทุน (฿)</span>
             <input
               type="number" min={0} step="0.01" inputMode="decimal"
               value={costDraft} onChange={(e) => setCostDraft(e.target.value)}
@@ -437,7 +437,7 @@ function Fig({ label, value, tone }: { label: string; value: string; tone?: "pos
   const cls = tone === "neg" ? "text-red-600" : tone === "pos" ? "text-green-700" : "";
   return (
     <div className="rounded border border-border bg-surface-alt/30 px-2 py-1">
-      <p className="text-[9px] text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
       <p className={`font-mono tabular-nums text-[11px] font-semibold ${cls}`}>{value}</p>
     </div>
   );
@@ -480,7 +480,7 @@ function ChecklistBlock({
 
   return (
     <div>
-      <p className="text-[10px] text-muted mb-1">เช็คลิสต์</p>
+      <p className="text-[11px] text-muted mb-1">เช็คลิสต์</p>
       {items.length === 0 ? (
         <p className="text-[11px] text-muted italic">— ยังไม่มีรายการ —</p>
       ) : (

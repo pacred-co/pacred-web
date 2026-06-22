@@ -172,7 +172,7 @@ export function ValueBlockEditor({ data, editable }: Props) {
         {data.declared_value_basis && (
           <p className="mt-2 text-xs text-amber-800 italic">📝 {data.declared_value_basis}</p>
         )}
-        <p className="mt-1 text-[10px] text-muted">
+        <p className="mt-1 text-[11px] text-muted">
           ⚠️ commercial_value_usd × exchange_rate = commercial_value_thb (frozen at invoice issuance) ·
           declared_customs_value_thb แก้ได้เฉพาะ super/accounting (ADR-0016 Q3) ·
           ฟิลด์ derived ({"commercial_value_thb / duty_thb / vat_thb"}) คำนวณอัตโนมัติตอน save
@@ -252,7 +252,7 @@ export function ValueBlockEditor({ data, editable }: Props) {
           className={INPUT_CLASS + " resize-none"}
           placeholder="เช่น 'แผน 2 — invoice แสดง 80% ของราคาจริง'"
         />
-        <p className="text-[10px] text-muted mt-0.5">{basis.length} / 1000</p>
+        <p className="text-[11px] text-muted mt-0.5">{basis.length} / 1000</p>
       </FieldGroup>
 
       {err && (
@@ -261,7 +261,7 @@ export function ValueBlockEditor({ data, editable }: Props) {
         </div>
       )}
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         commercial_value_thb / duty_thb / vat_thb คำนวณใหม่อัตโนมัติตอน save (server-side per ADR-0016)
       </p>
     </section>
@@ -292,7 +292,7 @@ function FieldGroup({
     <div>
       <label className="block text-[11px] font-semibold text-foreground mb-1">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-muted mt-0.5">{hint}</p>}
+      {hint && <p className="text-[11px] text-muted mt-0.5">{hint}</p>}
     </div>
   );
 }

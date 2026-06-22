@@ -303,7 +303,7 @@ export default async function CreditPendingReport({
                           {r.order_no}
                         </Link>
                         {r.f_no_cargo ? (
-                          <div className="text-[10px] text-muted">Cargo: {r.f_no_cargo}</div>
+                          <div className="text-[11px] text-muted">Cargo: {r.f_no_cargo}</div>
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-xs">
@@ -311,15 +311,15 @@ export default async function CreditPendingReport({
                       </td>
                       <td className="px-4 py-3 text-xs">
                         <div>{r.customer.name || "—"}</div>
-                        <div className="font-mono text-[10px] text-muted">{r.customer.member_code}</div>
-                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                        <div className="font-mono text-[11px] text-muted">{r.customer.member_code}</div>
+                        {r.customer.phone && <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.outstanding_thb)}</td>
                       <td className="px-4 py-3 text-xs">
                         {r.date_shipped_china ? new Date(r.date_shipped_china).toLocaleDateString("th-TH") : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${ageBadge}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${ageBadge}`}>
                           {age} วัน
                         </span>
                       </td>

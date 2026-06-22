@@ -169,7 +169,7 @@ export default async function AdminDocumentsLifecyclePage() {
           <p className="text-xs text-muted mt-1">
             แผน flow ออกเอกสารบัญชีของ Pacred · ดูตามเส้นทาง quote → invoice → receipt → tax-invoice → credit/debit note
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 ใบเสร็จ + ใบกำกับ + ใบลดหนี้ มี backend จริง (live) · ใบเสนอราคา + ใบแจ้งหนี้ banner เป็น Phase-C (อย่าหลอกตัวเอง)
           </p>
         </header>
@@ -186,7 +186,7 @@ export default async function AdminDocumentsLifecyclePage() {
         <section>
           <div className="flex items-baseline justify-between gap-3 mb-3">
             <h2 className="font-bold text-sm">🧾 Lifecycle ของเอกสารบัญชี</h2>
-            <p className="text-[10px] text-muted">live = backend จริง · 🚧 = banner Phase-C</p>
+            <p className="text-[11px] text-muted">live = backend จริง · 🚧 = banner Phase-C</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 relative">
             {stages.map((s, idx) => (
@@ -238,7 +238,7 @@ export default async function AdminDocumentsLifecyclePage() {
           </ul>
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 Per brief §3 — PEAK module landed incrementally · §3.2 AR-aging (live) · §3.3 period-close + e-Tax + PEAK-export = next surfaces
         </p>
       </main>
@@ -249,9 +249,9 @@ export default async function AdminDocumentsLifecyclePage() {
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-      <p className="text-[10px] font-medium text-muted">{label}</p>
+      <p className="text-[11px] font-medium text-muted">{label}</p>
       <p className="mt-1 font-bold font-mono text-foreground text-xl">{value}</p>
-      {sub && <p className="text-[10px] text-muted mt-0.5 font-mono">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted mt-0.5 font-mono">{sub}</p>}
     </div>
   );
 }
@@ -271,7 +271,7 @@ function DocCard({ title, desc, href, badge, stat, arrow }: DocCardProps & { arr
         <div className="flex items-center justify-between gap-2 mb-2">
           <h3 className="font-bold text-sm">{title}</h3>
           <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium border ${
               isLive
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                 : "bg-amber-50 text-amber-700 border-amber-200"
@@ -283,14 +283,14 @@ function DocCard({ title, desc, href, badge, stat, arrow }: DocCardProps & { arr
         <p className="text-[11px] text-muted mb-3">{desc}</p>
         {stat ? (
           <div className="border-t border-border pt-2">
-            <p className="text-[10px] text-muted">{stat.label}</p>
+            <p className="text-[11px] text-muted">{stat.label}</p>
             <p className="mt-0.5 font-mono font-bold text-primary-700 text-lg">{stat.count.toLocaleString("th-TH")} ฉบับ</p>
             {stat.sum !== undefined && (
-              <p className="text-[10px] text-muted font-mono">รวม {thb(stat.sum)}</p>
+              <p className="text-[11px] text-muted font-mono">รวม {thb(stat.sum)}</p>
             )}
           </div>
         ) : (
-          <p className="text-[10px] text-muted italic mt-3">backend ยังไม่พร้อม</p>
+          <p className="text-[11px] text-muted italic mt-3">backend ยังไม่พร้อม</p>
         )}
     </>
   );

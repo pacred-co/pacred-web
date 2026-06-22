@@ -62,7 +62,7 @@ export function YuanPaymentActions(props: Props) {
 
   return (
     <div className="space-y-1">
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       <div className="flex flex-wrap gap-1">
         {/* Legacy payment.php is a 2-step pending → completed (no in-flight
             "processing" state). Approve flips paystatus 1→2 directly via

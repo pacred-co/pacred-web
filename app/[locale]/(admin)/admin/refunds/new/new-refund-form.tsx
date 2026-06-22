@@ -75,7 +75,7 @@ export function NewRefundForm() {
           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
         />
-        <span className="block text-[10px] text-muted">
+        <span className="block text-[11px] text-muted">
           คัดลอกจาก /admin/customers (หน้า detail ของลูกค้า)
         </span>
       </label>

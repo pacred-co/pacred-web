@@ -78,7 +78,7 @@ export function OrderNoteForm({
       </label>
       <label className="block space-y-1">
         <span className="text-xs font-medium">รายละเอียด</span>
-        <span className="block text-[10px] text-red-600">
+        <span className="block text-[11px] text-red-600">
           หากแก้ไขสำเร็จแล้วให้ลบข้อความทิ้งแล้วกดบันทึก
         </span>
         <textarea

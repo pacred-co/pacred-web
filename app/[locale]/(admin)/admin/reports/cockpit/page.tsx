@@ -278,7 +278,7 @@ function FunnelBar({ f, max }: { f: FunnelStage; max: number }) {
           className={`h-full rounded-md ${barCls} flex items-center justify-end pr-2`}
           style={{ width: `${Math.max(pct, f.count > 0 ? 6 : 0)}%` }}
         >
-          {pct >= 18 && <span className="text-[10px] font-semibold text-white">{intTh(f.count)}</span>}
+          {pct >= 18 && <span className="text-[11px] font-semibold text-white">{intTh(f.count)}</span>}
         </div>
       </div>
       {pct < 18 && <span className="w-12 shrink-0 text-right font-mono text-xs">{intTh(f.count)}</span>}
@@ -358,7 +358,7 @@ function ProfitTable({
       </div>
       <div className="overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-sm">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">{firstColLabel}</th>
               <th className="px-3 py-2.5 text-right">ออเดอร์</th>
@@ -409,7 +409,7 @@ function ProfitTable({
         </table>
       </div>
       {repNote && (
-        <p className="px-4 py-2 text-[10px] text-muted border-t border-border">
+        <p className="px-4 py-2 text-[11px] text-muted border-t border-border">
           เซลล์ = เซลล์ที่ลูกค้าถูก assign (tb_users.adminIDSale) · ออเดอร์ที่ลูกค้ายังไม่มีเซลล์รวมอยู่ใน &quot;(ไม่มีเซลล์)&quot;
         </p>
       )}

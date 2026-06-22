@@ -81,7 +81,7 @@ export function TaxdocDocModeEditor({
         className="rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">
         ยกเลิก
       </button>
-      {err && <span className="text-[10px] text-red-600">⚠ {err}</span>}
+      {err && <span className="text-[11px] text-red-600">⚠ {err}</span>}
     </span>
   );
 }

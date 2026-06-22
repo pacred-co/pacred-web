@@ -823,7 +823,7 @@ export default async function AdminReportsPage({
       <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-bold text-sm">📋 รีพอร์ตเฉพาะกิจ (V-B1)</h2>
-          <span className="text-[10px] text-muted">เปิดดูรายชื่อ + ดาวน์โหลด CSV</span>
+          <span className="text-[11px] text-muted">เปิดดูรายชื่อ + ดาวน์โหลด CSV</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <QuickCard href="/admin/reports/pending-payments"        label="รอชำระเงิน"         count={pendingPaymentsCnt.count ?? 0} />
@@ -839,7 +839,7 @@ export default async function AdminReportsPage({
       <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-bold text-sm">📊 รีพอร์ตวิเคราะห์ (V-G6)</h2>
-          <span className="text-[10px] text-muted">aggregations + drill-down</span>
+          <span className="text-[11px] text-muted">aggregations + drill-down</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <QuickCard href="/admin/reports/forwarder-volume"        label="ปริมาณฝากนำเข้า"     count={vg6ForwarderVolumeCnt.count ?? 0} note="30 วัน · ส่งแล้ว+" />
@@ -1042,7 +1042,7 @@ export default async function AdminReportsPage({
               <td className="px-4 py-3 text-xs">
                 <div>{r.bank_name}</div>
                 <div className="text-muted">{r.account_name}</div>
-                <div className="font-mono text-[10px] text-muted">{r.account_number}</div>
+                <div className="font-mono text-[11px] text-muted">{r.account_number}</div>
               </td>
               <td className="px-4 py-3"><PayoutStatusBadge s={r.status} /></td>
               <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
@@ -1125,35 +1125,35 @@ function QuickCard({ href, label, count, note, highlight }: { href: string; labe
     >
       <p className={`text-2xl font-bold font-mono ${isHot ? "text-red-700" : "text-foreground"}`}>{count}</p>
       <p className="text-[11px] font-medium text-muted mt-0.5">{label}</p>
-      {note && <p className="text-[9px] text-muted mt-0.5">{note}</p>}
+      {note && <p className="text-[11px] text-muted mt-0.5">{note}</p>}
     </Link>
   );
 }
 
 function ForwarderStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${FORWARDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${FORWARDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {legacyForwarderStatusThai(s) || s}
     </span>
   );
 }
 function OrderStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${ORDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ORDER_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {legacyOrderStatusThai(s) || s}
     </span>
   );
 }
 function PaymentStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYMENT_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${PAYMENT_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {PAYMENT_LABEL[s] ?? s}
     </span>
   );
 }
 function PayoutStatusBadge({ s }: { s: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYOUT_STATUS_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${PAYOUT_STATUS_BADGE[s] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
       {PAYOUT_STATUS_LABEL[s] ?? s}
     </span>
   );

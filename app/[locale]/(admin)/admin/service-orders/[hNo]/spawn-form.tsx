@@ -151,7 +151,7 @@ export default function SpawnForwarderForm({
         <h3 className="font-bold text-sm">
           สร้างรายการฝากนำเข้าจาก tracking ({rows.length} รายการ)
         </h3>
-        <span className="text-[10px] text-muted">
+        <span className="text-[11px] text-muted">
           legacy: shops.php L1584 · update4.php L88-116
         </span>
       </div>
@@ -260,34 +260,34 @@ export default function SpawnForwarderForm({
 function renderStatusBadge(s: RowState) {
   if (s.status === "done") {
     return (
-      <span className="rounded-full border border-green-300 bg-green-50 text-green-700 px-2 py-0.5 text-[10px] font-medium">
+      <span className="rounded-full border border-green-300 bg-green-50 text-green-700 px-2 py-0.5 text-[11px] font-medium">
         ✓ สร้าง #{s.fNo}
       </span>
     );
   }
   if (s.status === "skipped") {
     return (
-      <span className="rounded-full border border-amber-300 bg-amber-50 text-amber-700 px-2 py-0.5 text-[10px] font-medium">
+      <span className="rounded-full border border-amber-300 bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px] font-medium">
         ข้าม (มีอยู่แล้ว #{s.fNo})
       </span>
     );
   }
   if (s.status === "pending") {
     return (
-      <span className="rounded-full border border-blue-300 bg-blue-50 text-blue-700 px-2 py-0.5 text-[10px] font-medium">
+      <span className="rounded-full border border-blue-300 bg-blue-50 text-blue-700 px-2 py-0.5 text-[11px] font-medium">
         กำลังสร้าง...
       </span>
     );
   }
   if (s.status === "error") {
     return (
-      <span className="rounded-full border border-red-300 bg-red-50 text-red-700 px-2 py-0.5 text-[10px] font-medium">
+      <span className="rounded-full border border-red-300 bg-red-50 text-red-700 px-2 py-0.5 text-[11px] font-medium">
         ผิดพลาด
       </span>
     );
   }
   return (
-    <span className="rounded-full border border-border bg-surface-alt text-muted px-2 py-0.5 text-[10px]">
+    <span className="rounded-full border border-border bg-surface-alt text-muted px-2 py-0.5 text-[11px]">
       รอสร้าง
     </span>
   );

@@ -238,7 +238,7 @@ export default async function HsCodeRevenueReport({
         />
       </div>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Source: <code>container_hs_lines</code> join <code>hs_codes</code> + <code>containers</code> · sort by total declared value
       </p>
     </main>

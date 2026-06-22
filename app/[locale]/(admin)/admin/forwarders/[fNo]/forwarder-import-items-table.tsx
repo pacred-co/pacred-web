@@ -334,7 +334,7 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
   return (
     <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
       <table className="w-full text-xs md:text-sm">
-        <thead className="text-[10px] md:text-[11px] uppercase tracking-wide bg-surface-alt/50 text-center">
+        <thead className="text-[11px] md:text-[11px] uppercase tracking-wide bg-surface-alt/50 text-center">
           <tr>
             <th className={`${TH} text-left`}>รายละเอียด</th>
             <th className={TH}>กล่อง</th>
@@ -351,7 +351,7 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
             <th className={TH}>ค่าอื่นๆ</th>
             <th className={TH}>ส่วนลด</th>
             {applyWHT && (
-              <th className={`${TH} text-[9px] leading-tight text-blue-700`}>LESS<br />WITHHOLDING<br />TAX 1%</th>
+              <th className={`${TH} text-[11px] leading-tight text-blue-700`}>LESS<br />WITHHOLDING<br />TAX 1%</th>
             )}
             <th className={`${TH} font-bold`}>ราคารวม</th>
           </tr>

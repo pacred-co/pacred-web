@@ -270,25 +270,25 @@ export default async function MomoHistoryPage({
       {/* Grand totals */}
       <section className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-primary-300 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-600">CBM รวม</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">CBM รวม</p>
           <p className="mt-1 font-mono text-3xl font-bold text-primary-700">
             {history.grandCbm.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">น้ำหนัก (kg)</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600">น้ำหนัก (kg)</p>
           <p className="mt-1 font-mono text-xl font-bold text-gray-800">
             {history.grandKgs.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">จำนวนชิ้น</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600">จำนวนชิ้น</p>
           <p className="mt-1 font-mono text-xl font-bold text-gray-800">
             {history.grandQty.toLocaleString("th-TH")}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">รายการ tracking</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600">รายการ tracking</p>
           <p className="mt-1 font-mono text-xl font-bold text-gray-800">
             {history.grandRows.toLocaleString("th-TH")}
           </p>

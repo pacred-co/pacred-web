@@ -119,7 +119,7 @@ export default async function AdminMarginMonitorPage({
           <p className="text-xs text-muted mt-1">
             ตามนโยบาย CEO 2026-06-01 — ตู้ที่กำไรเกิน ฿15k ควร review (อาจเรียกราคาสูงไป) · ตู้ขาดทุน = เรียกราคาต่ำเกิน หรือ rate sheet ผิด
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder</code> WHERE
             {" "}<code className="bg-surface-alt px-1 rounded">fstatus=&apos;7&apos;</code>
             {" "}(ส่งสำเร็จ · margin realised) · กำไร = ราคาขาย − ต้นทุน − ส่วนลด · per-rep attribution via
@@ -130,11 +130,11 @@ export default async function AdminMarginMonitorPage({
         {/* Date range form */}
         <form method="GET" action="/admin/accounting/margin-monitor" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
             <input type="date" name="date_from" defaultValue={dateFrom} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
             <input type="date" name="date_to" defaultValue={dateTo} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
           </label>
           <button type="submit" className="rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
@@ -145,7 +145,7 @@ export default async function AdminMarginMonitorPage({
               ใช้ default
             </Link>
           )}
-          <p className="text-[10px] text-muted ml-auto">
+          <p className="text-[11px] text-muted ml-auto">
             ช่วงปัจจุบัน {dateFrom} → {dateTo} · default = 90 วันล่าสุด
           </p>
         </form>
@@ -172,7 +172,7 @@ export default async function AdminMarginMonitorPage({
                 <p className="text-xs font-semibold">{BUCKET_LABEL[b.bucket]}</p>
                 <p className="mt-1 text-xs">{b.count.toLocaleString("th-TH")} ตู้</p>
                 <p className="mt-2 text-lg font-bold font-mono">฿{thb(b.sumMargin)}</p>
-                <p className="mt-1 text-[10px] opacity-75">
+                <p className="mt-1 text-[11px] opacity-75">
                   {report.totalMargin !== 0
                     ? `${((b.sumMargin / Math.abs(report.totalMargin)) * 100).toFixed(1)}% ของกำไรรวม`
                     : "—"}
@@ -202,7 +202,7 @@ export default async function AdminMarginMonitorPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[800px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
                     <th className="px-3 py-2">วันที่</th>
@@ -224,7 +224,7 @@ export default async function AdminMarginMonitorPage({
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.fdate)}</td>
                       <td className="px-3 py-2 font-mono text-xs">{r.userid}</td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted">{r.fTrackingChn}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.fTrackingChn}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.ftotalprice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.fcosttotalprice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.fdiscount)}</td>
@@ -248,7 +248,7 @@ export default async function AdminMarginMonitorPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[800px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
                     <th className="px-3 py-2">วันที่</th>
@@ -285,7 +285,7 @@ export default async function AdminMarginMonitorPage({
             <h2 className="font-bold text-sm mb-3">🏆 Sales Rep ที่สร้างกำไรมากที่สุด (top 20)</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[600px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">Rep</th>

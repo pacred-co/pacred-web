@@ -40,7 +40,7 @@ export function ContactMessageActions({ id, status }: { id: string; status: stri
 
   return (
     <div className="flex flex-col gap-1 min-w-[120px]">
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       {next.map((n) => (
         <Button
           key={n.value}

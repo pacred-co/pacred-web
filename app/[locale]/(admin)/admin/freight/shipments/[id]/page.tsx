@@ -527,13 +527,13 @@ export default async function AdminFreightShipmentDetailPage({
                 </Link>
                 <span className="text-muted">·</span>
                 <span>{CUSTOMS_DECLARATION_TYPE_LABEL[cd.declaration_type]}</span>
-                <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] ${CD_STATUS_BADGE[cd.status]}`}>
+                <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[11px] ${CD_STATUS_BADGE[cd.status]}`}>
                   {CUSTOMS_DECLARATION_STATUS_LABEL[cd.status]}
                 </span>
                 {cd.customs_control_no && (
-                  <span className="font-mono text-[10px] text-muted">ศุลฯ #{cd.customs_control_no}</span>
+                  <span className="font-mono text-[11px] text-muted">ศุลฯ #{cd.customs_control_no}</span>
                 )}
-                <span className="text-[10px] text-muted">
+                <span className="text-[11px] text-muted">
                   {cd.submitted_at
                     ? `ยื่น ${new Date(cd.submitted_at).toLocaleDateString("th-TH")}`
                     : `สร้าง ${new Date(cd.created_at).toLocaleDateString("th-TH")}`}
@@ -551,7 +551,7 @@ export default async function AdminFreightShipmentDetailPage({
           <ul className="space-y-1.5 text-xs">
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
-                <span className="font-mono text-[10px] text-muted whitespace-nowrap">
+                <span className="font-mono text-[11px] text-muted whitespace-nowrap">
                   {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
                 </span>
                 <span className="font-medium">{a.action}</span>
@@ -562,7 +562,7 @@ export default async function AdminFreightShipmentDetailPage({
         </section>
       )}
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         💡 invoice status: {invoices.map((i) => (
           <span key={i.id} className={`mr-1 inline-block rounded-full border px-1.5 py-0.5 ${INV_STATUS_BADGE[i.status]}`}>
             {i.invoice_no ?? "(no #)"} · {FREIGHT_INVOICE_STATUS_LABEL[i.status]}

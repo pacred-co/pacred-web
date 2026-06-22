@@ -58,7 +58,7 @@ export default async function AdminCommissionTiersTombstone() {
         </div>
       </section>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         Ref: ADR-0020 (commission SOT lock) · ADR-0026 D-3 (dead-writer tombstone).
       </p>
     </main>

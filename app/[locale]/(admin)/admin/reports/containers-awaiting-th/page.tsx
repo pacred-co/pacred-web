@@ -246,12 +246,12 @@ export default async function ContainersAwaitingThReport({
                       <td className="px-4 py-3 text-xs">{STATUS_LABEL[g.fstatus] ?? g.fstatus}</td>
                       <td className="px-4 py-3 text-right text-xs font-mono">
                         {g.shipmentCount}
-                        <p className="text-[10px] text-muted">{g.totalVolume.toFixed(2)} CBM</p>
+                        <p className="text-[11px] text-muted">{g.totalVolume.toFixed(2)} CBM</p>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {g.fdatecontainerclose ? g.fdatecontainerclose.slice(0, 10) : <span className="text-muted">—</span>}
                         {d != null && (
-                          <span className={`block mt-1 rounded-full border px-2 py-0.5 text-[10px] w-fit ${dBadge}`}>
+                          <span className={`block mt-1 rounded-full border px-2 py-0.5 text-[11px] w-fit ${dBadge}`}>
                             ปิดมา {d} วัน
                           </span>
                         )}

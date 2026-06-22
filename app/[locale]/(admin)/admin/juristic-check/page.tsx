@@ -217,12 +217,12 @@ export default async function AdminJuristicCheckPage({
                         <div className="font-mono">{c.userid}</div>
                         <div>{u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "—"}</div>
                         <div className="text-muted">{u?.userTel ?? ""}</div>
-                        <Link href={`/admin/customers/${c.userid}`} className="text-primary-500 hover:underline text-[10px]">→ ดูโปรไฟล์</Link>
+                        <Link href={`/admin/customers/${c.userid}`} className="text-primary-500 hover:underline text-[11px]">→ ดูโปรไฟล์</Link>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{c.corporatenumber}</td>
                       <td className="px-4 py-3 text-xs">{c.corporatename}</td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
                           {STATUS_LABEL[status] ?? status}
                         </span>
                       </td>

@@ -75,14 +75,14 @@ export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
             <button
               key={d.url}
               onClick={() => setPreview(preview?.url === d.url ? null : { url: d.url, mime: d.mime })}
-              className="rounded border border-border px-2 py-0.5 text-[10px] hover:bg-surface-alt"
+              className="rounded border border-border px-2 py-0.5 text-[11px] hover:bg-surface-alt"
             >
               📄 {d.label}
             </button>
           ))}
         </div>
       )}
-      {docUrls.length === 0 && <p className="text-[10px] text-muted">ไม่มีเอกสาร</p>}
+      {docUrls.length === 0 && <p className="text-[11px] text-muted">ไม่มีเอกสาร</p>}
 
       {/* Inline preview */}
       {preview && (
@@ -100,7 +100,7 @@ export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
       <button
         type="button"
         onClick={openDbd}
-        className="inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-0.5 text-[10px] font-medium text-primary-700 hover:bg-primary-100"
+        className="inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
       >
         🔎 ตรวจสอบกับ DBD
       </button>
@@ -108,8 +108,8 @@ export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
       {/* Approve / Reject — only on pending ('1') rows. */}
       {status === "1" && (
         <div className="space-y-1">
-          {err && <div className="text-[10px] text-red-700">{err}</div>}
-          {msg && <div className="text-[10px] text-green-700">{msg}</div>}
+          {err && <div className="text-[11px] text-red-700">{err}</div>}
+          {msg && <div className="text-[11px] text-green-700">{msg}</div>}
           <div className="flex gap-1">
             <Button size="sm" onClick={() => act(() => verifyJuristic({ userid }))} disabled={pending}>
               ✅ ยืนยัน
@@ -125,7 +125,7 @@ export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="เหตุผลปฏิเสธ (กรอกก่อนกดปฏิเสธ)"
-            className="w-full text-[10px] rounded border border-border px-2 py-1"
+            className="w-full text-[11px] rounded border border-border px-2 py-1"
           />
         </div>
       )}

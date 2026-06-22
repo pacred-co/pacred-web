@@ -292,7 +292,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
                 className={inputCls + " font-mono disabled:opacity-60"}
               />
               {formMode === "edit" && (
-                <span className="block text-[10px] text-muted">แก้ไขพิกัดไม่ได้ — ลบแล้วเพิ่มใหม่หากต้องเปลี่ยน</span>
+                <span className="block text-[11px] text-muted">แก้ไขพิกัดไม่ได้ — ลบแล้วเพิ่มใหม่หากต้องเปลี่ยน</span>
               )}
             </label>
             <label className="space-y-0.5">
@@ -382,7 +382,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
               </button>
             </div>
             {fOther.length === 0 ? (
-              <p className="text-[10px] text-muted">— ยังไม่มีฟอร์มอื่น — กด “เพิ่มฟอร์ม” เช่น Form-D (ATIGA), Form-AK</p>
+              <p className="text-[11px] text-muted">— ยังไม่มีฟอร์มอื่น — กด “เพิ่มฟอร์ม” เช่น Form-D (ATIGA), Form-AK</p>
             ) : (
               <div className="space-y-1.5">
                 {fOther.map((o, i) => (
@@ -478,11 +478,11 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
                     <td className="px-3 py-2 text-right font-mono text-xs tabular-nums">{pct(r.form_e_duty_pct)}</td>
                     <td className="px-3 py-2">
                       {r.is_active ? (
-                        <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] text-emerald-700">
+                        <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">
                           ใช้งาน
                         </span>
                       ) : (
-                        <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                        <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
                           ปิด
                         </span>
                       )}
@@ -503,7 +503,7 @@ export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-muted">แสดงได้สูงสุด 200 รายการ — ใช้ช่องค้นหาเพื่อกรองพิกัดที่ต้องการ</p>
+      <p className="text-[11px] text-muted">แสดงได้สูงสุด 200 รายการ — ใช้ช่องค้นหาเพื่อกรองพิกัดที่ต้องการ</p>
     </div>
   );
 }

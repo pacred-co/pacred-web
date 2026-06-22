@@ -398,7 +398,7 @@ export default async function AdminDeliveryHistoryPage({
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                         STATUS_BADGE[r.fstatus ?? ""] ?? "bg-gray-50 text-gray-600 border-gray-200"
                       }`}
                     >

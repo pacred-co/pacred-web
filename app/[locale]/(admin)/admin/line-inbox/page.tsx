@@ -226,16 +226,16 @@ function CustomerList({
                     {c.last_message_text || "— ยังไม่มีข้อความ —"}
                   </p>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-muted/80">
+                    <span className="text-[11px] text-muted/80">
                       {relativeTimeTh(c.last_message_at)}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] text-muted">
                       <MessageSquare className="w-3 h-3" />
                       {(c.total_messages ?? 0).toLocaleString("th-TH")}
                     </span>
                     {c.status && (
                       <span
-                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
                           STATUS_BADGE[c.status] ?? "bg-gray-50 text-gray-600 border-gray-200"
                         }`}
                       >
@@ -313,7 +313,7 @@ function ThreadPanel({
           <p className="text-[11px] text-muted">
             ข้อความ {(customer.total_messages ?? 0).toLocaleString("th-TH")}
           </p>
-          <p className="text-[10px] text-muted/70">
+          <p className="text-[11px] text-muted/70">
             เข้า {(customer.total_inbound_messages ?? 0).toLocaleString("th-TH")}
             {" · "}
             ออก {(customer.total_outbound_messages ?? 0).toLocaleString("th-TH")}
@@ -373,7 +373,7 @@ function MessageBubble({ message }: { message: LineMessage }) {
       >
         {message.group_name && (
           <p
-            className={`text-[10px] font-medium mb-1 ${
+            className={`text-[11px] font-medium mb-1 ${
               outbound ? "text-white/80" : "text-primary-600"
             }`}
           >
@@ -410,7 +410,7 @@ function MessageBubble({ message }: { message: LineMessage }) {
         )}
 
         <p
-          className={`mt-1 text-[10px] ${
+          className={`mt-1 text-[11px] ${
             outbound ? "text-white/70 text-right" : "text-muted"
           }`}
         >

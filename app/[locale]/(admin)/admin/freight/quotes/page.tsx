@@ -154,7 +154,7 @@ export default async function AdminFreightQuotesListPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({Object.values(counts).reduce((s, n) => s + n, 0)})</span>
         </Link>
         {QUOTE_STATUSES.map((s) => (
           <Link
@@ -164,7 +164,7 @@ export default async function AdminFreightQuotesListPage({
               s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {QUOTE_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s]})</span>
+            {QUOTE_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
           </Link>
         ))}
       </nav>
@@ -221,13 +221,13 @@ export default async function AdminFreightQuotesListPage({
                   <td className="px-3 py-2">
                     <p className="text-sm">{q.buyer_name_snapshot}</p>
                     {q.buyer_tax_id_snapshot && (
-                      <p className="font-mono text-[10px] text-muted">{q.buyer_tax_id_snapshot}</p>
+                      <p className="font-mono text-[11px] text-muted">{q.buyer_tax_id_snapshot}</p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">{TRANSPORT_MODE_LABEL[q.transport_mode]}</td>
                   <td className="px-3 py-2 text-right font-mono text-xs">{thb(q.total)}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[q.status]}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[q.status]}`}>
                       {QUOTE_STATUS_LABEL[q.status]}
                     </span>
                   </td>

@@ -213,14 +213,14 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
             </span>
           )}
         </h2>
-        <span className="ml-auto text-[10px] text-muted">
+        <span className="ml-auto text-[11px] text-muted">
           legacy detail.php L380-441 · per-item rows ¥ จาก tb_order ·
           แถวสุดท้าย = สรุป freight ฿ {applyWHT ? "− WHT 1%" : ""}
         </span>
       </header>
       <div className="overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/30 text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/30 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-2 text-center">#</th>
               <th className="px-2 py-2 text-left whitespace-nowrap">รายละเอียด</th>
@@ -238,7 +238,7 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
               <th className="px-2 py-2 text-right whitespace-nowrap">ค่าอื่นๆ</th>
               <th className="px-2 py-2 text-right whitespace-nowrap">ส่วนลด</th>
               {applyWHT && (
-                <th className="px-2 py-2 text-right whitespace-nowrap text-[9px]">
+                <th className="px-2 py-2 text-right whitespace-nowrap text-[11px]">
                   LESS<br />WITHHOLDING<br />TAX 1%
                 </th>
               )}
@@ -269,12 +269,12 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
                         )}
                         <div className="min-w-0 space-y-0.5">
                           {provider && (
-                            <span className={`inline-block text-[9px] font-medium px-1.5 py-0.5 rounded border ${provider.cls}`}>
+                            <span className={`inline-block text-[11px] font-medium px-1.5 py-0.5 rounded border ${provider.cls}`}>
                               {provider.name}
                             </span>
                           )}
                           {it.cnameshop && (
-                            <div className="text-[10px] text-muted truncate">
+                            <div className="text-[11px] text-muted truncate">
                               ชื่อร้าน: <span className="text-foreground">{it.cnameshop}</span>
                             </div>
                           )}
@@ -286,7 +286,7 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
                             <span className="text-[11px] break-words line-clamp-2">{it.ctitle || "—"}</span>
                           )}
                           {(it.csize || it.ccolor) && (
-                            <div className="text-[10px] text-muted">
+                            <div className="text-[11px] text-muted">
                               {it.csize ? <>ขนาด: {it.csize} </> : null}
                               {it.ccolor ? <> · สี: {it.ccolor}</> : null}
                             </div>
@@ -324,7 +324,7 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
                   <td className="px-2 py-2 min-w-[200px]">
                     <div className="text-foreground break-words">{it.productname || "—"}</div>
                     {it.producttracking && (
-                      <div className="text-[10px] text-muted">Tracking: {it.producttracking}</div>
+                      <div className="text-[11px] text-muted">Tracking: {it.producttracking}</div>
                     )}
                   </td>
                   <td className="px-2 py-2 text-right font-mono">{row.qty}</td>
@@ -374,7 +374,7 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
               <td className="px-2 py-3 text-center font-mono text-xs">∑</td>
               <td className="px-2 py-3 max-w-[260px]">
                 <div className="font-semibold text-foreground">สรุป freight (฿)</div>
-                <div className="text-[10px] text-muted mt-0.5">
+                <div className="text-[11px] text-muted mt-0.5">
                   {r.fdetail ? <span className="line-clamp-2 break-words">{r.fdetail}</span> : null}
                   <div>ประเภทสินค้า : {productTypeLabel}</div>
                 </div>

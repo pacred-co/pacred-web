@@ -168,7 +168,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
               ) : (
                 <div className="max-h-[50vh] overflow-y-auto rounded-md border border-border">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-surface-alt/80 text-[10px] uppercase text-muted">
+                    <thead className="sticky top-0 bg-surface-alt/80 text-[11px] uppercase text-muted">
                       <tr>
                         <th className="px-2 py-1.5 text-left">หมายเลขตู้</th>
                         <th className="px-2 py-1.5 text-left">โกดัง</th>
@@ -222,7 +222,7 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
                   defaultValue={totalSelectedAmount.toFixed(2)}
                   className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm disabled:bg-surface-alt/50"
                 />
-                <span className="mt-1 block text-[10px] text-muted">
+                <span className="mt-1 block text-[11px] text-muted">
                   คิดจากผลรวม <b>ต้นทุนต่อแทรคกิ้ง</b> ของตู้ที่เลือก (ตรงกับใบแจ้งหนี้ MOMO ที่คิดเป็นรายแทรคกิ้ง) — แก้ไขได้ถ้า MOMO เรียกเก็บต่างจากนี้
                 </span>
               </label>

@@ -194,7 +194,7 @@ export default async function AdminContactMessagesPage({
                         </div>
                       )}
                       {!r.profile && r.profile_id === null && (
-                        <div className="mt-0.5 text-[10px] text-muted italic">guest</div>
+                        <div className="mt-0.5 text-[11px] text-muted italic">guest</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs">
@@ -218,7 +218,7 @@ export default async function AdminContactMessagesPage({
                         </div>
                       </details>
                       {(r.source_url || r.ip) && (
-                        <div className="mt-1.5 text-[10px] text-muted/70 space-y-0.5">
+                        <div className="mt-1.5 text-[11px] text-muted/70 space-y-0.5">
                           {r.source_url && <div>📎 {r.source_url}</div>}
                           {r.ip && <div>🌐 {r.ip}</div>}
                         </div>
@@ -226,7 +226,7 @@ export default async function AdminContactMessagesPage({
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                           STATUS_BADGE[r.status] ?? "bg-gray-50 border-gray-200"
                         }`}
                       >
@@ -236,7 +236,7 @@ export default async function AdminContactMessagesPage({
                     <td className="px-4 py-3">
                       <ContactMessageActions id={r.id} status={r.status} />
                       {workItemByContact.has(r.id) && (
-                        <p className="mt-1 text-[10px] text-primary-600 font-medium" title="งานนี้มี internal chat thread — เปิดจากกระดานงานหรือหน้ารายละเอียดที่เชื่อมโยง">
+                        <p className="mt-1 text-[11px] text-primary-600 font-medium" title="งานนี้มี internal chat thread — เปิดจากกระดานงานหรือหน้ารายละเอียดที่เชื่อมโยง">
                           💬 มีแชทภายใน
                         </p>
                       )}

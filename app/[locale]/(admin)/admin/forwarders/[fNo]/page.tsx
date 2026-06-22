@@ -816,7 +816,7 @@ async function tryRenderTbForwarder(
                 <p className={`mt-2 text-[11px] md:text-xs font-medium ${isActive ? "text-red-700" : isFuture ? "text-muted" : "text-foreground"}`}>
                   {step.label}
                 </p>
-                <p className="text-[10px] text-muted font-mono">
+                <p className="text-[11px] text-muted font-mono">
                   {step.date ? new Date(step.date).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—"}
                 </p>
               </li>
@@ -859,12 +859,12 @@ async function tryRenderTbForwarder(
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>
               {deliveryAddrFromProfile && (
-                <span className="ml-1 inline-block rounded-full bg-sky-100 text-sky-700 border border-sky-300 text-[10px] px-1.5 py-0.5 align-middle">
+                <span className="ml-1 inline-block rounded-full bg-sky-100 text-sky-700 border border-sky-300 text-[11px] px-1.5 py-0.5 align-middle">
                   ที่อยู่หลักของลูกค้า
                 </span>
               )}
               {deliveryAddrCorp && (
-                <span className="ml-1 inline-block rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300 text-[10px] px-1.5 py-0.5 align-middle">
+                <span className="ml-1 inline-block rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300 text-[11px] px-1.5 py-0.5 align-middle">
                   ที่อยู่บริษัท (นิติบุคคล)
                 </span>
               )}
@@ -874,7 +874,7 @@ async function tryRenderTbForwarder(
                     {deliveryAddrCorp.name}<br />
                     {deliveryAddrCorp.addressLine}
                     {u?.userTel && (<><br />โทร. {u.userTel}</>)}
-                    <br /><span className="text-[10px] text-amber-600">
+                    <br /><span className="text-[11px] text-amber-600">
                       ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ลูกค้าเป็นนิติบุคคลและยังไม่ได้บันทึกที่อยู่จัดส่ง จึงดึงที่อยู่บริษัทมาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
                     </span>
                   </>
@@ -885,7 +885,7 @@ async function tryRenderTbForwarder(
                     {(deliveryAddr.tel || deliveryAddr.tel2) && (<><br />โทร. {deliveryAddr.tel || "—"}{deliveryAddr.tel2 ? `, ${deliveryAddr.tel2}` : ""}</>)}
                     {deliveryAddr.note && (<><br /><span className="text-muted">📝 {deliveryAddr.note}</span></>)}
                     {deliveryAddrFromProfile && (
-                      <><br /><span className="text-[10px] text-amber-600">
+                      <><br /><span className="text-[11px] text-amber-600">
                         ℹ️ ออเดอร์นี้เลือกขนส่งแบบส่งถึงบ้าน — ดึงที่อยู่หลักจากโปรไฟล์ลูกค้ามาแสดง (ที่อยู่บนออเดอร์เดิมเป็นค่าโกดัง)
                       </span></>
                     )}

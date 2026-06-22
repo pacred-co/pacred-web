@@ -290,7 +290,7 @@ export default async function AdminWhtChasePage({
                           {STATUS_LABEL[r.cert_status]}
                         </span>
                         {r.cert_status === "received" && r.cert_number && (
-                          <div className="mt-0.5 text-[10px] text-muted font-mono">เลขที่ {r.cert_number}</div>
+                          <div className="mt-0.5 text-[11px] text-muted font-mono">เลขที่ {r.cert_number}</div>
                         )}
                       </td>
                       <td className="px-4 py-2 text-center text-xs">

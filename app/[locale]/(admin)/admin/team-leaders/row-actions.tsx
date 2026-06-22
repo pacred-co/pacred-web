@@ -35,7 +35,7 @@ export function TeamLeaderRowActions({ id, isActive, commissionPct }: { id: stri
 
   return (
     <div className="space-y-1">
-      {error && <div className="text-[10px] text-red-700">{error}</div>}
+      {error && <div className="text-[11px] text-red-700">{error}</div>}
       <div className="flex items-center gap-1">
         {canEditPct && (editing ? (
           <>

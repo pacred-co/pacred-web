@@ -118,7 +118,7 @@ export function DeleteHolidayButton({ id, name }: { id: number; name: string }) 
       type="button"
       disabled={pending}
       onClick={remove}
-      className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-1 text-[10px] font-medium hover:bg-red-100 disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-1 text-[11px] font-medium hover:bg-red-100 disabled:opacity-50"
     >
       {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
       ลบรายการ

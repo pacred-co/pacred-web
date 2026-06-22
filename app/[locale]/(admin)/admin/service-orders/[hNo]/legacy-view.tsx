@@ -359,7 +359,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
                 <step.Icon className={`h-5 w-5 mb-1 ${
                   cur ? "text-primary-600" : visited ? "text-emerald-600" : "text-gray-400"
                 }`} />
-                <span className={`text-[10px] leading-tight ${
+                <span className={`text-[11px] leading-tight ${
                   cur ? "font-bold text-primary-700" : visited ? "text-emerald-700" : "text-muted"
                 }`}>
                   {step.label}
@@ -385,7 +385,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
           <h2 className="font-bold text-sm flex items-center gap-2">
             🚢 ฝากนำเข้าที่เชื่อมโยง ({linkedImports.length})
             {status === "5" && (
-              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] px-2 py-0.5 font-medium">
+              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[11px] px-2 py-0.5 font-medium">
                 ฝากสั่งซื้อสำเร็จ — ส่งต่อขั้นตอนนำเข้าแล้ว
               </span>
             )}
@@ -403,7 +403,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
                     className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
                   >
                     <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
-                    <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium whitespace-nowrap ${b.chip}`}>
+                    <span className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${b.chip}`}>
                       {b.label}
                     </span>
                   </a>
@@ -504,7 +504,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
               </div>
             )}
           </div>
-          <p className="text-[10px] text-muted">*ชำระเงิน เพิ่ม/ลด จะถูกคำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
+          <p className="text-[11px] text-muted">*ชำระเงิน เพิ่ม/ลด จะถูกคำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
           {r.hdatepayment && status === "2" && (
             <p className="rounded-md bg-orange-50 px-2 py-1 text-xs text-orange-700">
               กรุณาชำระภายใน: {new Date(r.hdatepayment).toLocaleString("th-TH")}
@@ -555,7 +555,7 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
       </h3>
       <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
         <table className="w-full min-w-[640px] text-xs">
-          <thead className="bg-surface-alt/60 text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
               <th className="px-2 py-2 text-right w-16">จำนวน</th>
@@ -587,7 +587,7 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                           <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
                         )}
                         {(it.ccolor || it.csize) && (
-                          <p className="text-[10px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
+                          <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
                         )}
                       </div>
                     </div>

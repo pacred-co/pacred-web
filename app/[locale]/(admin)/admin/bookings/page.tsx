@@ -191,7 +191,7 @@ export default async function AdminBookingsListPage({
               href={`/admin/bookings?status=${f.value}`}
               className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${badgeClass}`}
             >
-              {t(f.tKey)} <span className="ml-1 text-[10px] opacity-75">({count})</span>
+              {t(f.tKey)} <span className="ml-1 text-[11px] opacity-75">({count})</span>
             </Link>
           );
         })}
@@ -237,21 +237,21 @@ export default async function AdminBookingsListPage({
                           {r.booking_no ?? `(draft) ${r.id.slice(0, 8)}…`}
                         </Link>
                         {r.source_channel && (
-                          <p className="text-[9px] text-muted">{r.source_channel}</p>
+                          <p className="text-[11px] text-muted">{r.source_channel}</p>
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[r.status]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[r.status]}`}>
                           {tStatus(r.status)}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-xs">
                         <p className="font-medium">{svcLabel}</p>
                         {r.route_slug && (
-                          <p className="text-[10px] text-muted">/{r.route_slug}</p>
+                          <p className="text-[11px] text-muted">/{r.route_slug}</p>
                         )}
                         {r.transport_mode && (
-                          <p className="text-[10px] text-muted">{r.transport_mode}</p>
+                          <p className="text-[11px] text-muted">{r.transport_mode}</p>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-700">
@@ -260,7 +260,7 @@ export default async function AdminBookingsListPage({
                       <td className="px-3 py-2 text-xs">
                         <p>{r.contact_name || "—"}</p>
                         {r.contact_phone && (
-                          <p className="text-[10px] text-muted">☎ {r.contact_phone}</p>
+                          <p className="text-[11px] text-muted">☎ {r.contact_phone}</p>
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">

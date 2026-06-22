@@ -83,7 +83,7 @@ export function ForwardersSearchBar() {
               rows={4}
               className={`${inputCls} w-full font-mono`}
             />
-            <p className="mt-0.5 text-[10px] text-muted">
+            <p className="mt-0.5 text-[11px] text-muted">
               {multiLineCount > 0 ? `${multiLineCount} รายการ` : "ใส่ได้ทั้ง F-No / tracking-CN / tracking-TH / รหัสสมาชิก"}
             </p>
           </div>

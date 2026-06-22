@@ -60,7 +60,7 @@ export function AssignRepCell({
       <div className="text-[11px] text-muted leading-relaxed">
         <div>เซล: <span className="text-foreground">{repName || "—"}</span></div>
         <div>CS: <span className="text-foreground">{csName || "—"}</span></div>
-        <p className="mt-0.5 text-[10px] text-muted/70">เฉพาะหัวหน้า/เซลแอดมินมอบหมายได้</p>
+        <p className="mt-0.5 text-[11px] text-muted/70">เฉพาะหัวหน้า/เซลแอดมินมอบหมายได้</p>
       </div>
     );
   }
@@ -109,7 +109,7 @@ export function AssignRepCell({
     <div className="space-y-1.5 min-w-[180px]">
       {/* Sales rep */}
       {reps.length === 0 ? (
-        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
           {repsGateNote ?? "ยังไม่มีเซลให้มอบหมาย"}
         </p>
       ) : (
@@ -134,7 +134,7 @@ export function AssignRepCell({
 
       {/* CS rep */}
       {csReps.length === 0 ? (
-        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
           {csGateNote ?? "ยังไม่มี CS ให้มอบหมาย"}
         </p>
       ) : (
@@ -168,7 +168,7 @@ export function AssignRepCell({
       </button>
 
       {msg && (
-        <p className={`text-[10px] ${msg.kind === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+        <p className={`text-[11px] ${msg.kind === "ok" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
           {msg.text}
         </p>
       )}

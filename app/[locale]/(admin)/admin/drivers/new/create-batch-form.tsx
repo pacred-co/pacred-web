@@ -245,7 +245,7 @@ export function CreateBatchForm({
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[10px] font-medium">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[11px] font-medium">
                             {g.shipByLabel}
                           </span>
                           <span className="text-xs text-muted">
@@ -266,7 +266,7 @@ export function CreateBatchForm({
                   {isExpanded && (
                     <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
                       <table className="w-full text-xs">
-                        <thead className="text-left text-[10px] uppercase tracking-wide text-muted">
+                        <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
                           <tr>
                             <th className="px-2 py-1">F-no</th>
                             <th className="px-2 py-1">แทรคกิ้ง</th>
@@ -291,7 +291,7 @@ export function CreateBatchForm({
                               <td className="px-2 py-1.5">
                                 <div>{it.ftrackingchn}</div>
                                 {it.fpallet && (
-                                  <div className="text-[10px] text-muted">loc: {it.fpallet}</div>
+                                  <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
                                 )}
                               </td>
                               <td className="px-2 py-1.5 font-mono">{it.userid}</td>
@@ -304,7 +304,7 @@ export function CreateBatchForm({
                             <tr>
                               <td colSpan={6} className="px-2 py-1.5">
                                 {g.items.filter((i) => i.fnote).map((i) => (
-                                  <div key={`note-${i.id}`} className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
+                                  <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
                                     📝 {i.fidorco}: {i.fnote}
                                   </div>
                                 ))}

@@ -150,7 +150,7 @@ export default async function QaInspectionsListPage({
             >
               <span>{t(`verdict.${f.key}`)}</span>
               {c > 0 && (
-                <span className={`inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 py-0.5 ${f.bg}`}>
+                <span className={`inline-flex items-center justify-center rounded-full text-[11px] font-bold px-1.5 py-0.5 ${f.bg}`}>
                   {c}
                 </span>
               )}
@@ -227,7 +227,7 @@ export default async function QaInspectionsListPage({
                   </td>
                   <td className="px-3 py-2 text-center">
                     {r.blacklist_shop ? (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-bold">
+                      <span className="inline-block rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-bold">
                         {t("blacklistTag")}
                       </span>
                     ) : (

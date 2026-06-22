@@ -175,7 +175,7 @@ export default async function AdminCsvImportsPage({
                         {new Date(r.created_at).toLocaleString("th-TH")}
                       </Link>
                       {r.imported_at && (
-                        <div className="text-[10px]">
+                        <div className="text-[11px]">
                           เสร็จ {new Date(r.imported_at).toLocaleTimeString("th-TH")}
                         </div>
                       )}
@@ -184,7 +184,7 @@ export default async function AdminCsvImportsPage({
                       <div className="font-medium truncate max-w-[260px]">{r.filename}</div>
                       <div className="mt-0.5 font-mono text-muted">→ {r.target_table}</div>
                       {r.size_bytes && (
-                        <div className="text-[10px] text-muted">{(r.size_bytes / 1024).toFixed(1)} KB</div>
+                        <div className="text-[11px] text-muted">{(r.size_bytes / 1024).toFixed(1)} KB</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs">
@@ -199,14 +199,14 @@ export default async function AdminCsvImportsPage({
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                           STATUS_BADGE[r.status] ?? "bg-gray-50 border-gray-200"
                         }`}
                       >
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
                       {r.error_message && (
-                        <div className="mt-1 max-w-[180px] text-[10px] text-red-700">
+                        <div className="mt-1 max-w-[180px] text-[11px] text-red-700">
                           ⚠ {r.error_message}
                         </div>
                       )}

@@ -228,7 +228,7 @@ function RateCard({ label, value, note }: { label: string; value: string; note: 
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
       <p className="text-xs text-muted font-medium">{label}</p>
       <p className="mt-1 text-xl font-bold font-mono text-foreground">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted">{note}</p>
+      <p className="mt-0.5 text-[11px] text-muted">{note}</p>
     </div>
   );
 }

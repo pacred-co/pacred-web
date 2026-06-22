@@ -75,7 +75,7 @@ export default async function AdminNearChurnPage({
           <p className="text-xs text-muted mt-1">
             ลูกค้า active ที่เคยมีตู้สำเร็จ แต่ห่างหายไปนานเกิน {daysIdle} วัน — สำหรับเซลโทรกลับ
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_users</code> +
             {" "}<code className="bg-surface-alt px-1 rounded">tb_forwarder</code> WHERE fstatus=&apos;7&apos;
             · เรียงตาม lifetime margin (highest-LTV first)
@@ -85,7 +85,7 @@ export default async function AdminNearChurnPage({
         {/* Days-idle preset filter (form GET) */}
         <form method="GET" action="/admin/accounting/near-churn" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted">เงียบเกิน (วัน)</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted">เงียบเกิน (วัน)</span>
             <input
               type="number"
               name="days"
@@ -98,19 +98,19 @@ export default async function AdminNearChurnPage({
           <div className="flex items-center gap-1">
             <Link
               href="/admin/accounting/near-churn?days=60"
-              className={`rounded-lg border px-2.5 py-1 text-[10px] ${daysIdle === 60 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] ${daysIdle === 60 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
             >
               60 วัน
             </Link>
             <Link
               href="/admin/accounting/near-churn?days=90"
-              className={`rounded-lg border px-2.5 py-1 text-[10px] ${daysIdle === 90 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] ${daysIdle === 90 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
             >
               90 วัน
             </Link>
             <Link
               href="/admin/accounting/near-churn?days=180"
-              className={`rounded-lg border px-2.5 py-1 text-[10px] ${daysIdle === 180 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] ${daysIdle === 180 ? "border-primary-500 bg-primary-50 text-primary-700" : "border-border text-muted hover:border-foreground"}`}
             >
               180 วัน
             </Link>
@@ -152,7 +152,7 @@ export default async function AdminNearChurnPage({
             <h2 className="font-bold text-sm mb-3">🏆 จัดเซลส์ตามจำนวนลูกค้าหายไป (top 20)</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[500px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">เซลส์</th>
@@ -182,20 +182,20 @@ export default async function AdminNearChurnPage({
           <div className="px-5 py-3 border-b border-border flex items-center gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <h2 className="font-bold text-sm">รายชื่อลูกค้าใกล้หายไป — เรียงจากมูลค่าสูงสุด</h2>
-            <p className="text-[10px] text-muted ml-auto">แสดงสูงสุด 200 ราย</p>
+            <p className="text-[11px] text-muted ml-auto">แสดงสูงสุด 200 ราย</p>
           </div>
           {report.rows.length === 0 ? (
             <p className="p-12 text-center text-sm text-muted">
               ไม่มีลูกค้าใกล้หายไปในเกณฑ์นี้ 👍
               <br />
-              <span className="text-[10px]">
+              <span className="text-[11px]">
                 (active customer ทั้งหมดมีตู้ส่งสำเร็จในช่วง {daysIdle} วันที่ผ่านมา · งานเซลส์ดีมาก)
               </span>
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">ลูกค้า</th>
@@ -211,7 +211,7 @@ export default async function AdminNearChurnPage({
                 <tbody>
                   {report.rows.map((r, idx) => (
                     <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-3 py-2 text-[10px] font-mono text-muted">{idx + 1}</td>
+                      <td className="px-3 py-2 text-[11px] font-mono text-muted">{idx + 1}</td>
                       <td className="px-3 py-2">
                         <Link
                           href={`/admin/customers/${r.userid}`}
@@ -219,7 +219,7 @@ export default async function AdminNearChurnPage({
                         >
                           {r.fullName}
                         </Link>
-                        <div className="text-[10px] text-muted font-mono">{r.userid}</div>
+                        <div className="text-[11px] text-muted font-mono">{r.userid}</div>
                       </td>
                       <td className="px-3 py-2 text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -298,7 +298,7 @@ function Stat({ label, value, sub, bold, highlight }: { label: string; value: st
       }`}>
         {value}
       </p>
-      {sub && <p className="text-[10px] text-muted mt-1">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted mt-1">{sub}</p>}
     </div>
   );
 }

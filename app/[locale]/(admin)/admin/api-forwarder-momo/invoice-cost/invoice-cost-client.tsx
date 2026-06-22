@@ -101,7 +101,7 @@ export function MomoInvoiceCostClient() {
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2 text-left">แทรคกิ้ง</th>
                   <th className="px-2 py-2 text-left">รหัส / ตู้</th>

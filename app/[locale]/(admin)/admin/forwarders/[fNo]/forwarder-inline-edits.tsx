@@ -364,7 +364,7 @@ export function ForwarderInlineEdits(p: Props) {
               placeholder="เลขพาเลท (0 = ล้าง)"
               className={inputCls}
             />
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               เลขพาเลทในโกดัง — ใช้สำหรับค้นหาที่จัดเก็บ · กรอก 0 เพื่อล้าง
             </p>
             <div className="flex gap-2">
@@ -410,7 +410,7 @@ export function ForwarderInlineEdits(p: Props) {
               <option value="2">ทางเรือ (12-16 วัน)</option>
               <option value="3">ทางอากาศ</option>
             </select>
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — แก้ไขขนาด/น้ำหนักเพื่อคำนวณเรทใหม่
             </p>
             <div className="flex gap-2">
@@ -445,7 +445,7 @@ export function ForwarderInlineEdits(p: Props) {
               <option value="1">ตีลังไม้</option>
               <option value="2">ไม่ตีลังไม้</option>
             </select>
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ค่าตีลังจริงคำนวณตอนแก้ไขขนาด/น้ำหนัก (ต่อ-รายการ) — รายการนี้เก็บแค่ flag header
             </p>
             <div className="flex gap-2">
@@ -494,7 +494,7 @@ export function ForwarderInlineEdits(p: Props) {
                 className={inputCls}
               />
             )}
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ
             </p>
             <div className="flex gap-2">
@@ -581,7 +581,7 @@ export function ForwarderInlineEdits(p: Props) {
                 placeholder="เลขแทรคกิ้งจาก vendor จีน"
                 className={inputCls}
               />
-              <p className="text-[10px] text-muted">
+              <p className="text-[11px] text-muted">
                 แก้ไขได้ก่อนรายการจะถูกส่ง (fStatus &lt; 7) เท่านั้น
               </p>
               <div className="flex gap-2">
@@ -642,7 +642,7 @@ export function ForwarderInlineEdits(p: Props) {
               onChange={(e) => setDateCloseVal(e.target.value)}
               className={inputCls}
             />
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               วันที่จะอัปเดตทั้ง <b>วันปิดตู้</b> และ <b>วันถึงไทย (ETA)</b> โดยอัตโนมัติ
               (รถ +5 วัน · เรือ/อากาศ +12 วัน)
             </p>
@@ -707,7 +707,7 @@ export function ForwarderInlineEdits(p: Props) {
               <option value="2">ไม่รวมกล่อง (คิดราคาแยกต่อกล่อง)</option>
               <option value="1">รวมกล่อง (คิดราคารวมทั้งบิล)</option>
             </select>
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ⚠ ค่าฐานการคิดราคา — มีผลตอนกดแก้ไขขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)
             </p>
             <div className="flex gap-2">
@@ -761,7 +761,7 @@ export function ForwarderInlineEdits(p: Props) {
               placeholder={p.defaultBillTo || "เว้นว่าง = ใช้ชื่อเริ่มต้น"}
               className={inputCls}
             />
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ปล่อยว่าง = กลับใช้ชื่อเริ่มต้น ({p.defaultBillTo || "—"}) · สูงสุด 200 ตัวอักษร
             </p>
             <div className="flex gap-2">
@@ -879,7 +879,7 @@ export function EditPalletField({ fId, fpallet }: { fId: number; fpallet: number
           <>
             <input type="number" min={0} max={99999} step={1} value={palletVal}
               onChange={(e) => setPalletVal(e.target.value)} placeholder="เลขพาเลท (0 = ล้าง)" className={inputCls} />
-            <p className="text-[10px] text-muted">เลขพาเลทในโกดัง — ใช้สำหรับค้นหาที่จัดเก็บ · กรอก 0 เพื่อล้าง</p>
+            <p className="text-[11px] text-muted">เลขพาเลทในโกดัง — ใช้สำหรับค้นหาที่จัดเก็บ · กรอก 0 เพื่อล้าง</p>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave} onClick={() => {
                 const n = Number(palletVal);
@@ -925,7 +925,7 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
               <option value="1">ตีลังไม้</option>
               <option value="2">ไม่ตีลังไม้</option>
             </select>
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ค่าตีลังจริงคำนวณตอนแก้ไขขนาด/น้ำหนัก (ต่อ-รายการ) — รายการนี้เก็บแค่ flag header
             </p>
             <div className="flex gap-2">
@@ -1011,7 +1011,7 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
               <input type="text" value={shipByExt} onChange={(e) => setShipByExt(e.target.value)} maxLength={50}
                 placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express" className={inputCls} />
             )}
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               รับเองโกดัง Pacred → ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · ตัวเลือก Pacred คิดค่าขนส่งใหม่อัตโนมัติ
             </p>
             <div className="flex gap-2">
@@ -1049,7 +1049,7 @@ export function EditBillToField({ fId, fbilltoname, defaultBillTo }: { fId: numb
           <>
             <input type="text" value={billToVal} onChange={(e) => setBillToVal(e.target.value)} maxLength={200}
               placeholder={defaultBillTo || "เว้นว่าง = ใช้ชื่อเริ่มต้น"} className={inputCls} />
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               ปล่อยว่าง = กลับใช้ชื่อเริ่มต้น ({defaultBillTo || "—"}) · สูงสุด 200 ตัวอักษร
             </p>
             <div className="flex gap-2">
@@ -1104,7 +1104,7 @@ export function EditTaxDocModeField({ fId, taxDocPref }: { fId: number; taxDocPr
                 <option key={m} value={m}>{TAX_DOC_MODE_META[m].title}</option>
               ))}
             </select>
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               {TAX_DOC_MODE_META[mode].hint}
               <br />
               ฐาน VAT: <b>{TAX_DOC_MODE_META[mode].vatBase}</b>
@@ -1177,7 +1177,7 @@ export function EditTrackingChnField({ fId, ftrackingchn, fstatus }: { fId: numb
             <>
               <input type="text" value={trackingChnVal} onChange={(e) => setTrackingChnVal(e.target.value)} maxLength={60}
                 placeholder="เลขแทรคกิ้งจาก vendor จีน" className={inputCls} />
-              <p className="text-[10px] text-muted">แก้ไขได้ก่อนรายการจะถูกส่ง (fStatus &lt; 7) เท่านั้น</p>
+              <p className="text-[11px] text-muted">แก้ไขได้ก่อนรายการจะถูกส่ง (fStatus &lt; 7) เท่านั้น</p>
               <div className="flex gap-2">
                 <button type="button" disabled={pending || trackingChnVal.trim() === ""} className={btnSave}
                   onClick={() => run(() => adminUpdateForwarderTrackingChn({ fId, ftrackingchn: trackingChnVal.trim() }), close)}>บันทึก</button>
@@ -1217,7 +1217,7 @@ export function EditCabinetField({ fId, fcabinetnumber, fcabinetLocked }: { fId:
           <>
             <input type="text" value={cabinetVal} onChange={(e) => setCabinetVal(e.target.value)} maxLength={300}
               placeholder="GZE-2026-001 / GZS..." className={inputCls} />
-            <p className="text-[10px] text-muted">แก้เฉพาะเลขตู้ (ไม่เปลี่ยนสถานะ) · เว้นว่าง = ล้างเลขตู้</p>
+            <p className="text-[11px] text-muted">แก้เฉพาะเลขตู้ (ไม่เปลี่ยนสถานะ) · เว้นว่าง = ล้างเลขตู้</p>
             <div className="flex gap-2">
               <button type="button" disabled={pending || cabinetVal.trim() === cur} className={btnSave}
                 onClick={() => run(() => adminUpdateForwarderCabinet({ fId, cabinet: cabinetVal.trim() }), close)}>บันทึก</button>
@@ -1254,7 +1254,7 @@ export function EditTransportTypeField({ fId, ftransporttype }: { fId: number; f
               <option value="2">ทางเรือ (12-16 วัน)</option>
               <option value="3">ทางอากาศ</option>
             </select>
-            <p className="text-[10px] text-muted">⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — แก้ไขขนาด/น้ำหนักเพื่อคำนวณเรทใหม่</p>
+            <p className="text-[11px] text-muted">⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — แก้ไขขนาด/น้ำหนักเพื่อคำนวณเรทใหม่</p>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave}
                 onClick={() => run(() => adminUpdateForwarderTransportType({ fId, transportType: transportVal }), close)}>บันทึก</button>
@@ -1293,7 +1293,7 @@ export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; 
         {(close) => (
           <>
             <input type="date" value={dateCloseVal} onChange={(e) => setDateCloseVal(e.target.value)} className={inputCls} />
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               วันที่จะอัปเดตทั้ง <b>วันปิดตู้</b> และ <b>วันถึงไทย (ETA)</b> โดยอัตโนมัติ
               (รถ +5 วัน · เรือ/อากาศ +12 วัน)
             </p>
@@ -1348,7 +1348,7 @@ export function EditAmountCountField({ fId, famountcount, famount }: { fId: numb
               <option value="2">ไม่รวมกล่อง (คิดราคาแยกต่อกล่อง)</option>
               <option value="1">รวมกล่อง (คิดราคารวมทั้งบิล)</option>
             </select>
-            <p className="text-[10px] text-muted">⚠ ค่าฐานการคิดราคา — มีผลตอนกดแก้ไขขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)</p>
+            <p className="text-[11px] text-muted">⚠ ค่าฐานการคิดราคา — มีผลตอนกดแก้ไขขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)</p>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave}
                 onClick={() => run(() => adminUpdateForwarderAmountCount({ fId, famountcount: amountCountVal }), close)}>บันทึก</button>
@@ -1443,7 +1443,7 @@ export function EditCoverField({ fId, images }: { fId: number; images: Forwarder
                 <img src={img.url} alt="รูปสินค้า" className="h-20 w-20 rounded-lg border border-border object-cover" />
               </a>
               {img.isCover && (
-                <span className="absolute left-1 top-1 rounded bg-primary-600 px-1 py-0.5 text-[9px] font-semibold text-white shadow">ปก</span>
+                <span className="absolute left-1 top-1 rounded bg-primary-600 px-1 py-0.5 text-[11px] font-semibold text-white shadow">ปก</span>
               )}
               {img.canDelete && (
                 <button

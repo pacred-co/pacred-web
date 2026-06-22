@@ -25,25 +25,42 @@ export type WalletSystemTotals = {
   /** Row counts behind each sum — for the "(N ราย)" sub-labels. */
   walletCount: number;
   cbCount: number;
+  /** Negative-balance accounting (owner 2026-06-22: explain a negative TOTAL —
+   *  it's not a code bug, it's customers whose wallet went negative from an
+   *  unbalanced legacy "เติม-แล้วจ่าย" pay · needs accounting reconcile). */
+  negCount: number;
+  negSum: number;          // total of all negative balances (≤ 0)
+  topNegUserid: string | null;
+  topNegAmount: number;    // the single most-negative balance (≤ 0)
 };
 
 async function computeWalletSystemTotals(): Promise<WalletSystemTotals> {
   const admin = createAdminClient();
   const [{ data: wallets }, { data: cb }] = await Promise.all([
-    admin.from("tb_wallet").select("wallettotal").limit(50_000),
+    admin.from("tb_wallet").select("userid,wallettotal").limit(50_000),
     admin.from("tb_cash_back").select("cbtotal").limit(50_000),
   ]);
-  const walletRows = wallets ?? [];
+  const walletRows = (wallets ?? []) as Array<{ userid: string | null; wallettotal: number | null }>;
   const cbRows = cb ?? [];
-  const sumWallet = walletRows.reduce(
-    (s, r) => s + Number((r as { wallettotal: number | null }).wallettotal ?? 0),
-    0,
-  );
+  let sumWallet = 0, negCount = 0, negSum = 0, topNegAmount = 0;
+  let topNegUserid: string | null = null;
+  for (const r of walletRows) {
+    const v = Number(r.wallettotal ?? 0);
+    sumWallet += v;
+    if (v < 0) {
+      negCount += 1;
+      negSum += v;
+      if (v < topNegAmount) { topNegAmount = v; topNegUserid = r.userid ?? null; }
+    }
+  }
   const sumCb = cbRows.reduce(
     (s, r) => s + Number((r as { cbtotal: number | null }).cbtotal ?? 0),
     0,
   );
-  return { sumWallet, sumCb, walletCount: walletRows.length, cbCount: cbRows.length };
+  return {
+    sumWallet, sumCb, walletCount: walletRows.length, cbCount: cbRows.length,
+    negCount, negSum, topNegUserid, topNegAmount,
+  };
 }
 
 export const getWalletSystemTotals = unstable_cache(

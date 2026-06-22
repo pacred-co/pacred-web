@@ -146,6 +146,17 @@ Owner praised the `/admin/wallet?view=tx` row style and wants it **across the wh
 
 ---
 
+## 0h. Readable typography + visual hierarchy (2026-06-22 · owner directive)
+
+Owner: staff complained the text is too small — *"ตัวอักษรบางทีมองอ่านยาก ต้องเพ่ง พอเพ่งก็ทำงานไม่ได้นาน ไม่อยากใช้"*. Everyone reads these screens all day (CEO, owner, partners, outsource, customers) — readability is quality-of-life. Two rules:
+
+1. **Minimum readable size.** No body/label/secondary text below **11px** (`text-[11px]`). The platform floor was raised — `text-[9px]`/`text-[10px]` were swept to `text-[11px]` across `(admin)` (2026-06-22). Primary text = `text-sm` (14px); table/secondary = `text-xs` (12px) or `text-[11px]` at the smallest; never smaller. New code must not introduce `text-[9px]`/`text-[10px]`.
+2. **Use hierarchy to encode importance — don't flatten.** Play SIZE · WEIGHT · COLOR · contrast so the eye finds the important thing instantly: page title `text-2xl/3xl font-bold`; section `text-lg/xl font-semibold`; the row's primary identity (name / order# / amount) `font-semibold text-foreground`; supporting detail `text-muted`; an action-due cue rose/bold; money emphasised. The reader should never have to squint OR hunt for the key number. Headings are real headings (h1>h2>h3…), not same-size text.
+
+This is the typography arm of §0f (product-quality) — apply it whenever you touch a surface; a too-small or flat-hierarchy screen is a defect.
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

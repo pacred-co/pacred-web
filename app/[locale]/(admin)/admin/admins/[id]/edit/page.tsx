@@ -87,7 +87,7 @@ export default async function AdminEditPage({
           {row.legacy_admin_id && (
             <>
               <span aria-hidden>·</span>
-              <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px]">
+              <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 text-[11px]">
                 legacy: {row.legacy_admin_id}
               </span>
             </>

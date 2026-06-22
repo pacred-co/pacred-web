@@ -231,7 +231,7 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
                 notes (cashback/wallet tags + previous work notes) before acting. */}
             {tx.note && tx.note.trim().length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs">
-                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">
                   หมายเหตุเดิมในรายการ
                 </p>
                 <p className="whitespace-pre-wrap break-words text-amber-900">{tx.note}</p>
@@ -240,7 +240,7 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
 
             {/* Customer */}
             <div className="space-y-1 text-sm">
-              <p className="text-[10px] uppercase tracking-wider text-muted">ลูกค้า</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">ลูกค้า</p>
               <p className="font-medium">{tx.customer_name}</p>
               <p className="text-xs text-muted">
                 <span className="font-mono">{tx.member_code ?? "—"}</span>
@@ -250,11 +250,11 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
 
             {/* Big amount — what the customer typed */}
             <div className="rounded-xl border-2 border-primary-300 bg-primary-50 p-4 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-primary-700">ลูกค้ากรอกยอด</p>
+              <p className="text-[11px] uppercase tracking-widest text-primary-700">ลูกค้ากรอกยอด</p>
               <p className="mt-1 text-3xl font-bold font-mono text-primary-800">
                 ฿{Number(tx.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
               </p>
-              <p className="mt-1 text-[10px] text-muted">
+              <p className="mt-1 text-[11px] text-muted">
                 ⚠️ ต้องตรงกับยอดในสลิปก่อนอนุมัติ
               </p>
             </div>

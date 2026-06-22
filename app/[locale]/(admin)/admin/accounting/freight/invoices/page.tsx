@@ -169,7 +169,7 @@ export default async function AdminFreightInvoicesListPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({allCount})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({allCount})</span>
         </Link>
         {DOC_STATUSES.map((s) => (
           <Link
@@ -179,7 +179,7 @@ export default async function AdminFreightInvoicesListPage({
               s === status ? DOC_STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {DOC_STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s] ?? 0})</span>
+            {DOC_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s] ?? 0})</span>
           </Link>
         ))}
       </nav>
@@ -250,7 +250,7 @@ export default async function AdminFreightInvoicesListPage({
                     <td className="px-3 py-2">
                       <p className="text-sm">{customerName(r.profile)}</p>
                       {r.profile?.member_code && (
-                        <p className="font-mono text-[10px] text-muted">{r.profile.member_code}</p>
+                        <p className="font-mono text-[11px] text-muted">{r.profile.member_code}</p>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -266,11 +266,11 @@ export default async function AdminFreightInvoicesListPage({
                     <td className="px-3 py-2 text-right font-mono text-xs text-muted">—</td>
                     <td className="px-3 py-2">
                       <div className="flex flex-col gap-1">
-                        <span className={`inline-block w-fit rounded-full border px-2 py-0.5 text-[10px] ${DOC_STATUS_BADGE[r.status] ?? ""}`}>
+                        <span className={`inline-block w-fit rounded-full border px-2 py-0.5 text-[11px] ${DOC_STATUS_BADGE[r.status] ?? ""}`}>
                           {DOC_STATUS_LABEL[r.status] ?? r.status}
                         </span>
                         {r.status === "issued" && r.payment_status && (
-                          <span className={`inline-block w-fit rounded-full border px-2 py-0.5 text-[10px] ${PAY_STATUS_BADGE[r.payment_status] ?? ""}`}>
+                          <span className={`inline-block w-fit rounded-full border px-2 py-0.5 text-[11px] ${PAY_STATUS_BADGE[r.payment_status] ?? ""}`}>
                             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[r.payment_status]}
                           </span>
                         )}

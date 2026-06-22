@@ -137,7 +137,7 @@ export function YuanRefundModal({ open, onClose, yuanPayment }: Props) {
               ¥{Number(yuanPayment.yuan_amount).toFixed(2)} = ฿{Number(yuanPayment.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </p>
             {yuanPayment.paid_via_wallet && (
-              <p className="text-[10px] text-amber-800">
+              <p className="text-[11px] text-amber-800">
                 ⚠️ ลูกค้าจ่ายผ่าน wallet → ระบบจะคืน wallet debit อัตโนมัติ
               </p>
             )}

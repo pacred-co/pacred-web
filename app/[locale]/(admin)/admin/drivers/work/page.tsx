@@ -484,7 +484,7 @@ function renderShell(props: {
         </ul>
       )}
 
-      <p className="text-[10px] text-muted pt-3">
+      <p className="text-[11px] text-muted pt-3">
         Wave 12-B · อ่านจาก legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code> ·
         อัปโหลดรูป ขึ้นรถ / ส่งสำเร็จ พร้อมใช้งาน
       </p>

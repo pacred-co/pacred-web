@@ -413,17 +413,17 @@ export default async function MonthlyOrdersReport({
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user)}
-                      <p className="font-mono text-[10px] text-muted">{r.userid}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_price)}</td>
-                    <td className="px-3 py-2 text-[10px]">{legacyForwarderStatusThai(r.status) || r.status}</td>
+                    <td className="px-3 py-2 text-[11px]">{legacyForwarderStatusThai(r.status) || r.status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
           {forwarders.length > 100 && (
-            <p className="p-3 text-center text-[10px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
+            <p className="p-3 text-center text-[11px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
           )}
         </Pane>
 
@@ -448,17 +448,17 @@ export default async function MonthlyOrdersReport({
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user)}
-                      <p className="font-mono text-[10px] text-muted">{r.userid}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_thb)}</td>
-                    <td className="px-3 py-2 text-[10px]">{legacyOrderStatusThai(r.status) || r.status}</td>
+                    <td className="px-3 py-2 text-[11px]">{legacyOrderStatusThai(r.status) || r.status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
           {orders.length > 100 && (
-            <p className="p-3 text-center text-[10px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
+            <p className="p-3 text-center text-[11px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
           )}
         </Pane>
 
@@ -480,9 +480,9 @@ export default async function MonthlyOrdersReport({
                   <tr key={r.id} className="border-t border-border">
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user)}
-                      <p className="font-mono text-[10px] text-muted">{r.userid}</p>
+                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
-                    <td className="px-3 py-2 text-[10px]">{PAYTYPE_LABEL[r.paytype ?? ""] ?? "—"}</td>
+                    <td className="px-3 py-2 text-[11px]">{PAYTYPE_LABEL[r.paytype ?? ""] ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">¥{r.yuan_amount.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.thb_amount)}</td>
                   </tr>
@@ -491,7 +491,7 @@ export default async function MonthlyOrdersReport({
             </table>
           )}
           {yuan.length > 100 && (
-            <p className="p-3 text-center text-[10px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
+            <p className="p-3 text-center text-[11px] text-muted">แสดง 100 แถวแรก — ดาวน์โหลด CSV เพื่อดูทั้งหมด</p>
           )}
         </Pane>
       </div>
@@ -513,7 +513,7 @@ function Pane({ title, statusMap, children }: { title: string; statusMap: Record
     <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
         <h2 className="font-bold text-sm">{title}</h2>
-        <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+        <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
           {Object.entries(statusMap).map(([k, n]) => (
             <span key={k} className="rounded-full border border-border bg-surface-alt px-2 py-0.5">
               {k}: <span className="font-mono font-semibold">{n}</span>

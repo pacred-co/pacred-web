@@ -160,7 +160,7 @@ function Stat({ label, value, bad }: { label: string; value: number; bad: boolea
   return (
     <div className={`rounded-lg border px-2 py-1.5 text-center ${bad ? "border-red-200 bg-red-50" : "border-border bg-white dark:bg-surface"}`}>
       <div className={`text-sm font-semibold ${bad ? "text-red-700" : "text-foreground"}`}>{value}</div>
-      <div className="text-[10px] text-muted">{label}</div>
+      <div className="text-[11px] text-muted">{label}</div>
     </div>
   );
 }

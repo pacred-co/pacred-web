@@ -353,7 +353,7 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
                   </button>
                 </div>
                 {rawSpread && (
-                  <span className="text-[10px] text-muted">
+                  <span className="text-[11px] text-muted">
                     ทุก field ที่ MOMO ส่งมา (ยกเว้น <code>_id</code>) คลี่เป็นคอลัมน์ — ไว้ตรวจว่า MOMO คีย์อะไรมาบ้าง แล้วคัดว่าจะใช้ field ไหน
                   </span>
                 )}
@@ -436,7 +436,7 @@ function Stat({
                        "bg-slate-50 text-slate-700 border-slate-200";
   return (
     <div className={`rounded-lg border px-2 py-1.5 ${cls}`}>
-      <div className="text-[10px] uppercase tracking-wide opacity-70">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide opacity-70">{label}</div>
       <div className="text-lg font-extrabold">{value}</div>
     </div>
   );
@@ -485,7 +485,7 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
         {kv.map(([label, val]) => (
           <div key={label} className="flex flex-col">
-            <dt className="text-[10px] text-muted">{label}</dt>
+            <dt className="text-[11px] text-muted">{label}</dt>
             <dd className="text-[11px] font-medium break-words">{val}</dd>
           </div>
         ))}
@@ -493,7 +493,7 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
 
       {d.images.length > 0 && (
         <div>
-          <div className="text-[10px] text-muted mb-0.5">รูปพัสดุที่โกดังจีน ({d.images.length})</div>
+          <div className="text-[11px] text-muted mb-0.5">รูปพัสดุที่โกดังจีน ({d.images.length})</div>
           <div className="flex flex-wrap gap-2">
             {d.images.map((src, idx) => (
               <a key={idx} href={src} target="_blank" rel="noopener noreferrer"
@@ -507,7 +507,7 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
 
       {!d.isContainer && (
         <div>
-          <div className="text-[10px] text-muted mb-0.5">ไทม์ไลน์ของพัสดุ (status_date)</div>
+          <div className="text-[11px] text-muted mb-0.5">ไทม์ไลน์ของพัสดุ (status_date)</div>
           <ol className="flex flex-wrap gap-x-4 gap-y-1">
             {d.phases.map((p) => (
               <li key={p.key} className="text-[11px]">
@@ -520,11 +520,11 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
       )}
 
       <button type="button" onClick={() => setRawOpen((v) => !v)}
-        className="text-sky-600 underline text-[10px]">
+        className="text-sky-600 underline text-[11px]">
         {rawOpen ? "ซ่อน raw JSON" : "ดู raw JSON (ดิบ)"}
       </button>
       {rawOpen && (
-        <pre className="mt-1 max-h-60 overflow-auto rounded bg-slate-100 p-1.5 text-[10px] font-mono">
+        <pre className="mt-1 max-h-60 overflow-auto rounded bg-slate-100 p-1.5 text-[11px] font-mono">
           {JSON.stringify(raw, null, 2)}
         </pre>
       )}
@@ -549,7 +549,7 @@ function PreviewTable({
   return (
     <div>
       <h4 className="text-xs font-bold mb-1">{title} ({rows.length})</h4>
-      <p className="text-[10px] text-muted mb-1">
+      <p className="text-[11px] text-muted mb-1">
         ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · กด “รายละเอียด” เพื่อดูข้อมูล MOMO ครบทุกช่อง
       </p>
       <div className="max-h-[70vh] overflow-auto scrollbar-x-visible rounded-lg border border-border">
@@ -598,7 +598,7 @@ function PreviewTable({
                     <td className="px-2 py-1.5">
                       {d.productType || "—"}
                       {d.productType === "fda" && (
-                        <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700">อย.</span>
+                        <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>
                       )}
                     </td>
                     <td className="px-2 py-1.5 font-mono">{d.cgNo || "—"}</td>
@@ -608,7 +608,7 @@ function PreviewTable({
                       <button
                         type="button"
                         onClick={() => setOpenMap({ ...openMap, [k]: !isOpen })}
-                        className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100"
+                        className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
                       >
                         {isOpen ? "ปิด ▲" : "รายละเอียด ▼"}
                       </button>
@@ -716,7 +716,7 @@ function RawSpreadTable({
       <h4 className="text-xs font-bold mb-1">
         {title} · ดิบทั้งหมด ({rows.length} แถว · {cols.length} field)
       </h4>
-      <p className="text-[10px] text-muted mb-1">
+      <p className="text-[11px] text-muted mb-1">
         ⇆ เลื่อนซ้าย-ขวา · หัวตารางล็อกไว้ (เลื่อนลงยังเห็นหัวข้อ) · หัวคอลัมน์เป็นไทย (ชื่อ field ดิบ MOMO อยู่บรรทัดล่าง) · ทั้งแถวระบายสีตามสถานะ
         {cabinetMap && " · เลขตู้จริง = join จาก Container Closed (เชื่อได้กว่า ship_by)"}
       </p>
@@ -728,7 +728,7 @@ function RawSpreadTable({
               {cols.map((c) => (
                 <th key={c} className="border-b px-2 py-1 text-left">
                   <div className="font-semibold">{headerLabel(c)}</div>
-                  {headerRaw(c) && <div className="text-[9px] font-mono font-normal text-slate-400">{headerRaw(c)}</div>}
+                  {headerRaw(c) && <div className="text-[11px] font-mono font-normal text-slate-400">{headerRaw(c)}</div>}
                 </th>
               ))}
             </tr>
@@ -767,7 +767,7 @@ function RawSpreadTable({
                               <span className="text-slate-300">·</span>
                             ) : (
                               <button type="button" onClick={() => setLightbox(imgs)}
-                                className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100">
+                                className="rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">
                                 ดูรูป ({imgs.length})
                               </button>
                             )}
@@ -783,11 +783,11 @@ function RawSpreadTable({
                               <span>
                                 {joinedCab}
                                 {md && (
-                                  <span className={`ml-1 rounded px-1 text-[9px] font-semibold ${md === "เรือ" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>{md}</span>
+                                  <span className={`ml-1 rounded px-1 text-[11px] font-semibold ${md === "เรือ" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>{md}</span>
                                 )}
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">ยังไม่เข้าตู้ปิด</span>
+                              <span className="text-slate-400 text-[11px]">ยังไม่เข้าตู้ปิด</span>
                             )}
                           </td>
                         );
@@ -801,7 +801,7 @@ function RawSpreadTable({
                             ) : (
                               <button type="button"
                                 onClick={() => setExpanded((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                                className="rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100">
+                                className="rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">
                                 {expanded.has(i) ? "ซ่อนพัสดุ ▲" : `ดูพัสดุ (${trackDetails.length}) ▼`}
                               </button>
                             )}
@@ -813,7 +813,7 @@ function RawSpreadTable({
                         return (
                           <td key={c} className="px-2 py-1 font-semibold">
                             {statusWord ?? (m[c] || <span className="text-slate-300">·</span>)}
-                            {statusWord && m[c] && <span className="ml-1 text-[9px] font-mono font-normal text-slate-400">#{m[c]}</span>}
+                            {statusWord && m[c] && <span className="ml-1 text-[11px] font-mono font-normal text-slate-400">#{m[c]}</span>}
                           </td>
                         );
                       }
@@ -824,7 +824,7 @@ function RawSpreadTable({
                           <td key={c} className="px-2 py-1 font-mono">
                             {v === "" ? <span className="text-slate-300">·</span> : v}
                             {modeMismatch && (
-                              <span className="ml-1 rounded bg-red-100 px-1 text-[9px] font-semibold text-red-700"
+                              <span className="ml-1 rounded bg-red-100 px-1 text-[11px] font-semibold text-red-700"
                                 title={`โหมดไม่ตรงเลขตู้จริง — ตู้ ${realCab} = ${cabMode} แต่ ship_by = ${v}`}>
                                 ⚠ ไม่ตรงตู้
                               </span>
@@ -847,7 +847,7 @@ function RawSpreadTable({
                   {expanded.has(i) && trackDetails.length > 0 && (
                     <tr className="border-b bg-indigo-50/40">
                       <td colSpan={colSpan} className="px-3 py-2">
-                        <div className="mb-1 text-[10px] font-bold text-indigo-900">
+                        <div className="mb-1 text-[11px] font-bold text-indigo-900">
                           พัสดุในตู้ {m["cid"] || ""} ({trackDetails.length} รายการ)
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -1089,7 +1089,7 @@ function DebugResult({ result }: { result: Record<string, unknown> }) {
       <DebugSection title={`Raw events (${r.rawEvents?.length ?? 0})`}>
         <details className="text-xs">
           <summary className="cursor-pointer text-sky-700">click to see JSON dump</summary>
-          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[10px] font-mono">
+          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[11px] font-mono">
             {JSON.stringify(r.rawEvents ?? [], null, 2)}
           </pre>
         </details>
@@ -1099,7 +1099,7 @@ function DebugResult({ result }: { result: Record<string, unknown> }) {
       <DebugSection title="Source data (JSON)">
         <details className="text-xs">
           <summary className="cursor-pointer text-sky-700">expand</summary>
-          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[10px] font-mono">
+          <pre className="mt-2 max-h-80 overflow-auto rounded bg-slate-100 p-2 text-[11px] font-mono">
             {JSON.stringify({
               importTrack:            r.importTrack,
               containerClosedTracks:  r.containerClosedTracks,

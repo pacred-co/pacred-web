@@ -66,12 +66,12 @@ export function CsvImportDetailActions({
   return (
     <div className="flex flex-col gap-2 min-w-[180px]">
       {err && (
-        <div className="rounded border border-red-200 bg-red-50 p-2 text-[10px] text-red-700">
+        <div className="rounded border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
           {err}
         </div>
       )}
       {info && (
-        <div className="rounded border border-green-200 bg-green-50 p-2 text-[10px] text-green-700">
+        <div className="rounded border border-green-200 bg-green-50 p-2 text-[11px] text-green-700">
           {info}
         </div>
       )}

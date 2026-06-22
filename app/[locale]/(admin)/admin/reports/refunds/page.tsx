@@ -340,12 +340,12 @@ export default async function RefundsReport({
                           {userDisplayName(r.user)}
                         </Link>
                       </p>
-                      <p className="font-mono text-[10px] text-muted">{r.userid}</p>
-                      {r.user?.userTel && <p className="text-[10px] text-muted">☎ {r.user.userTel}</p>}
+                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
+                      {r.user?.userTel && <p className="text-[11px] text-muted">☎ {r.user.userTel}</p>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-green-700">{thb(r.amount)}</td>
                     <td className="px-4 py-3 text-xs">
-                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] text-green-700">
+                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
                     </td>

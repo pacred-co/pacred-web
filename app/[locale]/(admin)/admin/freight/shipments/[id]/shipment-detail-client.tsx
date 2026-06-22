@@ -317,7 +317,7 @@ function InvoicePanel({
       <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-bold text-sm">
           📄 Commercial Invoice {inv.invoice_no ? <span className="font-mono">{inv.invoice_no}</span> : <span className="text-muted">(ร่าง)</span>}
-          <span className="ml-2 text-[10px] font-normal text-muted">{FREIGHT_INVOICE_STATUS_LABEL[inv.status]}</span>
+          <span className="ml-2 text-[11px] font-normal text-muted">{FREIGHT_INVOICE_STATUS_LABEL[inv.status]}</span>
         </h2>
         <div className="flex items-center gap-2">
           {/* PDF downloads (V-E1) — work for draft too (live shipment fallback) */}
@@ -465,9 +465,9 @@ function LineRow({ item, editable }: { item: LineItemData; editable: boolean }) 
         <td className="px-2 py-2"><input type="number" min={0} step={0.001} value={kg} onChange={(e) => setKg(e.target.value === "" ? "" : Number(e.target.value) || 0)} className="w-20 rounded border border-border bg-white px-1.5 py-1 text-xs text-right font-mono" /></td>
         <td className="px-2 py-2"><input type="text" value={hs} onChange={(e) => setHs(e.target.value)} maxLength={20} className="w-24 rounded border border-border bg-white px-1.5 py-1 text-xs font-mono" /></td>
         <td className="px-2 py-2 text-right whitespace-nowrap">
-          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
-          <button type="button" onClick={() => { setEditing(false); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          <button type="button" onClick={fireUpdate} disabled={pending || !desc.trim()} className="rounded bg-primary-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">✓</button>
+          <button type="button" onClick={() => { setEditing(false); setErr(null); }} disabled={pending} className="ml-1 rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">×</button>
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       </tr>
     );
@@ -492,11 +492,11 @@ function LineRow({ item, editable }: { item: LineItemData; editable: boolean }) 
             <button type="button" onClick={() => setConfirmDelete(true)} className="ml-1 text-xs text-red-600 hover:underline">ลบ</button>
           ) : (
             <span className="ml-1">
-              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
-              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-0.5 text-[10px] text-muted hover:underline">×</button>
+              <button type="button" onClick={fireDelete} disabled={pending} className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-0.5 text-[11px] text-muted hover:underline">×</button>
             </span>
           )}
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       )}
     </tr>
@@ -639,8 +639,8 @@ function InvoiceActions({
             <p className="text-[11px] font-bold">เหตุผล (≥3 ตัว)</p>
             <textarea rows={2} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} maxLength={500} className="w-full rounded border border-border bg-white px-2 py-1 text-xs" />
             <div className="flex gap-1">
-              <button type="button" onClick={fireCancel} disabled={pending || cancelReason.trim().length < 3} className="rounded bg-red-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓ ยกเลิก</button>
-              <button type="button" onClick={() => { setShowCancel(false); setCancelReason(""); }} disabled={pending} className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
+              <button type="button" onClick={fireCancel} disabled={pending || cancelReason.trim().length < 3} className="rounded bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓ ยกเลิก</button>
+              <button type="button" onClick={() => { setShowCancel(false); setCancelReason(""); }} disabled={pending} className="rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50">×</button>
             </div>
             {err && <p className="text-[11px] text-red-700">{err}</p>}
           </div>
@@ -672,7 +672,7 @@ function PaymentPanel({ panel }: { panel: PaymentPanelData }) {
       <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-bold text-sm">
           💰 การชำระเงิน (ใบเสร็จ)
-          <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYMENT_STATUS_BADGE[panel.paymentStatus]}`}>
+          <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${PAYMENT_STATUS_BADGE[panel.paymentStatus]}`}>
             {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[panel.paymentStatus]}
           </span>
         </h2>
@@ -783,7 +783,7 @@ function PaymentRow({ row }: { row: PaymentLedgerRow }) {
       <td className="px-3 py-2 text-xs font-mono">
         {row.bank_ref ?? "—"}
         {row.slip_storage_path && <span className="ml-1 text-primary-500" title="มีสลิปแนบ">📎</span>}
-        {row.notes && <p className="text-[10px] text-muted not-italic">{row.notes}</p>}
+        {row.notes && <p className="text-[11px] text-muted not-italic">{row.notes}</p>}
       </td>
       <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(row.amount_thb)}</td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -799,15 +799,15 @@ function PaymentRow({ row }: { row: PaymentLedgerRow }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={500}
-              className="w-full rounded border border-border bg-white px-1.5 py-1 text-[10px]"
+              className="w-full rounded border border-border bg-white px-1.5 py-1 text-[11px]"
             />
             <div className="flex gap-1 justify-end">
-              <button type="button" onClick={fireVoid} disabled={pending || reason.trim().length < 3} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
-              <button type="button" onClick={() => { setConfirmVoid(false); setReason(""); setErr(null); }} disabled={pending} className="rounded border border-border bg-white px-1.5 py-0.5 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
+              <button type="button" onClick={fireVoid} disabled={pending || reason.trim().length < 3} className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
+              <button type="button" onClick={() => { setConfirmVoid(false); setReason(""); setErr(null); }} disabled={pending} className="rounded border border-border bg-white px-1.5 py-0.5 text-[11px] hover:bg-surface-alt disabled:opacity-50">×</button>
             </div>
           </div>
         )}
-        {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+        {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
       </td>
     </tr>
   );

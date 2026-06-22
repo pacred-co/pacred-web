@@ -121,7 +121,7 @@ export function ForwarderDocTierConfirmClient({
         <FileCheck2 className="h-4 w-4 text-teal-500" />
         <h3 className="text-sm font-semibold tracking-wide">ส่วนลดเอกสาร (doc-tier) · ยืนยันเงื่อนไข</h3>
         {!enabled && (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700">ยังไม่เปิดใช้งาน</span>
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">ยังไม่เปิดใช้งาน</span>
         )}
       </div>
 

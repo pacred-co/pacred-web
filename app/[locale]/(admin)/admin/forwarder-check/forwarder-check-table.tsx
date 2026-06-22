@@ -391,7 +391,7 @@ export function ForwarderCheckTable({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
                     <input
@@ -433,12 +433,12 @@ export function ForwarderCheckTable({
                 <tr>
                   <td className="px-2 py-2.5"></td>
                   <td className="px-2 py-2.5" colSpan={3}>
-                    <div className="text-[10px] uppercase tracking-wider text-orange-700">รวมในตาราง</div>
+                    <div className="text-[11px] uppercase tracking-wider text-orange-700">รวมในตาราง</div>
                   </td>
                   <td className="px-2 py-2.5 text-right">
                     <div>{datasetSummary.amountFi}/{datasetSummary.amount} กล่อง</div>
-                    <div className="text-[10px]">{datasetSummary.volumeCbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM</div>
-                    <div className="text-[10px]">{datasetSummary.weightKg.toLocaleString("th-TH", { maximumFractionDigits: 1 })} Kg</div>
+                    <div className="text-[11px]">{datasetSummary.volumeCbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM</div>
+                    <div className="text-[11px]">{datasetSummary.weightKg.toLocaleString("th-TH", { maximumFractionDigits: 1 })} Kg</div>
                   </td>
                   <td className="px-2 py-2.5"></td>
                   <td className="px-2 py-2.5"></td>
@@ -490,14 +490,14 @@ export function ForwarderCheckTable({
                           <div className="mt-0.5">
                             <Link
                               href={`/admin/report-cnt?id=${encodeURIComponent(r.cabinet_number)}`}
-                              className="text-[10px] font-mono text-muted hover:text-primary-600 hover:underline"
+                              className="text-[11px] font-mono text-muted hover:text-primary-600 hover:underline"
                             >
                               ตู้ {r.cabinet_number}
                             </Link>
                           </div>
                         )}
                         {r.tracking_chn && (
-                          <div className="mt-0.5 text-[10px] font-mono text-muted truncate max-w-[120px]" title={r.tracking_chn}>
+                          <div className="mt-0.5 text-[11px] font-mono text-muted truncate max-w-[120px]" title={r.tracking_chn}>
                             {r.tracking_chn}
                           </div>
                         )}
@@ -510,17 +510,17 @@ export function ForwarderCheckTable({
                         >
                           {r.userid}
                         </Link>
-                        <div className="truncate max-w-[140px] text-[10px]" title={r.customer_name}>
+                        <div className="truncate max-w-[140px] text-[11px]" title={r.customer_name}>
                           {r.customer_name || "—"}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {r.user_credit === "1" && (
-                            <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px]">
+                            <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px]">
                               เครดิต
                             </span>
                           )}
                           {r.customer_company === 1 && (
-                            <span className="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 text-[9px]">
+                            <span className="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 text-[11px]">
                               นิติบุคคล
                             </span>
                           )}
@@ -540,23 +540,23 @@ export function ForwarderCheckTable({
                           ) : (
                             <div
                               aria-hidden
-                              className="h-12 w-12 rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[10px] text-muted"
+                              className="h-12 w-12 rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[11px] text-muted"
                             >
                               ไม่มี<br />รูป
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
                             {transportBadge && (
-                              <span className={`rounded-full border px-1.5 py-0.5 text-[9px] mr-1 ${transportBadge.cls}`}>
+                              <span className={`rounded-full border px-1.5 py-0.5 text-[11px] mr-1 ${transportBadge.cls}`}>
                                 {transportBadge.label}
                               </span>
                             )}
-                            <span className="text-[10px] text-muted">
+                            <span className="text-[11px] text-muted">
                               เรท {r.ref_rate.toLocaleString("th-TH")}
                               {r.ref_price === "1" ? " (น้ำหนัก)" : " (ปริมาตร)"}
                             </span>
                             {r.fno_cargo && (
-                              <div className="text-[10px] font-mono text-muted mt-0.5">{r.fno_cargo}</div>
+                              <div className="text-[11px] font-mono text-muted mt-0.5">{r.fno_cargo}</div>
                             )}
                           </div>
                         </div>
@@ -565,12 +565,12 @@ export function ForwarderCheckTable({
                       <td className="px-2 py-2.5 text-right whitespace-nowrap">
                         <div>{r.amount_fi}/{r.amount} กล่อง</div>
                         {r.amount_count === "1" && (
-                          <div className="text-[9px] text-red-600">รวม</div>
+                          <div className="text-[11px] text-red-600">รวม</div>
                         )}
-                        <div className="text-[10px] text-muted">
+                        <div className="text-[11px] text-muted">
                           {r.volume_cbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
                         </div>
-                        <div className="text-[10px] text-muted">
+                        <div className="text-[11px] text-muted">
                           {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 1 })} Kg
                         </div>
                       </td>
@@ -578,19 +578,19 @@ export function ForwarderCheckTable({
                       <td className="px-2 py-2.5 text-right font-mono whitespace-nowrap">
                         <div>{thb(r.total_price)}</div>
                         {r.price_update > 0 && (
-                          <div className="text-[10px] text-muted">อัปเดต: {thb(r.price_update)}</div>
+                          <div className="text-[11px] text-muted">อัปเดต: {thb(r.price_update)}</div>
                         )}
                       </td>
 
                       <td className="px-2 py-2.5 text-right font-mono whitespace-nowrap">
                         {r.price_crate > 0 && (
-                          <div className="text-[10px]">ลัง: {thb(r.price_crate)}</div>
+                          <div className="text-[11px]">ลัง: {thb(r.price_crate)}</div>
                         )}
                         {r.transport_price_chn_thb > 0 && (
-                          <div className="text-[10px]">CHN+: {thb(r.transport_price_chn_thb)}</div>
+                          <div className="text-[11px]">CHN+: {thb(r.transport_price_chn_thb)}</div>
                         )}
                         {r.price_other > 0 && (
-                          <div className="text-[10px]">อื่นๆ: {thb(r.price_other)}</div>
+                          <div className="text-[11px]">อื่นๆ: {thb(r.price_other)}</div>
                         )}
                         {r.price_crate === 0 && r.transport_price_chn_thb === 0 && r.price_other === 0 && (
                           <span className="text-muted">—</span>
@@ -598,17 +598,17 @@ export function ForwarderCheckTable({
                       </td>
 
                       <td className="px-2 py-2.5">
-                        <div className="text-[10px] font-medium">{r.ship_by || "—"}</div>
+                        <div className="text-[11px] font-medium">{r.ship_by || "—"}</div>
                         {r.pay_method === "2" && (
-                          <div className="text-[9px] bg-red-100 text-red-700 px-1 rounded inline-block mt-0.5">ปลายทาง</div>
+                          <div className="text-[11px] bg-red-100 text-red-700 px-1 rounded inline-block mt-0.5">ปลายทาง</div>
                         )}
                         {r.ship_by && r.ship_by !== "PCS" && r.address_district && (
-                          <div className="text-[10px] text-muted">
+                          <div className="text-[11px] text-muted">
                             {r.address_district} · จ.{r.address_province}
                           </div>
                         )}
                         {r.ship_service_fee > 0 && (
-                          <div className="text-[10px] text-amber-700 mt-0.5">
+                          <div className="text-[11px] text-amber-700 mt-0.5">
                             ค่าบริการ: ฿{thb(r.ship_service_fee)}
                           </div>
                         )}
@@ -639,12 +639,12 @@ export function ForwarderCheckTable({
                           <td className="px-2 py-2.5 text-right font-mono whitespace-nowrap">
                             <div title="ต้นทุน PCS">P: {thb(r.cost_total_price)}</div>
                             {r.cost_total_price_sheet > 0 && (
-                              <div className="text-[10px] text-muted" title="ต้นทุน แสง">
+                              <div className="text-[11px] text-muted" title="ต้นทุน แสง">
                                 S: {thb(r.cost_total_price_sheet)}
                               </div>
                             )}
                             {r.cost_total_price === 0 && (
-                              <div className="text-[9px] text-amber-700">⚠ ไม่คำนวณ</div>
+                              <div className="text-[11px] text-amber-700">⚠ ไม่คำนวณ</div>
                             )}
                           </td>
                           <td className="px-2 py-2.5 text-right font-mono whitespace-nowrap">
@@ -656,15 +656,15 @@ export function ForwarderCheckTable({
                       )}
 
                       <td className="px-2 py-2.5 whitespace-nowrap">
-                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${statusCls}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusCls}`}>
                           {STATUS_LABEL[r.status] ?? r.status}
                         </span>
                       </td>
 
-                      <td className="px-2 py-2.5 text-[10px] font-mono text-muted whitespace-nowrap">
+                      <td className="px-2 py-2.5 text-[11px] font-mono text-muted whitespace-nowrap">
                         {r.check_added_by ?? "—"}
                         {r.check_added_at && (
-                          <div className="text-[9px] text-muted/70">
+                          <div className="text-[11px] text-muted/70">
                             {new Date(r.check_added_at).toLocaleDateString("th-TH", {
                               day: "2-digit", month: "2-digit", year: "2-digit",
                             })}
@@ -672,7 +672,7 @@ export function ForwarderCheckTable({
                         )}
                       </td>
 
-                      <td className="px-2 py-2.5 text-[10px] max-w-[140px] truncate" title={r.note ?? ""}>
+                      <td className="px-2 py-2.5 text-[11px] max-w-[140px] truncate" title={r.note ?? ""}>
                         {r.note || "—"}
                       </td>
                     </tr>

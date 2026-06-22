@@ -107,7 +107,7 @@ export default async function AdminHRAttendancePage() {
               <Clock className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold tracking-widest opacity-80">HR · TIME ATTENDANCE</p>
+              <p className="text-[11px] font-bold tracking-widest opacity-80">HR · TIME ATTENDANCE</p>
               <h1 className="text-xl sm:text-2xl font-bold">ระบบบันทึกเวลางาน</h1>
               <p className="text-xs opacity-80 mt-0.5">
                 จัดการวันหยุดประจำปี · วันหยุดทั้ง 2 บริษัทใช้แบบเดียวกัน · ทั้งหมด {holidays.length} วัน
@@ -132,7 +132,7 @@ export default async function AdminHRAttendancePage() {
               <FileText className="w-4 h-4" />
               การลางาน
               {pendingLeaves > 0 && (
-                <span className="rounded-full bg-red-500 text-white px-1.5 text-[10px]">{pendingLeaves}</span>
+                <span className="rounded-full bg-red-500 text-white px-1.5 text-[11px]">{pendingLeaves}</span>
               )}
             </Link>
             <Link

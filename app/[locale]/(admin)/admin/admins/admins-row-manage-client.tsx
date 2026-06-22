@@ -168,7 +168,7 @@ export function AdminRowManage({
             }`}
           />
         </button>
-        <span className={`text-[10px] font-medium ${active ? "text-primary-700" : "text-muted"}`}>
+        <span className={`text-[11px] font-medium ${active ? "text-primary-700" : "text-muted"}`}>
           {active ? "เปิดสิทธิ์" : "ปิดสิทธิ์"}
         </span>
       </div>

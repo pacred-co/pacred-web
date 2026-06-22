@@ -217,7 +217,7 @@ export default async function ForwarderVolumeReport({
       {/* Table */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">ต้นทาง</th>
               <th className="px-3 py-2.5">ขนส่ง</th>

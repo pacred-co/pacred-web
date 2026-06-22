@@ -141,7 +141,7 @@ export default async function QaInspectionDetailPage({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={url} alt={t("photoAlt")} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-muted">
+                    <div className="w-full h-full flex items-center justify-center text-[11px] text-muted">
                       {t("photoUnavailable")}
                     </div>
                   )}

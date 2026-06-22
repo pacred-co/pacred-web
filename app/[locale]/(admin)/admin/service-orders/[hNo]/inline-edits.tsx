@@ -214,7 +214,7 @@ export function OrderInlineEdits({
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-muted">PCS = รับที่โกดัง Pacred (จะเขียนทับที่อยู่จัดส่ง)</p>
+            <p className="text-[11px] text-muted">PCS = รับที่โกดัง Pacred (จะเขียนทับที่อยู่จัดส่ง)</p>
             <div className="flex gap-2">
               <button
                 type="button"

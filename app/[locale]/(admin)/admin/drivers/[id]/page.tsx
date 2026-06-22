@@ -576,7 +576,7 @@ export default async function AdminDriverBatchDetailPage({
               {/* Tracking sub-table */}
               <div className="rounded-lg border border-border overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-2 py-1.5">F-no</th>
                       <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
@@ -604,7 +604,7 @@ export default async function AdminDriverBatchDetailPage({
                           <td className="px-2 py-1.5">
                             <div>{forwarder.ftrackingchn ?? "—"}</div>
                             {forwarder.fpallet && (
-                              <div className="text-[10px] text-muted">loc: {forwarder.fpallet}</div>
+                              <div className="text-[11px] text-muted">loc: {forwarder.fpallet}</div>
                             )}
                           </td>
                           <td className="px-2 py-1.5 font-mono">{forwarder.userid ?? "—"}</td>
@@ -613,22 +613,22 @@ export default async function AdminDriverBatchDetailPage({
                           <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(3)}</td>
                           <td className="px-2 py-1.5">
                             <span
-                              className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${ITEM_STATUS_CLS[fdistatus]}`}
+                              className={`inline-block rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${ITEM_STATUS_CLS[fdistatus]}`}
                             >
                               {ITEM_STATUS_LABEL[fdistatus]}
                             </span>
                             {(photoOnUrl || photoOffUrl) && (
                               <div className="mt-1 flex gap-1">
                                 {photoOnUrl && (
-                                  <a href={photoOnUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline">📦 ขึ้นรถ</a>
+                                  <a href={photoOnUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-600 hover:underline">📦 ขึ้นรถ</a>
                                 )}
                                 {photoOffUrl && (
-                                  <a href={photoOffUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-emerald-600 hover:underline">✅ ส่ง</a>
+                                  <a href={photoOffUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline">✅ ส่ง</a>
                                 )}
                               </div>
                             )}
                             {forwarder.fnote && (
-                              <div className="mt-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
+                              <div className="mt-1 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
                                 📝 {forwarder.fnote}
                               </div>
                             )}
@@ -678,7 +678,7 @@ export default async function AdminDriverBatchDetailPage({
         </ol>
       )}
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code> #{batch.id}{" "}
         — {stops.length} จุดส่ง · ดำเนินการสถานะรายการในหน้า{" "}
         <Link href={`/admin/drivers/work?driver=${batch.fdadminid}`} className="text-primary-600 hover:underline">
@@ -702,7 +702,7 @@ function Metric({
     : "bg-surface-alt border-border";
   return (
     <div className={`rounded-lg border px-3 py-2 ${cls}`}>
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted">
         {icon}
         {label}
       </div>

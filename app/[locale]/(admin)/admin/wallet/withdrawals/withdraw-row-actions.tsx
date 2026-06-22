@@ -54,7 +54,7 @@ export function WithdrawRowActions({ id }: { id: number }) {
 
   return (
     <div className="space-y-1.5 min-w-[180px]">
-      {error && <div className="text-[10px] text-red-700">{error}</div>}
+      {error && <div className="text-[11px] text-red-700">{error}</div>}
 
       {mode === "idle" && (
         <div className="flex flex-wrap gap-1.5">
@@ -82,7 +82,7 @@ export function WithdrawRowActions({ id }: { id: number }) {
 
       {mode === "reject" && (
         <div className="space-y-1.5 rounded-lg border border-red-300 bg-red-50 p-2">
-          <p className="text-[10px] font-bold text-red-900">
+          <p className="text-[11px] font-bold text-red-900">
             เหตุผล (ตัวเลือก) · เมื่อปฏิเสธ ระบบจะคืนเงินเข้ากระเป๋าลูกค้าอัตโนมัติ
           </p>
           <textarea

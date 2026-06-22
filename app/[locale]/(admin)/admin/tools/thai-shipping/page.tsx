@@ -350,7 +350,7 @@ async function renderShipByTab(sp: Record<string, string | undefined>) {
                   key={`${c.id}-${i}`}
                   className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 text-xs font-medium"
                 >
-                  <span className="font-mono text-[10px] text-emerald-500">#{c.id}</span>
+                  <span className="font-mono text-[11px] text-emerald-500">#{c.id}</span>
                   {c.name}
                 </li>
               ))}

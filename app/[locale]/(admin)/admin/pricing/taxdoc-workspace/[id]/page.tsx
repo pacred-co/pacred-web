@@ -182,11 +182,11 @@ function NumberCard({
   return (
     <div className={`rounded-2xl border ${accent} p-4`}>
       <div className="flex items-center justify-between">
-        <p className={`text-[10px] font-semibold uppercase tracking-wide ${head}`}>{role}</p>
+        <p className={`text-[11px] font-semibold uppercase tracking-wide ${head}`}>{role}</p>
       </div>
       <p className="mt-0.5 text-[11px] text-muted">{label}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums ${head}`}>{value}</p>
-      <p className="mt-1.5 text-[10px] text-muted leading-snug">{hint}</p>
+      <p className="mt-1.5 text-[11px] text-muted leading-snug">{hint}</p>
     </div>
   );
 }

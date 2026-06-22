@@ -60,7 +60,7 @@ export function CarrierRowActions({
         <button
           type="button"
           onClick={() => setEditing(false)}
-          className="text-[10px] text-muted hover:underline"
+          className="text-[11px] text-muted hover:underline"
         >
           ← ปิดฟอร์ม
         </button>
@@ -76,7 +76,7 @@ export function CarrierRowActions({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="rounded-lg border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+        className="rounded-lg border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt"
         disabled={pending}
       >
         ✏️ แก้
@@ -85,7 +85,7 @@ export function CarrierRowActions({
         type="button"
         onClick={toggleActive}
         disabled={pending}
-        className={`rounded-lg border px-2 py-1 text-[10px] ${
+        className={`rounded-lg border px-2 py-1 text-[11px] ${
           isActive
             ? "border-red-200 text-red-600 hover:bg-red-50"
             : "border-green-200 text-green-700 hover:bg-green-50"

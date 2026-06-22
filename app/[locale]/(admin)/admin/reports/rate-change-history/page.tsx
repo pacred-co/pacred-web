@@ -399,7 +399,7 @@ export default async function RateChangeHistoryReport({
                           "—"
                         )}
                         {h.userid && (
-                          <span className="block font-mono text-[10px] text-muted">{h.userid}</span>
+                          <span className="block font-mono text-[11px] text-muted">{h.userid}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">{fmtDate(h.date)}</td>
@@ -415,7 +415,7 @@ export default async function RateChangeHistoryReport({
                           "—"
                         )}
                         {h.adminid && (
-                          <span className="block font-mono text-[10px] text-muted">{h.adminid}</span>
+                          <span className="block font-mono text-[11px] text-muted">{h.adminid}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs">

@@ -209,7 +209,7 @@ export function TbForwarderActionPanel(p: Props) {
         <label htmlFor="tap_cabinet" className="block text-xs font-medium text-muted mb-1">
           เลขตู้ (GZE / GZS)
           {cabinetLocked && (
-            <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-semibold">
+            <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-semibold">
               🔒 ล็อกแล้ว
             </span>
           )}
@@ -240,7 +240,7 @@ export function TbForwarderActionPanel(p: Props) {
           />
           <span>
             <strong>🔒 ล็อกเลขตู้นี้</strong> · กัน MOMO/partner sync เขียนทับ
-            <span className="block text-[10px] text-amber-700 mt-0.5">
+            <span className="block text-[11px] text-amber-700 mt-0.5">
               เปิดเมื่อ admin แก้เลขตู้แล้วต้องการให้ partner cron ไม่ทับ
               (ใช้กรณี MOMO ส่งเลข routing batch มาผิด · เช่นเคส 2026-05-29)
             </span>
@@ -299,7 +299,7 @@ export function TbForwarderActionPanel(p: Props) {
         {pending ? "กำลังบันทึก..." : "💾 บันทึกการเปลี่ยนแปลง"}
       </button>
 
-      <p className="text-[10px] text-muted text-center leading-relaxed">
+      <p className="text-[11px] text-muted text-center leading-relaxed">
         บันทึกแล้วจะอัพเดต fstatus + fcabinetnumber + ftrackingth + fnote + fcabinet_locked ของ
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">tb_forwarder #{p.fNo}</code>
         พร้อม stamp fdatestatusN · adminidupdate · audit log อัตโนมัติ
@@ -433,8 +433,8 @@ export function NotePushForm({
         <table className="w-full text-sm">
           <thead className="bg-surface-alt/50 uppercase tracking-wide">
             <tr>
-              <th className="whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted">หมายเหตุ</th>
-              <th className="whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted">แจ้งเตือนถึง</th>
+              <th className="whitespace-nowrap px-2 py-2 text-center text-[11px] md:text-[11px] font-semibold text-muted">หมายเหตุ</th>
+              <th className="whitespace-nowrap px-2 py-2 text-center text-[11px] md:text-[11px] font-semibold text-muted">แจ้งเตือนถึง</th>
             </tr>
           </thead>
           <tbody>

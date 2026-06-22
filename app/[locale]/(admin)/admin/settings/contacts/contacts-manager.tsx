@@ -271,7 +271,7 @@ function RowEditor({ row }: { row: Row }) {
             onChange={(e) => setValue(e.target.value)}
             className="w-full rounded border border-border bg-white px-2 py-1 text-xs"
           />
-          {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+          {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
         <td className="px-3 py-2">
           <input
@@ -297,7 +297,7 @@ function RowEditor({ row }: { row: Row }) {
             type="button"
             onClick={fireUpdate}
             disabled={pending || !label.trim() || !value.trim()}
-            className="rounded bg-primary-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+            className="rounded bg-primary-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-primary-700 disabled:opacity-50"
           >
             ✓ บันทึก
           </button>
@@ -310,7 +310,7 @@ function RowEditor({ row }: { row: Row }) {
               setErr(null);
             }}
             disabled={pending}
-            className="ml-1 rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50"
+            className="ml-1 rounded border border-border bg-white px-2 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50"
           >
             ยกเลิก
           </button>
@@ -330,7 +330,7 @@ function RowEditor({ row }: { row: Row }) {
           type="button"
           onClick={fireToggleActive}
           disabled={pending}
-          className={`rounded-full border px-2 py-0.5 text-[10px] ${
+          className={`rounded-full border px-2 py-0.5 text-[11px] ${
             row.is_active
               ? "bg-green-50 text-green-700 border-green-200"
               : "bg-gray-50 text-gray-600 border-gray-200"
@@ -361,7 +361,7 @@ function RowEditor({ row }: { row: Row }) {
               type="button"
               onClick={fireDelete}
               disabled={pending}
-              className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
             >
               ✓ ยืนยันลบ
             </button>
@@ -369,13 +369,13 @@ function RowEditor({ row }: { row: Row }) {
               type="button"
               onClick={() => setConfirmDelete(false)}
               disabled={pending}
-              className="ml-1 text-[10px] text-muted hover:underline"
+              className="ml-1 text-[11px] text-muted hover:underline"
             >
               ยกเลิก
             </button>
           </span>
         )}
-        {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+        {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
       </td>
     </tr>
   );

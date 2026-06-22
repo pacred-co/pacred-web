@@ -379,7 +379,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             {base}
           </span>
-          <span className="ml-1.5 inline-block rounded-full bg-primary-200 text-primary-800 dark:bg-primary-800 dark:text-primary-100 text-[9px] font-bold px-1.5 py-0.5">
+          <span className="ml-1.5 inline-block rounded-full bg-primary-200 text-primary-800 dark:bg-primary-800 dark:text-primary-100 text-[11px] font-bold px-1.5 py-0.5">
             {g.length} แทรค
           </span>
         </td>
@@ -434,7 +434,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
           <td className="px-2 py-2 text-right">
             <span title="ต้นทุน PCS รวม">P: {fmt(a.fcosttotalprice, 2)}</span>
             <br />
-            <span title="ต้นทุน แสง รวม" className="text-muted text-[10px]">S: {fmt(a.fcosttotalpricesheet, 2)}</span>
+            <span title="ต้นทุน แสง รวม" className="text-muted text-[11px]">S: {fmt(a.fcosttotalpricesheet, 2)}</span>
           </td>
         )}
         {/* กำไร — showMoney only */}
@@ -448,11 +448,11 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         {/* สถานะสินค้า + group bill (per-shipment pay) */}
         <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
           {statusBadge ? (
-            <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${statusBadge.chip}`}>
+            <span className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium ${statusBadge.chip}`}>
               {statusBadge.label}
             </span>
           ) : (
-            <span className="inline-block rounded-full text-[10px] px-2 py-0.5 font-medium bg-gray-200 text-gray-700">หลายสถานะ</span>
+            <span className="inline-block rounded-full text-[11px] px-2 py-0.5 font-medium bg-gray-200 text-gray-700">หลายสถานะ</span>
           )}
           {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
               — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
@@ -466,7 +466,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         {/* สถานะตู้ */}
         <td className="px-2 py-2 text-center">
           <span
-            className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
+            className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium ${
               a.allPaid ? CNTSTATUS_CFG.paid.chip : a.nonePaid ? CNTSTATUS_CFG.unpaid.chip : "bg-amber-100 text-amber-700"
             }`}
           >
@@ -505,7 +505,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               <span>{FILTER_LABEL[k]}</span>
               {cnt > 0 && (
                 <span
-                  className={`inline-flex items-center justify-center rounded-full text-[10px] font-bold leading-none px-1.5 py-0.5 ${
+                  className={`inline-flex items-center justify-center rounded-full text-[11px] font-bold leading-none px-1.5 py-0.5 ${
                     active ? "bg-white text-primary-600" : "bg-red-500 text-white"
                   }`}
                 >
@@ -524,7 +524,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         {DETAIL_LEGEND.map((l) => (
           <span
             key={l.key}
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium ${l.cls}`}
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${l.cls}`}
           >
             {l.label}
           </span>
@@ -534,7 +534,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
       {/* Table */}
       <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm scrollbar-x-visible">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {canBulkCheck && !cabinetIsPaid && (
                 <th className="px-2 py-2 text-center w-8">
@@ -706,7 +706,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       {r.ftrackingchn ?? "-"}
                     </Link>
                     <br />
-                    <span className="text-muted text-[10px]">เลขที่ #{r.id}</span>
+                    <span className="text-muted text-[11px]">เลขที่ #{r.id}</span>
                   </td>
                   <td className="px-2 py-2 text-[11px]">
                     {/* ภูม #5 2026-05-29: legacy PHP linked to
@@ -751,7 +751,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         (legacy report-cnt col 9: "ทั่วไป" + "3,700" / "15"). */}
                     {r.frefrate != null && Number.isFinite(r.frefrate) && r.frefrate > 0 && (
                       <div
-                        className="mt-0.5 text-[10px] text-muted"
+                        className="mt-0.5 text-[11px] text-muted"
                         title="เรทขาย (SELL) ต่อคิว/กิโล"
                       >
                         {r.frefrate.toLocaleString("en-US")}
@@ -762,7 +762,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   <td className="px-2 py-2 text-right">
                     {fmt(r.ftotalprice, 2)}
                     <br />
-                    <span className={`inline-block rounded-full text-[9px] px-1.5 py-0.5 ${r.frefprice === "1" ? "bg-sky-100 text-sky-700" : "bg-primary-100 text-primary-700"}`}>
+                    <span className={`inline-block rounded-full text-[11px] px-1.5 py-0.5 ${r.frefprice === "1" ? "bg-sky-100 text-sky-700" : "bg-primary-100 text-primary-700"}`}>
                       {r.frefprice === "1" ? "น้ำหนัก" : "ปริมาตร"}
                     </span>
                   </td>
@@ -773,10 +773,10 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   <td className="px-2 py-2 text-[11px]">
                     {shipByLabel(r.fshipby)}
                     {r.paymethod === "2" && (
-                      <span className="ml-1 inline-block bg-red-500 text-white text-[9px] px-1 rounded">ปลายทาง</span>
+                      <span className="ml-1 inline-block bg-red-500 text-white text-[11px] px-1 rounded">ปลายทาง</span>
                     )}
                     {r.fshipby !== "PCS" && (r.faddressdistrict || r.faddressprovince) && (
-                      <div className="text-muted text-[10px]">
+                      <div className="text-muted text-[11px]">
                         {r.faddressdistrict ?? ""}
                         {r.faddressprovince ? ` · จ.${r.faddressprovince}` : ""}
                       </div>
@@ -792,7 +792,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     <td className="px-2 py-2 text-right">
                       <span title="ต้นทุน PCS">P: {fmt(r.fcosttotalprice, 2)}</span>
                       <br />
-                      <span title="ต้นทุน แสง" className="text-muted text-[10px]">S: {fmt(r.fcosttotalpricesheet, 2)}</span>
+                      <span title="ต้นทุน แสง" className="text-muted text-[11px]">S: {fmt(r.fcosttotalpricesheet, 2)}</span>
                       <br />
                       <div className="flex gap-2 mt-0.5">
                         <ForwarderCostEditButton
@@ -848,7 +848,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     {(() => {
                       const b = fstatusBadge(r.fstatus);
                       return (
-                        <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${b.chip}`}>
+                        <span className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium ${b.chip}`}>
                           {b.label}
                         </span>
                       );
@@ -862,7 +862,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
                         <Link
                           href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
-                          className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5"
+                          className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[11px] px-1.5 py-0.5"
                         >
                           เครดิตได้
                         </Link>
@@ -881,7 +881,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   </td>
                   <td className="px-2 py-2 text-center">
                     <span
-                      className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
+                      className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium ${
                         r.cntPaid ? CNTSTATUS_CFG.paid.chip : CNTSTATUS_CFG.unpaid.chip
                       }`}
                     >
@@ -889,7 +889,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     </span>
                     {r.trackingDup && (
                       <div className="mt-1">
-                        <span className="inline-block rounded-full bg-orange-400 text-orange-950 border border-orange-600 text-[9px] px-1.5 py-0.5">
+                        <span className="inline-block rounded-full bg-orange-400 text-orange-950 border border-orange-600 text-[11px] px-1.5 py-0.5">
                           {r.cntPaid ? "จ่ายซ้ำแล้ว" : "กำลังจะจ่ายซ้ำ"}
                         </span>
                       </div>
@@ -964,7 +964,7 @@ function BillToCustomerButton({ fID }: { fID: number }) {
   }
 
   if (done) {
-    return <span className="inline-block text-[9px] text-amber-700">{msg}</span>;
+    return <span className="inline-block text-[11px] text-amber-700">{msg}</span>;
   }
   return (
     <>
@@ -972,11 +972,11 @@ function BillToCustomerButton({ fID }: { fID: number }) {
         type="button"
         onClick={bill}
         disabled={pending}
-        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[9px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
+        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[11px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
       >
         {pending ? "กำลังแจ้ง…" : "แจ้งหนี้ (4→5)"}
       </button>
-      {msg && <div className="mt-0.5 text-[9px] text-red-600">{msg}</div>}
+      {msg && <div className="mt-0.5 text-[11px] text-red-600">{msg}</div>}
     </>
   );
 }
@@ -1013,7 +1013,7 @@ function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: stri
   }
 
   if (done) {
-    return <span className="inline-block text-[9px] text-amber-700">{msg}</span>;
+    return <span className="inline-block text-[11px] text-amber-700">{msg}</span>;
   }
   return (
     <>
@@ -1021,11 +1021,11 @@ function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: stri
         type="button"
         onClick={bill}
         disabled={pending}
-        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[9px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
+        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[11px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
       >
         {pending ? "กำลังแจ้ง…" : `แจ้งหนี้ทั้งกลุ่ม (${fIDs.length} ซอย)`}
       </button>
-      {msg && <div className="mt-0.5 text-[9px] text-red-600">{msg}</div>}
+      {msg && <div className="mt-0.5 text-[11px] text-red-600">{msg}</div>}
     </>
   );
 }

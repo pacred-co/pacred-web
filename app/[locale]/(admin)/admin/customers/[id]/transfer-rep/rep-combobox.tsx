@@ -151,7 +151,7 @@ export function RepCombobox({
           <button
             type="button"
             onClick={clear}
-            className="rounded text-[10px] text-primary-700 hover:underline"
+            className="rounded text-[11px] text-primary-700 hover:underline"
           >
             ล้าง / เลือกใหม่
           </button>
@@ -181,7 +181,7 @@ export function RepCombobox({
       />
 
       {pending && (
-        <div className="absolute right-3 top-[34px] text-[10px] text-muted">
+        <div className="absolute right-3 top-[34px] text-[11px] text-muted">
           กำลังค้น…
         </div>
       )}
@@ -214,11 +214,11 @@ export function RepCombobox({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-medium">{h.name}</span>
-                <span className="font-mono text-[10px] text-muted">{h.member_code ?? "—"}</span>
+                <span className="font-mono text-[11px] text-muted">{h.member_code ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
                 <span>{h.phone ?? "—"}</span>
-                <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[9px] uppercase tracking-wide">
+                <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] uppercase tracking-wide">
                   {h.role}
                 </span>
               </div>

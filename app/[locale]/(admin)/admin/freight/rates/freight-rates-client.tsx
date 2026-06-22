@@ -268,9 +268,9 @@ export function FreightRatesClient({
                   <td className="px-3 py-3 text-xs text-muted">{r.effective_from}</td>
                   <td className="px-3 py-3">
                     {r.active ? (
-                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">เปิดใช้งาน</span>
+                      <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">เปิดใช้งาน</span>
                     ) : (
-                      <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">ปิดใช้งาน</span>
+                      <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">ปิดใช้งาน</span>
                     )}
                   </td>
                   {canWrite && (

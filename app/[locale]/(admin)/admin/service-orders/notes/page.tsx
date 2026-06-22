@@ -258,7 +258,7 @@ export default async function ServiceOrderNotesPage({
                         <td className="px-4 py-3 text-xs">
                           <div className="font-mono font-semibold">{r.userid || "—"}</div>
                           <div className="text-muted">{customerName || "—"}</div>
-                          <div className="text-[10px] text-muted">{user?.userTel}</div>
+                          <div className="text-[11px] text-muted">{user?.userTel}</div>
                         </td>
                         <td className="px-4 py-3 text-xs">{legacyOrderStatusThai(r.hstatus) || "—"}</td>
                         <td className="px-4 py-3 text-right font-mono text-xs">

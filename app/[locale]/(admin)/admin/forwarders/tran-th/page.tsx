@@ -87,7 +87,7 @@ export default async function AdminTranThListPage({
           <p className="text-xs text-muted mt-1">
             กลุ่ม forwarder ที่ส่งคันเดียวกัน · admin จับมัดเข้า batch ก่อนคนขับรับงาน
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder_tran_th_h</code> + <code className="bg-surface-alt px-1 rounded">_sub</code>
             {" "}(legacy ~296 batches · ~643 รายการ · brief §6) · MVP read-only · ⚠️ สร้าง batch DEFER ครั้งหน้า
           </p>
@@ -114,15 +114,15 @@ export default async function AdminTranThListPage({
         className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex flex-wrap items-end gap-3"
       >
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted">ตั้งแต่</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted">ตั้งแต่</span>
           <input type="date" name="date_from" defaultValue={dateFrom ?? ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted">ถึง</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted">ถึง</span>
           <input type="date" name="date_to" defaultValue={dateTo ?? ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted">ผู้สร้าง (adminID)</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted">ผู้สร้าง (adminID)</span>
           <input type="text" name="rep" defaultValue={adminID ?? ""} placeholder="admin_xxxx" className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs" />
         </label>
         <button type="submit" className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
@@ -141,7 +141,7 @@ export default async function AdminTranThListPage({
           <h2 className="font-bold text-sm mb-3">🏆 ผู้สร้าง batch (ในตาราง)</h2>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full min-w-[500px] text-sm">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">#</th>
                   <th className="px-3 py-2">Admin</th>
@@ -185,7 +185,7 @@ export default async function AdminTranThListPage({
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full min-w-[600px] text-sm">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">#</th>
                   <th className="px-3 py-2">วันที่สร้าง</th>
@@ -224,7 +224,7 @@ export default async function AdminTranThListPage({
         )}
       </section>
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         📌 MVP read-only (brief §6 · เก่า 0 Pacred reader) · CREATE batch DEFERRED — ต้องมี multi-row selector UI + dedup-guard (forwarder ห้ามอยู่ใน 2 batches)
       </p>
     </main>
@@ -236,7 +236,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-1 font-bold font-mono text-foreground text-xl">{value}</p>
-      {sub && <p className="text-[10px] text-muted">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted">{sub}</p>}
     </div>
   );
 }

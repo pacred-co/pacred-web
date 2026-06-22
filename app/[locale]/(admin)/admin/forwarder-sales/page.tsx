@@ -253,7 +253,7 @@ export default async function AdminForwarderSalesPage({
               ใครปิดออเดอร์ไหน · {rows.length.toLocaleString("th-TH")} forwarder ในช่วงที่เลือก ·
               อ้างอิงจาก <code className="bg-surface-alt px-1 rounded text-xs">tb_sales_report</code> ของจริง
             </p>
-            <p className="text-[10px] text-muted mt-1">
+            <p className="text-[11px] text-muted mt-1">
               📊 ADR-0026 repoint จาก dead <code>sales_commissions</code> · ค่าคอมจ่ายอยู่ที่ <Link href="/admin/commissions" className="underline">/admin/commissions</Link>
             </p>
           </div>
@@ -265,7 +265,7 @@ export default async function AdminForwarderSalesPage({
             <input type="hidden" name="date_from" value={dateFrom} />
             <input type="hidden" name="date_to" value={dateTo} />
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">Sales rep</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">Sales rep</span>
               <select
                 name="rep"
                 defaultValue={repId}
@@ -310,7 +310,7 @@ export default async function AdminForwarderSalesPage({
             <h2 className="font-bold text-sm mb-3">🏆 อันดับ Sales Rep ในช่วงนี้</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[600px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">Sales Rep</th>
@@ -361,7 +361,7 @@ export default async function AdminForwarderSalesPage({
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full min-w-[800px] text-xs sm:text-sm">
-              <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] sm:text-[11px] text-muted">
+              <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] sm:text-[11px] text-muted">
                 <tr>
                   <th className="px-3 py-2.5">วันที่ชำระ</th>
                   <th className="px-3 py-2.5">Forwarder</th>
@@ -391,7 +391,7 @@ export default async function AdminForwarderSalesPage({
                           #{r.fid}
                         </Link>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-muted whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-[11px] text-muted whitespace-nowrap">
                         {r.fTrackingCHN ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-xs">
@@ -405,7 +405,7 @@ export default async function AdminForwarderSalesPage({
                         {thb(r.ftotalprice - r.fdiscount)}
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                           {r.fstatus ?? "—"}
                         </span>
                       </td>

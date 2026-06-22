@@ -267,7 +267,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
+                  <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">ID</th>
                       <th className="px-2 py-2 text-left">วันที่สร้าง</th>
@@ -503,7 +503,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
           >
             ทั้งหมด
             {tabCountTotal > 0 && (
-              <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[10px] font-semibold">
+              <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[11px] font-semibold">
                 {tabCountTotal}
               </span>
             )}
@@ -524,7 +524,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
               >
                 {t.label}
                 {n > 0 && (
-                  <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[10px] font-semibold">
+                  <span className="ml-1 inline-flex items-center rounded-full bg-surface-alt px-1.5 text-[11px] font-semibold">
                     {n}
                   </span>
                 )}
@@ -561,7 +561,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
+                <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                   <tr>
                     <th className="px-2 py-2 text-left">ID</th>
                     <th className="px-2 py-2 text-left">รูป</th>
@@ -597,7 +597,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                             />
                           </a>
                         ) : (
-                          <span className="text-muted text-[10px]">—</span>
+                          <span className="text-muted text-[11px]">—</span>
                         )}
                       </td>
                       <td className="px-2 py-2">{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</td>

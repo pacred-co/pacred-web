@@ -393,7 +393,7 @@ export function AdminForwarderEditForm({
   // horizontal input TABLE (header columns + one editable row · scrolls sideways),
   // mirroring the read-only รายการสินค้า table. Same inputs/handlers/calc as before;
   // only the layout changed from a wrapping grid to a table.
-  const CELL_TH = "whitespace-nowrap px-2 py-2 text-center text-[10px] md:text-[11px] font-semibold text-muted";
+  const CELL_TH = "whitespace-nowrap px-2 py-2 text-center text-[11px] md:text-[11px] font-semibold text-muted";
   const CELL_NUM = "w-full min-w-[84px] rounded-md border border-border px-2 py-1.5 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60";
   const CELL_SEL = "w-full min-w-[120px] rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60";
   const CELL_RO = "w-full min-w-[88px] rounded-md border border-red-200 bg-red-50/30 px-2 py-1.5 text-sm font-mono tabular-nums text-right text-red-700";
@@ -471,7 +471,7 @@ export function AdminForwarderEditForm({
             {customRate === "1" ? (
               <div className="mt-1.5 flex flex-wrap items-end gap-2">
                 <label className="block">
-                  <span className="block text-[10px] text-muted">เรท ฿/กก.</span>
+                  <span className="block text-[11px] text-muted">เรท ฿/กก.</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateKg}
@@ -482,7 +482,7 @@ export function AdminForwarderEditForm({
                   />
                 </label>
                 <label className="block">
-                  <span className="block text-[10px] text-muted">เรท ฿/CBM</span>
+                  <span className="block text-[11px] text-muted">เรท ฿/CBM</span>
                   <input
                     type="number" min={0} step="0.01"
                     value={customRateCbm}
@@ -494,7 +494,7 @@ export function AdminForwarderEditForm({
                 </label>
               </div>
             ) : (
-              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = เรทระบบ · เปิด = กำหนดเรท กก./CBM เอง</p>
+              <p className="mt-1 text-[11px] text-muted leading-snug">ปิด = เรทระบบ · เปิด = กำหนดเรท กก./CBM เอง</p>
             )}
           </div>
 
@@ -515,7 +515,7 @@ export function AdminForwarderEditForm({
             {customComparison === "1" ? (
               <div className="mt-1.5 flex items-end gap-2">
                 <label className="block">
-                  <span className="block text-[10px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
                   <input
                     type="number" min={0} step="1"
                     value={comparisonValue}
@@ -526,10 +526,10 @@ export function AdminForwarderEditForm({
                   />
                 </label>
                 {/* 2026-06-16 — wired: the save recomputes the price with this ค่าเทียบ. */}
-                <p className="text-[10px] text-amber-700 leading-snug max-w-[150px]">ใช้ตอนบันทึก · แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้</p>
+                <p className="text-[11px] text-amber-700 leading-snug max-w-[150px]">ใช้ตอนบันทึก · แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้</p>
               </div>
             ) : (
-              <p className="mt-1 text-[10px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
+              <p className="mt-1 text-[11px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
             )}
           </div>
         </div>
@@ -615,7 +615,7 @@ export function AdminForwarderEditForm({
               {draftRows.map((dr, i) => (
                 <tr key={dr.key} className="border-t border-dashed border-amber-300 align-top bg-amber-50/30 [&>td]:px-1.5 [&>td]:py-1.5">
                   {/* warehouse / warehouse-th / type — draft placeholders (header row owns these) */}
-                  <td colSpan={3} className="text-[10px] text-amber-700 whitespace-nowrap">
+                  <td colSpan={3} className="text-[11px] text-amber-700 whitespace-nowrap">
                     item #{i + 2} <span className="text-amber-500">(ร่าง · ยังไม่บันทึก)</span>
                   </td>
                   <td>
@@ -675,7 +675,7 @@ export function AdminForwarderEditForm({
             </button>
           )}
           {draftRows.length > 0 && (
-            <span className="text-[10px] text-amber-700">
+            <span className="text-[11px] text-amber-700">
               {draftRows.length} แถวร่าง — ยังไม่บันทึก (ต้องต่อ backend items[] · ดูหมายเหตุ)
             </span>
           )}
@@ -694,11 +694,11 @@ export function AdminForwarderEditForm({
             <p>คิดตามน้ำหนัก {parsed.weight.toFixed(2)} × {(parseFloat(customRateKg) || 0).toFixed(2)} = <strong>฿{preview.priceByKg.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
             <p>คิดตามปริมาตร {cbmNum.toFixed(6)} × {(parseFloat(customRateCbm) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })} = <strong>฿{preview.priceByCbm.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
             {preview.comparisonOn && (
-              <p className="text-[10px] text-amber-700 font-sans not-italic">
+              <p className="text-[11px] text-amber-700 font-sans not-italic">
                 ค่าเทียบ {preview.threshold.toLocaleString("th-TH")} · KG/คิว = {preview.kgPerCbm.toFixed(2)} → {preview.kgPerCbm > preview.threshold ? "เกินค่าเทียบ คิดตามน้ำหนัก" : "ไม่เกิน คิดตามปริมาตร"}
               </p>
             )}
-            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-medium mt-1">
+            <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-1">
               {preview.comparisonOn
                 ? `ค่าเทียบ → คิดตาม${preview.basis === "1" ? "น้ำหนัก" : "ปริมาตร"}`
                 : "ระบบเลือก คิดตามราคามากสุด"} → ฿{preview.transport.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -706,7 +706,7 @@ export function AdminForwarderEditForm({
             <div className="border-t border-border mt-2 pt-2 space-y-0.5">
               <p>รวมค่าใช้จ่าย: <strong className="text-foreground">฿{preview.adders.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
               <p>− ส่วนลด: <strong className="text-red-600">฿{(parseFloat(fDiscount) || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong></p>
-              <p className="text-[10px] text-muted italic">* กำไรสุทธิคำนวณตอนกดบันทึก (ต้นทุนจาก server-side rate waterfall)</p>
+              <p className="text-[11px] text-muted italic">* กำไรสุทธิคำนวณตอนกดบันทึก (ต้นทุนจาก server-side rate waterfall)</p>
             </div>
           </div>
           {/* RIGHT — summary block */}
@@ -743,7 +743,7 @@ export function AdminForwarderEditForm({
             disabled={pending}
             className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
           />
-          <p className="mt-0.5 text-right text-[10px] text-muted">{note.length}/2,000</p>
+          <p className="mt-0.5 text-right text-[11px] text-muted">{note.length}/2,000</p>
         </label>
       </section>
 

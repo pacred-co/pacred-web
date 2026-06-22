@@ -66,7 +66,7 @@ export function BusinessConfigEditor({ groups }: Props) {
             }`}
           >
             {g.category}
-            <span className={`ml-1.5 text-[10px] ${g.category === activeCat ? "text-white/80" : "text-muted"}`}>
+            <span className={`ml-1.5 text-[11px] ${g.category === activeCat ? "text-white/80" : "text-muted"}`}>
               ({g.items.length})
             </span>
           </button>
@@ -126,7 +126,7 @@ function ConfigRow({ row }: { row: BusinessConfigRow }) {
         <div className="min-w-0">
           <p className="font-mono text-sm font-semibold">{row.key}</p>
           {NOT_YET_WIRED.has(row.key) && (
-            <p className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+            <p className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
               ⚠️ ยังไม่เชื่อมโค้ด (reference-only) — แก้แล้วยังไม่มีผลกับระบบ{row.key === "otp.ttl_ms" ? " · ค่าจริงในโค้ด = 15 นาที" : ""}
             </p>
           )}

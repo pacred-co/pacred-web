@@ -237,7 +237,7 @@ export function TbForwarderDriverAssignPanel(p: Props) {
         </p>
       )}
 
-      <p className="text-[10px] text-muted text-center leading-relaxed">
+      <p className="text-[11px] text-muted text-center leading-relaxed">
         มอบหมายแล้วจะสร้างรอบจัดส่งใน
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">tb_forwarder_driver</code>
         + รายการใน

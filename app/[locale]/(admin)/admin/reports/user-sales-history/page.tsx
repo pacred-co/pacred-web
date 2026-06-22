@@ -479,7 +479,7 @@ export default async function UserSalesHistoryEntry({
                       <td className="px-4 py-3 text-xs">
                         {a.fullname}
                         {a.is_juristic && (
-                          <span className="ml-1 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">
+                          <span className="ml-1 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-700">
                             นิติบุคคล
                           </span>
                         )}
@@ -494,7 +494,7 @@ export default async function UserSalesHistoryEntry({
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
                         <span className="text-muted">{fmtDateOnly(a.last_order_at)}</span>
                         {a.days_since_last !== null && (
-                          <span className="block text-[10px] text-muted">{a.days_since_last} วันก่อน</span>
+                          <span className="block text-[11px] text-muted">{a.days_since_last} วันก่อน</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap">
@@ -517,15 +517,15 @@ export default async function UserSalesHistoryEntry({
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
                         {noOrders ? (
-                          <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                          <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-600">
                             ยังไม่มีออเดอร์
                           </span>
                         ) : churnRisk ? (
-                          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700">
+                          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] text-red-700">
                             เสี่ยงเลิกใช้
                           </span>
                         ) : (
-                          <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] text-green-700">
+                          <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
                             ใช้งานอยู่
                           </span>
                         )}

@@ -109,7 +109,7 @@ export default async function AdminWithdrawCommSalePage({
             <p className="text-xs text-muted mt-1">
               ระบบจ่ายค่าคอมยกชุดสำหรับ Sales rep · 1% ของ <code className="bg-surface-alt px-1 rounded">fTotalPriceNetAll</code> หัก WHT 3%
             </p>
-            <p className="text-[10px] text-muted mt-1">
+            <p className="text-[11px] text-muted mt-1">
               📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_withdraw_comm_sale_h</code> + <code className="bg-surface-alt px-1 rounded">_item</code>
               {" "}(legacy 25 batches · 3,204 รายการ) · NEW MVP read-only ตาม brief §2 ·
               ⚠️ สร้าง batch + จ่ายเงิน DEFER ครั้งหน้า (ต้องคุย ก๊อต · money-sensitive)
@@ -139,7 +139,7 @@ export default async function AdminWithdrawCommSalePage({
               !status ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
             }`}
           >
-            ทั้งหมด <span className="ml-1 text-[10px]">({total})</span>
+            ทั้งหมด <span className="ml-1 text-[11px]">({total})</span>
           </Link>
           {(["1", "2", "3"] as const).map((s) => (
             <Link
@@ -149,7 +149,7 @@ export default async function AdminWithdrawCommSalePage({
                 s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
               }`}
             >
-              {STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({result.counts[s] ?? 0})</span>
+              {STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({result.counts[s] ?? 0})</span>
             </Link>
           ))}
         </nav>
@@ -181,7 +181,7 @@ export default async function AdminWithdrawCommSalePage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[800px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">วันที่</th>
@@ -211,7 +211,7 @@ export default async function AdminWithdrawCommSalePage({
                       {showMoney && <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(b.withholding)}</td>}
                       {showMoney && <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(b.amount)}</td>}
                       <td className="px-3 py-2 text-center">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[b.status]}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[b.status]}`}>
                           {STATUS_LABEL[b.status] ?? b.status}
                         </span>
                       </td>
@@ -223,7 +223,7 @@ export default async function AdminWithdrawCommSalePage({
           )}
         </div>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           🔗 sibling: <Link href="/admin/accounting/withdraw/comm-interpreter" className="underline">เบิกค่าคอมล่าม</Link>
           {" · "}
           ค่าคอมต่อรายการ: <Link href="/admin/commissions" className="underline">/admin/commissions</Link>

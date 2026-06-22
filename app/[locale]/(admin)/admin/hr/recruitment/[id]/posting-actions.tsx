@@ -247,12 +247,12 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
       {/* Contact quick links */}
       <div className="flex flex-wrap gap-1">
         {phone && (
-          <a href={`tel:${phone}`} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-1 text-[10px] hover:bg-primary-50 hover:border-primary-200">
+          <a href={`tel:${phone}`} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-1 text-[11px] hover:bg-primary-50 hover:border-primary-200">
             <Phone className="w-3 h-3" /> {phone}
           </a>
         )}
         {email && (
-          <a href={`mailto:${email}`} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-1 text-[10px] hover:bg-primary-50 hover:border-primary-200">
+          <a href={`mailto:${email}`} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-1 text-[11px] hover:bg-primary-50 hover:border-primary-200">
             <Mail className="w-3 h-3" /> ส่งอีเมล
           </a>
         )}
@@ -266,7 +266,7 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
               type="button"
               disabled={pending}
               onClick={() => move(next)}
-              className="inline-flex items-center gap-1 rounded-md bg-primary-500 text-white px-2 py-1 text-[10px] font-semibold hover:bg-primary-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md bg-primary-500 text-white px-2 py-1 text-[11px] font-semibold hover:bg-primary-600 disabled:opacity-50"
               title={`ส่งไปขั้น ${STAGE_LABEL[next]}`}
             >
               <ArrowRight className="w-3 h-3" />
@@ -277,7 +277,7 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
             type="button"
             disabled={pending}
             onClick={() => setScheduleOpen((o) => !o)}
-            className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2 py-1 text-[10px] font-semibold hover:bg-amber-100 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2 py-1 text-[11px] font-semibold hover:bg-amber-100 disabled:opacity-50"
           >
             <CalendarCheck2 className="w-3 h-3" />
             {interviewScheduledAt ? "แก้ไขนัด" : "นัดสัมภาษณ์"}
@@ -287,7 +287,7 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
               type="button"
               disabled={pending}
               onClick={hire}
-              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-1 text-[10px] font-semibold hover:bg-emerald-100 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-1 text-[11px] font-semibold hover:bg-emerald-100 disabled:opacity-50"
             >
               <CheckCheck className="w-3 h-3" />
               รับเข้าทำงาน
@@ -297,7 +297,7 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
             type="button"
             disabled={pending}
             onClick={reject}
-            className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-1 text-[10px] font-semibold hover:bg-red-100 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-1 text-[11px] font-semibold hover:bg-red-100 disabled:opacity-50"
           >
             <XCircle className="w-3 h-3" />
             ปฏิเสธ
@@ -343,7 +343,7 @@ export function ApplicantActions({ applicantId, stage, phone, email, interviewSc
         type="button"
         disabled={pending}
         onClick={remove}
-        className="inline-flex items-center gap-1 rounded-md text-[10px] text-muted hover:text-red-600 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md text-[11px] text-muted hover:text-red-600 disabled:opacity-50"
       >
         <Trash2 className="w-3 h-3" />
         ลบ

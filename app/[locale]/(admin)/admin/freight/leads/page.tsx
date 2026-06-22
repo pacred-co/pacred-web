@@ -134,7 +134,7 @@ export default async function AdminFreightLeadsPage({
             status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({totalAll})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({totalAll})</span>
         </Link>
         {LEAD_STATUSES.map((s) => (
           <Link
@@ -144,7 +144,7 @@ export default async function AdminFreightLeadsPage({
               s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
-            {STATUS_LABEL[s]} <span className="ml-1 text-[10px] opacity-75">({counts[s] ?? 0})</span>
+            {STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s] ?? 0})</span>
           </Link>
         ))}
       </nav>
@@ -197,17 +197,17 @@ export default async function AdminFreightLeadsPage({
                       {r.ref}
                     </Link>
                     {r.contact_pref === "call" && (
-                      <span className="ml-1 text-[10px] text-red-600" title="ลูกค้าขอให้โทรกลับ">⚡โทร</span>
+                      <span className="ml-1 text-[11px] text-red-600" title="ลูกค้าขอให้โทรกลับ">⚡โทร</span>
                     )}
                   </td>
                   <td className="px-3 py-2">
                     <p className="text-sm">{r.contact_name}</p>
-                    <p className="font-mono text-[10px] text-muted">{r.contact_phone}</p>
+                    <p className="font-mono text-[11px] text-muted">{r.contact_phone}</p>
                   </td>
                   <td className="px-3 py-2 text-xs">{routeSummary(r)}</td>
                   <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.est_total_thb)}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_BADGE[(r.status as LeadStatus)] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[(r.status as LeadStatus)] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
                       {STATUS_LABEL[(r.status as LeadStatus)] ?? r.status}
                     </span>
                   </td>

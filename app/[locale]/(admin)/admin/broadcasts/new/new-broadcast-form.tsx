@@ -63,7 +63,7 @@ export function NewBroadcastForm() {
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
             required
           />
-          <span className="text-[10px] text-muted">{title.length} / 400</span>
+          <span className="text-[11px] text-muted">{title.length} / 400</span>
         </Field>
 
         <Field label="ข้อความ / ลิงก์รูปภาพสำหรับ Popup">
@@ -75,7 +75,7 @@ export function NewBroadcastForm() {
             placeholder="ข้อความสั้น หรือ URL รูป https://…/promo.jpg"
             className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
           />
-          <span className="text-[10px] text-muted">
+          <span className="text-[11px] text-muted">
             {content.length} / 100 — ถ้าเป็น URL รูป (.png/.jpg) จะแสดงเป็นรูปใน popup
           </span>
         </Field>

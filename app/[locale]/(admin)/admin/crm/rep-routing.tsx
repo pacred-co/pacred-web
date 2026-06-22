@@ -78,7 +78,7 @@ export function RepRouting({
           <UserCog className="w-3.5 h-3.5" />
           เซลล์ผู้ดูแล: <span className="font-medium text-foreground">{cur?.name ?? currentRepLegacyId ?? "— ยังไม่มี —"}</span>
         </span>
-        <p className="mt-1 text-[10px] text-muted/80">เฉพาะหัวหน้า/ผู้จัดการเปลี่ยนเซลล์ผู้ดูแลได้</p>
+        <p className="mt-1 text-[11px] text-muted/80">เฉพาะหัวหน้า/ผู้จัดการเปลี่ยนเซลล์ผู้ดูแลได้</p>
       </div>
     );
   }

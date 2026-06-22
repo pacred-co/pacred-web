@@ -24,7 +24,7 @@ export function CsvImportRowActions({ id, status }: { id: string; status: string
 
   return (
     <div className="flex flex-col gap-1 min-w-[110px]">
-      {err && <div className="text-[10px] text-red-700">{err}</div>}
+      {err && <div className="text-[11px] text-red-700">{err}</div>}
       <Link
         href={`/admin/csv-imports/${id}`}
         className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-center hover:bg-surface-alt"

@@ -95,7 +95,7 @@ export function UpdateInspectionForm({
           className="w-full rounded-md border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
           placeholder={t("notesPlaceholder")}
         />
-        <p className="mt-1 text-[10px] text-muted">{notes.length}/2000</p>
+        <p className="mt-1 text-[11px] text-muted">{notes.length}/2000</p>
       </div>
 
       <div>
@@ -109,7 +109,7 @@ export function UpdateInspectionForm({
           <span>
             {t("blacklistLabel")}
             {verdict === "fake_product" && (
-              <span className="ml-1 text-[10px] text-red-600">({t("blacklistAutoFake")})</span>
+              <span className="ml-1 text-[11px] text-red-600">({t("blacklistAutoFake")})</span>
             )}
           </span>
         </label>

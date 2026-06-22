@@ -159,7 +159,7 @@ export default async function AdminForwarderNewBulkPage({
           >
             <span aria-hidden>📋</span>
             <span>เพิ่มทีละรายการ</span>
-            <span className="text-[10px] text-muted">(มีอัปโหลดรูป · auto-detect โกดัง)</span>
+            <span className="text-[11px] text-muted">(มีอัปโหลดรูป · auto-detect โกดัง)</span>
           </Link>
           <Link
             href="/admin/forwarders/new-bulk"
@@ -167,7 +167,7 @@ export default async function AdminForwarderNewBulkPage({
           >
             <span aria-hidden>📦</span>
             <span>เพิ่มหลายรายการพร้อมกัน</span>
-            <span className="rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium">ใหม่</span>
+            <span className="rounded-full bg-primary-100 px-1.5 py-0.5 text-[11px] font-medium">ใหม่</span>
           </Link>
         </div>
       </header>

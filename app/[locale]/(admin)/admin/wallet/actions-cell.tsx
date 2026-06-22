@@ -109,12 +109,12 @@ export function WalletTxActions(props: Props) {
           approve/cancel pair (the rich modal is deposit-specific). */}
       {!showReviewModal && status === "pending" && (
         <>
-          {err && <div className="text-[10px] text-red-700">{err}</div>}
+          {err && <div className="text-[11px] text-red-700">{err}</div>}
           <input
             value={rejectNote}
             onChange={(e) => setRejectNote(e.target.value)}
             placeholder="หมายเหตุ (เหตุผลถ้าปฏิเสธ)"
-            className="w-full text-[10px] rounded border border-border px-1 py-0.5"
+            className="w-full text-[11px] rounded border border-border px-1 py-0.5"
           />
           <div className="flex gap-1">
             <Button size="sm" type="button" onClick={() => set("completed")} disabled={pending}>

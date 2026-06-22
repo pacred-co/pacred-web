@@ -84,7 +84,7 @@ export function DeclarationCreateButton({
           <option key={t} value={t}>{CUSTOMS_DECLARATION_TYPE_LABEL[t]}</option>
         ))}
       </select>
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         จะ seed รายการสินค้าจาก commercial invoice ของงานนี้ (ถ้ามี) — แก้ไขได้หลังสร้าง
       </p>
       <div className="flex gap-2">

@@ -54,7 +54,7 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
               <h2 className="font-bold text-lg">{cfg.label}</h2>
               <p className="mt-2 text-sm text-muted">{cfg.description}</p>
             </div>
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 whitespace-nowrap">
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 whitespace-nowrap">
               อยู่ระหว่างจัดเตรียมเนื้อหา
             </span>
           </div>
@@ -145,7 +145,7 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
             </h3>
             <p className="mt-1 text-xs text-muted">{s.desc}</p>
             {s.external && (
-              <p className="mt-2 text-[10px] text-blue-600 font-medium">→ เปิดในโมดูล HR</p>
+              <p className="mt-2 text-[11px] text-blue-600 font-medium">→ เปิดในโมดูล HR</p>
             )}
           </Link>
         ))}

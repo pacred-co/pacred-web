@@ -360,13 +360,13 @@ export default async function SalesByRepReport({
                   <th className="px-4 py-3">เซลล์</th>
                   <th className="px-4 py-3">รหัสแอดมิน</th>
                   <th className="px-4 py-3 text-right">ลูกค้า</th>
-                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
-                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
-                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
-                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
-                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
-                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
-                  <th className="px-4 py-3 text-right">รวมรายได้<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[11px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[11px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[11px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[11px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[11px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[11px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">รวมรายได้<br/><span className="text-[11px] font-normal normal-case">(บาท)</span></th>
                 </tr>
               </thead>
               <tbody>

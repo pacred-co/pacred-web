@@ -244,7 +244,7 @@ export default async function ForwarderNotesPage({
                       <td className="px-4 py-3 text-xs">
                         <div className="font-mono font-semibold">{r.userid}</div>
                         <div className="text-muted">{customerName || "—"}</div>
-                        {u?.userTel && <div className="text-[10px] text-muted">{u.userTel}</div>}
+                        {u?.userTel && <div className="text-[11px] text-muted">{u.userTel}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs">{legacyForwarderStatusThai(r.fstatus)}</td>
                       <td className="px-4 py-3 text-right font-mono text-xs">
@@ -253,20 +253,20 @@ export default async function ForwarderNotesPage({
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs space-y-1">
-                        {r.ftrackingchn && <div className="font-mono text-[10px]">🇨🇳 {r.ftrackingchn}</div>}
-                        {r.ftrackingth &&  <div className="font-mono text-[10px]">🇹🇭 {r.ftrackingth}</div>}
+                        {r.ftrackingchn && <div className="font-mono text-[11px]">🇨🇳 {r.ftrackingchn}</div>}
+                        {r.ftrackingth &&  <div className="font-mono text-[11px]">🇹🇭 {r.ftrackingth}</div>}
                         {!r.ftrackingchn && !r.ftrackingth && <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs max-w-[320px] space-y-1">
                         {r.fnote && r.fnote.trim() && (
                           <div className="rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1">
-                            <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">แอดมิน</span>
+                            <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">แอดมิน</span>
                             <div>📝 {r.fnote}</div>
                           </div>
                         )}
                         {r.fnoteuser && r.fnoteuser.trim() && (
                           <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
-                            <span className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-300">ลูกค้า</span>
+                            <span className="text-[11px] font-semibold text-yellow-700 dark:text-yellow-300">ลูกค้า</span>
                             <div>📝 {r.fnoteuser}</div>
                           </div>
                         )}

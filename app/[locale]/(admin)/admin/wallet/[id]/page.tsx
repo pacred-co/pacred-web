@@ -644,7 +644,7 @@ export default async function AdminWalletDetail({
               ) : row.imagesslip ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปได้</p>
-                  <p className="mt-1 font-mono text-[10px] break-all text-amber-800">
+                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
                     filename = {row.imagesslip}
                   </p>
                 </div>
@@ -671,7 +671,7 @@ export default async function AdminWalletDetail({
               ) : partnerSlipFilename ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้</p>
-                  <p className="mt-1 font-mono text-[10px] break-all text-amber-800">
+                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
                     partner #{partnerTopupId} · filename = {partnerSlipFilename}
                   </p>
                 </div>
@@ -722,7 +722,7 @@ export default async function AdminWalletDetail({
               >
                 <div className="flex items-baseline justify-between">
                   <span className="font-mono text-sm text-red-700">#{s.id}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[s.status ?? "1"]}`}>
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_CLS[s.status ?? "1"]}`}>
                     {STATUS_LABEL[s.status ?? "1"] ?? s.status}
                   </span>
                 </div>
@@ -730,7 +730,7 @@ export default async function AdminWalletDetail({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={s.slipUrl} alt="slip" className="mt-1 max-h-32 w-full object-contain" />
                 ) : (
-                  <p className="mt-1 text-[10px] text-muted italic">ไม่มีสลิป</p>
+                  <p className="mt-1 text-[11px] text-muted italic">ไม่มีสลิป</p>
                 )}
               </Link>
             ))}

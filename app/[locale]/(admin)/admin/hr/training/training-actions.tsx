@@ -200,7 +200,7 @@ export function CourseRowActions({ courseId }: { courseId: string }) {
         type="button"
         onClick={bulkEnroll}
         disabled={pending}
-        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 px-2 py-1 text-[10px] font-bold hover:bg-blue-100 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 px-2 py-1 text-[11px] font-bold hover:bg-blue-100 disabled:opacity-50"
         title="Enroll ทุก active admin"
       >
         {pending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Users2 className="w-3 h-3" />}
@@ -250,7 +250,7 @@ export function EnrollmentRowActions({
         type="button"
         onClick={() => set("enrolled")}
         disabled={pending}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium hover:bg-surface disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium hover:bg-surface disabled:opacity-50"
       >
         Reset
       </button>
@@ -264,7 +264,7 @@ export function EnrollmentRowActions({
           type="button"
           disabled={pending}
           onClick={() => set("in_progress")}
-          className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5 text-[10px] font-bold hover:bg-amber-100 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px] font-bold hover:bg-amber-100 disabled:opacity-50"
         >
           <PlayCircle className="w-3 h-3" /> เริ่มเรียน
         </button>
@@ -273,7 +273,7 @@ export function EnrollmentRowActions({
         type="button"
         disabled={pending}
         onClick={() => set("completed", true)}
-        className="inline-flex items-center gap-1 rounded-md bg-emerald-500 text-white px-2 py-0.5 text-[10px] font-bold hover:bg-emerald-600 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md bg-emerald-500 text-white px-2 py-0.5 text-[11px] font-bold hover:bg-emerald-600 disabled:opacity-50"
       >
         <CheckCircle2 className="w-3 h-3" /> Pass
       </button>
@@ -281,7 +281,7 @@ export function EnrollmentRowActions({
         type="button"
         disabled={pending}
         onClick={() => set("failed", true)}
-        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[10px] font-bold hover:bg-red-100 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-[11px] font-bold hover:bg-red-100 disabled:opacity-50"
       >
         Fail
       </button>
@@ -289,7 +289,7 @@ export function EnrollmentRowActions({
         type="button"
         disabled={pending}
         onClick={() => set("exempted")}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt text-foreground px-2 py-0.5 text-[10px] hover:bg-surface disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-alt text-foreground px-2 py-0.5 text-[11px] hover:bg-surface disabled:opacity-50"
         title="ยกเว้น (ไม่ต้องเรียน)"
       >
         <MinusCircle className="w-3 h-3" /> Exempt
@@ -324,7 +324,7 @@ export function AddEnrollmentInline({ courseId, employees }: { courseId: string;
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 text-primary-700 px-2 py-1 text-[10px] font-bold hover:bg-primary-100"
+        className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 text-primary-700 px-2 py-1 text-[11px] font-bold hover:bg-primary-100"
       >
         <GraduationCap className="w-3 h-3" />
         + Enroll คนเดียว

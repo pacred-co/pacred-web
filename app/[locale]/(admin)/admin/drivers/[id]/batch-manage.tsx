@@ -221,12 +221,12 @@ export function RemoveItemButton({
             else setErr(res.error ?? "ลบไม่สำเร็จ");
           });
         }}
-        className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-600 px-1.5 py-0.5 text-[10px] hover:bg-rose-100 disabled:opacity-60"
+        className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-600 px-1.5 py-0.5 text-[11px] hover:bg-rose-100 disabled:opacity-60"
         title="ลบรายการนี้ออกจากรอบจัดส่ง"
       >
         <Trash2 className="h-3 w-3" /> {pending ? "..." : "ลบออก"}
       </button>
-      {err && <span className="text-[10px] text-rose-700">{err}</span>}
+      {err && <span className="text-[11px] text-rose-700">{err}</span>}
     </span>
   );
 }

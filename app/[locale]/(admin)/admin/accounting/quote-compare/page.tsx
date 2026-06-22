@@ -124,7 +124,7 @@ export default async function AdminQuoteComparePage({
           <p className="text-xs text-muted mt-1">
             เปรียบเทียบกำไรของ Pacred ใน 9 partner carriers · forward-looking · ใช้ pitch ลูกค้า + ตัดสินใจ route
           </p>
-          <p className="text-[10px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1">
             📊 SALE rate จาก <code className="bg-surface-alt px-1 rounded">tb_rate_g_*</code> / <code className="bg-surface-alt px-1 rounded">tb_rate_vip_*</code> / <code className="bg-surface-alt px-1 rounded">tb_rate_custom_*</code> waterfall (resolve-rate.ts)
             · COST จาก <code className="bg-surface-alt px-1 rounded">tb_settings.fcost*</code> 144 cells (forwarder-costs/costs-model.ts)
             · กำไรเฉลี่ย/ตู้ ดูที่ <Link href="/admin/accounting/margin-monitor" className="text-primary-600 underline">Margin Monitor</Link>
@@ -135,21 +135,21 @@ export default async function AdminQuoteComparePage({
         <form method="GET" action="/admin/accounting/quote-compare" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-4">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">โกดังจีน</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">โกดังจีน</span>
               <select name="warehouse" defaultValue={input.warehouse} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
                 <option value="1">1 · กวางโจว</option>
                 <option value="2">2 · อี้อู</option>
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">ขนส่ง</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">ขนส่ง</span>
               <select name="transport" defaultValue={input.transport} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
                 <option value="1">1 · ทางรถ</option>
                 <option value="2">2 · ทางเรือ</option>
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">ประเภทสินค้า</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">ประเภทสินค้า</span>
               <select name="productType" defaultValue={String(input.productType)} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
                 <option value="1">1 · ทั่วไป</option>
                 <option value="2">2 · มอก.</option>
@@ -158,7 +158,7 @@ export default async function AdminQuoteComparePage({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">คิดราคาตาม</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">คิดราคาตาม</span>
               <select name="basis" defaultValue={input.basis} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
                 <option value="cbm">CBM (คิว)</option>
                 <option value="kg">น้ำหนัก (กิโล)</option>
@@ -168,15 +168,15 @@ export default async function AdminQuoteComparePage({
 
           <div className="grid sm:grid-cols-3 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">น้ำหนัก (กก.)</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">น้ำหนัก (กก.)</span>
               <input type="number" step="0.01" name="weight" defaultValue={input.weightKg || ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="0" />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">ปริมาตร (CBM)</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">ปริมาตร (CBM)</span>
               <input type="number" step="0.01" name="volume" defaultValue={input.volumeCbm || ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="0" />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted">รหัสลูกค้า (optional · VIP/SVIP)</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted">รหัสลูกค้า (optional · VIP/SVIP)</span>
               <input type="text" name="userid" defaultValue={input.customerUserid ?? ""} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm font-mono" placeholder="PR1234 (ปล่อยว่าง = general)" />
             </label>
           </div>
@@ -213,7 +213,7 @@ export default async function AdminQuoteComparePage({
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-wider text-muted">ประเภท rate</p>
+                  <p className="text-[11px] uppercase tracking-wider text-muted">ประเภท rate</p>
                   <p className="font-mono text-sm font-medium">
                     {report.saleSource === "general"  && "🟦 General (PCS tiered)"}
                     {report.saleSource === "vip"      && "🟣 VIP (กลุ่ม)"}
@@ -221,7 +221,7 @@ export default async function AdminQuoteComparePage({
                     {report.saleSource === "manual"   && "✏️ Manual override"}
                     {report.saleSource === "missing"  && "🔴 No rate"}
                   </p>
-                  <p className="text-[10px] text-muted mt-1 max-w-xs">{report.saleNote}</p>
+                  <p className="text-[11px] text-muted mt-1 max-w-xs">{report.saleNote}</p>
                 </div>
               </div>
             </section>
@@ -261,7 +261,7 @@ export default async function AdminQuoteComparePage({
               </div>
               <div className="overflow-x-auto scrollbar-x-visible">
                 <table className="w-full min-w-[800px] text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">Carrier</th>
                       <th className="px-3 py-2 text-right">Cost rate</th>
@@ -278,7 +278,7 @@ export default async function AdminQuoteComparePage({
                         <tr key={c.carrierKey || "ctt"} className={`border-t border-border ${c.hasRate ? "hover:bg-surface-alt/30" : "opacity-50"}`}>
                           <td className="px-3 py-2 font-medium">
                             {c.carrierLabel}
-                            {!c.hasRate && <span className="ml-2 text-[10px] text-muted">(no rate)</span>}
+                            {!c.hasRate && <span className="ml-2 text-[11px] text-muted">(no rate)</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-xs">{c.costRate > 0 ? `฿${thb(c.costRate)}` : "—"}</td>
                           <td className="px-3 py-2 text-right font-mono text-xs text-muted">{c.hasRate ? `฿${thb(c.costSubtotal)}` : "—"}</td>
@@ -296,7 +296,7 @@ export default async function AdminQuoteComparePage({
                           </td>
                           <td className="px-3 py-2 text-center">
                             {c.hasRate && (
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] border ${BUCKET_COLOR[c.bucket]}`}>
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] border ${BUCKET_COLOR[c.bucket]}`}>
                                 {BUCKET_LABEL[c.bucket]}
                               </span>
                             )}
@@ -359,9 +359,9 @@ function Stat({
     "border-border bg-white dark:bg-surface";
   return (
     <div className={`rounded-2xl border p-4 shadow-sm ${ringCls}`}>
-      <p className="text-[10px] font-medium text-muted">{label}</p>
+      <p className="text-[11px] font-medium text-muted">{label}</p>
       <p className="mt-1 font-bold font-mono text-foreground text-lg">{value}</p>
-      {sub && <p className="text-[10px] text-muted mt-0.5">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted mt-0.5">{sub}</p>}
     </div>
   );
 }

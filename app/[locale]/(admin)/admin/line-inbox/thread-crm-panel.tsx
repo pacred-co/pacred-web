@@ -164,19 +164,19 @@ export function ThreadCrmPanel({
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-border bg-surface-alt/40 px-2 py-1.5 text-center">
-                <p className="flex items-center justify-center gap-1 text-[10px] text-muted">
+                <p className="flex items-center justify-center gap-1 text-[11px] text-muted">
                   <Wallet className="h-3 w-3" /> วอลเล็ท
                 </p>
                 <p className="mt-0.5 text-sm font-bold text-foreground">฿{baht(snapshot.walletTotal)}</p>
               </div>
               <div className="rounded-lg border border-border bg-surface-alt/40 px-2 py-1.5 text-center">
-                <p className="flex items-center justify-center gap-1 text-[10px] text-muted">
+                <p className="flex items-center justify-center gap-1 text-[11px] text-muted">
                   <Package className="h-3 w-3" /> พัสดุ
                 </p>
                 <p className="mt-0.5 text-sm font-bold text-foreground">{snapshot.forwarderTotal}</p>
               </div>
               <div className="rounded-lg border border-border bg-surface-alt/40 px-2 py-1.5 text-center">
-                <p className="text-[10px] text-muted">กำลังดำเนินการ</p>
+                <p className="text-[11px] text-muted">กำลังดำเนินการ</p>
                 <p className="mt-0.5 text-sm font-bold text-amber-600">{snapshot.forwarderInTransit}</p>
               </div>
             </div>

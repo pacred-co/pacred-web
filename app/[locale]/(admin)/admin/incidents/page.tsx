@@ -174,7 +174,7 @@ export default async function AdminIncidentsPage({
           <h1 className="mt-1 text-2xl font-bold">รายงานสถานะระบบ — Incident triage</h1>
           <p className="mt-1 text-sm text-muted">
             ข้อผิดพลาดที่ระบบเก็บอัตโนมัติ (ไม่มีปุ่มส่ง) จากตาราง{" "}
-            <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">platform_incidents</code>{" "}
+            <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">platform_incidents</code>{" "}
             — กรอง + รับเรื่อง + ปิดงาน
           </p>
         </div>
@@ -206,7 +206,7 @@ export default async function AdminIncidentsPage({
         className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]"
       >
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">สถานะ</span>
+          <span className="text-[11px] text-muted">สถานะ</span>
           <select name="status" defaultValue={statusMode} className={FILTER_INPUT}>
             <option value="live">ยังไม่ปิด (live)</option>
             <option value="all">ทั้งหมด</option>
@@ -216,7 +216,7 @@ export default async function AdminIncidentsPage({
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ความรุนแรง</span>
+          <span className="text-[11px] text-muted">ความรุนแรง</span>
           <select name="severity" defaultValue={sp.severity ?? ""} className={FILTER_INPUT}>
             <option value="">— ทั้งหมด —</option>
             {INCIDENT_SEVERITIES.map((s) => (
@@ -225,7 +225,7 @@ export default async function AdminIncidentsPage({
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">surface</span>
+          <span className="text-[11px] text-muted">surface</span>
           <select name="source" defaultValue={sp.source ?? ""} className={FILTER_INPUT}>
             <option value="">— ทั้งหมด —</option>
             {INCIDENT_SOURCES.map((s) => (
@@ -234,7 +234,7 @@ export default async function AdminIncidentsPage({
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ชนิด</span>
+          <span className="text-[11px] text-muted">ชนิด</span>
           <select name="kind" defaultValue={sp.kind ?? ""} className={FILTER_INPUT}>
             <option value="">— ทั้งหมด —</option>
             {INCIDENT_KINDS.map((k) => (
@@ -243,11 +243,11 @@ export default async function AdminIncidentsPage({
           </select>
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ตั้งแต่ (last seen)</span>
+          <span className="text-[11px] text-muted">ตั้งแต่ (last seen)</span>
           <input type="date" name="from" defaultValue={sp.from ?? ""} className={FILTER_INPUT} />
         </label>
         <label className="space-y-1">
-          <span className="text-[10px] text-muted">ถึง</span>
+          <span className="text-[11px] text-muted">ถึง</span>
           <input type="date" name="to" defaultValue={sp.to ?? ""} className={FILTER_INPUT} />
         </label>
         <div className="flex flex-col gap-1.5 self-end">
@@ -270,7 +270,7 @@ export default async function AdminIncidentsPage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="font-bold text-sm">{rows.length} incident (limit {limit})</h2>
-          <span className="text-[10px] text-muted">last seen ใหม่ → เก่า</span>
+          <span className="text-[11px] text-muted">last seen ใหม่ → เก่า</span>
         </div>
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">
@@ -289,19 +289,19 @@ export default async function AdminIncidentsPage({
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${INCIDENT_SEVERITY_BADGE[r.severity as IncidentSeverity] ?? ""}`}
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${INCIDENT_SEVERITY_BADGE[r.severity as IncidentSeverity] ?? ""}`}
                         >
                           {INCIDENT_SEVERITY_LABEL[r.severity as IncidentSeverity] ?? r.severity}
                         </span>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${INCIDENT_STATUS_BADGE[r.status as IncidentStatus] ?? ""}`}
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${INCIDENT_STATUS_BADGE[r.status as IncidentStatus] ?? ""}`}
                         >
                           {INCIDENT_STATUS_LABEL[r.status as IncidentStatus] ?? r.status}
                         </span>
-                        <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] text-muted">
+                        <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] text-muted">
                           {INCIDENT_SOURCE_LABEL[r.source as IncidentSource] ?? r.source}
                         </span>
-                        <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] text-muted font-mono">
+                        <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] text-muted font-mono">
                           {INCIDENT_KIND_LABEL[r.kind as IncidentKind] ?? r.kind}
                         </span>
                       </div>
@@ -327,26 +327,26 @@ export default async function AdminIncidentsPage({
                       รายละเอียดข้อผิดพลาด
                     </summary>
                     <div className="mt-1.5 space-y-1.5">
-                      <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[10px] whitespace-pre-wrap break-words">
+                      <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap break-words">
                         {r.message}
                       </pre>
                       {r.stack && (
-                        <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[10px] whitespace-pre-wrap break-words max-h-64">
+                        <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap break-words max-h-64">
                           {r.stack}
                         </pre>
                       )}
                       {r.surface_meta && Object.keys(r.surface_meta).length > 0 && (
-                        <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[10px] whitespace-pre-wrap break-words">
+                        <pre className="rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap break-words">
                           {JSON.stringify(r.surface_meta, null, 2)}
                         </pre>
                       )}
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[11px] text-muted">
                         fingerprint <code className="font-mono">{r.fingerprint}</code>
                         {r.actor_role && <> · actor <code className="font-mono">{r.actor_role}</code></>}
                         {r.actor_ref && <> <code className="font-mono">{r.actor_ref}</code></>}
                       </p>
                       {r.resolution_note && (
-                        <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[10px] text-green-800">
+                        <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[11px] text-green-800">
                           บันทึกการแก้ไข: {r.resolution_note}
                         </p>
                       )}
@@ -355,7 +355,7 @@ export default async function AdminIncidentsPage({
                           href={r.sentry_issue_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-block text-[10px] text-primary-600 hover:underline"
+                          className="inline-block text-[11px] text-primary-600 hover:underline"
                         >
                           ↗ เปิดใน Sentry
                         </a>
@@ -363,7 +363,7 @@ export default async function AdminIncidentsPage({
                       {r.work_item_id && (
                         <Link
                           href="/admin/board"
-                          className="block text-[10px] text-primary-600 hover:underline"
+                          className="block text-[11px] text-primary-600 hover:underline"
                         >
                           ↗ มี work item สำหรับงานแก้ไขนี้แล้ว
                         </Link>

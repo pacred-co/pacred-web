@@ -308,7 +308,7 @@ export default async function AdminQaOrderCancellationsPage({
                       </td>
                       <td className="px-3 py-3 text-right text-xs">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             ageDays >= 7
                               ? "bg-red-100 text-red-700 border-red-200"
                               : ageDays >= 3
@@ -328,11 +328,11 @@ export default async function AdminQaOrderCancellationsPage({
                       </td>
                       <td className="px-3 py-3 text-right font-mono text-xs">
                         ฿{Number(r.htotalpriceuser ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                        {r.hrate ? <div className="text-muted text-[10px]">@ {Number(r.hrate).toFixed(2)}</div> : null}
+                        {r.hrate ? <div className="text-muted text-[11px]">@ {Number(r.hrate).toFixed(2)}</div> : null}
                       </td>
                       <td className="px-3 py-3 text-xs">
                         {hasPayment ? (
-                          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700">
+                          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] text-red-700">
                             จ่ายแล้ว · รอคืน
                           </span>
                         ) : (

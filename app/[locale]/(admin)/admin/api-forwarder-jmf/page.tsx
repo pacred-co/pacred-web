@@ -88,7 +88,7 @@ export default async function AdminApiForwarderJmfPage() {
                 รายการที่ JMF ส่งเข้าระบบ พร้อมสถานะ API (ถึงโกดังจีน / ส่งมาไทย / สร้างใหม่). อ่านจาก{" "}
                 <code className="rounded bg-surface-alt px-1">tb_forwarder_jmf_tmp</code>.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
                 ✓ พร้อมใช้ (อ่านอย่างเดียว)
               </span>
             </div>
@@ -106,7 +106,7 @@ export default async function AdminApiForwarderJmfPage() {
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 ยอดค้างชำระ · รอเข้าโกดังจีน · กำลังส่งมาไทย · เข้าโกดัง PR แล้ว.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>
@@ -124,7 +124,7 @@ export default async function AdminApiForwarderJmfPage() {
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 เรียก JMF Auto-API ดึงรายการใหม่. <strong>ต้องการ credentials</strong> + retry design.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 รอ creds จากเจ้าของ
               </span>
             </div>
@@ -142,7 +142,7 @@ export default async function AdminApiForwarderJmfPage() {
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 รายการใบแจ้งหนี้ JMF (รอชำระ / สำเร็จ / ไม่สำเร็จ). เลื่อนไป Phase C.
               </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 Phase C — เลื่อน
               </span>
             </div>

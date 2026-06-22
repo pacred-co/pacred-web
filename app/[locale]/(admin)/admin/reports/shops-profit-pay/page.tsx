@@ -594,7 +594,7 @@ export default async function AdminReportShopsProfitPayPage({
                       ) : (
                         <span>—</span>
                       )}
-                      {r.userid && <div className="font-mono text-[10px] text-muted">{r.userid}</div>}
+                      {r.userid && <div className="font-mono text-[11px] text-muted">{r.userid}</div>}
                     </td>
                     {showMoney && (
                       <td className="px-4 py-3 text-right font-mono text-xs">
@@ -614,7 +614,7 @@ export default async function AdminReportShopsProfitPayPage({
                     )}
                     <td className="px-4 py-3 text-xs">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${
+                        className={`rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap ${
                           ORDER_STATUS_CLS[r.hstatus ?? ""] ?? "bg-gray-50 text-gray-600 border-gray-200"
                         }`}
                       >
@@ -623,11 +623,11 @@ export default async function AdminReportShopsProfitPayPage({
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {r.hshoppay === "1" ? (
-                        <span className="rounded-full border bg-green-50 text-green-700 border-green-200 px-2 py-0.5 text-[10px] whitespace-nowrap">
+                        <span className="rounded-full border bg-green-50 text-green-700 border-green-200 px-2 py-0.5 text-[11px] whitespace-nowrap">
                           เบิกจ่ายแล้ว
                         </span>
                       ) : (
-                        <span className="rounded-full border bg-red-50 text-red-700 border-red-200 px-2 py-0.5 text-[10px] whitespace-nowrap">
+                        <span className="rounded-full border bg-red-50 text-red-700 border-red-200 px-2 py-0.5 text-[11px] whitespace-nowrap">
                           ยังไม่จ่าย
                         </span>
                       )}

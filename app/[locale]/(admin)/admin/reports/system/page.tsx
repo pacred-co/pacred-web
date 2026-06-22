@@ -486,7 +486,7 @@ export default async function ReportSystemPage({
               placeholder="YYYY-MM-DD - YYYY-MM-DD"
               className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             />
-            <p className="mt-1 text-[10px] text-muted">รูปแบบ: <code>2025-12-01 - 2025-12-31</code></p>
+            <p className="mt-1 text-[11px] text-muted">รูปแบบ: <code>2025-12-01 - 2025-12-31</code></p>
           </div>
           <div>
             <label htmlFor="type" className="block text-xs text-muted mb-1">ประเภทอุปกรณ์</label>
@@ -653,8 +653,8 @@ export default async function ReportSystemPage({
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-[10px] font-mono text-muted whitespace-nowrap">{row.session_id ?? "—"}</td>
-                    <td className="px-3 py-2 text-[10px] text-muted max-w-md truncate" title={row.user_agent ?? ""}>
+                    <td className="px-3 py-2 text-[11px] font-mono text-muted whitespace-nowrap">{row.session_id ?? "—"}</td>
+                    <td className="px-3 py-2 text-[11px] text-muted max-w-md truncate" title={row.user_agent ?? ""}>
                       {row.user_agent ?? "—"}
                     </td>
                   </tr>
@@ -760,7 +760,7 @@ function GroupByToggle({
   const cur = defaultValue ?? "all";
   return (
     <div className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2">
-      <label htmlFor={name} className="block text-[10px] uppercase tracking-wide text-muted mb-1">
+      <label htmlFor={name} className="block text-[11px] uppercase tracking-wide text-muted mb-1">
         {label}
       </label>
       <select

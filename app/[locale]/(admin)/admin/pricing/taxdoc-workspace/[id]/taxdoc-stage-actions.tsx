@@ -98,7 +98,7 @@ export function TaxdocStageActions({
                   <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px]">{meta.num}</span>
                   {meta.label}
                 </p>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusCls(status)}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusCls(status)}`}>
                   {statusLabel(status)}
                 </span>
               </div>
@@ -134,7 +134,7 @@ export function TaxdocStageActions({
                     )}
                   </>
                 ) : (
-                  <span className="text-[10px] text-muted">อ่านอย่างเดียว (ไม่มีสิทธิ์บทบาทนี้)</span>
+                  <span className="text-[11px] text-muted">อ่านอย่างเดียว (ไม่มีสิทธิ์บทบาทนี้)</span>
                 )}
               </div>
             </div>

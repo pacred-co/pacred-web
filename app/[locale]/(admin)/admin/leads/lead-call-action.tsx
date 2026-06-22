@@ -116,7 +116,7 @@ export function LeadCallAction({ userid }: { userid: string }) {
             placeholder="โน้ต (ถ้ามี)"
             className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
           />
-          <label className="flex items-center gap-1.5 text-[10px] text-muted">
+          <label className="flex items-center gap-1.5 text-[11px] text-muted">
             <input
               type="checkbox"
               checked={bypassCs}
@@ -124,11 +124,11 @@ export function LeadCallAction({ userid }: { userid: string }) {
             />
             ปิดการขาย: งานเคลียร์/แอร์ (ข้าม CS)
           </label>
-          {err && <div className="text-[10px] text-red-700">{err}</div>}
+          {err && <div className="text-[11px] text-red-700">{err}</div>}
           <button
             type="button"
             onClick={() => { setOpen(false); setErr(null); }}
-            className="text-[10px] text-muted hover:underline"
+            className="text-[11px] text-muted hover:underline"
           >
             ยกเลิก
           </button>

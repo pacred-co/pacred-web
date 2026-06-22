@@ -144,17 +144,17 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${cfg.cls}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${cfg.cls}`}>
                     <cfg.Icon className="w-3 h-3" />
                     {cfg.label}
                   </span>
-                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium">
+                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[11px] font-medium">
                     {postCompanyLabel(posting.companytype)}
                   </span>
-                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium">
+                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[11px] font-medium">
                     {postAdminTypeLabel(posting.admintype)}
                   </span>
-                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-bold">
+                  <span className="rounded-full border border-white/30 bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[11px] font-bold">
                     รับ {posting.amount} อัตรา
                   </span>
                 </div>
@@ -233,7 +233,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
               <div className="flex items-center gap-2">
                 <span className={`inline-block w-2 h-2 rounded-full ${info.bar}`} />
                 <h2 className="font-bold text-sm">{info.label}</h2>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${info.cls}`}>{arr.length}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${info.cls}`}>{arr.length}</span>
               </div>
             </header>
 

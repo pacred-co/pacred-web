@@ -390,7 +390,7 @@ export default async function AdminDriversPage({
                         <span className="font-mono text-[11px] text-muted">{g.driverId}</span>
                       )}
                       {g.hasExpired && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
                           <AlertCircle className="h-3 w-3" /> มีงานเลยเวลา
                         </span>
                       )}
@@ -474,7 +474,7 @@ export default async function AdminDriversPage({
                           <td className="px-3 py-3 text-xs text-muted">{r.fdadmincreator ?? "—"}</td>
                           <td className="px-3 py-3 text-xs text-right">
                             <div className="font-medium">{agg.doneCount} / {agg.itemCount}</div>
-                            <div className="text-[10px] text-muted">ส่งแล้ว</div>
+                            <div className="text-[11px] text-muted">ส่งแล้ว</div>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap">
                             <span
@@ -503,7 +503,7 @@ export default async function AdminDriversPage({
         params={{ status: sp.status, range: sp.range }}
       />
 
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code>{" "}
         + <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code>{" "}
         — ทั้งหมด {(tallyData ?? []).length} รอบในช่วง {range === "all" ? "ทั้งหมด" : "90 วัน"}

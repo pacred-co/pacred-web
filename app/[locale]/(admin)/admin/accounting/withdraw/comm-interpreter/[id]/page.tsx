@@ -105,7 +105,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
             <div className="mt-4 text-xs">
               <p className="text-muted">สลิปจ่ายเงิน</p>
               <p className="mt-1 font-mono break-all">{header.imagesslip}</p>
-              <p className="text-[10px] text-muted mt-1">⚠️ Slip download เร็วๆ นี้</p>
+              <p className="text-[11px] text-muted mt-1">⚠️ Slip download เร็วๆ นี้</p>
             </div>
           )}
         </section>
@@ -124,7 +124,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
               <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">hno</th>
                     <th className="px-3 py-2">วันที่สั่งจ่าย</th>
@@ -152,7 +152,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
                         </td>
                       )}
                       <td className="px-3 py-2">
-                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                           {it.order?.hstatus ?? "—"}
                         </span>
                       </td>
@@ -164,7 +164,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
           )}
         </section>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           📌 MVP read-only · CREATE + PAY DEFERRED — ต้อง ก๊อต co-sign + ดู legacy
           <code className="bg-surface-alt px-1 rounded ml-1">withdraw-commission-interpreter.php</code> ก่อน
         </p>

@@ -94,7 +94,7 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
             ฿{THB(Number(tx.amount))}
           </span>
           {tx.slip_transferred_at && (
-            <span className="text-[10px] text-muted">
+            <span className="text-[11px] text-muted">
               slip: {new Date(tx.slip_transferred_at).toLocaleDateString("th-TH")}
             </span>
           )}
@@ -104,7 +104,7 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
       {/* Candidates picker */}
       {hasCandidates ? (
         <div className="space-y-1 rounded-lg border border-border bg-surface-alt p-2">
-          <p className="text-[10px] text-muted">เลือกใบที่จะจับคู่:</p>
+          <p className="text-[11px] text-muted">เลือกใบที่จะจับคู่:</p>
           {item.candidates.map((c) => (
             <label key={c.forwarder_id} className="flex items-center gap-2 text-[11px] cursor-pointer">
               <input
@@ -124,11 +124,11 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
               </Link>
               <span className="font-mono">฿{THB(c.total_price)}</span>
               {c.is_exact ? (
-                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] text-green-700">
+                <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] text-green-700">
                   ยอดตรง
                 </span>
               ) : (
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700">
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-700">
                   diff ฿{THB(c.amount_diff)}
                 </span>
               )}
@@ -139,8 +139,8 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
         <p className="text-[11px] text-muted italic">ลูกค้าไม่มีใบ pending_payment — slip นี้ลอย</p>
       )}
 
-      {msg && <div className="rounded border border-green-200 bg-green-50 p-1.5 text-[10px] text-green-700">{msg}</div>}
-      {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[10px] text-red-700">{err}</div>}
+      {msg && <div className="rounded border border-green-200 bg-green-50 p-1.5 text-[11px] text-green-700">{msg}</div>}
+      {err && <div className="rounded border border-red-200 bg-red-50 p-1.5 text-[11px] text-red-700">{err}</div>}
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
@@ -149,7 +149,7 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
             type="button"
             onClick={doManualMatch}
             disabled={pending || !picked}
-            className="rounded-lg bg-primary-600 text-white px-2.5 py-1 text-[10px] font-medium hover:bg-primary-700 disabled:opacity-50"
+            className="rounded-lg bg-primary-600 text-white px-2.5 py-1 text-[11px] font-medium hover:bg-primary-700 disabled:opacity-50"
           >
             {pending ? "กำลัง..." : "✓ จับคู่"}
           </button>
@@ -158,13 +158,13 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
           type="button"
           onClick={doMarkUnmatched}
           disabled={pending}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-[10px] hover:bg-surface-alt disabled:opacity-50"
+          className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt disabled:opacity-50"
         >
           ไม่จับคู่ →
         </button>
         <Link
           href={`/admin/wallet/${tx.id}`}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-[10px] hover:bg-surface-alt"
+          className="rounded-lg border border-border bg-white px-2.5 py-1 text-[11px] hover:bg-surface-alt"
         >
           ตรวจ slip →
         </Link>

@@ -259,7 +259,7 @@ export default async function AdminAccountingFreightHubPage() {
               <div className="flex items-start justify-between gap-2">
                 <h3 className="font-semibold text-foreground">{card.title}</h3>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase border ${
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium uppercase border ${
                     card.badge === "live"
                       ? "bg-green-50 text-green-700 border-green-200"
                       : "bg-indigo-50 text-indigo-700 border-indigo-200"

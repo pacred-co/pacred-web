@@ -244,17 +244,17 @@ export function TransferBulkForm({ customers, reps }: { customers: Customer[]; r
                     <td className="px-3 py-2 font-mono text-xs">{c.member_code ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">
                       <div className="font-medium">{c.name}</div>
-                      <div className="text-muted text-[10px]">{c.account_type === "juristic" ? "นิติบุคคล" : "บุคคล"}</div>
+                      <div className="text-muted text-[11px]">{c.account_type === "juristic" ? "นิติบุคคล" : "บุคคล"}</div>
                     </td>
                     <td className="px-3 py-2 text-xs">{c.phone ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">
-                      <span className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 text-[10px]">{c.customer_group}</span>
+                      <span className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 text-[11px]">{c.customer_group}</span>
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {c.current_rep ? (
                         <div>
                           <div className="font-medium">{c.current_rep.display_name}</div>
-                          {c.current_rep.member_code && <div className="font-mono text-muted text-[10px]">{c.current_rep.member_code}</div>}
+                          {c.current_rep.member_code && <div className="font-mono text-muted text-[11px]">{c.current_rep.member_code}</div>}
                         </div>
                       ) : (
                         <span className="text-muted italic">ไม่มี</span>
@@ -309,7 +309,7 @@ export function TransferBulkForm({ customers, reps }: { customers: Customer[]; r
             maxLength={500}
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
           />
-          <p className="text-[10px] text-muted">บันทึกเข้า audit log + แสดงในแจ้งเตือนให้พนักงานขายต้นทาง/ปลายทาง · 3-500 ตัวอักษร</p>
+          <p className="text-[11px] text-muted">บันทึกเข้า audit log + แสดงในแจ้งเตือนให้พนักงานขายต้นทาง/ปลายทาง · 3-500 ตัวอักษร</p>
         </div>
         <div className="flex items-center justify-end">
           <button

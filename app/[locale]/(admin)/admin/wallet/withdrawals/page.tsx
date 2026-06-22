@@ -294,7 +294,7 @@ export default async function AdminWithdrawalsQueuePage({
                         </td>
                         <td className="px-3 py-3">
                           <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                               STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
                             }`}
                           >

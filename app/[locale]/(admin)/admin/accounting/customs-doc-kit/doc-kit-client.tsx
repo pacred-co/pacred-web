@@ -317,7 +317,7 @@ function LetterGenerator({ initialShipmentId }: { initialShipmentId?: string }) 
               <option key={t.type} value={t.type}>{t.titleTh}</option>
             ))}
           </select>
-          {meta && <p className="text-[10px] text-muted mt-0.5">{meta.descTh}</p>}
+          {meta && <p className="text-[11px] text-muted mt-0.5">{meta.descTh}</p>}
         </div>
         <div>
           <label className={labelCls}>วันที่ในเอกสาร</label>

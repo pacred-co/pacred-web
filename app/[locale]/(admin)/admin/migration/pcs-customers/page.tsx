@@ -111,7 +111,7 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
                          "border-border bg-surface";
   return (
     <div className={`rounded-lg border px-3 py-2 ${klass}`}>
-      <p className="text-[10px] uppercase tracking-wider font-semibold opacity-70">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider font-semibold opacity-70">{label}</p>
       <p className="mt-0.5 text-lg font-bold tabular-nums">{value}</p>
     </div>
   );

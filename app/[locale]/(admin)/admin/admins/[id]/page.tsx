@@ -387,7 +387,7 @@ export default async function AdminProfilePage({
             <span className="font-mono font-medium">{p.member_code ?? "(no member_code)"}</span>
             {x?.legacy_admin_id && (
               <span
-                className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-medium"
+                className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[11px] font-medium"
                 title="PCS adminID เดิม (legacy bridge)"
               >
                 legacy: {x.legacy_admin_id}
@@ -395,27 +395,27 @@ export default async function AdminProfilePage({
             )}
             {/* Status pill — precedence: ended > suspended > inactive > active */}
             {isEnded && (
-              <span className="rounded-full bg-red-500 text-white px-2.5 py-0.5 text-[10px] font-medium">
+              <span className="rounded-full bg-red-500 text-white px-2.5 py-0.5 text-[11px] font-medium">
                 ลาออกแล้ว
               </span>
             )}
             {!isEnded && isSuspended && (
-              <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-medium">
+              <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[11px] font-medium">
                 พักงานชั่วคราว
               </span>
             )}
             {!isEnded && !isSuspended && !hasActiveGrant && (
-              <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-[10px] font-medium">
+              <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium">
                 ปิดสิทธิ์ทั้งหมด
               </span>
             )}
             {!isEnded && !isSuspended && hasActiveGrant && (
-              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-medium">
+              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium">
                 ทำงานอยู่
               </span>
             )}
             {p.is_active === false && (
-              <span className="rounded-full bg-slate-500 text-white px-2.5 py-0.5 text-[10px] font-medium">
+              <span className="rounded-full bg-slate-500 text-white px-2.5 py-0.5 text-[11px] font-medium">
                 profile inactive
               </span>
             )}
@@ -530,7 +530,7 @@ export default async function AdminProfilePage({
           </div>
           <div className="space-y-1">
             <KV label="member_code"   value={p.member_code ?? "-"} mono />
-            <KV label="profile UUID"  value={<span className="text-[10px] break-all">{p.id}</span>} mono />
+            <KV label="profile UUID"  value={<span className="text-[11px] break-all">{p.id}</span>} mono />
             <KV label="วันที่สร้างบัญชี" value={DateThai2(p.created_at)} />
             <KV label="ล็อกอินล่าสุด"     value={DateThai2(p.last_login_at)} />
             <KV label="สถานะ profile"    value={p.is_active === false ? "ปิด" : "เปิด"} />
@@ -638,13 +638,13 @@ export default async function AdminProfilePage({
                   <Td>
                     <div className="flex items-center gap-1.5">
                       <Pill label={r.label} color={r.color} />
-                      <span className="font-mono text-[10px] text-muted">{g.role}</span>
+                      <span className="font-mono text-[11px] text-muted">{g.role}</span>
                     </div>
                   </Td>
                   <Td>
                     {g.is_active
-                      ? <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">active</span>
-                      : <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[10px]">inactive</span>}
+                      ? <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px]">active</span>
+                      : <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[11px]">inactive</span>}
                   </Td>
                   <Td>{DateThai2(g.granted_at)}</Td>
                   <Td>
@@ -655,11 +655,11 @@ export default async function AdminProfilePage({
                           className="text-primary-600 hover:underline"
                         >
                           {granter.name}
-                          {granter.member_code && <span className="text-muted text-[10px] ml-1">({granter.member_code})</span>}
+                          {granter.member_code && <span className="text-muted text-[11px] ml-1">({granter.member_code})</span>}
                         </Link>
                       )
                       : (g.granted_by
-                          ? <span className="font-mono text-[10px] text-muted" title={g.granted_by}>{g.granted_by.slice(0, 8)}…</span>
+                          ? <span className="font-mono text-[11px] text-muted" title={g.granted_by}>{g.granted_by.slice(0, 8)}…</span>
                           : <span className="text-muted">-</span>)}
                   </Td>
                 </tr>
@@ -737,7 +737,7 @@ function Table({ children }: { children: React.ReactNode }) {
 }
 function Th({ children }: { children?: React.ReactNode }) {
   return (
-    <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted bg-surface-alt/50 text-left whitespace-nowrap">
+    <th className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted bg-surface-alt/50 text-left whitespace-nowrap">
       {children}
     </th>
   );

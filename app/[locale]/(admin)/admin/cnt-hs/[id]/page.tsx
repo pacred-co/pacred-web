@@ -323,7 +323,7 @@ export default async function CntHsDetailPage({
               ) : (
                 <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์สลิปได้</p>
               )}
-              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntImagesSlip}</p>
+              <p className="text-[11px] text-muted mt-2 break-all">{cnt.cntImagesSlip}</p>
             </div>
           )}
           {cnt.cntFile && (
@@ -341,7 +341,7 @@ export default async function CntHsDetailPage({
               ) : (
                 <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์เอกสารได้</p>
               )}
-              <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntFile}</p>
+              <p className="text-[11px] text-muted mt-2 break-all">{cnt.cntFile}</p>
             </div>
           )}
         </div>
@@ -388,7 +388,7 @@ export default async function CntHsDetailPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
+              <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">เลขตู้</th>
                   <th className="px-3 py-2 text-right">จำนวน forwarder</th>
@@ -456,7 +456,7 @@ export default async function CntHsDetailPage({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
+              <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">วันที่</th>
                   <th className="px-3 py-2 text-left">F-no</th>
@@ -494,7 +494,7 @@ export default async function CntHsDetailPage({
                       <td className="px-3 py-2">
                         {f.fstatus ? (
                           <span
-                            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.chip}`}
+                            className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.chip}`}
                           >
                             {badge.label}
                           </span>

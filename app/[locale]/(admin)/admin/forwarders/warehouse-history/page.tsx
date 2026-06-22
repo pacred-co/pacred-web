@@ -99,8 +99,8 @@ function nameProductsType(t: string | null): string {
 /** Legacy `nameTransportType2($int)` — function.php L660-668.
  *  Returns a Tailwind <span> pill. */
 function NameTransportType2({ t }: { t: string | null }) {
-  if (t === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">🚛 ทางรถ</span>;
-  if (t === "2") return <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-medium">🚢 ทางเรือ</span>;
+  if (t === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">🚛 ทางรถ</span>;
+  if (t === "2") return <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px] font-medium">🚢 ทางเรือ</span>;
   return <span className="text-muted text-xs">—</span>;
 }
 
@@ -130,8 +130,8 @@ function StatusForwarderAll({ s }: { s: string | null }) {
 
 /** Legacy `badgeNameWarehouseChina($int)` — function.php L1052-1059 */
 function BadgeNameWarehouseChina({ w }: { w: string | null }) {
-  if (w === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">กวางโจว</span>;
-  if (w === "2") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">อี้อู</span>;
+  if (w === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">กวางโจว</span>;
+  if (w === "2") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">อี้อู</span>;
   return null;
 }
 
@@ -142,7 +142,7 @@ function BadgeNameWarehouseChina({ w }: { w: string | null }) {
 function BadgeVIP2({ coid }: { coid: string | null }) {
   if (isGeneralCoid(coid)) return null;
   return (
-    <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+    <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-bold uppercase">
       {coid}
     </span>
   );
@@ -687,7 +687,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
           action="/admin/forwarders/warehouse-history"
         >
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+            <span className="text-[11px] uppercase tracking-wide text-muted">ตั้งแต่</span>
             <input
               type="date"
               name="date_from"
@@ -696,7 +696,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+            <span className="text-[11px] uppercase tracking-wide text-muted">ถึง</span>
             <input
               type="date"
               name="date_to"
@@ -822,7 +822,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           <td className="px-3 py-2 text-center text-muted">—</td>
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <div>{scanDate}</div>
-                            <div className="text-[10px] text-muted">{scanTime} น.</div>
+                            <div className="text-[11px] text-muted">{scanTime} น.</div>
                           </td>
                           <td className="px-3 py-2">
                             <span className="font-mono text-[11px] break-all">{row.keysearch}</span>
@@ -882,20 +882,20 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           {/* 2 — วันที่บันทึก + print badges */}
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <div>{scanDate}</div>
-                            <div className="text-[10px] text-muted">{scanTime} น.</div>
+                            <div className="text-[11px] text-muted">{scanTime} น.</div>
                             <div className="mt-1 flex flex-col gap-0.5 items-center">
                               {row.f_printstatus1 === "1" && (
-                                <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[11px] font-medium">
                                   พิมพ์แล้ว #1
                                 </span>
                               )}
                               {row.f_printstatus2 === "1" && (
-                                <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[11px] font-medium">
                                   พิมพ์แล้ว #2
                                 </span>
                               )}
                               {row.f_printstatus3 === "1" && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[11px] font-medium">
                                   พิมพ์แล้ว #3
                                 </span>
                               )}
@@ -928,7 +928,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                               กล่อง : {row.fi2amount}/{row.f_famount ?? 0}
                             </div>
                             {hasDupes && (
-                              <div className="mt-1 rounded bg-red-600 text-white px-2 py-1 text-[10px]">
+                              <div className="mt-1 rounded bg-red-600 text-white px-2 py-1 text-[11px]">
                                 มีรายการซ้ำ:{" "}
                                 {dupeIds.map((dupId, idx) => (
                                   <Link
@@ -976,18 +976,18 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {row.f_adminidcreator && row.f_adminidcreator !== "" && (!row.f_reforder || row.f_reforder === "") && (
-                                    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-medium">
                                       ฝากนำเข้า: {row.f_adminidcreator}
                                     </span>
                                   )}
                                   {(!row.f_adminidcreator || row.f_adminidcreator === "") && (!row.f_reforder || row.f_reforder === "") && (
-                                    <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                    <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[11px] font-medium">
                                       ฝากนำเข้าจาก: users
                                     </span>
                                   )}
                                   {row.f_reforder && row.f_reforder !== "" && (
                                     <Link href={`/admin/shops/detail/${row.f_reforder}`}>
-                                      <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[9px] font-medium hover:bg-sky-200">
+                                      <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[11px] font-medium hover:bg-sky-200">
                                         ฝากสั่งซื้อ: {row.f_reforder}
                                       </span>
                                     </Link>
@@ -1008,7 +1008,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                               <div className="text-[11px] text-muted">{volumeTotal} CBM</div>
                             )}
                             {row.f_adminidkey && (
-                              <div className="text-[10px] text-muted mt-0.5" title="admin ที่วัดขนาด">
+                              <div className="text-[11px] text-muted mt-0.5" title="admin ที่วัดขนาด">
                                 @{row.f_adminidkey}
                               </div>
                             )}
@@ -1016,7 +1016,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           {/* 7 — เลขพัสดุ (จีน) + ตู้ + transport */}
                           <td className="px-3 py-2">
                             {row.f_ftrackingchn && (
-                              <div className="bg-rose-600 text-white px-2 py-0.5 rounded font-mono text-[10px] break-all mb-1">
+                              <div className="bg-rose-600 text-white px-2 py-0.5 rounded font-mono text-[11px] break-all mb-1">
                                 {row.f_ftrackingchn}
                               </div>
                             )}
@@ -1035,12 +1035,12 @@ export default async function AdminForwardersWarehouseHistoryPage({
                               <BadgeNameWarehouseChina w={row.f_fwarehousechina} />
                             </div>
                             {containerCloseDDMMYYYY && (
-                              <div className="text-[10px] text-muted mt-0.5">
+                              <div className="text-[11px] text-muted mt-0.5">
                                 ปิดตู้: {containerCloseDDMMYYYY}
                               </div>
                             )}
                             {row.f_fidorco && (
-                              <div className="bg-rose-600 text-white px-1.5 py-0.5 rounded font-mono text-[10px] inline-block mt-1">
+                              <div className="bg-rose-600 text-white px-1.5 py-0.5 rounded font-mono text-[11px] inline-block mt-1">
                                 {row.f_fidorco}
                               </div>
                             )}
@@ -1051,9 +1051,9 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           </td>
                           {/* 9 — อัปเดต — admin who scanned + date arrived in China */}
                           <td className="px-3 py-2 text-center whitespace-nowrap">
-                            <div className="text-[10px] text-muted">วันที่ถึงจีน</div>
+                            <div className="text-[11px] text-muted">วันที่ถึงจีน</div>
                             <div className="text-[11px]">{row.f_fdatestatus2?.slice(0, 10) ?? "—"}</div>
-                            <div className="text-[10px] text-muted mt-1">@{row.adminid}</div>
+                            <div className="text-[11px] text-muted mt-1">@{row.adminid}</div>
                           </td>
                           {/* 10 — ตัวเลือก */}
                           <td className="px-3 py-2 text-center">

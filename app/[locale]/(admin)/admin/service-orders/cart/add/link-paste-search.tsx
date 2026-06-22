@@ -476,14 +476,14 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                 {product.title}
               </a>
               <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
-                <span className="inline-block rounded-full bg-white border border-border px-2 py-0.5 font-mono text-[10px] uppercase">
+                <span className="inline-block rounded-full bg-white border border-border px-2 py-0.5 font-mono text-[11px] uppercase">
                   {product.provider}
                 </span>
                 {product.shopName && (
                   <span className="text-xs">ร้าน: <strong>{product.shopName}</strong></span>
                 )}
                 {product.productId && (
-                  <span className="text-[10px] font-mono text-muted">#{product.productId}</span>
+                  <span className="text-[11px] font-mono text-muted">#{product.productId}</span>
                 )}
               </div>
               <div className="text-lg font-mono font-semibold text-red-700">
@@ -494,7 +494,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                   </span>
                 )}
                 <span className="ml-2 text-xs text-muted font-normal">
-                  ≈ ฿{previewThb} <span className="text-[10px]">(เรท {rsDefault.toFixed(2)})</span>
+                  ≈ ฿{previewThb} <span className="text-[11px]">(เรท {rsDefault.toFixed(2)})</span>
                 </span>
               </div>
               {effectiveStock != null && (
@@ -514,11 +514,11 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
           {isMultiPickMode && product.skuMap && (
             <div className="space-y-2 border-t border-emerald-200 pt-3">
               <p className="text-xs font-medium text-muted">
-                เลือกตัวเลือกสินค้า + จำนวน <span className="text-[10px]">({product.skuMap.length} ตัวเลือก · เลือกได้หลายอันพร้อมกัน)</span>
+                เลือกตัวเลือกสินค้า + จำนวน <span className="text-[11px]">({product.skuMap.length} ตัวเลือก · เลือกได้หลายอันพร้อมกัน)</span>
               </p>
               <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-emerald-200 bg-white">
                 <table className="w-full text-xs">
-                  <thead className="bg-emerald-50/60 text-[10px] uppercase tracking-wide text-emerald-800">
+                  <thead className="bg-emerald-50/60 text-[11px] uppercase tracking-wide text-emerald-800">
                     <tr>
                       <th className="px-2 py-2 text-left">ตัวเลือก</th>
                       <th className="px-2 py-2 text-right whitespace-nowrap">ราคา ¥</th>
@@ -613,7 +613,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                       {selectedLabel && (
                         <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
                       )}
-                      <span className="ml-1.5 text-[10px]">({axis.values.length} ตัวเลือก)</span>
+                      <span className="ml-1.5 text-[11px]">({axis.values.length} ตัวเลือก)</span>
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {axis.values.map((v) => {

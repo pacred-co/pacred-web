@@ -194,7 +194,7 @@ export default async function RecentlyActiveCustomersPage({
       {/* Table */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+          <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">ลูกค้า</th>
               <th className="px-3 py-2.5">เบอร์</th>
@@ -225,7 +225,7 @@ export default async function RecentlyActiveCustomersPage({
                       >
                         {name}
                       </Link>
-                      <div className="text-[10px] text-muted font-mono">
+                      <div className="text-[11px] text-muted font-mono">
                         {r.userID} · {isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </div>
                     </td>
@@ -234,22 +234,22 @@ export default async function RecentlyActiveCustomersPage({
                     <td className="px-3 py-2 text-muted">{dateOnly(r.userRegistered)}</td>
                     <td className="px-3 py-2">
                       {r.userLastLogin ? (
-                        <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[11px]">
                           {dateOnly(r.userLastLogin)}
                         </span>
                       ) : (
-                        <span className="text-muted text-[10px]">— ยังไม่เคย login —</span>
+                        <span className="text-muted text-[11px]">— ยังไม่เคย login —</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {days === null ? (
                         <span className="text-muted">—</span>
                       ) : days > 90 ? (
-                        <span className="rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 text-[11px]">
                           {days} วัน
                         </span>
                       ) : days > 30 ? (
-                        <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px]">
+                        <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[11px]">
                           {days} วัน
                         </span>
                       ) : (

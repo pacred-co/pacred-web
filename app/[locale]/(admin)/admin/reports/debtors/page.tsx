@@ -182,8 +182,8 @@ export default async function DebtorsReport({
                     <tr key={w.userid} className="border-t border-border">
                       <td className="px-4 py-3 text-xs">
                         <p>{customerName || "—"}</p>
-                        <p className="font-mono text-[10px] text-muted">{w.userid}</p>
-                        {u?.userTel && <p className="text-[10px] text-muted">☎ {u.userTel}</p>}
+                        <p className="font-mono text-[11px] text-muted">{w.userid}</p>
+                        {u?.userTel && <p className="text-[11px] text-muted">☎ {u.userTel}</p>}
                       </td>
                       <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${Number(w.wallettotal) < 0 ? "text-red-700" : "text-muted"}`}>
                         {thb(Number(w.wallettotal))}

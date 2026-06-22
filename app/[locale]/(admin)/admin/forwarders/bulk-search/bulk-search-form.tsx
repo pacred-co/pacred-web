@@ -67,7 +67,7 @@ export function BulkSearchForm() {
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             required
           />
-          <span className="text-[10px] text-muted">
+          <span className="text-[11px] text-muted">
             แยกด้วย newline / comma / space ก็ได้ — ระบบจะ dedup ให้
           </span>
         </label>
@@ -129,7 +129,7 @@ export function BulkSearchForm() {
                           <td className="px-4 py-3 text-xs">
                             {FOUND_IN_LABEL[m.found_in]}
                             {m.item_name && (
-                              <div className="text-[10px] text-muted">{m.item_name}</div>
+                              <div className="text-[11px] text-muted">{m.item_name}</div>
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs font-mono">{m.f_no}</td>
@@ -145,7 +145,7 @@ export function BulkSearchForm() {
                           <td className="px-4 py-3">
                             <Link
                               href={`/admin/forwarders/${m.f_no}`}
-                              className="rounded-lg border border-border px-2 py-1 text-[10px] hover:bg-surface-alt"
+                              className="rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-surface-alt"
                             >
                               ดู →
                             </Link>

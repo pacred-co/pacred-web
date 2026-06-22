@@ -207,7 +207,7 @@ function EtdEtaCell({
           className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : "bg-gray-400"}`}
         />
         <span className={isTaem ? "text-foreground" : "text-muted"}>{v}</span>
-        {momoDiffers && <span className="text-[9px] text-amber-600" aria-hidden>≠MOMO</span>}
+        {momoDiffers && <span className="text-[11px] text-amber-600" aria-hidden>≠MOMO</span>}
       </span>
     </td>
   );
@@ -460,7 +460,7 @@ export function CntListTable({
     <>
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {canSelect && (
                 <th className="px-2 py-2 text-center w-8">
@@ -560,7 +560,7 @@ export function CntListTable({
                           aria-label={`เลือกตู้ ${r.fcabinetnumber}`}
                         />
                       ) : (
-                        <span className="text-[9px] text-muted" title="ตู้นี้จ่ายแล้ว · เลือกไม่ได้">—</span>
+                        <span className="text-[11px] text-muted" title="ตู้นี้จ่ายแล้ว · เลือกไม่ได้">—</span>
                       )}
                     </td>
                   )}
@@ -591,7 +591,7 @@ export function CntListTable({
                           >
                             {momo.realContainer}
                           </Link>
-                          <span className="text-[9px] text-muted">MOMO {r.fcabinetnumber}</span>
+                          <span className="text-[11px] text-muted">MOMO {r.fcabinetnumber}</span>
                         </span>
                       ) : isPlaceholder && momo?.sackNo ? (
                         <span className="flex flex-col leading-tight">
@@ -602,7 +602,7 @@ export function CntListTable({
                           >
                             {momo.sackNo}
                           </Link>
-                          <span className="text-[9px] text-amber-600">เลขกระสอบ · เลขตู้จริงรอจากแต้ม</span>
+                          <span className="text-[11px] text-amber-600">เลขกระสอบ · เลขตู้จริงรอจากแต้ม</span>
                         </span>
                       ) : (
                         <Link
@@ -657,17 +657,17 @@ export function CntListTable({
                       stays in the tooltip for reference. */}
                   <td className="px-2 py-2 text-center">
                     {r.completenessForwardersTotal === 0 ? (
-                      <span className="text-[10px] text-muted">-</span>
+                      <span className="text-[11px] text-muted">-</span>
                     ) : r.completenessScanned >= r.completenessExpected ? (
                       <span
-                        className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[10px] font-medium"
+                        className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[11px] font-medium"
                         title={`ยิงครบทุกกล่อง — ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ`}
                       >
                         {r.completenessScanned}/{r.completenessExpected}
                       </span>
                     ) : (
                       <span
-                        className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[10px] font-medium"
+                        className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[11px] font-medium"
                         title={`ของยังขาด ${r.completenessExpected - r.completenessScanned} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
                         {r.completenessScanned}/{r.completenessExpected}
@@ -678,23 +678,23 @@ export function CntListTable({
                   {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.priceSum, 2)}</td>}
                   {showMoney && <td className="px-2 py-2 text-right">{fmtNum(r.profitSum, 2)}</td>}
                   <td className="px-2 py-2 text-center">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.chip}`}>{badge.label}</span>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.chip}`}>{badge.label}</span>
                     {/* Next-action hint (self-explaining-row standard §0g · owner
                         2026-06-22) — "ให้พนักงานทำอะไรต่อ" under the สถานะตู้ pill.
                         Reuses the SOT FSTATUS_CFG.next/act via `badge` (same display
                         status as the pill: "3" on the waiting tab · r.fstatus on the
                         arrived tab). 🔔 + rose when an action is due. */}
                     {badge.next ? (
-                      <div className={`mt-1 text-[9px] whitespace-nowrap ${badge.act ? "font-semibold text-rose-600" : "text-muted"}`}>
+                      <div className={`mt-1 text-[11px] whitespace-nowrap ${badge.act ? "font-semibold text-rose-600" : "text-muted"}`}>
                         {badge.act ? "🔔 " : ""}{badge.next}
                       </div>
                     ) : null}
                   </td>
                   <td className="px-2 py-2 text-center">
                     {r.isPaid ? (
-                      <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[10px] font-medium">จ่ายแล้ว</span>
+                      <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[11px] font-medium">จ่ายแล้ว</span>
                     ) : (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[10px] font-medium">ยังไม่จ่าย</span>
+                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[11px] font-medium">ยังไม่จ่าย</span>
                     )}
                   </td>
                 </tr>
@@ -737,7 +737,7 @@ export function CntListTable({
           >
             💸 ทำรายการจ่ายเงินตู้
             {selected.size > 0 && (
-              <span className="inline-flex items-center justify-center bg-white text-primary-600 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+              <span className="inline-flex items-center justify-center bg-white text-primary-600 text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
                 {selected.size}
               </span>
             )}
@@ -771,7 +771,7 @@ export function CntListTable({
               >
                 📄 ทำใบวางบิล
                 {selected.size > 0 && (
-                  <span className="inline-flex items-center justify-center bg-white text-emerald-600 text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
+                  <span className="inline-flex items-center justify-center bg-white text-emerald-600 text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5">
                     {selected.size}
                   </span>
                 )}
@@ -863,7 +863,7 @@ function BoxBreakdownPanel({
             const perBox = g.boxes > 0 ? g.cbm / g.boxes : 0;
             return (
               <tr key={i} className="border-b border-border/40 last:border-0">
-                <td className="px-3 py-1.5 font-mono text-[10px] text-foreground">
+                <td className="px-3 py-1.5 font-mono text-[11px] text-foreground">
                   {g.trackings.length > 0 ? (
                     <span className="break-all" title={g.trackings.join(", ")}>
                       {g.trackings.join(", ")}
@@ -891,7 +891,7 @@ function BoxBreakdownPanel({
         </tfoot>
       </table>
       {hasUnsized && (
-        <div className="px-3 py-1 text-[10px] text-muted border-t border-border">
+        <div className="px-3 py-1 text-[11px] text-muted border-t border-border">
           &quot;—&quot; = กล่องที่ไม่ได้ระบุขนาด (เช่น พัสดุ MOMO ที่บันทึกแต่ CBM รวม)
         </div>
       )}

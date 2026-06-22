@@ -193,7 +193,7 @@ export function FreightThWithdrawalList({
                     <td className="px-4 py-3 text-right tabular-nums">{baht(r.grossThb)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted">
                       {baht(r.whtThb)}
-                      <span className="ml-1 text-[10px]">({r.whtRatePct}%)</span>
+                      <span className="ml-1 text-[11px]">({r.whtRatePct}%)</span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">{baht(r.netThb)}</td>
                     <td className="px-4 py-3 text-xs text-muted">{fmtDate(r.requestedAt)}</td>

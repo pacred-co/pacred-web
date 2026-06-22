@@ -191,7 +191,7 @@ export function PolicyRowActions({
         type="button"
         onClick={togglePublish}
         disabled={pending}
-        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-50 ${
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-bold transition-colors disabled:opacity-50 ${
           isPublished
             ? "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100"
             : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"

@@ -286,14 +286,14 @@ export default async function AdminBookingDetailPage({
           {row.profile?.email && <p className="text-xs">{`✉ ${row.profile.email}`}</p>}
           {row.customer_note && (
             <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-[10px] text-muted uppercase tracking-wide mb-1">note</p>
+              <p className="text-[11px] text-muted uppercase tracking-wide mb-1">note</p>
               <p className="text-xs whitespace-pre-line">{row.customer_note}</p>
             </div>
           )}
           {row.profile_id ? (
-            <p className="text-[10px] font-mono text-muted mt-2">profile_id: {row.profile_id}</p>
+            <p className="text-[11px] font-mono text-muted mt-2">profile_id: {row.profile_id}</p>
           ) : (
-            <p className="text-[10px] text-amber-700 mt-2 font-medium">(guest draft — no profile linked yet)</p>
+            <p className="text-[11px] text-amber-700 mt-2 font-medium">(guest draft — no profile linked yet)</p>
           )}
         </section>
       </div>
@@ -360,7 +360,7 @@ export default async function AdminBookingDetailPage({
               <tbody>
                 {options.map((o) => (
                   <tr key={o.id} className="border-t border-border">
-                    <td className="py-1 pr-3 font-mono text-[10px]">{o.option_key}</td>
+                    <td className="py-1 pr-3 font-mono text-[11px]">{o.option_key}</td>
                     <td className="py-1 pr-3">
                       {o.option_label}
                       {o.detail && <span className="text-muted"> — {o.detail}</span>}
@@ -382,20 +382,20 @@ export default async function AdminBookingDetailPage({
           <h2 className="font-bold text-sm mb-3">{t("sectionPin")}</h2>
           <div className="grid sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <p className="text-muted uppercase text-[10px] tracking-wide mb-1">pickup</p>
+              <p className="text-muted uppercase text-[11px] tracking-wide mb-1">pickup</p>
               {row.pickup_address && <p>{row.pickup_address}</p>}
               {pickupHasPin && (
-                <p className="font-mono text-[10px] text-muted">
+                <p className="font-mono text-[11px] text-muted">
                   {row.pickup_lat}, {row.pickup_lng}
                 </p>
               )}
               {!row.pickup_address && !pickupHasPin && <p className="text-muted">—</p>}
             </div>
             <div>
-              <p className="text-muted uppercase text-[10px] tracking-wide mb-1">drop-off</p>
+              <p className="text-muted uppercase text-[11px] tracking-wide mb-1">drop-off</p>
               {row.dropoff_address && <p>{row.dropoff_address}</p>}
               {dropoffHasPin && (
-                <p className="font-mono text-[10px] text-muted">
+                <p className="font-mono text-[11px] text-muted">
                   {row.dropoff_lat}, {row.dropoff_lng}
                 </p>
               )}
@@ -415,7 +415,7 @@ export default async function AdminBookingDetailPage({
           {row.source_url && (
             <p className="truncate">
               <span className="text-muted">url:</span>{" "}
-              <span className="font-mono text-[10px]">{row.source_url}</span>
+              <span className="font-mono text-[11px]">{row.source_url}</span>
             </p>
           )}
         </section>
@@ -441,7 +441,7 @@ export default async function AdminBookingDetailPage({
                     <p className="text-xs font-semibold text-foreground truncate">
                       {DOC_KIND_LABEL_TH[doc.kind]} <span className="text-muted font-normal">— {cleanName}</span>
                     </p>
-                    <p className="text-[10px] text-muted">
+                    <p className="text-[11px] text-muted">
                       {doc.mimeType ?? "unknown"}
                       {sizeKb !== null && ` · ${sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`}`}
                       {" · "}อัปโหลด {new Date(doc.uploadedAt).toLocaleString("th-TH")}
@@ -461,7 +461,7 @@ export default async function AdminBookingDetailPage({
               );
             })}
           </ul>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             ลิงก์มีอายุ ~1 ชั่วโมง · refresh หน้าเพื่อสร้างลิงก์ใหม่
           </p>
         </section>

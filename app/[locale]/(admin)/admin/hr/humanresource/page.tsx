@@ -131,7 +131,7 @@ export default async function AdminHrHumanResourceHubPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="font-semibold text-foreground">{card.title}</h3>
-                <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[11px] font-medium uppercase">
                   {card.badge}
                 </span>
               </div>

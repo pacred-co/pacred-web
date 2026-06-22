@@ -718,10 +718,10 @@ export async function renderLegacyCustomerView(
                     <StatusPill label={legacyOrderStatusThai(r.hstatus) || "-"} tone={orderStatusTone(r.hstatus)} />
                   </Td>
                   <Td>
-                    <div className="text-[10px] text-muted whitespace-nowrap">
+                    <div className="text-[11px] text-muted whitespace-nowrap">
                       {r.hdateupdate ? new Date(r.hdateupdate).toLocaleString("th-TH") : "-"}
                     </div>
-                    {r.adminidupdate ? <div className="text-[10px]">{r.adminidupdate}</div> : null}
+                    {r.adminidupdate ? <div className="text-[11px]">{r.adminidupdate}</div> : null}
                   </Td>
                   <Td>
                     <div className="flex flex-col gap-1">
@@ -798,12 +798,12 @@ export async function renderLegacyCustomerView(
                           {r.reforder && r.reforder.trim() !== "" ? (
                             <Link
                               href={`/admin/service-orders/${encodeURIComponent(r.reforder)}`}
-                              className="mt-0.5 inline-block rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[9px] hover:bg-sky-100"
+                              className="mt-0.5 inline-block rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[11px] hover:bg-sky-100"
                             >
                               ฝากสั่งซื้อ : {r.reforder}
                             </Link>
                           ) : (
-                            <span className="mt-0.5 inline-block rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0.5 text-[9px]">
+                            <span className="mt-0.5 inline-block rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0.5 text-[11px]">
                               ฝากนำเข้า
                             </span>
                           )}
@@ -812,40 +812,40 @@ export async function renderLegacyCustomerView(
                     </Td>
                     <Td right>
                       <div className="font-mono">{fmtBaht(Number(r.ftotalprice ?? 0))}</div>
-                      <div className="text-[10px] text-muted mt-0.5">
+                      <div className="text-[11px] text-muted mt-0.5">
                         {TRANSPORT_LABEL_FW[r.ftransporttype ?? ""] ?? ""}
                       </div>
-                      <div className="text-[10px] text-muted">
+                      <div className="text-[11px] text-muted">
                         {Number(r.fweight ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg ·{" "}
                         {Number(r.fvolume ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 5 })} CBM
                       </div>
                     </Td>
                     <Td>
-                      <div className="font-mono text-[10px]">{r.ftrackingchn ?? "-"}</div>
+                      <div className="font-mono text-[11px]">{r.ftrackingchn ?? "-"}</div>
                       {r.fcabinetnumber ? (
-                        <div className="text-[10px] mt-0.5">
+                        <div className="text-[11px] mt-0.5">
                           เลขตู้: <span className="font-mono">{r.fcabinetnumber}</span>
                         </div>
                       ) : null}
-                      <div className="text-[10px] text-muted">
+                      <div className="text-[11px] text-muted">
                         ประเภท: {PRODUCT_TYPE_LABEL_FW[r.fproductstype ?? ""] ?? "-"}
                       </div>
-                      {r.fpallet ? <div className="text-[10px] text-muted">location: {r.fpallet}</div> : null}
-                      <div className="text-[10px] text-muted">{r.famount ?? 0} กล่อง</div>
+                      {r.fpallet ? <div className="text-[11px] text-muted">location: {r.fpallet}</div> : null}
+                      <div className="text-[11px] text-muted">{r.famount ?? 0} กล่อง</div>
                     </Td>
                     <Td>
                       {r.fshipby ? <div className="text-[11px]">{r.fshipby}</div> : null}
-                      {r.ftrackingth ? <div className="font-mono text-[10px]">{r.ftrackingth}</div> : null}
-                      {addr ? <div className="text-[10px] text-muted max-w-[200px] break-words">{addr}</div> : null}
+                      {r.ftrackingth ? <div className="font-mono text-[11px]">{r.ftrackingth}</div> : null}
+                      {addr ? <div className="text-[11px] text-muted max-w-[200px] break-words">{addr}</div> : null}
                     </Td>
                     <Td>
                       <StatusPill label={legacyForwarderStatusThai(r.fstatus) || "-"} tone={forwarderStatusTone(r.fstatus)} />
                     </Td>
                     <Td>
-                      <div className="text-[10px] text-muted whitespace-nowrap">
+                      <div className="text-[11px] text-muted whitespace-nowrap">
                         {r.fdateadminstatus ? new Date(r.fdateadminstatus).toLocaleString("th-TH") : "-"}
                       </div>
-                      {r.adminidkey ? <div className="text-[10px]">{r.adminidkey}</div> : null}
+                      {r.adminidkey ? <div className="text-[11px]">{r.adminidkey}</div> : null}
                     </Td>
                     <Td>
                       <div className="flex flex-col gap-1">
@@ -906,7 +906,7 @@ export async function renderLegacyCustomerView(
                   </Td>
                   <Td>
                     {r.paydetail ? <div>{r.paydetail}</div> : null}
-                    <div className="text-[10px] text-muted">
+                    <div className="text-[11px] text-muted">
                       ¥{Number(r.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                   </Td>
@@ -917,7 +917,7 @@ export async function renderLegacyCustomerView(
                       tone={paystatusTone(r.paystatus)}
                     />
                   </Td>
-                  <Td>{r.adminid ? <span className="text-[10px]">{r.adminid}</span> : "-"}</Td>
+                  <Td>{r.adminid ? <span className="text-[11px]">{r.adminid}</span> : "-"}</Td>
                   <Td>
                     <Link
                       href={`/admin/yuan-payments/${r.id}`}
@@ -1128,7 +1128,7 @@ function Table({ children }: { children: React.ReactNode }) {
 function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
   return (
     <th
-      className={`px-2 py-3 text-[10px] uppercase tracking-wide text-muted bg-surface-alt/50 whitespace-nowrap ${right ? "text-right" : "text-left"}`}
+      className={`px-2 py-3 text-[11px] uppercase tracking-wide text-muted bg-surface-alt/50 whitespace-nowrap ${right ? "text-right" : "text-left"}`}
     >
       {children}
     </th>
@@ -1158,7 +1158,7 @@ const TRANSPORT_LABEL_FW: Record<string, string> = {
 };
 function SaleBadge({ adminId }: { adminId: string | null }) {
   return (
-    <span className="ml-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
+    <span className="ml-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
       Sale : {adminId || "ไม่ระบุ"}
     </span>
   );
@@ -1186,7 +1186,7 @@ const PILL_TONE: Record<PillTone, string> = {
 };
 function StatusPill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
   return (
-    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${PILL_TONE[tone]}`}>
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${PILL_TONE[tone]}`}>
       {label}
     </span>
   );

@@ -85,7 +85,7 @@ export function ResetPwdButton({ userid }: Props) {
       </button>
 
       {err && (
-        <span className="ml-2 text-[10px] text-red-600" role="alert">
+        <span className="ml-2 text-[11px] text-red-600" role="alert">
           {err}
         </span>
       )}
@@ -113,7 +113,7 @@ export function ResetPwdButton({ userid }: Props) {
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-amber-700 dark:text-amber-300">
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
                 ส่งให้ลูกค้าทันที — กล่องนี้จะปิดอัตโนมัติใน 30 วินาที
               </p>
             </div>

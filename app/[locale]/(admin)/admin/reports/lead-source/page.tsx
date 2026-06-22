@@ -252,7 +252,7 @@ export default async function LeadSourceReportPage({
           ⚠️ ดึงข้อมูลถึงเพดาน — ตัวเลขอาจไม่ครบ ลองแคบช่วงวันที่ลง
         </p>
       )}
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         {res.ok
           ? "Source: tb_users (userregisterwith · userrecom · useractive · userregistered) ⨝ tb_forwarder (userid · ftotalprice) — READ-ONLY · ไม่มีตาราง ad-spend/UTM ในระบบจึงไม่แสดง ROAS"
           : `❌ โหลดข้อมูลล้มเหลว: ${res.error}`}

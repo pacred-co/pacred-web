@@ -337,8 +337,8 @@ export function AdminForwarderNewBulkForm({
       {/* ── SECTION 1: ตัวเลือกขนส่ง (shared) ────────────────── */}
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">1</span>
-          ตัวเลือกขนส่ง <span className="text-[10px] font-normal text-muted">(ใช้กับทุกรายการในใบนี้ · ลูกค้าแยกตามแถว)</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">1</span>
+          ตัวเลือกขนส่ง <span className="text-[11px] font-normal text-muted">(ใช้กับทุกรายการในใบนี้ · ลูกค้าแยกตามแถว)</span>
         </h2>
 
         <div className="space-y-4">
@@ -379,7 +379,7 @@ export function AdminForwarderNewBulkForm({
                   >
                     <input type="radio" name="transport" value={t.value} checked={transportType === t.value} onChange={() => setTransportType(t.value)} className="sr-only" />
                     <span>{t.label}</span>
-                    <span className="text-[10px] text-muted">{t.hint}</span>
+                    <span className="text-[11px] text-muted">{t.hint}</span>
                   </label>
                 ))}
               </div>
@@ -401,7 +401,7 @@ export function AdminForwarderNewBulkForm({
                 >
                   <input type="radio" name="taxdoc" value={d.value} checked={taxDocPref === d.value} onChange={() => setTaxDocPref(d.value)} className="sr-only" />
                   <span className="font-medium">{d.label}</span>
-                  <span className="text-[10px] text-muted">{d.hint}</span>
+                  <span className="text-[11px] text-muted">{d.hint}</span>
                 </label>
               ))}
             </div>
@@ -413,8 +413,8 @@ export function AdminForwarderNewBulkForm({
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-sm font-semibold flex items-center gap-2">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[10px] font-bold text-primary-700">2</span>
-            รายการ <span className="text-[10px] font-normal text-muted">(เลือกลูกค้า + tracking ต่อแถว · แถวว่างจะถูกข้าม)</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-[11px] font-bold text-primary-700">2</span>
+            รายการ <span className="text-[11px] font-normal text-muted">(เลือกลูกค้า + tracking ต่อแถว · แถวว่างจะถูกข้าม)</span>
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -600,7 +600,7 @@ function BulkRow({
                   type="button"
                   onClick={onClear}
                   disabled={pending}
-                  className="text-[10px] text-muted hover:text-foreground underline shrink-0"
+                  className="text-[11px] text-muted hover:text-foreground underline shrink-0"
                 >
                   เปลี่ยน
                 </button>
@@ -630,9 +630,9 @@ function BulkRow({
                           onClick={() => onPick(u)}
                           className="block w-full px-2.5 py-1.5 text-left text-xs hover:bg-primary-50"
                         >
-                          <span className="font-mono text-[10px] text-primary-700">{u.userID}</span>
+                          <span className="font-mono text-[11px] text-primary-700">{u.userID}</span>
                           <span className="ml-1.5">{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                          {u.userTel && <span className="ml-1.5 text-[10px] text-muted">{u.userTel}</span>}
+                          {u.userTel && <span className="ml-1.5 text-[11px] text-muted">{u.userTel}</span>}
                         </button>
                       ))
                     )}
@@ -646,10 +646,10 @@ function BulkRow({
               </div>
             )}
             {row.addressLoading && (
-              <p className="mt-1 text-[10px] text-muted">กำลังโหลดที่อยู่...</p>
+              <p className="mt-1 text-[11px] text-muted">กำลังโหลดที่อยู่...</p>
             )}
             {row.customer && shipBy && shipBy !== "PCS" && !row.addressLoading && !row.addressId && (
-              <p className="mt-1 text-[10px] text-amber-700">⚠ ลูกค้านี้ยังไม่มีที่อยู่ — เพิ่มที่ /admin/customers/{row.customer.userID}</p>
+              <p className="mt-1 text-[11px] text-amber-700">⚠ ลูกค้านี้ยังไม่มีที่อยู่ — เพิ่มที่ /admin/customers/{row.customer.userID}</p>
             )}
           </div>
 
@@ -695,7 +695,7 @@ function BulkRow({
         {/* Status + remove */}
         <div className="shrink-0 flex flex-col items-end gap-1 pt-0.5">
           {/* Status chip */}
-          <div className="text-[10px]">
+          <div className="text-[11px]">
             {row.status === "success" && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">
                 ✓ #{row.resultId}

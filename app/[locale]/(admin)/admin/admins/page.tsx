@@ -140,7 +140,7 @@ function isSyntheticAdminEmail(email: string | null | undefined): boolean {
 function Pill({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${
+      className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${
         BADGE_CLS[color] ?? BADGE_CLS.secondary
       }`}
     >
@@ -591,7 +591,7 @@ export default async function AdminTablePage({
             >
               {t.l}
               {t.n > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-700 px-1.5 py-0.5 text-[10px]">
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-700 px-1.5 py-0.5 text-[11px]">
                   {t.n.toLocaleString("th-TH")}
                 </span>
               )}
@@ -723,7 +723,7 @@ export default async function AdminTablePage({
                       <Td>
                         {typeBadge ? <Pill {...typeBadge} /> : <span className="text-muted">-</span>}
                         {isProbation && probationDue && (
-                          <div className="mt-1 text-[10px] text-muted">
+                          <div className="mt-1 text-[11px] text-muted">
                             <div>เหลือ: <span className="text-red-600 font-medium">{probationRemaining}</span></div>
                             <div>ครบ: {probationDue}</div>
                           </div>
@@ -731,7 +731,7 @@ export default async function AdminTablePage({
                       </Td>
                       <Td>
                         {x?.department && <div className="text-foreground">{x.department}</div>}
-                        {x?.section    && <div className="text-muted text-[10px]">{x.section}</div>}
+                        {x?.section    && <div className="text-muted text-[11px]">{x.section}</div>}
                         {!x?.department && !x?.section && <span className="text-muted">-</span>}
                       </Td>
                       <Td>
@@ -757,22 +757,22 @@ export default async function AdminTablePage({
                       <Td>
                         <div className="flex flex-col gap-0.5">
                           {isEnded && (
-                            <span className="rounded bg-red-500 text-white px-2 py-0.5 text-[10px] text-center whitespace-nowrap">
+                            <span className="rounded bg-red-500 text-white px-2 py-0.5 text-[11px] text-center whitespace-nowrap">
                               ลาออกแล้ว
                             </span>
                           )}
                           {!isEnded && isSuspended && (
-                            <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] whitespace-nowrap text-center">
+                            <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 text-[11px] whitespace-nowrap text-center">
                               พักงานชั่วคราว
                             </span>
                           )}
                           {!isEnded && !isSuspended && isInactive && (
-                            <span className="rounded bg-slate-500 text-white px-2 py-0.5 text-[10px] text-center whitespace-nowrap">
+                            <span className="rounded bg-slate-500 text-white px-2 py-0.5 text-[11px] text-center whitespace-nowrap">
                               ปิดสิทธิ์
                             </span>
                           )}
                           {!isEnded && !isSuspended && !isInactive && (
-                            <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] whitespace-nowrap text-center">
+                            <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] whitespace-nowrap text-center">
                               ทำงานอยู่
                             </span>
                           )}
@@ -792,7 +792,7 @@ export default async function AdminTablePage({
                         <div className="flex flex-wrap items-center gap-1">
                           <Link
                             href={detailHref}
-                            className="rounded-lg border border-border bg-white px-2 py-1 text-[10px] text-foreground hover:bg-primary-50 hover:border-primary-200"
+                            className="rounded-lg border border-border bg-white px-2 py-1 text-[11px] text-foreground hover:bg-primary-50 hover:border-primary-200"
                             title="ดูข้อมูล"
                           >
                             ดู
@@ -800,7 +800,7 @@ export default async function AdminTablePage({
                           {canMutate && (
                             <Link
                               href={`${detailHref}/edit`}
-                              className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] text-sky-700 hover:bg-sky-100"
+                              className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] text-sky-700 hover:bg-sky-100"
                               title="แก้ไข"
                             >
                               แก้ไข
@@ -850,7 +850,7 @@ function EmptyState({ canMutate, hasFilters }: { canMutate: boolean; hasFilters:
             </Link>
           </div>
         )}
-        <p className="text-[10px] text-muted pt-3">
+        <p className="text-[11px] text-muted pt-3">
           Wave 22 transition: ภูม กำลังย้ายข้อมูล 13 พนักงานจาก legacy `tb_admin` มาที่ระบบใหม่ ผ่านฟอร์ม `/admin/admins/new`
         </p>
       </div>
@@ -861,7 +861,7 @@ function EmptyState({ canMutate, hasFilters }: { canMutate: boolean; hasFilters:
 // ── tiny helpers ─────────────────────────────────────────
 function Th({ children }: { children?: React.ReactNode }) {
   return (
-    <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-muted font-semibold whitespace-nowrap">
+    <th className="px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold whitespace-nowrap">
       {children}
     </th>
   );
@@ -883,7 +883,7 @@ function SortTh({
   const active = activeKey === field;
   const arrow = active ? (activeDir === "asc" ? "↑" : "↓") : "⇵";
   return (
-    <th className="px-3 py-2 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap">
+    <th className="px-3 py-2 text-[11px] uppercase tracking-wider font-semibold whitespace-nowrap">
       <Link
         href={hrefs[field]}
         className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${
@@ -891,7 +891,7 @@ function SortTh({
         }`}
       >
         <span>{label}</span>
-        <span className="text-[9px]" aria-hidden>{arrow}</span>
+        <span className="text-[11px]" aria-hidden>{arrow}</span>
       </Link>
     </th>
   );

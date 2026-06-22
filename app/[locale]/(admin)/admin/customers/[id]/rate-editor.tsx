@@ -211,7 +211,7 @@ export function CustomerRateEditor({
       >
         <Settings className="w-3.5 h-3.5" /> ตั้งค่าเรทขนส่ง
         {matrix.isSvip ? (
-          <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-1.5 py-0.5 text-[9px] font-semibold">
+          <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-1.5 py-0.5 text-[11px] font-semibold">
             <BadgeCheck className="w-2.5 h-2.5" /> SVIP
           </span>
         ) : null}
@@ -238,11 +238,11 @@ export function CustomerRateEditor({
                 <span className="text-sm font-semibold">ตั้งค่าเรทขนส่ง (เรทขายต่อลูกค้า)</span>
                 <span className="text-[11px] text-muted font-mono">{userid}</span>
                 {matrix.isSvip ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[11px] font-semibold">
                     <BadgeCheck className="w-3 h-3" /> SVIP · มีเรทเฉพาะตัว
                   </span>
                 ) : (
-                  <span className="rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[10px]">
+                  <span className="rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[11px]">
                     ใช้เรทกลุ่ม / default
                   </span>
                 )}
@@ -450,7 +450,7 @@ function RateGrid({
                             : "border-border focus:ring-primary-500/40 focus:border-primary-500"
                         }`}
                       />
-                      <span className="block text-[9px] text-muted mt-0.5">ขั้นต่ำ {floor}</span>
+                      <span className="block text-[11px] text-muted mt-0.5">ขั้นต่ำ {floor}</span>
                     </td>
                   );
                 }),
@@ -669,7 +669,7 @@ function InfoTab({
         <h3 className="font-semibold text-foreground mb-1.5 flex items-center gap-2 flex-wrap">
           <span>ราคาขายขั้นต่ำ — CBM (฿/คิว · ห้ามขายต่ำกว่านี้)</span>
           {canEdit ? (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[11px] font-semibold">
               <BadgeCheck className="w-3 h-3" /> Ultra · แก้ได้
             </span>
           ) : null}

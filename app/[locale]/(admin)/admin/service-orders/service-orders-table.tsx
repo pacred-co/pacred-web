@@ -251,7 +251,7 @@ export function ServiceOrdersTable({
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-[11px] min-w-[1100px]">
-              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
                     <input
@@ -358,14 +358,14 @@ export function ServiceOrdersTable({
                       <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         <div className="text-foreground">{fmtDateOnly(dateCol)}</div>
-                        <div className="text-muted text-[10px]">{fmtTimeOnly(dateCol)} น.</div>
+                        <div className="text-muted text-[11px]">{fmtTimeOnly(dateCol)} น.</div>
                         {isPrinted && (
-                          <span className="mt-0.5 inline-block rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                          <span className="mt-0.5 inline-block rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                             พิมพ์ใบเสร็จแล้ว
                           </span>
                         )}
                         {isInvoicePrinted && (
-                          <span className="mt-0.5 inline-block rounded-full bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 text-[9px]">
+                          <span className="mt-0.5 inline-block rounded-full bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 text-[11px]">
                             พิมพ์ใบแจ้งหนี้แล้ว
                           </span>
                         )}
@@ -378,7 +378,7 @@ export function ServiceOrdersTable({
                           {r.hno}
                         </Link>
                         <div className="mt-0.5">
-                          <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[9px] ${sourceBadgeCls}`}>
+                          <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[11px] ${sourceBadgeCls}`}>
                             {sourceLabel}
                           </span>
                         </div>
@@ -391,23 +391,23 @@ export function ServiceOrdersTable({
                           {r.userid}
                         </Link>
                         {r.customerName && (
-                          <div className="truncate max-w-[140px] text-[10px] text-muted" title={r.customerName}>
+                          <div className="truncate max-w-[140px] text-[11px] text-muted" title={r.customerName}>
                             {r.customerName}
                           </div>
                         )}
                         <div className="mt-0.5 flex flex-wrap gap-1">
                           {r.isVip && r.vipTier && (
-                            <span className="rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 text-[9px] font-semibold">
+                            <span className="rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 text-[11px] font-semibold">
                               {r.vipTier}
                             </span>
                           )}
                           {r.isCorporate && (
-                            <span className="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 text-[9px]">
+                            <span className="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 text-[11px]">
                               นิติบุคคล
                             </span>
                           )}
                           {r.salesRep && (
-                            <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                            <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                               sale: {r.salesRep}
                             </span>
                           )}
@@ -423,36 +423,36 @@ export function ServiceOrdersTable({
                               {r.htitle ?? "—"}
                             </Link>
                             {r.hcount > 1 && (
-                              <span className="ml-1 text-[10px] text-muted">
+                              <span className="ml-1 text-[11px] text-muted">
                                 และอีก {Math.round(r.hcount - 1)} รายการ
                               </span>
                             )}
                             {r.hstatus === "2" && r.hdatepayment && (
-                              <div className="text-red-600 text-[10px] mt-0.5">
+                              <div className="text-red-600 text-[11px] mt-0.5">
                                 กรุณาชำระเงินก่อน {fmtDate(r.hdatepayment, true)} น.
                               </div>
                             )}
                             {r.hnote && (
                               <div className="mt-1 space-y-0.5">
                                 {r.hnoteuser === "1" ? (
-                                  <span className="inline-block rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px]">
+                                  <span className="inline-block rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px]">
                                     แอดมินเท่านั้น
                                   </span>
                                 ) : (
                                   <>
-                                    <span className="inline-block rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                                    <span className="inline-block rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                                       ทั้งลูกค้าและแอดมิน
                                     </span>
                                     {r.hnoteuserread === "1" && (
-                                      <span className="ml-1 text-[9px] text-muted">ยังไม่อ่าน</span>
+                                      <span className="ml-1 text-[11px] text-muted">ยังไม่อ่าน</span>
                                     )}
                                   </>
                                 )}
-                                <div className="rounded bg-red-600 text-white text-[10px] px-1.5 py-0.5">
+                                <div className="rounded bg-red-600 text-white text-[11px] px-1.5 py-0.5">
                                   หมายเหตุ: {r.hnote}
                                 </div>
                                 {r.hnotedate && (
-                                  <div className="text-[9px] text-muted">
+                                  <div className="text-[11px] text-muted">
                                     {fmtDate(r.hnotedate, true)} · ผ่านมา{" "}
                                     <span className="text-red-600">{relativeAgo(r.hnotedate)}</span>
                                   </div>
@@ -471,7 +471,7 @@ export function ServiceOrdersTable({
                           ) : (
                             <div
                               aria-hidden
-                              className="h-[60px] w-[60px] rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[9px] text-muted text-center"
+                              className="h-[60px] w-[60px] rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[11px] text-muted text-center"
                               title="ไม่มีรูปสินค้า"
                             >
                               ไม่มี
@@ -485,11 +485,11 @@ export function ServiceOrdersTable({
                         ฿{price.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-2 py-2.5">
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
+                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${badgeCls}`}>
                           {sLabel}
                         </span>
                         {sNext && r.hstatus !== "6" ? (
-                          <div className={`mt-1 text-[9px] whitespace-nowrap ${sAct ? "font-semibold text-rose-600" : "text-muted"}`}>
+                          <div className={`mt-1 text-[11px] whitespace-nowrap ${sAct ? "font-semibold text-rose-600" : "text-muted"}`}>
                             {sAct ? "🔔 " : ""}{sNext}
                           </div>
                         ) : null}
@@ -497,8 +497,8 @@ export function ServiceOrdersTable({
                       <td className="px-2 py-2.5 whitespace-nowrap">
                         {sDate ? (
                           <>
-                            <div className="text-[10px]">{fmtDate(sDate, true)}</div>
-                            <div className="text-[9px] text-red-600">
+                            <div className="text-[11px]">{fmtDate(sDate, true)}</div>
+                            <div className="text-[11px] text-red-600">
                               ผ่านมา {relativeAgo(sDate)}
                             </div>
                           </>
@@ -506,7 +506,7 @@ export function ServiceOrdersTable({
                           <span className="text-muted">—</span>
                         )}
                         {r.adminidupdate && r.adminidupdate !== "" && (
-                          <div className="text-[9px] text-muted font-mono mt-0.5">{r.adminidupdate}</div>
+                          <div className="text-[11px] text-muted font-mono mt-0.5">{r.adminidupdate}</div>
                         )}
                       </td>
                       <td
@@ -517,13 +517,13 @@ export function ServiceOrdersTable({
                         <div className="flex flex-col gap-1 items-stretch min-w-[110px]">
                           <Link
                             href={`/admin/service-orders/${r.hno}`}
-                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[10px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"
+                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[11px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"
                           >
                             ดูรายละเอียด
                           </Link>
                           <Link
                             href={`/admin/service-orders/${r.hno}`}
-                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[10px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
+                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[11px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
                           >
                             อัปเดตรายการ
                           </Link>
@@ -532,7 +532,7 @@ export function ServiceOrdersTable({
                               href={`/admin/service-orders/print?print=1&id=${encodeURIComponent(r.hno)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[10px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
+                              className="rounded border border-blue-500 bg-blue-50 text-blue-700 text-[11px] px-2 py-1 hover:bg-blue-100 text-center whitespace-nowrap"
                             >
                               พิมพ์ใบเสร็จ
                             </a>
@@ -543,7 +543,7 @@ export function ServiceOrdersTable({
                               href={`/admin/service-orders/print?print=2&id=${encodeURIComponent(r.hno)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded border border-red-500 bg-red-50 text-red-700 text-[10px] px-2 py-1 hover:bg-red-100 text-center whitespace-nowrap"
+                              className="rounded border border-red-500 bg-red-50 text-red-700 text-[11px] px-2 py-1 hover:bg-red-100 text-center whitespace-nowrap"
                             >
                               พิมพ์ใบแจ้งหนี้
                             </a>
@@ -710,7 +710,7 @@ function SortableTh({
         className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-primary-600" : ""}`}
       >
         {label}
-        <span className="text-[9px]" aria-hidden>{arrow}</span>
+        <span className="text-[11px]" aria-hidden>{arrow}</span>
       </Link>
     </th>
   );

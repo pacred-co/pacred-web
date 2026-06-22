@@ -733,7 +733,7 @@ export function AdminForwarderNewForm({
                             <span className="mx-1.5 text-muted">·</span>
                             <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
                             {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
-                            {u.coID && <span className="ml-2 rounded bg-surface-alt px-1.5 text-[10px] text-muted">{u.coID}</span>}
+                            {u.coID && <span className="ml-2 rounded bg-surface-alt px-1.5 text-[11px] text-muted">{u.coID}</span>}
                           </button>
                         ))
                       )
@@ -847,7 +847,7 @@ export function AdminForwarderNewForm({
             {/* Cover image */}
             <div>
               <label className="block text-xs font-medium text-muted mb-1">
-                รูปสินค้า <span className="text-[10px] text-muted">(ไม่บังคับ · max 5MB)</span>
+                รูปสินค้า <span className="text-[11px] text-muted">(ไม่บังคับ · max 5MB)</span>
               </label>
               {!coverFile ? (
                 <label className="flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border bg-surface-alt px-3 py-5 text-xs text-muted hover:bg-surface-alt/70 hover:border-primary-300 transition">
@@ -875,12 +875,12 @@ export function AdminForwarderNewForm({
                       type="button"
                       onClick={removeCover}
                       disabled={pending}
-                      className="absolute right-1 top-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white hover:bg-black/80"
+                      className="absolute right-1 top-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white hover:bg-black/80"
                     >
                       × ลบ
                     </button>
                   </div>
-                  <p className="text-[10px] text-muted truncate">{coverFile.name}</p>
+                  <p className="text-[11px] text-muted truncate">{coverFile.name}</p>
                 </div>
               )}
             </div>

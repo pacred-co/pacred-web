@@ -246,12 +246,12 @@ export default async function AdminQaChnShopOver2dPage({
                             })
                           : "—"}
                         {!r.hdate3 ? (
-                          <div className="text-[10px] text-muted">(ใช้ hdate · ไม่มี hdate3)</div>
+                          <div className="text-[11px] text-muted">(ใช้ hdate · ไม่มี hdate3)</div>
                         ) : null}
                       </td>
                       <td className="px-3 py-3 text-right text-xs">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             ageDays >= 14
                               ? "bg-red-100 text-red-700 border-red-200"
                               : ageDays >= 7

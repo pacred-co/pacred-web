@@ -265,13 +265,13 @@ export default async function ShopRefundHistoryPage({
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-emerald-700">
+            <p className="text-[11px] uppercase tracking-wide text-emerald-700">
               ในช่วงที่กรอง (หน้าปัจจุบัน)
             </p>
             <p className="text-lg font-mono font-bold text-emerald-700">
               {thb(sumThb)} · {hsRows.length.toLocaleString("th-TH")} รายการ
             </p>
-            <p className="text-[10px] text-emerald-700/75">
+            <p className="text-[11px] text-emerald-700/75">
               ทั้งหมดในช่วง: {(total ?? 0).toLocaleString("th-TH")} รายการ
             </p>
           </div>
@@ -290,7 +290,7 @@ export default async function ShopRefundHistoryPage({
           className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm flex flex-wrap items-end gap-3"
         >
           <div>
-            <label className="text-[10px] text-muted block mb-1">
+            <label className="text-[11px] text-muted block mb-1">
               วันที่คืนเงิน · ตั้งแต่
             </label>
             <input
@@ -301,7 +301,7 @@ export default async function ShopRefundHistoryPage({
             />
           </div>
           <div>
-            <label className="text-[10px] text-muted block mb-1">
+            <label className="text-[11px] text-muted block mb-1">
               ถึง
             </label>
             <input
@@ -312,7 +312,7 @@ export default async function ShopRefundHistoryPage({
             />
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="text-[10px] text-muted block mb-1">
+            <label className="text-[11px] text-muted block mb-1">
               ค้นหา hNo หรือ PR
             </label>
             <input

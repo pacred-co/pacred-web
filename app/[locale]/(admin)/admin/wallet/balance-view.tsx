@@ -258,7 +258,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                           {r.userid}
                         </Link>
                         {u?.coID ? (
-                          <div className="text-[10px] text-muted font-mono mt-0.5">
+                          <div className="text-[11px] text-muted font-mono mt-0.5">
                             {u.coID}
                           </div>
                         ) : null}
@@ -274,7 +274,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                       </td>
                       <td className="px-3 py-3">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_CFG[statusKey].cls}`}
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CFG[statusKey].cls}`}
                         >
                           {STATUS_CFG[statusKey].label}
                         </span>
@@ -329,7 +329,7 @@ function BalanceSortTh({
         } ${align === "right" ? "flex-row-reverse" : ""}`}
       >
         <span>{label}</span>
-        <span className="text-[9px]" aria-hidden>{arrow}</span>
+        <span className="text-[11px]" aria-hidden>{arrow}</span>
       </Link>
     </th>
   );

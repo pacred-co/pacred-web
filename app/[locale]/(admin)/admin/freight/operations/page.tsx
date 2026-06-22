@@ -187,7 +187,7 @@ export default async function FreightOperationsBoardPage({
             activeColumn === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
           }`}
         >
-          ทั้งหมด <span className="ml-1 text-[10px]">({stats.total})</span>
+          ทั้งหมด <span className="ml-1 text-[11px]">({stats.total})</span>
         </Link>
         {FREIGHT_OPS_BOARD_COLUMNS.map((col) => {
           const params = new URLSearchParams();
@@ -205,7 +205,7 @@ export default async function FreightOperationsBoardPage({
               }`}
             >
               {FREIGHT_OPS_BOARD_COLUMN_LABEL[col]}{" "}
-              <span className="ml-1 text-[10px] opacity-75">({stats.byColumn[col]})</span>
+              <span className="ml-1 text-[11px] opacity-75">({stats.byColumn[col]})</span>
             </Link>
           );
         })}
@@ -240,7 +240,7 @@ export default async function FreightOperationsBoardPage({
             <div key={col} className={`rounded-2xl border ${COL_ACCENT[col]} p-2.5 min-h-[120px]`}>
               <div className={`flex items-center justify-between px-1 pb-2 text-xs font-bold ${COL_HEAD[col]}`}>
                 <span>{FREIGHT_OPS_BOARD_COLUMN_LABEL[col]}</span>
-                <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px]">{grouped[col].length}</span>
+                <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px]">{grouped[col].length}</span>
               </div>
               <div className="space-y-2">
                 {grouped[col].length === 0 ? (
@@ -269,7 +269,7 @@ function StatCard({
     tone === "urgent" ? "text-red-600" : tone === "ok" ? "text-green-700" : "text-foreground";
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-surface p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className={`mt-0.5 font-bold tabular-nums ${small ? "text-base" : "text-xl"} ${valueCls}`}>{value}</p>
     </div>
   );
@@ -283,14 +283,14 @@ function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean 
     >
       <div className="flex items-center justify-between gap-1">
         <span className="font-mono text-xs font-semibold text-primary-700">{card.jobNo ?? "—"}</span>
-        {card.isUrgent && <span className="text-[10px] font-bold text-red-600">🔴 ด่วน</span>}
+        {card.isUrgent && <span className="text-[11px] font-bold text-red-600">🔴 ด่วน</span>}
       </div>
       <p className="mt-1 text-sm font-medium leading-snug line-clamp-1">{card.customerName}</p>
-      <p className="text-[10px] text-muted">
+      <p className="text-[11px] text-muted">
         {card.memberCode ? `${card.memberCode} · ` : ""}{card.transportModeLabel}
       </p>
       {card.containerCode && (
-        <p className="font-mono text-[10px] text-muted">{card.containerCode}</p>
+        <p className="font-mono text-[11px] text-muted">{card.containerCode}</p>
       )}
 
       {/* 4-stage status dots */}
@@ -299,7 +299,7 @@ function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean 
         <StageDot label="S" s={card.salesStatus} />
         <StageDot label="D" s={card.docsStatus} />
         <StageDot label="A" s={card.accStatus} />
-        <span className="ml-auto rounded-full bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
+        <span className="ml-auto rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] text-muted">
           {card.shipmentStatusLabel}
         </span>
       </div>
@@ -307,7 +307,7 @@ function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean 
       {/* P&L snapshot mini-line (display-only) — cost/profit hidden from line
           staff (owner 2026-06-15 "ไม่ควรเห็นต้นทุน"). */}
       {canSeeCost && (card.revenueSnapshot != null || card.costSnapshot != null) && (
-        <div className="mt-2 flex items-center justify-between text-[10px] text-muted tabular-nums">
+        <div className="mt-2 flex items-center justify-between text-[11px] text-muted tabular-nums">
           <span>กำไร snap:</span>
           <span className={card.profitSnapshot != null && card.profitSnapshot < 0 ? "text-red-600 font-semibold" : "text-green-700 font-semibold"}>
             <CostValue>{thb(card.profitSnapshot)}</CostValue>
@@ -320,7 +320,7 @@ function JobCard({ card, canSeeCost }: { card: CockpitCard; canSeeCost: boolean 
 
 function StageDot({ label, s }: { label: string; s: FreightOpsStageStatus }) {
   return (
-    <span className="inline-flex items-center gap-0.5 text-[9px] text-muted">
+    <span className="inline-flex items-center gap-0.5 text-[11px] text-muted">
       <span className={`h-2 w-2 rounded-full ${stageDot(s)}`} aria-hidden />
       {label}
     </span>

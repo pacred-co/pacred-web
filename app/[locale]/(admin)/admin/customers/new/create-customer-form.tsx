@@ -224,7 +224,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   }
   return (
     <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <div className="mt-1 flex items-center gap-2">
         <code className="flex-1 truncate rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 font-mono text-sm font-bold">
           {value}

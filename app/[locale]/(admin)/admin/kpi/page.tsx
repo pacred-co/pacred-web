@@ -376,7 +376,7 @@ function BigStat({
         <div className="min-w-0">
           <p className={`text-2xl sm:text-3xl font-bold font-mono leading-none ${tones}`}>{value}</p>
           <p className="mt-2 text-xs font-semibold text-foreground line-clamp-2">{label}</p>
-          <p className="mt-1 text-[10px] text-muted">{sub}</p>
+          <p className="mt-1 text-[11px] text-muted">{sub}</p>
         </div>
         <div className={`shrink-0 opacity-80 ${tones}`}>{icon}</div>
       </div>
@@ -388,7 +388,7 @@ function BigStat({
 /** vs-last-month change pill. `null` delta = no prior-month baseline. */
 function DeltaBadge({ delta }: { delta: number | null }) {
   if (delta === null) {
-    return <p className="mt-2 text-[10px] text-muted">เดือนก่อนไม่มีข้อมูลเทียบ</p>;
+    return <p className="mt-2 text-[11px] text-muted">เดือนก่อนไม่มีข้อมูลเทียบ</p>;
   }
   const up = delta > 0;
   const flat = delta === 0;

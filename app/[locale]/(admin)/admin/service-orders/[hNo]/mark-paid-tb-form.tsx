@@ -116,7 +116,7 @@ export function MarkPaidTbForm({
         </button>
       </div>
 
-      <p className="text-[10px] text-muted leading-relaxed">
+      <p className="text-[11px] text-muted leading-relaxed">
         ✅ จะ INSERT รายการใน tb_wallet_hs (type=2 · status=2) · หัก tb_wallet.wallettotal ·
         เปลี่ยน tb_header_order.hstatus → 3 (สั่งสินค้าแล้ว) · stamp hdate3
       </p>

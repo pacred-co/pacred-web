@@ -137,18 +137,18 @@ export default async function AdminCarriersPage({
                     <td className="px-4 py-3 text-xs">
                       <div className="font-medium">{r.name_th}</div>
                       <div className="text-muted">{r.name_en}</div>
-                      {r.note && <div className="text-[10px] text-muted mt-1">📝 {r.note}</div>}
+                      {r.note && <div className="text-[11px] text-muted mt-1">📝 {r.note}</div>}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {r.tracking_url_template ? (
-                        <code className="text-[10px] break-all">{r.tracking_url_template}</code>
+                        <code className="text-[11px] break-all">{r.tracking_url_template}</code>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                           r.is_active
                             ? "bg-green-50 text-green-700 border-green-200"
                             : "bg-gray-50 text-gray-600 border-gray-200"

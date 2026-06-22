@@ -55,7 +55,7 @@ export default async function AdminLearningNewSystemPage() {
               เพื่อให้ทีมงานปรับตัวเข้ากับระบบ Pacred ได้รวดเร็ว
             </p>
           </div>
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 whitespace-nowrap">
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 whitespace-nowrap">
             อยู่ระหว่างจัดเตรียมเนื้อหา
           </span>
         </div>

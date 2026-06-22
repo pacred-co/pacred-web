@@ -173,7 +173,7 @@ export default async function AdminAccountingPeriodDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-surface-alt/30">
           <h2 className="font-bold text-sm">📊 Snapshot ตอนปิดงวด ({events.length} รายการ)</h2>
-          <p className="text-[10px] text-muted mt-0.5">
+          <p className="text-[11px] text-muted mt-0.5">
             แต่ละครั้งที่ปิดงวด ระบบจะสร้าง snapshot ต่อตารางการเงิน (4 ตาราง) · re-close จะเพิ่มแถวใหม่ (ไม่ทับของเดิม)
           </p>
         </div>
@@ -183,7 +183,7 @@ export default async function AdminAccountingPeriodDetailPage({
           </p>
         ) : (
           <table className="w-full text-xs">
-            <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[10px] text-muted">
+            <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
               <tr>
                 <th className="px-3 py-2">ตาราง</th>
                 <th className="px-3 py-2 text-right">จำนวนแถว</th>

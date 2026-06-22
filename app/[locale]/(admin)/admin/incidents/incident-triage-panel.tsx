@@ -147,8 +147,8 @@ export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
         </button>
       )}
 
-      {pending && <span className="text-[10px] text-muted">กำลังบันทึก…</span>}
-      {!pending && msg && <span className="text-[10px] text-muted">{msg}</span>}
+      {pending && <span className="text-[11px] text-muted">กำลังบันทึก…</span>}
+      {!pending && msg && <span className="text-[11px] text-muted">{msg}</span>}
     </div>
   );
 }

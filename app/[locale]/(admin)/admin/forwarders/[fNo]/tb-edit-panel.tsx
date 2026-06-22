@@ -288,7 +288,7 @@ export function TbForwarderEditPanel(p: Props) {
         >
           🚚 บันทึกประเภทขนส่ง
         </button>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           ⚠ เปลี่ยนแล้วราคาไม่อัพเดทอัตโนมัติ — กด <b>“แก้ไขขนาด/น้ำหนัก”</b> เพื่อคำนวณเรทใหม่
         </p>
       </div>
@@ -329,7 +329,7 @@ export function TbForwarderEditPanel(p: Props) {
         >
           🏷️ บันทึกผู้ขนส่ง
         </button>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร)
         </p>
       </div>
@@ -358,7 +358,7 @@ export function TbForwarderEditPanel(p: Props) {
         >
           🧮 บันทึกฐานราคา
         </button>
-        <p className="text-[10px] text-muted">{RE_PRICE_HINT}</p>
+        <p className="text-[11px] text-muted">{RE_PRICE_HINT}</p>
       </div>
 
       {/* Manual cost-adjust (Pacred-added · owner-blessed) */}
@@ -368,7 +368,7 @@ export function TbForwarderEditPanel(p: Props) {
         </label>
         <div className="grid grid-cols-1 gap-2">
           <div>
-            <label htmlFor="te_priceupdate" className="block text-[10px] text-muted mb-0.5">ค่าสินค้า / ปรับเพิ่ม (฿)</label>
+            <label htmlFor="te_priceupdate" className="block text-[11px] text-muted mb-0.5">ค่าสินค้า / ปรับเพิ่ม (฿)</label>
             <input
               id="te_priceupdate"
               type="number" min="0" step="0.01" inputMode="decimal"
@@ -379,7 +379,7 @@ export function TbForwarderEditPanel(p: Props) {
             />
           </div>
           <div>
-            <label htmlFor="te_priceother" className="block text-[10px] text-muted mb-0.5">ค่าอื่นๆ (฿)</label>
+            <label htmlFor="te_priceother" className="block text-[11px] text-muted mb-0.5">ค่าอื่นๆ (฿)</label>
             <input
               id="te_priceother"
               type="number" min="0" step="0.01" inputMode="decimal"
@@ -390,7 +390,7 @@ export function TbForwarderEditPanel(p: Props) {
             />
           </div>
           <div>
-            <label htmlFor="te_discount" className="block text-[10px] text-muted mb-0.5">ส่วนลด (฿)</label>
+            <label htmlFor="te_discount" className="block text-[11px] text-muted mb-0.5">ส่วนลด (฿)</label>
             <input
               id="te_discount"
               type="number" min="0" step="0.01" inputMode="decimal"
@@ -409,7 +409,7 @@ export function TbForwarderEditPanel(p: Props) {
         >
           💰 บันทึกค่าใช้จ่าย
         </button>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           มีผลต่อยอดรวมที่ลูกค้าต้องชำระทันที (ไม่แตะค่าขนส่ง/ค่าตีลังที่คำนวณจากขนาด)
         </p>
       </div>
@@ -430,7 +430,7 @@ export function TbForwarderEditPanel(p: Props) {
             <option key={m} value={m}>{TAX_DOC_MODE_META[m].title}</option>
           ))}
         </select>
-        <p className="text-[10px] text-muted">{TAX_DOC_MODE_META[taxDocMode].hint}</p>
+        <p className="text-[11px] text-muted">{TAX_DOC_MODE_META[taxDocMode].hint}</p>
         <button
           type="button"
           onClick={onSaveTaxDocMode}
@@ -439,7 +439,7 @@ export function TbForwarderEditPanel(p: Props) {
         >
           🧾 บันทึกโหมดเอกสาร
         </button>
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           ปัจจุบัน: <b>{TAX_DOC_MODE_META[currentMode].title}</b> · ฐาน VAT: {TAX_DOC_MODE_META[taxDocMode].vatBase} · มีผลตอนชำระเงิน (ออกเอกสารอัตโนมัติตามโหมดนี้)
         </p>
       </div>
@@ -490,7 +490,7 @@ export function TbForwarderEditPanel(p: Props) {
           >
             🔀 ย้ายเจ้าของ
           </button>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             การเงิน/รายการสินค้าจะติดไปด้วย · ที่อยู่จัดส่งยังเป็นของเดิม — เลือกที่อยู่ใหม่หลังย้าย
           </p>
         </div>
@@ -506,7 +506,7 @@ export function TbForwarderEditPanel(p: Props) {
         </div>
       )}
 
-      <p className="text-[10px] text-muted text-center">
+      <p className="text-[11px] text-muted text-center">
         เขียน <code className="rounded bg-surface-alt px-1 font-mono">tb_forwarder</code> จริง · faithful port ของ
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">update_fAddress</code>·
         <code className="mx-1 rounded bg-surface-alt px-1 font-mono">update_fTransportType</code>·

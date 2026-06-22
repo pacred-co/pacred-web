@@ -544,7 +544,7 @@ export default async function AdminServiceOrdersPage({
                   {o.l}
                   {o.n > 0 && (
                     <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
                         active ? "bg-white/30 text-white" : o.cls
                       }`}
                     >
@@ -561,7 +561,7 @@ export default async function AdminServiceOrdersPage({
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-3 lg:p-4 shadow-sm space-y-3">
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-[10px] text-muted block mb-1">วันที่สร้างออเดอร์</label>
+              <label className="text-[11px] text-muted block mb-1">วันที่สร้างออเดอร์</label>
               <AdminDateFilter
                 tab={statusFilter}
                 dateFrom={sp.date_from}
@@ -570,7 +570,7 @@ export default async function AdminServiceOrdersPage({
             </div>
             {/* Page-size dropdown · legacy L632 + DataTables aLengthMenu */}
             <div>
-              <label className="text-[10px] text-muted block mb-1">แสดง</label>
+              <label className="text-[11px] text-muted block mb-1">แสดง</label>
               <div className="flex gap-1">
                 {allowedPageSizes.map((n) => (
                   <Link
@@ -603,7 +603,7 @@ export default async function AdminServiceOrdersPage({
                 placeholder={SEARCH_AXES_HINT}
                 className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
               />
-              <p className="text-[10px] text-muted mt-0.5">
+              <p className="text-[11px] text-muted mt-0.5">
                 {SEARCH_AXES_HINT}
               </p>
             </div>
