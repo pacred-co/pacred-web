@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -47,22 +48,24 @@ export default async function AdminRatesPage() {
   return (
     <main className="p-6 lg:p-8 space-y-6 max-w-3xl">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">อัตราค่าบริการ</h1>
-          <p className="mt-1 text-sm text-muted">
+      <PageHeader
+        eyebrow="ADMIN · อัตราค่าบริการ"
+        title="อัตราค่าบริการ"
+        subtitle={
+          <>
             อัตราจริงที่ระบบใช้คำนวณราคา — อ่านสดจาก{" "}
             <code className="rounded bg-surface-alt px-1 text-xs">tb_settings</code> (id=1)
-          </p>
-        </div>
-        <Link
-          href="/admin/settings/legacy-rates"
-          className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt"
-        >
-          ปรับเรทหยวน →
-        </Link>
-      </div>
+          </>
+        }
+        actions={
+          <Link
+            href="/admin/settings/legacy-rates"
+            className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt"
+          >
+            ปรับเรทหยวน →
+          </Link>
+        }
+      />
 
       {/* Exchange rate — the two live yuan rates (rp = ฝากโอน · rs = ฝากสั่ง) */}
       <RateSection title="อัตราแลกเปลี่ยนหยวน (CNY → THB)">

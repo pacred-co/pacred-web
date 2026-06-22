@@ -47,6 +47,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
 import { CARGO_MENUBAR, ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
 import {
@@ -631,31 +632,31 @@ export default async function AdminAccountingPage({
           - subtitle hint about the 6 section labels
           - Optional date-range chip when filter is set
           - "ปิดงบรายเดือน" CTA stays right-side */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <div className="mt-1 flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
-            <AccountingSegmentPills active="cargo" />
-          </div>
-          <p className="mt-2 text-sm text-muted">
+      <PageHeader
+        eyebrow="ADMIN · ระบบบัญชี"
+        title="ระบบบัญชี"
+        badges={<AccountingSegmentPills active="cargo" />}
+        subtitle={
+          <>
             Cargo · ฝากสั่งซื้อ · ฝากนำเข้า · ฝากโอนหยวน — รายรับ · รายจ่าย · ผู้ติดต่อ · การเงิน · การบัญชี
-          </p>
-          {(dateFrom || dateTo) && (
-            <p className="text-xs text-muted mt-1">
-              ช่วงเวลา: {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
-              {" — "}
-              {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
-            </p>
-          )}
-        </div>
-        <Link
-          href="/admin/accounting/closing"
-          className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-        >
-          📋 ปิดงบฝากนำเข้ารายเดือน →
-        </Link>
-      </div>
+            {(dateFrom || dateTo) && (
+              <span className="block mt-1 text-xs">
+                ช่วงเวลา: {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
+                {" — "}
+                {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <Link
+            href="/admin/accounting/closing"
+            className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+          >
+            📋 ปิดงบฝากนำเข้ารายเดือน →
+          </Link>
+        }
+      />
 
       {/* ── PEAK-style TOP menubar — purple bar with cascading dropdowns ──
           Shared config from `lib/admin/accounting-menubar.ts`. Many leaf

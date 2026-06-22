@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { PageHeader } from "@/components/admin/page-header";
 import { exportContactMessagesAll } from "@/actions/admin/export/contact-messages";
 import { ContactMessageActions } from "./actions-cell";
 
@@ -127,24 +128,22 @@ export default async function AdminContactMessagesPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ข้อความติดต่อจากเว็บไซต์</h1>
-          <p className="mt-1 text-sm text-muted">
-            ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส
-          </p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={CSV_COLS}
-          filename="contact-messages.csv"
-          fetchAll={async () => {
-            "use server";
-            return exportContactMessagesAll({ status: sp.status });
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow="ADMIN"
+        title="ข้อความติดต่อจากเว็บไซต์"
+        subtitle="ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส"
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={CSV_COLS}
+            filename="contact-messages.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportContactMessagesAll({ status: sp.status });
+            }}
+          />
+        }
+      />
 
       <div className="flex flex-wrap gap-2">
         <Chip active={!sp.status} href="/admin/contact-messages">

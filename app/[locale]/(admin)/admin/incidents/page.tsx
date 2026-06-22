@@ -19,6 +19,7 @@ import {
   type IncidentStatus,
 } from "@/lib/validators/platform-incident";
 import { IncidentTriagePanel } from "./incident-triage-panel";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * IO-1 — /admin/incidents triage queue (design doc §6.5).
@@ -166,22 +167,22 @@ export default async function AdminIncidentsPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">
-            ADMIN · observability · IO-1
-          </p>
-          <h1 className="mt-1 text-2xl font-bold">รายงานสถานะระบบ — Incident triage</h1>
-          <p className="mt-1 text-sm text-muted">
+      <PageHeader
+        eyebrow="ADMIN · observability · IO-1"
+        title="รายงานสถานะระบบ — Incident triage"
+        subtitle={
+          <>
             ข้อผิดพลาดที่ระบบเก็บอัตโนมัติ (ไม่มีปุ่มส่ง) จากตาราง{" "}
             <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">platform_incidents</code>{" "}
             — กรอง + รับเรื่อง + ปิดงาน
-          </p>
-        </div>
-        <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          ← Admin
-        </Link>
-      </div>
+          </>
+        }
+        actions={
+          <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            ← Admin
+          </Link>
+        }
+      />
 
       {/* Summary chips */}
       <div className="flex flex-wrap gap-2 text-xs">

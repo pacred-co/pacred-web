@@ -46,7 +46,7 @@ export default async function AdminApiForwarderGogoPage() {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-gray-400">
           <Ban className="h-8 w-8" />
         </div>
-        <h1 className="mt-4 text-2xl font-bold text-foreground">GOGO ยกเลิกการใช้งานแล้ว</h1>
+        <h1 className="mt-4 text-2xl sm:text-3xl font-bold tracking-tight text-foreground">GOGO ยกเลิกการใช้งานแล้ว</h1>
         <p className="mt-2 text-sm text-muted">
           ระบบ GOGO (นำเข้าผ่าน Google Sheet) ไม่ได้ใช้แล้ว — ใช้ <strong>MOMO</strong> แทน.
         </p>

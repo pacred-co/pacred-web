@@ -30,6 +30,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import {
   getEligibleShopOrdersForDisbursement,
@@ -79,21 +80,19 @@ export default async function AdminShopDisbursementPage({
     <>
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/shop-disbursement" />
       <main className="space-y-5 p-6 lg:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ACCOUNTING</p>
-            <h1 className="mt-1 text-2xl font-bold">เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)</h1>
-            <p className="mt-1 text-xs text-muted">
-              เลือกออเดอร์ฝากสั่งซื้อที่ชำระเงินแล้ว · ยังไม่เบิกจ่าย → ทำรายการเบิกเงินจ่ายต้นทุนจีน (บันทึก tb_shop_pay_h)
-            </p>
-          </div>
-          <Link
-            href="/admin/shop-disbursement/history"
-            className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-          >
-            ประวัติการเบิกจ่าย →
-          </Link>
-        </div>
+        <PageHeader
+          eyebrow="ADMIN · ACCOUNTING"
+          title="เบิกจ่ายค่าสินค้า (ฝากสั่งซื้อ)"
+          subtitle="เลือกออเดอร์ฝากสั่งซื้อที่ชำระเงินแล้ว · ยังไม่เบิกจ่าย → ทำรายการเบิกเงินจ่ายต้นทุนจีน (บันทึก tb_shop_pay_h)"
+          actions={
+            <Link
+              href="/admin/shop-disbursement/history"
+              className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+            >
+              ประวัติการเบิกจ่าย →
+            </Link>
+          }
+        />
 
         {!eligRes.ok && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

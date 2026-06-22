@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 
 import { CarrierManualForm } from "@/components/admin/carrier-manual-form";
+import { PageHeader } from "@/components/admin/page-header";
 import { CARRIER_REGISTRY } from "@/lib/carrier/registry";
 import {
   loadCarrierManualPageData,
@@ -37,13 +38,12 @@ export default async function ApiSheetsMkPage({
         <span className="text-foreground font-medium">เพิ่มรายการ — {carrier.label}</span>
       </nav>
 
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · อัปเดตฝากนำเข้า · {carrier.label}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการ — {carrier.label}</h1>
-        <p className="mt-1.5 text-sm text-muted">{carrier.description}</p>
-      </header>
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow={`ADMIN · อัปเดตฝากนำเข้า · ${carrier.label}`}
+        title={`เพิ่มรายการ — ${carrier.label}`}
+        subtitle={carrier.description}
+      />
 
       <CarrierManualForm
         carrier={carrier}

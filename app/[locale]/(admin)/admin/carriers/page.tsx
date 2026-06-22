@@ -5,6 +5,7 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportCarriersAll } from "@/actions/admin/export/carriers";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -89,28 +90,31 @@ export default async function AdminCarriersPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
-          <h1 className="mt-1 text-2xl font-bold">จัดการขนส่ง (Carriers)</h1>
-          <p className="mt-1 text-sm text-muted">
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. Display-only
+          swap; same eyebrow + title + subtitle + counts + CSV action as before. */}
+      <PageHeader
+        eyebrow="ADMIN · ปฏิบัติการ"
+        title="จัดการขนส่ง (Carriers)"
+        subtitle={
+          <>
             เพิ่ม/แก้ไขผู้ให้บริการขนส่ง (SPX/J&amp;T/Flash/EMS/Lalamove ฯลฯ).
             Code เปลี่ยนภายหลังไม่ได้ — ถ้าตั้งผิดให้สร้างใหม่ + soft-delete อันเก่า.
-          </p>
-          <p className="mt-1 text-xs text-muted">
+            <br />
             {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
-          </p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={csvCols}
-          filename="carriers.csv"
-          fetchAll={async () => {
-            "use server";
-            return exportCarriersAll();
-          }}
-        />
-      </div>
+          </>
+        }
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="carriers.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportCarriersAll();
+            }}
+          />
+        }
+      />
 
       {/* List */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">

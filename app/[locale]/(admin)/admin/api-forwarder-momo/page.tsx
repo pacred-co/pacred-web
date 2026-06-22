@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   Truck,
   Wand2,
@@ -308,19 +309,15 @@ export default async function AdminApiForwarderMomoPage({
         <span className="text-foreground font-medium">MOMO</span>
       </nav>
 
-      {/* Header */}
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · ฝากนำเข้า · MOMO Integration
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">แดชบอร์ด Cargo Center · MOMO</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          เชื่อมข้อมูลรายการ MOMO เข้าระบบ PR — Wave 17 รองรับเฉพาะ &ldquo;อัปเดตด้วยมือ&rdquo;
-        </p>
-      </header>
-
       {/* Top menubar (MOMO ↔ CargoCenter) */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-momo" />
+
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · ฝากนำเข้า · MOMO Integration"
+        title="แดชบอร์ด Cargo Center · MOMO"
+        subtitle="เชื่อมข้อมูลรายการ MOMO เข้าระบบ PR — Wave 17 รองรับเฉพาะ “อัปเดตด้วยมือ”"
+      />
 
       {/*
         2026-06-05 ภูม flag — ยอดรวมคิวสะสม (สำหรับพี่ป๊อปดู).

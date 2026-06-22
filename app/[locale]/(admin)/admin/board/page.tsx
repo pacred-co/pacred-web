@@ -18,6 +18,7 @@ import {
   WAITING_REASON_LABEL_TH,
   type WaitingReason,
 } from "@/types/work-item-chat";
+import { PageHeader } from "@/components/admin/page-header";
 import { WorkItemCard } from "./work-item-card";
 import { CreateWorkItemPanel } from "./create-work-item";
 
@@ -214,21 +215,19 @@ export default async function AdminBoardPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · OPERATING SYSTEM</p>
-          <h1 className="mt-1 text-2xl font-bold">กระดานงานข้ามแผนก (Work Board)</h1>
-          <p className="mt-1 text-sm text-muted">
-            ทุกแผนกเห็นงานในที่เดียว — มอบหมาย · เลื่อนสถานะ · ส่งต่อ ไม่ต้องไล่ถามใน LINE
-          </p>
-        </div>
-        <Link
-          href="/admin/board/inbox"
-          className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-alt transition-colors"
-        >
-          📥 งานของฉัน (Inbox)
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · OPERATING SYSTEM"
+        title="กระดานงานข้ามแผนก (Work Board)"
+        subtitle="ทุกแผนกเห็นงานในที่เดียว — มอบหมาย · เลื่อนสถานะ · ส่งต่อ ไม่ต้องไล่ถามใน LINE"
+        actions={
+          <Link
+            href="/admin/board/inbox"
+            className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-alt transition-colors"
+          >
+            📥 งานของฉัน (Inbox)
+          </Link>
+        }
+      />
 
       {/* Stat strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -12,6 +12,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { Truck, Wand2, Database, Search, BarChart3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -35,19 +36,15 @@ export default async function AdminApiForwarderCnPage() {
         <span className="text-foreground font-medium">CargoCenter</span>
       </nav>
 
-      {/* Header */}
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · ฝากนำเข้า · CargoCenter Integration
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">แดชบอร์ด Cargo Center · CN</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          เชื่อมข้อมูลรายการ CargoCenter เข้าระบบ PR — Wave 17 รองรับเฉพาะ &ldquo;อัปเดตด้วยมือ&rdquo;
-        </p>
-      </header>
-
       {/* Top menubar (MOMO ↔ CargoCenter) */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-cn" />
+
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · ฝากนำเข้า · CargoCenter Integration"
+        title="แดชบอร์ด Cargo Center · CN"
+        subtitle="เชื่อมข้อมูลรายการ CargoCenter เข้าระบบ PR — Wave 17 รองรับเฉพาะ “อัปเดตด้วยมือ”"
+      />
 
       {/* Wave 17 banner */}
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">

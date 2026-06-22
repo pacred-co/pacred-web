@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/admin/page-header";
 import { Search } from "lucide-react";
 
 /**
@@ -209,15 +210,15 @@ export default async function AdminGlobalSearchPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · U4-1 global search</p>
-        <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
-          <Search className="w-6 h-6" /> ค้นหาทุกที่
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          ค้นหาข้าม profiles · forwarders (+ตู้) · service_orders · freight · tax invoices · refunds · quotes
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · U4-1 global search"
+        title={
+          <span className="flex items-center gap-2">
+            <Search className="w-6 h-6" /> ค้นหาทุกที่
+          </span>
+        }
+        subtitle="ค้นหาข้าม profiles · forwarders (+ตู้) · service_orders · freight · tax invoices · refunds · quotes"
+      />
 
       <form action="/admin/search" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm flex gap-2">
         <input

@@ -6,6 +6,7 @@ import { AddTeamLeaderForm } from "./add-form";
 import { TeamLeaderRowActions } from "./row-actions";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportTeamLeadersAll } from "@/actions/admin/export/team-leaders";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function AdminTeamLeadersPage() {
   // W-1 (gap-admin H-1): page-level role gate. Manages team leaders +
@@ -58,30 +59,30 @@ export default async function AdminTeamLeadersPage() {
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ทีมขาย — Team Leaders</h1>
-          <p className="mt-1 text-sm text-muted">หัวหน้าทีมที่ได้รับค่าคอมจากออเดอร์ของลูกค้าในกลุ่ม customer_group ตน</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <CsvButton
-            rows={csvRows}
-            cols={csvCols}
-            filename="team-leaders.csv"
-            fetchAll={async () => {
-              "use server";
-              return exportTeamLeadersAll();
-            }}
-          />
-          <Link
-            href="/admin/forwarder-sales"
-            className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-          >
-            📊 รายงานค่าคอมฝากนำเข้า →
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · ทีมขาย"
+        title="ทีมขาย — Team Leaders"
+        subtitle="หัวหน้าทีมที่ได้รับค่าคอมจากออเดอร์ของลูกค้าในกลุ่ม customer_group ตน"
+        actions={
+          <>
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="team-leaders.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportTeamLeadersAll();
+              }}
+            />
+            <Link
+              href="/admin/forwarder-sales"
+              className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+            >
+              📊 รายงานค่าคอมฝากนำเข้า →
+            </Link>
+          </>
+        }
+      />
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">

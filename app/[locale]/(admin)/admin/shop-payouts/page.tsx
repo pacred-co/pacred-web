@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
@@ -120,24 +121,22 @@ export default async function AdminShopPayoutsPage({
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/shop-payouts" />
       <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
-          <p className="mt-1 text-sm text-muted">
-            คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด &ldquo;โอนแล้ว&rdquo; ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ
-          </p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={csvCols}
-          filename="shop-payouts.csv"
-          fetchAll={async () => {
-            "use server";
-            return exportShopPayoutsAll({ status: sp.status });
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · เบิกกระเป๋าร้าน"
+        title="เบิกกระเป๋าร้าน (shop wallet)"
+        subtitle={"คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด “โอนแล้ว” ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ"}
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="shop-payouts.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportShopPayoutsAll({ status: sp.status });
+            }}
+          />
+        }
+      />
 
       <FilterBar currentStatus={sp.status} />
 

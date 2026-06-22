@@ -43,6 +43,7 @@ import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import {
@@ -854,24 +855,26 @@ export default async function AdminReportsPage({
       </section>
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">รายงาน</h1>
-          {(dateFrom || dateTo) && (
-            <p className="text-sm text-muted mt-0.5">
+      <PageHeader
+        eyebrow="ADMIN"
+        title="รายงาน"
+        subtitle={
+          (dateFrom || dateTo) ? (
+            <>
               {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
               {" — "}
               {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
-            </p>
-          )}
-        </div>
-        <CsvButton
-          rows={activeCsv}
-          cols={Object.keys(activeCsv[0] ?? {}).map((k) => ({ key: k, label: k }))}
-          filename={csvFilename}
-        />
-      </div>
+            </>
+          ) : undefined
+        }
+        actions={
+          <CsvButton
+            rows={activeCsv}
+            cols={Object.keys(activeCsv[0] ?? {}).map((k) => ({ key: k, label: k }))}
+            filename={csvFilename}
+          />
+        }
+      />
 
       {/* Tab nav */}
       <div className="flex flex-wrap border-b border-border gap-0">

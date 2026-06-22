@@ -77,7 +77,7 @@ export default async function AdminLineInboxPage({
         </span>
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CRM</p>
-          <h1 className="mt-0.5 text-xl sm:text-2xl font-bold">กล่องข้อความ LINE</h1>
+          <h1 className="mt-0.5 text-2xl sm:text-3xl font-bold tracking-tight">กล่องข้อความ LINE</h1>
           <p className="mt-1 text-sm text-muted">
             ลูกค้าและข้อความจาก LINE OA ของ Pacred — ดูประวัติการสนทนา รายลูกค้า
           </p>

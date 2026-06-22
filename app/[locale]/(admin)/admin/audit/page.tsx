@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/admin/page-header";
 
 // Admin audit-log viewer — surfaces every admin_audit_log row written by
 // `lib/auth/require-admin.ts::logAdminAction`. Lets super track WHO did
@@ -109,16 +110,16 @@ export default async function AdminAuditPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · audit log</p>
-          <h1 className="mt-1 text-2xl font-bold">บันทึกการกระทำของแอดมิน</h1>
-          <p className="mt-1 text-sm text-muted">
+      <PageHeader
+        eyebrow="ADMIN · audit log"
+        title="บันทึกการกระทำของแอดมิน"
+        subtitle={
+          <>
             ทุก action ที่เรียก <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">logAdminAction()</code> ลงในตาราง <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">admin_audit_log</code>
-          </p>
-        </div>
-        <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
-      </div>
+          </>
+        }
+        actions={<Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>}
+      />
 
       {/* Filter form */}
       <form action="/admin/audit" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]">

@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { computeCommission } from "@/lib/sales-commission/calc";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -226,26 +227,28 @@ export default async function AdminCommissionsPage({
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/commissions" />
       <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
-        <header className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ค่าคอม + Payouts</p>
-            <h1 className="mt-1 text-2xl font-bold">ค่าคอม + Payouts</h1>
-            <p className="text-xs text-muted mt-1">
+        <PageHeader
+          eyebrow="ADMIN · ค่าคอม + Payouts"
+          title="ค่าคอม + Payouts"
+          subtitle={
+            <>
               Sales-rep ค่าคอมจาก {topEarners.reduce((s, t) => s + t.unpaidCount, 0).toLocaleString("th-TH")} รายการที่ยังไม่ได้เบิก ·
               workflow: ลูกค้าส่งคำขอ → admin จ่ายเงิน + upload slip ({STATUS_LABEL["2"]} → {STATUS_LABEL["3"]})
-            </p>
-            <p className="text-[11px] text-muted mt-1">
-              📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_user_sales</code> + <code className="bg-surface-alt px-1 rounded">tb_user_sales_admin_pay</code> (ADR-0026 repoint จาก dead rebuilt) ·
-              คำนวณค่าคอม 1% − WHT 3% per ADR-0020.
-            </p>
-          </div>
-          <Link
-            href="/admin/sales-payouts"
-            className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-          >
-            → ดูคิวจ่ายเงิน (faithful queue)
-          </Link>
-        </header>
+              <span className="block mt-1 text-[11px]">
+                📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_user_sales</code> + <code className="bg-surface-alt px-1 rounded">tb_user_sales_admin_pay</code> (ADR-0026 repoint จาก dead rebuilt) ·
+                คำนวณค่าคอม 1% − WHT 3% per ADR-0020.
+              </span>
+            </>
+          }
+          actions={
+            <Link
+              href="/admin/sales-payouts"
+              className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+            >
+              → ดูคิวจ่ายเงิน (faithful queue)
+            </Link>
+          }
+        />
 
         {/* Top earners — top 20 teams with unpaid commissions (money-internal) */}
         {showMoney && (

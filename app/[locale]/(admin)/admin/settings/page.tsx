@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { getAdminRoles, hasRole, isGodRole } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/admin/page-header";
 import { SettingsForm } from "./settings-form";
 
 export default async function AdminSettingsPage() {
@@ -51,11 +52,11 @@ export default async function AdminSettingsPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">ตั้งค่าระบบ</h1>
-        <p className="mt-1 text-sm text-muted">
-          ศูนย์รวมตัวตั้งค่า — แต่ละค่าแก้ที่ตัวแก้ตัวจริงด้านล่าง (มีผลกับออเดอร์ใหม่ทันที · ออเดอร์เก่าใช้ค่าตอนเปิด)
-        </p>
+        <PageHeader
+          eyebrow="ADMIN · ตั้งค่าระบบ"
+          title="ตั้งค่าระบบ"
+          subtitle="ศูนย์รวมตัวตั้งค่า — แต่ละค่าแก้ที่ตัวแก้ตัวจริงด้านล่าง (มีผลกับออเดอร์ใหม่ทันที · ออเดอร์เก่าใช้ค่าตอนเปิด)"
+        />
         <p className="mt-2 text-xs">
           <Link href="/admin/settings/notifications" className="text-primary-600 underline">
             → ตั้งค่าการแจ้งเตือนของฉัน (รวม Sales Daily Digest)

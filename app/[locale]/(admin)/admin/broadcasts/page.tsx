@@ -5,6 +5,7 @@ import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol } from "@/components/admin/csv-button";
+import { PageHeader } from "@/components/admin/page-header";
 import { exportBroadcastsAll } from "@/actions/admin/export/broadcasts";
 
 /**
@@ -102,33 +103,35 @@ export default async function AdminBroadcastsListPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">📢 Pop-up ประกาศ</h1>
-          <p className="text-xs text-muted mt-1">
+      <PageHeader
+        eyebrow="ADMIN"
+        title="📢 Pop-up ประกาศ"
+        subtitle={
+          <>
             ประกาศที่เด้งหาลูกค้าทุกคนตอน login — แสดงในช่วง <strong>วันเริ่ม–วันหมดอายุ</strong> จนกว่าลูกค้าจะกด &quot;รับทราบ&quot;
             (<span className="text-green-700 font-medium">{activeCount}</span> รายการกำลังแสดงตอนนี้)
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <CsvButton
-            rows={csvRows}
-            cols={csvCols}
-            filename="broadcasts.csv"
-            fetchAll={async () => {
-              "use server";
-              return exportBroadcastsAll();
-            }}
-          />
-          <Link
-            href="/admin/broadcasts/new"
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
-          >
-            ➕ เพิ่ม Pop-up ใหม่
-          </Link>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="broadcasts.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportBroadcastsAll();
+              }}
+            />
+            <Link
+              href="/admin/broadcasts/new"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+            >
+              ➕ เพิ่ม Pop-up ใหม่
+            </Link>
+          </>
+        }
+      />
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
         {rows.length === 0 ? (

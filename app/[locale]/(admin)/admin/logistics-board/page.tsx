@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -109,22 +110,19 @@ export default async function LogisticsBoardPage() {
         <span className="text-foreground font-medium">ศูนย์งานโลจิสติกส์</span>
       </nav>
 
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · LOGISTICS</p>
-          <h1 className="mt-1 text-2xl font-bold">ศูนย์งานโลจิสติกส์ (ภาพรวมทุกแผนก)</h1>
-          <p className="mt-1.5 text-sm text-muted">
-            ทุกชิปเมนต์ในระบบ จัดตาม flow งาน — แต่ละแผนกเห็นว่าต้องทำอะไรต่อ ตรงจุดไหน ·
-            อัปเดตสด จาก tb_forwarder
-          </p>
-        </div>
-        <Link
-          href="/admin/forwarders"
-          className="rounded-full bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        >
-          + ป้อนของเข้าระบบ (ฝากนำเข้า)
-        </Link>
-      </header>
+      <PageHeader
+        eyebrow="ADMIN · LOGISTICS"
+        title="ศูนย์งานโลจิสติกส์ (ภาพรวมทุกแผนก)"
+        subtitle="ทุกชิปเมนต์ในระบบ จัดตาม flow งาน — แต่ละแผนกเห็นว่าต้องทำอะไรต่อ ตรงจุดไหน · อัปเดตสด จาก tb_forwarder"
+        actions={
+          <Link
+            href="/admin/forwarders"
+            className="rounded-full bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+          >
+            + ป้อนของเข้าระบบ (ฝากนำเข้า)
+          </Link>
+        }
+      />
 
       {/* 🚐 Pending-dispatch alert — ready-to-ship but no driver assigned yet. */}
       {pendingDispatch > 0 && (

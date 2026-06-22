@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/admin/page-header";
 import { SackCheckForm } from "./search-form";
 
 /**
@@ -25,14 +26,17 @@ export default async function AdminMomoLclPage() {
 
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">ตรวจสอบ MOMO LCL Sack</h1>
-        <p className="mt-1 text-sm text-muted">
-          ดึงรายการ tracking ใน sack จาก MOMO + รวมยอด CBM / น้ำหนัก
-          (จับคู่กับ <code className="font-mono text-xs">tb_tmp_forwarder_item_momo</code>)
-        </p>
-      </div>
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · MOMO LCL"
+        title="ตรวจสอบ MOMO LCL Sack"
+        subtitle={
+          <>
+            ดึงรายการ tracking ใน sack จาก MOMO + รวมยอด CBM / น้ำหนัก
+            (จับคู่กับ <code className="font-mono text-xs">tb_tmp_forwarder_item_momo</code>)
+          </>
+        }
+      />
 
       <SackCheckForm />
     </main>

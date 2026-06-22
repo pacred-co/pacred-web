@@ -48,6 +48,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 
 export const dynamic = "force-dynamic";
@@ -313,24 +314,26 @@ export default async function DriverRunsPage({
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/driver-runs" />
       <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">DISBURSEMENT · งานคนขับ</p>
-            <h1 className="mt-1 text-2xl font-bold">
-              {filterDriver ? `งานของ ${filterDriver}` : "งานคนขับ (สรุปทั้งระบบ)"}
-            </h1>
-            <p className="mt-1 text-sm text-muted">
+        {/* §0h — one consistent page-title hierarchy via <PageHeader>. Display-only
+            swap; same eyebrow + dynamic title + subtitle + action link as before. */}
+        <PageHeader
+          eyebrow="DISBURSEMENT · งานคนขับ"
+          title={filterDriver ? `งานของ ${filterDriver}` : "งานคนขับ (สรุปทั้งระบบ)"}
+          subtitle={
+            <>
               อ่านจาก legacy <code className="rounded bg-surface-alt px-1 text-xs">tb_forwarder_driver_item</code> ·
               สำหรับเซลส์/บัญชี ติดตามงานวิ่งจริงเพื่อคำนวณค่าคอม + ตรวจรอบเก็บเงินปลายทาง
-            </p>
-          </div>
-          <Link
-            href="/admin/drivers"
-            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-bold hover:bg-surface-alt"
-          >
-            จัดการมอบหมาย →
-          </Link>
-        </div>
+            </>
+          }
+          actions={
+            <Link
+              href="/admin/drivers"
+              className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-bold hover:bg-surface-alt"
+            >
+              จัดการมอบหมาย →
+            </Link>
+          }
+        />
 
         {/* Driver filter */}
         {driverDirectory.length > 0 && (

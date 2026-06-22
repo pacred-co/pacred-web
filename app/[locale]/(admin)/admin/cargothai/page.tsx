@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageHeader } from "@/components/admin/page-header";
 import { SyncForm } from "./sync-form";
 
 /**
@@ -60,14 +61,12 @@ export default async function AdminCargoThaiPage() {
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">CargoThai sync</h1>
-        <p className="mt-1 text-sm text-muted">
-          ดึงข้อมูล container + product manifest จาก CargoThai (https://cargothai.tech/api/service/GetContainerV2)
-          เข้าตาราง tb_tmp_forwarder_cargothai + tb_tmp_forwarder_item_cargothai. Cron รันอัตโนมัติทุกวัน 02:30 ICT.
-        </p>
-      </header>
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · CargoThai"
+        title="CargoThai sync"
+        subtitle="ดึงข้อมูล container + product manifest จาก CargoThai (https://cargothai.tech/api/service/GetContainerV2) เข้าตาราง tb_tmp_forwarder_cargothai + tb_tmp_forwarder_item_cargothai. Cron รันอัตโนมัติทุกวัน 02:30 ICT."
+      />
 
       {!tokenConfigured && (
         <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">

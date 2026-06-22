@@ -7,6 +7,7 @@ import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * Admin > "รายการจ่ายเงินตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
@@ -206,12 +207,14 @@ export default async function CntHsPage({
     <>
       <TopMenuReport activeHref="/admin/cnt-hs" />
       <main className="p-6 lg:p-8 space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-            <h1 className="mt-1 text-2xl font-bold">รายการจ่ายเงินตู้</h1>
-            <p className="mt-1 text-sm text-muted">
+        {/* §0h — one consistent page-title hierarchy via <PageHeader>. Display-only
+            swap; same eyebrow + title + subtitle (+ ดูทั้งหมด) and the breadcrumb
+            moves into the actions slot. */}
+        <PageHeader
+          eyebrow="ADMIN"
+          title="รายการจ่ายเงินตู้"
+          subtitle={
+            <>
               จัดการการชำระเงินค่าตู้คอนเทนเนอร์ (tb_cnt) · {countAll.toLocaleString()} รายการทั้งหมด
               {sp.q && (
                 <>
@@ -225,14 +228,16 @@ export default async function CntHsPage({
                   </Link>
                 </>
               )}
-            </p>
-          </div>
-          <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center">
-            <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
-            <span>/</span>
-            <span className="text-foreground">รายการจ่ายเงินตู้</span>
-          </nav>
-        </div>
+            </>
+          }
+          actions={
+            <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center">
+              <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+              <span>/</span>
+              <span className="text-foreground">รายการจ่ายเงินตู้</span>
+            </nav>
+          }
+        />
 
         {/* Status tabs */}
         <div className="flex flex-wrap gap-2">

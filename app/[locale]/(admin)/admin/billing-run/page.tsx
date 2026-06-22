@@ -29,6 +29,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getInvoiceList } from "@/actions/admin/billing-run";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
@@ -315,7 +316,8 @@ export default async function BillingRunListPage({
     return (
       <main className="p-6 lg:p-8 space-y-4">
         <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
-        <h1 className="text-xl font-bold">ใบวางบิล (Billing-Run)</h1>
+        <PageHeader eyebrow="ADMIN · รายรับ → ใบวางบิล" title="ใบวางบิล (Billing-Run)" />
+
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
           ไม่สามารถโหลดข้อมูลได้: {res.error}
         </div>
@@ -348,34 +350,34 @@ export default async function BillingRunListPage({
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/billing-run" />
 
       <div className="px-4 md:px-6 lg:px-8 space-y-5">
-        <header className="flex flex-wrap items-center justify-between gap-3 pt-4">
-          <div>
-            <p className="text-xs text-muted">รายรับ → ใบวางบิล</p>
-            <h1 className="text-xl font-bold tracking-tight">ใบวางบิล</h1>
-            <p className="text-xs text-muted mt-0.5">
-              ออกใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม · ดูประวัติ · ปรับสถานะรับชำระ
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <CsvButton
-              rows={csvRows}
-              cols={CSV_COLS}
-              filename={`billing-run-${tab}.csv`}
-              fetchAll={async () => {
-                "use server";
-                return exportBillingRunAll({
-                  dateFrom,
-                  dateTo,
-                  status: statusFilter,
-                  userid: sp.userid?.trim() || undefined,
-                });
-              }}
-            />
-            <Link href="/admin/billing-run/add" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
-              + สร้างใบวางบิลใหม่
-            </Link>
-          </div>
-        </header>
+        <div className="pt-4">
+          <PageHeader
+            eyebrow="ADMIN · รายรับ → ใบวางบิล"
+            title="ใบวางบิล"
+            subtitle="ออกใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม · ดูประวัติ · ปรับสถานะรับชำระ"
+            actions={
+              <>
+                <CsvButton
+                  rows={csvRows}
+                  cols={CSV_COLS}
+                  filename={`billing-run-${tab}.csv`}
+                  fetchAll={async () => {
+                    "use server";
+                    return exportBillingRunAll({
+                      dateFrom,
+                      dateTo,
+                      status: statusFilter,
+                      userid: sp.userid?.trim() || undefined,
+                    });
+                  }}
+                />
+                <Link href="/admin/billing-run/add" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                  + สร้างใบวางบิลใหม่
+                </Link>
+              </>
+            }
+          />
+        </div>
 
         {/* Tab strip (PEAK pattern) */}
         <nav className="flex flex-wrap gap-2 overflow-x-auto scrollbar-x-visible -mx-1 px-1 pb-1">

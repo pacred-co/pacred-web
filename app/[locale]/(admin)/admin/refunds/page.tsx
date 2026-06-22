@@ -12,6 +12,7 @@ import {
   type RefundStatus,
   type RefundSource,
 } from "@/lib/validators/refund";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * U1-6 — /admin/refunds list page.
@@ -115,21 +116,19 @@ export default async function AdminRefundsListPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · การเงิน</p>
-          <h1 className="mt-1 text-2xl font-bold">คำขอคืนเงิน (Refunds — U1-6)</h1>
-          <p className="text-xs text-muted mt-1">
-            workflow: pending → อนุมัติ → จ่ายแล้ว (เครดิตเข้ากระเป๋าลูกค้า) · approve+mark-paid = super/accounting
-          </p>
-        </div>
-        <Link
-          href="/admin/refunds/new"
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
-        >
-          ➕ สร้างคำขอ (admin → ลูกค้า)
-        </Link>
-      </header>
+      <PageHeader
+        eyebrow="ADMIN · การเงิน"
+        title="คำขอคืนเงิน (Refunds — U1-6)"
+        subtitle="workflow: pending → อนุมัติ → จ่ายแล้ว (เครดิตเข้ากระเป๋าลูกค้า) · approve+mark-paid = super/accounting"
+        actions={
+          <Link
+            href="/admin/refunds/new"
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+          >
+            ➕ สร้างคำขอ (admin → ลูกค้า)
+          </Link>
+        }
+      />
 
       {/* Status filter chips */}
       <nav className="flex flex-wrap gap-2">

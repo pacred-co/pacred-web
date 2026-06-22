@@ -47,6 +47,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAdminsAll } from "@/actions/admin/export/admins";
 import { AdminRowManage } from "./admins-row-manage-client";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -515,48 +516,46 @@ export default async function AdminTablePage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">รายชื่อพนักงานทั้งหมด</h1>
-          <p className="text-sm text-muted mt-0.5">
-            {rows.length.toLocaleString("th-TH")} รายการ (จาก {sAll.toLocaleString("th-TH")} ทั้งหมด)
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <CsvButton
-            rows={csvRows}
-            cols={csvCols}
-            filename="admins.csv"
-            fetchAll={async () => {
-              "use server";
-              return exportAdminsAll({
-                s: sp.s,
-                c: sp.c,
-                type: sp.type,
-                position: sp.position,
-              });
-            }}
-          />
-          {canMutate && (
-            <Link
-              href="/admin/admins/sales-team"
-              className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
-              title="เปิด/ปิด ใครเป็นเซล — สุ่มลูกค้า + การ์ดทีมเซลอัปเดตอัตโนมัติ"
-            >
-              👥 จัดการทีมเซล
-            </Link>
-          )}
-          {canMutate && (
-            <Link
-              href="/admin/admins/new"
-              className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
-            >
-              + เพิ่มพนักงานใหม่
-            </Link>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · พนักงาน"
+        title="รายชื่อพนักงานทั้งหมด"
+        subtitle={`${rows.length.toLocaleString("th-TH")} รายการ (จาก ${sAll.toLocaleString("th-TH")} ทั้งหมด)`}
+        actions={
+          <>
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename="admins.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportAdminsAll({
+                  s: sp.s,
+                  c: sp.c,
+                  type: sp.type,
+                  position: sp.position,
+                });
+              }}
+            />
+            {canMutate && (
+              <Link
+                href="/admin/admins/sales-team"
+                className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+                title="เปิด/ปิด ใครเป็นเซล — สุ่มลูกค้า + การ์ดทีมเซลอัปเดตอัตโนมัติ"
+              >
+                👥 จัดการทีมเซล
+              </Link>
+            )}
+            {canMutate && (
+              <Link
+                href="/admin/admins/new"
+                className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
+              >
+                + เพิ่มพนักงานใหม่
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {/* Wave 22 status banner — proactive transparency per AGENTS §0a. */}
       <div className="rounded-md border border-sky-200 bg-sky-50/60 p-2.5 text-xs text-sky-800 flex items-start gap-2">

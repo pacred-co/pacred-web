@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon,
   Users, Container as ContainerIcon, TrendingUp, TrendingDown, Minus,
@@ -258,18 +259,16 @@ export default async function AdminKpiPage() {
 
   return (
     <main className="p-4 lg:p-6 space-y-5">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · KPI</p>
-          <h1 className="mt-1 text-2xl font-bold">KPI ภาพรวมธุรกิจ</h1>
-          <p className="mt-1 text-sm text-muted">
-            ตัวเลขสำคัญของบริษัท — รายได้ · ออเดอร์ · ตู้ · ลูกค้าใหม่ · ยอดชำระเงิน · เทียบกับเดือน{prevMonthLabel}
-          </p>
-        </div>
-        <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          ← กลับภาพรวม
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · KPI"
+        title="KPI ภาพรวมธุรกิจ"
+        subtitle={`ตัวเลขสำคัญของบริษัท — รายได้ · ออเดอร์ · ตู้ · ลูกค้าใหม่ · ยอดชำระเงิน · เทียบกับเดือน${prevMonthLabel}`}
+        actions={
+          <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            ← กลับภาพรวม
+          </Link>
+        }
+      />
 
       {/* ── headline KPIs ── */}
       <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">

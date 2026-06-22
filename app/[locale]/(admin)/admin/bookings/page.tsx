@@ -8,6 +8,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportBookingsAll } from "@/actions/admin/export/bookings";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * BK-1 — /admin/bookings list page.
@@ -158,22 +159,24 @@ export default async function AdminBookingsListPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ขายและ Pricing</p>
-          <h1 className="mt-1 text-2xl font-bold">{t("listTitle")} (BK-1)</h1>
-          <p className="text-xs text-muted mt-1">{t("subtitle")}</p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={csvCols}
-          filename={`bookings-${isAll ? "all" : (status ?? "submitted")}.csv`}
-          fetchAll={async () => {
-            "use server";
-            return exportBookingsAll({ status });
-          }}
-        />
-      </header>
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. Display-only
+          swap; same eyebrow + title + subtitle + CSV action as before. */}
+      <PageHeader
+        eyebrow="ADMIN · ขายและ Pricing"
+        title={`${t("listTitle")} (BK-1)`}
+        subtitle={t("subtitle")}
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename={`bookings-${isAll ? "all" : (status ?? "submitted")}.csv`}
+            fetchAll={async () => {
+              "use server";
+              return exportBookingsAll({ status });
+            }}
+          />
+        }
+      />
 
       {/* Status filter chips */}
       <nav className="flex flex-wrap gap-2">

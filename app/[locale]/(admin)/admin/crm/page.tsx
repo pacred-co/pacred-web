@@ -134,7 +134,7 @@ export default async function AdminCrmPage({
         </span>
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CRM</p>
-          <h1 className="mt-0.5 text-xl sm:text-2xl font-bold">CRM — ลูกค้าสัมพันธ์</h1>
+          <h1 className="mt-0.5 text-2xl sm:text-3xl font-bold tracking-tight">CRM — ลูกค้าสัมพันธ์</h1>
           <p className="mt-1 text-sm text-muted">
             กล่องข้อความรวมทุกช่องทาง · ข้อมูลลูกค้า 360° · มอบหมายเซลล์ผู้ดูแล
           </p>

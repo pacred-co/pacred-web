@@ -28,6 +28,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { PageHeader } from "@/components/admin/page-header";
 import { FREE_SHIPPING_ZIPS } from "@/lib/forwarder/free-shipping-zips";
 import { NotPortageCombinePanel, type NotPortageRow } from "./notportage-combine-panel";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
@@ -158,10 +159,12 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
       <>
         <TopMenuReport activeHref={`/admin/forwarder-action`} />
         <main className="p-6 lg:p-8">
-          <h1 className="text-2xl font-bold">forwarder-action</h1>
-          <p className="text-sm text-muted mt-2">
-            กรุณาเลือกหัวข้อจากเมนูด้านบน (9 audit queues)
-          </p>
+          {/* §0h — consistent page-title hierarchy via <PageHeader>. Display-only. */}
+          <PageHeader
+            eyebrow="ADMIN · AUDIT"
+            title="forwarder-action"
+            subtitle="กรุณาเลือกหัวข้อจากเมนูด้านบน (9 audit queues)"
+          />
         </main>
       </>
     );
@@ -212,24 +215,28 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
       <>
         <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
         <main className="p-4 lg:p-6 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
-              <h1 className="mt-1 text-2xl font-bold">{label}</h1>
-              <p className="mt-1 text-xs text-muted">
+          {/* §0h — consistent page-title hierarchy via <PageHeader>. Display-only
+              swap; same eyebrow + title + subtitle + CSV action. */}
+          <PageHeader
+            eyebrow="ADMIN · AUDIT"
+            title={label}
+            subtitle={
+              <>
                 Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action]}</code>
-              </p>
-            </div>
-            <CsvButton
-              rows={shopCsvRows}
-              cols={shopCsvCols}
-              filename={`forwarder-action-NoteShop${shopQForExport ? `-q${shopQForExport}` : ""}.csv`}
-              fetchAll={async () => {
-                "use server";
-                return exportForwarderActionAll({ action: "NoteShop", q: shopQForExport });
-              }}
-            />
-          </div>
+              </>
+            }
+            actions={
+              <CsvButton
+                rows={shopCsvRows}
+                cols={shopCsvCols}
+                filename={`forwarder-action-NoteShop${shopQForExport ? `-q${shopQForExport}` : ""}.csv`}
+                fetchAll={async () => {
+                  "use server";
+                  return exportForwarderActionAll({ action: "NoteShop", q: shopQForExport });
+                }}
+              />
+            }
+          />
 
           {/* Status tab strip (?q=1..6) */}
           <div className="flex flex-wrap gap-1 border-b border-border">
@@ -465,29 +472,34 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
     <>
       <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
       <main className="p-4 lg:p-6 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
-            <h1 className="mt-1 text-2xl font-bold">{label}</h1>
-            <p className="mt-1 text-xs text-muted">
+        {/* §0h — consistent page-title hierarchy via <PageHeader>. Display-only
+            swap; same eyebrow + title + subtitle (legacy condition + conditional
+            ship-queue ZIP note) + CSV action. */}
+        <PageHeader
+          eyebrow="ADMIN · AUDIT"
+          title={label}
+          subtitle={
+            <>
               Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action] ?? "TBD"}</code>
-            </p>
-            {isShipQueue && (
-              <p className="mt-1 text-[11px] text-muted">
-                Free-shipping ZIP list: {FREE_SHIPPING_ZIPS.length} codes (BKK + นนทบุรี + ปทุมธานี + นครปฐม + สมุทรปราการ + สมุทรสาคร)
-              </p>
-            )}
-          </div>
-          <CsvButton
-            rows={fwdCsvRows}
-            cols={fwdCsvCols}
-            filename={`forwarder-action-${action}${fStatusQ ? `-q${fStatusQ}` : ""}.csv`}
-            fetchAll={async () => {
-              "use server";
-              return exportForwarderActionAll({ action, q: fStatusQ });
-            }}
-          />
-        </div>
+              {isShipQueue && (
+                <span className="mt-1 block text-[11px] text-muted">
+                  Free-shipping ZIP list: {FREE_SHIPPING_ZIPS.length} codes (BKK + นนทบุรี + ปทุมธานี + นครปฐม + สมุทรปราการ + สมุทรสาคร)
+                </span>
+              )}
+            </>
+          }
+          actions={
+            <CsvButton
+              rows={fwdCsvRows}
+              cols={fwdCsvCols}
+              filename={`forwarder-action-${action}${fStatusQ ? `-q${fStatusQ}` : ""}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportForwarderActionAll({ action, q: fStatusQ });
+              }}
+            />
+          }
+        />
 
         {/* Per-fStatus tab strip (?q=1..7) — legacy forwarder-action.php:290-375.
             Renders above WHATEVER body follows, including the notPortage panel. */}

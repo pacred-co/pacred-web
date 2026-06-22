@@ -6,6 +6,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportCsvImportsAll } from "@/actions/admin/export/csv-imports";
 import { CsvImportRowActions } from "./row-actions";
+import { PageHeader } from "@/components/admin/page-header";
 
 const CSV_COLS: CsvCol[] = [
   { key: "created_at", label: "วันที่" },
@@ -119,34 +120,39 @@ export default async function AdminCsvImportsPage({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">นำเข้าข้อมูล CSV</h1>
-          <p className="mt-1 text-sm text-muted">
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. Display-only
+          swap; same eyebrow + title + subtitle + actions (CSV export + disabled
+          upload) as before. */}
+      <PageHeader
+        eyebrow="ADMIN"
+        title="นำเข้าข้อมูล CSV"
+        subtitle={
+          <>
             อัปโหลดไฟล์ CSV → พรีวิว 5 แถวแรก → ยืนยันนำเข้าตารางเป้าหมาย.
             รองรับ <span className="font-mono">forwarders</span> เท่านั้นในเฟสนี้.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <CsvButton
-            rows={csvRows}
-            cols={CSV_COLS}
-            filename="csv-imports.csv"
-            fetchAll={async () => {
-              "use server";
-              return exportCsvImportsAll();
-            }}
-          />
-          <span
-            aria-disabled="true"
-            title="ปิดชั่วคราว — เขียนลงตารางที่ระบบจริงไม่อ่าน (ดู banner ด้านบน)"
-            className="cursor-not-allowed rounded-lg bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-500"
-          >
-            + อัปโหลด CSV ใหม่ (ปิดชั่วคราว)
-          </span>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <CsvButton
+              rows={csvRows}
+              cols={CSV_COLS}
+              filename="csv-imports.csv"
+              fetchAll={async () => {
+                "use server";
+                return exportCsvImportsAll();
+              }}
+            />
+            <span
+              aria-disabled="true"
+              title="ปิดชั่วคราว — เขียนลงตารางที่ระบบจริงไม่อ่าน (ดู banner ด้านบน)"
+              className="cursor-not-allowed rounded-lg bg-gray-300 px-4 py-2 text-sm font-semibold text-gray-500"
+            >
+              + อัปโหลด CSV ใหม่ (ปิดชั่วคราว)
+            </span>
+          </>
+        }
+      />
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (

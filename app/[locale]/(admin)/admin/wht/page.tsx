@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { PageHeader } from "@/components/admin/page-header";
 import { exportWhtAll } from "@/actions/admin/export/wht";
 
 /**
@@ -175,27 +176,29 @@ export default async function AdminWhtChasePage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ACCOUNTING</p>
-          <h1 className="mt-1 text-2xl font-bold">ใบ 50 ทวิ — ตามใบหักภาษี ณ ที่จ่าย</h1>
-          <p className="mt-1 text-sm text-muted">
+      <PageHeader
+        eyebrow="ADMIN · ACCOUNTING"
+        title="ใบ 50 ทวิ — ตามใบหักภาษี ณ ที่จ่าย"
+        subtitle={
+          <>
             คิวรายการที่ลูกค้านิติบุคคลหักภาษี ณ ที่จ่ายแล้ว — ต้องส่ง <strong>ใบ 50 ทวิ</strong>{" "}
             กลับมาให้ Pacred เพื่อใช้เป็นเครดิตภาษี. <strong>ใบเสร็จออกไม่ได้</strong>{" "}
             จนกว่าใบ 50 ทวิ จะเข้าระบบ (gate ที่ <code>issueTaxInvoice</code> +{" "}
             <code>adminCreateFreightInvoice</code>).
-          </p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={csvCols}
-          filename={`wht-${status}.csv`}
-          fetchAll={async () => {
-            "use server";
-            return exportWhtAll({ status });
-          }}
-        />
-      </header>
+          </>
+        }
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename={`wht-${status}.csv`}
+            fetchAll={async () => {
+              "use server";
+              return exportWhtAll({ status });
+            }}
+          />
+        }
+      />
 
       {/* Filter chips — show count beside each so the queue size is visible at a glance. */}
       <nav className="flex flex-wrap gap-2 text-xs">

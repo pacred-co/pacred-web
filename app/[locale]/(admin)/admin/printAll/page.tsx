@@ -388,10 +388,11 @@ function PrintAllGuide() {
     <main className="min-h-screen bg-slate-50 p-4 text-black sm:p-8">
       <div className="mx-auto max-w-2xl space-y-4">
         <header>
-          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary-600">ADMIN · พิมพ์ป้ายกล่อง</p>
+          <h1 className="mt-0.5 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 leading-tight">
             พิมพ์ป้ายกล่อง
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1.5 text-sm text-slate-600 leading-snug">
             สแกนกล่อง → พิมพ์ป้ายทันที · หรือพิมพ์ทั้งตู้ในครั้งเดียว — ทำได้ในหน้านี้เลย
           </p>
         </header>

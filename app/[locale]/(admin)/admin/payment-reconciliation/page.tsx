@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   listPendingReconciliations,
   type PendingReconciliationItem,
@@ -70,13 +71,13 @@ export default async function PaymentReconciliationPage() {
         </p>
       </div>
 
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · บัญชี</p>
-        <h1 className="mt-1 text-2xl font-bold">Slip ↔ Order Reconciliation</h1>
-        <p className="mt-1 text-sm text-muted">
-          สลิปเงินที่อนุมัติแล้วแต่ยังไม่ได้จับคู่กับใบฝากนำเข้า (90 วันล่าสุด). ระบบเสนอผู้สมัครที่ตรงตามยอด ±2 บาท · admin สามารถจับคู่แบบ manual หรือ mark เป็นไม่จับคู่ (เข้าคิว refund).
-        </p>
-        <div className="mt-2 flex gap-2 text-xs">
+      <div className="space-y-2">
+        <PageHeader
+          eyebrow="ADMIN · บัญชี"
+          title="Slip ↔ Order Reconciliation"
+          subtitle="สลิปเงินที่อนุมัติแล้วแต่ยังไม่ได้จับคู่กับใบฝากนำเข้า (90 วันล่าสุด). ระบบเสนอผู้สมัครที่ตรงตามยอด ±2 บาท · admin สามารถจับคู่แบบ manual หรือ mark เป็นไม่จับคู่ (เข้าคิว refund)."
+        />
+        <div className="flex gap-2 text-xs">
           <Link href="/admin/accounting" className="text-primary-500 hover:underline">← กลับบัญชี</Link>
           <span className="text-muted">·</span>
           <Link href="/admin/accounting/reconcile" className="text-primary-500 hover:underline">

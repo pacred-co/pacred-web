@@ -7,6 +7,7 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportPartnersAll } from "@/actions/admin/export/partners";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * /admin/partners — manage the external partner directory (CLAUDE.md §PM-6 #3).
@@ -104,30 +105,27 @@ export default async function AdminPartnersPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · เครื่องมือ</p>
-        <h1 className="mt-1 text-2xl font-bold">พาร์ทเนอร์ (Partners)</h1>
-        <p className="mt-1 text-sm text-muted">
-          ทำเนียบบริษัทพาร์ทเนอร์ภายนอกที่ Pacred ทำงานด้วย — ผู้รวบรวมสินค้า
-          (GOGO/JMF/TTP/MOMO/CargoThai), โกดังจีน-ไทย, ตัวแทนออกของ,
-          แมสเซ็นเจอร์, ผู้ให้บริการ API ฯลฯ.
-          Code เปลี่ยนภายหลังไม่ได้ — ถ้าตั้งผิดให้สร้างใหม่ + ปิด/ลบอันเก่า.
-        </p>
-        <p className="mt-1 text-xs text-muted">
-          {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
-        </p>
-        </div>
-        <CsvButton
-          rows={csvRows}
-          cols={csvCols}
-          filename="พาร์ทเนอร์.csv"
-          fetchAll={async () => {
-            "use server";
-            return exportPartnersAll();
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · เครื่องมือ"
+        title="พาร์ทเนอร์ (Partners)"
+        subtitle="ทำเนียบบริษัทพาร์ทเนอร์ภายนอกที่ Pacred ทำงานด้วย — ผู้รวบรวมสินค้า (GOGO/JMF/TTP/MOMO/CargoThai), โกดังจีน-ไทย, ตัวแทนออกของ, แมสเซ็นเจอร์, ผู้ให้บริการ API ฯลฯ. Code เปลี่ยนภายหลังไม่ได้ — ถ้าตั้งผิดให้สร้างใหม่ + ปิด/ลบอันเก่า."
+        badges={
+          <span className="text-xs text-muted">
+            {activeCount} active · {inactiveCount} inactive · รวม {rows.length} รายการ
+          </span>
+        }
+        actions={
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename="พาร์ทเนอร์.csv"
+            fetchAll={async () => {
+              "use server";
+              return exportPartnersAll();
+            }}
+          />
+        }
+      />
 
       {/* List */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">

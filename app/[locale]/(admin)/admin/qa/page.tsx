@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * Admin > QA & QC — Service-Level Queues (hub)
@@ -81,17 +82,15 @@ export default async function AdminQaHubPage() {
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Header */}
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · PHASE 2</p>
-        <h1 className="mt-1 text-2xl font-bold">QA &amp; QC — Service-Level Queues</h1>
-        <p className="mt-1 text-sm text-muted">
-          คาดการณ์ล่าช้า · งานที่ค้างเกิน SLA — เปิดดูรายชื่อ + จัดการ
-        </p>
-      </div>
-
       {/* TOP menubar — purple bar with cascading dropdowns */}
       <PageTopMenubar items={QA_MENUBAR} activeHref="/admin/qa" />
+
+      {/* Header — §0h consistent <PageHeader> hierarchy */}
+      <PageHeader
+        eyebrow="ADMIN · PHASE 2"
+        title="QA & QC — Service-Level Queues"
+        subtitle="คาดการณ์ล่าช้า · งานที่ค้างเกิน SLA — เปิดดูรายชื่อ + จัดการ"
+      />
 
       {/* Hub body — alert cards (10) */}
       <section>

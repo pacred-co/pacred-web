@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getLeadQueue, getLeadStats, exportLeadsAll } from "@/actions/admin/leads";
 import { getTagsBulk } from "@/actions/admin/customer-tags";
@@ -111,13 +112,11 @@ export default async function AdminLeadsPage({
       <PageTopMenubar items={LEADS_MENUBAR} activeHref={`/admin/leads?segment=${segment}`} />
       <main className="p-4 sm:p-6 lg:p-8 space-y-5">
         {/* Header */}
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ACQUISITION</p>
-          <h1 className="mt-1 text-2xl font-bold">โทรตามลูกค้า (Leads)</h1>
-          <p className="mt-1 text-sm text-muted">
-            โทรหาลูกค้าจากบนลงล่างเพื่อปิดการขาย — ลูกค้าเก่าที่ยังไม่เคยติดต่อ + ลูกค้า PCS รายใหญ่
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="ADMIN · ACQUISITION"
+          title="โทรตามลูกค้า (Leads)"
+          subtitle="โทรหาลูกค้าจากบนลงล่างเพื่อปิดการขาย — ลูกค้าเก่าที่ยังไม่เคยติดต่อ + ลูกค้า PCS รายใหญ่"
+        />
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

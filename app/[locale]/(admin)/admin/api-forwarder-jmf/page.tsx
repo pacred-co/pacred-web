@@ -22,6 +22,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { Truck, History, Database, Search, BarChart3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -48,19 +49,15 @@ export default async function AdminApiForwarderJmfPage() {
         <span className="text-foreground font-medium">JMF</span>
       </nav>
 
-      {/* Header */}
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · ฝากนำเข้า · JMF Integration
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">แดชบอร์ดข้อมูลจาก JMF</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          บริษัท เจเอ็มเอฟ คาร์โก้ อิมพอร์ต เซอร์วิส จำกัด · เลขผู้เสียภาษี 0735563005872
-        </p>
-      </header>
-
       {/* Top menubar */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-jmf" />
+
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · ฝากนำเข้า · JMF Integration"
+        title="แดชบอร์ดข้อมูลจาก JMF"
+        subtitle="บริษัท เจเอ็มเอฟ คาร์โก้ อิมพอร์ต เซอร์วิส จำกัด · เลขผู้เสียภาษี 0735563005872"
+      />
 
       {/* Scope banner */}
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">

@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -245,19 +246,19 @@ export default async function AdminForwarderSalesPage({
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/forwarder-sales" />
       <main className="p-6 lg:p-8 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SALES ATTRIBUTION</p>
-            <h1 className="mt-1 text-2xl font-bold">รายงานยอดขาย Sales Rep (ฝากนำเข้า)</h1>
-            <p className="text-sm text-muted mt-1">
+        <PageHeader
+          eyebrow="ADMIN · SALES ATTRIBUTION"
+          title="รายงานยอดขาย Sales Rep (ฝากนำเข้า)"
+          subtitle={
+            <>
               ใครปิดออเดอร์ไหน · {rows.length.toLocaleString("th-TH")} forwarder ในช่วงที่เลือก ·
               อ้างอิงจาก <code className="bg-surface-alt px-1 rounded text-xs">tb_sales_report</code> ของจริง
-            </p>
-            <p className="text-[11px] text-muted mt-1">
-              📊 ADR-0026 repoint จาก dead <code>sales_commissions</code> · ค่าคอมจ่ายอยู่ที่ <Link href="/admin/commissions" className="underline">/admin/commissions</Link>
-            </p>
-          </div>
-        </div>
+              <span className="block mt-1 text-[11px]">
+                📊 ADR-0026 repoint จาก dead <code>sales_commissions</code> · ค่าคอมจ่ายอยู่ที่ <Link href="/admin/commissions" className="underline">/admin/commissions</Link>
+              </span>
+            </>
+          }
+        />
 
         {/* Filters */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">

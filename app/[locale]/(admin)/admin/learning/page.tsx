@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { PageHeader } from "@/components/admin/page-header";
 
 // Per-topic placeholder routing (Wave B-6 — sidebar fidelity audit fix).
 // The sidebar promises 5 distinct learning destinations
@@ -40,13 +41,13 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
     const cfg = TOPIC_CFG[topic];
     return (
       <main className="p-6 lg:p-8 space-y-5">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · LEARNING</p>
-          <div className="mt-1 text-xs text-muted">
+        <PageHeader
+          eyebrow="ADMIN · LEARNING"
+          title={`📚 ${cfg.label}`}
+          subtitle={
             <Link href="/admin/learning" className="hover:text-primary-600 hover:underline">← ย้อนกลับไปหน้ารวม</Link>
-          </div>
-          <h1 className="mt-2 text-2xl font-bold">📚 {cfg.label}</h1>
-        </div>
+          }
+        />
 
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -124,11 +125,11 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · LEARNING</p>
-        <h1 className="mt-1 text-2xl font-bold">📚 เรียนรู้และข้อมูลภายใน</h1>
-        <p className="mt-1 text-sm text-muted">เนื้อหาสำหรับพนักงานทุกฝ่าย</p>
-      </div>
+      <PageHeader
+        eyebrow="ADMIN · LEARNING"
+        title="📚 เรียนรู้และข้อมูลภายใน"
+        subtitle="เนื้อหาสำหรับพนักงานทุกฝ่าย"
+      />
 
       <div className="grid sm:grid-cols-2 gap-4">
         {sections.map((s) => (

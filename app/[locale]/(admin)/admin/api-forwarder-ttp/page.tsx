@@ -24,6 +24,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { PageHeader } from "@/components/admin/page-header";
 import { Truck, Database, KeyRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -65,19 +66,15 @@ export default async function AdminApiForwarderTtpPage() {
         <span className="text-foreground font-medium">TTP</span>
       </nav>
 
-      {/* Header */}
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · ฝากนำเข้า · TTP Integration
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">แดชบอร์ดข้อมูลจาก TTP</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          ข้อมูล SM (ตู้สินค้า) จากโกดังจีน — ดึงสดผ่าน cargothai.tech
-        </p>
-      </header>
-
       {/* Top menubar */}
       <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-ttp" />
+
+      {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
+      <PageHeader
+        eyebrow="ADMIN · ฝากนำเข้า · TTP Integration"
+        title="แดชบอร์ดข้อมูลจาก TTP"
+        subtitle="ข้อมูล SM (ตู้สินค้า) จากโกดังจีน — ดึงสดผ่าน cargothai.tech"
+      />
 
       {/* Table-not-migrated banner — TTP has no local tb_* table (live proxy only) */}
       <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 leading-relaxed space-y-2">
