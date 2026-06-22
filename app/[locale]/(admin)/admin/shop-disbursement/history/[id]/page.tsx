@@ -27,6 +27,9 @@ import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { getShopDisbursementBatch } from "@/actions/admin/shop-disbursement";
 import { bankName } from "@/lib/admin/bank-names";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { SlipImage } from "@/components/admin/slip-image";
+import { ShopDisbursementPayForm } from "./pay-form";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +76,8 @@ export default async function AdminShopDisbursementBatchPage({
   const { batch, orders, totals } = res.data!;
   const batchStatusLabel =
     batch.status === "2" ? "จ่ายแล้ว" : batch.status === "1" ? "รอดำเนินการ" : "ไม่สำเร็จ";
+  // B2 — paid slip (resolve only when paid).
+  const slipUrl = batch.status === "2" ? await resolveLegacyUrl(batch.imagesslip, "slip") : null;
 
   return (
     <>
@@ -189,11 +194,27 @@ export default async function AdminShopDisbursementBatchPage({
                 <dd className="font-medium">{batch.adminidcreate ?? "—"}</dd>
               </div>
             </dl>
+            {/* B2 (2026-06-22) — pay-out completion (status '1'→'2' + slip). */}
             {batch.status === "1" && (
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                สถานะ &quot;รอดำเนินการ&quot; — แนบสลิปจ่ายเงินผ่านหน้าจ่ายเงิน (Disbursements)
-                เพื่อปิดรายการเป็น &quot;จ่ายแล้ว&quot;
-              </p>
+              <ShopDisbursementPayForm id={batch.id} amount={Number(batch.amount ?? 0)} />
+            )}
+            {batch.status === "2" && (
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                <p className="text-sm font-bold text-emerald-800">จ่ายแล้ว · หลักฐานการโอน</p>
+                {batch.dateupdate ? (
+                  <p className="text-xs text-muted">
+                    วันที่จ่าย: {new Date(batch.dateupdate).toLocaleString("th-TH")}
+                    {batch.adminidupdate ? ` · โดย ${batch.adminidupdate}` : ""}
+                  </p>
+                ) : null}
+                {slipUrl ? (
+                  <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block" title="เปิดสลิปเต็ม">
+                    <SlipImage src={slipUrl} pdfMode="tile" className="h-24 w-24 rounded-lg border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-emerald-300" />
+                  </a>
+                ) : (
+                  <p className="mt-1 text-xs text-muted">— ไม่มีไฟล์สลิป</p>
+                )}
+              </div>
             )}
           </div>
 

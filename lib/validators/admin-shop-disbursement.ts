@@ -49,6 +49,16 @@ export const createShopDisbursementSchema = z.object({
 
 export type CreateShopDisbursementInput = z.infer<typeof createShopDisbursementSchema>;
 
+/** B2 (2026-06-22) — pay-out completion: flip a tb_shop_pay_h batch
+ *  status '1' (รอดำเนินการ) → '2' (จ่ายแล้ว) with a transfer-slip. Mirrors the
+ *  proven `payoutPaidSchema` on sales-payouts. The slip File is passed
+ *  separately (FormData), not in this schema. */
+export const markShopDisbursementPaidSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+export type MarkShopDisbursementPaidInput = z.infer<typeof markShopDisbursementPaidSchema>;
+
 /** A YYYY-MM-DD - YYYY-MM-DD range string OR explicit start/end. The
  *  eligibility + history queries filter on the SETTLED WALLET date
  *  (tb_wallet_hs.date) — see shop-disbursement-calc.ts. */
