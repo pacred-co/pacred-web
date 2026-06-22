@@ -32,6 +32,7 @@ import {
   upsertLegacyCorporate,
 } from "@/lib/auth/legacy-bridge-tb-users";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
+import { signCustomerLoginToken } from "@/lib/auth/customer-magic-link";
 import { CORP_STATUS } from "@/lib/admin/customer-identity";
 import {
   adminCreateCustomerSchema,
@@ -96,6 +97,58 @@ export async function adminCreateCustomer(
     const existingUserId = await findLegacyUserIdByPhone(admin, phone);
     if (existingUserId) {
       return { ok: false, error: `เบอร์นี้มีลูกค้าอยู่แล้ว: ${existingUserId}` };
+    }
+
+    // Validate any explicit เซลล์/CS pick against the active pool BEFORE we
+    // provision anything — fail fast so we never half-create a customer and
+    // then reject. Blank = auto (the seed's round-robin picks the least-loaded).
+    // tb_admin is camelCase per migration 0113 (assign-sales-rep.ts queries it
+    // the same way). The flag columns: adminStatusSale='1' (is a เซลล์),
+    // adminStatusCS='1' (is a CS · migration 0141), adminStatusA='1' (active).
+    const wantSalesRep = (d.salesRepId ?? "").trim();
+    const wantCsRep = (d.csRepId ?? "").trim();
+    // Compose the staff note saved to tb_users.userNote: a "บริการที่ใช้" line
+    // (the selected service chips · de-duped, order-preserved) above the
+    // free-text remark. Both land in the SAME field the customer profile
+    // shows/edits — "เลือกเพื่อโน๊ต".
+    const services = Array.from(
+      new Set((d.services ?? []).map((s) => s.trim()).filter(Boolean)),
+    );
+    const freeNote = (d.note ?? "").trim();
+    const note = [
+      services.length > 0 ? `บริการที่ใช้: ${services.join(", ")}` : "",
+      freeNote,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    if (wantSalesRep || wantCsRep) {
+      const ids = Array.from(new Set([wantSalesRep, wantCsRep].filter(Boolean)));
+      const { data: pool, error: poolErr } = await admin
+        .from("tb_admin")
+        .select("adminID, adminStatusA, adminStatusSale, adminStatusCS")
+        .in("adminID", ids);
+      if (poolErr) {
+        logger.error("adminCreateCustomer", "tb_admin pool validation failed", poolErr, {});
+        return { ok: false, error: "ตรวจสอบเซลล์/CS ไม่สำเร็จ ลองอีกครั้ง" };
+      }
+      const byId = new Map(
+        (pool ?? []).map((r) => [
+          (r as { adminID: string }).adminID,
+          r as { adminStatusA: string | null; adminStatusSale: string | null; adminStatusCS: string | null },
+        ]),
+      );
+      if (wantSalesRep) {
+        const row = byId.get(wantSalesRep);
+        if (!row || row.adminStatusA !== "1" || row.adminStatusSale !== "1") {
+          return { ok: false, error: "เซลล์ที่เลือกไม่ถูกต้องหรือไม่ได้เปิดใช้งาน" };
+        }
+      }
+      if (wantCsRep) {
+        const row = byId.get(wantCsRep);
+        if (!row || row.adminStatusA !== "1" || row.adminStatusCS !== "1") {
+          return { ok: false, error: "CS ที่เลือกไม่ถูกต้องหรือไม่ได้เปิดใช้งาน" };
+        }
+      }
     }
 
     const generated = !(d.password && d.password.length > 0);
@@ -211,6 +264,32 @@ export async function adminCreateCustomer(
       return { ok: false, error: "เบอร์นี้ถูกใช้แล้วในระบบ (อาจเป็นบัญชีที่ถูกระงับ) — สร้างไม่สำเร็จ" };
     }
 
+    // 4.5 — post-seed tb_users customizations the create form collected:
+    //       · เซลล์/CS override — insertLegacyTbUserRow already round-robined
+    //         BOTH adminIDSale + adminIDCS (every customer is owned at create);
+    //         overwrite only what the admin explicitly picked (validated against
+    //         the active pool above).
+    //       · userNote — the staff remark (same field the profile shows/edits).
+    //       Best-effort: the customer exists + is owned; a failed write just
+    //       keeps the round-robin pick / empty note (log loud, never roll back a
+    //       committed signup).
+    const postSeed: Record<string, string> = {};
+    if (wantSalesRep) postSeed.adminIDSale = wantSalesRep;
+    if (wantCsRep) postSeed.adminIDCS = wantCsRep;
+    if (note) postSeed.userNote = note;
+    if (Object.keys(postSeed).length > 0) {
+      const { error: psErr } = await admin
+        .from("tb_users")
+        .update(postSeed)
+        .eq("userID", memberCode);
+      if (psErr) {
+        logger.warn("adminCreateCustomer", "post-seed tb_users update failed — kept round-robin pick / empty note", {
+          memberCode,
+          reason: psErr.message,
+        });
+      }
+    }
+
     // 5. Juristic — mirror the company data into the LEGACY tb_corporate (keyed
     //    by userid = member_code) + flag userCompany='1'. Admin-created juristic
     //    defaults verified ('2') — the admin is the verifier. Best-effort: the
@@ -243,6 +322,10 @@ export async function adminCreateCustomer(
       hasEmail: !!email,
       isJuristic: d.isJuristic,
       password_generated: generated,
+      salesRepChosen: wantSalesRep || "(auto)",
+      csRepChosen: wantCsRep || "(auto)",
+      services: services.length > 0 ? services.join(", ") : "(none)",
+      note_set: freeNote.length > 0,
     });
 
     revalidatePath("/admin/customers");
@@ -250,7 +333,12 @@ export async function adminCreateCustomer(
     // New customer provisioned → refresh the admin sidebar customer badges.
     bustAdminChrome();
 
-    return { ok: true, data: { memberCode, password, generated } };
+    // Magic-login capability token (owner 2026-06-22) — the success panel turns
+    // this into `/k/<token>`, a non-expiring OTP-gated link the staff sends the
+    // customer to log straight into their own account.
+    const loginLinkToken = signCustomerLoginToken(memberCode);
+
+    return { ok: true, data: { memberCode, password, generated, loginLinkToken } };
   });
 }
 

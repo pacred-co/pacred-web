@@ -14,7 +14,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Copy, Printer, Check, Calculator, LayoutList } from "lucide-react";
+import { Copy, Printer, Check, Calculator, LayoutList, Share2 } from "lucide-react";
 import {
   CONTACT, SOCIAL, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, SITE_LEGAL_NAME, TAX_ID,
 } from "@/components/seo/site";
@@ -24,6 +24,7 @@ import {
   MODE_KEYS, QUOTE_HEADER, QUOTE_HOW_TO, QUOTE_NOTES, WAREHOUSE_KEYS, WAREHOUSE_LABEL,
   rateFor, type CargoPromoPackage, type PackageRate, type QuoteMode, type WarehouseKey,
 } from "@/lib/quote/cargo-promo-packages";
+import { encodeQuoteState, type QuoteInputs } from "@/lib/quote/quote-share";
 
 const LOGO = "/images/pacred-logo-red.png";
 const JURISTIC_WHT = 0.01;
@@ -47,7 +48,7 @@ type View = "compare" | "calc";
 type DisplayLine = { desc: string; qtyLabel: string; price: number; amount: number; vat: boolean; whtApplicable: boolean };
 type CompareRow = { warehouse: string; isYiwu: boolean; truck: PackageRate; ship: PackageRate };
 
-type QuoteModel = {
+export type QuoteModel = {
   view: View;
   refNo: string; customerCode: string; dateLabel: string; validUntil: string;
   buyerName: string; buyerTaxId: string; buyerAddress: string; buyerPhone: string;
@@ -110,6 +111,8 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
   const [salesTel, setSalesTel] = useState("");
   const [extraNote, setExtraNote] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const num = (s: string) => { const n = parseFloat(s.replace(/,/g, "").trim()); return Number.isFinite(n) && n >= 0 ? n : 0; };
@@ -120,50 +123,26 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
     yiwuTruckSurchargePerCbm: 0, isYiwuTruck: false, minCharge: MIN_CHARGE, // surcharge folded into the rate
   }), [cbm, kg, comparison, ratePerCbm, ratePerKg]);
 
-  const model: QuoteModel = useMemo(() => {
-    const compareRows: CompareRow[] = WAREHOUSE_KEYS.map((w) => ({
-      warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
-      truck: rateFor(pkg, effLicensed, w, "truck"), ship: rateFor(pkg, effLicensed, w, "ship"),
-    }));
+  // All the raw inputs the quote render needs — captured for both the live
+  // card AND the shareable `/q/[token]` permalink (encodeQuoteState).
+  const dateLabel = today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+  const inputs: QuoteInputs = useMemo(() => ({
+    view, pkgId, licensed, juristic, warehouse, mode, cbm, kg, comparison, ratePerCbm, ratePerKg,
+    customs: [...customs].sort((a, b) => a - b), issueTax, showCustomsInfo,
+    refNo, dateLabel, validUntil, customerCode: userid,
+    buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote,
+  }), [view, pkgId, licensed, juristic, warehouse, mode, cbm, kg, comparison, ratePerCbm, ratePerKg,
+    customs, issueTax, showCustomsInfo, refNo, dateLabel, validUntil, userid,
+    buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote]);
 
-    const lines: DisplayLine[] = [];
-    if (view === "calc" && (num(cbm) > 0 || num(kg) > 0)) {
-      const basisTxt = freight.basis === "kg" ? "น้ำหนัก KG" : "ปริมาตร CBM";
-      lines.push({
-        desc: `ค่าขนส่งนำเข้า LCL จีน-ไทย · ${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]} · คิดตาม${basisTxt}`,
-        qtyLabel: `${QTY(freight.chargeableQty)} ${freight.basis === "kg" ? "กก." : "คิว"}`,
-        price: freight.rateUsed, amount: freight.freightBeforeSurcharge, vat: issueTax, whtApplicable: true,
-      });
-      const topUp = freight.freightTotal > 0 ? round2(freight.freightTotal - freight.freightBeforeSurcharge) : 0;
-      if (topUp > 0) lines.push({ desc: `ปรับเป็นค่าขั้นต่ำ ${MIN_CHARGE} บาท / shipment`, qtyLabel: "-", price: topUp, amount: topUp, vat: issueTax, whtApplicable: true });
-      for (const i of [...customs].sort((a, b) => a - b)) {
-        const c = CUSTOMS_ADDON.costs[i];
-        if (!c) continue;
-        lines.push({ desc: c.label, qtyLabel: c.note ?? "1", price: c.amount, amount: c.amount, vat: issueTax && c.vat, whtApplicable: c.vat });
-      }
-    }
-    const whtRate = juristic ? JURISTIC_WHT : 0;
-    const totals = calcQuoteTotals(lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), whtRate);
-
-    return {
-      view, refNo, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
-      buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel,
-      packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
-      juristic, compareRows,
-      routeLabel: `${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]}`,
-      density: freight.density, basisLabel: freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)",
-      comparison: num(comparison) > 0 ? num(comparison) : DEFAULT_COMPARISON,
-      lines, totals, showCustomsInfo,
-      conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: extraNote.trim(),
-    };
-  }, [view, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, userid, showCustomsInfo]);
+  const model: QuoteModel = useMemo(() => buildQuoteModel(inputs), [inputs]);
 
   const calcEmpty = view === "calc" && model.lines.length === 0;
 
   async function copyText() {
-    try { await navigator.clipboard.writeText(buildQuoteText(model)); setActionMsg(null); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { setCopied(false); setActionMsg("คัดลอกไม่สำเร็จ — ลองแคปการ์ดด้านล่างแทน"); }
+    const ok = await copyToClipboard(buildQuoteText(model));
+    if (ok) { setActionMsg(null); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    else { setCopied(false); setActionMsg("คัดลอกไม่สำเร็จ — เลือกข้อความในการ์ดด้านล่าง หรือแคปหน้าจอส่งลูกค้าแทนได้"); }
   }
   function printQuote() {
     const w = window.open("", "_blank", "width=900,height=1000");
@@ -172,6 +151,19 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
     w.document.write(buildPrintHtml(model));
     w.document.close();
     w.focus();
+  }
+  // Stateless permalink — the encoded state IS the quote (no DB · /q/[token]).
+  // ALWAYS reveal the link (the panel below) so the rep can copy/open it even
+  // when auto-copy is blocked (clipboard needs a focused doc / secure context);
+  // the auto-copy is just a best-effort convenience on top.
+  function shareLink() {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/q/${encodeQuoteState(inputs)}`;
+    setActionMsg(null);
+    setShareUrl(url);
+    void copyToClipboard(url).then((ok) => {
+      if (ok) { setShared(true); setTimeout(() => setShared(false), 2000); }
+    });
   }
 
   const seg = (active: boolean) =>
@@ -281,7 +273,10 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-muted">แคปการ์ดด้านล่าง หรือกดปุ่มเพื่อคัดลอก/พิมพ์เป็นไฟล์ส่งลูกค้า</p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={shareLink} disabled={calcEmpty} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 text-primary-700 px-3 py-1.5 text-[12px] font-medium hover:bg-primary-50 disabled:opacity-50">
+            {shared ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Share2 className="w-3.5 h-3.5" />}{shared ? "คัดลอกลิงก์แล้ว" : "แชร์ลิงก์"}
+          </button>
           <button type="button" onClick={copyText} disabled={calcEmpty} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-surface-alt disabled:opacity-50">
             {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}{copied ? "คัดลอกแล้ว" : "คัดลอกเป็นข้อความ"}
           </button>
@@ -290,6 +285,35 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
           </button>
         </div>
       </div>
+      {shareUrl && (
+        <div className="rounded-lg border border-primary-200 bg-primary-50/50 px-3 py-2 space-y-1.5">
+          <p className="text-[11px] font-semibold text-primary-700">🔗 ลิงก์ใบเสนอราคา — ส่งให้ลูกค้า{shared ? " · คัดลอกแล้ว ✓" : ""}</p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 min-w-0 rounded-md border border-border bg-white dark:bg-surface px-2 py-1.5 text-[11px] font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => void copyToClipboard(shareUrl).then((ok) => { if (ok) { setShared(true); setTimeout(() => setShared(false), 2000); } })}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium hover:bg-surface-alt"
+            >
+              {shared ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />} คัดลอก
+            </button>
+            <a
+              href={shareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary-600 text-white px-2.5 py-1.5 text-[12px] font-semibold hover:bg-primary-700"
+            >
+              เปิด
+            </a>
+          </div>
+          <p className="text-[10px] text-muted">แตะช่องลิงก์เพื่อเลือกทั้งหมดแล้วคัดลอก หรือกด &ldquo;เปิด&rdquo; เพื่อดู/ส่งต่อให้ลูกค้า</p>
+        </div>
+      )}
       {actionMsg && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">{actionMsg}</div>}
 
       {calcEmpty ? (
@@ -305,8 +329,61 @@ function Field({ label, v, on, cls }: { label: string; v: string; on: (s: string
   return <label className="block"><span className="block text-[11px] text-muted mb-0.5">{label}</span><input type="text" value={v} onChange={(e) => on(e.target.value)} className={cls} /></label>;
 }
 
+/**
+ * Pure quote-model builder — turns the raw inputs into the render model. Lives
+ * at module scope (not inside QuoteTab's useMemo) so the public `/q/[token]`
+ * render reproduces the EXACT same quote from the shared state. Behaviour-
+ * identical to the prior inline useMemo (extracted 2026-06-22).
+ */
+export function buildQuoteModel(i: QuoteInputs): QuoteModel {
+  const n = (s: string) => { const v = parseFloat(s.replace(/,/g, "").trim()); return Number.isFinite(v) && v >= 0 ? v : 0; };
+  const pkg = CARGO_PROMO_PACKAGES.find((p) => p.id === i.pkgId) ?? CARGO_PROMO_PACKAGES[0];
+  const effLicensed = i.licensed && !!pkg.licensedRates;
+  const freight = calcFreight({
+    cbm: n(i.cbm), kg: n(i.kg), comparison: n(i.comparison),
+    ratePerCbm: n(i.ratePerCbm), ratePerKg: n(i.ratePerKg),
+    yiwuTruckSurchargePerCbm: 0, isYiwuTruck: false, minCharge: MIN_CHARGE,
+  });
+
+  const compareRows: CompareRow[] = WAREHOUSE_KEYS.map((w) => ({
+    warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
+    truck: rateFor(pkg, effLicensed, w, "truck"), ship: rateFor(pkg, effLicensed, w, "ship"),
+  }));
+
+  const lines: DisplayLine[] = [];
+  if (i.view === "calc" && (n(i.cbm) > 0 || n(i.kg) > 0)) {
+    const basisTxt = freight.basis === "kg" ? "น้ำหนัก KG" : "ปริมาตร CBM";
+    lines.push({
+      desc: `ค่าขนส่งนำเข้า LCL จีน-ไทย · ${WAREHOUSE_LABEL[i.warehouse]} · ${MODE_LABEL[i.mode]} · คิดตาม${basisTxt}`,
+      qtyLabel: `${QTY(freight.chargeableQty)} ${freight.basis === "kg" ? "กก." : "คิว"}`,
+      price: freight.rateUsed, amount: freight.freightBeforeSurcharge, vat: i.issueTax, whtApplicable: true,
+    });
+    const topUp = freight.freightTotal > 0 ? round2(freight.freightTotal - freight.freightBeforeSurcharge) : 0;
+    if (topUp > 0) lines.push({ desc: `ปรับเป็นค่าขั้นต่ำ ${MIN_CHARGE} บาท / shipment`, qtyLabel: "-", price: topUp, amount: topUp, vat: i.issueTax, whtApplicable: true });
+    for (const ci of [...i.customs].sort((a, b) => a - b)) {
+      const c = CUSTOMS_ADDON.costs[ci];
+      if (!c) continue;
+      lines.push({ desc: c.label, qtyLabel: c.note ?? "1", price: c.amount, amount: c.amount, vat: i.issueTax && c.vat, whtApplicable: c.vat });
+    }
+  }
+  const whtRate = i.juristic ? JURISTIC_WHT : 0;
+  const totals = calcQuoteTotals(lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), whtRate);
+
+  return {
+    view: i.view, refNo: i.refNo, customerCode: i.customerCode, dateLabel: i.dateLabel, validUntil: i.validUntil,
+    buyerName: i.buyerName, buyerTaxId: i.buyerTaxId, buyerAddress: i.buyerAddress, buyerPhone: i.buyerPhone, salesName: i.salesName, salesTel: i.salesTel,
+    packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
+    juristic: i.juristic, compareRows,
+    routeLabel: `${WAREHOUSE_LABEL[i.warehouse]} · ${MODE_LABEL[i.mode]}`,
+    density: freight.density, basisLabel: freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)",
+    comparison: n(i.comparison) > 0 ? n(i.comparison) : DEFAULT_COMPARISON,
+    lines, totals, showCustomsInfo: i.showCustomsInfo,
+    conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: i.extraNote.trim(),
+  };
+}
+
 // ── Receipt-style quotation card (mirrors the Pacred ใบเสร็จ palette/layout) ─
-function QuoteCard({ model }: { model: QuoteModel }) {
+export function QuoteCard({ model }: { model: QuoteModel }) {
   const t = model.totals;
   return (
     <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm overflow-hidden">
@@ -519,6 +596,40 @@ function SignatureRow({ model }: { model: QuoteModel }) {
   );
 }
 
+/**
+ * Robust clipboard copy. Tries the async Clipboard API first; if it's blocked
+ * (e.g. "Document is not focused" NotAllowedError, or a non-secure context where
+ * navigator.clipboard is absent), falls back to a legacy execCommand("copy") via
+ * a hidden textarea. Returns true on success — callers degrade gracefully
+ * (the share panel always shows the link regardless).
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the legacy execCommand path
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── plain text (คัดลอก) ───────────────────────────────────────────────────
 function buildQuoteText(m: QuoteModel): string {
   const L: string[] = [];
@@ -564,7 +675,7 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-function buildPrintHtml(m: QuoteModel): string {
+export function buildPrintHtml(m: QuoteModel): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const t = m.totals;
   const li = (items: string[]) => items.map((i) => `<li>${esc(i)}</li>`).join("");
