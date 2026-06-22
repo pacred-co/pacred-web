@@ -198,3 +198,30 @@ Meanwhile the ACTUAL assign form (`drivers/new`) + the legacy `forwarder-driver.
 **Fix pattern (the reusable lesson):** when the same business count/figure appears on ≥2 surfaces (a sidebar badge, a banner, a dashboard card, a list footer), it is a SOT candidate — make ONE pure/async helper that encodes the predicate (here `countPendingDispatch` with the full legacy filter) and have EVERY surface call it. A duplicated `.eq("fstatus","6")` in a Promise.all is the smell; it drifts the moment one site adds a filter. The faithful predicate lives in the legacy SQL + the real action that consumes the rows — derive the helper from THOSE, not from the badge that happens to be wrong.
 
 **Audit-method note:** the adversarial verify step earned its keep — across the 4 depts it dismissed the large majority of finder claims as false-positives (misread comments, claims about non-existent code, already-guarded paths) and the 0-confirmed customer dept proved the finders weren't just rubber-stamping. Trust the *verified* list, not the raw finder count. Cross-links: [[verify-deep-flow]] · `lib/admin/pending-dispatch.ts` · the §0f badge-accuracy rule.
+
+---
+
+## [2026-06-22] Fidelity-audit by parallel agents OVER-COUNTS gaps — verify each claim against `actions/` BEFORE building
+
+**Context:** ภูม asked to "แยกร่าง" (spawn agents) to find what the warehouse/driver port is still MISSING vs legacy PCS, then fill the gaps. Ran 3 parallel Explore agents (warehouse-scan / driver / container-cnt) comparing `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\` to our Pacred pages.
+
+**Symptom:** the 3 agents returned a RICH gap list — many items flagged "P0 missing / blocks ops". Taken at face value it implied the port was ~65% done with huge holes.
+
+**Root cause:** the agents read the **legacy PHP thoroughly** (every `$_GET`/`$_POST` mode) but read **our side only partially** — they opened our `page.tsx` files but NOT the `actions/admin/*.ts` server actions where most of the logic lives. So they flagged as "missing" things we'd already built one directory over.
+
+**Falsification (every top "P0 gap" verified FALSE in minutes):**
+- "no `tb_forwarder_import2` scan table" → ✅ exists + used (`barcode-import.ts`, `warehouse-history.ts`)
+- "forwarder-check `callPriceUser` (bulk-bill 4→5 + notify) missing" → ✅ `adminCallPriceUser` does exactly that
+- "driver photo `fdipictureon/off` not populated" → ✅ written at `driver-work.ts:233`
+- "cnt-hs cost-update (Google Sheets) missing" → ✅ INTENTIONALLY dropped Sheets for an internal tab (Wave 16) — a divergence, not a gap
+- "report-cnt detail view unclear/missing" → ✅ `/admin/report-cnt/[fNo]` exists
+- live-walk: `/admin/drivers` renders "รายการขนส่งสินค้า" = the legacy list mode, correct
+
+Verdict: warehouse/driver/cnt port is ~85–90% faithful; the genuinely-missing set was tiny (a `report-driver.php` "ยอดพนักขับรถ" summary).
+
+**The reusable lesson (sharpens §0b/§0e + the trust-but-verify rule):**
+1. A gap-audit agent that reads legacy deeply but our app shallowly will **systematically over-report missing**. Brief such agents to enumerate OUR `actions/` + `lib/` for the feature (grep the `tb_*` table / fn name) BEFORE concluding "missing", and to mark intentional divergences (e.g. dropped Google-Sheets) as NOT gaps.
+2. Never spawn build agents straight off a raw fidelity-audit — **each claimed gap is a hypothesis; disprove it against `actions/` first** (one grep per claim). Building from the raw list = rebuilding existing features = wasted work + regression risk (violates "ห้ามทำงานบัค งานหาย").
+3. When the code-audit + a live page-walk BOTH show the pages are mostly faithful, the remaining real gaps are usually **user-experienced** (a broken button, an awkward flow) that a presence-audit can't see — fastest path is a screenshot from the operator, then a surgical fix (proven same session: the billing-run invoice-link fix took minutes from ภูม's screenshot).
+
+**Cross-links:** [[verify-deep-flow]] · AGENTS §0b (deep-audit from source) · §0e (reachable dead-write traps) · the `branch-integrate-loop` "trust-but-verify agent output" note.
