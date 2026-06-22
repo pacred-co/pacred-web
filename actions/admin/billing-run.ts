@@ -1311,6 +1311,18 @@ export async function markBillingRunPaid(
           ((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id),
         );
         if (invFids.size > 0) {
+          // ภูม 2026-06-22 — advance the import order's OWN status too: a paid bill
+          // means the forwarder (รายการนำเข้า) should move รอชำระเงิน (fstatus '5') →
+          // เตรียมส่ง ('6'), else the import list still shows "รอชำระเงิน" while the bill
+          // says paid ("ต้อง link ถึงกันหมด"). Guard .eq('5') → only advances rows still
+          // at 5 (never touches a credit-6 or already-shipped row). Best-effort.
+          const { error: advErr } = await admin
+            .from("tb_forwarder")
+            .update({ fstatus: "6", fdatestatus6: paidAtIso, fdateadminstatus: paidAtIso })
+            .in("id", Array.from(invFids))
+            .eq("fstatus", "5");
+          if (advErr) console.error("[markBillingRunPaid forwarder-advance]", { code: advErr.code, message: advErr.message });
+
           const { data: touch, error: touchErr } = await admin
             .from("tb_receipt_item")
             .select("rid")
@@ -1352,6 +1364,7 @@ export async function markBillingRunPaid(
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
       revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
+      revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
     },
