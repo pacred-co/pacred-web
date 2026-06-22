@@ -125,7 +125,7 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
     const totals = calcQuoteTotals(lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), whtRate);
 
     return {
-      view, refNo, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
+      view, refNo, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
       buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel,
       packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
       juristic, compareRows,
@@ -136,7 +136,7 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
       conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: extraNote.trim(),
     };
   }, [view, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, showCustomsInfo]);
+    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, userid, showCustomsInfo]);
 
   const calcEmpty = view === "calc" && model.lines.length === 0;
 

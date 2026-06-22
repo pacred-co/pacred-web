@@ -59,6 +59,7 @@ const payloadSchema = z
   .object({
     view: z.enum(["compare", "calc"]),
     refNo: z.string().min(1).max(120),
+    customerCode: z.string().max(40).optional().default(""),
     dateLabel: z.string(),
     validUntil: z.string(),
     buyerName: z.string(),

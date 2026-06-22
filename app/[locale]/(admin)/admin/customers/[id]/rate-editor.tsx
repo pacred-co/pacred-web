@@ -259,6 +259,18 @@ export function CustomerRateEditor({
 
       {/* Tabs */}
       <div className="flex border-b border-border bg-surface-alt/30 text-sm">
+        {/* ใบเสนอราคา — ปักไว้เป็นแท็บแรก ก่อนโกดังกวางโจว (owner 2026-06-22) */}
+        <button
+          type="button"
+          onClick={() => setTab("quote")}
+          className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
+            tab === "quote"
+              ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
+              : "border-transparent text-muted hover:text-foreground"
+          }`}
+        >
+          ใบเสนอราคา
+        </button>
         {WAREHOUSES.map((w) => (
           <button
             key={w.id}
@@ -287,17 +299,6 @@ export function CustomerRateEditor({
         >
           <Scale className="w-3.5 h-3.5" /> {tCmp("tabLabel")}
           {comparisonEnabled ? <span className="ml-0.5 text-primary-500">●</span> : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("quote")}
-          className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
-            tab === "quote"
-              ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
-              : "border-transparent text-muted hover:text-foreground"
-          }`}
-        >
-          ใบเสนอราคา
         </button>
         <button
           type="button"
