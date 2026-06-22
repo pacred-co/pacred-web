@@ -26,6 +26,7 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Sales-rep data CONNECT** — staff↔sales-roster across the 3 stores (profiles/admins/tb_admin). `adminCreateNew`+`adminChangeRole`+`adminSetSalesRepFlag` now mirror every staff into `tb_admin` (no hollow accounts) + auto-flag sales-role. Data-fix: pupu→rep + 4 hollow staff backfilled (0 hollow left). | `lib/admin/ensure-legacy-admin.ts` (new) · `actions/admin/admins.ts` · `tb_admin` (data) · no mig | main · verified pupu live (dropdown + public card) | 2026-06-22 |
 | ภูม | **P0 sweep** — platform-wide `tb_users` lowercase→camelCase (42703 · 16+ surfaces: reports/wallet/cron/sales-payout/notifications/customers) | reports/* · wallet · cron/refresh-active-customers · sales-payouts-tb · etc. | main · verified (user-all 158 rows) | 2026-06-22 |
 | เดฟ | Team skills: keep-context · team-collision-check + worklog | `.claude/skills/*` · this file | main | 2026-06-22 |
 | เดฟ | Accounting **B3** — per-order doc registry (read-only · `lib/admin/order-documents.ts` + panel on shop detail) | `tb_shop_tax_invoice`/`tb_receipt`/`customs_declarations` · no mig | main · verified empty-state | 2026-06-22 |
