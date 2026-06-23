@@ -13,7 +13,7 @@
 
 ## Shared anchors (the "แผนเดียวกัน / โค้ดเดียวกัน")
 - **Trunk:** everyone bases on `dave-pacred` (= the integration branch); เดฟ promotes to `main` on the owner's go.
-- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0204.** (0199 admin AD#### · 0200 customer_quotations · 0201-0203 ปอน imported_leads CRM [+note +pr_code] — all applied prod+dev 2026-06-22/23.)
+- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0207.** (0199 admin AD#### · 0200 customer_quotations · 0201-0203 ปอน imported_leads CRM · 0204-0205 CMS articles · 0206 ปอน cms_articles_tags — all applied prod+dev 2026-06-22/23.)
 - **Plans:** the accounting build = [`docs/research/pay-and-accounting-gap-2026-06-21.md`](research/pay-and-accounting-gap-2026-06-21.md) (B1-B7). Port plan = [`docs/PORT_PLAN.md`](PORT_PLAN.md). UX standard = [`docs/learnings/self-explaining-row-design.md`](learnings/self-explaining-row-design.md) + AGENTS §0g/§0h.
 
 ---
