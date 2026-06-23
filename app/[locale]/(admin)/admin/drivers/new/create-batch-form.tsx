@@ -76,9 +76,12 @@ function routeOrderOf(district: string | null | undefined): number {
 export function CreateBatchForm({
   groups,
   drivers,
+  showCarrierFilter = false,
 }: {
   groups: Stop[];
   drivers: DriverOption[];
+  /** Show the 🚚 ขนส่ง carrier-filter chip row — Express tab only (มอบคนขับ = Pacred-only, no filter). */
+  showCarrierFilter?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -248,8 +251,8 @@ export function CreateBatchForm({
           </div>
         </div>
 
-        {/* ขนส่ง filter chips — กรองตามบริษัทขนส่ง (Flash / J&T / ไปรษณีย์ / …) */}
-        {carriers.length > 1 && (
+        {/* ขนส่ง filter chips — กรองตามบริษัทขนส่ง (Flash / J&T / เฟิร์ส / …) · Express tab only */}
+        {showCarrierFilter && carriers.length > 1 && (
           <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
             <span className="text-xs font-medium text-muted mr-0.5">🚚 ขนส่ง:</span>
             <button

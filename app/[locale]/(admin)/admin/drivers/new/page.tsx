@@ -2,22 +2,24 @@
  * /admin/drivers/new — Create driver batch + self-pickup close (faithful port
  * of `pcs-admin/forwarder-driver.php?page=add`, BOTH work-tabs).
  *
- * Legacy renders two functional tabs on this page (forwarder-driver.php:737/746):
- *   1. "มอบงานให้คนขับรถ"   (default · no `?q`)  — assign a Pacred driver
- *      → carriers `fShipBy NOT IN ('PCS','2','4')` (PCSF/PCSE door-to-door +
- *        other couriers). Grouped by (carrier · recipient address) = "จุดส่ง".
- *   2. "รายการรับเองหน้าโกดัง" (`?q=pcs`)         — hand-off, NO driver
- *      → carriers `fShipBy IN ('PCS','2','4')` = รับเอง[PCS] / Flash[2] / Kerry[4]
- *        per legacy nameShipBy() (the counter hands these to the customer/courier
- *        at the warehouse). Tick handed-off parcels → close ส่งแล้ว (fstatus 6→7).
+ * THREE delivery work-tabs (ภูม 2026-06-23 — split legacy's 2 tabs by carrier
+ * KIND so warehouse staff find external-courier orders fast). Every fstatus=6
+ * paydeposit-ok row falls in EXACTLY one (complete partition · no overlap/loss):
+ *   1. "มอบงานให้คนขับรถ" (default)  — Pacred's OWN drivers · fShipBy IN ('PCSF','PCSE')
+ *        (เหมาๆ / Pacred Express door-to-door). Assign a driver + create a run.
+ *   2. "รับเองหน้าโกดัง" (`?tab=pickup`) — customer self-pickup · fShipBy = 'PCS'.
+ *        Tick handed-off parcels → close ส่งแล้ว (fstatus 6→7), NO driver.
+ *   3. "Express" (`?tab=express`)     — EXTERNAL couriers · everything else
+ *        (Flash · Kerry · J&T · เฟิร์ส · จันทร์สว่าง · … + 'F'). Carrier filter inside;
+ *        legacy keeps all non-2/4/PCS in the driver-batch flow (forwarder-driver.php:726)
+ *        → Express uses the SAME มอบคนขับ flow (assign a Pacred driver to take them out).
  * (legacy also shows 2 counter-only tabs — "กำลังจัดส่ง" + "เตรียมส่งอนุมัติแล้ว"
  *  — that just link back; we surface "กำลังจัดส่ง" as a link to /admin/drivers,
  *  the list/รูป1 view where in-progress runs are managed.)
  *
- * The two tabs partition every fstatus=6 row with no overlap and no loss
- * (legacy counts forwarder-driver.php:726 [NOT IN 2,4,PCS] + :729 [IN 2,4,PCS]).
- * Before this, the page over-showed PCS/2/4 in the driver list (the bug
- * พี่ป๊อป hit — self-pickup parcels wrongly offered for driver assignment).
+ * The split diverges from legacy's exact 2/4 placement (legacy put Flash[2]/Kerry[4]
+ * in the pickup tab) — ภูม unified ALL external couriers under "Express"; the
+ * partition stays complete so no order is ever lost.
  *
  * AGENTS.md §0a — Pacred Tailwind, NOT verbatim Bootstrap.
  * AGENTS.md §0c — every Supabase query destructures `error`.
@@ -26,7 +28,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ArrowLeft, Truck, Package, MapPin, Home, Send, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Truck, Package, MapPin, Home, Send, CheckCircle2, Zap } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
 
@@ -124,10 +126,18 @@ function nameShipBy(code: string | null): string {
   return SHIP_BY_LABEL[code] ?? code;
 }
 
-// The carriers that go through the รับเองหน้าโกดัง tab (legacy: fShipBy IN
-// 'PCS','2','4'). The driver tab is the complement.
+// 3-way carrier split (ภูม 2026-06-23):
+//   • Pacred's own drivers → fShipBy IN ('PCSF','PCSE')  → "มอบคนขับ"
+//   • customer self-pickup → fShipBy = 'PCS'              → "รับเองหน้าโกดัง"
+//   • external couriers     → everything else (numeric 1–47 · 'F' · …) → "Express"
+function isPacredDriver(code: string | null): boolean {
+  return code === "PCSF" || code === "PCSE";
+}
 function isSelfPickup(code: string | null): boolean {
-  return code === "PCS" || code === "2" || code === "4";
+  return code === "PCS";
+}
+function isExpress(code: string | null): boolean {
+  return !isPacredDriver(code) && !isSelfPickup(code);
 }
 
 type Stop = {
@@ -210,7 +220,8 @@ export default async function CreateDriverBatchPage({
   await requireAdmin(["ops", "super", "warehouse"]);
   const admin = createAdminClient();
   const sp = await searchParams;
-  const activeTab: "driver" | "pickup" = sp.tab === "pickup" ? "pickup" : "driver";
+  const activeTab: "driver" | "pickup" | "express" =
+    sp.tab === "pickup" ? "pickup" : sp.tab === "express" ? "express" : "driver";
 
   // 1. Forwarders already in an open assignment (fdistatus '' or '1') — these
   //    must NOT be offered again.
@@ -249,19 +260,24 @@ export default async function CreateDriverBatchPage({
   const allEligible = paydOk.filter((r) => !openFids.has(r.id));
   const inProgress = totalReadyToShip - allEligible.length; // ออกส่งกับคนขับแล้ว
 
-  // 3. Partition the still-to-action rows into the two legacy work-tabs
-  //    (no overlap, no loss).
-  const driverEligible = allEligible.filter((r) => !isSelfPickup(r.fshipby));
-  const pickupEligible = allEligible.filter((r) => isSelfPickup(r.fshipby));
-  const driverCount = driverEligible.length;
-  const pickupCount = pickupEligible.length;
+  // 3. Partition the still-to-action rows into the three work-tabs
+  //    (complete partition — no overlap, no loss · every row lands in one).
+  const driverEligible  = allEligible.filter((r) => isPacredDriver(r.fshipby));
+  const pickupEligible  = allEligible.filter((r) => isSelfPickup(r.fshipby));
+  const expressEligible = allEligible.filter((r) => isExpress(r.fshipby));
+  const driverCount  = driverEligible.length;
+  const pickupCount  = pickupEligible.length;
+  const expressCount = expressEligible.length;
 
-  const eligible = activeTab === "pickup" ? pickupEligible : driverEligible;
+  const eligible =
+    activeTab === "pickup"  ? pickupEligible  :
+    activeTab === "express" ? expressEligible :
+    driverEligible;
   const groups = buildStops(eligible);
 
-  // 4. Driver picker — only the driver tab needs it.
+  // 4. Driver picker — the มอบคนขับ + Express tabs both assign a Pacred driver.
   let drivers: DriverOption[] = [];
-  if (activeTab === "driver") {
+  if (activeTab === "driver" || activeTab === "express") {
     const { data: driversData, error: driversErr } = await admin
       .from("admins")
       .select("profile_id, role, is_active, profile:profiles!profile_id(member_code, first_name, last_name)")
@@ -303,15 +319,21 @@ export default async function CreateDriverBatchPage({
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">CARGO · จัดส่ง</p>
         <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
-          {activeTab === "pickup" ? <Home className="h-6 w-6" /> : <Truck className="h-6 w-6" />}
+          {activeTab === "pickup" ? <Home className="h-6 w-6" />
+            : activeTab === "express" ? <Zap className="h-6 w-6" />
+            : <Truck className="h-6 w-6" />}
           {activeTab === "pickup"
             ? "รับเองหน้าโกดัง — ปิดงานส่งสำเร็จ"
+            : activeTab === "express"
+            ? "Express — มอบงานขนส่งภายนอกให้คนขับไปส่ง"
             : "สร้างรายการขนส่ง — มอบงานให้คนขับรถ"}
         </h1>
         <p className="mt-1 text-sm text-muted">
           {activeTab === "pickup"
-            ? "ของที่ลูกค้ามารับเอง / ส่งไปรษณีย์ / J&T — ติ๊กที่ส่ง/รับแล้ว แนบรูป (ถ้ามี) → ปิดงานเป็น \"ส่งแล้ว\" โดยไม่ต้องมอบคนขับ"
-            : "เลือกจุดที่ต้องการให้ส่ง · เลือกคนขับ · กำหนดเวลาส่งงาน · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
+            ? "ของที่ลูกค้ามารับเองที่โกดัง — ติ๊กที่ส่ง/รับแล้ว แนบรูป (ถ้ามี) → ปิดงานเป็น \"ส่งแล้ว\" โดยไม่ต้องมอบคนขับ"
+            : activeTab === "express"
+            ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Flash · Kerry · J&T · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
+            : "ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง · เลือกคนขับ · กำหนดเวลา · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
         </p>
       </div>
 
@@ -319,6 +341,7 @@ export default async function CreateDriverBatchPage({
       <div className="flex flex-wrap gap-2 border-b border-border pb-px">
         <TabLink href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverCount} />
         <TabLink href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รับเองหน้าโกดัง" count={pickupCount} />
+        <TabLink href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressCount} />
         <Link
           href="/admin/drivers"
           className="inline-flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-medium text-muted hover:text-primary-600 hover:bg-surface-alt"
@@ -343,13 +366,13 @@ export default async function CreateDriverBatchPage({
           <CheckCircle2 className="h-4 w-4" />
           เตรียมส่ง · อนุมัติจ่ายแล้ว
           <span className="ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold bg-emerald-500 text-white">
-            {(driverCount + pickupCount + inProgress).toLocaleString("th-TH")}/{totalReadyToShip.toLocaleString("th-TH")}
+            {(driverCount + pickupCount + expressCount + inProgress).toLocaleString("th-TH")}/{totalReadyToShip.toLocaleString("th-TH")}
           </span>
         </Link>
       </div>
 
-      {/* Stats strip */}
-      {activeTab === "driver" ? (
+      {/* Stats strip — driver + Express both assign a driver (3 stats); pickup = 2 */}
+      {activeTab !== "pickup" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <Stat icon={<Package className="h-4 w-4" />} label="แทรคกิ้งรอมอบหมาย" value={eligible.length} />
           <Stat icon={<MapPin className="h-4 w-4" />} label="จุดส่งจัดกลุ่มแล้ว" value={groups.length} />
@@ -362,7 +385,7 @@ export default async function CreateDriverBatchPage({
         </div>
       )}
 
-      {activeTab === "driver" && drivers.length === 0 && (
+      {(activeTab === "driver" || activeTab === "express") && drivers.length === 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           ⚠️ ยังไม่มีคนขับในระบบ — เพิ่มก่อนที่{" "}
           <Link href="/admin/admins/new" className="underline">/admin/admins/new</Link>{" "}
@@ -370,11 +393,12 @@ export default async function CreateDriverBatchPage({
         </div>
       )}
 
-      {/* Form per tab */}
+      {/* Form per tab — pickup = hand-off close; driver/express = driver batch
+          (Express adds the ขนส่ง carrier filter, มอบคนขับ doesn't) */}
       {activeTab === "pickup" ? (
         <SelfPickupForm groups={groups} />
       ) : (
-        <CreateBatchForm groups={groups} drivers={drivers} />
+        <CreateBatchForm groups={groups} drivers={drivers} showCarrierFilter={activeTab === "express"} />
       )}
     </main>
   );
