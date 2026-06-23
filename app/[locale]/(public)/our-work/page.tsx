@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { Star, Sparkles, BadgeCheck } from "lucide-react";
+import { Link } from "@/i18n/navigation";
+import { getPublishedArticles, getPublishedArticleTags } from "@/lib/cms/articles";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { Reviews } from "@/components/sections/reviews";
+import { ArticleListTabs } from "@/components/sections/article-list-tabs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
@@ -52,12 +56,21 @@ export async function generateMetadata({
 
 export default async function ReviewsListingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ tag?: string }>;
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: "reviews" });
+  // Owner 2026-06-23: published CMS "ผลงานของเรา" articles append below the carousel,
+  // filterable by tag (HS code · product category). The tag bar = all distinct tags.
+  const activeTag = (((await searchParams).tag) ?? "").trim();
+  const [dbArticles, allTags] = await Promise.all([
+    getPublishedArticles("our_work", { tag: activeTag }),
+    getPublishedArticleTags("our_work"),
+  ]);
 
   const itemList = {
     "@context": "https://schema.org",
@@ -135,6 +148,11 @@ export default async function ReviewsListingPage({
                 {ui.subtitle}
               </p>
 
+              {/* Tab switcher — สาระน่ารู้ ↔ ข่าวสาร ↔ ผลงานของเรา (owner 2026-06-23) */}
+              <div className="mt-5 md:mt-6 flex justify-center md:justify-start">
+                <ArticleListTabs active="our-work" />
+              </div>
+
               {/* Stat pills */}
               <div className="mt-5 md:mt-6 flex flex-wrap items-center justify-center md:justify-start gap-2">
                 <span className="inline-flex items-center gap-1.5 h-8 md:h-9 px-3.5 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 text-[12px] md:text-[12.5px] font-black border border-primary-100 dark:border-primary-900/40">
@@ -156,6 +174,80 @@ export default async function ReviewsListingPage({
 
         {/* Carousel + filters (the homepage reviews section, reused) */}
         <Reviews />
+
+        {/* Published CMS "ผลงานของเรา" — tag-filterable (owner 2026-06-23) */}
+        {allTags.length > 0 || dbArticles.length > 0 ? (
+          <section className="relative pb-10 md:pb-16">
+            <div className="mx-auto w-full max-w-[1140px] px-[10px]">
+              <h2 className="mb-3 md:mb-4 text-[20px] md:text-[28px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
+                ผลงานเพิ่มเติม
+              </h2>
+
+              {/* Tag filter bar — กดแท็กเพื่อดูผลงานในหมวดนั้น (HS code · ประเภทสินค้า) */}
+              {allTags.length > 0 ? (
+                <div className="mb-5 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[12px] font-bold text-muted">กรองตามแท็ก:</span>
+                  <Link
+                    href="/our-work"
+                    className={`rounded-full border px-3 py-1 text-[12px] font-semibold transition ${!activeTag ? "border-primary-500 bg-primary-600 text-white" : "border-border bg-white text-foreground hover:bg-surface-alt dark:bg-surface"}`}
+                  >
+                    ทั้งหมด
+                  </Link>
+                  {allTags.map((tg) => {
+                    const on = tg === activeTag;
+                    return (
+                      <Link
+                        key={tg}
+                        href={`/our-work?tag=${encodeURIComponent(tg)}`}
+                        className={`rounded-full border px-3 py-1 text-[12px] font-semibold transition ${on ? "border-primary-500 bg-primary-600 text-white" : "border-border bg-white text-foreground hover:bg-surface-alt dark:bg-surface"}`}
+                      >
+                        #{tg}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {dbArticles.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3">
+                  {dbArticles.map((a) => (
+                    <Link
+                      key={`db-${a.id}`}
+                      href={`/articles/${a.slug}`}
+                      className="group relative bg-white dark:bg-surface rounded-2xl overflow-hidden border border-border shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] hover:border-primary-200 hover:-translate-y-1 transition-all duration-300"
+                    >
+                      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
+                        {a.coverUrl ? (
+                          <Image src={a.coverUrl} alt={a.title} fill sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 240px" quality={92} className="object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
+                        ) : null}
+                      </div>
+                      <div className="p-3 md:p-3.5">
+                        <h3 className="text-[12.5px] md:text-[13px] font-black text-[#111827] dark:text-white leading-[1.3] line-clamp-2 group-hover:text-primary-700 transition-colors">
+                          {a.title}
+                        </h3>
+                        {a.excerpt ? <p className="mt-1 text-[11px] md:text-[12px] text-muted line-clamp-2">{a.excerpt}</p> : null}
+                        {a.tags.length > 0 ? (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {a.tags.slice(0, 3).map((tg) => (
+                              <span key={tg} className="inline-block rounded-full border border-primary-100 bg-primary-50 px-1.5 py-0.5 text-[11px] font-semibold text-primary-700 dark:border-primary-900/40 dark:bg-primary-900/20 dark:text-primary-300">
+                                #{tg}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border bg-surface-alt/40 px-4 py-10 text-center text-sm text-muted">
+                  ไม่พบผลงานในแท็ก <b className="text-foreground">#{activeTag}</b> ·{" "}
+                  <Link href="/our-work" className="text-primary-600 hover:underline">ดูทั้งหมด</Link>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <HomeBottomBanner />
       </main>

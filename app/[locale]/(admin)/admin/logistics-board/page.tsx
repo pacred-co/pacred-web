@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
+import { getMomoRecentArrivals } from "@/lib/admin/momo-recent-arrivals";
 import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,10 @@ export default async function LogisticsBoardPage() {
   const assignedFids = await loadAssignedFids(admin, readyIds);
   const pendingDispatch = readyIds.filter((id) => !assignedFids.has(id)).length;
 
+  // 📦 MOMO arrivals — the "ตัวบอก ว่าของอยู่ MOMO แล้ว ตู้ไหน · กี่คิว · กี่กล่อง" (owner
+  // 2026-06-23). Fresh feed (momo_import_tracks · 10-min cron) grouped by container.
+  const momo = await getMomoRecentArrivals(12);
+
   return (
     <main className="p-4 lg:p-8 space-y-5">
       <nav className="flex items-center gap-1.5 text-xs text-muted">
@@ -144,6 +149,54 @@ export default async function LogisticsBoardPage() {
                 จัดรถ (เฟิมบันทึก) →
               </Link>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* 📦 ของถึง MOMO ล่าสุด — the "ตัวบอก" (owner 2026-06-23): the fresh MOMO feed
+         (momo_import_tracks · cron ทุก 10 นาที) so nobody waits for the MOMO chat. */}
+      {momo.totalContainers > 0 && (
+        <section className="rounded-2xl border-2 border-cyan-400 bg-cyan-50/60 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-cyan-900">📦 ของถึง MOMO ล่าสุด</h2>
+              <p className="mt-0.5 text-[11px] text-cyan-800">
+                <strong>{momo.totalContainers}</strong> ตู้ · <strong>{momo.totalTrackings}</strong> แทรคกิ้ง ·
+                รวม <strong>{momo.totalCbm.toLocaleString("th-TH")}</strong> คิว ·{" "}
+                <strong>{momo.totalBoxes.toLocaleString("th-TH")}</strong> กล่อง
+                {momo.arrivedThCount > 0 && (
+                  <> · <span className="font-bold text-red-700">{momo.arrivedThCount} ถึงไทยแล้ว — รอเก็บเงิน</span></>
+                )}
+                {" "}· อัปเดตสดจาก MOMO ทุก 10 นาที
+              </p>
+            </div>
+            <Link href="/admin/api-forwarder-momo"
+              className="rounded-full bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">
+              จัดการ MOMO →
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {momo.containers.map((c) => (
+              <div key={c.container}
+                className={`rounded-xl border p-3 ${c.arrivedTh ? "border-red-300 bg-red-50" : "border-cyan-200 bg-white"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-foreground">{c.container}</span>
+                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">{c.modeTh}</span>
+                </div>
+                <div className="mt-1 text-[11px] font-semibold text-cyan-900">{c.latestStatusTh}</div>
+                <div className="mt-1 text-xs text-muted">
+                  {c.trackingCount} แทรคกิ้ง · {c.totalBoxes.toLocaleString("th-TH")} กล่อง ·{" "}
+                  {c.totalCbm.toLocaleString("th-TH")} คิว
+                  {c.totalWeight > 0 && <> · {c.totalWeight.toLocaleString("th-TH")} กก.</>}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className={`rounded px-1.5 py-0.5 ${c.committedCount === c.trackingCount ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                    เข้าระบบ {c.committedCount}/{c.trackingCount}
+                  </span>
+                  {c.arrivedTh && <span className="rounded bg-red-600 px-1.5 py-0.5 font-bold text-white">รอเก็บเงิน</span>}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}

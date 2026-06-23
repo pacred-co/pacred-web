@@ -3499,6 +3499,8 @@
       "tos": "เงื่อนไขการให้บริการลูกค้า"
     },
     "extension": {
+      "writeArticle": "เขียนบทความ",
+      "marketingHub": "ระบบการตลาด",
       "juristicCheck": "เช็คข้อมูลลูกค้านิติบุคคล",
       "thaiTransport": "จัดการขนส่งไทย",
       "thaiShippingTools": "ตรวจสอบขนส่งไทย",

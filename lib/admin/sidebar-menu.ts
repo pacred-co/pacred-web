@@ -882,6 +882,17 @@ const blockExtInbox: MenuItem = {
 const blockExtBroadcasts: MenuItem = {
   labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing", phase: 2,
 };
+// Owner 2026-06-23 — no-code article CMS (write → Ultra Admin Z approve → live on
+// the public site). No phase tag = visible to the content team in whatever menu
+// it sits in; the editor's server gate (WRITE_ROLES) is the real guard.
+const blockExtWriteArticle: MenuItem = {
+  labelKey: "extension.writeArticle", href: "/admin/articles", icon: "FileText",
+};
+// Owner 2026-06-23 — marketing control room: a hub surfacing all the marketing
+// tools (content · broadcasts · promos · leads · CRM · analytics) in one place.
+const blockExtMarketingHub: MenuItem = {
+  labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent",
+};
 const blockExtWithdrawalsAll: MenuItem = {
   labelKey: "extension.withdrawalsAll", href: "/admin/withdrawals", icon: "Banknote", phase: 2,
 };
@@ -1026,7 +1037,9 @@ const wrapClassMarketing: MenuItem = {
       labelKey: "marketingNav.marketing",
       icon: "Megaphone",
       children: [
+        blockExtMarketingHub,
         blockExtBroadcasts,
+        blockExtWriteArticle,
         blockExtLeadSource,
         itemReportsAll,
         settingsByKey("settingsCargo.homeNotice"),
@@ -1266,6 +1279,8 @@ const menuManager: MenuSection[] = [
     blockExtContactMessages,
     blockExtLineInbox,
     blockExtBroadcasts,
+    blockExtWriteArticle,
+    blockExtMarketingHub,
     // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
     // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
     // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
@@ -1426,6 +1441,8 @@ const menuSalesAdmin: MenuSection[] = [
       itemTaxdocWorkspace,
       // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
+      { labelKey: "extension.writeArticle", href: "/admin/articles", icon: "FileText" },
+      { labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent" },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
     ],
   },
