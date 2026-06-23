@@ -137,7 +137,7 @@ export function CreateBatchForm({
         <h2 className="text-sm font-semibold flex items-center gap-2">
           1. เลือกคนขับและเวลาส่งงาน
         </h2>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
           <div>
             <label htmlFor="driver" className="block text-xs font-medium text-muted mb-1">
               คนขับรถ <span className="text-rose-600">*</span>
@@ -211,103 +211,110 @@ export function CreateBatchForm({
               return (
                 <li
                   key={g.key}
-                  className={`rounded-lg border ${
-                    isSelected ? "border-primary-300 bg-primary-50/30" : "border-border bg-white"
+                  className={`overflow-hidden rounded-xl border transition-colors ${
+                    isSelected ? "border-primary-400 ring-1 ring-primary-200 bg-primary-50/10" : "border-border bg-white"
                   }`}
                 >
-                  <div className="flex items-start gap-3 p-3">
+                  {/* Header bar — click anywhere to toggle the whole stop */}
+                  <label className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 cursor-pointer select-none border-b border-border ${
+                    isSelected ? "bg-primary-50/50" : "bg-surface-alt/40 hover:bg-surface-alt/70"
+                  }`}>
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleStop(g.key)}
-                      className="mt-1 h-5 w-5 rounded border-border text-primary-500 focus:ring-primary-500"
+                      className="h-5 w-5 rounded border-border text-primary-500 focus:ring-primary-500 flex-shrink-0"
                       aria-label={`เลือกจุดส่งคุณ ${g.address.name}`}
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div>
-                          <p className="font-semibold text-sm">
-                            คุณ{g.address.name} {g.address.lastName}
-                          </p>
-                          <p className="text-xs text-muted">
-                            <MapPin className="inline h-3 w-3 mr-0.5" />
-                            {g.address.no} ตำบล/แขวง {g.address.subDistrict}{" "}
-                            อำเภอ/เขต <span className="bg-amber-100 px-1 rounded text-amber-800">{g.address.district}</span>{" "}
-                            จังหวัด {g.address.province} {g.address.zipCode}
-                          </p>
-                          {g.address.tel && g.address.tel !== "-" && (
-                            <p className="text-xs text-muted mt-0.5">
-                              <Phone className="inline h-3 w-3 mr-0.5" />
-                              {g.address.tel}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[11px] font-medium">
-                            {g.shipByLabel}
-                          </span>
-                          <span className="text-xs text-muted">
-                            {g.items.length} แทรคกิ้ง · {g.totalBoxes} กล่อง
-                          </span>
-                        </div>
-                      </div>
+                    <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-semibold text-sm text-foreground">
+                        คุณ{g.address.name} {g.address.lastName}
+                      </span>
+                      <span className="text-xs text-muted">
+                        <MapPin className="inline h-3 w-3 mr-0.5" />
+                        {g.address.no} ต.{g.address.subDistrict}{" "}
+                        อ.<span className="bg-amber-100 px-1 rounded text-amber-800">{g.address.district}</span>{" "}
+                        จ.{g.address.province} {g.address.zipCode}
+                      </span>
+                      {g.address.tel && g.address.tel !== "-" && (
+                        <span className="text-xs text-muted">
+                          <Phone className="inline h-3 w-3 mr-0.5" />
+                          {g.address.tel}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <div className="border-t border-border bg-surface-alt/30 p-3 overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
+                    <span className="inline-flex items-center rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[11px] font-medium flex-shrink-0">
+                      {g.shipByLabel}
+                    </span>
+                    <span className="text-xs text-muted whitespace-nowrap flex-shrink-0">
+                      {g.items.length} แทรคกิ้ง · {g.totalBoxes} กล่อง
+                    </span>
+                  </label>
+
+                  {/* Tracking table — gang'd out, full-width, fixed proportions */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm table-fixed min-w-[640px]">
+                      <colgroup>
+                        <col className="w-[14%]" />
+                        <col className="w-[32%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[16%]" />
+                      </colgroup>
+                      <thead className="text-left text-[11px] uppercase tracking-wide text-muted bg-surface-alt/30">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">F-no</th>
+                          <th className="px-3 py-2 font-medium">แทรคกิ้ง</th>
+                          <th className="px-3 py-2 font-medium">ลูกค้า</th>
+                          <th className="px-3 py-2 font-medium text-right">กล่อง</th>
+                          <th className="px-3 py-2 font-medium text-right">นน. (kg)</th>
+                          <th className="px-3 py-2 font-medium text-right">ปริมาตร (m³)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.items.map((it) => (
+                          <tr key={it.id} className="border-t border-border/60 odd:bg-white even:bg-surface-alt/20 hover:bg-primary-50/30">
+                            <td className="px-3 py-2 align-top">
+                              <Link
+                                href={`/admin/forwarders/${it.fidorco}`}
+                                className="font-mono text-primary-600 hover:underline"
+                                target="_blank"
+                              >
+                                {it.fidorco}
+                              </Link>
+                            </td>
+                            <td className="px-3 py-2 align-top">
+                              <div className="font-medium break-all">{it.ftrackingchn}</div>
+                              {it.fpallet && (
+                                <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 align-top font-mono text-xs">{it.userid}</td>
+                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.famount}</td>
+                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.fweight.toFixed(2)}</td>
+                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
+                          </tr>
+                        ))}
+                        {g.items.some((i) => i.fnote) && (
                           <tr>
-                            <th className="px-2 py-1">F-no</th>
-                            <th className="px-2 py-1">แทรคกิ้ง</th>
-                            <th className="px-2 py-1">ลูกค้า</th>
-                            <th className="px-2 py-1 text-right">กล่อง</th>
-                            <th className="px-2 py-1 text-right">นน.</th>
-                            <th className="px-2 py-1 text-right">ปริมาตร</th>
+                            <td colSpan={6} className="px-3 py-1.5">
+                              {g.items.filter((i) => i.fnote).map((i) => (
+                                <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
+                                  📝 {i.fidorco}: {i.fnote}
+                                </div>
+                              ))}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {g.items.map((it) => (
-                            <tr key={it.id} className="border-t border-border align-top">
-                              <td className="px-2 py-1.5">
-                                <Link
-                                  href={`/admin/forwarders/${it.fidorco}`}
-                                  className="font-mono text-primary-600 hover:underline"
-                                  target="_blank"
-                                >
-                                  {it.fidorco}
-                                </Link>
-                              </td>
-                              <td className="px-2 py-1.5">
-                                <div>{it.ftrackingchn}</div>
-                                {it.fpallet && (
-                                  <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
-                                )}
-                              </td>
-                              <td className="px-2 py-1.5 font-mono">{it.userid}</td>
-                              <td className="px-2 py-1.5 text-right">{it.famount}</td>
-                              <td className="px-2 py-1.5 text-right">{it.fweight.toFixed(2)}</td>
-                              <td className="px-2 py-1.5 text-right">{it.fvolume.toFixed(3)}</td>
-                            </tr>
-                          ))}
-                          {g.items.some((i) => i.fnote) && (
-                            <tr>
-                              <td colSpan={6} className="px-2 py-1.5">
-                                {g.items.filter((i) => i.fnote).map((i) => (
-                                  <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
-                                    📝 {i.fidorco}: {i.fnote}
-                                  </div>
-                                ))}
-                              </td>
-                            </tr>
-                          )}
-                          <tr className="bg-rose-50 border-t-2 border-rose-200 font-semibold">
-                            <td colSpan={3} className="px-2 py-1.5 text-right">รวม</td>
-                            <td className="px-2 py-1.5 text-right">{g.totalBoxes}</td>
-                            <td className="px-2 py-1.5 text-right">{g.totalWeight.toFixed(2)}</td>
-                            <td className="px-2 py-1.5 text-right">{g.totalVolume.toFixed(3)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                        )}
+                        <tr className="border-t-2 border-primary-200 bg-primary-50/40 font-semibold">
+                          <td colSpan={3} className="px-3 py-2 text-right">รวม</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{g.totalBoxes}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </li>
               );

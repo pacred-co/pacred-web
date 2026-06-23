@@ -245,7 +245,7 @@ export default async function CreateDriverBatchPage({
   }
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-7xl mx-auto">
+    <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-[1800px] mx-auto">
       {/* Breadcrumb */}
       <Link href="/admin/drivers" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
         <ArrowLeft className="h-3 w-3" />
