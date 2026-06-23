@@ -39,17 +39,18 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 
 // ── 1. Manual override — highest precedence (forwarder.php L1801-1818) ──
 {
-  // weight 300kg, cbm 1 → KGPerCBM=300; no comparison → ราคามากสุด.
-  // manual KG=20 → priceKg=6000 ; manual CBM=5000 → priceCbm=5000 → KG wins.
+  // weight 300kg, cbm 1. manual KG=20, CBM=5000. owner 2026-06-23: no ค่าเทียบ tick →
+  // DEFAULT คิว even for a manual override (the admin typed both rates; CBM is the
+  // basis). So basis=cbm, rate=5000 (NOT the legacy max-of-both KG 6000).
   const r = resolveForwarderRate(
     cand({ manualOverride: true, manualKg: 20, manualCbm: 5000, isSvip: true, svipKg: 999, svipCbm: 999 }),
     inp({ weightKg: 300, volumeCbm: 1 }),
   );
   eq("manual: source=manual (beats SVIP)", r.source, "manual");
-  eq("manual: basis=kg (6000>5000)", r.basis, "kg");
-  near("manual: rate=20", r.rate, 20);
-  near("manual: subtotal=6000", r.transportSubtotal, 6000);
-  eq("manual: refPrice=1", r.refPrice, 1);
+  eq("manual: basis=cbm (default คิว)", r.basis, "cbm");
+  near("manual: rate=5000", r.rate, 5000);
+  near("manual: subtotal=5000 (cbm 1 × 5000)", r.transportSubtotal, 5000);
+  eq("manual: refPrice=2", r.refPrice, 2);
   eq("manual: rateMissing=false", r.rateMissing, false);
 }
 
@@ -137,16 +138,24 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   eq("default: refPrice=2", r.refPrice, 2);
 }
 
-// ── 5a. MANUAL override keeps legacy max-of-both (admin typed exact rates) ──
+// ── 5a. MANUAL override also DEFAULTS CBM (owner 2026-06-23) + KG-only fallback ──
 {
-  // manual KG=50, CBM=2000. weight 50 → priceKg=2500 > priceCbm=2000 → KG wins.
-  const r = resolveForwarderRate(
+  // manual KG=50, CBM=2000. weight 50. Legacy max-of-both → KG (2500>2000); the new
+  // default ignores KG → CBM (2000). The admin ticks ค่าเทียบ to bill dense by KG.
+  let r = resolveForwarderRate(
     cand({ manualOverride: true, manualKg: 50, manualCbm: 2000 }),
     inp({ weightKg: 50, volumeCbm: 1 }),
   );
-  eq("manual max: KG wins (2500>2000)", r.basis, "kg");
-  near("manual max: subtotal=2500", r.transportSubtotal, 2500);
-  eq("manual max: refPrice=1", r.refPrice, 1);
+  eq("manual default: basis=cbm (ยึดตามคิว)", r.basis, "cbm");
+  near("manual default: subtotal=2000", r.transportSubtotal, 2000);
+  // kg-only manual (no CBM rate) → fall back to KG, never ฿0.
+  r = resolveForwarderRate(
+    cand({ manualOverride: true, manualKg: 50, manualCbm: 0 }),
+    inp({ weightKg: 50, volumeCbm: 1 }),
+  );
+  eq("manual kg-only (no cbm) → KG fallback", r.basis, "kg");
+  near("manual kg-only: subtotal=2500", r.transportSubtotal, 2500);
+  eq("manual kg-only: rateMissing=false", r.rateMissing, false);
 }
 
 // ── 5b. KG vs CBM tie → CBM wins (legacy `>=`, L1993) ──

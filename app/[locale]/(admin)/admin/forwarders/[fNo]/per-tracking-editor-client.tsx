@@ -250,23 +250,19 @@ export function PerTrackingEditorClient({
         byWeight = kgPerCbm > threshold;
         transport = byWeight ? pKg : pCbm;
       } else {
-        // NO ค่าเทียบ → EACH tracking picks its own higher basis, then summed.
-        // This is what the bill ACTUALLY charges (resolve-rate per-line · legacy
-        // forwarder.php:558 accumulates per-row fTotalPrice) — it differs from the
-        // whole-order max(Σkg×rate, Σcbm×rate) whenever trackings have mixed
-        // winning bases (Σ max(a,b) ≥ max(Σa, Σb)). Computing it per-row here makes
-        // this preview EQUAL the saved per-line total shown at the top of the page
-        // (was the 4,324.05-vs-4,083.96 mismatch the owner hit · 2026-06-22).
-        transport = rows.reduce(
-          (s, r) =>
-            s +
-            Math.max(
-              (parseFloat(r.weight) || 0) * rateKg,
-              (parseFloat(r.cbm) || 0) * rateCbm,
-            ),
-          0,
-        );
-        byWeight = pKg >= pCbm; // label hint only
+        // owner 2026-06-23: NO ค่าเทียบ → DEFAULT "คิดตามคิว" (whole-order CBM) — NOT
+        // per-line max-of-both (which billed dense trackings by KG · the 4,324.05 the
+        // owner flagged on 1780103566 vs the wanted whole-order 4,083.96). This now
+        // EQUALS the saved total: resolve-rate bills CBM per-line, and Σ(cbm_i×rate) =
+        // (Σcbm)×rate = pCbm. KG only via the ค่าเทียบ tick; fall back to KG ONLY when
+        // there is no CBM rate at all (avoid ฿0).
+        if (rateCbm > 0) {
+          byWeight = false;
+          transport = pCbm;
+        } else {
+          byWeight = true;
+          transport = pKg;
+        }
       }
     } else if (useProfile) {
       // BOTH amounts from the server (computed by the SAME engine the save runs).
@@ -289,10 +285,6 @@ export function PerTrackingEditorClient({
       cr, useProfile, profileRate, profileBasis,
       rateKg, rateCbm, comparisonOn, threshold, count: rows.length,
       label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
-      // perLineMax = the custom-rate, no-ค่าเทียบ, multi-tracking case where each
-      // tracking picks its own basis → the chosen total is the per-line SUM, not a
-      // single Σkg/Σcbm line (so the label must say so · 2026-06-22).
-      perLineMax: cr && !comparisonOn && rows.length > 1,
       w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
   }, [
@@ -506,7 +498,7 @@ export function PerTrackingEditorClient({
               <strong>{calc.pCbm == null ? "—" : baht(calc.pCbm)}</strong>
             </p>
             <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-1">
-              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : calc.perLineMax ? "ราคาสูงสุดต่อแทรคกิง (รวมทุกแทค)" : calc.useProfile ? (calc.byWeight ? "น้ำหนัก" : "ปริมาตร") : "ราคามากสุด"} → {baht(calc.transport)}
+              ระบบเลือก คิดตาม{calc.comparisonOn ? "ค่าเทียบ" : (calc.byWeight ? "น้ำหนัก (กิโล)" : "ปริมาตร (คิว)")} (รวมทุกแทค) → {baht(calc.transport)}
             </p>
             {/* Only fall back to the "คำนวณตอนบันทึก" note when system pricing
                 couldn't resolve a profile rate (no rate card for the tuple). */}

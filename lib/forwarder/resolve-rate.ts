@@ -418,33 +418,33 @@ export function resolveForwarderRate(
 
   // ── No ค่าเทียบ tick → DEFAULT "คิดตามคิว" (CBM) ──────────────────────────
   // owner 2026-06-23: "ยึดตามคิว เป็น default เพราะ MOMO เก็บเราเป็นคิว · ถ้าอยากคิด
-  // กิโล ก็ค่อยติ๊กค่าเทียบ". So without the comparison tick the basis is ALWAYS CBM
-  // — NOT the legacy "ราคามากสุด" max-of-both (which silently billed dense items by
-  // KG). EXCEPTION: a MANUAL admin override keeps the legacy max-of-both — the admin
-  // typed exact rates on each basis, so respect their explicit choice (and never
-  // force a manual-KG-only order onto a ฿0 CBM). KG-for-dense is the tick path above.
+  // กิโล ก็ค่อยติ๊กค่าเทียบ". Without the tick the basis is ALWAYS CBM — for the system
+  // rate AND a manual/custom-rate override (the admin typing เรท ฿/กก. + ฿/CBM does
+  // NOT change the basis; คิว stays the default · owner re-confirmed on order
+  // 1780103566 — manual rate must still bill whole-order CBM, not per-line max). This
+  // replaces the legacy "ราคามากสุด" max-of-both that silently billed dense items by KG.
+  // KG-for-dense is the comparison-tick path above.
   const kgProbe = rateForBasis("kg", candidates, weight);
   const cbmProbe = rateForBasis("cbm", candidates, cbm);
   const cbmDisc = applyDocTierCbmDiscount(cbmProbe.rate, docEligible, docDiscountCbm);
   const priceKg = round2(weight * kgProbe.rate);
   const priceCbm = round2(cbm * cbmDisc.rate);
 
-  // MANUAL override only: legacy max-of-both (priceKg > priceCbm → KG). Honours an
-  // admin who typed a KG rate; ties + CBM-higher fall through to the CBM return.
-  if (candidates.manualOverride && priceKg > priceCbm) {
+  // KG fallback ONLY when there is NO CBM rate at all but a KG rate exists — so a
+  // kg-only rate card / kg-only manual override is never forced onto a ฿0 CBM. This
+  // is NOT max-of-both: when a CBM rate exists, CBM always wins (ยึดตามคิว).
+  if (cbmProbe.rate === 0 && kgProbe.rate > 0) {
     return {
       rate: kgProbe.rate,
       basis: "kg",
       source: kgProbe.source,
       transportSubtotal: priceKg,
       refPrice: 1,
-      rateMissing: kgProbe.rate === 0 && cbmProbe.rate === 0,
+      rateMissing: false,
       docDiscountApplied: 0,
     };
   }
-  // Default → CBM (and manual where CBM ≥ KG). A missing CBM rate is a hard flag —
-  // we do NOT silently fall back to KG (that would defeat "ยึดตามคิว"); for a manual
-  // override only-both-legs-0 counts as missing.
+  // Default → CBM. A missing CBM rate (and no KG to fall back to) is a hard flag.
   return {
     rate: cbmDisc.rate,
     basis: "cbm",
@@ -452,9 +452,7 @@ export function resolveForwarderRate(
     transportSubtotal: priceCbm,
     refPrice: 2,
     docDiscountApplied: cbmDisc.applied,
-    rateMissing: candidates.manualOverride
-      ? cbmProbe.rate === 0 && kgProbe.rate === 0
-      : cbmProbe.rate === 0,
+    rateMissing: cbmProbe.rate === 0,
   };
 }
 
