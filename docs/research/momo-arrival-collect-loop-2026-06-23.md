@@ -71,3 +71,11 @@ fstatus 7 ส่งแล้ว = จบ
 3. **เช้า** โกดังไปรับของ → สแกนเข้าระบบเรา + ถ่ายรูป → **จ่ายงานคนขับไปส่งได้เลย** ไม่ต้องรอเก็บเงินใหม่.
 
 **= the per-shipment "ยิงเปรี้ยงเดียว" redesign** ที่รวม: collect-once-per-shipment (แก้ FIX 2ข) + bill China-TH + in-TH together + trigger = MOMO-scan-confirmed (ไม่ใช่ของถึงไทย). build นี้แทนที่ per-line pay model. **NEXT BUILD (เดฟ · careful · money).**
+
+### 🔧 CBM-default + manual basis toggle — precise spec (owner 2026-06-23: "ยึดตามคิวเป็น default · คนสลับ คิว↔กิโล ได้เอง")
+**Engine fact (must not get wrong):** `lib/forwarder/live-rate.ts:249` `comparisonEnabled = customComparisonSwitch || userComparison`. Two existing modes — **(A)** comparison ON → KG เมื่อ kg/คิว > ค่าเทียบ ; **(B)** comparison OFF → `max(คิว×rate, กิโล×rate)` (ราคามากสุด). **⚠️ ทั้ง 2 โหมด ของหนักออกมาเป็นกิโลอยู่ดี — ไม่มีโหมด "CBM ล้วน" วันนี้.** So owner's model needs:
+1. **โหมดใหม่ force-CBM** = default basis = CBM เสมอ (ข้าม ค่าเทียบ + ข้าม max) — `resolve-rate.ts` รับ input ใหม่ `forcedBasis?: 'cbm'|'kg'` (เมื่อ set → ใช้ basis นั้นตรงๆ, refPrice ตาม basis).
+2. **default = `forcedBasis='cbm'`** เมื่อไม่มี override (owner: ยึดคิว).
+3. **ปุ่มสลับ คิว↔กิโล** ใน forwarder pricing editor (per-line หรือ per-order) → persist (คอลัมน์ใหม่ tb_forwarder e.g. `fbasis` หรือ reuse · mig) → staff กดสลับเอง.
+4. **lock ด้วย `lib/forwarder/resolve-rate.test.ts`** (มีอยู่ · เพิ่มเคส forcedBasis) ก่อน apply · money review · NOT browser-test money on prod.
+**= งานแก้เครื่องคิดเงินทั้งระบบ (ทุกลูกค้า) → ทำตอน context สด · มี test · ไม่รีบ.**
