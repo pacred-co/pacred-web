@@ -7,6 +7,7 @@ import { ForwarderStepRevert } from "./forwarder-step-revert";
 import { DomesticShippingSelector } from "./domestic-shipping-selector";
 import { domesticShippingOptions } from "@/lib/forwarder/domestic-shipping";
 import { CreateOrderBillButton } from "./create-order-bill-button";
+import { AdvanceBillConfirmButton } from "./advance-bill-confirm-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -310,6 +311,8 @@ async function tryRenderTbForwarder(
       "frefprice, frefrate, customrate, customratekg, customratecbm, " +
       // 2026-06-17 (mig 0187) — per-order ค่าเทียบ override (durable persistence)
       "custom_comparison, custom_comparison_value, " +
+      // 2026-06-23 (mig 0207) — เฟิม flag for advance billing (วางบิลล่วงหน้า)
+      "advance_bill_confirmed, " +
       "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, " +
       "faddresstel, faddresstel2, faddressnote, " +
@@ -355,6 +358,7 @@ async function tryRenderTbForwarder(
     frefprice: string | null; frefrate: number | null;
     customrate: string | null; customratekg: number | null; customratecbm: number | null;
     custom_comparison: string | null; custom_comparison_value: number | string | null;
+    advance_bill_confirmed: string | null;
     faddressname: string | null; faddresslastname: string | null;
     faddressno: string | null; faddresssubdistrict: string | null;
     faddressdistrict: string | null; faddressprovince: string | null;
@@ -666,6 +670,12 @@ async function tryRenderTbForwarder(
     userId: r.userid,
     isCorporate: collectIsCorporate,
   });
+  // ── Advance billing (owner 2026-06-23 · วางบิลล่วงหน้าตอน MOMO ยิงของ) ──
+  // The whole shipment's sibling ids (เฟิม + advance-bill cover all แทค), whether it's
+  // already เฟิม'd, and whether it's priced (any sibling has freight > 0 = measured).
+  const advanceSiblingIds = collectSiblings.map((s) => s.id).filter((n): n is number => Number.isInteger(n) && n > 0);
+  const advanceConfirmed = String(r.advance_bill_confirmed ?? "").trim() === "1";
+  const advancePriced = collectSiblings.some((s) => (Number(s.ftotalprice) || 0) > 0);
   // Collapse the per-line breakdowns into ONE shipment breakdown (same shape the
   // ยอดเก็บจริง panel renders); the total is the authoritative batch total.
   const collect =
@@ -1073,11 +1083,17 @@ async function tryRenderTbForwarder(
           </div>
         )}
 
-        {/* ── สร้างใบวางบิล รายตัว (owner 2026-06-22) — shows at รอชำระเงิน/เตรียมส่ง
-           (fstatus 5/6) · mints the bill for the whole tracking group → send to
-           collect. Self-gates by fstatus. ── */}
-        <div id="bill-section" className="mt-3 scroll-mt-24">
-          <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} />
+        {/* ── สร้างใบวางบิล (owner 2026-06-22 + advance 2026-06-23) — at รอชำระเงิน/
+           เตรียมส่ง (5/6) normally, OR ล่วงหน้าที่ ถึงโกดังจีน/กำลังส่งมาไทย/ถึงไทย (2/3/4)
+           เมื่อเฟิมแล้ว. The "🔒 เฟิม" gate sits above it (วางบิลล่วงหน้าตอน MOMO ยิงของ). ── */}
+        <div id="bill-section" className="mt-3 scroll-mt-24 space-y-2">
+          <AdvanceBillConfirmButton
+            fIds={advanceSiblingIds.length > 0 ? advanceSiblingIds : [r.id]}
+            fstatus={r.fstatus}
+            confirmed={advanceConfirmed}
+            priced={advancePriced}
+          />
+          <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} advanceConfirmed={advanceConfirmed} />
         </div>
 
         {/* ── จัดส่งในไทย — zone-aware smart selector (task F · owner 2026-06-22):

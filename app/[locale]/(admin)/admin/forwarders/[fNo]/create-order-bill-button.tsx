@@ -23,13 +23,17 @@ type Result =
   | { kind: "ok"; docNo: string; invoiceId?: number }
   | { kind: "err"; text: string; billed?: Array<{ forwarderId: number; docNo: string; invoiceId: number }> };
 
-export function CreateOrderBillButton({ fId, fstatus }: { fId: number; fstatus: string }) {
+export function CreateOrderBillButton({ fId, fstatus, advanceConfirmed = false }: { fId: number; fstatus: string; advanceConfirmed?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<Result | null>(null);
 
   const cur = String(fstatus ?? "").trim();
-  if (cur !== "5" && cur !== "6") return null; // billable only at รอชำระเงิน/เตรียมส่ง
+  const normalBillable = cur === "5" || cur === "6"; // รอชำระเงิน/เตรียมส่ง
+  // ADVANCE (owner 2026-06-23): once เฟิม'd, bill BEFORE TH arrival at ถึงโกดังจีน/
+  // กำลังส่งมาไทย/ถึงไทย (2/3/4) — วางบิลล่วงหน้าตอน MOMO ยิงของ.
+  const advanceBillable = advanceConfirmed && (cur === "2" || cur === "3" || cur === "4");
+  if (!normalBillable && !advanceBillable) return null;
 
   async function onClick() {
     setResult(null);
@@ -70,7 +74,7 @@ export function CreateOrderBillButton({ fId, fstatus }: { fId: number; fstatus: 
         className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Receipt className="h-4 w-4" />
-        {pending ? "กำลังสร้างบิล..." : "🧾 สร้างใบวางบิล (เก็บเงินลูกค้า)"}
+        {pending ? "กำลังสร้างบิล..." : advanceBillable ? "🧾 สร้างใบวางบิลล่วงหน้า (เก็บเงินก่อนของถึงไทย)" : "🧾 สร้างใบวางบิล (เก็บเงินลูกค้า)"}
       </button>
 
       {result?.kind === "ok" && (

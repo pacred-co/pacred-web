@@ -180,7 +180,7 @@ export type BillingRunInvoiceDetail = {
 // the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
 const FWD_BILLING_SELECT =
   "id, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
-  "fcredit, paydeposit, fusercompany, " +
+  "fcredit, paydeposit, fusercompany, advance_bill_confirmed, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount";
 
@@ -1322,6 +1322,21 @@ export async function markBillingRunPaid(
             .in("id", Array.from(invFids))
             .eq("fstatus", "5");
           if (advErr) console.error("[markBillingRunPaid forwarder-advance]", { code: advErr.code, message: advErr.message });
+
+          // ADVANCE bill (owner 2026-06-23 · วางบิลล่วงหน้าตอน MOMO ยิง): a paid advance
+          // bill marks its forwarder rows SETTLED (paydeposit='1') but does NOT force
+          // fstatus 6 — the goods are still in China (fstatus 2/3/4). The settled marker
+          // blocks any re-collect; the morning arrival scan flips a settled advance row →
+          // 6 (เตรียมส่ง · skip รอชำระ) so it dispatches without re-charging. Guard: only
+          // advance-confirmed rows still at the physical stages.
+          const { error: advPaidErr } = await admin
+            .from("tb_forwarder")
+            .update({ paydeposit: "1", fdateadminstatus: paidAtIso })
+            .in("id", Array.from(invFids))
+            .eq("advance_bill_confirmed", "1")
+            .neq("paydeposit", "1")
+            .in("fstatus", ["2", "3", "4"]);
+          if (advPaidErr) console.error("[markBillingRunPaid advance-paid]", { code: advPaidErr.code, message: advPaidErr.message });
 
           const { data: touch, error: touchErr } = await admin
             .from("tb_receipt_item")

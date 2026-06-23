@@ -479,6 +479,24 @@ export async function adminBarcodeImportScan(
                   await appendStatusLog(admin, g.id, g.fstatus, "4", legacyAdminId);
                 }
               }
+              // ADVANCE-PAID (owner 2026-06-23 · วางบิลล่วงหน้า): a row paid IN ADVANCE
+              // (advance_bill_confirmed + paydeposit='1') is already settled — now that it
+              // landed in TH (just flipped → 4), skip รอชำระ and go straight to เตรียมส่ง
+              // (6) so it dispatches without re-collecting. Tight guard (advance-confirmed
+              // + settled + exactly-at-4) → a normal arrival is untouched.
+              const { data: advRows, error: advUpErr } = await admin
+                .from("tb_forwarder")
+                .update({ fstatus: "6", fdatestatus6: nowIso, adminidupdate: legacyAdminId })
+                .in("id", flip.eligibleIds)
+                .eq("fstatus", "4")
+                .eq("advance_bill_confirmed", "1")
+                .eq("paydeposit", "1")
+                .select("id");
+              if (advUpErr) {
+                console.error("[barcode_import advance-paid→6]", { code: advUpErr.code, message: advUpErr.message, base });
+              } else {
+                for (const r of advRows ?? []) await appendStatusLog(admin, (r as { id: number }).id, "4", "6", legacyAdminId);
+              }
             }
           }
         } else {

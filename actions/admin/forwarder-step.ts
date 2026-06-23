@@ -369,6 +369,85 @@ export async function adminAdvanceForwarderToWaitPayment(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// adminConfirmAdvanceBill — เฟิม the cbm/weight for ADVANCE billing (owner 2026-06-23
+// "วางบิลล่วงหน้าตอน MOMO ยิงของ · จุดเฟิม"). Sets advance_bill_confirmed='1' on a
+// shipment's tracking rows so they become advance-billable (eligibility cohort C)
+// BEFORE Thailand arrival — staff confirms the firmed numbers (แต้ม packing list ·
+// MOMO fallback) FIRST, so we never เก็บตังมั่ว on goods that might be lost. Only at
+// fstatus 2/3/4 (MOMO-scanned, pre-/at-arrival) AND priced (ftotalprice>0). Reversible
+// (confirm:false → '0'). Per-row TOCTOU. Gated.
+// ─────────────────────────────────────────────────────────────────────────────
+const advanceConfirmSchema = z.object({
+  fIds: z.array(z.number().int().positive()).min(1).max(50),
+  source: z.enum(["taem", "momo", "th"]).optional(),
+  confirm: z.boolean().optional(),
+});
+
+export async function adminConfirmAdvanceBill(
+  rawInput: z.infer<typeof advanceConfirmSchema>,
+): Promise<AdminActionResult<{ confirmed: number[]; skipped: number[] }>> {
+  const parsed = advanceConfirmSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { fIds, source, confirm } = parsed.data;
+  const on = confirm !== false;
+
+  return withAdmin<{ confirmed: number[]; skipped: number[] }>(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+    const nowIso = new Date().toISOString();
+    const confirmed: number[] = [];
+    const skipped: number[] = [];
+
+    // Validate the candidates (only confirm priced, pre-arrival rows).
+    const { data: rows, error: readErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, ftotalprice")
+      .in("id", fIds);
+    if (readErr) {
+      console.error("[adminConfirmAdvanceBill read]", { code: readErr.code, message: readErr.message });
+      return { ok: false, error: `db_error:${readErr.code ?? "unknown"}` };
+    }
+    const byId = new Map(((rows ?? []) as Array<{ id: number; fstatus: string | null; ftotalprice: number | string | null }>).map((r) => [r.id, r]));
+
+    for (const fid of fIds) {
+      const r = byId.get(fid);
+      if (on) {
+        const fstatus = String(r?.fstatus ?? "").trim();
+        const priced = (Number(r?.ftotalprice) || 0) > 0;
+        if (!["2", "3", "4"].includes(fstatus) || !priced) { skipped.push(fid); continue; }
+        const { data: upd, error: upErr } = await admin
+          .from("tb_forwarder")
+          .update({
+            advance_bill_confirmed: "1",
+            advance_bill_measure_source: source ?? "taem",
+            adminidupdate: legacyAdminId,
+            fdateadminstatus: nowIso,
+          })
+          .eq("id", fid)
+          .in("fstatus", ["2", "3", "4"]) // TOCTOU — never confirm a row that raced to billed/shipped
+          .select("id");
+        if (upErr) { console.error("[adminConfirmAdvanceBill upd]", { code: upErr.code, message: upErr.message, fid }); skipped.push(fid); continue; }
+        if (upd && upd.length > 0) confirmed.push(fid); else skipped.push(fid);
+      } else {
+        const { error: upErr } = await admin
+          .from("tb_forwarder")
+          .update({ advance_bill_confirmed: "0" })
+          .eq("id", fid);
+        if (upErr) { skipped.push(fid); continue; }
+        confirmed.push(fid);
+      }
+    }
+
+    if (confirmed.length > 0) {
+      await logAdminAction(adminId, on ? "tb_forwarder.advance_bill_confirm" : "tb_forwarder.advance_bill_unconfirm", "tb_forwarder", confirmed.join(","), { confirmed, skipped, source });
+      revalidatePath("/admin/forwarders");
+      for (const fid of confirmed) revalidatePath(`/admin/forwarders/${fid}`);
+    }
+    return { ok: true, data: { confirmed, skipped } };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // advanceForwarderStep — move fstatus N → N+1 (one step forward · status-only).
 // Forward-only · TOCTOU-guarded · Option B (NO money/dispatch side-effect).
 // Owner: "ทำ4เสร็จ→5→6". Used for the 4→5 and 5→6 workflow advances.
