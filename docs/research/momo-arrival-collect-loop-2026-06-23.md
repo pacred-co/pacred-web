@@ -92,6 +92,15 @@ Owner chose **option 1**: bill on MOMO's scanned numbers (locked price · เก
   5. morning TH re-measure: if |new − billed| > threshold → **flag for review** (no auto re-collect · option 1). Else proceed to dispatch (already works).
 - **= multi-piece money build + new dep (xlsx) + migration → do with fresh context, not rushed.**
 
+### ✅✅ B — BUILT END-TO-END (2026-06-23 · `9b3da83c` foundation + `95c48a5a` activation)
+The full "ยิงเปรี้ยงเดียว" advance-billing loop is shipped (main · safe-by-default):
+1. **เฟิม (จุดเฟิม)** — `adminConfirmAdvanceBill` + `<AdvanceBillConfirmButton>` on forwarder detail · sets advance_bill_confirmed='1' on the whole shipment, only at fstatus 2/3/4 + priced. (อิงแต้ม: firm คิว/น้ำหนัก via the existing paste-reconcile tool · MOMO fallback.)
+2. **วางบิลล่วงหน้า** — eligibility cohort C (mig 0207) + CreateOrderBillButton shows at 2/3/4 when เฟิม'd + FWD_BILLING_SELECT carries the flag → bill freight + in-TH once, before TH arrival.
+3. **จ่าย** — markBillingRunPaid marks advance orders SETTLED (paydeposit='1') without forcing fstatus 6 → blocks re-collect.
+4. **เช้ารับ+สแกน→ส่ง** — arrival scan flips an advance-paid row (4) → 6 (skip รอชำระ) → dispatch, no re-charge. Tight guard → normal arrivals untouched.
+- เหมาๆ once-per-shipment fix (`db86a181`) + morning-scan-no-reset (verified) round it out.
+- **Remaining follow-ups (nice-to-have):** แต้ม Excel-FILE upload UX (paste works now · needs an xlsx dep) · TH re-measure > threshold → review flag (owner option-1: locked, no auto re-collect — the flag/alert UI is the polish) · advance rows in the billing-run PICKER query (per-order วางบิล button works now). NOT browser-tested on prod (money · confirm-flag default-off = opt-in).
+
 ### 🔧 CBM-default + manual basis toggle — precise spec (owner 2026-06-23: "ยึดตามคิวเป็น default · คนสลับ คิว↔กิโล ได้เอง")
 **Engine fact (must not get wrong):** `lib/forwarder/live-rate.ts:249` `comparisonEnabled = customComparisonSwitch || userComparison`. Two existing modes — **(A)** comparison ON → KG เมื่อ kg/คิว > ค่าเทียบ ; **(B)** comparison OFF → `max(คิว×rate, กิโล×rate)` (ราคามากสุด). **⚠️ ทั้ง 2 โหมด ของหนักออกมาเป็นกิโลอยู่ดี — ไม่มีโหมด "CBM ล้วน" วันนี้.** So owner's model needs:
 1. **โหมดใหม่ force-CBM** = default basis = CBM เสมอ (ข้าม ค่าเทียบ + ข้าม max) — `resolve-rate.ts` รับ input ใหม่ `forcedBasis?: 'cbm'|'kg'` (เมื่อ set → ใช้ basis นั้นตรงๆ, refPrice ตาม basis).
