@@ -1,20 +1,21 @@
 import { Link } from "@/i18n/navigation";
-import { BookOpen, Newspaper } from "lucide-react";
+import { BookOpen, Newspaper, Briefcase } from "lucide-react";
 
 /**
- * Tab strip rendered above the article listing on both `/knowledge` and
- * `/news`. Active state is passed in by the page itself — both routes
- * are server-rendered so we don't need `usePathname()`.
+ * Tab strip rendered above the article listing on `/knowledge`, `/news`, and
+ * `/our-work` (owner 2026-06-23 added ผลงานของเรา). Active state is passed in by
+ * the page itself — all routes are server-rendered so we don't need
+ * `usePathname()`.
  *
- * Visual: pill row, primary-red fill for the active tab + outline for
- * the other; aligns left on desktop, centred on mobile to balance the
- * narrow viewport.
+ * Visual: pill row, primary-red fill for the active tab + outline for the
+ * others; aligns left on desktop, centred on mobile to balance the narrow
+ * viewport.
  */
 export function ArticleListTabs({
   active,
   className = "",
 }: {
-  active: "knowledge" | "news";
+  active: "knowledge" | "news" | "our-work";
   className?: string;
 }) {
   const tabs = [
@@ -29,6 +30,12 @@ export function ArticleListTabs({
       href: "/news",
       label: "ข่าวสาร Pacred",
       icon: Newspaper,
+    },
+    {
+      id: "our-work" as const,
+      href: "/our-work",
+      label: "ผลงานของเรา",
+      icon: Briefcase,
     },
   ];
 

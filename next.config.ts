@@ -108,6 +108,13 @@ const nextConfig: NextConfig = {
     // throws an Issue per <Image quality={N}> where N isn't in this allowlist —
     // so keep all 4 values listed even if some are only used by 1-2 components.
     qualities: [75, 92, 95, 100],
+    // Supabase Storage public objects (e.g. CMS article covers in the `avatars`
+    // bucket · uploadCmsCover → getPublicUrl). next/image rejects remote hosts
+    // unless allow-listed. Scoped to the public-object path. CSP img-src already
+    // permits https:. Owner 2026-06-23.
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+    ],
   },
 
   async headers() {
