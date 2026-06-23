@@ -24,7 +24,7 @@
  */
 
 import { Fragment, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
@@ -75,6 +75,12 @@ type Props = {
    * entries (= real container codes / non-MOMO cabinets) need no resolution.
    */
   momoInfoByCab?: Record<string, MomoContainerInfo>;
+  /**
+   * report-cnt search (ภูม 2026-06-23) — each visible cabinet's tracking
+   * numbers, so the search box matches by แทรคกิง (not only เลขตู้). Keyed by
+   * `fcabinetnumber`. Built server-side (scoped to the visible cabinets).
+   */
+  tracksByCab?: Record<string, string[]>;
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -264,6 +270,7 @@ export function CntListTable({
   transportLabel,
   completenessByCab,
   momoInfoByCab,
+  tracksByCab,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
@@ -279,6 +286,7 @@ export function CntListTable({
   const [modalOpen, setModalOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("fdatecontainerclose");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [search,  setSearch]  = useState("");
 
   // ── Expandable box-dimension detail (owner ask 2026-06-19 · ปอน) ──
   // Click a container's chevron → drop down its box detail (กว้าง/ยาว/สูง/CBM/
@@ -375,9 +383,25 @@ export function CntListTable({
     return out;
   }, [rowsWithDiff, sortKey, sortDir]);
 
+  // ค้นหา เลขตู้ / แทรคกิง (ภูม 2026-06-23) — instant client-side filter so staff
+  // don't scroll the whole list. Matches the raw cabinet, the resolved MOMO real
+  // container / sack number, AND any tracking number in the cabinet (tracksByCab).
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sortedRows;
+    return sortedRows.filter((r) => {
+      if (r.fcabinetnumber.toLowerCase().includes(q)) return true;
+      const momo = momoInfoByCab?.[r.fcabinetnumber];
+      if (momo?.realContainer?.toLowerCase().includes(q)) return true;
+      if (momo?.sackNo?.toLowerCase().includes(q)) return true;
+      const tracks = tracksByCab?.[r.fcabinetnumber];
+      return tracks ? tracks.some((t) => t.toLowerCase().includes(q)) : false;
+    });
+  }, [sortedRows, search, momoInfoByCab, tracksByCab]);
+
   const selectableRows = useMemo(
-    () => (canSelect ? sortedRows.filter((r) => !r.isPaid) : []),
-    [canSelect, sortedRows],
+    () => (canSelect ? filteredRows.filter((r) => !r.isPaid) : []),
+    [canSelect, filteredRows],
   );
 
   const allSelected =
@@ -387,10 +411,10 @@ export function CntListTable({
   // Aggregates for the orange summary band (matches legacy L532-538 jQuery
   // .t7..t12 + .t16). avgDay = สูตรเฉลี่ย วันที่รอเข้าโกดัง — averaged across
   // all containers with non-null diffDay.
-  // Footer sums iterate `rowsWithDiff` (same membership the body renders, with
-  // diffDay already computed) — NOT the raw `rows` prop — so the footer can
-  // never drift from the visible body if a client-side filter is ever added
-  // (audit 2026-06-18 defensive decoupling; sort doesn't change membership).
+  // Footer sums iterate `filteredRows` (the EXACT membership the body renders —
+  // search-filtered + sorted) — NOT the raw `rows` prop — so the footer total
+  // never drifts from the visible body (ภูม search 2026-06-23 · the 2026-06-18
+  // defensive decoupling anticipated this client-side filter).
   const totals = useMemo(() => {
     let trackCount = 0;
     let ctnsSum = 0;
@@ -401,7 +425,7 @@ export function CntListTable({
     let profitSum = 0;
     let dayTotal = 0;
     let dayCount = 0;
-    for (const r of rowsWithDiff) {
+    for (const r of filteredRows) {
       trackCount += r.trackCount;
       ctnsSum    += r.completenessExpected; // CTNS — total cartons (Σ famount)
       volumeSum  += r.volumeSum;
@@ -416,7 +440,7 @@ export function CntListTable({
     }
     const avgDay = dayCount > 0 ? Math.round(dayTotal / dayCount) : 0;
     return { trackCount, ctnsSum, volumeSum, weightSum, costSum, priceSum, profitSum, avgDay };
-  }, [rowsWithDiff]);
+  }, [filteredRows]);
 
   function toggle(code: string) {
     setSelected((prev) => {
@@ -458,6 +482,24 @@ export function CntListTable({
 
   return (
     <>
+      {/* ค้นหา เลขตู้ / แทรคกิง (ภูม 2026-06-23) — instant filter, ไม่ต้องเลื่อนหา */}
+      <div className="mb-3 flex items-center gap-2">
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ค้นหา เลขตู้ / แทรคกิง…"
+            aria-label="ค้นหาเลขตู้หรือแทรคกิง"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface pl-9 pr-3 py-2 text-sm focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-300"
+          />
+        </div>
+        {search && (
+          <span className="whitespace-nowrap text-xs text-muted">พบ {filteredRows.length} ตู้</span>
+        )}
+      </div>
+
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <table className="w-full text-xs">
           <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
@@ -506,7 +548,7 @@ export function CntListTable({
             <tr className="bg-white dark:bg-surface text-foreground text-sm font-bold border-y-2 border-border">
               {canSelect && <td className="px-2 py-2"></td>}
               {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (7) */}
-              <td className="px-2 py-2 text-base font-bold" colSpan={7}>รวม ({rows.length} ตู้)</td>
+              <td className="px-2 py-2 text-base font-bold" colSpan={7}>รวม ({search ? `${filteredRows.length}/${rows.length}` : rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
@@ -520,7 +562,15 @@ export function CntListTable({
               <td className="px-2 py-2" colSpan={2}></td>
             </tr>
 
-            {sortedRows.map((r) => {
+            {filteredRows.length === 0 && (
+              <tr>
+                <td colSpan={colCount} className="px-3 py-8 text-center text-sm text-muted">
+                  ไม่พบตู้ / แทรคกิงที่ตรงกับ &quot;{search}&quot;
+                </td>
+              </tr>
+            )}
+
+            {filteredRows.map((r) => {
               // สถานะตู้ — owner 2026-06-19 (ปอน): "มีเลขตู้ = กำลังส่งมาไทย ทั้งหมด".
               // Every row on the รอเข้าโกดังไทย tab has a cabinet number (the page
               // groups by + filters fcabinetnumber), so the container is loaded +

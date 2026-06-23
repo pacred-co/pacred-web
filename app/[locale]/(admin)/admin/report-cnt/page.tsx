@@ -359,6 +359,25 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
       : {};
 
+  // Search support (ภูม 2026-06-23) — each visible cabinet's tracking numbers so
+  // the client search box matches by แทรคกิง too (not only เลขตู้). Two tiny
+  // columns scoped to the visible cabinets — cheap next to the avoided 50k pull.
+  const tracksByCab: Record<string, string[]> = {};
+  if (grouped.length > 0) {
+    const { data: trackRows, error: trackErr } = await admin
+      .from("tb_forwarder")
+      .select("fcabinetnumber,ftrackingchn")
+      .in("fcabinetnumber", grouped.map((g) => g.fcabinetnumber))
+      .limit(50_000);
+    if (trackErr) {
+      console.error("[report-cnt tracksByCab] failed", { code: trackErr.code, message: trackErr.message });
+    }
+    for (const tr of (trackRows ?? []) as { fcabinetnumber: string; ftrackingchn: string | null }[]) {
+      if (!tr.ftrackingchn) continue;
+      (tracksByCab[tr.fcabinetnumber] ??= []).push(tr.ftrackingchn);
+    }
+  }
+
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
@@ -556,6 +575,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             transportLabel={TRANSPORT_LABEL}
             completenessByCab={completenessByCab}
             momoInfoByCab={momoInfoByCab}
+            tracksByCab={tracksByCab}
           />
         )}
         {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons
