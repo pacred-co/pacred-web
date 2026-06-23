@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getImportedLeadStats } from "@/actions/admin/imported-leads";
 import { PageHeader } from "@/components/admin/page-header";
 
 // Reads live counts via the service-role client on each request.
@@ -55,22 +56,22 @@ export default async function MarketingHubPage() {
   const admin = createAdminClient();
 
   // ── Live quick stats (cheap counts · §0c destructure error · soft-fail → null) ──
-  const [pubRes, pendRes, leadsRes, leadsPendRes] = await Promise.all([
+  // Leads counts come from getImportedLeadStats (distinct callable phones · role-
+  // scoped) so they MATCH the /admin/leads page badges exactly (owner 2026-06-23).
+  const [pubRes, pendRes, leadStatsRes] = await Promise.all([
     admin.from("cms_articles").select("id", { count: "exact", head: true }).eq("status", "published"),
     admin.from("cms_articles").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("imported_leads").select("id", { count: "exact", head: true }),
-    admin.from("imported_leads").select("id", { count: "exact", head: true }).eq("call_status", ""),
+    getImportedLeadStats(),
   ]);
   if (pubRes.error) console.error("[marketing:pub] failed", { message: pubRes.error.message });
   if (pendRes.error) console.error("[marketing:pend] failed", { message: pendRes.error.message });
-  if (leadsRes.error) console.error("[marketing:leads] failed", { message: leadsRes.error.message });
-  if (leadsPendRes.error) console.error("[marketing:leadsPend] failed", { message: leadsPendRes.error.message });
+  const leadStats = leadStatsRes.ok ? leadStatsRes.data : undefined;
 
   const stats = [
-    { label: "บทความเผยแพร่",      value: pubRes.count ?? 0,       href: "/admin/articles?status=published", tone: "text-green-700" },
-    { label: "บทความรออนุมัติ",    value: pendRes.count ?? 0,      href: "/admin/articles?status=pending",   tone: "text-amber-700" },
-    { label: "Leads ทั้งหมด",       value: leadsRes.count ?? 0,     href: "/admin/leads",                     tone: "text-foreground" },
-    { label: "Leads รอดำเนินการ",  value: leadsPendRes.count ?? 0, href: "/admin/leads?segment=pending",     tone: "text-rose-700" },
+    { label: "บทความเผยแพร่",      value: pubRes.count ?? 0,           href: "/admin/articles?status=published", tone: "text-green-700" },
+    { label: "บทความรออนุมัติ",    value: pendRes.count ?? 0,          href: "/admin/articles?status=pending",   tone: "text-amber-700" },
+    { label: "Leads ทั้งหมด",       value: leadStats?.total ?? 0,       href: "/admin/leads",                     tone: "text-foreground" },
+    { label: "Leads รอดำเนินการ",  value: leadStats?.pendingCount ?? 0, href: "/admin/leads?segment=pending",     tone: "text-rose-700" },
   ];
 
   return (

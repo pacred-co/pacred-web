@@ -387,20 +387,29 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
     setDistReps(new Set());
     await refresh(filter === "mine");
   }
+  // owner 2026-06-23: อัปเดตทีละแถว (optimistic) แทน refresh ทั้งลิสต์ — เว็บไม่ค้าง
+  // + แถวไม่ขยับ/หาย คนโทรไม่หลุดลูกค้าที่กำลังโทรอยู่.
+  const patchLead = (id: number, patch: Partial<ImportedLead>) =>
+    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+
   async function doCall(lead: ImportedLead) {
     if (busyId === lead.id) return; // guard repeat taps while a log is in flight
     setBusyId(lead.id);
-    await logImportedLeadCall({ id: lead.id });
+    const res = await logImportedLeadCall({ id: lead.id });
     setBusyId(null);
-    setCallOpenId(lead.id); // reveal the outcome buttons
-    await refresh(filter === "mine");
+    patchLead(lead.id, {
+      call_count: res.ok && res.data ? res.data.callCount : lead.call_count + 1,
+      last_called_at: new Date().toISOString(),
+    });
+    setCallOpenId(lead.id); // เปิดป็อปอัปให้เลือกผลการโทร
   }
   async function doStatus(id: number, status: string) {
     setBusyId(id);
-    await setImportedLeadStatus({ id, status });
+    const res = await setImportedLeadStatus({ id, status });
     setBusyId(null);
+    if (!res.ok) { setNotice("บันทึกสถานะไม่สำเร็จ"); return; }
+    patchLead(id, { call_status: status });
     setCallOpenId(null);
-    await refresh(filter === "mine");
   }
   async function doHandoff(id: number, legacyId: string) {
     if (!legacyId) return;
@@ -409,10 +418,10 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
     setBusyId(null);
     if (!res.ok) { setNotice(`ส่งต่อไม่สำเร็จ: ${res.error}`); return; }
     setNotice(`ส่งลูกค้าให้ ${repName(legacyId)} แล้ว → เข้า "ลูกค้าของฉัน" ของเซลล์`);
+    patchLead(id, { call_status: "other_rep", assigned_admin_id: legacyId });
     setHandoffOpenId(null);
     setHandoffRep("");
     setCallOpenId(null);
-    await refresh(filter === "mine");
   }
   function openClosePicker(id: number) {
     setCloseOpenId(closeOpenId === id ? null : id);
@@ -437,16 +446,15 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
     if (prCode) { const pr = await setImportedLeadPrCode({ id, prCode }); prOk = pr.ok; }
     setBusyId(null);
     setCloseOpenId(null); setCallOpenId(null); setPrQuery(""); setPrResults([]);
-    if (!cl.ok) setNotice(`ปิดดีลไม่สำเร็จ: ${cl.error}`);
-    else if (prCode && !prOk) setNotice("ปิดดีลแล้ว · แต่บันทึกรหัส PR ไม่สำเร็จ (prod รอ migration 0203)");
-    else setNotice(`✅ ปิดการขายได้${prCode ? ` · รหัส PR: ${prCode}` : ""}`);
-    await refresh(filter === "mine");
+    if (!cl.ok) { setNotice(`ปิดดีลไม่สำเร็จ: ${cl.error}`); return; }
+    patchLead(id, { call_status: "closed", ...(prCode ? { pr_code: prCode } : {}) });
+    setNotice(prCode && !prOk ? "ปิดดีลแล้ว · แต่บันทึกรหัส PR ไม่สำเร็จ (prod รอ migration 0203)" : `✅ ปิดการขายได้${prCode ? ` · รหัส PR: ${prCode}` : ""}`);
   }
   async function doService(id: number, service: string) {
     setBusyId(id);
-    await setImportedLeadService({ id, service });
+    const res = await setImportedLeadService({ id, service });
     setBusyId(null);
-    await refresh(filter === "mine");
+    if (res.ok) patchLead(id, { service }); else setNotice("บันทึกบริการไม่สำเร็จ");
   }
   async function doNote(id: number, note: string) {
     setSavingCell(`note:${id}`);
@@ -521,51 +529,69 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
           {busyId === l.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Phone className="h-3.5 w-3.5" />} โทร
         </a>
       ) : <span className="text-xs text-muted">ไม่มีเบอร์</span>}
-      {l.call_count > 0 ? <span className="text-[10px] text-muted">โทร {l.call_count} ครั้ง{l.last_called_at ? ` · ${new Date(l.last_called_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span> : null}
-      {callOpenId === l.id ? (
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap gap-1">
-            {QUICK_STATUSES.map((s) => (
-              <button key={s} type="button" onClick={() => (s === "closed" ? openClosePicker(l.id) : doStatus(l.id, s))} className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${CALL_STATUS_STYLE[s]} ${s === "closed" && closeOpenId === l.id ? "ring-1 ring-green-500" : ""}`}>{CALL_STATUS_LABEL[s]}</button>
-            ))}
-            {/* ลูกค้าเซลล์อื่น — opens a rep picker; routes the lead to the chosen rep (ปอน 2026-06-23) */}
-            <button type="button" onClick={() => { setHandoffRep(""); setHandoffOpenId(handoffOpenId === l.id ? null : l.id); }} aria-expanded={handoffOpenId === l.id} className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${CALL_STATUS_STYLE.other_rep} ${handoffOpenId === l.id ? "ring-1 ring-slate-400" : ""}`}>{CALL_STATUS_LABEL.other_rep}</button>
+      {l.call_count > 0 ? (
+        <button type="button" onClick={() => { setHandoffOpenId(null); setCloseOpenId(null); setCallOpenId(l.id); }} className="text-left text-[10px] font-semibold text-primary-600 hover:underline">
+          บันทึกผล · โทรแล้ว {l.call_count} ครั้ง{l.last_called_at ? ` · ${new Date(l.last_called_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+        </button>
+      ) : null}
+    </div>
+  );
+
+  // ── Call-outcome POPUP (owner 2026-06-23: เด้งป็อปอัปให้กดเลือกผล · ไม่หลุดลูกค้า) ──
+  const callLead = callOpenId != null ? leads.find((l) => l.id === callOpenId) ?? null : null;
+  const closeCallModal = () => { setCallOpenId(null); setHandoffOpenId(null); setCloseOpenId(null); setPrQuery(""); setPrResults([]); };
+  const callOutcomeModal = callLead ? (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6" onClick={closeCallModal}>
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-white shadow-xl dark:bg-surface" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-black text-foreground">บันทึกผลการโทร</h3>
+            <p className="truncate text-[12px] text-muted">{callLead.name || "ลูกค้า"} · {phoneDigits(callLead.phone) || "—"}</p>
           </div>
-          {handoffOpenId === l.id ? (
-            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1.5 dark:border-slate-700 dark:bg-slate-900/30">
-              <span className="text-[10px] text-muted">ส่งให้เซลล์:</span>
-              <select aria-label={`เลือกเซลล์เจ้าของ ${l.name || "ลูกค้า"}`} value={handoffRep} onChange={(e) => setHandoffRep(e.target.value)} className="rounded-md border border-border bg-white px-1.5 py-1 text-[11px] dark:bg-surface">
+          <button type="button" onClick={closeCallModal} aria-label="ปิด" className="shrink-0 rounded-lg p-1.5 text-muted transition hover:bg-surface-alt hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-2 p-4">
+          <p className="text-[12px] text-muted">เลือกผลการโทร:</p>
+          <div className="grid grid-cols-2 gap-2">
+            {QUICK_STATUSES.map((s) => (
+              <button key={s} type="button" disabled={busyId === callLead.id} onClick={() => (s === "closed" ? openClosePicker(callLead.id) : doStatus(callLead.id, s))} className={`rounded-lg border px-2 py-2.5 text-xs font-bold ${CALL_STATUS_STYLE[s]} ${s === "closed" && closeOpenId === callLead.id ? "ring-2 ring-green-500" : ""} disabled:opacity-50`}>{CALL_STATUS_LABEL[s]}</button>
+            ))}
+            <button type="button" onClick={() => { setCloseOpenId(null); setHandoffRep(""); setHandoffOpenId(handoffOpenId === callLead.id ? null : callLead.id); }} aria-expanded={handoffOpenId === callLead.id} className={`rounded-lg border px-2 py-2.5 text-xs font-bold ${CALL_STATUS_STYLE.other_rep} ${handoffOpenId === callLead.id ? "ring-2 ring-slate-400" : ""}`}>{CALL_STATUS_LABEL.other_rep}</button>
+          </div>
+          {handoffOpenId === callLead.id ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900/30">
+              <span className="text-[11px] text-muted">ส่งให้เซลล์:</span>
+              <select aria-label="เลือกเซลล์เจ้าของ" value={handoffRep} onChange={(e) => setHandoffRep(e.target.value)} className="rounded-md border border-border bg-white px-2 py-1 text-[12px] dark:bg-surface">
                 <option value="">— เลือกเซลล์ —</option>
                 {reps.map((r) => <option key={r.legacyId} value={r.legacyId}>{r.name}</option>)}
               </select>
-              <button type="button" disabled={!handoffRep || busyId === l.id} onClick={() => doHandoff(l.id, handoffRep)} className="inline-flex items-center gap-1 rounded-md bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-40">
-                {busyId === l.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null} ส่ง
+              <button type="button" disabled={!handoffRep || busyId === callLead.id} onClick={() => doHandoff(callLead.id, handoffRep)} className="inline-flex items-center gap-1 rounded-md bg-slate-700 px-3 py-1 text-[12px] font-semibold text-white transition hover:bg-slate-800 disabled:opacity-40">
+                {busyId === callLead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null} ส่ง
               </button>
             </div>
           ) : null}
-          {/* "ปิดได้" → เลือกรหัสลูกค้า PR จากระบบ (ปอน 2026-06-23) → ปิด + บันทึก pr_code → โผล่แถบ "ปิดการขายได้" */}
-          {closeOpenId === l.id ? (
-            <div className="flex flex-col gap-1 rounded-lg border border-green-300 bg-green-50 p-1.5 dark:border-green-900 dark:bg-green-950/20">
-              <span className="text-[10px] font-semibold text-green-800 dark:text-green-300">เลือกรหัสลูกค้า (PR) ที่ปิดได้:</span>
-              <input value={prQuery} onChange={(e) => onPrQueryChange(e.target.value)} placeholder="ค้นหา รหัส PR / ชื่อ / เบอร์…" aria-label="ค้นหารหัสลูกค้า PR" className="rounded-md border border-border bg-white px-2 py-1 text-[11px] dark:bg-surface" />
-              {prLoading ? <span className="inline-flex items-center gap-1 text-[10px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> ค้นหา…</span> : null}
+          {closeOpenId === callLead.id ? (
+            <div className="flex flex-col gap-1.5 rounded-lg border border-green-300 bg-green-50 p-2 dark:border-green-900 dark:bg-green-950/20">
+              <span className="text-[11px] font-semibold text-green-800 dark:text-green-300">เลือกรหัสลูกค้า (PR) ที่ปิดได้:</span>
+              <input value={prQuery} onChange={(e) => onPrQueryChange(e.target.value)} placeholder="ค้นหา รหัส PR / ชื่อ / เบอร์…" aria-label="ค้นหารหัสลูกค้า PR" className="rounded-md border border-border bg-white px-2 py-1 text-[12px] dark:bg-surface" />
+              {prLoading ? <span className="inline-flex items-center gap-1 text-[11px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> ค้นหา…</span> : null}
               {prResults.length > 0 ? (
-                <div className="max-h-40 overflow-auto rounded-md border border-border bg-white dark:bg-surface">
+                <div className="max-h-44 overflow-auto rounded-md border border-border bg-white dark:bg-surface">
                   {prResults.map((r) => (
-                    <button key={r.ID} type="button" onClick={() => doCloseWithPr(l.id, r.ID)} className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[11px] hover:bg-green-50 dark:hover:bg-green-950/30">
+                    <button key={r.ID} type="button" onClick={() => doCloseWithPr(callLead.id, r.ID)} className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-green-50 dark:hover:bg-green-950/30">
                       <span className="font-mono font-bold text-green-700">{r.ID}</span>
                       <span className="truncate text-muted">{[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}{r.phone ? ` · ${r.phone}` : ""}</span>
                     </button>
                   ))}
                 </div>
-              ) : prQuery.trim().length >= 2 && !prLoading ? <span className="text-[10px] text-muted">ไม่พบลูกค้าในระบบ</span> : null}
-              <button type="button" onClick={() => doCloseWithPr(l.id, "")} className="self-start text-[10px] text-muted underline hover:text-foreground">ปิดโดยไม่ระบุรหัส PR</button>
+              ) : prQuery.trim().length >= 2 && !prLoading ? <span className="text-[11px] text-muted">ไม่พบลูกค้าในระบบ</span> : null}
+              <button type="button" onClick={() => doCloseWithPr(callLead.id, "")} className="self-start text-[11px] text-muted underline hover:text-foreground">ปิดโดยไม่ระบุรหัส PR</button>
             </div>
           ) : null}
         </div>
-      ) : null}
+      </div>
     </div>
-  );
+  ) : null;
 
   // Per-lead call history (shown in the expanded row · owner 2026-06-23).
   const callHistory = (l: ImportedLead) => {
@@ -860,6 +886,9 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
           </>
         )}
       </div>
+
+      {/* ── Call-outcome POPUP (owner 2026-06-23) ── */}
+      {callOutcomeModal}
 
       {/* ── Import POPUP ── */}
       {importOpen ? (
