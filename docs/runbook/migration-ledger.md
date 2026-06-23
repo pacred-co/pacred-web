@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0206**
+## 🔢 NEXT FREE NUMBER = **0207**
+
+> ✅ **2026-06-23 (เดฟ-on-InwPond007 · CMS tags): 0206** = `cms_articles_tags` — additive `tags text[] not null default '{}'` + GIN index. Free-form tags (HS code · product category) → on /our-work a clickable tag filter bar (`?tag=…` · `tags @> {tag}`). **✅ dev applied · ⏳ PROD owner-apply** (with 0204/0205). Idempotent. Code degrades gracefully (mapRow defaults to []).
 
 > ✅ **2026-06-23 (เดฟ-on-InwPond007 · CMS SEO + inline images): 0205** = `cms_articles_seo` — 2 additive cols `meta_title` + `meta_description` (per-article SEO override · blank → detail page falls back to title/excerpt). Inline images need NO column (markdown `![](url)` markers in `body`, rendered by `<ArticleContent>`'s new image block · cover stays in cover_url). **✅ dev applied · ⏳ PROD owner-apply** (with 0204). Idempotent (`ADD COLUMN IF NOT EXISTS`). Code degrades gracefully (mapRow defaults to '').
 
