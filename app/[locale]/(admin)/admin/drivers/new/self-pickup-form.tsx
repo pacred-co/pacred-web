@@ -268,9 +268,9 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
         )}
       </section>
 
-      {/* Photo + submit — soft emerald bar (green = ปิดงานสำเร็จ · visible, not white) */}
-      <section className="sticky bottom-0 rounded-2xl border border-emerald-700/20 bg-gradient-to-r from-emerald-400 to-green-500 shadow-xl p-4 space-y-3 text-white">
-        <div className="rounded-lg bg-white/95 p-2.5">
+      {/* Photo + submit — soft pastel emerald bar (green = ปิดงานสำเร็จ · light, not white-blended) */}
+      <section className="sticky bottom-0 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-100 shadow-lg p-4 space-y-3">
+        <div className="rounded-lg bg-white p-2.5 border border-emerald-100">
           <label htmlFor="self-pickup-photo" className="block text-xs font-medium text-muted mb-1">
             <Camera className="inline h-3.5 w-3.5 mr-1" />
             รูปหลักฐานการรับ/ส่ง (ถ้ามี · ไม่บังคับ)
@@ -292,10 +292,10 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
-            <div className="font-bold text-base">
+            <div className="font-bold text-base text-emerald-900">
               เลือกแล้ว: {summary.stops} รายการ · {summary.items} แทรคกิ้ง · {summary.boxes} กล่อง
             </div>
-            <div className="text-xs text-white/90">
+            <div className="text-xs text-emerald-700/80">
               ปิดงานเป็น &quot;ส่งแล้ว&quot; (7) — ไม่ต้องมอบคนขับ
             </div>
           </div>
@@ -303,7 +303,7 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
             type="button"
             onClick={handleSubmit}
             disabled={pending || summary.stops === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-green-700 shadow hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             <CheckCircle2 className="h-4 w-4" />
             {pending ? "กำลังบันทึก..." : "บันทึกส่งสำเร็จ"}

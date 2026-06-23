@@ -365,20 +365,20 @@ export function CreateBatchForm({
       </section>
 
       {/* Summary + submit */}
-      <section className="sticky bottom-0 rounded-2xl border border-orange-600/25 bg-gradient-to-r from-orange-400 to-rose-500 shadow-xl p-4 text-white">
+      <section className="sticky bottom-0 rounded-2xl border border-rose-200 bg-gradient-to-r from-orange-50 to-rose-100 shadow-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
-            <div className="font-bold text-base">
+            <div className="font-bold text-base text-rose-900">
               เลือกแล้ว: {summary.stops} จุดส่ง · {summary.items} แทรคกิ้ง · {summary.boxes} กล่อง
             </div>
-            <div className="text-xs text-white/90">
+            <div className="text-xs text-rose-700/80">
               นน.รวม {summary.weight.toFixed(2)} kg · ปริมาตร {summary.volume.toFixed(3)} m³
             </div>
           </div>
           <button
             type="submit"
             disabled={pending || summary.stops === 0 || !driverCode}
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-rose-700 shadow hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             <Package className="h-4 w-4" />
             {pending ? "กำลังสร้าง..." : "สร้างรอบจัดส่ง"}
