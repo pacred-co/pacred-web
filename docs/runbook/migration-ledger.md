@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0204**
+## 🔢 NEXT FREE NUMBER = **0205**
+
+> ✅ **2026-06-23 (เดฟ-on-InwPond007 · no-code article CMS): 0204** = `cms_articles` — 1 NEW isolated table for the back-office "เขียนบทความ" editor (Extensions → write → Ultra Admin Z approve → live on the public site). Cols: category (knowledge/news/our_work) · title · slug (unique) · excerpt · cover_url · body (plain text → `<ArticleContent>`) · sub_category · status (draft/pending/published/rejected) · author_admin_id · approved_by · reject_note · published_at. RLS service-role-only (0201 pattern · reached via createAdminClient · admin actions gate by role · public pages read published rows via `lib/cms/articles.ts`). **NO FK to tb_*/profiles.** Backs `actions/admin/cms-articles.ts` + `/admin/articles` + public `/articles/[slug]` + the appended cards on `/knowledge`·`/news`·`/our-work`. **✅ dev applied (`lozntlidlqqzzcaathnm`) · ⏳ PROD owner-apply via dave-pacred/เดฟ** (no prod pw on this box). Idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`). **Code degrades gracefully pre-apply** — `getPublishedArticles`/`getPublishedArticleBySlug` fail-soft → []/null so the public pages just show the static cards if the table is absent.
 
 > ⏳ **2026-06-23 (ปอน · "ปิดการขายได้" tab): 0203** = `imported_leads_pr_code` — additive col `public.imported_leads.pr_code text NOT NULL DEFAULT ''` (the "รหัส PR" column on the new closed-deals tab · rep records the member code when the deal closes). Backs `setImportedLeadPrCode` + the รหัส PR column (closed-segment-only) in `lead-assign-bar.tsx`. **✅ dev applied (`lozntlidlqqzzcaathnm`) · ⏳ PROD owner-apply via dave-pacred/เดฟ** (เดฟไม่มี prod pw ปัจจุบัน · ดู 0202 ค้างเหมือนกัน). Idempotent (`ADD COLUMN IF NOT EXISTS`). **Code degrades gracefully pre-apply** — `getImportedLeads` retries without note+pr_code on 42703 so the workspace never hard-breaks.
 

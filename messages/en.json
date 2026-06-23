@@ -3499,6 +3499,7 @@
       "tos": "Customer terms of service"
     },
     "extension": {
+      "writeArticle": "Write Article",
       "juristicCheck": "Juristic customer check",
       "thaiTransport": "Manage TH carriers",
       "thaiShippingTools": "Thai Shipping Checker",

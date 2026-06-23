@@ -7,6 +7,7 @@ import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleListTabs } from "@/components/sections/article-list-tabs";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
+import { getPublishedArticles } from "@/lib/cms/articles";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
@@ -44,6 +45,8 @@ export default async function KnowledgeListingPage({
   const { locale } = await params;
   const t = await getTranslations("knowledgeIndex");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  // Owner 2026-06-23: published CMS articles append after the static cards.
+  const dbArticles = await getPublishedArticles("knowledge");
   const CATEGORY_LABELS: Record<string, string> = {
     นำเข้า: t("categoryImport"),
     เคลียร์: t("categoryCustoms"),
@@ -152,6 +155,39 @@ export default async function KnowledgeListingPage({
                   <div className="p-3 md:p-3.5">
                     <h3 className="text-[12.5px] md:text-[13px] font-black text-[#111827] dark:text-white leading-[1.3] line-clamp-2 group-hover:text-primary-700 transition-colors">
                       {article.title}
+                    </h3>
+                  </div>
+                </Link>
+              ))}
+              {/* Published CMS articles — appended after the static cards (owner 2026-06-23) */}
+              {dbArticles.map((a) => (
+                <Link
+                  key={`db-${a.id}`}
+                  href={`/articles/${a.slug}`}
+                  className="group relative bg-white dark:bg-surface rounded-2xl overflow-hidden border border-border shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] hover:border-primary-200 hover:-translate-y-1 transition-all duration-300"
+                >
+                  <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
+                    {a.coverUrl ? (
+                      <Image
+                        src={a.coverUrl}
+                        alt={a.title}
+                        fill
+                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 240px"
+                        quality={92}
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                      />
+                    ) : null}
+                    {a.subCategory ? (
+                      <div className="absolute top-2.5 left-2.5">
+                        <span className={["inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]", CATEGORY_BADGE[a.subCategory] ?? CATEGORY_BADGE["นำเข้า"]].join(" ")}>
+                          {a.subCategory}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="p-3 md:p-3.5">
+                    <h3 className="text-[12.5px] md:text-[13px] font-black text-[#111827] dark:text-white leading-[1.3] line-clamp-2 group-hover:text-primary-700 transition-colors">
+                      {a.title}
                     </h3>
                   </div>
                 </Link>
