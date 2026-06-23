@@ -51,4 +51,23 @@ fstatus 7 ส่งแล้ว = จบ
 | 3 | **One-click collect chain** (logistics board: ติ๊ก fstatus4 → วางบิล → จ่าย → จัดรถ) | เดฟ | ไม่ | ใช่ (verify auto-flip + money) |
 | 4 | **วางบิล MOMO supplier-AP** (รวมยอด 2,500/คิว · ออกใบ) | **ภูม (accounting B5)** | อาจ | ใช่ |
 
-**ต้องการจากเจ้าของ:** (ก) กลุ่ม LINE ปลายทางของ arrival-alert (#2) · (ข) #4 วางบิล MOMO = ภูม lane (ยืนยัน) · (ค) เลือกลำดับ build.
+**ต้องการจากเจ้าของ:** (ก) กลุ่ม LINE ปลายทางของ arrival-alert (#2) · (ข) #4 วางบิล MOMO — owner 2026-06-23 บอก **"ผมทำเอง" (เดฟ ทำ ไม่ใช่ภูม)** · (ค) เลือกลำดับ build.
+
+---
+
+## 🧾 2026-06-23 — money audit (PR106 order 1780103566) + owner's advance-billing brief
+
+### Audit verdict (9-agent · adversarial-verified)
+- **คำนวณ CBM vs KG (เรื่องที่ 1) = CORRECT_BY_DESIGN.** `lib/forwarder/resolve-rate.ts:359-435`. comparison ON → bill KG เมื่อ kg/คิว > ค่าเทียบ, ไม่งั้น CBM. PR106: cbm 3300 / kg 11 (ค่าเทียบ≈300). บรรทัด 4-6 (kg/คิว 673·540·346) คิด KG = ถูกตามโมเดล. **ไม่ใช่บั๊ก.**
+- **🔴 OWNER DECISION 2026-06-23: "ยึดคิด ตามคิว (CBM) เป็นค่าเริ่มต้น เพราะ momo เก็บเราเป็นคิว."** → ต้องเปลี่ยน default basis เป็น CBM (เลิก auto-switch KG). **= pricing-engine change · money · ต้องเคาะ scope ก่อนแตะ** (ทุกลูกค้า? เฉพาะ order ใหม่? เก็บ override KG ไว้ไหม?).
+- **🔴 เหมาๆ double-charge (เรื่องที่ 2) = REAL_BUG ×2 (verified):**
+  - **(ก) FIXED 2026-06-23 `4e88e41d`** — customer `/service-import/[fNo]` คิด ยอดเก็บจริง บน single-row batch → split shipment โชว์ ฿100 เหมาๆ ทุกบรรทัด (6×). แก้: fetch siblings → batch เดียว = ฿100 ครั้งเดียว (mirror ภูม's admin fix).
+  - **(ข) ยังไม่แก้ — line-by-line PAY** (`forwarder-debit-total.ts` isPcsfFirst reset ต่อ batch): จ่ายทีละบรรทัด → แต่ละ solo-pay เติม ฿100 ใหม่ = เก็บ เหมาๆ ซ้ำ. **แก้จริง = per-shipment "เก็บรอบเดียว"** (ไม่ band-aid · = บรีฟล่างนี้).
+
+### Owner advance-billing brief (2026-06-23) — "วางบิลล่วงหน้าตอน MOMO ยิงของ"
+ตู้ถึง MOMO → ลงตู้เย็น → MOMO สแกนรับของเข้าระบบ เย็น-มืด (เรายังไม่ได้รับของ). อยากให้:
+1. **MOMO ยิงของตอนลงตู้ = ยืนยัน "ของไม่หาย อยู่ที่ MOMO"** (กันเก็บตังมั่ว ถ้าของหาย/ไม่มาจากต้นทาง).
+2. admin **วางบิล + เก็บเงิน ล่วงหน้าได้เลย** (ทั้ง **ค่าขนส่งไทย-จีน + ค่าขนส่งในไทย พร้อมกัน · ครั้งเดียว/ชิปเมนต์**) จากรายการที่ MOMO ยิงแล้ว.
+3. **เช้า** โกดังไปรับของ → สแกนเข้าระบบเรา + ถ่ายรูป → **จ่ายงานคนขับไปส่งได้เลย** ไม่ต้องรอเก็บเงินใหม่.
+
+**= the per-shipment "ยิงเปรี้ยงเดียว" redesign** ที่รวม: collect-once-per-shipment (แก้ FIX 2ข) + bill China-TH + in-TH together + trigger = MOMO-scan-confirmed (ไม่ใช่ของถึงไทย). build นี้แทนที่ per-line pay model. **NEXT BUILD (เดฟ · careful · money).**
