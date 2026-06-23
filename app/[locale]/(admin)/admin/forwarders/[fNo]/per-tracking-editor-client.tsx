@@ -21,6 +21,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
+import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -58,6 +59,8 @@ export type PerTrackingRow = {
 
 type Props = {
   rows: PerTrackingRow[];
+  /** เหมาๆ (Pacred PRF) carrier → in-Thailand delivery is the flat ฿100 fee. */
+  isMao?: boolean;
   customRateInit: "0" | "1";
   customRateKgInit: number;
   customRateCbmInit: number;
@@ -118,6 +121,7 @@ const TH = "px-2 py-1.5 text-[11px] font-semibold text-muted whitespace-nowrap b
 
 export function PerTrackingEditorClient({
   rows: rowsInit,
+  isMao = false,
   customComparisonInit,
   canEditComparison,
   profileRate = 0,
@@ -223,6 +227,10 @@ export function PerTrackingEditorClient({
       thai += parseFloat(r.fTransportPrice) || 0;
       discount += parseFloat(r.fDiscount) || 0;
     }
+    // เหมาๆ (Pacred PRF · owner 2026-06-23): in-Thailand delivery is the flat ฿100 fee.
+    // Surface it even when the per-row fTransportPrice hasn't been stamped yet (the
+    // save adds it) — max() so a row that already carries the ฿100 isn't doubled.
+    if (isMao) thai = Math.max(thai, MAO_FLAT_FEE);
     const kgPerCbm = v !== 0 ? w / v : 0;
 
     // System/profile rate is usable when manual is OFF, the server ran the
@@ -288,7 +296,7 @@ export function PerTrackingEditorClient({
       w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
   }, [
-    rows, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
+    rows, isMao, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
     profileResolved, profileRateMissing, profileRate, profileBasis, profileTransportTotal,
     profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate,
   ]);
@@ -510,7 +518,14 @@ export function PerTrackingEditorClient({
             <Sum label="ค่าขนส่งจีน+" value={calc.chnThb} />
             <Sum label="ค่าบริการ" value={calc.service} />
             <Sum label="ค่าอื่นๆ CO" value={calc.other} />
-            <Sum label="ค่าจัดส่งในไทย" value={calc.thai} />
+            {isMao ? (
+              <p className="flex items-baseline justify-between gap-2">
+                <span className="font-medium text-cyan-700">ค่าจัดส่งในไทย · ใช้บริการ Pacred เหมาๆ 🚚</span>
+                <strong className="font-mono tabular-nums text-cyan-800">{baht(calc.thai)}</strong>
+              </p>
+            ) : (
+              <Sum label="ค่าจัดส่งในไทย" value={calc.thai} />
+            )}
             <Sum label="ส่วนลด" value={calc.discount} negative />
             <div className="border-t border-border pt-1 mt-1">
               <p className="flex items-baseline justify-between gap-2">
@@ -527,9 +542,16 @@ export function PerTrackingEditorClient({
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
 
-      <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-        {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
+        </button>
+        {/* owner 2026-06-23 "ครบจบๆ" — jump straight to สร้างใบวางบิล (renders below at
+            รอชำระเงิน/เตรียมส่ง). Save first → สถานะ → 5 → ปุ่มโผล่ → กดลิงก์นี้ลงไปวางบิลต่อ. */}
+        <a href="#bill-section" className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+          🧾 ไปสร้างใบวางบิล ↓
+        </a>
+      </div>
     </div>
   );
 }

@@ -30,6 +30,7 @@ import {
 // the "คิดราคาแบบกำหนดเอง" toggle is OFF (the client alone can't reach the rate
 // cards). Uses the EXACT same waterfall the save runs → preview == save (no drift).
 import { resolveLiveForwarderRate, type PricingRowContext } from "@/lib/forwarder/live-rate";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { PerTrackingEditorClient, type PerTrackingRow } from "./per-tracking-editor-client";
 
 // The landed row passed from page.tsx (carries userid for the sibling lookup).
@@ -79,12 +80,13 @@ type Row = {
   ftransportpricechnthb: number | string | null;
   priceother: number | string | null;
   fshippingservice: number | string | null;
+  fshipby: string | null;
 };
 
 const SIBLING_SELECT =
   "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, " +
   "fweight, fvolume, fwidth, flength, fheight, fwarehousechina, fwarehousename, ftransporttype, " +
-  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice";
+  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby";
 
 const VALID_PRODUCT = ["1", "2", "3", "4"];
 const VALID_WH_TH = ["1", "2", "3", "4", "5", "6", "7", "8"];
@@ -390,9 +392,14 @@ export async function ForwarderPerTrackingEditor({
     profileResolved = true;
   }
 
+  // เหมาๆ (Pacred PRF) — when ANY tracking ships via the เหมาๆ carrier, the in-Thailand
+  // delivery is the flat MAO_FLAT_FEE. Surface it explicitly (owner 2026-06-23).
+  const isMao = rows.some((row) => isMaoCarrier(row.fshipby));
+
   return (
     <PerTrackingEditorClient
       rows={editorRows}
+      isMao={isMao}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
       customRateCbmInit={customRateCbmInit}

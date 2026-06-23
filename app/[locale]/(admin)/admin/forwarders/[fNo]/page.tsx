@@ -1076,7 +1076,7 @@ async function tryRenderTbForwarder(
         {/* ── สร้างใบวางบิล รายตัว (owner 2026-06-22) — shows at รอชำระเงิน/เตรียมส่ง
            (fstatus 5/6) · mints the bill for the whole tracking group → send to
            collect. Self-gates by fstatus. ── */}
-        <div className="mt-3">
+        <div id="bill-section" className="mt-3 scroll-mt-24">
           <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} />
         </div>
 
