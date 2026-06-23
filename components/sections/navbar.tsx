@@ -170,9 +170,12 @@ export function NavBar() {
           </Link>
 
           {/* ติดตามเราบน + social icons — placed right after the logo (ปอน
-              2026-05-30). Desktop-only (xl) so the tight mobile bar stays
-              untouched. SOCIAL URLs from components/seo/site.ts. */}
-          <div className="hidden xl:flex shrink-0 items-center gap-2.5">
+              2026-05-30). 2xl-only (≥1536): at narrow-xl (1280–1536, e.g. a Surface
+              ~1368) this ~230px block crowded the row so the right cluster's
+              LocaleSwitcher + ThemeToggle clipped off the right edge — the bug ภูม's
+              customer hit (2026-06-23). The social links also live in the footer, so
+              dropping them below 2xl loses nothing. SOCIAL URLs from seo/site.ts. */}
+          <div className="hidden 2xl:flex shrink-0 items-center gap-2.5">
             <span className="whitespace-nowrap text-[12px] font-medium text-white/85">
               {t("followUs")}
             </span>
@@ -195,8 +198,11 @@ export function NavBar() {
             </div>
           </div>
 
-          {/* Desktop nav — TopMenu with dropdowns */}
-          <div className="hidden xl:flex flex-1 justify-center">
+          {/* Desktop nav — TopMenu with dropdowns. min-w-0 lets this flex-1 menu
+              actually shrink below its content width so the shrink-0 right cluster
+              (cart/bell/user + LocaleSwitcher + ThemeToggle) is never pushed off the
+              right edge on a narrow-xl screen (the 2026-06-23 clip). */}
+          <div className="hidden xl:flex flex-1 justify-center min-w-0">
             <TopMenu />
           </div>
 
