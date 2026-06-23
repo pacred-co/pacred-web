@@ -80,7 +80,8 @@ export default async function AdminLeadsPage({
   // อยู่ใน LeadAssignPanel · non-ultra hitting ?segment=assign ตกมา work view + backend gate.)
   const isAssignTab = isUltra && rawSegment === "assign";
   const workSegment =
-    ["mine", "callback", "pending", "closed", "all"].includes(rawSegment)
+    // owner 2026-06-23: the stat cards link to no_answer/not_interested/called_today too.
+    ["mine", "callback", "pending", "closed", "all", "no_answer", "not_interested", "called_today"].includes(rawSegment)
       ? rawSegment
       : "pending"; // default + the "ยังไม่ได้ดำเนินการ" tab
   const uiSegment = isAssignTab ? "assign" : workSegment;
@@ -154,23 +155,27 @@ export default async function AdminLeadsPage({
         {/* Stat cards — ปอน 2026-06-23: 4 การ์ด compact (เตี้ยลง) จาก imported_leads
             (getImportedLeadStats · สัมพันธ์ตาราง · scoped ตาม role). ติดต่อวันนี้ = daily
             reset · ปิด/ไม่รับสาย/ไม่สนใจ = ยอดสะสมตามสถานะ. */}
+        {/* Stat cards are CLICKABLE filters (owner 2026-06-23: "กดแถบข้างบนก็ให้สลับ
+            ไปแถบที่มีรายการนั้นๆ") → switch the list to that status. Active = ring. */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
-            <p className="text-[11px] text-muted">ติดต่อแล้ววันนี้</p>
-            <p className="mt-0.5 text-xl font-bold">{stats ? stats.calledToday.toLocaleString("th-TH") : "—"}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
-            <p className="text-[11px] text-muted">ปิดการขายแล้ว</p>
-            <p className="mt-0.5 text-xl font-bold text-green-700">{stats ? stats.closed.toLocaleString("th-TH") : "—"}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
-            <p className="text-[11px] text-muted">ไม่รับสาย</p>
-            <p className="mt-0.5 text-xl font-bold text-amber-700">{stats ? stats.noAnswer.toLocaleString("th-TH") : "—"}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
-            <p className="text-[11px] text-muted">ไม่สนใจ</p>
-            <p className="mt-0.5 text-xl font-bold text-rose-700">{stats ? stats.notInterested.toLocaleString("th-TH") : "—"}</p>
-          </div>
+          {([
+            { seg: "called_today",   label: "ติดต่อแล้ววันนี้", value: stats?.calledToday,   tone: "" },
+            { seg: "closed",         label: "ปิดการขายแล้ว",    value: stats?.closed,        tone: "text-green-700" },
+            { seg: "no_answer",      label: "ไม่รับสาย",        value: stats?.noAnswer,      tone: "text-amber-700" },
+            { seg: "not_interested", label: "ไม่สนใจ",          value: stats?.notInterested, tone: "text-rose-700" },
+          ] as const).map((c) => {
+            const active = uiSegment === c.seg;
+            return (
+              <Link
+                key={c.seg}
+                href={carry({ segment: c.seg, page: 1 })}
+                className={`rounded-xl bg-white dark:bg-surface shadow-sm px-3 py-2.5 border transition hover:border-primary-300 ${active ? "border-primary-400 ring-2 ring-primary-200" : "border-border"}`}
+              >
+                <p className="text-[11px] text-muted">{c.label}</p>
+                <p className={`mt-0.5 text-xl font-bold ${c.tone}`}>{stats ? (c.value ?? 0).toLocaleString("th-TH") : "—"}</p>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Same-day call SLA — the leads YOU claimed today but haven't logged a
