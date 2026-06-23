@@ -365,7 +365,7 @@ export function CreateBatchForm({
       </section>
 
       {/* Summary + submit */}
-      <section className="sticky bottom-0 rounded-2xl border border-orange-700/30 bg-gradient-to-r from-orange-500 to-rose-600 shadow-xl p-4 text-white">
+      <section className="sticky bottom-0 rounded-2xl border border-orange-600/25 bg-gradient-to-r from-orange-400 to-rose-500 shadow-xl p-4 text-white">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             <div className="font-bold text-base">
