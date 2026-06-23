@@ -13,7 +13,7 @@
 
 ## Shared anchors (the "แผนเดียวกัน / โค้ดเดียวกัน")
 - **Trunk:** everyone bases on `dave-pacred` (= the integration branch); เดฟ promotes to `main` on the owner's go.
-- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0201.** (0199 = admin AD#### code scheme · 0200 = customer_quotations [was ภูม's 0199, renamed on merge] — both applied prod+dev 2026-06-22.)
+- **Migration numbers:** reserve the NEXT FREE here + in [`docs/runbook/migration-ledger.md`](runbook/migration-ledger.md) so two devs never grab the same number. **NEXT FREE migration = 0204.** (0199 admin AD#### · 0200 customer_quotations · 0201-0203 ปอน imported_leads CRM [+note +pr_code] — all applied prod+dev 2026-06-22/23.)
 - **Plans:** the accounting build = [`docs/research/pay-and-accounting-gap-2026-06-21.md`](research/pay-and-accounting-gap-2026-06-21.md) (B1-B7). Port plan = [`docs/PORT_PLAN.md`](PORT_PLAN.md). UX standard = [`docs/learnings/self-explaining-row-design.md`](learnings/self-explaining-row-design.md) + AGENTS §0g/§0h.
 
 ---
@@ -26,6 +26,7 @@
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
 |---|---|---|---|---|
+| เดฟ | **Integrate round-3 (2026-06-23)** — ภูม Poom 6c (drivers `รับเองหน้าโกดัง` self-pickup tab + batch auto-complete-on-full-delivery + 4th tab · iTAM parser real Shipment-Report layout fix · ภูม also hardened my `ensure-legacy-admin` to clear adminPicture = next/image crash fix) + ปอน InwPond007 3c (CRM leads round-2: stats/editable cells/tabs/pagination/distribute · admin profile-pic `usable-image-src` guard · header-nav). **Applied ปอน mig 0201-0203 (imported_leads + note + pr_code) prod+dev.** 0 conflicts · gate typecheck/lint/build/test 0 | drivers/* · taem-parser · imported_leads · mig 0201-0203 | main | 2026-06-23 |
 | เดฟ | **Integrate round-2 (close)** — ภูม Poom-pacred 6c (mark-paid advances forwarder 5→6 + syncs ใบเสร็จ '3'→'1' + links 3 docs + clickable invoice link · ภูม also enhanced my `CreateOrderBillButton`) + ปอน InwPond007 5c (admin/leads รับเอง/CS/SLA/กดโทร · customer profile cover+avatar · create-form CS+magic-login `/k/[token]` · quote share-link). 0 conflicts · 0 new migrations · gate typecheck/lint/build 0 | billing-run.ts · leads · profile · customer-magic-link · no mig | main | 2026-06-22 |
 | เดฟ | **Integrated ภูม + ปอน** — Poom-pacred 8c (quotation /q share-link + PEAK shop-doc toggle + billing-run show-already-billed + ภูม's price-save 4→5) + InwPond007 (quote receipt-style + รหัสลูกค้า). Resolved 0199 migration collision (→0200) + auto-advance dup + quote-tab conflict (kept both). gate typecheck/lint/build/test 0 | many · mig 0200 prod+dev | main | 2026-06-22 |
 | เดฟ | **Forwarder price→bill flow** — บันทึกทุกแถว auto-advances fstatus 4→5 (รอชำระเงิน · `adminAdvanceForwarderToWaitPayment`, 4→5-only idempotent) + page-level "🧾 สร้างใบวางบิล" button at fstatus 5/6 (`createForwarderOrderBill` derives the tracking group → reuses `createBillingRunInvoice`) | `actions/admin/forwarder-step.ts` · `billing-run.ts` · `create-order-bill-button.tsx` · per-tracking editor · no mig | main | 2026-06-22 |
