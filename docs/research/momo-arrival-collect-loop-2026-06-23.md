@@ -72,6 +72,15 @@ fstatus 7 ส่งแล้ว = จบ
 
 **= the per-shipment "ยิงเปรี้ยงเดียว" redesign** ที่รวม: collect-once-per-shipment (แก้ FIX 2ข) + bill China-TH + in-TH together + trigger = MOMO-scan-confirmed (ไม่ใช่ของถึงไทย). build นี้แทนที่ per-line pay model. **NEXT BUILD (เดฟ · careful · money).**
 
+### ✅ B progress (2026-06-23)
+- **🟢 FIX 2ข เหมาๆ เก็บซ้ำ — DONE `db86a181`** — `computeForwarderDebitBatch` anchors MAO_FLAT_FEE to each shipment's BASE tracking (ftrackingchn suffix 0) → ฿100 ครั้งเดียว/ชิปเมนต์ ทุก pay path (line-by-line ก็ไม่เบิ้ล). pay-user.ts ทั้ง 2 path ส่ง ftrackingchn. test 63 pass.
+- **🟢 morning scan→dispatch — VERIFIED ไม่ต้องแก้** — map ยืนยัน: ออเดอร์ที่จ่ายแล้ว (fstatus 6) **ถูก filter ออกจาก warehouse intake scan** (`barcode-import.ts:156`) → arrival scan ไม่ reset · ไป dispatch คนขับตรงๆ (6→7). So วางบิลล่วงหน้า→จ่าย→fstatus 6 → เช้าสแกน ไม่ collect ซ้ำ. ✓
+- **🔴 advance-billing core (bill ตอน MOMO ยิง · ก่อนถึงไทย) — ยังไม่ทำ (งานใหญ่ · money · ต้องเคาะ):**
+  - eligibility: `BILLABLE_FSTATUS ['5','6']` → relax ให้ 2/3 ได้ **เมื่อ MOMO-confirmed** (tb_forwarder.fcabinetnumber set = MOMO ยิงเข้าตู้ = ของไม่หาย) **+ measured** (fweight/fvolume > 0). `billing-eligibility.ts:31` + `billing-run.ts:935` gate.
+  - **dependency: MOMO cbm/weight ยังไม่ไหลเข้า tb_forwarder.fweight/fvolume** (อยู่ใน momo_import_tracks) → freight คิดไม่ได้ตอน fstatus 2/3 จนกว่าจะ sync. ต้องทำ sync MOMO measure → tb_forwarder ก่อน.
+  - **🚩 DECISION ต้องเคาะ:** เช้าโกดัง re-measure แล้วได้ cbm/น้ำหนัก **ต่างจาก MOMO** (MOMO ชอบมั่ว) → บิลที่เก็บล่วงหน้าไปแล้วจะ**ปรับยังไง?** (ก) เก็บส่วนต่างเพิ่ม/คืน · (ข) ล็อกราคาตาม MOMO ไม่ปรับ · (ค) re-measure ต้องตรง MOMO ±x% ไม่งั้นเตือน. = money policy เจ้าของเคาะ.
+  - likely needs mig (track advance-billed + measurement-source) · test-first · NOT browser-test money on prod.
+
 ### 🔧 CBM-default + manual basis toggle — precise spec (owner 2026-06-23: "ยึดตามคิวเป็น default · คนสลับ คิว↔กิโล ได้เอง")
 **Engine fact (must not get wrong):** `lib/forwarder/live-rate.ts:249` `comparisonEnabled = customComparisonSwitch || userComparison`. Two existing modes — **(A)** comparison ON → KG เมื่อ kg/คิว > ค่าเทียบ ; **(B)** comparison OFF → `max(คิว×rate, กิโล×rate)` (ราคามากสุด). **⚠️ ทั้ง 2 โหมด ของหนักออกมาเป็นกิโลอยู่ดี — ไม่มีโหมด "CBM ล้วน" วันนี้.** So owner's model needs:
 1. **โหมดใหม่ force-CBM** = default basis = CBM เสมอ (ข้าม ค่าเทียบ + ข้าม max) — `resolve-rate.ts` รับ input ใหม่ `forcedBasis?: 'cbm'|'kg'` (เมื่อ set → ใช้ basis นั้นตรงๆ, refPrice ตาม basis).
