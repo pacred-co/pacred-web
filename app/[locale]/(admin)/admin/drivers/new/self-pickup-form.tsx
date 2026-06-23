@@ -63,8 +63,9 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
   const { confirm, alert, dialogs } = useConfirmDialogs();
   const [err, setErr] = useState<string | null>(null);
 
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [photo,        setPhoto]        = useState<File | null>(null);
+  const [selectedKeys,  setSelectedKeys]  = useState<Set<string>>(new Set());
+  const [carrierFilter, setCarrierFilter] = useState<string>("");
+  const [photo,         setPhoto]         = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const summary = useMemo(() => {
@@ -81,6 +82,20 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
     return { stops, items, boxes, fwdIds };
   }, [groups, selectedKeys]);
 
+  // ขนส่ง filter — distinct carrier labels + count (for the chip row).
+  const carriers = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of groups) m.set(g.shipByLabel, (m.get(g.shipByLabel) ?? 0) + 1);
+    return [...m.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [groups]);
+
+  const visibleGroups = useMemo(
+    () => (carrierFilter ? groups.filter((g) => g.shipByLabel === carrierFilter) : groups),
+    [groups, carrierFilter],
+  );
+
   function toggleStop(key: string) {
     setSelectedKeys((prev) => {
       const next = new Set(prev);
@@ -89,7 +104,7 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
       return next;
     });
   }
-  function selectAll() { setSelectedKeys(new Set(groups.map((g) => g.key))); }
+  function selectAll() { setSelectedKeys(new Set(visibleGroups.map((g) => g.key))); }
   function clearAll()  { setSelectedKeys(new Set()); }
 
   // Confirm BEFORE the transition (the dialog must open synchronously from the
@@ -133,7 +148,7 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
       <section className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">
-            เลือกรายการที่รับ/ส่งแล้ว ({groups.length} รายการ)
+            เลือกรายการที่รับ/ส่งแล้ว ({carrierFilter ? `${visibleGroups.length}/${groups.length}` : groups.length} รายการ)
           </h2>
           {groups.length > 0 && (
             <div className="flex gap-2">
@@ -148,14 +163,47 @@ export function SelfPickupForm({ groups }: { groups: Stop[] }) {
           )}
         </div>
 
+        {/* ขนส่ง filter chips — กรองตามวิธีรับ/ส่ง (รับเอง / ไปรษณีย์ / J&T) */}
+        {carriers.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+            <span className="text-xs font-medium text-muted mr-0.5">🚚 ขนส่ง:</span>
+            <button
+              type="button"
+              onClick={() => setCarrierFilter("")}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                !carrierFilter ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+              }`}
+            >
+              ทั้งหมด ({groups.length})
+            </button>
+            {carriers.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => setCarrierFilter(c.label)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  carrierFilter === c.label ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+                }`}
+              >
+                {c.label} ({c.count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {groups.length === 0 ? (
           <div className="p-8 text-center">
             <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
             <p className="text-sm text-muted">ไม่มีรายการรับเองหน้าโกดัง — ทุกอย่างปิดงานแล้ว</p>
           </div>
+        ) : visibleGroups.length === 0 ? (
+          <div className="p-8 text-center">
+            <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
+            <p className="text-sm text-muted">ไม่มีรายการสำหรับขนส่ง &quot;{carrierFilter}&quot; — เลือกขนส่งอื่น หรือ &quot;ทั้งหมด&quot;</p>
+          </div>
         ) : (
           <ul className="space-y-2">
-            {groups.map((g) => {
+            {visibleGroups.map((g) => {
               const isSelected = selectedKeys.has(g.key);
               return (
                 <li

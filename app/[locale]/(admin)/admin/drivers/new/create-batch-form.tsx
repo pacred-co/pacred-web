@@ -87,8 +87,9 @@ export function CreateBatchForm({
   // Selected stop keys (the user picks WHOLE stops, not individual items —
   // matches legacy "select N rows from grouped table"). Defaults to empty.
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [driverCode,   setDriverCode]   = useState<string>("");
-  const [endTimeHours, setEndTimeHours] = useState<17 | 24 | 30>(17);
+  const [driverCode,    setDriverCode]    = useState<string>("");
+  const [endTimeHours,  setEndTimeHours]  = useState<17 | 24 | 30>(17);
+  const [carrierFilter, setCarrierFilter] = useState<string>("");
 
   // Aggregates for the selection summary.
   const summary = useMemo(() => {
@@ -121,6 +122,21 @@ export function CreateBatchForm({
     [groups],
   );
 
+  // ขนส่ง filter — distinct carrier labels + count, biggest first (for the chip row).
+  const carriers = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of groups) m.set(g.shipByLabel, (m.get(g.shipByLabel) ?? 0) + 1);
+    return [...m.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [groups]);
+
+  // The route-sorted list, narrowed to the picked carrier (if any).
+  const visibleGroups = useMemo(
+    () => (carrierFilter ? sortedGroups.filter((g) => g.shipByLabel === carrierFilter) : sortedGroups),
+    [sortedGroups, carrierFilter],
+  );
+
   function toggleStop(key: string) {
     setSelectedKeys((prev) => {
       const next = new Set(prev);
@@ -130,7 +146,8 @@ export function CreateBatchForm({
     });
   }
   function selectAll() {
-    setSelectedKeys(new Set(groups.map((g) => g.key)));
+    // Select only what's currently visible (respects the ขนส่ง filter).
+    setSelectedKeys(new Set(visibleGroups.map((g) => g.key)));
   }
   function clearAll() {
     setSelectedKeys(new Set());
@@ -210,7 +227,7 @@ export function CreateBatchForm({
       <section className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">
-            2. เลือกจุดส่ง ({groups.length} กลุ่ม)
+            2. เลือกจุดส่ง ({carrierFilter ? `${visibleGroups.length}/${groups.length}` : groups.length} กลุ่ม)
           </h2>
           <div className="flex gap-2">
             <button
@@ -231,14 +248,47 @@ export function CreateBatchForm({
           </div>
         </div>
 
+        {/* ขนส่ง filter chips — กรองตามบริษัทขนส่ง (Flash / J&T / ไปรษณีย์ / …) */}
+        {carriers.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+            <span className="text-xs font-medium text-muted mr-0.5">🚚 ขนส่ง:</span>
+            <button
+              type="button"
+              onClick={() => setCarrierFilter("")}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                !carrierFilter ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+              }`}
+            >
+              ทั้งหมด ({groups.length})
+            </button>
+            {carriers.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => setCarrierFilter(c.label)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  carrierFilter === c.label ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+                }`}
+              >
+                {c.label} ({c.count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {groups.length === 0 ? (
           <div className="p-8 text-center">
             <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
             <p className="text-sm text-muted">ไม่มีรายการรอมอบหมาย — ทุกอย่างถูกมอบหมายไปแล้ว</p>
           </div>
+        ) : visibleGroups.length === 0 ? (
+          <div className="p-8 text-center">
+            <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
+            <p className="text-sm text-muted">ไม่มีจุดส่งสำหรับขนส่ง &quot;{carrierFilter}&quot; — เลือกขนส่งอื่น หรือ &quot;ทั้งหมด&quot;</p>
+          </div>
         ) : (
           <ul className="space-y-2">
-            {sortedGroups.map((g) => {
+            {visibleGroups.map((g) => {
               const isSelected = selectedKeys.has(g.key);
               const order = routeOrderOf(g.address.district);
               return (

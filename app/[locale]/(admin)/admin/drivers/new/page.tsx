@@ -7,8 +7,9 @@
  *      → carriers `fShipBy NOT IN ('PCS','2','4')` (PCSF/PCSE door-to-door +
  *        other couriers). Grouped by (carrier · recipient address) = "จุดส่ง".
  *   2. "รายการรับเองหน้าโกดัง" (`?q=pcs`)         — hand-off, NO driver
- *      → carriers `fShipBy IN ('PCS','2','4')` (รับเอง / ไปรษณีย์ / J&T).
- *        Tick handed-off parcels → close ส่งแล้ว (fstatus 6→7).
+ *      → carriers `fShipBy IN ('PCS','2','4')` = รับเอง[PCS] / Flash[2] / Kerry[4]
+ *        per legacy nameShipBy() (the counter hands these to the customer/courier
+ *        at the warehouse). Tick handed-off parcels → close ส่งแล้ว (fstatus 6→7).
  * (legacy also shows 2 counter-only tabs — "กำลังจัดส่ง" + "เตรียมส่งอนุมัติแล้ว"
  *  — that just link back; we surface "กำลังจัดส่ง" as a link to /admin/drivers,
  *  the list/รูป1 view where in-progress runs are managed.)
@@ -57,19 +58,65 @@ type DriverOption = {
   display:     string;
 };
 
-// nameShipBy equivalent (compact subset from legacy function.php — extend
-// later if more carriers appear in data). Keep cases stable for prod fidelity.
+// nameShipBy — FULL faithful port of legacy `include/function.php nameShipBy()`
+// (the canonical fShipBy → carrier-name resolver legacy uses on every screen,
+// incl. forwarder-driver.php L888/L1012/L1829). The PCS*/F/PCS cases are
+// Pacred-rebranded; the numeric carrier codes (1–47) are verbatim legacy.
+// ⚠️ The earlier compact stub had WRONG names for 1–7 (e.g. "1" said KERRY but
+// legacy "1" = DHL Express) and was MISSING 8–47, so the per-row carrier badge +
+// the ขนส่ง filter showed wrong/raw labels. 2026-06-23.
 const SHIP_BY_LABEL: Record<string, string> = {
-  PCSF: "Pacred เหมาเหมา",
-  PCSE: "Pacred Express",
-  PCS:  "รับเองโกดัง Pacred",
-  "1":  "KERRY",
-  "2":  "ไปรษณีย์",
-  "3":  "Flash",
-  "4":  "J&T",
-  "5":  "Best Express",
-  "6":  "Ninja",
-  "7":  "DHL",
+  PCSF: "Pacred เหมาเหมา",          // legacy "PCS เหมาเหมา"
+  PCSE: "Pacred Express",            // legacy "PCS Express"
+  PCS:  "รับเองโกดัง Pacred",        // legacy "รับเองโกดัง PCS กทม"
+  F:    "บริษัทจัดหาให้อัตโนมัติ",
+  "1":  "DHL Express",
+  "2":  "Flash Express",
+  "3":  "J.K. เอ็กซ์เพรส",
+  "4":  "Kerry Express",
+  "5":  "Nim Express",
+  "6":  "S & J ขนส่งด่วนสุพรรณบุรี",
+  "7":  "SB สมใจขนส่ง",
+  "8":  "SCG Express",
+  "9":  "เคพีเอ็น",
+  "10": "เฟิร์ส เอ็กเพรส ขนส่ง",
+  "11": "ไปรษณีย์ไทย",
+  "12": "จันทร์สว่างขนส่ง",
+  "13": "ธนามัย ขนส่งด่วน",
+  "14": "บุญอนันต์ขนส่ง",
+  "15": "พี.เจ. ด่วนอีสาน ขนส่ง",
+  "16": "มะม่วงขนส่ง",
+  "17": "วันชนะ แอนด์ วันณิสา ขนส่ง",
+  "18": "สมพงษ์อุบลรัตน์ ขนส่ง",
+  "19": "อาร์.ซี.อาร์ เพลส",
+  "20": "ตองสอง ขนส่ง",
+  "21": "นิ่มซี่เส็งขนส่ง 1988",
+  "22": "ธนาไพศาล ขนส่ง",
+  "23": "PL ขนส่งด่วน",
+  "24": "J&T Express",
+  "25": "มังกรทองขนส่ง 2019",
+  "26": "PM ชลบุรี ขนส่งด่วน",
+  "27": "ทรัพย์ปรีชา",
+  "28": "พัฒนาเอ็กซ์เพลส",
+  "29": "หาดใหญ่ทัวร์",
+  "30": "หาดใหญ่ โอ.พี. 2012",
+  "31": "อาร์.ซี.เอ็กซเพรส",
+  "32": "สี่สหาย",
+  "33": "แพปลา​สมบัติ​วัฒนา",
+  "34": "ทวีทรัพย์ระยอง",
+  "35": "ศิริสมบูรณ์",
+  "36": "นิวสอง อัศวินขนส่ง",
+  "37": "โชคสถาพรขนส่ง",
+  "38": "ทรัพย์สมบูรณ์ถาวร",
+  "39": "MNB Transport",
+  "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014",
+  "41": "สิรินครขนส่ง",
+  "42": "พาณิชย์การขนส่ง KSD",
+  "43": "นวรรณขนส่ง",
+  "44": "กุญชรมณี ขนส่ง",
+  "45": "บริษัท เอ็มพอร์ท โลจิสติกส์ จำกัด",
+  "46": "ซี.เอ็น.ทรานสปอร์ต",
+  "47": "ภูเก็ตแหลมทองขนส่ง",
 };
 
 function nameShipBy(code: string | null): string {
