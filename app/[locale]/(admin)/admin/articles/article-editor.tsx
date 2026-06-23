@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import {
-  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft,
+  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search,
 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { ArticleContent } from "@/components/knowledge/article-content";
@@ -47,10 +47,16 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [excerpt, setExcerpt] = useState(initial?.excerpt ?? "");
   const [coverUrl, setCoverUrl] = useState(initial?.coverUrl ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
+  const [metaTitle, setMetaTitle] = useState(initial?.metaTitle ?? "");
+  const [metaDescription, setMetaDescription] = useState(initial?.metaDescription ?? "");
+  const [seoOpen, setSeoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [insertingImg, setInsertingImg] = useState(false);
   const [preview, setPreview] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const bodyFileRef = useRef<HTMLInputElement>(null);
 
   const status = initial?.status ?? "draft";
   const isNew = !initial;
@@ -66,7 +72,29 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       coverUrl: coverUrl.trim(),
       body: body.trim(),
       subCategory: category === "knowledge" ? subCategory : "",
+      metaTitle: metaTitle.trim(),
+      metaDescription: metaDescription.trim(),
     };
+  }
+
+  /** Upload an image and insert a markdown ![](url) marker at the body cursor
+   *  (owner 2026-06-23: "แนบรูปในเนื้อหาได้หลายรูปแบบเว็บบทความทั่วไป"). */
+  async function insertBodyImage(file: File) {
+    setErr(null); setInsertingImg(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadCmsCover(fd);
+    setInsertingImg(false);
+    if (!res.ok) { setErr(errText(res.error)); return; }
+    if (!res.data) return;
+    const marker = `\n![](${res.data.url})\n`;
+    const el = bodyRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + marker + body.slice(end);
+    setBody(next);
+    if (el) queueMicrotask(() => { el.focus(); const pos = start + marker.length; el.setSelectionRange(pos, pos); });
+    setNotice("แทรกรูปในเนื้อหาแล้ว — กด “ดูตัวอย่าง” เพื่อเช็ค");
   }
 
   async function doUpload(file: File) {
@@ -231,12 +259,40 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className={labelCls + " mb-0"}>เนื้อหา</label>
-              <button type="button" onClick={() => setPreview((p) => !p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline">
-                {preview ? <><EyeOff className="h-3.5 w-3.5" /> ซ่อนตัวอย่าง</> : <><Eye className="h-3.5 w-3.5" /> ดูตัวอย่าง</>}
-              </button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => bodyFileRef.current?.click()} disabled={insertingImg} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline disabled:opacity-50">
+                  {insertingImg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} แทรกรูป
+                </button>
+                <button type="button" onClick={() => setPreview((p) => !p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline">
+                  {preview ? <><EyeOff className="h-3.5 w-3.5" /> ซ่อนตัวอย่าง</> : <><Eye className="h-3.5 w-3.5" /> ดูตัวอย่าง</>}
+                </button>
+              </div>
             </div>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n“ครอบด้วยอัญประกาศ” = คำพูดเน้น"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
-            <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นบทความสวยเองเหมือนบทความเดิม — กด “ดูตัวอย่าง” เพื่อเช็ค</p>
+            <input ref={bodyFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) insertBodyImage(f); if (e.target) e.target.value = ""; }} />
+            <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n“ครอบด้วยอัญประกาศ” = คำพูดเน้น\nกด “แทรกรูป” เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
+            <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นบทความสวยเอง · กด “แทรกรูป” ใส่ได้หลายรูปในเนื้อหา · กด “ดูตัวอย่าง” เพื่อเช็ค</p>
+          </div>
+
+          {/* SEO (collapsible · optional) */}
+          <div className="border-t border-border pt-3">
+            <button type="button" onClick={() => setSeoOpen((s) => !s)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+              <Search className="h-4 w-4 text-muted" /> SEO — Google / แชร์ลิงก์ <span className="text-muted">{seoOpen ? "▲" : "▼"}</span>
+              <span className="text-[11px] font-normal text-muted">ไม่ใส่ก็ได้ · ระบบใช้หัวข้อ/คำโปรยแทน</span>
+            </button>
+            {seoOpen ? (
+              <div className="mt-2 space-y-3">
+                <div>
+                  <label className={labelCls}>SEO Title (ชื่อบนแท็บ/Google)</label>
+                  <input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} maxLength={200} placeholder="ปล่อยว่าง = ใช้หัวข้อบทความ" className={inputCls} />
+                  <p className="mt-1 text-[11px] text-muted">{metaTitle.length}/200 · แนะนำ ~50–60 ตัวอักษร</p>
+                </div>
+                <div>
+                  <label className={labelCls}>SEO Description (คำอธิบายใต้ลิงก์ใน Google)</label>
+                  <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} maxLength={400} rows={2} placeholder="ปล่อยว่าง = ใช้คำโปรย" className={`${inputCls} resize-y`} />
+                  <p className="mt-1 text-[11px] text-muted">{metaDescription.length}/400 · แนะนำ ~150–160 ตัวอักษร</p>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Save / submit actions */}

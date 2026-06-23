@@ -48,6 +48,8 @@ export type AdminArticle = {
   coverUrl: string;
   body: string;
   subCategory: string;
+  metaTitle: string;
+  metaDescription: string;
   status: CmsStatus;
   authorAdminId: string | null;
   approvedBy: string | null;
@@ -59,6 +61,7 @@ export type AdminArticle = {
 
 const SELECT_COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, status, " +
+  "meta_title, meta_description, " +
   "author_admin_id, approved_by, reject_note, published_at, created_at, updated_at";
 
 type Row = {
@@ -70,6 +73,8 @@ type Row = {
   cover_url: string | null;
   body: string | null;
   sub_category: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
   status: string | null;
   author_admin_id: string | null;
   approved_by: string | null;
@@ -89,6 +94,8 @@ function mapRow(r: Row): AdminArticle {
     coverUrl: r.cover_url ?? "",
     body: r.body ?? "",
     subCategory: r.sub_category ?? "",
+    metaTitle: r.meta_title ?? "",
+    metaDescription: r.meta_description ?? "",
     status: (r.status as CmsStatus) ?? "draft",
     authorAdminId: r.author_admin_id,
     approvedBy: r.approved_by,
@@ -192,6 +199,8 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         cover_url: d.coverUrl,
         body: d.body,
         sub_category: d.subCategory,
+        meta_title: d.metaTitle,
+        meta_description: d.metaDescription,
         updated_at: nowIso,
       };
       // Editing a live article without ultra rights → back to pending review.
@@ -221,6 +230,8 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           cover_url: d.coverUrl,
           body: d.body,
           sub_category: d.subCategory,
+          meta_title: d.metaTitle,
+          meta_description: d.metaDescription,
           status: "draft",
           author_admin_id: adminId,
         })

@@ -24,12 +24,15 @@ export async function generateMetadata({
   const { slug } = await params;
   const a = await getPublishedArticleBySlug(slug);
   if (!a) return { title: "ไม่พบบทความ · Pacred Shipping" };
+  // SEO overrides (owner 2026-06-23) — fall back to title / excerpt when blank.
+  const metaTitle = a.metaTitle || a.title;
+  const metaDesc = a.metaDescription || a.excerpt || a.title;
   return {
-    title: `${a.title} · Pacred Shipping`,
-    description: a.excerpt || a.title,
+    title: `${metaTitle} · Pacred Shipping`,
+    description: metaDesc,
     openGraph: {
-      title: a.title,
-      description: a.excerpt || a.title,
+      title: metaTitle,
+      description: metaDesc,
       images: a.coverUrl ? [{ url: a.coverUrl }] : undefined,
     },
   };
@@ -60,8 +63,8 @@ export default async function CmsArticlePage({
             typedLocale,
           ),
           articleSchema({
-            title: a.title,
-            description: a.excerpt || a.title,
+            title: a.metaTitle || a.title,
+            description: a.metaDescription || a.excerpt || a.title,
             slug: `/articles/${a.slug}`,
             image: a.coverUrl || "/images/pacred-logo-red.png",
             datePublished: a.publishedAt || undefined,

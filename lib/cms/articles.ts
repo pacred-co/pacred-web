@@ -22,11 +22,14 @@ export type CmsArticle = {
   coverUrl: string;
   body: string;
   subCategory: string;
+  metaTitle: string;
+  metaDescription: string;
   publishedAt: string | null;
 };
 
 const COLS =
-  "id, category, title, slug, excerpt, cover_url, body, sub_category, published_at";
+  "id, category, title, slug, excerpt, cover_url, body, sub_category, " +
+  "meta_title, meta_description, published_at";
 
 type Row = {
   id: number;
@@ -37,6 +40,8 @@ type Row = {
   cover_url: string | null;
   body: string | null;
   sub_category: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
   published_at: string | null;
 };
 
@@ -50,6 +55,8 @@ function mapRow(r: Row): CmsArticle {
     coverUrl: r.cover_url ?? "",
     body: r.body ?? "",
     subCategory: r.sub_category ?? "",
+    metaTitle: r.meta_title ?? "",
+    metaDescription: r.meta_description ?? "",
     publishedAt: r.published_at,
   };
 }

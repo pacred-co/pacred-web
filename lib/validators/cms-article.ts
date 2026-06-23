@@ -36,6 +36,9 @@ export const saveCmsArticleSchema = z.object({
   coverUrl: z.string().trim().max(2000).default(""),
   body: z.string().trim().min(1, "ใส่เนื้อหาบทความ").max(60_000),
   subCategory: z.string().trim().max(40).default(""),
+  // SEO overrides — blank falls back to title / excerpt on the public page.
+  metaTitle: z.string().trim().max(200).default(""),
+  metaDescription: z.string().trim().max(400).default(""),
 });
 export type SaveCmsArticleInput = z.infer<typeof saveCmsArticleSchema>;
 
