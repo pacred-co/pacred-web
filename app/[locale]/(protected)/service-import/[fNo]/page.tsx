@@ -24,6 +24,7 @@ import {
   computeForwarderDebitBatch,
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
+import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings";
 // 2026-06-19 (owner ภูม #2) — customer-facing import price-breakdown. PURE +
 // DISPLAY-ONLY: turns the ALREADY-STORED rate decision (frefrate/frefprice/
 // ftotalprice) into the same "หาค่าเทียบ / คิดตามน้ำหนัก / คิดตามปริมาตร / ระบบเลือก"
@@ -993,23 +994,44 @@ export default async function ServiceImportDetailPage({
     }
     if (corpRow) collectIsCorporate = true;
   }
-  const collectDebitRow: ForwarderDebitRow = {
-    id: row.id,
-    fshipby: row.fshipby,
-    ftotalprice: fTotalPrice,
-    ftransportprice: fTransportPrice,
-    fpriceupdate: fPriceUpdate,
-    fshippingservice: fShippingService,
-    pricecrate: priceCrate,
-    ftransportpricechnthb: fTransportPriceChnThb,
-    priceother: priceOther,
-    fdiscount: fDiscount,
-  };
-  const collectBatch = computeForwarderDebitBatch([collectDebitRow], {
+  // 2026-06-23 (เดฟ · owner "เก็บรอบเดียวต่อชิปเมนต์ · ระวังเก็บตังเบิ้ล") — the
+  // ยอดเก็บจริง MUST span the WHOLE shipment (all sibling trackings), exactly like
+  // ภูม's admin fix (forwarders/[fNo]/page.tsx). The bug: a single-row batch made
+  // computeForwarderDebitBatch treat THIS row as the first PCSF-zero row → it added
+  // the ฿100 เหมาๆ to EVERY sibling's detail page (6×฿100 across a split shipment).
+  // Passing all siblings = one ฿100 เหมาๆ for the batch + the นิติ 1% on the batch
+  // total. fetchCountableForwarderSiblings falls back to [landed] on any error.
+  const collectSiblings = await fetchCountableForwarderSiblings(admin, {
+    id: row.id, ftrackingchn: row.ftrackingchn, userid: row.userid, fweight: row.fweight,
+    fshipby: row.fshipby, ftotalprice: fTotalPrice, ftransportprice: fTransportPrice,
+    fpriceupdate: fPriceUpdate, fshippingservice: fShippingService, pricecrate: priceCrate,
+    ftransportpricechnthb: fTransportPriceChnThb, priceother: priceOther, fdiscount: fDiscount,
+  });
+  const collectRows: ForwarderDebitRow[] = collectSiblings.map((s) => ({
+    id: s.id, fshipby: s.fshipby, ftotalprice: s.ftotalprice, ftransportprice: s.ftransportprice,
+    fpriceupdate: s.fpriceupdate, fshippingservice: s.fshippingservice, pricecrate: s.pricecrate,
+    ftransportpricechnthb: s.ftransportpricechnthb, priceother: s.priceother, fdiscount: s.fdiscount,
+  }));
+  const collectBatch = computeForwarderDebitBatch(collectRows, {
     userId: collectUserId,
     isCorporate: collectIsCorporate,
   });
-  const collect = collectBatch.lines[0]?.breakdown ?? null;
+  // Collapse the per-line breakdowns into ONE shipment breakdown; the total is the
+  // authoritative batch total (= the รายการสินค้า table Σ + one ฿100 เหมาๆ).
+  const collect =
+    collectBatch.lines.length > 0
+      ? collectBatch.lines.reduce(
+          (acc, l) => ({
+            freight: acc.freight + l.breakdown.freight,
+            otherCharges: acc.otherCharges + l.breakdown.otherCharges,
+            discount: acc.discount + l.breakdown.discount,
+            maoFee: acc.maoFee + l.breakdown.maoFee,
+            wht1pct: acc.wht1pct + l.breakdown.wht1pct,
+            total: collectBatch.total_thb,
+          }),
+          { freight: 0, otherCharges: 0, discount: 0, maoFee: 0, wht1pct: 0, total: collectBatch.total_thb },
+        )
+      : null;
   const baht2 = (n: number) =>
     `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
