@@ -61,6 +61,22 @@ export function fstatusBadge(fstatus: string): { label: string; chip: string; ro
   return FSTATUS_CFG[fstatus as FStatus] ?? { label: fstatus, chip: "bg-gray-100 text-gray-600 border border-gray-300", rowBg: "", next: "", act: false };
 }
 
+// VIVID status chip (owner 2026-06-23: "เน้นสีเข้มตรงสถานะท้ายรายการเด่นๆ") — a SOLID,
+// high-contrast version of the soft `chip`, for the end-of-row status pill once the
+// rows themselves are white. Same hue per status, dialed up to a bold fill.
+export const FSTATUS_VIVID: Record<string, string> = {
+  "1": "bg-yellow-400 text-yellow-950",
+  "2": "bg-cyan-500 text-white",
+  "3": "bg-pink-500 text-white",
+  "4": "bg-amber-500 text-white",
+  "5": "bg-red-600 text-white",
+  "6": "bg-blue-600 text-white",
+  "7": "bg-emerald-600 text-white",
+};
+export function fstatusVivid(fstatus: string): string {
+  return FSTATUS_VIVID[fstatus] ?? "bg-slate-600 text-white";
+}
+
 /**
  * Cnt-payment status (2-state) — legacy function.php L2141-2149 (statusCNT)
  * + report-cnt.php LIST mode showing สถานะจ่ายค่าตู้ column.
@@ -113,10 +129,12 @@ export function detailRowTint(f: RowFlags): string {
  * Derived from fstatus + isPaid (no DETAIL-mode flags here since LIST groups
  * by container · per-tracking flags only relevant in DETAIL).
  */
-export function listRowTint(fstatus: string, isPaid: boolean, selected: boolean): string {
-  if (selected) return "bg-emerald-200 ring-2 ring-emerald-500";
-  if (isPaid)   return "bg-emerald-100";
-  return fstatusBadge(fstatus).rowBg;
+export function listRowTint(_fstatus: string, _isPaid: boolean, selected: boolean): string {
+  // /admin/forwarders (owner 2026-06-23 · this fn is used ONLY by forwarders-table):
+  // rows are WHITE — colour now marks ONLY an ACTION state (a row ticked/selected
+  // for a bulk action · keep the ring cue). The status shows VIVIDLY in the
+  // end-of-row pill (fstatusVivid), not as a full-row wash ("สีทั้งแถวลายตา").
+  return selected ? "bg-emerald-100 ring-2 ring-emerald-400" : "";
 }
 
 /**

@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
-import { FSTATUS_CFG, listRowTint } from "@/lib/admin/forwarder-status";
+import { FSTATUS_CFG, listRowTint, fstatusVivid } from "@/lib/admin/forwarder-status";
 // 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
 // shared, unit-tested helper so the report / completeness / check-queue Σ
 // reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
@@ -836,7 +836,9 @@ export function ForwardersTable({
                     : null;
 
                   const statusKey = r.status;
-                  const badgeCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
+                  // VIVID end-of-row status pill (owner 2026-06-23: rows white →
+                  // เน้นสถานะท้ายรายการเด่นๆ). Solid high-contrast fill, not the soft chip.
+                  const badgeCls = fstatusVivid(r.status);
                   const sLabel = r.fcredit === "1"
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
@@ -1266,7 +1268,7 @@ export function ForwardersTable({
                         {fmtDate(r.date_status4)}
                       </td>
                       <td className="px-2 py-2.5">
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${badgeCls}`}>
+                        <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap shadow-sm ${badgeCls}`}>
                           {sLabel}
                         </span>
                         {/* Sibling group with mixed member statuses: show the

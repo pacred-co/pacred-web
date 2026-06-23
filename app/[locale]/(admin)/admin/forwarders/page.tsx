@@ -34,6 +34,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { fstatusVivid } from "@/lib/admin/forwarder-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -631,8 +632,11 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         />
       </div>
 
-      {/* Status filter chips — legacy 10 tabs */}
-      <div className="flex flex-wrap gap-2">
+      {/* Status filter tabs — legacy 10 tabs · owner 2026-06-23: เด่นๆ — bigger,
+         bold, the ACTIVE tab takes its own VIVID status colour (same palette as the
+         end-of-row pill) so the current queue reads at a glance. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-muted mr-0.5">สถานะ:</span>
         {filterOpts.map((o) => {
           const params = new URLSearchParams();
           if (o.v)          params.set("status", o.v);
@@ -645,12 +649,15 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.all)       params.set("all", sp.all);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
+          const activeCls = o.v && /^[1-7]$/.test(o.v) ? fstatusVivid(o.v) : "bg-primary-600 text-white";
           return (
             <Link key={o.v ?? "all"} href={href}
-              className={`rounded-full border px-3 py-1 text-xs whitespace-nowrap ${
-                active ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+                active
+                  ? `${activeCls} shadow-md ring-2 ring-black/10`
+                  : "bg-white border border-border text-foreground hover:bg-surface-alt hover:border-primary-300"
               }`}>
-              {o.l} {o.n > 0 && <span className="ml-1 opacity-75">({o.n.toLocaleString("th-TH")})</span>}
+              {o.l}{o.n > 0 && <span className="ml-1 opacity-80 font-bold">{o.n.toLocaleString("th-TH")}</span>}
             </Link>
           );
         })}
