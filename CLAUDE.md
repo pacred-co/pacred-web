@@ -5,7 +5,7 @@
 
 # 🚚 2026-06-23 (ภูม) — โกดัง/คนขับ fidelity: รับเองหน้าโกดัง tab + batch สถานะไหลตามงาน (auto-complete) + รูป1 กางข้อมูล/tab-4 → Poom-pacred · read FIRST
 
-> **🏁 SAVE-POINT (ภูม: "เซฟ Poom-pacred · พรุ่งนี้ไปทำต่อที่คอมที่ทำงาน · อัพเดตต่อเนื่อง").** Branch **Poom-pacred = `8a643a89`** (= HEAD · pushed · clean · local==origin). คอมที่ทำงาน resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · ห้าม `| tail` — pipe กลบ exit code). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod pw อยู่ใน chat เท่านั้น · **prod = เดฟ จัดการ (ผม read-only)** · mig DEV เท่านั้น · NEXT FREE = 0201. **กฎ: push เฉพาะ Poom-pacred · ห้ามทำงานบัค งานหาย · อ่าน legacy จาก source จริงก่อนเคลม fidelity (§0b · legacy = `C:\xampp\htdocs\pcscargo\member\pcs-admin\`).**
+> **🏁 SAVE-POINT (ภูม: "เซฟ Poom-pacred · พรุ่งนี้ไปทำต่อที่คอมที่ทำงาน · อัพเดตต่อเนื่อง").** Branch **Poom-pacred = `8a643a89`** (= HEAD · pushed · clean · local==origin). คอมที่ทำงาน resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · ห้าม `| tail` — pipe กลบ exit code). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod pw อยู่ใน chat เท่านั้น · **prod = เดฟ จัดการ (ผม read-only)** · mig DEV เท่านั้น · NEXT FREE = 0204 (ปอน ใช้ 0201-0203 imported_leads ไปแล้ว). **กฎ: push เฉพาะ Poom-pacred · ห้ามทำงานบัค งานหาย · อ่าน legacy จาก source จริงก่อนเคลม fidelity (§0b · legacy = `C:\xampp\htdocs\pcscargo\member\pcs-admin\`).**
 >
 > **✅ งานวันนี้ (owner lane = โกดัง/คนขับ · พี่ป๊อปบ่น "ไม่เหมือน pcs ทำงานไม่ได้"):**
 > - **(1) รับเองหน้าโกดัง tab** (`7d82ee1c`) — `/admin/drivers/new` เพิ่มแท็บที่ขาด (legacy `forwarder-driver.php?page=add&q=pcs` · `fShipBy IN ('PCS','2','4')` = รับเอง/ไปรษณีย์/J&T). action ใหม่ `actions/admin/forwarder-self-pickup.ts markForwarderSelfPickupDelivered` ปิดงาน fstatus 6→7 + รูป (`fphotoend`/`fdatestatus7`) + earn-trigger + status-log (legacy SQL :1328) · gate `canAnyRoleFlipFstatus('6','7')` ตรงกับ path คนขับ (กัน ops bypass). **แก้บั๊ก:** หน้าเดิมเอา PCS/2/4 ไปปนในลิสต์มอบคนขับ → แยก 2 แท็บตาม filter legacy (line 726/729) แบ่งครบ ไม่ทับ ไม่หาย.
@@ -16,7 +16,7 @@
 >
 > **⚠️ ยังไม่ browser-test สด (ผม login admin ไม่ได้):** ให้ ภูม เทสบน DEV — (a) `/admin/drivers/new?tab=pickup` โชว์เฉพาะ PCS/2/4 · driver-tab ไม่มี PCS/2/4 · กางข้อมูลเต็ม · tab-4 X/Y · (b) คนขับส่งครบรอบ → batch เด้งเป็น "สำเร็จ" เอง (ไม่ต้องปรับมือ) · (c) ติ๊กรับเอง+กดบันทึกส่งสำเร็จ → fwd เป็น "ส่งแล้ว" 7.
 >
-> **➡️ NEXT (เลน ภูม):** Accounting Phase B (B1 VAT→AR billing-run · mig 0201 · เงิน · B4 ซ่อม `/admin/accounting/reconcile` repoint `tb_forwarder`/`tb_wallet_hs`) · warehouse report "ยอดพนักขับรถ" (legacy `report-driver.php` · read-only) · ปุ่ม "บันทึกการโอน+แนบสลิปแทนลูกค้า" (รอ ภูม เคาะ). 🔴 carryover เดฟ prod-backfill: บิล paid ก่อน fix sync → forwarder ค้าง 5 + ใบเสร็จ ค้าง 3.
+> **➡️ NEXT (เลน ภูม):** Accounting Phase B (B1 VAT→AR billing-run · mig 0204 · เงิน · B4 ซ่อม `/admin/accounting/reconcile` repoint `tb_forwarder`/`tb_wallet_hs`) · warehouse report "ยอดพนักขับรถ" (legacy `report-driver.php` · read-only) · ปุ่ม "บันทึกการโอน+แนบสลิปแทนลูกค้า" (รอ ภูม เคาะ). 🔴 carryover เดฟ prod-backfill: บิล paid ก่อน fix sync → forwarder ค้าง 5 + ใบเสร็จ ค้าง 3.
 
 ---
 
