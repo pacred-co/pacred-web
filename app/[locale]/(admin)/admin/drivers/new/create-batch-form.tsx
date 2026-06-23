@@ -51,6 +51,28 @@ type Stop = {
 
 type DriverOption = { member_code: string; display: string };
 
+// ลำดับส่ง — faithful port of legacy `$arrPositF` (forwarder-driver.php L725): the
+// BKK + ปริมณฑล districts laid out in DRIVING-ROUTE order (โกดัง สมุทรสาคร → ใกล้ → ไกล).
+// A stop's ลำดับส่ง = its district's index here; the stop list is SORTED by it so the
+// driver runs one efficient loop instead of zig-zagging. A district not in the list
+// defaults to 69 (sorts to the end) — exactly like legacy `else echo '69'`.
+const DISTRICT_ROUTE_ORDER: readonly string[] = [
+  "หนองแขม", "บางแค", "ภาษีเจริญ", "ธนบุรี", "บางกอกใหญ่", "บางกอกน้อย", "คลองสาน", "สัมพันธวงศ์",
+  "ป้อมปราบศัตรูพ่าย", "พระนคร", "สาทร", "ปทุมวัน", "ราชเทวี", "ดุสิต", "พญาไท", "ดินแดง", "ห้วยขวาง",
+  "วัฒนา", "คลองเตย", "พระโขนง", "ยานนาวา", "บางคอแหลม", "บางรัก", "ทวีวัฒนา", "ตลิ่งชัน", "บางใหญ่",
+  "ไทรน้อย", "บางบัวทอง", "เมืองนนทบุรี", "ปากเกร็ด", "บางกรวย", "จตุจักร", "บางพลัด", "บางซื่อ",
+  "หลักสี่", "ดอนเมือง", "สายไหม", "บางเขน", "ลาดพร้าว", "วังทองหลาง", "สวนหลวง", "บางกะปิ", "สะพานสูง",
+  "บึงกุ่ม", "คันนายาว", "มีนบุรี", "คลองสามวา", "บางบอน", "จอมทอง", "บางขุนเทียน", "ราษฎร์บูรณะ",
+  "ทุ่งครุ", "พระประแดง", "พระสมุทรเจดีย์", "เมืองสมุทรปราการ", "บางนา", "ลาดกระบัง", "ประเวศ", "หนองจอก",
+  "บางเสาธง", "บางบ่อ", "บางพลี", "เมืองปทุมธานี", "กระทุ่มแบน", "เมืองสมุทรสาคร", "พุทธมณฑล", "สามพราน",
+];
+const DISTRICT_ORDER_NOT_FOUND = 69; // legacy default
+const routeOrderMap = new Map(DISTRICT_ROUTE_ORDER.map((d, i) => [d, i]));
+function routeOrderOf(district: string | null | undefined): number {
+  const d = (district ?? "").trim();
+  return routeOrderMap.has(d) ? routeOrderMap.get(d)! : DISTRICT_ORDER_NOT_FOUND;
+}
+
 export function CreateBatchForm({
   groups,
   drivers,
@@ -88,6 +110,16 @@ export function CreateBatchForm({
     }
     return { stops, items, boxes, weight, volume, fwdIds };
   }, [groups, selectedKeys]);
+
+  // Sort the stops by ลำดับส่ง (district route order) — closest→farthest — so the
+  // list reads like the driver's actual run (legacy sorts the add-table the same way).
+  const sortedGroups = useMemo(
+    () =>
+      [...groups].sort(
+        (a, b) => routeOrderOf(a.address.district) - routeOrderOf(b.address.district),
+      ),
+    [groups],
+  );
 
   function toggleStop(key: string) {
     setSelectedKeys((prev) => {
@@ -206,8 +238,9 @@ export function CreateBatchForm({
           </div>
         ) : (
           <ul className="space-y-2">
-            {groups.map((g) => {
+            {sortedGroups.map((g) => {
               const isSelected = selectedKeys.has(g.key);
+              const order = routeOrderOf(g.address.district);
               return (
                 <li
                   key={g.key}
@@ -226,14 +259,22 @@ export function CreateBatchForm({
                       className="h-5 w-5 rounded border-border text-primary-500 focus:ring-primary-500 flex-shrink-0"
                       aria-label={`เลือกจุดส่งคุณ ${g.address.name}`}
                     />
+                    {/* ลำดับส่ง — district route order (legacy $arrPositF index · sorted) */}
+                    <span
+                      title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก (รายการเรียงตามนี้ให้คนขับวิ่งเป็นเส้นเดียว)"
+                      className="flex-shrink-0 inline-flex flex-col items-center justify-center rounded-lg bg-orange-100 border border-orange-300 px-2.5 py-1 leading-tight"
+                    >
+                      <span className="text-[11px] font-medium text-orange-700/90">ลำดับส่ง</span>
+                      <span className="text-lg font-extrabold text-orange-700 tabular-nums">{order}</span>
+                    </span>
                     <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <span className="font-semibold text-sm text-foreground">
                         คุณ{g.address.name} {g.address.lastName}
                       </span>
-                      <span className="text-xs text-muted">
-                        <MapPin className="inline h-3 w-3 mr-0.5" />
+                      <span className="text-xs text-foreground/80">
+                        <MapPin className="inline h-3 w-3 mr-0.5 text-rose-500" />
                         {g.address.no} ต.{g.address.subDistrict}{" "}
-                        อ.<span className="bg-amber-100 px-1 rounded text-amber-800">{g.address.district}</span>{" "}
+                        อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}
                         จ.{g.address.province} {g.address.zipCode}
                       </span>
                       {g.address.tel && g.address.tel !== "-" && (
@@ -307,7 +348,7 @@ export function CreateBatchForm({
                             </td>
                           </tr>
                         )}
-                        <tr className="border-t-2 border-primary-200 bg-primary-50/40 font-semibold">
+                        <tr className="border-t-2 border-primary-400 bg-primary-100 text-primary-900 font-bold">
                           <td colSpan={3} className="px-3 py-2 text-right">รวม</td>
                           <td className="px-3 py-2 text-right tabular-nums">{g.totalBoxes}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
@@ -324,20 +365,20 @@ export function CreateBatchForm({
       </section>
 
       {/* Summary + submit */}
-      <section className="sticky bottom-0 rounded-2xl border border-border bg-white shadow-lg p-4">
+      <section className="sticky bottom-0 rounded-2xl border border-rose-200 bg-gradient-to-r from-orange-50 to-rose-100 shadow-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
-            <div className="font-semibold">
+            <div className="font-bold text-base text-rose-900">
               เลือกแล้ว: {summary.stops} จุดส่ง · {summary.items} แทรคกิ้ง · {summary.boxes} กล่อง
             </div>
-            <div className="text-xs text-muted">
+            <div className="text-xs text-rose-700/80">
               นน.รวม {summary.weight.toFixed(2)} kg · ปริมาตร {summary.volume.toFixed(3)} m³
             </div>
           </div>
           <button
             type="submit"
             disabled={pending || summary.stops === 0 || !driverCode}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             <Package className="h-4 w-4" />
             {pending ? "กำลังสร้าง..." : "สร้างรอบจัดส่ง"}
