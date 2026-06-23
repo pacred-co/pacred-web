@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getLeadQueue, exportLeadsAll, getMyLeadSlaToday } from "@/actions/admin/leads";
 import { getImportedLeadStats } from "@/actions/admin/imported-leads";
-import { getCrmReps, getCrmCsReps } from "@/actions/admin/crm";
+import { getCrmReps, getCrmCsReps, getAssignableAdmins } from "@/actions/admin/crm";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { getTagsBulk } from "@/actions/admin/customer-tags";
 import { LeadRepCell, LeadCsCell } from "./lead-owner-controls";
@@ -114,13 +114,19 @@ export default async function AdminLeadsPage({
   // Ownership controls + same-day SLA banner (owner 2026-06-22): the assignable
   // เซลล์/CS pools, the viewing admin's own legacy rep id (for "รับเอง" + the
   // "คุณ" badge), and the current admin's claimed-today-but-not-called count.
-  const [repsRes, csRepsRes, slaRes, myLegacyId] = await Promise.all([
+  const [repsRes, csRepsRes, slaRes, myLegacyId, assignableRes] = await Promise.all([
     getCrmReps(),
     getCrmCsReps(),
     getMyLeadSlaToday(),
     getAdminLegacyId(user.id),
+    // The "มอบหมายโทรเซลล์" assign/distribute/handoff pool = active เซลล์/CS staff,
+    // keyed by profile_id (owner 2026-06-23: "ให้แค่เซลล์ cs … มอบหมายแล้วไปเข้า user
+    // นั้นตรงๆ"). Distinct from `reps` (legacy adminID) which feeds the legacy
+    // customer-ownership cell only.
+    getAssignableAdmins(),
   ]);
   const reps = repsRes.ok ? (repsRes.data?.reps ?? []) : [];
+  const assignableAdmins = assignableRes.ok ? (assignableRes.data?.reps ?? []) : [];
   const csReps = csRepsRes.ok ? (csRepsRes.data?.reps ?? []) : [];
   const sla = slaRes.ok ? slaRes.data : undefined;
 
@@ -306,7 +312,7 @@ export default async function AdminLeadsPage({
           // ปอน 2026-06-22 ("เข้าใจใหม่"): every admin works the leads assigned to
           // them in the normal tabs (mode="work" · NO assign control). Import +
           // assign-to-rep live ONLY in the ultra "มอบหมายโทรเซลล์" tab (mode="assign").
-          <LeadAssignPanel reps={reps} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
+          <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
         ) : queueErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
             โหลดรายการไม่สำเร็จ: {queueErr}

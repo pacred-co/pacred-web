@@ -15,8 +15,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
-import { getCrmReps } from "@/actions/admin/crm";
+import { getAssignableAdmins } from "@/actions/admin/crm";
 import { isGodRole, type AdminRole } from "@/lib/auth/require-admin";
 import { withAdmin, type AdminActionResult, logAdminAction } from "./common";
 import {
@@ -68,7 +67,7 @@ export type ImportedLead = {
   note: string;
   /** "รหัส PR" — member code recorded on a closed deal (migration 0203). */
   pr_code: string;
-  /** For call_status='other_rep': the rep legacyId this lead was handed off FROM
+  /** For call_status='other_rep': the rep (profile_id) this lead was handed off FROM
    *  (current assigned_admin_id = the TO). Sourced from the handoff call-history
    *  row, NOT a column — so no migration (ปอน 2026-06-23 "ใครย้ายไปเข้าใคร"). */
   handoffFrom?: string;
@@ -80,11 +79,13 @@ export async function getImportedLeads(
 ): Promise<AdminActionResult<{ leads: ImportedLead[] }>> {
   return withAdmin<{ leads: ImportedLead[] }>([...WORK_ROLES], async ({ adminId, roles }) => {
     const admin = createAdminClient();
-    const scopeLegacy =
-      !isSenior(roles) || input?.mine ? (await getAdminLegacyId(adminId)) ?? "__none__" : null;
+    // Scope to OWN assigned leads (non-senior always · senior when ?mine). The key
+    // is the admin's profile_id — exactly what assignImportedLeads stores (owner
+    // 2026-06-23: a lead is assigned directly to the user).
+    const scopeId = !isSenior(roles) || input?.mine ? adminId : null;
     const build = (cols: string) => {
       let q = admin.from(TABLE).select(cols).order("id", { ascending: false }).limit(2000);
-      if (scopeLegacy !== null) q = q.eq("assigned_admin_id", scopeLegacy);
+      if (scopeId !== null) q = q.eq("assigned_admin_id", scopeId);
       return q;
     };
 
@@ -153,12 +154,12 @@ export async function getImportedLeadStats(): Promise<AdminActionResult<Imported
   return withAdmin<ImportedLeadStats>([...WORK_ROLES], async ({ adminId, roles }) => {
     const admin = createAdminClient();
     const senior = isSenior(roles);
-    const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+    const myId = adminId; // a lead is assigned directly to the admin's profile_id
 
     // ONE scoped read → compute every card + chip badge in JS (≤ a few hundred rows).
     // Avoids `note` (migration 0202) so it works on prod regardless of apply state.
     let q = admin.from(TABLE).select("assigned_admin_id, call_status, last_called_at").limit(50000);
-    if (!senior) q = q.eq("assigned_admin_id", myLegacy);
+    if (!senior) q = q.eq("assigned_admin_id", myId);
     const { data, error } = await q;
     if (error) {
       console.error("[imported_leads:stats] failed", { code: error.code, message: error.message });
@@ -175,7 +176,7 @@ export async function getImportedLeadStats(): Promise<AdminActionResult<Imported
       else if (st === "no_answer") noAnswer++;
       else if (st === "not_interested") notInterested++;
       else if (st === "callback") callbackCount++;
-      if (r.assigned_admin_id === myLegacy) mineCount++;
+      if (r.assigned_admin_id === myId) mineCount++;
     }
     return { ok: true, data: { calledToday, closed, noAnswer, notInterested, mineCount, callbackCount, pendingCount } };
   });
@@ -225,7 +226,7 @@ export async function getImportedLeadCallReport(
       return { ok: false, error: "query_failed" };
     }
 
-    const repsRes = await getCrmReps();
+    const repsRes = await getAssignableAdmins();
     const nameOf = new Map((repsRes.ok ? repsRes.data?.reps ?? [] : []).map((r) => [r.legacyId, r.name]));
     const blank = (): Record<string, number> => Object.fromEntries(IMPORTED_LEAD_CALL_STATUSES.map((s) => [s, 0]));
 
@@ -286,12 +287,12 @@ export async function assignImportedLeads(input: unknown): Promise<AdminActionRe
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
   return withAdmin<{ assigned: number }>([...IMPORT_ROLES], async ({ adminId }) => {
-    // Validate the target rep against the SAME pool the assign dropdown is built
-    // from (getCrmReps → admin_contact_extras.legacy_admin_id) so a typo'd /
+    // Validate the target against the SAME pool the assign dropdown is built from
+    // (getAssignableAdmins → active เซลล์/CS, keyed by profile_id) so a typo'd /
     // off-boarded id can't silently strand prospects ('' = clear assignment).
-    // (Skip the guard if the rep list can't load — the UI already constrained it.)
+    // (Skip the guard if the pool can't load — the UI already constrained it.)
     if (parsed.data.legacyId) {
-      const repsRes = await getCrmReps();
+      const repsRes = await getAssignableAdmins();
       if (repsRes.ok) {
         const allowed = new Set((repsRes.data?.reps ?? []).map((r) => r.legacyId));
         if (!allowed.has(parsed.data.legacyId)) {
@@ -337,8 +338,8 @@ export async function distributeImportedLeads(
   const { ids, legacyIds } = parsed.data;
 
   return withAdmin<{ distributed: number; perRep: Record<string, number> }>([...IMPORT_ROLES], async ({ adminId }) => {
-    // Validate every target rep against the assign-dropdown pool (getCrmReps).
-    const repsRes = await getCrmReps();
+    // Validate every target against the assign-dropdown pool (getAssignableAdmins).
+    const repsRes = await getAssignableAdmins();
     if (repsRes.ok) {
       const allowed = new Set((repsRes.data?.reps ?? []).map((r) => r.legacyId));
       for (const lid of legacyIds) {
@@ -387,12 +388,11 @@ export async function logImportedLeadCall(input: unknown): Promise<AdminActionRe
 
   return withAdmin<{ callCount: number }>([...WORK_ROLES], async ({ adminId, roles }) => {
     const admin = createAdminClient();
-    const callerLegacy = (await getAdminLegacyId(adminId)) ?? adminId;
     const senior = isSenior(roles);
 
     // Existence + ownership check (scoped for non-senior → 404 if not theirs).
     let read = admin.from(TABLE).select("call_count").eq("id", parsed.data.id);
-    if (!senior) read = read.eq("assigned_admin_id", callerLegacy);
+    if (!senior) read = read.eq("assigned_admin_id", adminId);
     const { data: cur, error: readErr } = await read.maybeSingle<{ call_count: number }>();
     if (readErr) {
       console.error("[imported_leads:call read] failed", { code: readErr.code, message: readErr.message });
@@ -403,7 +403,7 @@ export async function logImportedLeadCall(input: unknown): Promise<AdminActionRe
     const nowIso = new Date().toISOString();
     const { error: logErr } = await admin.from("imported_lead_calls").insert({
       lead_id: parsed.data.id,
-      admin_id: callerLegacy,
+      admin_id: adminId,
       status: parsed.data.status ?? "called",
       note: parsed.data.note,
     });
@@ -443,8 +443,7 @@ export async function setImportedLeadStatus(input: unknown): Promise<AdminAction
       .update({ call_status: parsed.data.status, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -468,8 +467,7 @@ export async function setImportedLeadService(input: unknown): Promise<AdminActio
       .update({ service: parsed.data.service, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -495,21 +493,20 @@ export async function handoffImportedLead(input: unknown): Promise<AdminActionRe
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
   return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
-    // Validate the target rep against the SAME pool as the dropdown (getCrmReps).
-    const repsRes = await getCrmReps();
+    // Validate the target against the SAME pool as the dropdown (getAssignableAdmins).
+    const repsRes = await getAssignableAdmins();
     if (repsRes.ok) {
       const allowed = new Set((repsRes.data?.reps ?? []).map((r) => r.legacyId));
       if (!allowed.has(parsed.data.legacyId)) return { ok: false, error: "invalid_rep" };
     }
 
     const admin = createAdminClient();
-    const callerLegacy = (await getAdminLegacyId(adminId)) ?? adminId;
     const senior = isSenior(roles);
 
     // Capture the current owner (the "from") before reassigning — for the
     // "ย้ายจาก X → Y" display. The scoped read also enforces rep-owns-it.
     let readCur = admin.from(TABLE).select("assigned_admin_id").eq("id", parsed.data.id);
-    if (!senior) readCur = readCur.eq("assigned_admin_id", callerLegacy);
+    if (!senior) readCur = readCur.eq("assigned_admin_id", adminId);
     const { data: cur, error: curErr } = await readCur.maybeSingle<{ assigned_admin_id: string }>();
     if (curErr) {
       console.error("[imported_leads:handoff read] failed", { code: curErr.code, message: curErr.message });
@@ -523,7 +520,7 @@ export async function handoffImportedLead(input: unknown): Promise<AdminActionRe
       .from(TABLE)
       .update({ assigned_admin_id: parsed.data.legacyId, assigned_at: nowIso, call_status: "other_rep", updated_at: nowIso })
       .eq("id", parsed.data.id);
-    if (!senior) upd = upd.eq("assigned_admin_id", callerLegacy); // a rep may hand off only their OWN lead
+    if (!senior) upd = upd.eq("assigned_admin_id", adminId); // a rep may hand off only their OWN lead
     const { data, error } = await upd.select("id");
     if (error) {
       console.error("[imported_leads:handoff] failed", { code: error.code, message: error.message });
@@ -533,7 +530,7 @@ export async function handoffImportedLead(input: unknown): Promise<AdminActionRe
 
     // Record who→whom in call history (note = FROM rep legacyId · TO = the new
     // assigned_admin_id). No migration — reuses imported_lead_calls (0201).
-    await admin.from("imported_lead_calls").insert({ lead_id: parsed.data.id, admin_id: callerLegacy, status: "other_rep", note: fromLegacy });
+    await admin.from("imported_lead_calls").insert({ lead_id: parsed.data.id, admin_id: adminId, status: "other_rep", note: fromLegacy });
     void logAdminAction(adminId, "imported_lead.handoff", TABLE, String(parsed.data.id), { from: fromLegacy, to: parsed.data.legacyId });
     revalidatePath("/admin/leads");
     return { ok: true };
@@ -552,8 +549,7 @@ export async function setImportedLeadNote(input: unknown): Promise<AdminActionRe
       .update({ note: parsed.data.note, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -577,8 +573,7 @@ export async function setImportedLeadLineFacebook(input: unknown): Promise<Admin
       .update({ line_facebook: parsed.data.lineFacebook, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -602,8 +597,7 @@ export async function setImportedLeadEmail(input: unknown): Promise<AdminActionR
       .update({ email: parsed.data.email, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -628,8 +622,7 @@ export async function setImportedLeadPhone(input: unknown): Promise<AdminActionR
       .update({ phone: parsed.data.phone, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {
@@ -653,8 +646,7 @@ export async function setImportedLeadPrCode(input: unknown): Promise<AdminAction
       .update({ pr_code: parsed.data.prCode, updated_at: new Date().toISOString() })
       .eq("id", parsed.data.id);
     if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy);
+      q = q.eq("assigned_admin_id", adminId); // own leads only — keyed by profile_id
     }
     const { error } = await q;
     if (error) {

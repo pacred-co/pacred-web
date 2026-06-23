@@ -63,6 +63,10 @@ const CALL_STATUS_STYLE: Record<string, string> = {
 // picker + routes the lead, so it's rendered separately, not in this loop).
 const QUICK_STATUSES = IMPORTED_LEAD_CALL_STATUSES.filter((s) => s !== "other_rep");
 
+// One assignable admin. `legacyId` is the OPAQUE assignment key the server stores
+// in imported_leads.assigned_admin_id + matches the "ลูกค้าของฉัน" filter on. For this
+// workspace it carries the admin's **profile_id** (getAssignableAdmins · owner
+// 2026-06-23: assign goes directly to the user) — NOT a legacy adminID.
 export type AssignRep = { legacyId: string; name: string };
 
 // ── CSV parsing (handles quoted fields, escaped quotes, commas, CRLF) ───────

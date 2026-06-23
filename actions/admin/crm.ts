@@ -59,6 +59,13 @@ const ROUTING_ROLES = ["super", "manager", "sales_admin"] as const;
 
 const REP_ROLES = ["sales", "sales_admin", "super", "ultra"] as const;
 
+// The "มอบหมายโทรเซลล์" assignable set = เซลล์ (sales/sales_admin) + CS (ops) and their
+// super/ultra leads — the staff who actually work leads (owner 2026-06-23 "ให้แค่เซลล์
+// cs"). Matches the /admin/leads page gate + ultra; excludes driver/warehouse/back-office.
+// Note: in this small team most sales/CS staff hold the `super`/`ultra` role (there are
+// no plain `sales`/`ops` grants), so those are included or the picker would be empty.
+const LEAD_ASSIGN_ROLES = new Set<string>(["super", "ultra", "sales_admin", "sales", "ops"]);
+
 // ════════════════════════════════════════════════════════════════════════
 // getCrmReps — the assignable sales-rep list (+ how many customers each owns)
 // ════════════════════════════════════════════════════════════════════════
@@ -167,6 +174,104 @@ export async function getCrmReps(): Promise<AdminActionResult<CrmRepsResult>> {
 
     // Sort: fewest-owned first (who has capacity), then name.
     reps.sort((a, b) => a.ownedCount - b.ownedCount || a.name.localeCompare(b.name, "th"));
+    return { ok: true, data: { reps, gateNote: null } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// getAssignableAdmins — the เซลล์ + CS lead-workers, keyed by profile_id
+// ════════════════════════════════════════════════════════════════════════
+//
+// The "มอบหมายโทรเซลล์" (imported-leads) assign/distribute/handoff pool: active,
+// non-suspended, non-resigned admins whose role is a lead-working one
+// (LEAD_ASSIGN_ROLES = sales/CS + their super/ultra leads · owner 2026-06-23
+// "ให้แค่เซลล์ cs") — driver/warehouse/back-office are NOT assignable.
+//
+// Why profile_id (owner: "ไปเข้า user นี้ตรงๆ"): getCrmReps keyed reps on
+// legacy_admin_id, so it dropped every admin created via /admin/admins/new (they
+// have an admin_login_id but NO legacy_admin_id) → on prod the list came up
+// incomplete. profile_id is present for EVERY admin AND equals the id the logged-in
+// admin carries (withAdmin's adminId), so imported_leads.assigned_admin_id stores it
+// and the "ลูกค้าของฉัน" filter matches it directly — no legacy bridge, no one dropped.
+//
+// Shape = CrmRepsResult (drop-in for the assign panel + the imported-leads validators),
+// but each rep's `legacyId` field carries the **profile_id** (the assignment key).
+export async function getAssignableAdmins(): Promise<AdminActionResult<CrmRepsResult>> {
+  return withAdmin<CrmRepsResult>([...CRM_ROLES], async () => {
+    const admin = createAdminClient();
+
+    // 1) All grants → one row per person; "active" iff ANY grant is active; the
+    //    effective role = the most-recent ACTIVE grant (mirrors /admin/admins).
+    const { data: grantRows, error: grantErr } = await admin
+      .from("admins")
+      .select("profile_id, role, is_active, granted_at")
+      .order("granted_at", { ascending: false, nullsFirst: false });
+    if (grantErr) {
+      console.error("[assignable admins:admins] failed", { code: grantErr.code, message: grantErr.message });
+      return { ok: false, error: `query_failed: ${grantErr.message}` };
+    }
+    const anyActive = new Map<string, boolean>();
+    const effectiveRole = new Map<string, string>();
+    const hasLeadRole = new Map<string, boolean>(); // any ACTIVE grant in LEAD_ASSIGN_ROLES
+    for (const r of (grantRows ?? []) as { profile_id: string; role: string; is_active: boolean }[]) {
+      anyActive.set(r.profile_id, (anyActive.get(r.profile_id) ?? false) || r.is_active);
+      if (r.is_active && !effectiveRole.has(r.profile_id)) effectiveRole.set(r.profile_id, r.role);
+      if (r.is_active && LEAD_ASSIGN_ROLES.has(r.role)) hasLeadRole.set(r.profile_id, true);
+    }
+    const profileIds = [...anyActive.keys()];
+    if (profileIds.length === 0) {
+      return { ok: true, data: { reps: [], gateNote: "ยังไม่มีแอดมินที่ใช้งานอยู่ในระบบ" } };
+    }
+
+    // 2) Names + status (profiles = name/login/active · extras = display/nickname/ended/suspended).
+    const [profilesRes, extrasRes] = await Promise.all([
+      admin.from("profiles").select("id, first_name, last_name, admin_login_id, is_active").in("id", profileIds),
+      admin
+        .from("admin_contact_extras")
+        .select("profile_id, display_name, nickname, legacy_admin_id, ended_at, suspended_at")
+        .in("profile_id", profileIds),
+    ]);
+    if (profilesRes.error) {
+      console.error("[assignable admins:profiles] failed", { code: profilesRes.error.code, message: profilesRes.error.message });
+      return { ok: false, error: `query_failed: ${profilesRes.error.message}` };
+    }
+    if (extrasRes.error) {
+      // Hard-fail: without extras we can't honour ended/suspended → we'd risk
+      // offering a resigned admin. Better to surface the error than misassign.
+      console.error("[assignable admins:extras] failed", { code: extrasRes.error.code, message: extrasRes.error.message });
+      return { ok: false, error: `query_failed: ${extrasRes.error.message}` };
+    }
+    type P = { id: string; first_name: string | null; last_name: string | null; admin_login_id: string | null; is_active: boolean | null };
+    type X = { profile_id: string; display_name: string | null; nickname: string | null; legacy_admin_id: string | null; ended_at: string | null; suspended_at: string | null };
+    const profById = new Map<string, P>(((profilesRes.data ?? []) as unknown as P[]).map((p) => [p.id, p]));
+    const exById = new Map<string, X>(((extrasRes.data ?? []) as unknown as X[]).map((e) => [e.profile_id, e]));
+
+    const reps: CrmRep[] = [];
+    for (const pid of profileIds) {
+      if (!anyActive.get(pid)) continue;        // no active grant → not working
+      if (!hasLeadRole.get(pid)) continue;      // not เซลล์/CS → skip driver/warehouse/back-office
+      const x = exById.get(pid);
+      if (x?.ended_at) continue;                // resigned
+      if (x?.suspended_at) continue;            // paused — no new leads
+      const p = profById.get(pid);
+      const fullName = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim();
+      const name =
+        x?.display_name?.trim() ||
+        fullName ||
+        x?.nickname?.trim() ||
+        p?.admin_login_id?.trim() ||
+        x?.legacy_admin_id?.trim() ||
+        "แอดมิน";
+      reps.push({
+        profileId: pid,
+        legacyId: pid,                          // ⚠️ assignment key = profile_id (see header)
+        name,
+        role: effectiveRole.get(pid) ?? "staff",
+        ownedCount: 0,
+      });
+    }
+
+    reps.sort((a, b) => a.name.localeCompare(b.name, "th"));
     return { ok: true, data: { reps, gateNote: null } };
   });
 }
