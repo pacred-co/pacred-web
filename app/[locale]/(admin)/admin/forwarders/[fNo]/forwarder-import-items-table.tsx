@@ -43,11 +43,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  baseTracking,
-  trackingSuffix,
-  filterCountableForwarderRows,
-} from "@/lib/admin/momo-bill-header";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings";
 
 type ItemRow = {
   id: number;
@@ -81,13 +78,6 @@ type ItemRow = {
 };
 
 type Props = { r: ItemRow; isJuristic?: boolean };
-
-// The columns we need to re-render any sibling row, kept in sync with ItemRow.
-const SIBLING_SELECT =
-  "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, fweight, fvolume, " +
-  "fwidth, flength, fheight, fwarehousename, " +
-  "frefprice, frefrate, ftotalprice, fpriceupdate, pricecrate, ftransportpricechnthb, " +
-  "ftransportprice, fshippingservice, priceother, fdiscount";
 
 // legacy nameProductsType — function.php L1196-1208
 const PRODUCT_TYPE_LABEL: Record<string, string> = {
@@ -134,44 +124,11 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
 
   // ── Gather the sibling tracking rows (Issue ① · ภูม 2026-06-16) ──
   // A split parcel = multiple tb_forwarder rows sharing (baseTracking, userid).
-  // Narrow by a prefix ILIKE, then keep only EXACT baseTracking matches (a
-  // prefix like "178055573" must not absorb "1780555731"). On any DB error or
-  // an empty result, fall back to the single landed row `r` — never lose it.
+  // Routed through the shared helper (ภูม 2026-06-23) so this DISPLAY and the
+  // ยอดเก็บจริง collect calc on the page use the IDENTICAL row set — they can
+  // never disagree on which trackings make up the shipment again.
   const base = baseTracking(r.ftrackingchn);
-  let rows: ItemRow[] = [r];
-  if (base && r.userid) {
-    const { data, error } = await admin
-      .from("tb_forwarder")
-      .select(SIBLING_SELECT)
-      .eq("userid", r.userid)
-      .ilike("ftrackingchn", `${base}%`)
-      .limit(200);
-    if (error) {
-      console.error(`[ForwarderImportItemsTable siblings]`, {
-        code: error.code, message: error.message, base, userid: r.userid,
-      });
-    } else {
-      const exact = ((data ?? []) as unknown as ItemRow[]).filter(
-        (row) => baseTracking(row.ftrackingchn) === base,
-      );
-      if (exact.length > 0) rows = exact;
-    }
-  }
-
-  // Drop the MOMO หัวบิล (bare zero-weight bill-header that sits beside the
-  // real -N/M boxes) — the exact filter the list-page box/CBM Σ runs through,
-  // so the detail rows match the list. Then order siblings by box number.
-  const countable = filterCountableForwarderRows(rows, {
-    tracking: (row) => row.ftrackingchn,
-    weight: (row) => Number(row.fweight ?? 0),
-    userid: (row) => row.userid ?? "",
-  });
-  const display = (countable.length > 0 ? countable : rows)
-    .slice()
-    .sort(
-      (a, b) =>
-        trackingSuffix(a.ftrackingchn) - trackingSuffix(b.ftrackingchn) || a.id - b.id,
-    );
+  const display = await fetchCountableForwarderSiblings(admin, r);
 
   // ── Item names for the รายละเอียด cell, batched across all siblings ──
   // shop-spawned (tb_order by reforder→hno) preferred, else tb_forwarder_item

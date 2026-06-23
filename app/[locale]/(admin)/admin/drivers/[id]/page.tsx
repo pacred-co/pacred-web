@@ -1,22 +1,18 @@
 /**
  * /admin/drivers/[id] — Driver batch detail (faithful port of
- * `pcs-admin/forwarder-driver.php?page=detail&id=X` · 2026-05-30 ภูม #3).
+ * `pcs-admin/forwarder-driver.php` detail mode · L1630-1880).
  *
  * Shows ONE batch (tb_forwarder_driver) with all its delivery stops
- * (tb_forwarder_driver_item joined to tb_forwarder for recipient info).
+ * (tb_forwarder_driver_item joined to tb_forwarder for recipient info),
+ * GROUPED BY delivery destination (fShipBy + recipient + address) exactly like
+ * legacy. Each stop renders as ONE clean 3-zone row — matching the legacy table
+ * (จำนวน+สถานะ+รูปส่ง | บริษัทขนส่ง+ที่อยู่+โทร | ตารางย่อยออเดอร์+cover+รวม):
+ *   2026-06-23 ภูม — "เอาให้เหมือน legacy เป๊ะ ดูง่าย สะอาด". Was a tall card-per-stop
+ *   with a per-item status column + courier inputs interleaved = cluttered.
  *
- * Legacy reference: forwarder-driver.php lines 1272-2104 (detail mode).
- *   - Header: batch name + driver + creator + box/tracking/stop counts
- *   - Countdown timer (endtime - now)
- *   - Google Maps waypoint-chain nav link
- *   - Per-stop card with: recipient · address · phone · tracking list
- *     + status badge · photo (if uploaded) · per-row "ขึ้นรถ/ส่งสำเร็จ/ไม่สำเร็จ"
- *   - "ยกเลิกรอบ" button for ops/super (no delivered items yet)
- *
- * This REPLACES the prior page that read REBUILT `forwarder_driver` UUID table.
- *
- * AGENTS.md §0a — Pacred Tailwind design + Lucide icons (NOT verbatim Bootstrap).
+ * AGENTS.md §0a — legacy IA + workflow, Pacred Tailwind polish (NOT verbatim Bootstrap).
  * AGENTS.md §0c — every Supabase query destructures `error`.
+ * AGENTS.md §0g — self-explaining row (count · status · photo · recipient · items · next-action).
  */
 
 import { Link } from "@/i18n/navigation";
@@ -24,9 +20,10 @@ import { notFound } from "next/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
@@ -51,19 +48,34 @@ const BATCH_STATUS_CLS: Record<FdStatus, string> = {
   "3": "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-const ITEM_STATUS_LABEL: Record<FdiStatus, string> = {
-  "":  "ยังไม่ขึ้นรถ",
-  "1": "กำลังส่ง",
-  "2": "ส่งสำเร็จ",
-  "3": "ส่งไม่ได้",
-};
-
 const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
   "":  "bg-gray-100 text-gray-700 border-gray-200",
   "1": "bg-blue-100 text-blue-700 border-blue-200",
   "2": "bg-emerald-100 text-emerald-700 border-emerald-200",
   "3": "bg-rose-100 text-rose-700 border-rose-200",
 };
+
+// Faithful nameShipBy() — legacy pcs-admin/include/function.php L185-242. A driver
+// batch carries PCS* (company self-delivery) or a courier code; the obscure
+// up-country carriers (12-47) almost never appear in a local run, so we map the
+// common set + fall back to the raw code.
+const SHIP_BY_LABEL: Record<string, string> = {
+  PCS: "รับเองโกดัง PCS", PCSE: "PCS Express", PCSF: "PCS เหมาเหมา",
+  F: "บริษัทจัดหาให้อัตโนมัติ",
+  "1": "DHL Express", "2": "Flash Express", "3": "J.K. เอ็กซ์เพรส", "4": "Kerry Express",
+  "5": "Nim Express", "8": "SCG Express", "11": "ไปรษณีย์ไทย",
+  "21": "นิ่มซี่เส็งขนส่ง 1988", "24": "J&T Express",
+};
+function shipByLabel(code: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  return SHIP_BY_LABEL[c] ?? (c || "ไม่ระบุขนส่ง");
+}
+// PCS / PCSE / PCSF = company self-delivery (driver run · legacy L1828 renders the
+// red "เหมาเหมา" badge + a map-pin for these); any other code = an outside courier.
+function isSelfDelivery(code: string | null | undefined): boolean {
+  const c = (code ?? "").trim();
+  return c === "PCS" || c === "PCSE" || c === "PCSF";
+}
 
 type Batch = {
   id:              number;
@@ -98,6 +110,7 @@ type Forwarder = {
   fnote:                    string | null;
   fphotoend:                string | null;
   fcabinetnumber:           string | null;
+  fcover:                   string | null;
   userid:                   string | null;
   faddressname:             string | null;
   faddresslastname:         string | null;
@@ -180,7 +193,7 @@ export default async function AdminDriverBatchDetailPage({
       .from("tb_forwarder")
       .select(
         "id, fidorco, fstatus, ftrackingchn, fshipby, famount, fweight, fvolume, " +
-        "fpallet, fnote, fphotoend, fcabinetnumber, userid, courier_tracking_url, " +
+        "fpallet, fnote, fphotoend, fcabinetnumber, fcover, userid, courier_tracking_url, " +
         "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
         "faddressdistrict, faddressprovince, faddresszipcode, " +
         "faddresstel, faddresstel2, faddresslatitude, faddresslongitude",
@@ -272,16 +285,17 @@ export default async function AdminDriverBatchDetailPage({
   }
   const stops = Array.from(stopsByKey.values());
 
-  // 6. Resolve signed photo URLs in parallel
+  // 6. Resolve signed photo URLs (delivery photos + order covers) in parallel
   const stopsWithPhotos = await Promise.all(
     stops.map(async (stop) => {
       const itemsWithPhotos = await Promise.all(
         stop.items.map(async (entry) => {
-          const [onUrl, offUrl] = await Promise.all([
+          const [onUrl, offUrl, coverUrl] = await Promise.all([
             entry.item.fdipictureon ? getSignedBucketUrl("forwarder-covers", entry.item.fdipictureon) : Promise.resolve(null),
             entry.item.fdipictureoff ? getSignedBucketUrl("forwarder-covers", entry.item.fdipictureoff) : Promise.resolve(null),
+            entry.forwarder.fcover ? resolveLegacyUrl(entry.forwarder.fcover, "cover") : Promise.resolve(null),
           ]);
-          return { ...entry, photoOnUrl: onUrl, photoOffUrl: offUrl };
+          return { ...entry, photoOnUrl: onUrl, photoOffUrl: offUrl, coverUrl };
         }),
       );
       return { ...stop, items: itemsWithPhotos };
@@ -503,179 +517,220 @@ export default async function AdminDriverBatchDetailPage({
         </details>
       )}
 
-      {/* Stops list */}
+      {/* ── Stops — one clean 3-zone row per delivery point (legacy detail table) ── */}
       {stopsWithPhotos.length === 0 ? (
         <div className="rounded-2xl border border-border bg-white p-8 text-center">
           <AlertTriangle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
           <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
         </div>
       ) : (
-        <ol className="space-y-3">
-          {stopsWithPhotos.map((stop, idx) => (
-            <li key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-              {/* Stop header */}
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-primary-500 text-white w-7 h-7 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {idx + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-base">
-                    คุณ{stop.forwarder.faddressname ?? ""} {stop.forwarder.faddresslastname ?? ""}
-                  </p>
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    📍 {stop.forwarder.faddressno ?? ""}{" "}
-                    ตำบล/แขวง {stop.forwarder.faddresssubdistrict ?? ""}{" "}
-                    อำเภอ/เขต <span className="bg-amber-100 px-1 rounded text-amber-800">{stop.forwarder.faddressdistrict ?? ""}</span>{" "}
-                    จังหวัด {stop.forwarder.faddressprovince ?? ""}{" "}
-                    {stop.forwarder.faddresszipcode ?? ""}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    {stop.forwarder.faddresstel && stop.forwarder.faddresstel !== "-" && (
-                      <a
-                        href={`tel:${stop.forwarder.faddresstel}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-xs hover:bg-blue-100"
-                      >
-                        <Phone className="h-3 w-3" /> {stop.forwarder.faddresstel}
-                      </a>
-                    )}
-                    {stop.forwarder.faddresstel2 && stop.forwarder.faddresstel2 !== "-" && stop.forwarder.faddresstel2 !== stop.forwarder.faddresstel && (
-                      <a
-                        href={`tel:${stop.forwarder.faddresstel2}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-xs hover:bg-blue-100"
-                      >
-                        <Phone className="h-3 w-3" /> {stop.forwarder.faddresstel2}
-                      </a>
-                    )}
-                    {(stop.forwarder.faddresslatitude && stop.forwarder.faddresslongitude) ? (
-                      <a
-                        href={`https://www.google.com/maps/search/${stop.forwarder.faddresslatitude},${stop.forwarder.faddresslongitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-xs hover:bg-emerald-100"
-                      >
-                        <MapPin className="h-3 w-3" /> แผนที่
-                      </a>
+        <div className="space-y-3">
+          {stopsWithPhotos.map((stop, idx) => {
+            const f = stop.forwarder;
+            const total = stop.items.length;
+            const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
+            const failed = stop.items.filter((e) => e.item.fdistatus === "3").length;
+            const allDone = total > 0 && delivered === total;
+            const self = isSelfDelivery(f.fshipby);
+            const hasPin = Boolean(f.faddresslatitude && f.faddresslongitude);
+            const addrText = [f.faddressno, f.faddresssubdistrict, f.faddressdistrict, f.faddressprovince, f.faddresszipcode]
+              .filter(Boolean).join(" ");
+            const mapHref = hasPin
+              ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
+              : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
+            // delivery photos for this stop (the driver's drop-off shots)
+            const deliveryPhotos = Array.from(
+              new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))),
+            );
+            const phones = [f.faddresstel, f.faddresstel2]
+              .map((p) => (p ?? "").trim())
+              .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+
+            return (
+              <section key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+                <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-border">
+
+                  {/* ZONE 1 — จำนวน + สถานะส่ง + รูปส่ง */}
+                  <div className="p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-primary-500 text-white w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {idx + 1}
+                      </span>
+                      <span className="font-bold text-sm">{total} รายการ</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                        allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : ITEM_STATUS_CLS[""]
+                      }`}>
+                        {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+                        {allDone ? "ส่งสำเร็จ" : `ส่งแล้ว ${delivered}/${total}`}
+                      </span>
+                      {failed > 0 && (
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${ITEM_STATUS_CLS["3"]}`}>
+                          <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
+                        </span>
+                      )}
+                    </div>
+                    {/* รูปถ่ายส่งสินค้า — the visual anchor (legacy fPhotoEnd) */}
+                    {deliveryPhotos.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {deliveryPhotos.slice(0, 3).map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="รูปส่งสินค้า" className="h-20 w-20 rounded-lg border border-border object-cover hover:ring-2 hover:ring-primary-300" />
+                          </a>
+                        ))}
+                      </div>
                     ) : (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2 py-3 text-[11px] text-muted">
+                        <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ZONE 2 — บริษัทขนส่ง + ผู้รับ + ที่อยู่ + โทร */}
+                  <div className="p-3 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                        self ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-700 border border-slate-200"
+                      }`}>
+                        <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
+                      </span>
                       <a
-                        href={`https://www.google.com/maps/search/${encodeURIComponent([
-                          stop.forwarder.faddressno, stop.forwarder.faddresssubdistrict,
-                          stop.forwarder.faddressdistrict, stop.forwarder.faddressprovince,
-                          stop.forwarder.faddresszipcode,
-                        ].filter(Boolean).join(" "))}`}
+                        href={mapHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 px-2 py-0.5 text-xs hover:bg-gray-100"
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[11px] hover:bg-emerald-100"
                       >
-                        <MapPin className="h-3 w-3" /> ค้นที่อยู่
+                        <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
+                    </div>
+                    <p className="font-semibold text-sm text-foreground">
+                      คุณ{f.faddressname ?? ""} {f.faddresslastname ?? ""}
+                    </p>
+                    <p className="text-xs text-foreground/80 leading-relaxed">
+                      {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
+                      <span className="bg-amber-100 px-1 rounded text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
+                      จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
+                    </p>
+                    {phones.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {phones.map((p) => (
+                          <a key={p} href={`tel:${p}`} className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-[11px] hover:bg-blue-100">
+                            <Phone className="h-3 w-3" /> {p}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ZONE 3 — ตารางย่อยออเดอร์ (cover + ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร) */}
+                  <div className="p-3">
+                    <div className="overflow-x-auto rounded-lg border border-border scrollbar-x-visible">
+                      <table className="w-full text-xs">
+                        <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+                          <tr>
+                            <th className="px-2 py-1.5 w-6">#</th>
+                            <th className="px-2 py-1.5">ออเดอร์</th>
+                            <th className="px-2 py-1.5">รหัสสมาชิก</th>
+                            <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
+                            <th className="px-2 py-1.5 text-right">กล่อง</th>
+                            <th className="px-2 py-1.5 text-right">นน.</th>
+                            <th className="px-2 py-1.5 text-right">ปริมาตร</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stop.items.map(({ item, forwarder, coverUrl }, i) => {
+                            const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
+                            return (
+                              <tr key={item.id} className="border-t border-border align-top">
+                                <td className="px-2 py-1.5 text-muted">{i + 1}</td>
+                                <td className="px-2 py-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    {coverUrl && (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={coverUrl} alt="" className="h-8 w-8 rounded border border-border object-cover flex-shrink-0" />
+                                    )}
+                                    <Link href={`/admin/forwarders/${fNo}`} className="font-mono text-primary-600 hover:underline">
+                                      {fNo}
+                                    </Link>
+                                  </div>
+                                </td>
+                                <td className="px-2 py-1.5 font-mono">
+                                  {forwarder.userid ? (
+                                    <Link href={`/admin/customers/${forwarder.userid}`} className="text-primary-600 hover:underline">
+                                      {forwarder.userid}
+                                    </Link>
+                                  ) : "—"}
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <Link href={`/admin/forwarders/${fNo}`} className="hover:underline">
+                                    {forwarder.ftrackingchn ?? "—"}
+                                  </Link>
+                                  {forwarder.fpallet && (
+                                    <div className="text-[11px] text-muted">location : {forwarder.fpallet}</div>
+                                  )}
+                                  {forwarder.fnote && (
+                                    <div className="mt-0.5 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
+                                      📝 {forwarder.fnote}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-right">{forwarder.famount ?? 0}</td>
+                                <td className="px-2 py-1.5 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
+                                <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
+                              </tr>
+                            );
+                          })}
+                          {/* รวม */}
+                          <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
+                            <td className="px-2 py-1.5 text-right text-muted" colSpan={4}>รวม</td>
+                            <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
+                            <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
+                            <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* per-stop actions — ยกเลิกรายการ + ลิงก์ติดตามขนส่ง (ops only · compact) */}
+                    {isOpsOverride && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {stop.items.map(({ item, forwarder }) => {
+                            const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
+                            return (
+                              <RemoveItemButton
+                                key={`rm-${item.id}`}
+                                itemId={item.id}
+                                fNo={fNo}
+                                delivered={item.fdistatus === "2"}
+                              />
+                            );
+                          })}
+                        </div>
+                        <details className="rounded-lg border border-border">
+                          <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-medium text-muted flex items-center gap-1">
+                            <Link2 className="h-3 w-3" /> ลิงก์ติดตามขนส่ง (ลูกค้าเห็น) — {stop.items.length} รายการ
+                          </summary>
+                          <div className="px-2 pb-2 pt-1 space-y-1.5">
+                            {stop.items.map(({ forwarder }) => (
+                              <CourierUrlInput
+                                key={`courier-${forwarder.id}`}
+                                forwarderId={forwarder.id}
+                                initialUrl={forwarder.courier_tracking_url}
+                              />
+                            ))}
+                          </div>
+                        </details>
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
-
-              {/* Tracking sub-table */}
-              <div className="rounded-lg border border-border overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-2 py-1.5">F-no</th>
-                      <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
-                      <th className="px-2 py-1.5">ลูกค้า</th>
-                      <th className="px-2 py-1.5 text-right">กล่อง</th>
-                      <th className="px-2 py-1.5 text-right">นน.(kg)</th>
-                      <th className="px-2 py-1.5 text-right">ปริมาตร(m³)</th>
-                      <th className="px-2 py-1.5">สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stop.items.map(({ item, forwarder, photoOnUrl, photoOffUrl }) => {
-                      const fdistatus = (item.fdistatus ?? "") as FdiStatus;
-                      const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
-                      return (
-                        <tr key={item.id} className="border-t border-border align-top">
-                          <td className="px-2 py-1.5">
-                            <Link
-                              href={`/admin/forwarders/${fNo}`}
-                              className="font-mono text-primary-600 hover:underline"
-                            >
-                              {fNo}
-                            </Link>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <div>{forwarder.ftrackingchn ?? "—"}</div>
-                            {forwarder.fpallet && (
-                              <div className="text-[11px] text-muted">loc: {forwarder.fpallet}</div>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 font-mono">{forwarder.userid ?? "—"}</td>
-                          <td className="px-2 py-1.5 text-right">{forwarder.famount ?? 0}</td>
-                          <td className="px-2 py-1.5 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
-                          <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(3)}</td>
-                          <td className="px-2 py-1.5">
-                            <span
-                              className={`inline-block rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${ITEM_STATUS_CLS[fdistatus]}`}
-                            >
-                              {ITEM_STATUS_LABEL[fdistatus]}
-                            </span>
-                            {(photoOnUrl || photoOffUrl) && (
-                              <div className="mt-1 flex gap-1">
-                                {photoOnUrl && (
-                                  <a href={photoOnUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-600 hover:underline">📦 ขึ้นรถ</a>
-                                )}
-                                {photoOffUrl && (
-                                  <a href={photoOffUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline">✅ ส่ง</a>
-                                )}
-                              </div>
-                            )}
-                            {forwarder.fnote && (
-                              <div className="mt-1 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
-                                📝 {forwarder.fnote}
-                              </div>
-                            )}
-                            {isOpsOverride && (
-                              <div className="mt-1">
-                                <RemoveItemButton itemId={item.id} fNo={fNo} delivered={fdistatus === "2"} />
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Stop totals */}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-border/50">
-                <div className="text-muted">
-                  รวม {stop.items.length} แทรคกิ้ง · {stop.totalBoxes} กล่อง ·{" "}
-                  {stop.totalWeight.toFixed(2)} kg · {stop.totalVolume.toFixed(3)} m³
-                </div>
-                <Link
-                  href={`/admin/drivers/work?tab=pending`}
-                  className="text-primary-600 hover:underline"
-                >
-                  → ดูใน work-list คนขับ
-                </Link>
-              </div>
-
-              {/* External-courier tracking URL — ops/super only. One input
-                  per forwarder row in this stop (the customer sees the link
-                  on /service-import/[fNo]). 2026-06-08 gap analysis #2. */}
-              {isOpsOverride && (
-                <div className="space-y-1.5">
-                  {stop.items.map(({ forwarder }) => (
-                    <CourierUrlInput
-                      key={`courier-${forwarder.id}`}
-                      forwarderId={forwarder.id}
-                      initialUrl={forwarder.courier_tracking_url}
-                    />
-                  ))}
-                </div>
-              )}
-            </li>
-          ))}
-        </ol>
+              </section>
+            );
+          })}
+        </div>
       )}
 
       <p className="text-[11px] text-muted">
