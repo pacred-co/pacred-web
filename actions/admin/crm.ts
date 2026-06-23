@@ -59,6 +59,13 @@ const ROUTING_ROLES = ["super", "manager", "sales_admin"] as const;
 
 const REP_ROLES = ["sales", "sales_admin", "super", "ultra"] as const;
 
+// The "มอบหมายโทรเซลล์" assignable set = เซลล์ (sales/sales_admin) + CS (ops) and their
+// super/ultra leads — the staff who actually work leads (owner 2026-06-23 "ให้แค่เซลล์
+// cs"). Matches the /admin/leads page gate + ultra; excludes driver/warehouse/back-office.
+// Note: in this small team most sales/CS staff hold the `super`/`ultra` role (there are
+// no plain `sales`/`ops` grants), so those are included or the picker would be empty.
+const LEAD_ASSIGN_ROLES = new Set<string>(["super", "ultra", "sales_admin", "sales", "ops"]);
+
 // ════════════════════════════════════════════════════════════════════════
 // getCrmReps — the assignable sales-rep list (+ how many customers each owns)
 // ════════════════════════════════════════════════════════════════════════
@@ -172,20 +179,20 @@ export async function getCrmReps(): Promise<AdminActionResult<CrmRepsResult>> {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// getAssignableAdmins — EVERY active staff member, keyed by profile_id
+// getAssignableAdmins — the เซลล์ + CS lead-workers, keyed by profile_id
 // ════════════════════════════════════════════════════════════════════════
 //
-// The "มอบหมายโทรเซลล์" (imported-leads) assign/distribute/handoff pool. Unlike
-// getCrmReps (sales-role + legacy_admin_id keyed — the legacy tb_users ownership
-// model), this MIRRORS the /admin/admins roster: one row per active, non-suspended,
-// non-resigned admin PERSON, keyed by their **profile_id**.
+// The "มอบหมายโทรเซลล์" (imported-leads) assign/distribute/handoff pool: active,
+// non-suspended, non-resigned admins whose role is a lead-working one
+// (LEAD_ASSIGN_ROLES = sales/CS + their super/ultra leads · owner 2026-06-23
+// "ให้แค่เซลล์ cs") — driver/warehouse/back-office are NOT assignable.
 //
-// Why profile_id (owner 2026-06-23 "ให้มันมาทุก user เลยในระบบ … ไปเข้า user นี้ตรงๆ"):
-// the legacy picker dropped every admin created via /admin/admins/new (they have an
-// admin_login_id but NO legacy_admin_id), so on prod the list came up incomplete.
-// profile_id is present for EVERY admin AND equals the id the logged-in admin carries
-// (withAdmin's adminId), so imported_leads.assigned_admin_id stores it and the
-// "ลูกค้าของฉัน" filter matches it directly — no legacy bridge, no one dropped.
+// Why profile_id (owner: "ไปเข้า user นี้ตรงๆ"): getCrmReps keyed reps on
+// legacy_admin_id, so it dropped every admin created via /admin/admins/new (they
+// have an admin_login_id but NO legacy_admin_id) → on prod the list came up
+// incomplete. profile_id is present for EVERY admin AND equals the id the logged-in
+// admin carries (withAdmin's adminId), so imported_leads.assigned_admin_id stores it
+// and the "ลูกค้าของฉัน" filter matches it directly — no legacy bridge, no one dropped.
 //
 // Shape = CrmRepsResult (drop-in for the assign panel + the imported-leads validators),
 // but each rep's `legacyId` field carries the **profile_id** (the assignment key).
@@ -205,9 +212,11 @@ export async function getAssignableAdmins(): Promise<AdminActionResult<CrmRepsRe
     }
     const anyActive = new Map<string, boolean>();
     const effectiveRole = new Map<string, string>();
+    const hasLeadRole = new Map<string, boolean>(); // any ACTIVE grant in LEAD_ASSIGN_ROLES
     for (const r of (grantRows ?? []) as { profile_id: string; role: string; is_active: boolean }[]) {
       anyActive.set(r.profile_id, (anyActive.get(r.profile_id) ?? false) || r.is_active);
       if (r.is_active && !effectiveRole.has(r.profile_id)) effectiveRole.set(r.profile_id, r.role);
+      if (r.is_active && LEAD_ASSIGN_ROLES.has(r.role)) hasLeadRole.set(r.profile_id, true);
     }
     const profileIds = [...anyActive.keys()];
     if (profileIds.length === 0) {
@@ -240,6 +249,7 @@ export async function getAssignableAdmins(): Promise<AdminActionResult<CrmRepsRe
     const reps: CrmRep[] = [];
     for (const pid of profileIds) {
       if (!anyActive.get(pid)) continue;        // no active grant → not working
+      if (!hasLeadRole.get(pid)) continue;      // not เซลล์/CS → skip driver/warehouse/back-office
       const x = exById.get(pid);
       if (x?.ended_at) continue;                // resigned
       if (x?.suspended_at) continue;            // paused — no new leads

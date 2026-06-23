@@ -119,10 +119,10 @@ export default async function AdminLeadsPage({
     getCrmCsReps(),
     getMyLeadSlaToday(),
     getAdminLegacyId(user.id),
-    // The "มอบหมายโทรเซลล์" assign/distribute/handoff pool = EVERY active admin from the
-    // /admin/admins roster, keyed by profile_id (owner 2026-06-23: "ให้มันมาทุก user เลย
-    // ในระบบ … มอบหมายแล้วไปเข้า user นั้นตรงๆ"). Distinct from `reps` (sales-only, legacy
-    // adminID) which feeds the legacy customer-ownership cell only.
+    // The "มอบหมายโทรเซลล์" assign/distribute/handoff pool = active เซลล์/CS staff,
+    // keyed by profile_id (owner 2026-06-23: "ให้แค่เซลล์ cs … มอบหมายแล้วไปเข้า user
+    // นั้นตรงๆ"). Distinct from `reps` (legacy adminID) which feeds the legacy
+    // customer-ownership cell only.
     getAssignableAdmins(),
   ]);
   const reps = repsRes.ok ? (repsRes.data?.reps ?? []) : [];

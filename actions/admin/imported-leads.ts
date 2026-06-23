@@ -288,7 +288,7 @@ export async function assignImportedLeads(input: unknown): Promise<AdminActionRe
 
   return withAdmin<{ assigned: number }>([...IMPORT_ROLES], async ({ adminId }) => {
     // Validate the target against the SAME pool the assign dropdown is built from
-    // (getAssignableAdmins → every active admin, keyed by profile_id) so a typo'd /
+    // (getAssignableAdmins → active เซลล์/CS, keyed by profile_id) so a typo'd /
     // off-boarded id can't silently strand prospects ('' = clear assignment).
     // (Skip the guard if the pool can't load — the UI already constrained it.)
     if (parsed.data.legacyId) {
