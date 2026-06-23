@@ -22,20 +22,27 @@ import { withAdmin, type AdminActionResult, logAdminAction } from "./common";
 import {
   saveImportedLeadsSchema,
   assignImportedLeadsSchema,
+  distributeImportedLeadsSchema,
   logImportedLeadCallSchema,
   setImportedLeadStatusSchema,
   setImportedLeadServiceSchema,
   setImportedLeadNoteSchema,
+  setImportedLeadLineFacebookSchema,
+  setImportedLeadEmailSchema,
+  setImportedLeadPrCodeSchema,
+  setImportedLeadPhoneSchema,
   handoffImportedLeadSchema,
+  importedLeadReportSchema,
+  IMPORTED_LEAD_CALL_STATUSES,
 } from "@/lib/validators/imported-lead";
 
 const TABLE = "imported_leads";
 const SELECT_COLS_BASE =
   "id, name, address, phone, line_facebook, email, service, source, assigned_admin_id, call_status, call_count, last_called_at";
-// `note` = migration 0202 (owner-applied). getImportedLeads degrades gracefully
-// if 0202 hasn't landed yet (retries without note) so the table never hard-breaks
-// in the window between this code and the migration apply.
-const SELECT_COLS = `${SELECT_COLS_BASE}, note`;
+// `note` (0202) + `pr_code` (0203) = owner-applied migrations. getImportedLeads
+// degrades gracefully if either hasn't landed yet (retries without them) so the
+// table never hard-breaks in the window between this code and the migration apply.
+const SELECT_COLS = `${SELECT_COLS_BASE}, note, pr_code`;
 
 const WORK_ROLES = ["super", "manager", "sales_admin", "sales", "ops"] as const;
 const IMPORT_ROLES = ["super", "manager", "sales_admin"] as const;
@@ -59,6 +66,12 @@ export type ImportedLead = {
   call_count: number;
   last_called_at: string | null;
   note: string;
+  /** "รหัส PR" — member code recorded on a closed deal (migration 0203). */
+  pr_code: string;
+  /** For call_status='other_rep': the rep legacyId this lead was handed off FROM
+   *  (current assigned_admin_id = the TO). Sourced from the handoff call-history
+   *  row, NOT a column — so no migration (ปอน 2026-06-23 "ใครย้ายไปเข้าใคร"). */
+  handoffFrom?: string;
 };
 
 /** List imported leads (newest first). Reps see only their own; `mine` also scopes seniors. */
@@ -76,21 +89,163 @@ export async function getImportedLeads(
     };
 
     const { data, error } = await build(SELECT_COLS);
+    let leads: ImportedLead[];
     if (error) {
       // 42703 = undefined_column → migration 0202 (note) not applied yet. Retry
       // without note so the workspace stays usable until the owner applies it.
       if (error.code === "42703") {
         const fb = await build(SELECT_COLS_BASE);
-        if (!fb.error) {
-          const rows = (fb.data ?? []) as unknown as Record<string, unknown>[];
-          const leads = rows.map((d) => ({ ...d, note: "" })) as unknown as ImportedLead[];
-          return { ok: true, data: { leads } };
+        if (fb.error) {
+          console.error("[imported_leads:list] failed", { code: fb.error.code, message: fb.error.message });
+          return { ok: false, error: `query_failed: ${fb.error.message}` };
         }
+        leads = ((fb.data ?? []) as unknown as Record<string, unknown>[]).map((d) => ({ ...d, note: "", pr_code: "" })) as unknown as ImportedLead[];
+      } else {
+        console.error("[imported_leads:list] failed", { code: error.code, message: error.message });
+        return { ok: false, error: `query_failed: ${error.message}` };
       }
-      console.error("[imported_leads:list] failed", { code: error.code, message: error.message });
+    } else {
+      leads = (data ?? []) as unknown as ImportedLead[];
+    }
+
+    // Enrich other_rep leads with their handoff source (ปอน 2026-06-23 "ใครย้ายไป
+    // เข้าใคร"): the latest handoff call-row's note holds the FROM rep legacyId.
+    const otherIds = leads.filter((l) => l.call_status === "other_rep").map((l) => l.id);
+    if (otherIds.length) {
+      const { data: hcalls, error: hErr } = await admin
+        .from("imported_lead_calls")
+        .select("lead_id, note, called_at")
+        .eq("status", "other_rep")
+        .in("lead_id", otherIds)
+        .order("called_at", { ascending: false });
+      if (hErr) console.error("[imported_leads:handoff-enrich] failed", { code: hErr.code, message: hErr.message });
+      const fromMap = new Map<number, string>();
+      for (const c of (hcalls ?? []) as { lead_id: number; note: string }[]) {
+        if (!fromMap.has(c.lead_id)) fromMap.set(c.lead_id, c.note || "");
+      }
+      leads = leads.map((l) => (l.call_status === "other_rep" ? { ...l, handoffFrom: fromMap.get(l.id) ?? "" } : l));
+    }
+    return { ok: true, data: { leads } };
+  });
+}
+
+/**
+ * Top-card stats DERIVED FROM the imported_leads workspace (ปอน 2026-06-23 —
+ * "ทำให้มันสัมพันธ์กัน": the cards above the table must reflect THIS data, not the
+ * old tb_users lead system). Scoped like the table — a rep sees their own numbers,
+ * a senior/ultra sees the whole pool.
+ *   ติดต่อแล้ววันนี้ = DISTINCT leads called today — 1 ลูกค้า=1 ไม่ว่าจะโทรกี่ครั้ง
+ *                     (ปอน 2026-06-23) — via imported_leads.last_called_at ≥ midnight
+ *                     (1 แถว/ลูกค้า → distinct โดยธรรมชาติ). server-local boundary.
+ *   ปิดการขายแล้ว    = imported_leads whose call_status = 'closed'.
+ */
+export type ImportedLeadStats = {
+  calledToday: number;    // daily (resets) — distinct leads last-called today
+  closed: number;         // cumulative status counts ↓
+  noAnswer: number;
+  notInterested: number;
+  mineCount: number;      // chip badges ↓ — leads assigned to the viewer
+  callbackCount: number;  // call_status = callback
+  pendingCount: number;   // call_status = '' (ยังไม่ได้ดำเนินการ)
+};
+
+export async function getImportedLeadStats(): Promise<AdminActionResult<ImportedLeadStats>> {
+  return withAdmin<ImportedLeadStats>([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    const senior = isSenior(roles);
+    const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+
+    // ONE scoped read → compute every card + chip badge in JS (≤ a few hundred rows).
+    // Avoids `note` (migration 0202) so it works on prod regardless of apply state.
+    let q = admin.from(TABLE).select("assigned_admin_id, call_status, last_called_at").limit(50000);
+    if (!senior) q = q.eq("assigned_admin_id", myLegacy);
+    const { data, error } = await q;
+    if (error) {
+      console.error("[imported_leads:stats] failed", { code: error.code, message: error.message });
       return { ok: false, error: `query_failed: ${error.message}` };
     }
-    return { ok: true, data: { leads: (data ?? []) as unknown as ImportedLead[] } };
+
+    const startMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+    let calledToday = 0, closed = 0, noAnswer = 0, notInterested = 0, callbackCount = 0, pendingCount = 0, mineCount = 0;
+    for (const r of (data ?? []) as { assigned_admin_id: string; call_status: string; last_called_at: string | null }[]) {
+      if (r.last_called_at && new Date(r.last_called_at).getTime() >= startMs) calledToday++;
+      const st = r.call_status || "";
+      if (st === "") pendingCount++;
+      else if (st === "closed") closed++;
+      else if (st === "no_answer") noAnswer++;
+      else if (st === "not_interested") notInterested++;
+      else if (st === "callback") callbackCount++;
+      if (r.assigned_admin_id === myLegacy) mineCount++;
+    }
+    return { ok: true, data: { calledToday, closed, noAnswer, notInterested, mineCount, callbackCount, pendingCount } };
+  });
+}
+
+export type ImportedLeadReportRow = {
+  legacyId: string;
+  name: string;
+  contacted: number;
+  closed: number;
+  byStatus: Record<string, number>;
+};
+
+/**
+ * "ประวัติการมอบหมายโทรเซลล์" report (ปอน 2026-06-23) — per-rep contacted/closed
+ * over a date range, filterable by rep + status. SENIOR-only (cross-rep view; the
+ * UI is in the ultra assign tab). "contacted" = DISTINCT leads whose last call falls
+ * in the range (imported_leads = 1 row/lead) — reconciles with the daily card.
+ */
+export async function getImportedLeadCallReport(
+  input: unknown,
+): Promise<AdminActionResult<{ rows: ImportedLeadReportRow[]; total: { contacted: number; closed: number; byStatus: Record<string, number> } }>> {
+  const parsed = importedLeadReportSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { from, to, rep, status } = parsed.data;
+
+  return withAdmin([...IMPORT_ROLES], async () => {
+    const admin = createAdminClient();
+    const start = new Date(`${from}T00:00:00`);
+    const end = new Date(`${to}T23:59:59.999`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      return { ok: false, error: "invalid_range" };
+    }
+
+    let q = admin
+      .from(TABLE)
+      .select("assigned_admin_id, call_status")
+      .gte("last_called_at", start.toISOString())
+      .lte("last_called_at", end.toISOString())
+      .not("last_called_at", "is", null)
+      .limit(50000);
+    if (rep) q = q.eq("assigned_admin_id", rep);
+    if (status) q = q.eq("call_status", status);
+    const { data, error } = await q;
+    if (error) {
+      console.error("[imported_leads:report] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "query_failed" };
+    }
+
+    const repsRes = await getCrmReps();
+    const nameOf = new Map((repsRes.ok ? repsRes.data?.reps ?? [] : []).map((r) => [r.legacyId, r.name]));
+    const blank = (): Record<string, number> => Object.fromEntries(IMPORTED_LEAD_CALL_STATUSES.map((s) => [s, 0]));
+
+    const byRep = new Map<string, ImportedLeadReportRow>();
+    const total = { contacted: 0, closed: 0, byStatus: blank() };
+    for (const row of (data ?? []) as { assigned_admin_id: string; call_status: string }[]) {
+      const id = row.assigned_admin_id || "";
+      if (!byRep.has(id)) {
+        byRep.set(id, { legacyId: id, name: id ? nameOf.get(id) ?? id : "(ยังไม่มอบหมาย)", contacted: 0, closed: 0, byStatus: blank() });
+      }
+      const r = byRep.get(id)!;
+      // a called-but-no-outcome lead has call_status='' → bucket as 'called'
+      const st = (IMPORTED_LEAD_CALL_STATUSES as readonly string[]).includes(row.call_status) ? row.call_status : "called";
+      r.contacted++; total.contacted++;
+      r.byStatus[st]++; total.byStatus[st]++;
+      if (st === "closed") { r.closed++; total.closed++; }
+    }
+
+    const rows = [...byRep.values()].sort((a, b) => b.contacted - a.contacted);
+    return { ok: true, data: { rows, total } };
   });
 }
 
@@ -165,6 +320,63 @@ export async function assignImportedLeads(input: unknown): Promise<AdminActionRe
     });
     revalidatePath("/admin/leads");
     return { ok: true, data: { assigned: data?.length ?? 0 } };
+  });
+}
+
+/**
+ * Random EVEN distribution (ปอน 2026-06-23) — shuffle the selected ids (Fisher-Yates)
+ * + round-robin across the chosen reps so each gets an equal share (±1), randomly.
+ * IMPORT_ROLES (ultra/senior · same gate as assign). Math.random is fine here (server
+ * action, not a workflow script).
+ */
+export async function distributeImportedLeads(
+  input: unknown,
+): Promise<AdminActionResult<{ distributed: number; perRep: Record<string, number> }>> {
+  const parsed = distributeImportedLeadsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { ids, legacyIds } = parsed.data;
+
+  return withAdmin<{ distributed: number; perRep: Record<string, number> }>([...IMPORT_ROLES], async ({ adminId }) => {
+    // Validate every target rep against the assign-dropdown pool (getCrmReps).
+    const repsRes = await getCrmReps();
+    if (repsRes.ok) {
+      const allowed = new Set((repsRes.data?.reps ?? []).map((r) => r.legacyId));
+      for (const lid of legacyIds) {
+        if (!allowed.has(lid)) return { ok: false, error: "invalid_rep" };
+      }
+    }
+    const admin = createAdminClient();
+    const nowIso = new Date().toISOString();
+
+    // Fisher-Yates shuffle → round-robin to reps (even ±1 + random who-gets-what).
+    const shuffled = [...ids];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const groups = new Map<string, number[]>(legacyIds.map((lid) => [lid, []]));
+    shuffled.forEach((id, idx) => groups.get(legacyIds[idx % legacyIds.length])!.push(id));
+
+    const perRep: Record<string, number> = {};
+    let distributed = 0;
+    for (const lid of legacyIds) {
+      const grp = groups.get(lid) ?? [];
+      if (grp.length === 0) { perRep[lid] = 0; continue; }
+      const { data, error } = await admin
+        .from(TABLE)
+        .update({ assigned_admin_id: lid, assigned_at: nowIso, updated_at: nowIso })
+        .in("id", grp)
+        .select("id");
+      if (error) {
+        console.error("[imported_leads:distribute] failed", { code: error.code, message: error.message });
+        return { ok: false, error: `distribute_failed: ${error.message}` };
+      }
+      perRep[lid] = data?.length ?? 0;
+      distributed += data?.length ?? 0;
+    }
+    void logAdminAction(adminId, "imported_lead.distribute", TABLE, ids.join(","), { legacyIds, distributed });
+    revalidatePath("/admin/leads");
+    return { ok: true, data: { distributed, perRep } };
   });
 }
 
@@ -291,29 +503,38 @@ export async function handoffImportedLead(input: unknown): Promise<AdminActionRe
     }
 
     const admin = createAdminClient();
-    const nowIso = new Date().toISOString();
-    let q = admin
-      .from(TABLE)
-      .update({
-        assigned_admin_id: parsed.data.legacyId,
-        assigned_at: nowIso,
-        call_status: "other_rep",
-        updated_at: nowIso,
-      })
-      .eq("id", parsed.data.id);
-    if (!isSenior(roles)) {
-      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
-      q = q.eq("assigned_admin_id", myLegacy); // a rep may hand off only their OWN lead
+    const callerLegacy = (await getAdminLegacyId(adminId)) ?? adminId;
+    const senior = isSenior(roles);
+
+    // Capture the current owner (the "from") before reassigning — for the
+    // "ย้ายจาก X → Y" display. The scoped read also enforces rep-owns-it.
+    let readCur = admin.from(TABLE).select("assigned_admin_id").eq("id", parsed.data.id);
+    if (!senior) readCur = readCur.eq("assigned_admin_id", callerLegacy);
+    const { data: cur, error: curErr } = await readCur.maybeSingle<{ assigned_admin_id: string }>();
+    if (curErr) {
+      console.error("[imported_leads:handoff read] failed", { code: curErr.code, message: curErr.message });
+      return { ok: false, error: "read_failed" };
     }
-    const { data, error } = await q.select("id");
+    if (!cur) return { ok: false, error: "not_found" };
+    const fromLegacy = cur.assigned_admin_id || "";
+
+    const nowIso = new Date().toISOString();
+    let upd = admin
+      .from(TABLE)
+      .update({ assigned_admin_id: parsed.data.legacyId, assigned_at: nowIso, call_status: "other_rep", updated_at: nowIso })
+      .eq("id", parsed.data.id);
+    if (!senior) upd = upd.eq("assigned_admin_id", callerLegacy); // a rep may hand off only their OWN lead
+    const { data, error } = await upd.select("id");
     if (error) {
       console.error("[imported_leads:handoff] failed", { code: error.code, message: error.message });
       return { ok: false, error: "update_failed" };
     }
     if (!data || data.length === 0) return { ok: false, error: "not_found" };
-    void logAdminAction(adminId, "imported_lead.handoff", TABLE, String(parsed.data.id), {
-      to: parsed.data.legacyId,
-    });
+
+    // Record who→whom in call history (note = FROM rep legacyId · TO = the new
+    // assigned_admin_id). No migration — reuses imported_lead_calls (0201).
+    await admin.from("imported_lead_calls").insert({ lead_id: parsed.data.id, admin_id: callerLegacy, status: "other_rep", note: fromLegacy });
+    void logAdminAction(adminId, "imported_lead.handoff", TABLE, String(parsed.data.id), { from: fromLegacy, to: parsed.data.legacyId });
     revalidatePath("/admin/leads");
     return { ok: true };
   });
@@ -337,6 +558,107 @@ export async function setImportedLeadNote(input: unknown): Promise<AdminActionRe
     const { error } = await q;
     if (error) {
       console.error("[imported_leads:note] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "update_failed" };
+    }
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/** Edit the LINE/Facebook contact — everyone's editable col; reps scoped to OWN. */
+export async function setImportedLeadLineFacebook(input: unknown): Promise<AdminActionResult> {
+  const parsed = setImportedLeadLineFacebookSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    let q = admin
+      .from(TABLE)
+      .update({ line_facebook: parsed.data.lineFacebook, updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.id);
+    if (!isSenior(roles)) {
+      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+      q = q.eq("assigned_admin_id", myLegacy);
+    }
+    const { error } = await q;
+    if (error) {
+      console.error("[imported_leads:line_facebook] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "update_failed" };
+    }
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/** Edit the email — everyone's editable col; reps scoped to OWN. */
+export async function setImportedLeadEmail(input: unknown): Promise<AdminActionResult> {
+  const parsed = setImportedLeadEmailSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    let q = admin
+      .from(TABLE)
+      .update({ email: parsed.data.email, updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.id);
+    if (!isSenior(roles)) {
+      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+      q = q.eq("assigned_admin_id", myLegacy);
+    }
+    const { error } = await q;
+    if (error) {
+      console.error("[imported_leads:email] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "update_failed" };
+    }
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/** Edit the phone — reps fix messy/typo'd numbers so the tel: link dials right
+ *  (ปอน 2026-06-23). Editable; reps scoped to OWN. */
+export async function setImportedLeadPhone(input: unknown): Promise<AdminActionResult> {
+  const parsed = setImportedLeadPhoneSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    let q = admin
+      .from(TABLE)
+      .update({ phone: parsed.data.phone, updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.id);
+    if (!isSenior(roles)) {
+      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+      q = q.eq("assigned_admin_id", myLegacy);
+    }
+    const { error } = await q;
+    if (error) {
+      console.error("[imported_leads:phone] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "update_failed" };
+    }
+    revalidatePath("/admin/leads");
+    return { ok: true };
+  });
+}
+
+/** Set "รหัส PR" (closed-deal member code) — editable; reps scoped to OWN. */
+export async function setImportedLeadPrCode(input: unknown): Promise<AdminActionResult> {
+  const parsed = setImportedLeadPrCodeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    let q = admin
+      .from(TABLE)
+      .update({ pr_code: parsed.data.prCode, updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.id);
+    if (!isSenior(roles)) {
+      const myLegacy = (await getAdminLegacyId(adminId)) ?? "__none__";
+      q = q.eq("assigned_admin_id", myLegacy);
+    }
+    const { error } = await q;
+    if (error) {
+      console.error("[imported_leads:pr_code] failed", { code: error.code, message: error.message });
       return { ok: false, error: "update_failed" };
     }
     revalidatePath("/admin/leads");

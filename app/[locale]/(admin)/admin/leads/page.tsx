@@ -1,11 +1,10 @@
 import { Link } from "@/i18n/navigation";
 import { UserPlus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { type MenubarItem } from "@/components/admin/page-top-menubar";
-import { AdminHeaderNavInject } from "@/components/admin/admin-header-nav";
 import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { getLeadQueue, getLeadStats, exportLeadsAll, getMyLeadSlaToday } from "@/actions/admin/leads";
+import { getLeadQueue, exportLeadsAll, getMyLeadSlaToday } from "@/actions/admin/leads";
+import { getImportedLeadStats } from "@/actions/admin/imported-leads";
 import { getCrmReps, getCrmCsReps } from "@/actions/admin/crm";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { getTagsBulk } from "@/actions/admin/customer-tags";
@@ -33,31 +32,17 @@ export const dynamic = "force-dynamic";
 // Spec: docs/research/ceo-directives-2026-06-01.md §6/§7.1.
 // ──────────────────────────────────────────────────────────────────────
 
-const LEADS_MENUBAR: MenubarItem[] = [
-  { label: "ลูกค้าของฉัน", href: "/admin/leads?segment=mine" },
-  // ปอน 2026-06-22: ซ่อนเมนู Cold + PCS รายใหญ่ ออกจาก display (segment ยังใช้ได้ทาง URL)
-  { label: "นัดโทรกลับ (ถึงคิว)", href: "/admin/leads?segment=callback" },
-  { label: "ทั้งหมด", href: "/admin/leads?segment=all" },
-  {
-    label: "กรองตามสถานะ",
-    children: [
-      { label: "ยังไม่ติดต่อ", href: "/admin/leads?status=all" },
-      { label: "ติดต่อแล้ว", href: "/admin/leads?status=called" },
-      { label: "ไม่รับสาย", href: "/admin/leads?status=no_answer" },
-      { label: "นัดโทรกลับ", href: "/admin/leads?status=callback" },
-      { label: "ปิดการขาย", href: "/admin/leads?status=closed" },
-      { label: "ไม่สนใจ", href: "/admin/leads?status=not_interested" },
-    ],
-  },
-];
-
 // ปอน 2026-06-22: ซ่อน chip 'cold' + 'big-pcs' ออกจากแถบ segment filter
 // (display-only — segment/handler/data ยังอยู่ครบ · เปิด ?segment=cold หรือ
 // ?segment=big-pcs ตรงๆ ยังเข้าได้ แค่ไม่มี chip ให้กด · ไม่แตะ database)
-const SEGMENTS: { key: LeadSegment; label: string; hint: string }[] = [
+// ปอน 2026-06-23: เอา "ทั้งหมด" ออก แทนด้วย "ลูกค้าที่ยังไม่ได้ดำเนินการ"
+// (call_status ว่าง = ยังไม่มีผล). key เป็น string เพราะ "pending" เป็น UI-segment
+// (ไม่ใช่ LeadSegment data-layer · filter ใน LeadAssignPanel).
+const SEGMENTS: { key: string; label: string; hint: string }[] = [
   { key: "mine", label: "ลูกค้าของฉัน", hint: "lead ที่มอบหมายให้ฉัน" },
-  { key: "callback", label: "นัดโทรกลับ", hint: "ถึงคิวโทรกลับ · ค้างนานสุดก่อน" },
-  { key: "all", label: "ทั้งหมด", hint: "ทุกลูกค้าที่มีเบอร์โทร" },
+  { key: "callback", label: "นัดโทรกลับ", hint: "ถึงคิวโทรกลับ" },
+  { key: "pending", label: "ลูกค้าที่ยังไม่ได้ดำเนินการ", hint: "ยังไม่มีการกระทำ" },
+  { key: "closed", label: "ปิดการขายได้", hint: "ดีลที่ปิดได้ (มีรหัส PR)" },
 ];
 
 // ปอน 2026-06-22: ซ่อน "ข้อมูลรายชื่อลูกค้า" ออกจากหน้านี้ทั้งหมด (ตาราง list +
@@ -88,20 +73,23 @@ export default async function AdminLeadsPage({
   const isUltra = roles.includes("ultra");
 
   const sp = await searchParams;
-  // ปอน 2026-06-22: cold/big-pcs ถูกซ่อนจาก display แล้ว → default landing = "all"
-  // (segment ทั้งสองยัง URL-reachable: ?segment=cold / ?segment=big-pcs · handler/data คงอยู่ครบ)
-  const segment: LeadSegment =
-    sp.segment === "big-pcs" || sp.segment === "cold" || sp.segment === "all" || sp.segment === "callback" || sp.segment === "mine"
-      ? sp.segment
-      : "all";
-  // ปอน 2026-06-22 ("เข้าใจใหม่"): "มอบหมายโทรเซลล์" = ONE dedicated ultra-only tab
-  // (?segment=assign) — the import + assign-to-rep workspace. NOT a LeadSegment
-  // (no data-layer queue behind it) so it rides alongside `segment` as a UI tab.
-  // Non-ultra hitting the URL falls through to the normal work view (gate + the
-  // backend IMPORT_ROLES check both refuse the assign actions anyway).
   const rawSegment = typeof sp.segment === "string" ? sp.segment : "";
+  // "มอบหมายโทรเซลล์" = ultra-only UI tab (ปอน 2026-06-22). ปอน 2026-06-23: work tabs =
+  // ลูกค้าของฉัน(mine) / นัดโทรกลับ(callback) / ยังไม่ได้ดำเนินการ(pending) — "ทั้งหมด" ถอดออก ·
+  // default landing = pending. (mine/callback/pending/all/assign = UI segments · filter
+  // อยู่ใน LeadAssignPanel · non-ultra hitting ?segment=assign ตกมา work view + backend gate.)
   const isAssignTab = isUltra && rawSegment === "assign";
-  const uiSegment = isAssignTab ? "assign" : segment;
+  const workSegment =
+    ["mine", "callback", "pending", "closed", "all"].includes(rawSegment)
+      ? rawSegment
+      : "pending"; // default + the "ยังไม่ได้ดำเนินการ" tab
+  const uiSegment = isAssignTab ? "assign" : workSegment;
+  // LeadSegment for the (hidden · LEAD_DATA_HIDDEN) legacy getLeadQueue only —
+  // 'pending' has no legacy queue → 'all'.
+  const segment: LeadSegment =
+    rawSegment === "big-pcs" || rawSegment === "cold" || rawSegment === "all" || rawSegment === "callback" || rawSegment === "mine"
+      ? rawSegment
+      : "all";
   const statusFilter: LeadCallStatus | "all" = isStatusFilter(sp.status) ? sp.status : "all";
   const q = typeof sp.q === "string" ? sp.q : "";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
@@ -109,7 +97,8 @@ export default async function AdminLeadsPage({
   const view: "list" | "board" = sp.view === "board" ? "board" : "list";
 
   const [statsRes, queueRes] = await Promise.all([
-    getLeadStats(),
+    // ปอน 2026-06-23: การ์ดสรุปดึงจาก imported_leads (สัมพันธ์กับตารางด้านล่าง) แทนระบบ lead เก่า
+    getImportedLeadStats(),
     getLeadQueue({ segment, status: statusFilter, q, page }),
   ]);
 
@@ -135,12 +124,6 @@ export default async function AdminLeadsPage({
   const csReps = csRepsRes.ok ? (csRepsRes.data?.reps ?? []) : [];
   const sla = slaRes.ok ? slaRes.data : undefined;
 
-  // The header top-nav (injected into the red bar) — ultra also gets the
-  // dedicated "มอบหมายโทรเซลล์" entry; everyone else sees the work tabs only.
-  const menubar: MenubarItem[] = isUltra
-    ? [...LEADS_MENUBAR, { label: "มอบหมายโทรเซลล์", href: "/admin/leads?segment=assign" }]
-    : LEADS_MENUBAR;
-
   // Preserve filters across the search form + pagination links.
   const carry = (over: Record<string, string | number>) => {
     const params = new URLSearchParams();
@@ -154,7 +137,6 @@ export default async function AdminLeadsPage({
 
   return (
     <>
-      <AdminHeaderNavInject items={menubar} activeHref={`/admin/leads?segment=${uiSegment}`} />
       <main className="p-4 sm:p-6 lg:p-8 space-y-5">
         {/* Header */}
         <PageHeader
@@ -163,21 +145,25 @@ export default async function AdminLeadsPage({
           subtitle="โทรหาลูกค้าจากบนลงล่างเพื่อปิดการขาย"
         />
 
-        {/* Stat cards — ปอน 2026-06-22: ซ่อนการ์ด Cold ออก (display-only · stats.cold ยังคำนวณอยู่ ไม่แตะ data) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4">
-            <p className="text-xs text-muted">ติดต่อแล้ววันนี้</p>
-            <p className="mt-1 text-2xl font-bold">
-              {stats ? stats.calledToday.toLocaleString("th-TH") : "—"}
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted">บันทึกผลโทรวันนี้</p>
+        {/* Stat cards — ปอน 2026-06-23: 4 การ์ด compact (เตี้ยลง) จาก imported_leads
+            (getImportedLeadStats · สัมพันธ์ตาราง · scoped ตาม role). ติดต่อวันนี้ = daily
+            reset · ปิด/ไม่รับสาย/ไม่สนใจ = ยอดสะสมตามสถานะ. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
+            <p className="text-[11px] text-muted">ติดต่อแล้ววันนี้</p>
+            <p className="mt-0.5 text-xl font-bold">{stats ? stats.calledToday.toLocaleString("th-TH") : "—"}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4">
-            <p className="text-xs text-muted">ปิดการขายแล้ว</p>
-            <p className="mt-1 text-2xl font-bold text-green-700">
-              {stats ? stats.closed.toLocaleString("th-TH") : "—"}
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted">ลูกค้าที่ปิดได้</p>
+          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
+            <p className="text-[11px] text-muted">ปิดการขายแล้ว</p>
+            <p className="mt-0.5 text-xl font-bold text-green-700">{stats ? stats.closed.toLocaleString("th-TH") : "—"}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
+            <p className="text-[11px] text-muted">ไม่รับสาย</p>
+            <p className="mt-0.5 text-xl font-bold text-amber-700">{stats ? stats.noAnswer.toLocaleString("th-TH") : "—"}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 py-2.5">
+            <p className="text-[11px] text-muted">ไม่สนใจ</p>
+            <p className="mt-0.5 text-xl font-bold text-rose-700">{stats ? stats.notInterested.toLocaleString("th-TH") : "—"}</p>
           </div>
         </div>
 
@@ -199,6 +185,8 @@ export default async function AdminLeadsPage({
         <div className="flex flex-wrap items-center gap-2">
           {SEGMENTS.map((s) => {
             const active = s.key === uiSegment;
+            // ปอน 2026-06-23: วงกลม+ตัวเลขเป็นแจ้งเตือนกลายๆ (mine/callback/pending)
+            const count = s.key === "mine" ? stats?.mineCount : s.key === "callback" ? stats?.callbackCount : s.key === "pending" ? stats?.pendingCount : s.key === "closed" ? stats?.closed : undefined;
             return (
               <Link
                 key={s.key}
@@ -210,6 +198,9 @@ export default async function AdminLeadsPage({
                 }`}
               >
                 {s.label}
+                {count && count > 0 ? (
+                  <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none ${s.key === "callback" ? "bg-red-500 text-white" : active ? "bg-primary-600 text-white" : "bg-primary-100 text-primary-700"}`}>{count > 99 ? "99+" : count}</span>
+                ) : null}
                 <span className="ml-1 hidden sm:inline text-[11px] font-normal text-muted">· {s.hint}</span>
               </Link>
             );
@@ -230,25 +221,9 @@ export default async function AdminLeadsPage({
               <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none ${isAssignTab ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>Ultra</span>
             </Link>
           ) : null}
-          {/* View mode toggle (CRM depth · 2026-06-08) */}
-          <div className="ml-auto inline-flex rounded-xl border border-border overflow-hidden">
-            <Link
-              href={carry({ view: "list", page: 1 })}
-              className={`px-3 py-2 text-sm font-medium ${
-                view === "list" ? "bg-primary-50 text-primary-700" : "bg-white dark:bg-surface hover:bg-surface-alt"
-              }`}
-            >
-              รายการ
-            </Link>
-            <Link
-              href={carry({ view: "board", page: 1 })}
-              className={`px-3 py-2 text-sm font-medium border-l border-border ${
-                view === "board" ? "bg-primary-50 text-primary-700" : "bg-white dark:bg-surface hover:bg-surface-alt"
-              }`}
-            >
-              บอร์ด (Pipeline)
-            </Link>
-          </div>
+          {/* ปอน 2026-06-23: เอา toggle "รายการ/บอร์ด" ออก — ไม่ได้สลับอะไรจริง
+              (หน้านี้แสดง LeadAssignPanel เสมอเพราะ LEAD_DATA_HIDDEN · kanban/board
+              อยู่ใน dead branch). `view` var คงไว้ (carry preserve · default list). */}
         </div>
 
         {/* Search + active filters + CSV export — sales hands the cold list to
@@ -256,12 +231,12 @@ export default async function AdminLeadsPage({
             order count, current rep, last-call note. */}
         <div className="flex flex-wrap items-center gap-2">
           <form action="/admin/leads" className="flex gap-2 flex-wrap">
-            <input type="hidden" name="segment" value={segment} />
+            <input type="hidden" name="segment" value={uiSegment} />
             {statusFilter !== "all" ? <input type="hidden" name="status" value={statusFilter} /> : null}
             <input
               name="q"
               defaultValue={q}
-              placeholder="ค้นหา รหัส / เบอร์ / ชื่อ"
+              placeholder="ค้นหา ชื่อ / เบอร์ / LINE / email"
               className="rounded-lg border border-border px-3 py-2 text-sm w-56"
             />
             <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 text-sm">
@@ -331,7 +306,7 @@ export default async function AdminLeadsPage({
           // ปอน 2026-06-22 ("เข้าใจใหม่"): every admin works the leads assigned to
           // them in the normal tabs (mode="work" · NO assign control). Import +
           // assign-to-rep live ONLY in the ultra "มอบหมายโทรเซลล์" tab (mode="assign").
-          <LeadAssignPanel reps={reps} segment={segment} mode={isAssignTab ? "assign" : "work"} />
+          <LeadAssignPanel reps={reps} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
         ) : queueErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
             โหลดรายการไม่สำเร็จ: {queueErr}

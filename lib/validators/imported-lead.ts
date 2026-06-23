@@ -36,6 +36,13 @@ export const assignImportedLeadsSchema = z.object({
   legacyId: z.string().trim().max(50), // rep adminID; '' clears assignment
 });
 
+// Random even distribution (ปอน 2026-06-23 "เลือกทั้งหมด → สุ่มคละ แบ่งเท่าๆกันให้
+// เซลล์ที่เลือก"): shuffle the ids + round-robin split across ≥2 reps.
+export const distributeImportedLeadsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(5000),
+  legacyIds: z.array(z.string().trim().min(1).max(50)).min(2).max(50),
+});
+
 export const logImportedLeadCallSchema = z.object({
   id: z.number().int().positive(),
   status: z.enum(IMPORTED_LEAD_CALL_STATUSES).optional(),
@@ -57,6 +64,44 @@ export const setImportedLeadServiceSchema = z.object({
 export const setImportedLeadNoteSchema = z.object({
   id: z.number().int().positive(),
   note: z.string().trim().max(2000).default(""),
+});
+
+// LINE/Facebook contact — editable inline by the assigned rep + seniors (ปอน
+// 2026-06-23 "ให้ user แก้ contact line/facebook ได้"). Same scoping as note.
+export const setImportedLeadLineFacebookSchema = z.object({
+  id: z.number().int().positive(),
+  lineFacebook: z.string().trim().max(300).default(""),
+});
+
+// Email — editable inline (ปอน 2026-06-23 "email ก็ทำให้ user แก้ได้ด้วย"). Freeform
+// (lead data is messy · not format-enforced). Same scoping as note/line.
+export const setImportedLeadEmailSchema = z.object({
+  id: z.number().int().positive(),
+  email: z.string().trim().max(300).default(""),
+});
+
+// "รหัส PR" — member code recorded on a closed deal (ปอน 2026-06-23 · "ปิดการขายได้"
+// tab). Editable free-text · same scoping as note/email · migration 0203.
+export const setImportedLeadPrCodeSchema = z.object({
+  id: z.number().int().positive(),
+  prCode: z.string().trim().max(50).default(""),
+});
+
+// Phone — editable so reps can fix messy / typo'd numbers (ปอน 2026-06-23: "ปุ่มโทร
+// ต้องโทรได้จริง อิงเบอร์จากช่องคอลัมน์"). The tel: link + display use the digits of
+// this field, so correcting it here makes the call dial the right number.
+export const setImportedLeadPhoneSchema = z.object({
+  id: z.number().int().positive(),
+  phone: z.string().trim().max(50).default(""),
+});
+
+// "ประวัติการมอบหมายโทรเซลล์" report (ปอน 2026-06-23) — per-rep call/close summary
+// over a date range (default วันนี้-วันนี้), filterable by rep + status.
+export const importedLeadReportSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rep: z.string().trim().max(50).default(""), // '' = all reps
+  status: z.union([z.enum(IMPORTED_LEAD_CALL_STATUSES), z.literal("")]).default(""), // '' = all statuses
 });
 
 // "ลูกค้าเซลล์อื่น" handoff (ปอน 2026-06-23) — a rep, mid-call, finds the customer

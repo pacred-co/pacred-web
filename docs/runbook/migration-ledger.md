@@ -5,7 +5,9 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0203**
+## 🔢 NEXT FREE NUMBER = **0204**
+
+> ⏳ **2026-06-23 (ปอน · "ปิดการขายได้" tab): 0203** = `imported_leads_pr_code` — additive col `public.imported_leads.pr_code text NOT NULL DEFAULT ''` (the "รหัส PR" column on the new closed-deals tab · rep records the member code when the deal closes). Backs `setImportedLeadPrCode` + the รหัส PR column (closed-segment-only) in `lead-assign-bar.tsx`. **✅ dev applied (`lozntlidlqqzzcaathnm`) · ⏳ PROD owner-apply via dave-pacred/เดฟ** (เดฟไม่มี prod pw ปัจจุบัน · ดู 0202 ค้างเหมือนกัน). Idempotent (`ADD COLUMN IF NOT EXISTS`). **Code degrades gracefully pre-apply** — `getImportedLeads` retries without note+pr_code on 42703 so the workspace never hard-breaks.
 
 > ⚠️ **Header had stayed STALE at 0185** — migrations 0185–0200 were applied without ledger bumps (CLAUDE.md is the authoritative running record). Corrected to 0202 on 2026-06-22 after 0201.
 
