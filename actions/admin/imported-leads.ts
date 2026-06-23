@@ -130,6 +130,46 @@ export async function getImportedLeads(
   });
 }
 
+export type ImportedLeadCall = {
+  id: number;
+  adminId: string;
+  status: string;
+  note: string;
+  calledAt: string | null;
+};
+
+/** Call history for ONE lead (newest first · owner 2026-06-23 "กดแถวแล้วดูว่าโทรหา
+ *  ใครบ้างแล้ว"). A non-senior may only view a lead assigned to them. */
+export async function getImportedLeadCalls(input: { id?: number } | unknown): Promise<AdminActionResult<{ calls: ImportedLeadCall[] }>> {
+  const id = Number((input as { id?: unknown })?.id);
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "invalid_input" };
+  return withAdmin<{ calls: ImportedLeadCall[] }>([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    if (!isSenior(roles)) {
+      const { data: own, error: ownErr } = await admin
+        .from(TABLE).select("id").eq("id", id).eq("assigned_admin_id", adminId).maybeSingle<{ id: number }>();
+      if (ownErr) {
+        console.error("[imported_leads:calls own] failed", { code: ownErr.code, message: ownErr.message });
+        return { ok: false, error: "read_failed" };
+      }
+      if (!own) return { ok: false, error: "not_found" };
+    }
+    const { data, error } = await admin
+      .from("imported_lead_calls")
+      .select("id, admin_id, status, note, called_at")
+      .eq("lead_id", id)
+      .order("called_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error("[imported_leads:calls] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "query_failed" };
+    }
+    const calls = ((data ?? []) as { id: number; admin_id: string | null; status: string | null; note: string | null; called_at: string | null }[])
+      .map((c) => ({ id: c.id, adminId: c.admin_id ?? "", status: c.status ?? "", note: c.note ?? "", calledAt: c.called_at }));
+    return { ok: true, data: { calls } };
+  });
+}
+
 /**
  * Top-card stats DERIVED FROM the imported_leads workspace (ปอน 2026-06-23 —
  * "ทำให้มันสัมพันธ์กัน": the cards above the table must reflect THIS data, not the

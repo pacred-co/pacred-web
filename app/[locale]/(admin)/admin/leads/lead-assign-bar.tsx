@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { UserPlus, X, Upload, FileSpreadsheet, Phone, Check, Loader2, Users, ChevronDown, BarChart3, ListChecks, Shuffle } from "lucide-react";
 import { LeadCallReport } from "./lead-call-report";
 import {
@@ -17,7 +17,9 @@ import {
   setImportedLeadPrCode,
   setImportedLeadPhone,
   handoffImportedLead,
+  getImportedLeadCalls,
   type ImportedLead,
+  type ImportedLeadCall,
 } from "@/actions/admin/imported-leads";
 import { adminSearchCustomers, type CustomerPickerRow } from "@/actions/admin/search-customers";
 import {
@@ -106,6 +108,23 @@ function phoneDigits(raw: string): string {
   return (raw ?? "").replace(/\D/g, "");
 }
 
+/** Hide duplicate-phone rows (same customer · owner 2026-06-23) so the same
+ *  customer can't land with several reps when random-splitting. Keeps the most-
+ *  "worked" row per number (assigned > has-calls > first-seen). */
+function dedupeByPhone(list: ImportedLead[]): ImportedLead[] {
+  const best = new Map<string, ImportedLead>();
+  const order: string[] = [];
+  const score = (l: ImportedLead) => (l.assigned_admin_id ? 2 : 0) + (l.call_count > 0 ? 1 : 0);
+  for (const l of list) {
+    const key = phoneDigits(l.phone);
+    if (!key) continue;
+    const cur = best.get(key);
+    if (!cur) { best.set(key, l); order.push(key); }
+    else if (score(l) > score(cur)) best.set(key, l);
+  }
+  return order.map((k) => best.get(k)!);
+}
+
 /** Inline-editable text cell — saves on blur when the trimmed value changed. The
  *  call site keys it by `${field}-${id}-${value}` so a server-side change remounts
  *  it with the fresh value (no setState-in-effect re-sync). Used for หมายเหตุ
@@ -180,6 +199,9 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   const [busyId, setBusyId] = useState<number | null>(null);
   const [savingCell, setSavingCell] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  // Per-lead call history (owner 2026-06-23: กดแถวแล้วกางดูว่าโทรหาใครบ้างแล้ว).
+  const [callsCache, setCallsCache] = useState<Record<number, ImportedLeadCall[]>>({});
+  const [callsLoadingId, setCallsLoadingId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // assign tab sub-view: the import/assign workspace vs the call report (ปอน 2026-06-23).
   const [assignView, setAssignView] = useState<"list" | "report">("list");
@@ -187,6 +209,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   const [pageSize, setPageSize] = useState<number | "all">(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [sourceFilter, setSourceFilter] = useState(""); // กรองตามที่มา (source · ปอน 2026-06-23)
+  const [repFilter, setRepFilter] = useState(""); // กรองตามเซลล์ผู้ดูแล (owner 2026-06-23) · "__none__" = ยังไม่มอบหมาย
 
   // import popup
   const [importOpen, setImportOpen] = useState(false);
@@ -223,7 +246,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   // Back to page 1 whenever a filter (segment/search/source) changes.
   useEffect(() => {
     queueMicrotask(() => setCurrentPage(1));
-  }, [segment, q, sourceFilter]);
+  }, [segment, q, sourceFilter, repFilter]);
 
   // ── import popup handlers ──
   function handleFile(file: File) {
@@ -279,15 +302,22 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   //  · แถบ "นัดโทรกลับ" = สถานะ callback · "ยังไม่ได้ดำเนินการ" = สถานะว่าง (ยังไม่มีผล).
   const needle = q.trim().toLowerCase();
   const needleDigits = needle.replace(/\D/g, "");
+  const startOfToday = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
   // distinct ที่มา (source) ที่มีจริงในข้อมูล → ตัวเลือกตัวกรอง (ปอน 2026-06-23)
   const sources = [...new Set(leads.map((l) => l.source).filter(Boolean))].sort();
-  const displayLeads = leads
+  const filteredLeads = leads
     .filter((l) => phoneDigits(l.phone) !== "")
     .filter((l) => !sourceFilter || l.source === sourceFilter)
+    .filter((l) => (!repFilter ? true : repFilter === "__none__" ? !l.assigned_admin_id : l.assigned_admin_id === repFilter))
     .filter((l) =>
+      // owner 2026-06-23: stat cards link here — closed/no_answer/not_interested/
+      // called_today are now filterable segments too.
       segment === "callback" ? l.call_status === "callback"
         : segment === "pending" ? !l.call_status
         : segment === "closed" ? l.call_status === "closed"
+        : segment === "no_answer" ? l.call_status === "no_answer"
+        : segment === "not_interested" ? l.call_status === "not_interested"
+        : segment === "called_today" ? Boolean(l.last_called_at && new Date(l.last_called_at).getTime() >= startOfToday)
         : true,
     )
     // ปอน 2026-06-23: free-text search across ชื่อ/LINE/email/ที่อยู่ + เบอร์ (เทียบเฉพาะตัวเลข).
@@ -298,14 +328,25 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
       if (needleDigits && phoneDigits(l.phone).includes(needleDigits)) return true;
       return false;
     });
+  // owner 2026-06-23: ซ่อนเบอร์ซ้ำ (ลูกค้าคนเดียวกัน) — กันเซลล์ได้ลูกค้าซ้ำตอนสุ่มแบ่ง.
+  const displayLeads = dedupeByPhone(filteredLeads);
 
   // ── client-side pagination (ปอน 2026-06-23 · ทุกแถบ) ──
   const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(displayLeads.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const rowOffset = pageSize === "all" ? 0 : (safePage - 1) * pageSize;
   const pagedLeads = pageSize === "all" ? displayLeads : displayLeads.slice(rowOffset, rowOffset + pageSize);
+  async function loadCalls(id: number) {
+    if (callsCache[id]) return; // already fetched
+    setCallsLoadingId(id);
+    const res = await getImportedLeadCalls({ id });
+    setCallsLoadingId((cur) => (cur === id ? null : cur));
+    if (res.ok && res.data) setCallsCache((c) => ({ ...c, [id]: res.data!.calls }));
+  }
   function toggleExpand(id: number) {
+    const willOpen = !expandedIds.has(id);
     setExpandedIds((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    if (willOpen) void loadCalls(id);
   }
 
   // ── table actions ──
@@ -526,6 +567,27 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
     </div>
   );
 
+  // Per-lead call history (shown in the expanded row · owner 2026-06-23).
+  const callHistory = (l: ImportedLead) => {
+    const calls = callsCache[l.id];
+    if (callsLoadingId === l.id && !calls) {
+      return <div className="inline-flex items-center gap-1 text-[11px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> กำลังโหลดประวัติการโทร…</div>;
+    }
+    if (!calls || calls.length === 0) return <div className="text-[11px] text-muted">ยังไม่มีประวัติการโทร</div>;
+    return (
+      <ul className="space-y-1">
+        {calls.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+            <span className="font-mono text-muted">{c.calledAt ? new Date(c.calledAt).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+            <span className="text-foreground">โดย {repName(c.adminId)}</span>
+            {c.status ? <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 font-semibold ${CALL_STATUS_STYLE[c.status] ?? "border-border text-muted"}`}>{CALL_STATUS_LABEL[c.status] ?? c.status}</span> : null}
+            {c.status === "other_rep" && c.note ? <span className="text-slate-500">↩ ย้ายจาก {repName(c.note)}</span> : c.note ? <span className="text-muted">· {c.note}</span> : null}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   const title = isAssign
     ? "มอบหมายโทรเซลล์ — รายชื่อลูกค้านำเข้า"
     : segment === "mine"
@@ -536,7 +598,13 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
           ? "ลูกค้าที่ยังไม่ได้ดำเนินการ"
           : segment === "closed"
             ? "ปิดการขายได้"
-            : "รายชื่อลูกค้า";
+            : segment === "no_answer"
+              ? "ไม่รับสาย"
+              : segment === "not_interested"
+                ? "ไม่สนใจ"
+                : segment === "called_today"
+                  ? "ติดต่อแล้ววันนี้"
+                  : "รายชื่อลูกค้า";
 
   return (
     <div className="rounded-2xl border border-primary-200 bg-white shadow-sm dark:border-primary-900/50 dark:bg-surface">
@@ -617,6 +685,19 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
 
       {/* Body — the call report (assign tab · report sub-view) OR the leads table */}
       <div className="px-4 py-3">
+        {/* กรองตามเซลล์ผู้ดูแล → ติ๊ก → ย้ายเซลล์ (owner 2026-06-23 · assign list เท่านั้น) */}
+        {isAssign && assignView === "list" ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted">เซลล์ผู้ดูแล:</span>
+            <select value={repFilter} onChange={(e) => setRepFilter(e.target.value)} aria-label="กรองตามเซลล์ผู้ดูแล" className="rounded-lg border border-border bg-white px-2 py-1 text-xs dark:bg-surface">
+              <option value="">ทุกเซลล์</option>
+              <option value="__none__">ยังไม่มอบหมาย</option>
+              {reps.map((r) => <option key={r.legacyId} value={r.legacyId}>{r.name}</option>)}
+            </select>
+            {repFilter ? <button type="button" onClick={() => setRepFilter("")} className="text-xs text-muted hover:text-foreground">ล้าง</button> : null}
+            {repFilter ? <span className="text-[11px] text-muted">— ติ๊กเลือกแล้วใช้ “มอบหมายทั้งหมดให้” ด้านบนเพื่อย้ายไปเซลล์อื่น</span> : null}
+          </div>
+        ) : null}
         {/* ตัวกรอง "ที่มาของลูกค้า" (source · ปอน 2026-06-23) — list view เท่านั้น */}
         {!(isAssign && assignView === "report") && sources.length > 0 ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -642,9 +723,15 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                     ? "ไม่มีลูกค้าที่ค้างดำเนินการ — เคลียร์หมดแล้ว 🎉"
                     : segment === "closed"
                       ? "ยังไม่มีดีลที่ปิดการขายได้"
-                      : segment === "mine"
-                        ? "ยังไม่มีลูกค้าที่มอบหมายให้คุณ"
-                        : "ยังไม่มีรายชื่อลูกค้า"}
+                      : segment === "no_answer"
+                        ? "ยังไม่มีลูกค้าที่โทรไม่ติด"
+                        : segment === "not_interested"
+                          ? "ยังไม่มีลูกค้าที่ไม่สนใจ"
+                          : segment === "called_today"
+                            ? "ยังไม่มีการติดต่อวันนี้"
+                            : segment === "mine"
+                              ? "ยังไม่มีลูกค้าที่มอบหมายให้คุณ"
+                              : "ยังไม่มีรายชื่อลูกค้า"}
           </div>
         ) : (
           <>
@@ -653,6 +740,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
             <table className="w-full min-w-[1400px] text-sm">
               <thead className="sticky top-0 z-10 bg-surface-alt text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
+                  <th className="w-8 px-2 py-2.5" aria-label="กางดูประวัติ"></th>
                   {isAssign ? <th className="px-3 py-2.5"><input type="checkbox" checked={pagedLeads.length > 0 && pagedLeads.every((l) => selected.has(l.id))} onChange={toggleAll} aria-label="เลือกทั้งหน้านี้" /></th> : null}
                   <th className="px-3 py-2.5 font-semibold">#</th>
                   <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ชื่อลูกค้า</th>
@@ -670,8 +758,16 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                 </tr>
               </thead>
               <tbody>
-                {pagedLeads.map((l, idx) => (
-                  <tr key={l.id} className={`border-t border-border align-top hover:bg-surface-alt/40 ${selected.has(l.id) ? "bg-primary-50/40 dark:bg-primary-950/10" : ""}`}>
+                {pagedLeads.map((l, idx) => {
+                  const open = expandedIds.has(l.id);
+                  return (
+                  <Fragment key={l.id}>
+                  <tr className={`border-t border-border align-top hover:bg-surface-alt/40 ${selected.has(l.id) ? "bg-primary-50/40 dark:bg-primary-950/10" : ""}`}>
+                    <td className="px-2 py-2.5 align-top">
+                      <button type="button" onClick={() => toggleExpand(l.id)} aria-expanded={open} aria-label={open ? "ย่อ" : "ดูประวัติการโทร"} className="rounded p-1 text-muted transition hover:bg-surface-alt hover:text-foreground">
+                        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+                      </button>
+                    </td>
                     {isAssign ? <td className="px-3 py-2.5"><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} aria-label={`เลือก ${l.name}`} /></td> : null}
                     <td className="px-3 py-2.5 text-muted">{rowOffset + idx + 1}</td>
                     <td className="px-3 py-2.5">{l.name || <span className="text-muted">—</span>}</td>
@@ -690,7 +786,17 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                     <td className="px-3 py-2.5 whitespace-nowrap">{callActions(l)}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{statusBadge(l)}</td>
                   </tr>
-                ))}
+                  {open ? (
+                    <tr className="bg-surface-alt/30">
+                      <td colSpan={20} className="px-4 py-3">
+                        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">ประวัติการโทร ({l.call_count} ครั้ง)</p>
+                        {callHistory(l)}
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -723,6 +829,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                       <MobileField label="source">{l.source || <span className="text-muted">—</span>}</MobileField>
                       <MobileField label="เซลล์ผู้ดูแล">{l.assigned_admin_id ? repName(l.assigned_admin_id) : <span className="text-muted">ยังไม่มอบหมาย</span>}{l.call_status === "other_rep" && l.handoffFrom ? <span className="mt-0.5 block text-[10px] text-slate-500">↩ ย้ายมาจาก {repName(l.handoffFrom)}</span> : null}</MobileField>
                       <MobileField label="หมายเหตุ"><EditableCell key={`mnote-${l.id}-${l.note}`} value={l.note} saving={savingCell === `note:${l.id}`} onSave={(v) => doNote(l.id, v)} placeholder="เพิ่มหมายเหตุ…" ariaLabel={`หมายเหตุของ ${l.name || "ลูกค้า"}`} multiline /></MobileField>
+                      <MobileField label={`ประวัติโทร (${l.call_count})`}>{callHistory(l)}</MobileField>
                     </dl>
                   ) : null}
                 </div>
