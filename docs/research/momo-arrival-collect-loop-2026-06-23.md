@@ -1,0 +1,54 @@
+# 📦 MOMO arrival → pickup → bill-MOMO → collect-customer loop — legacy dig + automation plan (2026-06-23)
+
+> Owner ask: *"ไปไล่เจาะ legacy ให้หน่อยว่าเขารู้ได้ยังไงว่าของถึง MOMO แล้ว ไปเอาของได้เมื่อไหร่ ต้องรอ MOMO บอกในแชทเองหรอ ไม่น่าใช่ มันควรมีตัวรู้ตัวบอกไหม ว่าของอยู่ MOMO แล้วนะ ตู้ไหน แทรคกิ้งไหน กี่คิว กี่กล่อง ต้องเอารถอะไรไปเอา วางบิล MOMO เลยมั้ยตอนไหน แล้วกดยิงเปรี้ยงเดียวไปเก็บตังลูกค้าได้ตอนไหน ขอให้จบจริงๆสักที"*
+>
+> Dig = 3-agent source sweep over legacy PCS (`/Users/dev/Desktop/pcs-realshit/...`) + the Pacred MOMO integration.
+
+## TL;DR — answering each question
+
+| คำถาม | คำตอบ (จาก source) |
+|---|---|
+| **เขารู้ได้ยังไงว่าของถึง MOMO?** | **Legacy = MANUAL.** ไม่มี auto-poll — แอดมินเข้า `api-forwarder-momo.php?page=updateAPI` กดดึงเอง (proxy `tiso-ai.com`) หรือพิมพ์มือจากที่ MOMO บอกในแชท. **ใช่ — legacy รอแชท/กดดึงเอง.** |
+| **Pacred ดีกว่า legacy แล้วมั้ย?** | **ใช่ส่วนหนึ่ง.** มี cron `/api/cron/momo-sync` ดึงทุก 10 นาที → ลง `momo_import_tracks`/`momo_container_closed` (ตู้/tracking/คิว/กล่อง/น้ำหนัก/วันเข้า-ออกโกดัง). **แต่ดึงเงียบๆ — ไม่มีตัว "บอก" ใคร.** |
+| **ตัวรู้/ตัวบอก ว่าของถึง MOMO แล้ว — ตู้ไหน tracking ไหน กี่คิว กี่กล่อง?** | **ยังไม่มี (GAP 1).** ข้อมูลครบใน `momo_import_tracks` แต่ไม่มี LINE-alert/การ์ดเด่นที่ "ดีดบอก" ตอนของถึง. นี่คือสิ่งที่ต้องสร้าง. |
+| **ต้องเอารถอะไรไปเอา (China→TH)?** | **MOMO เป็นคนเลือกรถ/ตู้เอง** (Sang/MK/… ตามขนาดตู้/ETA ของเขา). Pacred แค่ "อ่าน" รหัสตู้ที่ MOMO กำหนด (GZS=เรือ / GZE,EK=รถ / GZA=อากาศ) แล้ว auto-decode โหมด (`cabinet-transport.ts`). **รถที่ Pacred เลือกเอง = รถส่งในไทย** (driver-batch ตอน fstatus 6 — มีแล้ว). |
+| **วางบิล MOMO ตอนไหน?** | **คนละเรื่องกับเก็บเงินลูกค้า.** "วางบิล MOMO" = จ่าย **supplier** (ต้นทุน 2,500/คิว · ฮุย-ไท่ต๋า) → เป็น **supplier-AP/เจ้าหนี้** ตามรอบ agreement (เช่น จ่ายตอนปิดตู้/NET-x) ไม่ผูกกับ fstatus. วันนี้ต้นทุน MOMO เก็บได้ทาง **paste invoice PDF** (เครื่องมือที่ทำไว้แล้ว) เท่านั้น — ยังไม่มีหน้า "วางบิล MOMO" รวมยอด. → **accounting lane (ภูม · B5 supplier AP).** |
+| **เก็บเงินลูกค้า "ยิงเปรี้ยงเดียว" ตอนไหน?** | **เมื่อของถึงไทย (fstatus 4)** → ตั้งราคา → วางบิล (fstatus 5) → ลูกค้าจ่าย → 6 → ส่ง → 7. **เก็บก่อนของถึงไทยไม่ได้** (ยกเว้นลูกค้าเครดิตจ่ายล่วงหน้า). คือ trigger เก็บเงิน = **ถึงไทย (4)** ไม่ใช่ถึงโกดังจีน (2). |
+
+## The full state machine (where money + the truck sit)
+
+```
+fstatus 1 รอเข้าโกดังจีน
+   │  MOMO scan-in (kodang)        ← cron ดึงรู้ · แต่ไม่มีตัวบอก  (GAP 1)
+fstatus 2 ถึงโกดังจีนแล้ว = "ของถึง MOMO แล้ว"   ← ตู้/tracking/คิว/กล่อง รู้ครบที่นี่
+   │  MOMO ปิดตู้ + เลือกรถ/ตู้เอง (China→TH)   ← Pacred อ่านรหัสตู้ + decode โหมด
+fstatus 3 กำลังส่งมาไทย
+   │  ของถึงโกดังไทย (is_arrival=true → AT_WAREHOUSE_TH)  ← cron stamp · gate MOMO_SYNC_PROPAGATE_STATUS
+fstatus 4 ถึงไทยแล้ว   ← ★ จุดเริ่ม "เก็บเงินลูกค้า" : ตั้งราคา → วางบิล
+   │  createBillingRunInvoice (มีแล้ว · calcForwarderOutstanding = ยอดจริง 7 คอลัมน์)
+fstatus 5 รอชำระเงิน   ← SMS/LINE ลูกค้า
+   │  ลูกค้าจ่าย (wallet/สลิป·ตรวจ 2 รอบ)  → auto 5→6
+fstatus 6 เตรียมส่ง   ← createDriverBatch (มีแล้ว · เลือกคนขับ/รถไทย)
+   │  คนขับส่ง + อัปรูป  → auto 6→7
+fstatus 7 ส่งแล้ว = จบ
+
+[แยกขนาน · ไม่ผูก fstatus]  วางบิล MOMO = จ่าย supplier 2,500/คิว ตามรอบ  → accounting (ภูม)
+```
+
+## GAPS (สิ่งที่ขาด เพื่อให้ "จบ")
+
+- **GAP 1 — ไม่มี "ตัวบอก" ตอนของถึง MOMO / ถึงไทย.** ข้อมูลลงเงียบๆ ใน `momo_import_tracks`. ต้องมี (ก) LINE-alert ดีดเข้ากลุ่ม staff ตอนตู้ถึง + (ข) การ์ด/คิว "📦 ของถึง MOMO/ถึงไทย — รอจัดการ" เด่นๆ (ตู้·tracking·คิว·กล่อง·น้ำหนัก·โหมด·วันถึง + ปุ่มไปเก็บเงิน). **(my lane · ไม่แตะเงิน · `notifyStaffGroup` มี helper พร้อม)** — dedup ต้องใช้ committed_at หรือ mig 0206 `notified_at` กันยิงซ้ำทุก 10 นาที.
+- **GAP 2 — ไม่มีหน้า "วางบิล MOMO" (supplier-AP).** ต้นทุน MOMO เก็บได้แค่ paste invoice. ต้องมีหน้ารวมยอดจ่าย MOMO ต่อเดือน/ต่อตู้ + ออกใบ. **→ accounting lane (ภูม · B5).**
+- **GAP 3 — auto-flip gates ต้อง verify** (เคยทำหลาย session แล้ว — ยืนยันอีกครั้ง): barcode 3→4 · wallet/slip-pay 5→6 · driver-photo 6→7. ถ้าขาดข้อไหน = สถานะค้าง.
+- **GAP 4 — ยังไม่มี "ยิงเปรี้ยงเดียว" chain เดียวจบ** จาก logistics board: ติ๊กของถึงไทย → วางบิล → (ลูกค้าจ่าย) → จัดรถ. ชิ้นส่วนมีหมด (billing-run · driver-batch) แค่ยังไม่ร้อยเป็น one-click.
+
+## Build plan (sequenced · lane-tagged)
+
+| # | สิ่งที่สร้าง | lane | mig? | เสี่ยงเงิน? |
+|---|---|---|---|---|
+| 1 | **"ของถึง MOMO/ถึงไทย — รอจัดการ" surface** (อ่านอย่างเดียว · logistics board) — ตัวบอกที่ glance | เดฟ | ไม่ | ไม่ |
+| 2 | **LINE arrival alert** (`notifyStaffGroup` ตอนตู้ถึง · dedup) | เดฟ | อาจ 0206 notified_at | ไม่ (ต้อง test ไม่ให้ spam กลุ่มจริง) |
+| 3 | **One-click collect chain** (logistics board: ติ๊ก fstatus4 → วางบิล → จ่าย → จัดรถ) | เดฟ | ไม่ | ใช่ (verify auto-flip + money) |
+| 4 | **วางบิล MOMO supplier-AP** (รวมยอด 2,500/คิว · ออกใบ) | **ภูม (accounting B5)** | อาจ | ใช่ |
+
+**ต้องการจากเจ้าของ:** (ก) กลุ่ม LINE ปลายทางของ arrival-alert (#2) · (ข) #4 วางบิล MOMO = ภูม lane (ยืนยัน) · (ค) เลือกลำดับ build.
