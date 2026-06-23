@@ -17,6 +17,7 @@
 import {
   isAwaitingPaymentEligible,
   isCreditUnsettledEligible,
+  isAdvanceBillEligible,
   isBillableForwarder,
   type ForwarderBillingEligibilityFields,
 } from "./billing-eligibility";
@@ -132,6 +133,35 @@ assertEq("leak amount the fix recovers", billSubtotal - buggySubtotal, 380);
 // composite → no double-count). e.g. +CHN 100, +TH 50, +other 0, −discount 80.
 const finalTotal = Math.max(0, billSubtotal + 100 + 50 + 0 - 80);
 assertEq("final total = subtotal + adjustments (no double-count)", finalTotal, 3950);
+
+// ── Cohort C — ADVANCE bill (owner 2026-06-23 · gated on the เฟิม flag, SAFE-default) ──
+section("cohort C — advance billing (fstatus 2/3/4, confirmed + priced)");
+// SAFE-DEFAULT: not confirmed → never advance-billable (so shipping it changes nothing).
+assertEq("fstatus 2, NOT confirmed → no advance bill",
+  isAdvanceBillEligible(gate({ fstatus: "2", ftotalprice: 1000 })), false);
+assertEq("fstatus 2 confirmed + priced → advance billable",
+  isAdvanceBillEligible(gate({ fstatus: "2", advance_bill_confirmed: "1", ftotalprice: 1000 })), true);
+assertEq("fstatus 3 confirmed + priced → billable",
+  isAdvanceBillEligible(gate({ fstatus: "3", advance_bill_confirmed: "1", ftotalprice: 1 })), true);
+assertEq("fstatus 4 confirmed + priced → billable",
+  isAdvanceBillEligible(gate({ fstatus: "4", advance_bill_confirmed: "1", ftotalprice: 1 })), true);
+assertEq("confirmed (bool true) + priced → billable",
+  isAdvanceBillEligible(gate({ fstatus: "2", advance_bill_confirmed: true, ftotalprice: 1 })), true);
+assertEq("confirmed but ฿0 (unmeasured) → NOT billable (กันเก็บตังมั่ว)",
+  isAdvanceBillEligible(gate({ fstatus: "2", advance_bill_confirmed: "1", ftotalprice: 0 })), false);
+assertEq("confirmed but fstatus 1 (รอเข้าโกดัง · ของยังไม่ถึง MOMO) → no advance bill",
+  isAdvanceBillEligible(gate({ fstatus: "1", advance_bill_confirmed: "1", ftotalprice: 1000 })), false);
+assertEq("confirmed but already settled (paydeposit='1') → no",
+  isAdvanceBillEligible(gate({ fstatus: "2", advance_bill_confirmed: "1", paydeposit: "1", ftotalprice: 1000 })), false);
+assertEq("confirmed but cancelled (99) → no",
+  isAdvanceBillEligible(gate({ fstatus: "99", advance_bill_confirmed: "1", ftotalprice: 1000 })), false);
+// isBillableForwarder now accepts cohort C too (without regressing A/B).
+assertEq("isBillableForwarder: confirmed fstatus 2 → true",
+  isBillableForwarder(gate({ fstatus: "2", advance_bill_confirmed: "1", ftotalprice: 1000 })), true);
+assertEq("isBillableForwarder: fstatus 2 not confirmed → false (unchanged)",
+  isBillableForwarder(gate({ fstatus: "2", ftotalprice: 1000 })), false);
+assertEq("isBillableForwarder: plain fstatus 5 still true (cohort A intact)",
+  isBillableForwarder(gate({ fstatus: "5" })), true);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} forwarder/billing-eligibility: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

@@ -31,15 +31,38 @@
 /** The forwarder-status values a credit order may sit at and still be billable. */
 export const BILLABLE_FSTATUS = ["5", "6"] as const;
 
+/**
+ * ADVANCE billing (owner 2026-06-23 · B "วางบิลล่วงหน้าตอน MOMO ยิงของ"): the physical
+ * stages BEFORE Thailand arrival at which a confirmed parcel may be billed early —
+ * ถึงโกดังจีน(2) / กำลังส่งมาไทย(3) / ถึงไทย(4). ONLY when a staff has เฟิม'd it.
+ */
+export const ADVANCE_BILLABLE_FSTATUS = ["2", "3", "4"] as const;
+
 /** Subset of `tb_forwarder` columns the eligibility rule reads. */
 export interface ForwarderBillingEligibilityFields {
   fstatus: string | null;
   fcredit: string | null;
   paydeposit: string | null;
+  /** เฟิม flag (mig 0207) — '1' once a staff confirmed the cbm/weight for an advance bill. */
+  advance_bill_confirmed?: string | boolean | null;
+  /** The freight total — must be > 0 (priced/measured) before an advance bill. */
+  ftotalprice?: number | string | null;
 }
 
 function norm(v: string | null | undefined): string {
   return (v ?? "").trim();
+}
+
+/** '1' / true / 'true' → confirmed. */
+function isConfirmed(v: string | boolean | null | undefined): boolean {
+  if (v === true) return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "1" || s === "true";
+}
+
+function toNum(v: number | string | null | undefined): number {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+  return Number.isFinite(n) ? n : 0;
 }
 
 /**
@@ -69,12 +92,39 @@ export function isCreditUnsettledEligible(
 }
 
 /**
- * A forwarder row is billable when it is in EITHER cohort. This is the gate the
+ * Cohort C — ADVANCE bill (owner 2026-06-23). Bill BEFORE Thailand arrival, at the
+ * MOMO-scanned stages (fstatus 2/3/4), but ONLY when:
+ *   • a staff has เฟิม'd it (advance_bill_confirmed) — the MOMO scan confirmed the
+ *     parcel exists + a human checked the firmed cbm/weight (กันเก็บตังมั่ว), AND
+ *   • the freight is priced (ftotalprice > 0 = measured · MOMO/แต้ม cbm/weight applied), AND
+ *   • not already settled (paydeposit<>'1') and not cancelled (fstatus<>'99').
+ *
+ * SAFE-BY-DEFAULT: advance_bill_confirmed defaults '0' (mig 0207) → this cohort never
+ * matches until a staff explicitly confirms, so shipping it changes nothing.
+ */
+export function isAdvanceBillEligible(
+  row: ForwarderBillingEligibilityFields,
+): boolean {
+  if (!isConfirmed(row.advance_bill_confirmed)) return false;
+  const fstatus = norm(row.fstatus);
+  if (fstatus === "99") return false;
+  if (!(ADVANCE_BILLABLE_FSTATUS as readonly string[]).includes(fstatus)) return false;
+  if (norm(row.paydeposit) === "1") return false;
+  if (!(toNum(row.ftotalprice) > 0)) return false; // never advance-bill an unmeasured ฿0 row
+  return true;
+}
+
+/**
+ * A forwarder row is billable when it is in ANY cohort. This is the gate the
  * billing-run create-invoice + the manual-receipt issue path enforce in memory
  * after re-reading the candidate rows.
  */
 export function isBillableForwarder(
   row: ForwarderBillingEligibilityFields,
 ): boolean {
-  return isAwaitingPaymentEligible(row) || isCreditUnsettledEligible(row);
+  return (
+    isAwaitingPaymentEligible(row) ||
+    isCreditUnsettledEligible(row) ||
+    isAdvanceBillEligible(row)
+  );
 }
