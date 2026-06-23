@@ -1,10 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
-import { getImportedLeadCallReport, type ImportedLeadReportRow } from "@/actions/admin/imported-leads";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { ChevronDown, Loader2 } from "lucide-react";
+import {
+  getImportedLeadCallReport,
+  getImportedLeadReportDetail,
+  type ImportedLeadReportRow,
+  type ImportedLeadReportDetailRow,
+} from "@/actions/admin/imported-leads";
 import { IMPORTED_LEAD_CALL_STATUSES } from "@/lib/validators/imported-lead";
 import type { AssignRep } from "./lead-assign-bar";
+
+const digits = (p: string) => (p ?? "").replace(/\D/g, "");
+const STATUS_STYLE: Record<string, string> = {
+  closed: "border-green-300 bg-green-50 text-green-700",
+  callback: "border-purple-300 bg-purple-50 text-purple-700",
+  no_answer: "border-amber-300 bg-amber-50 text-amber-700",
+  not_interested: "border-rose-300 bg-rose-50 text-rose-700",
+  other_rep: "border-slate-300 bg-slate-100 text-slate-700",
+  called: "border-sky-300 bg-sky-50 text-sky-700",
+};
 
 /**
  * "ประวัติการมอบหมายโทรเซลล์" — per-rep call/close summary over a date range
@@ -40,10 +55,16 @@ export function LeadCallReport({ reps }: { reps: AssignRep[] }) {
   const [total, setTotal] = useState<Total | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Drill-down (owner 2026-06-23): กดแถวเซลล์ → กางดูรายชื่อลูกค้าจริงเบื้องหลังตัวเลข.
+  const [expandedRep, setExpandedRep] = useState<string | null>(null);
+  const [detailCache, setDetailCache] = useState<Record<string, ImportedLeadReportDetailRow[]>>({});
+  const [detailLoadingRep, setDetailLoadingRep] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    setExpandedRep(null);
+    setDetailCache({}); // filters changed → drop stale detail
     const res = await getImportedLeadCallReport({ from, to, rep, status });
     if (res.ok && res.data) {
       setRows(res.data.rows);
@@ -66,6 +87,17 @@ export function LeadCallReport({ reps }: { reps: AssignRep[] }) {
     setFrom(t);
     setTo(t);
   };
+
+  const toggleRep = useCallback(async (legacyId: string) => {
+    const willOpen = expandedRep !== legacyId;
+    setExpandedRep(willOpen ? legacyId : null);
+    if (willOpen && !detailCache[legacyId]) {
+      setDetailLoadingRep(legacyId);
+      const res = await getImportedLeadReportDetail({ from, to, rep: legacyId, status });
+      setDetailLoadingRep((cur) => (cur === legacyId ? null : cur));
+      if (res.ok && res.data) setDetailCache((c) => ({ ...c, [legacyId]: res.data!.rows }));
+    }
+  }, [expandedRep, detailCache, from, to, status]);
 
   return (
     <div className="space-y-4">
@@ -124,15 +156,49 @@ export function LeadCallReport({ reps }: { reps: AssignRep[] }) {
           <tbody>
             {rows.length === 0 ? (
               <tr><td colSpan={2 + STATUS_COLS.length} className="px-3 py-10 text-center text-sm text-muted">{loading ? "กำลังโหลด…" : "ไม่มีข้อมูลในช่วงวันที่/ตัวกรองที่เลือก"}</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.legacyId || "(none)"} className="border-t border-border hover:bg-surface-alt/40">
-                <td className="px-3 py-2.5 font-medium whitespace-nowrap">{r.name}</td>
+            ) : rows.map((r) => {
+              const open = expandedRep === r.legacyId;
+              const detail = detailCache[r.legacyId];
+              return (
+              <Fragment key={r.legacyId || "(none)"}>
+              <tr className="border-t border-border cursor-pointer hover:bg-surface-alt/40" onClick={() => toggleRep(r.legacyId)}>
+                <td className="px-3 py-2.5 font-medium whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5">
+                    <ChevronDown className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
+                    {r.name}
+                  </span>
+                </td>
                 <td className="px-3 py-2.5 text-right font-semibold">{r.contacted.toLocaleString("th-TH")}</td>
                 {STATUS_COLS.map((s) => (
                   <td key={s} className={`px-3 py-2.5 text-right ${s === "closed" && (r.byStatus[s] ?? 0) > 0 ? "font-semibold text-green-700" : "text-muted"}`}>{(r.byStatus[s] ?? 0).toLocaleString("th-TH")}</td>
                 ))}
               </tr>
-            ))}
+              {open ? (
+                <tr className="bg-surface-alt/30">
+                  <td colSpan={2 + STATUS_COLS.length} className="px-4 py-3">
+                    {detailLoadingRep === r.legacyId && !detail ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังโหลดรายชื่อลูกค้า…</span>
+                    ) : !detail || detail.length === 0 ? (
+                      <span className="text-xs text-muted">ไม่มีรายชื่อลูกค้าในช่วงวันที่/สถานะนี้</span>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {detail.map((d) => (
+                          <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px]">
+                            <span className="font-semibold text-foreground">{d.name || "— ไม่มีชื่อ —"}</span>
+                            {digits(d.phone) ? <a href={`tel:${digits(d.phone)}`} onClick={(e) => e.stopPropagation()} className="font-mono text-primary-600 hover:underline">{digits(d.phone)}</a> : <span className="text-muted">ไม่มีเบอร์</span>}
+                            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[d.callStatus] ?? "border-border text-muted"}`}>{STATUS_LABEL[d.callStatus] ?? (d.callStatus || "โทรแล้ว")}</span>
+                            {d.lastCalledAt ? <span className="text-muted">· {new Date(d.lastCalledAt).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                            {d.callCount > 0 ? <span className="text-muted">· โทร {d.callCount} ครั้ง</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              ) : null}
+              </Fragment>
+              );
+            })}
           </tbody>
           {total && rows.length > 0 ? (
             <tfoot className="border-t-2 border-border bg-surface-alt/60 font-semibold">

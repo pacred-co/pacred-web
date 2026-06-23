@@ -104,6 +104,16 @@ export const importedLeadReportSchema = z.object({
   status: z.union([z.enum(IMPORTED_LEAD_CALL_STATUSES), z.literal("")]).default(""), // '' = all statuses
 });
 
+// Drill-down behind a report row (owner 2026-06-23 "กดแล้วกางดูว่าลูกค้าเป็นใคร"):
+// the actual customers a rep contacted in the range. Here `rep` is the EXACT
+// assigned_admin_id ('' = ยังไม่มอบหมาย) — NOT the report filter's '' = all.
+export const importedLeadReportDetailSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rep: z.string().trim().max(50),
+  status: z.union([z.enum(IMPORTED_LEAD_CALL_STATUSES), z.literal("")]).default(""),
+});
+
 // "ลูกค้าเซลล์อื่น" handoff (ปอน 2026-06-23) — a rep, mid-call, finds the customer
 // actually belongs to another rep → routes the lead to them; it then appears in
 // THAT rep's "ลูกค้าของฉัน". legacyId is required (must pick a rep).

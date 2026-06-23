@@ -32,6 +32,7 @@ import {
   setImportedLeadPhoneSchema,
   handoffImportedLeadSchema,
   importedLeadReportSchema,
+  importedLeadReportDetailSchema,
   IMPORTED_LEAD_CALL_STATUSES,
 } from "@/lib/validators/imported-lead";
 
@@ -304,6 +305,55 @@ export async function getImportedLeadCallReport(
 
     const rows = [...byRep.values()].sort((a, b) => b.contacted - a.contacted);
     return { ok: true, data: { rows, total } };
+  });
+}
+
+export type ImportedLeadReportDetailRow = {
+  id: number;
+  name: string;
+  phone: string;
+  callStatus: string;
+  lastCalledAt: string | null;
+  callCount: number;
+};
+
+/**
+ * Drill-down behind a report row (owner 2026-06-23) — the actual customers a rep
+ * contacted in the range. `rep` = EXACT assigned_admin_id ('' = ยังไม่มอบหมาย).
+ * SENIOR-only (same gate as the report).
+ */
+export async function getImportedLeadReportDetail(
+  input: unknown,
+): Promise<AdminActionResult<{ rows: ImportedLeadReportDetailRow[] }>> {
+  const parsed = importedLeadReportDetailSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { from, to, rep, status } = parsed.data;
+
+  return withAdmin([...IMPORT_ROLES], async () => {
+    const admin = createAdminClient();
+    const start = new Date(`${from}T00:00:00`);
+    const end = new Date(`${to}T23:59:59.999`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      return { ok: false, error: "invalid_range" };
+    }
+    let q = admin
+      .from(TABLE)
+      .select("id, name, phone, call_status, last_called_at, call_count")
+      .eq("assigned_admin_id", rep)
+      .gte("last_called_at", start.toISOString())
+      .lte("last_called_at", end.toISOString())
+      .not("last_called_at", "is", null)
+      .order("last_called_at", { ascending: false })
+      .limit(1000);
+    if (status) q = q.eq("call_status", status);
+    const { data, error } = await q;
+    if (error) {
+      console.error("[imported_leads:report detail] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "query_failed" };
+    }
+    const rows = ((data ?? []) as { id: number; name: string | null; phone: string | null; call_status: string | null; last_called_at: string | null; call_count: number | null }[])
+      .map((r) => ({ id: r.id, name: r.name ?? "", phone: r.phone ?? "", callStatus: r.call_status ?? "", lastCalledAt: r.last_called_at, callCount: r.call_count ?? 0 }));
+    return { ok: true, data: { rows } };
   });
 }
 
