@@ -209,6 +209,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   const [pageSize, setPageSize] = useState<number | "all">(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [sourceFilter, setSourceFilter] = useState(""); // กรองตามที่มา (source · ปอน 2026-06-23)
+  const [repFilter, setRepFilter] = useState(""); // กรองตามเซลล์ผู้ดูแล (owner 2026-06-23) · "__none__" = ยังไม่มอบหมาย
 
   // import popup
   const [importOpen, setImportOpen] = useState(false);
@@ -245,7 +246,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   // Back to page 1 whenever a filter (segment/search/source) changes.
   useEffect(() => {
     queueMicrotask(() => setCurrentPage(1));
-  }, [segment, q, sourceFilter]);
+  }, [segment, q, sourceFilter, repFilter]);
 
   // ── import popup handlers ──
   function handleFile(file: File) {
@@ -307,6 +308,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   const filteredLeads = leads
     .filter((l) => phoneDigits(l.phone) !== "")
     .filter((l) => !sourceFilter || l.source === sourceFilter)
+    .filter((l) => (!repFilter ? true : repFilter === "__none__" ? !l.assigned_admin_id : l.assigned_admin_id === repFilter))
     .filter((l) =>
       // owner 2026-06-23: stat cards link here — closed/no_answer/not_interested/
       // called_today are now filterable segments too.
@@ -683,6 +685,19 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
 
       {/* Body — the call report (assign tab · report sub-view) OR the leads table */}
       <div className="px-4 py-3">
+        {/* กรองตามเซลล์ผู้ดูแล → ติ๊ก → ย้ายเซลล์ (owner 2026-06-23 · assign list เท่านั้น) */}
+        {isAssign && assignView === "list" ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted">เซลล์ผู้ดูแล:</span>
+            <select value={repFilter} onChange={(e) => setRepFilter(e.target.value)} aria-label="กรองตามเซลล์ผู้ดูแล" className="rounded-lg border border-border bg-white px-2 py-1 text-xs dark:bg-surface">
+              <option value="">ทุกเซลล์</option>
+              <option value="__none__">ยังไม่มอบหมาย</option>
+              {reps.map((r) => <option key={r.legacyId} value={r.legacyId}>{r.name}</option>)}
+            </select>
+            {repFilter ? <button type="button" onClick={() => setRepFilter("")} className="text-xs text-muted hover:text-foreground">ล้าง</button> : null}
+            {repFilter ? <span className="text-[11px] text-muted">— ติ๊กเลือกแล้วใช้ “มอบหมายทั้งหมดให้” ด้านบนเพื่อย้ายไปเซลล์อื่น</span> : null}
+          </div>
+        ) : null}
         {/* ตัวกรอง "ที่มาของลูกค้า" (source · ปอน 2026-06-23) — list view เท่านั้น */}
         {!(isAssign && assignView === "report") && sources.length > 0 ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
