@@ -9,6 +9,7 @@ import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { Reviews } from "@/components/sections/reviews";
+import { ArticleListTabs } from "@/components/sections/article-list-tabs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
@@ -139,6 +140,11 @@ export default async function ReviewsListingPage({
               <p className="mt-3 text-[14px] md:text-[16px] leading-[1.6] text-muted max-w-[820px] md:mx-0 mx-auto">
                 {ui.subtitle}
               </p>
+
+              {/* Tab switcher — สาระน่ารู้ ↔ ข่าวสาร ↔ ผลงานของเรา (owner 2026-06-23) */}
+              <div className="mt-5 md:mt-6 flex justify-center md:justify-start">
+                <ArticleListTabs active="our-work" />
+              </div>
 
               {/* Stat pills */}
               <div className="mt-5 md:mt-6 flex flex-wrap items-center justify-center md:justify-start gap-2">
