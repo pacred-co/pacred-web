@@ -73,6 +73,7 @@ import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 // adminUpdateForwarderDimensions customRate path (no new pricing writer).
 import { previewForwarderRateMissing } from "@/lib/forwarder/live-rate";
 import { ForwarderRateMissingFallback } from "./forwarder-inline-rate-fallback";
+import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
 // breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
 // (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + เหมาๆ 100).
@@ -644,23 +645,43 @@ async function tryRenderTbForwarder(
     }
     if (corpRow) collectIsCorporate = true;
   }
-  const collectRow: ForwarderDebitRow = {
-    id: r.id,
-    fshipby: r.fshipby,
-    ftotalprice: r.ftotalprice,
-    ftransportprice: r.ftransportprice,
-    fpriceupdate: r.fpriceupdate,
-    fshippingservice: r.fshippingservice,
-    pricecrate: r.pricecrate,
-    ftransportpricechnthb: r.ftransportpricechnthb,
-    priceother: r.priceother,
-    fdiscount: r.fdiscount,
-  };
-  const collectBatch = computeForwarderDebitBatch([collectRow], {
+  // ภูม 2026-06-23 — aggregate the WHOLE shipment (all sibling trackings), the
+  // SAME row set the รายการสินค้า table sums, so ยอดเก็บจริง matches it. Was a
+  // money bug: this computed on the ONE landed row (฿410) while the items table
+  // summed all 6 siblings (฿4,424) → staff/customer saw two clashing totals.
+  // computeForwarderDebitBatch is batch-aware (one ฿100 เหมาๆ for the batch + the
+  // นิติ 1% gate on the BATCH total), so passing every sibling is correct.
+  const collectSiblings = await fetchCountableForwarderSiblings(admin, {
+    id: r.id, ftrackingchn: r.ftrackingchn, userid: r.userid, fweight: r.fweight,
+    fshipby: r.fshipby, ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
+    fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice, pricecrate: r.pricecrate,
+    ftransportpricechnthb: r.ftransportpricechnthb, priceother: r.priceother, fdiscount: r.fdiscount,
+  });
+  const collectRows: ForwarderDebitRow[] = collectSiblings.map((s) => ({
+    id: s.id, fshipby: s.fshipby, ftotalprice: s.ftotalprice, ftransportprice: s.ftransportprice,
+    fpriceupdate: s.fpriceupdate, fshippingservice: s.fshippingservice, pricecrate: s.pricecrate,
+    ftransportpricechnthb: s.ftransportpricechnthb, priceother: s.priceother, fdiscount: s.fdiscount,
+  }));
+  const collectBatch = computeForwarderDebitBatch(collectRows, {
     userId: r.userid,
     isCorporate: collectIsCorporate,
   });
-  const collect = collectBatch.lines[0]?.breakdown ?? null;
+  // Collapse the per-line breakdowns into ONE shipment breakdown (same shape the
+  // ยอดเก็บจริง panel renders); the total is the authoritative batch total.
+  const collect =
+    collectBatch.lines.length > 0
+      ? collectBatch.lines.reduce(
+          (acc, l) => ({
+            freight: acc.freight + l.breakdown.freight,
+            otherCharges: acc.otherCharges + l.breakdown.otherCharges,
+            discount: acc.discount + l.breakdown.discount,
+            maoFee: acc.maoFee + l.breakdown.maoFee,
+            wht1pct: acc.wht1pct + l.breakdown.wht1pct,
+            total: collectBatch.total_thb,
+          }),
+          { freight: 0, otherCharges: 0, discount: 0, maoFee: 0, wht1pct: 0, total: collectBatch.total_thb },
+        )
+      : null;
   // Show the panel when the row is still collectible (รอชำระเงิน fstatus='5' OR
   // ติดเครดิต fcredit='1') — i.e. before the ฿50 is persisted, which is exactly
   // when the freight-only number on the page would mislead.
