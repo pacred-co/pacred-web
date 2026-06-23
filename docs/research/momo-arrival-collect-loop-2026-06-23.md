@@ -79,3 +79,17 @@ fstatus 7 ส่งแล้ว = จบ
 3. **ปุ่มสลับ คิว↔กิโล** ใน forwarder pricing editor (per-line หรือ per-order) → persist (คอลัมน์ใหม่ tb_forwarder e.g. `fbasis` หรือ reuse · mig) → staff กดสลับเอง.
 4. **lock ด้วย `lib/forwarder/resolve-rate.test.ts`** (มีอยู่ · เพิ่มเคส forcedBasis) ก่อน apply · money review · NOT browser-test money on prod.
 **= งานแก้เครื่องคิดเงินทั้งระบบ (ทุกลูกค้า) → ทำตอน context สด · มี test · ไม่รีบ.**
+
+### ✅ FINAL spec A (owner 2026-06-23 turn 2 · LOCKED) — "ไม่ติ๊ก = คิว · ติ๊ก = ค่าเทียบ 250(default)–350(max)"
+โมเดลที่เจ้าของยืนยัน (interpretation B):
+- **ไม่ติ๊ก ค่าเทียบ (DEFAULT) → คิดตามคิว (CBM) ล้วน** — ของหนักก็คิดคิว (ไม่เด้งกิโล).
+- **ติ๊ก "ใช้ค่าเทียบ" → คิดกิโลสำหรับของหนัก** (kg/คิว > ค่าเทียบ → KG, ไม่งั้น CBM) · ค่าเทียบ field **default 250 · clamp [250, 350]**.
+- **per-order toggle** (staff กดติ๊ก/ปรับเองได้) · ทำ UI ให้ทุกคนเข้าใจง่าย (label ไทยชัด + hint).
+
+**Engine change points (อ่านจริงแล้ว · resolve-rate.ts + live-rate.ts):**
+1. `live-rate.ts:249` `comparisonEnabled = customComparisonSwitch === true ? true : userComparison` → **ตัด `: userComparison` fallback** → default OFF (ติ๊กต่อ-order เท่านั้นที่เปิด). ⚠️ blast: ลูกค้าที่ `userComparison=true` วันนี้ (เช่น PR106) จะ default CBM going-forward.
+2. `resolve-rate.ts:400-435` comparison-OFF path **`max(คิว,กิโล)` → force CBM ล้วน** (เลิก ราคามากสุด). ⚠️ blast: ลูกค้า OFF วันนี้ ของหนักจะคิด CBM (เก็บได้น้อยลง · = เจตนาเจ้าของ MOMO เก็บเป็นคิว).
+3. `resolve-rate.ts:341-344` threshold = `clamp(comparisonValue || 250, 250, 350)` (เลิก hardcode 200/150 customComparison override · แทนด้วย 250-350).
+4. **UI** forwarder pricing editor: `☐ ใช้ค่าเทียบ (คิดกิโลสำหรับของหนัก)` + ค่าเทียบ field 250-350 เมื่อติ๊ก · default ไม่ติ๊ก = "คิดตามคิว". persist (custom_comparison/_value มีอยู่ · mig 0187) — reuse, อาจไม่ต้อง mig ใหม่.
+5. **lock `resolve-rate.test.ts`** (OFF=CBM · ติ๊ก+ค่าเทียบ=KG-for-dense · clamp).
+> ⚠️ **ship engine+UI พร้อมกัน** — ถ้า flip engine default โดยไม่มี UI ติ๊ก = ของหนักคิด CBM หมดทันที ไม่มีทาง override = บริษัทเสียมาร์จิ้น. ต้องมาคู่กัน = 1 coherent change · test-first · money-review · NOT browser-test money on prod.
