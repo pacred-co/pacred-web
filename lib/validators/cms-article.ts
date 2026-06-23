@@ -39,6 +39,8 @@ export const saveCmsArticleSchema = z.object({
   // SEO overrides — blank falls back to title / excerpt on the public page.
   metaTitle: z.string().trim().max(200).default(""),
   metaDescription: z.string().trim().max(400).default(""),
+  // Free-form tags (HS code · product category …) — the /our-work filter bar.
+  tags: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
 });
 export type SaveCmsArticleInput = z.infer<typeof saveCmsArticleSchema>;
 

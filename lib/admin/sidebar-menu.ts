@@ -888,6 +888,11 @@ const blockExtBroadcasts: MenuItem = {
 const blockExtWriteArticle: MenuItem = {
   labelKey: "extension.writeArticle", href: "/admin/articles", icon: "FileText",
 };
+// Owner 2026-06-23 — marketing control room: a hub surfacing all the marketing
+// tools (content · broadcasts · promos · leads · CRM · analytics) in one place.
+const blockExtMarketingHub: MenuItem = {
+  labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent",
+};
 const blockExtWithdrawalsAll: MenuItem = {
   labelKey: "extension.withdrawalsAll", href: "/admin/withdrawals", icon: "Banknote", phase: 2,
 };
@@ -1032,6 +1037,7 @@ const wrapClassMarketing: MenuItem = {
       labelKey: "marketingNav.marketing",
       icon: "Megaphone",
       children: [
+        blockExtMarketingHub,
         blockExtBroadcasts,
         blockExtWriteArticle,
         blockExtLeadSource,
@@ -1274,6 +1280,7 @@ const menuManager: MenuSection[] = [
     blockExtLineInbox,
     blockExtBroadcasts,
     blockExtWriteArticle,
+    blockExtMarketingHub,
     // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
     // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
     // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
@@ -1435,6 +1442,7 @@ const menuSalesAdmin: MenuSection[] = [
       // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
       { labelKey: "extension.writeArticle", href: "/admin/articles", icon: "FileText" },
+      { labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent" },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
     ],
   },

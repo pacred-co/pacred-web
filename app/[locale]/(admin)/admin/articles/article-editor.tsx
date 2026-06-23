@@ -49,6 +49,8 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [body, setBody] = useState(initial?.body ?? "");
   const [metaTitle, setMetaTitle] = useState(initial?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(initial?.metaDescription ?? "");
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [tagDraft, setTagDraft] = useState("");
   const [seoOpen, setSeoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [insertingImg, setInsertingImg] = useState(false);
@@ -74,7 +76,18 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       subCategory: category === "knowledge" ? subCategory : "",
       metaTitle: metaTitle.trim(),
       metaDescription: metaDescription.trim(),
+      tags,
     };
+  }
+
+  function addTag(raw: string) {
+    const t = raw.trim().replace(/,+$/, "").trim();
+    if (!t) { setTagDraft(""); return; }
+    setTags((cur) => (cur.includes(t) ? cur : [...cur, t].slice(0, 30)));
+    setTagDraft("");
+  }
+  function removeTag(t: string) {
+    setTags((cur) => cur.filter((x) => x !== t));
   }
 
   /** Upload an image and insert a markdown ![](url) marker at the body cursor
@@ -253,6 +266,34 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 <p className="text-[11px] text-muted">แนวตั้ง 3:4 จะสวยที่สุด · ≤ 5 MB</p>
               </div>
             </div>
+          </div>
+
+          {/* Tags (HS code · product category …) — the /our-work filter bar */}
+          <div>
+            <label className={labelCls}>
+              แท็ก <span className="text-[11px] font-normal text-muted">(เช่น HS code · ประเภทสินค้า — พิมพ์แล้วกด Enter)</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-white px-2 py-1.5 dark:bg-surface">
+              {tags.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
+                  {t}
+                  <button type="button" onClick={() => removeTag(t)} aria-label={`ลบแท็ก ${t}`} className="hover:text-primary-900"><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+              <input
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagDraft); }
+                  else if (e.key === "Backspace" && !tagDraft && tags.length) { removeTag(tags[tags.length - 1]); }
+                }}
+                onBlur={() => addTag(tagDraft)}
+                placeholder={tags.length ? "เพิ่มแท็ก…" : "เช่น 3926.90 · พลาสติก · เครื่องสำอาง"}
+                aria-label="เพิ่มแท็ก"
+                className="min-w-[120px] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm outline-none"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted">ใช้กรองผลงานบนหน้าเว็บ — ผู้เข้าชมกดแท็กแล้วจะเห็นผลงานในแท็กนั้น (เด่นในหน้า “ผลงานของเรา”)</p>
           </div>
 
           {/* Body */}

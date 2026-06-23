@@ -99,6 +99,23 @@ export default async function CmsArticlePage({
               <p className="mt-3 text-[15px] md:text-[17px] leading-[1.6] text-muted">{a.excerpt}</p>
             ) : null}
 
+            {/* Tags — our_work tags link back to the /our-work filter; others display-only */}
+            {a.tags.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {a.tags.map((tg) =>
+                  a.category === "our_work" ? (
+                    <Link key={tg} href={`/our-work?tag=${encodeURIComponent(tg)}`} className="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-[12px] font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-900/40 dark:bg-primary-900/20 dark:text-primary-300">
+                      #{tg}
+                    </Link>
+                  ) : (
+                    <span key={tg} className="rounded-full border border-border bg-surface-alt px-2.5 py-0.5 text-[12px] font-semibold text-muted">
+                      #{tg}
+                    </span>
+                  ),
+                )}
+              </div>
+            ) : null}
+
             {/* Cover */}
             {a.coverUrl ? (
               <div className="relative mt-5 aspect-[16/10] w-full overflow-hidden rounded-2xl border border-border bg-surface-alt">
