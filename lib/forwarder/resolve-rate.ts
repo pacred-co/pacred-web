@@ -223,6 +223,23 @@ function n(v: number | string | null | undefined): number {
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /**
+ * ค่าเทียบ (KG-vs-CBM threshold) bounds — owner 2026-06-23: default 250, the staff
+ * may set it anywhere in [250, 350]. A 0/blank/invalid value → the 250 default.
+ * Exported so the caller (live-rate.ts) clamps the admin-typed tick value the same
+ * way the resolver does. NB: only the comparison-TICK path is clamped — the
+ * estimator's basis PINS (comparisonValue 0 = force-KG, 1e9 = force-CBM) flow
+ * through the general comparisonEnabled path untouched.
+ */
+export const COMPARISON_DEFAULT = 250;
+export const COMPARISON_MIN = 250;
+export const COMPARISON_MAX = 350;
+export function clampComparison(v: number | string | null | undefined): number {
+  const x = n(v);
+  if (!(x > 0)) return COMPARISON_DEFAULT;
+  return Math.max(COMPARISON_MIN, Math.min(x, COMPARISON_MAX));
+}
+
+/**
  * Pick the general tiered rate for a basis + quantity.
  * KG  tiers (forwarder.php L1845-1862): value<=100 → t1 ; value>100 && value<500 → t2 ; else t3.
  * CBM tiers (forwarder.php L1863-1880): value<=2  → t1 ; value>2   && value<5   → t2 ; else t3.
@@ -340,7 +357,9 @@ export function resolveForwarderRate(
   const comparisonOn = input.comparisonEnabled || input.customComparison === true;
   let threshold = n(input.comparisonValue);
   if (input.customComparison === true) {
-    threshold = input.hasRefOrder ? 150 : 200;
+    // owner 2026-06-23: ค่าเทียบ default 250, ปรับได้ในช่วง 250–350 (เลิก legacy
+    // 200/150). hasRefOrder no longer changes the threshold — the staff types it.
+    threshold = clampComparison(n(input.comparisonValue) || 250);
   }
 
   // ค่าเทียบ basis decision uses the ORDER-TOTAL ratio when the caller supplies
@@ -397,41 +416,45 @@ export function resolveForwarderRate(
     };
   }
 
-  // ── "ราคามากสุด" — no comparison (forwarder.php L1983-2010) ──
-  // Compute BOTH totals; legacy `priceCBM >= priceKg` → CBM (ties favour CBM).
-  // The doc-tier discount is applied to the CBM unit rate BEFORE the subtotal
-  // AND the priceCBM>=priceKg decision (owner spec) — so a discounted CBM that
-  // dips below the KG total can flip the winner to KG, exactly as a hand-typed
-  // lower CBM rate would.
+  // ── No ค่าเทียบ tick → DEFAULT "คิดตามคิว" (CBM) ──────────────────────────
+  // owner 2026-06-23: "ยึดตามคิว เป็น default เพราะ MOMO เก็บเราเป็นคิว · ถ้าอยากคิด
+  // กิโล ก็ค่อยติ๊กค่าเทียบ". So without the comparison tick the basis is ALWAYS CBM
+  // — NOT the legacy "ราคามากสุด" max-of-both (which silently billed dense items by
+  // KG). EXCEPTION: a MANUAL admin override keeps the legacy max-of-both — the admin
+  // typed exact rates on each basis, so respect their explicit choice (and never
+  // force a manual-KG-only order onto a ฿0 CBM). KG-for-dense is the tick path above.
   const kgProbe = rateForBasis("kg", candidates, weight);
   const cbmProbe = rateForBasis("cbm", candidates, cbm);
   const cbmDisc = applyDocTierCbmDiscount(cbmProbe.rate, docEligible, docDiscountCbm);
   const priceKg = round2(weight * kgProbe.rate);
   const priceCbm = round2(cbm * cbmDisc.rate);
 
-  if (priceCbm >= priceKg) {
+  // MANUAL override only: legacy max-of-both (priceKg > priceCbm → KG). Honours an
+  // admin who typed a KG rate; ties + CBM-higher fall through to the CBM return.
+  if (candidates.manualOverride && priceKg > priceCbm) {
     return {
-      rate: cbmDisc.rate,
-      basis: "cbm",
-      source: cbmProbe.source,
-      transportSubtotal: priceCbm,
-      refPrice: 2,
-      docDiscountApplied: cbmDisc.applied,
-      // Both legs 0 → genuinely no rate. (If only one leg is 0, the larger
-      // non-zero leg wins above; here priceCbm>=priceKg with priceCbm 0 means
-      // both are 0.)
-      rateMissing: cbmProbe.rate === 0 && kgProbe.rate === 0,
+      rate: kgProbe.rate,
+      basis: "kg",
+      source: kgProbe.source,
+      transportSubtotal: priceKg,
+      refPrice: 1,
+      rateMissing: kgProbe.rate === 0 && cbmProbe.rate === 0,
+      docDiscountApplied: 0,
     };
   }
+  // Default → CBM (and manual where CBM ≥ KG). A missing CBM rate is a hard flag —
+  // we do NOT silently fall back to KG (that would defeat "ยึดตามคิว"); for a manual
+  // override only-both-legs-0 counts as missing.
   return {
-    rate: kgProbe.rate,
-    basis: "kg",
-    source: kgProbe.source,
-    transportSubtotal: priceKg,
-    refPrice: 1,
-    rateMissing: kgProbe.rate === 0 && cbmProbe.rate === 0,
-    // KG basis won → the CBM-only doc-tier discount does not apply here.
-    docDiscountApplied: 0,
+    rate: cbmDisc.rate,
+    basis: "cbm",
+    source: cbmProbe.source,
+    transportSubtotal: priceCbm,
+    refPrice: 2,
+    docDiscountApplied: cbmDisc.applied,
+    rateMissing: candidates.manualOverride
+      ? cbmProbe.rate === 0 && kgProbe.rate === 0
+      : cbmProbe.rate === 0,
   };
 }
 
