@@ -52,11 +52,19 @@
  */
 
 import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
+import { trackingSuffix } from "@/lib/admin/momo-bill-header";
 
 /** One unpaid forwarder row's pricing inputs (lowercase = PostgREST casing). */
 export interface ForwarderDebitRow {
   id: number | string;
   fshipby: string | null;
+  /**
+   * The China tracking — used to anchor the เหมาๆ flat fee to the BASE tracking
+   * (no -N suffix) of a shipment, so it's charged ONCE per shipment across ANY
+   * pay path (single-row line-by-line OR whole-batch · owner 2026-06-23 "ระวังเก็บ
+   * ตังเบิ้ล"). Optional: callers that omit it fall back to first-in-batch (legacy).
+   */
+  ftrackingchn?: string | null;
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -141,15 +149,27 @@ export function computeForwarderDebitBatch(
   const userId = (opts.userId ?? "").trim();
   const exemptPcsf = userId === "PCS999";
 
-  // ── pass 1: PCSMao count + locate the first PCSF-zero row (L243-249) ──
+  // ── pass 1: locate the เหมาๆ flat-fee ANCHOR row(s) ──
+  // owner 2026-06-23 (กันเก็บตังเบิ้ล): anchor the fee to each shipment's BASE
+  // tracking (no -N suffix) so it's charged ONCE per shipment no matter the pay
+  // path — paying a -N sub-row solo never re-adds it; only the base row carries it.
+  // (The old "first PCSF-zero in the passed batch" double-charged when the same
+  // shipment was paid line-by-line: each single-row batch re-fired the fee.)
+  // Legacy callers that don't pass ftrackingchn fall back to first-PCSF-in-batch.
+  const haveTracking = rows.some((r) => (r.ftrackingchn ?? "").trim() !== "");
   let firstPcsfIdx = -1;
   rows.forEach((r, i) => {
     if (isPcsfZero(r) && firstPcsfIdx === -1) firstPcsfIdx = i;
   });
-  const pcsfFirstApplies = firstPcsfIdx !== -1 && !exemptPcsf;
+  const isMaoAnchor = (r: ForwarderDebitRow, i: number): boolean => {
+    if (exemptPcsf || !isPcsfZero(r)) return false;
+    // per-shipment anchor = the base tracking (suffix 0); legacy = first in batch.
+    return haveTracking ? trackingSuffix(r.ftrackingchn) === 0 : i === firstPcsfIdx;
+  };
+  const anchorIdx = rows.findIndex((r, i) => isMaoAnchor(r, i));
 
   // ── pass 2: per-row BASE price (pre-corporate) ──
-  // The first PCSF-zero row carries +฿50 on its transport leg (L387).
+  // The เหมาๆ anchor row carries +MAO_FLAT_FEE on its transport leg (L387).
   const baseLines = rows.map((r, i) => {
     const freight = toNumber(r.ftotalprice);
     const otherCharges =
@@ -161,7 +181,7 @@ export function computeForwarderDebitBatch(
       toNumber(r.priceother);
     const discount = toNumber(r.fdiscount);
     const base = freight + otherCharges - discount;
-    const isPcsfFirst = pcsfFirstApplies && i === firstPcsfIdx;
+    const isPcsfFirst = isMaoAnchor(r, i);
     const maoFee = isPcsfFirst ? MAO_FLAT_FEE : 0;
     const withPcsf = base + maoFee;
     return { id: String(r.id), base: withPcsf, isPcsfFirst, freight, otherCharges, discount, maoFee };
@@ -205,7 +225,7 @@ export function computeForwarderDebitBatch(
   return {
     lines,
     total_thb,
-    pcsfTransportFixId: pcsfFirstApplies ? String(rows[firstPcsfIdx].id) : null,
+    pcsfTransportFixId: anchorIdx >= 0 ? String(rows[anchorIdx].id) : null,
     applyCorporateDiscount,
   };
 }

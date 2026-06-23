@@ -58,6 +58,7 @@ function row(p: Partial<ForwarderDebitRow> & { id: number | string }): Forwarder
   return {
     id: p.id,
     fshipby: p.fshipby ?? null,
+    ftrackingchn: p.ftrackingchn ?? null,
     ftotalprice: p.ftotalprice ?? 0,
     ftransportprice: p.ftransportprice ?? 0,
     fpriceupdate: p.fpriceupdate ?? 0,
@@ -263,6 +264,56 @@ console.log("computeForwarderDebitBatch — itemised breakdown (owner: แจง
   assertEq("no PCSF → maoFee=0", bd.maoFee, 0);
   assertEq("personal → wht1pct=0", bd.wht1pct, 0);
   assertClose("total = freight", bd.total, 45.1);
+}
+
+// ── เหมาๆ anchored to the BASE tracking per shipment (owner 2026-06-23 · กันเก็บตังเบิ้ล) ──
+// When rows carry ftrackingchn, the ฿100 fee fires on the base tracking (suffix 0)
+// ONLY — never on a -N sub-row. This makes the fee deterministic per shipment across
+// ANY pay path (whole-batch OR line-by-line in separate actions).
+console.log("computeForwarderDebitBatch — เหมาๆ anchored to base tracking");
+{
+  // whole shipment (base + 2 sub-rows), all PCSF-zero → fee ONCE on the base row.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 1, ftrackingchn: "1780103566",   fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+      row({ id: 2, ftrackingchn: "1780103566-2", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+      row({ id: 3, ftrackingchn: "1780103566-3", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+    ],
+    { userId: "PR106", isCorporate: false },
+  );
+  assertClose("base row carries +100", b.lines[0].price_thb, 200);
+  assertClose("sub-row -2 no fee", b.lines[1].price_thb, 100);
+  assertClose("sub-row -3 no fee", b.lines[2].price_thb, 100);
+  assertEq("fix-id = base row", b.pcsfTransportFixId, "1");
+  assertClose("batch total = 400 (300 + one ฿100)", b.total_thb, 400);
+}
+{
+  // LINE-BY-LINE (the double-charge case): paying a -N sub-row ALONE → NO fee
+  // (the base row carries it); paying the base row alone → fee once. Old logic
+  // would have charged ฿100 on EACH solo batch.
+  const sub = computeForwarderDebitBatch(
+    [row({ id: 2, ftrackingchn: "1780103566-2", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 })],
+    { userId: "PR106", isCorporate: false },
+  );
+  assertClose("solo -N row → no เหมาๆ (was the double)", sub.lines[0].price_thb, 100);
+  assertEq("solo -N row → no fix-id", sub.pcsfTransportFixId, null);
+  const baseRow = computeForwarderDebitBatch(
+    [row({ id: 1, ftrackingchn: "1780103566", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 })],
+    { userId: "PR106", isCorporate: false },
+  );
+  assertClose("solo base row → เหมาๆ once", baseRow.lines[0].price_thb, 200);
+}
+{
+  // back-compat: NO ftrackingchn → legacy first-PCSF-in-batch behaviour unchanged.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 1, fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+      row({ id: 2, fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+    ],
+    { userId: "PR106", isCorporate: false },
+  );
+  assertClose("legacy: first row +100", b.lines[0].price_thb, 200);
+  assertClose("legacy: second row no fee", b.lines[1].price_thb, 100);
 }
 
 console.log(`\nforwarder-debit-total: ${pass} passed, ${fail} failed`);

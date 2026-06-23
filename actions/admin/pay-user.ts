@@ -535,7 +535,9 @@ export async function adminPayForwardersOnBehalf(
     // id ASC so the "first PCSF" row is deterministic + matches legacy DB order.
     const { data: eligibleRaw, error: eligErr } = await admin
       .from("tb_forwarder")
-      .select(`${FORWARDER_PRICE_COLS}, fcredit`)
+      // ftrackingchn → computeForwarderDebitBatch anchors the เหมาๆ fee to the base
+      // tracking (once per shipment) even across separate pay actions (2026-06-23).
+      .select(`${FORWARDER_PRICE_COLS}, ftrackingchn, fcredit`)
       .eq("userid", userId)
       .in("id", fIds.map(Number))
       .or("fstatus.eq.5,fcredit.eq.1")
@@ -1289,7 +1291,9 @@ export async function adminPayForwardersWithTopUp(
     // 3. AUTHORITATIVE batch — price the selected rows (legacy L316/L380).
     const { data: eligibleRaw, error: eligErr } = await admin
       .from("tb_forwarder")
-      .select(`${FORWARDER_PRICE_COLS}, fcredit`)
+      // ftrackingchn → computeForwarderDebitBatch anchors the เหมาๆ fee to the base
+      // tracking (once per shipment) even across separate pay actions (2026-06-23).
+      .select(`${FORWARDER_PRICE_COLS}, ftrackingchn, fcredit`)
       .eq("userid", userId)
       .in("id", fIds.map(Number))
       .or("fstatus.eq.5,fcredit.eq.1")
