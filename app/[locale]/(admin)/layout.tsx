@@ -8,6 +8,7 @@ import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sideb
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CostRevealProvider } from "@/components/admin/cost-reveal";
+import { AdminHeaderNavProvider, AdminHeaderNavDisplay } from "@/components/admin/admin-header-nav";
 
 /**
  * Layout for /admin/* routes. Gates access to admin profiles; non-admins
@@ -69,16 +70,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // so sticky never activates. `overflow-x: clip` clips without forming
   // a scroll context, which is what we want here.
   return (
+    <AdminHeaderNavProvider>
     <div className="min-h-screen flex text-foreground">
-      {/* 2026-06-10 (ปอน) — slim admin top bar, carries ONLY the locale + theme
-          controls (justify-end → right side), `fixed` so it follows the scroll.
-          2026-06-11 (owner "ยก sidebar ทับ nav bar"): the sidebar is now top-0
-          z-[70] and COVERS this bar's left corner — so the red shows only to the
-          RIGHT of the sidebar (the PR-ADMIN brand sits top-left). Hidden on print
-          so it doesn't bleed into receipts/invoices. */}
-      <header className="print:hidden fixed top-0 inset-x-0 z-[60] h-14 bg-[#B91C1C] flex items-center justify-end gap-2 px-4 shadow-md">
-        <LocaleSwitcher variant="on-primary" />
-        <ThemeToggle variant="on-primary" />
+      {/* 2026-06-10 (ปอน) — slim admin top bar, carries locale + theme controls
+          on the right. Pages can inject their own nav items into the left side
+          via <AdminHeaderNavInject> — items appear here via AdminHeaderNavDisplay.
+          2026-06-11 (owner "ยก sidebar ทับ nav bar"): the sidebar is top-0
+          z-[70] and COVERS this bar's left corner (the PR-ADMIN brand sits
+          top-left). Hidden on print so it doesn't bleed into receipts/invoices. */}
+      <header className="print:hidden fixed top-0 inset-x-0 z-[60] h-14 bg-[#B91C1C] flex items-center px-4 shadow-md">
+        <AdminHeaderNavDisplay />
+        <div className="ml-auto flex items-center gap-2">
+          <LocaleSwitcher variant="on-primary" />
+          <ThemeToggle variant="on-primary" />
+        </div>
       </header>
       {/* 2026-06-09 ภูม flag round 4 (receipt-print artefacts): hide the
           sidebar on print so receipts/invoices/tax-invoices don't show admin
@@ -104,5 +109,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </CostRevealProvider>
       </div>
     </div>
+    </AdminHeaderNavProvider>
   );
 }

@@ -9,6 +9,7 @@ import { notify } from "@/lib/notifications/templates";
 import { findLegacyUserIdByPhone } from "@/lib/auth/legacy-bridge-tb-users";
 import { normalizePhone } from "@/lib/utils/phone";
 import { ensureLegacyAdminRow } from "@/lib/admin/ensure-legacy-admin";
+import { usableImageSrcOr } from "@/lib/admin/usable-image-src";
 
 // Roles that, when granted, should auto-surface the staffer as a sales rep
 // (card หน้าบ้าน + customer-360 dropdown + round-robin). Owner 2026-06-22:
@@ -1228,7 +1229,11 @@ export async function adminUpdateProfileFields(
       if (legacyAdminId) {
         const { error: tbErr } = await admin
           .from("tb_admin")
-          .update({ adminPicture: d.avatar_url ?? null })
+          // adminPicture is NOT NULL — mirror only a usable src, else "" ("no
+          // photo"). The old `?? null` violated NOT NULL when an avatar was
+          // cleared (silent mirror failure → stale picture) and could re-seed a
+          // non-path value that crashes next/image.
+          .update({ adminPicture: usableImageSrcOr(d.avatar_url, "") })
           .eq("adminID", legacyAdminId);
         if (tbErr) {
           console.error(
