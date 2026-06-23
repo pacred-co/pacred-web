@@ -3,6 +3,21 @@
 
 ---
 
+# 🧾 2026-06-23 (ภูม · คอมที่ทำงาน) — billing 3-link carryover + navbar narrow-xl + driver-detail legacy 3-zone + forwarder ยอดเก็บจริง scope-fix + 🔴 freight-price legacy-verified (display-only TODO ส่งเดฟ) → Poom-pacred · read FIRST
+
+> **🏁 SAVE-POINT (ภูม: "ยังไม่ต้องแก้ · เซฟเป็นความรู้ + push Poom-pacred · เดี๋ยวพี่เดฟตรวจงานจัดการต่อ").** Branch **Poom-pacred = `<HEAD>`** (pushed · gate tsc 0 · eslint 0 ทุก commit · อ่าน exit จริง). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod pw chat-only · **prod = เดฟ จัดการ (ผม read-only)** · NEXT FREE mig = 0204. Browser authed = work machine (Browser deviceId `c0898978-…`).
+>
+> **✅ งาน session นี้ (push Poom-pacred · gate เขียวทุกอัน · verify สดบน DEV+authed browser):**
+> - **(1) navbar LocaleSwitcher หลุดจอแคบ-xl** (`2c778b18`) — ลูกค้า Surface (~1368px scaling) ไม่เห็นปุ่มเปลี่ยนภาษา แต่จอเรา 1900px เห็น. root = เมกะเมนู `flex-1` ไม่มี `min-w-0` → แถวล้น → switcher+theme (ขวาสุด) หลุดขอบ. fix: social→`2xl:flex` + เมกะเมนู `min-w-0`. verify วัดที่ 1281/1368px เห็นครบ. learning → nextjs-16-quirks.md.
+> - **(2) driver detail รื้อเป็น legacy 3-zone** (`22d9f27d`) — `/admin/drivers/[id]` รก → แกะ legacy `forwarder-driver.php` detail (L1630-1880) ทำเป็นตารางแถวต่อจุด 3 โซน [จำนวน+สถานะ+รูปส่ง | ขนส่ง(nameShipBy)+ที่อยู่+โทร | ตารางย่อย+cover+รวม]. helper ใหม่ `lib/admin/forwarder-siblings.ts`. verify render 0 error.
+> - **(3) 🔴 forwarder ยอดเก็บจริง vs รายการสินค้า ยอดไม่ตรง (money)** (`60702110`) — box ยอดเก็บจริงนับ **row เดียว** (฿410) แต่ตารางสินค้ารวม **6 sibling** (฿4,424). fix: ยอดเก็บจริง aggregate sibling ชุดเดียวกัน (ผ่าน `fetchCountableForwarderSiblings`) → ตรงกัน. **เหมาๆ คิด 1 ครั้ง/ออเดอร์** (computeForwarderDebitBatch batch-aware) = ตรงกฎภูม (split ตู้ปิดไม่พอ = เรารับเอง).
+> - **(4) billing 3-link backfill script** (`dc6503a5`) — ใบวางบิล paid แต่ใบเสร็จ/forwarder ค้าง (เพราะ fix forward-only · ของเก่าไม่ย้อนแก้). script `scripts/backfill-paid-invoice-status-sync-2026-06-23.mjs` (dry-run default) เคลียร์ของค้าง.
+>
+> **🔴 CARRYOVER ส่งเดฟ (ภูม deferred · ห้ามแก้เอง):**
+> - **(A) freight-price display ทำให้งง (เงินถูกแล้ว · แก้ display อย่างเดียว)** — `/admin/forwarders/[fNo]/edit` โชว์ 3 เลข (น้ำหนักรวม 3,366 · ปริมาตรรวม 4,083.96 · max ต่อแทรค 4,324.05). **verify legacy แล้ว: 4,324.05 ถูกต้อง** — legacy SAVE (`forwarder.php update_data` L1983-2010 · port ใน `lib/forwarder/resolve-rate.ts` L400) = "ราคามากสุด" (max ต่อแทรค) เมื่อไม่เปิดค่าเทียบ. ⚠️ legacy preview (`calPriceNew.php` ใช้ KGPerCBM>250) ≠ legacy save (max) — legacy เองไม่ตรงกัน. **TODO (display-only · ไม่แตะสูตรเงิน):** หน้า preview ให้โชว์ breakdown ต่อแทรค (ไม่ใช่เลขรวม-ออเดอร์ที่ทำให้งง) + ยอดเก็บจริงแจง+ดึงเลขแทรคกิง. learning เต็ม → `docs/learnings/pacred-domain-knowledge.md` [2026-06-23].
+> - **(B) เหมาๆ charge-path** — ภูม ยังไม่เคาะ: ตอน charge จริง (collect/debit) legacy = 1 ครั้ง/การกดจ่าย (≈1/ออเดอร์ปกติ) · ภูมอยาก 1/ออเดอร์เป๊ะ (2 ออเดอร์=2 · split=1). หน้า detail แก้แล้ว · charge-path ยังเป็น legacy รอภูมเคาะ.
+> - **(C) prod backfill (เดฟ รัน):** (1) deploy Poom-pacred→prod · (2) รัน backfill script `--apply` บน prod เคลียร์ใบเสร็จ/forwarder ค้าง.
+
 # 🚚 2026-06-23 (ภูม) — โกดัง/คนขับ fidelity: รับเองหน้าโกดัง tab + batch สถานะไหลตามงาน (auto-complete) + รูป1 กางข้อมูล/tab-4 → Poom-pacred · read FIRST
 
 > **🏁 SAVE-POINT (ภูม: "เซฟ Poom-pacred · พรุ่งนี้ไปทำต่อที่คอมที่ทำงาน · อัพเดตต่อเนื่อง").** Branch **Poom-pacred = `8a643a89`** (= HEAD · pushed · clean · local==origin). คอมที่ทำงาน resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · ห้าม `| tail` — pipe กลบ exit code). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod pw อยู่ใน chat เท่านั้น · **prod = เดฟ จัดการ (ผม read-only)** · mig DEV เท่านั้น · NEXT FREE = 0204 (ปอน ใช้ 0201-0203 imported_leads ไปแล้ว). **กฎ: push เฉพาะ Poom-pacred · ห้ามทำงานบัค งานหาย · อ่าน legacy จาก source จริงก่อนเคลม fidelity (§0b · legacy = `C:\xampp\htdocs\pcscargo\member\pcs-admin\`).**

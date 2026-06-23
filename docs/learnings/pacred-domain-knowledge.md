@@ -734,3 +734,47 @@ gate fstatus≥2 → only the helper changed.
 downstream's full status — else it looks "stuck" while the work is actually progressing elsewhere.
 Surface the bridge (a linked-card with a click-through) on every role's detail so nobody wonders
 "where did the order go?".
+
+## [2026-06-23] China→Thailand freight price: legacy has TWO formulas that DISAGREE (preview ≠ save) — the SAVE is "ราคามากสุด" (max), and that is the money
+
+**Context:** ภูม flagged the /admin/forwarders/[fNo]/edit page as "มั่ว" (confusing) on a real 6-tracking
+MOMO order (1780103566 · custom rate 11฿/kg, 3300฿/CBM): it showed THREE freight numbers and he
+couldn't tell which is the charge or whether it matches legacy — "นี่แย่มากนะเรื่องเงินนะ".
+  - คิดตามน้ำหนัก (whole order): 306 × 11 = **3,366.00**
+  - คิดตามปริมาตร (whole order): 1.23756 × 3300 = **4,083.96**
+  - "ระบบเลือก คิดตามราคาสูงสุดต่อแทรคกิง (รวมทุกแทค)" → **4,324.05**  ← the one used
+
+**The legacy truth (read from source — there are TWO code paths that compute it DIFFERENTLY):**
+1. **PREVIEW** — `pcs-admin/include/pages/forwarder/calPriceNew.php` L197-209 (the live AJAX as the admin
+   types): per the SINGLE row passed, `KGPerCBM > 250 → คิดตามน้ำหนัก, else → คิดตามปริมาตร` (a ค่าเทียบ-250
+   DECISION, hardcoded 250, NOT a max).
+2. **SAVE** — `pcs-admin/include/pages/forwarder/update.php` → `forwarder.php update_data` L1983-2010 (what
+   actually writes `tb_forwarder.fTotalPrice`): with comparison OFF it is **"ราคามากสุด"** — compute BOTH
+   `priceKg = weight×rateKg` and `priceCbm = cbm×rateCbm`, **pick the MAX** (ties → CBM). With comparison ON
+   it is `KGPerCBM > threshold` (threshold on the ORDER-TOTAL ratio, ภูม 2026-06-18). PER ROW; a split order =
+   N tb_forwarder rows each priced independently, summed.
+
+So **legacy's own preview (250-decision) and save (max) DISAGREE** — a legacy quirk. The SAVE is the money.
+Our port `lib/forwarder/resolve-rate.ts` `resolveForwarderRate` (L359-409) is a faithful port of the SAVE:
+comparison-OFF → max, comparison-ON → threshold. So **our stored ftotalprice (Σ per-row = 4,324.05) is
+CORRECT / legacy-faithful — the customer was NOT mis-charged.**
+
+**Why per-row max and the 250-decision COINCIDED for this order (4,324.05 both ways):** they differ ONLY when
+a row's KGPerCBM sits in the (250, rateCbm/rateKg) zone — and for custom rates 11/3300 that pivot is 300, so
+the divergence window is 250–300. This order's per-tracking KGPerCBMs (212, 201, 224, 673, 540, 346) all fell
+OUTSIDE 250–300 → max == 250-decision row by row → 4,324.05 identical. With a row at e.g. KGPerCBM 270, max
+would bill volume (higher) while the 250-decision bills weight (lower) → they'd diverge.
+
+**Why it LOOKED มั่ว (the real, display-only problem):** the per-tracking editor (`per-tracking-editor-client.tsx`)
+shows the WHOLE-ORDER weight (3,366) and WHOLE-ORDER volume (4,083.96) reference lines, but the chosen value is
+the PER-TRACKING-max SUM (4,324.05) — which equals NEITHER whole-order line. Three numbers, the picked one
+matching none → reads as a bug. The fix (ภูม deferred to เดฟ) is DISPLAY-ONLY: show the per-tracking breakdown
+(each แทรค: weight-price vs volume-price → which won) so 4,324.05 is self-justifying; drop/relabel the
+misleading whole-order lines. No money-math change — the math is already legacy-faithful.
+
+**Lesson:** a legacy system can have two price formulas (a live preview vs the persisted save) that quietly
+disagree — when verifying "is our money right?", port and trust the SAVE path, and treat the preview as just a
+hint. Before declaring a money number wrong, find the legacy code that WRITES the column (not the one that
+previews it). And a confusing money DISPLAY (3 numbers, the chosen one matching none) erodes trust even when
+the stored value is correct — surface the actual basis breakdown, don't show reference numbers that aren't the
+charge. Cross-link: [[sell-floor-rate-model]] · `lib/forwarder/resolve-rate.ts` · `per-tracking-editor-client.tsx`.
