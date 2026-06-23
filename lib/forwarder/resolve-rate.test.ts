@@ -39,17 +39,18 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 
 // ── 1. Manual override — highest precedence (forwarder.php L1801-1818) ──
 {
-  // weight 300kg, cbm 1 → KGPerCBM=300; no comparison → ราคามากสุด.
-  // manual KG=20 → priceKg=6000 ; manual CBM=5000 → priceCbm=5000 → KG wins.
+  // weight 300kg, cbm 1. manual KG=20, CBM=5000. owner 2026-06-23: no ค่าเทียบ tick →
+  // DEFAULT คิว even for a manual override (the admin typed both rates; CBM is the
+  // basis). So basis=cbm, rate=5000 (NOT the legacy max-of-both KG 6000).
   const r = resolveForwarderRate(
     cand({ manualOverride: true, manualKg: 20, manualCbm: 5000, isSvip: true, svipKg: 999, svipCbm: 999 }),
     inp({ weightKg: 300, volumeCbm: 1 }),
   );
   eq("manual: source=manual (beats SVIP)", r.source, "manual");
-  eq("manual: basis=kg (6000>5000)", r.basis, "kg");
-  near("manual: rate=20", r.rate, 20);
-  near("manual: subtotal=6000", r.transportSubtotal, 6000);
-  eq("manual: refPrice=1", r.refPrice, 1);
+  eq("manual: basis=cbm (default คิว)", r.basis, "cbm");
+  near("manual: rate=5000", r.rate, 5000);
+  near("manual: subtotal=5000 (cbm 1 × 5000)", r.transportSubtotal, 5000);
+  eq("manual: refPrice=2", r.refPrice, 2);
   eq("manual: rateMissing=false", r.rateMissing, false);
 }
 
@@ -68,17 +69,20 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 }
 
 // ── 3a. General tiered KG — tier boundaries (forwarder.php L1845-1862) ──
+// 2026-06-23: default is now CBM, so to exercise the KG tiers we force the KG
+// path via comparison ON + value 0 (kg/cbm > 0 → KG). Tier boundaries unchanged.
 {
   const g = { generalKg: { tier1: 50, tier2: 40, tier3: 30 } as const, generalCbm: { tier1: 0, tier2: 0, tier3: 0 } as const };
+  const kgOn = (w: number) => inp({ weightKg: w, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 0 });
   // value<=100 → tier1
-  let r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 100, volumeCbm: 1 }));
+  let r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(100));
   near("general KG tier1 (w=100 → rate 50)", r.rate, 50);
   eq("general KG tier1 basis=kg", r.basis, "kg");
   // value>100 && value<500 → tier2
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 300, volumeCbm: 1 }));
+  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(300));
   near("general KG tier2 (w=300 → rate 40)", r.rate, 40);
   // value>=500 → tier3
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 500, volumeCbm: 1 }));
+  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(500));
   near("general KG tier3 (w=500 → rate 30)", r.rate, 30);
 }
 
@@ -121,17 +125,37 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("vip-fallback: subtotal = 1*3000", r.transportSubtotal, 3000);
 }
 
-// ── 5. KG vs CBM selection — ราคามากสุด picks the LARGER total (L1993) ──
+// ── 5. DEFAULT = คิดตามคิว (owner 2026-06-23) — no tick + no manual → CBM ──
 {
-  // SVIP KG=50, CBM=2000. weight 50 → priceKg=2500 ; cbm 1 → priceCbm=2000.
-  // priceCbm(2000) >= priceKg(2500)? NO → KG wins.
+  // SVIP KG=50, CBM=2000. weight 50, cbm 1. Legacy ราคามากสุด would have picked KG
+  // (2500>2000); the new default ignores KG (no ค่าเทียบ tick) → bills CBM.
   const r = resolveForwarderRate(
     cand({ isSvip: true, svipKg: 50, svipCbm: 2000 }),
     inp({ weightKg: 50, volumeCbm: 1 }),
   );
-  eq("ราคามากสุด: KG wins (2500>2000)", r.basis, "kg");
-  near("ราคามากสุด: subtotal=2500", r.transportSubtotal, 2500);
-  eq("ราคามากสุด: refPrice=1", r.refPrice, 1);
+  eq("default: basis=cbm (KG ignored without tick)", r.basis, "cbm");
+  near("default: subtotal=2000 (cbm 1 × 2000)", r.transportSubtotal, 2000);
+  eq("default: refPrice=2", r.refPrice, 2);
+}
+
+// ── 5a. MANUAL override also DEFAULTS CBM (owner 2026-06-23) + KG-only fallback ──
+{
+  // manual KG=50, CBM=2000. weight 50. Legacy max-of-both → KG (2500>2000); the new
+  // default ignores KG → CBM (2000). The admin ticks ค่าเทียบ to bill dense by KG.
+  let r = resolveForwarderRate(
+    cand({ manualOverride: true, manualKg: 50, manualCbm: 2000 }),
+    inp({ weightKg: 50, volumeCbm: 1 }),
+  );
+  eq("manual default: basis=cbm (ยึดตามคิว)", r.basis, "cbm");
+  near("manual default: subtotal=2000", r.transportSubtotal, 2000);
+  // kg-only manual (no CBM rate) → fall back to KG, never ฿0.
+  r = resolveForwarderRate(
+    cand({ manualOverride: true, manualKg: 50, manualCbm: 0 }),
+    inp({ weightKg: 50, volumeCbm: 1 }),
+  );
+  eq("manual kg-only (no cbm) → KG fallback", r.basis, "kg");
+  near("manual kg-only: subtotal=2500", r.transportSubtotal, 2500);
+  eq("manual kg-only: rateMissing=false", r.rateMissing, false);
 }
 
 // ── 5b. KG vs CBM tie → CBM wins (legacy `>=`, L1993) ──
@@ -168,14 +192,21 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("comparison<=thr: subtotal=5000 (ignores higher KG)", r.transportSubtotal, 5000);
 }
 
-// ── 6c. customComparison forces threshold 200 (fresh) / 150 (refOrder) ──
+// ── 6c. customComparison: threshold = clamp(value||250, 250, 350) (owner 2026-06-23) ──
 {
-  // KGPerCBM = 175. fresh → thr 200 → 175<=200 → CBM. refOrder → thr 150 → 175>150 → KG.
   const c = cand({ isSvip: true, svipKg: 10, svipCbm: 5000 });
-  const fresh = resolveForwarderRate(c, inp({ weightKg: 175, volumeCbm: 1, customComparison: true, hasRefOrder: false }));
-  eq("customComparison fresh (thr200): CBM", fresh.basis, "cbm");
-  const linked = resolveForwarderRate(c, inp({ weightKg: 175, volumeCbm: 1, customComparison: true, hasRefOrder: true }));
-  eq("customComparison refOrder (thr150): KG", linked.basis, "kg");
+  // blank value → default 250. kg/cbm 175 < 250 → CBM.
+  let r = resolveForwarderRate(c, inp({ weightKg: 175, volumeCbm: 1, customComparison: true }));
+  eq("customComparison default 250: 175<250 → CBM", r.basis, "cbm");
+  // typed 300 (in range). kg/cbm 400 > 300 → KG.
+  r = resolveForwarderRate(c, inp({ weightKg: 400, volumeCbm: 1, customComparison: true, comparisonValue: 300 }));
+  eq("customComparison 300: 400>300 → KG", r.basis, "kg");
+  // typed 999 clamps to 350. kg/cbm 300 < 350 → CBM (clamp caps a too-high thr).
+  r = resolveForwarderRate(c, inp({ weightKg: 300, volumeCbm: 1, customComparison: true, comparisonValue: 999 }));
+  eq("customComparison 999→clamp350: 300<350 → CBM", r.basis, "cbm");
+  // typed 100 clamps to 250. kg/cbm 260 > 250 → KG (clamp raises a too-low thr).
+  r = resolveForwarderRate(c, inp({ weightKg: 260, volumeCbm: 1, customComparison: true, comparisonValue: 100 }));
+  eq("customComparison 100→clamp250: 260>250 → KG", r.basis, "kg");
 }
 
 // ── 7. SVIP-but-warehouse-missing EDGE → rate 0 → rateMissing flag ──
@@ -227,9 +258,11 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 
 // ── 9. varchar coercion (legacy stores rates/measurements as strings) ──
 {
+  // force KG (comparison value 0) to exercise the kg-rate string coercion —
+  // the default basis is now CBM (2026-06-23) so KG must be opted into.
   const r = resolveForwarderRate(
     cand({ isSvip: true, svipKg: "12.50", svipCbm: "0" }),
-    inp({ weightKg: "200", volumeCbm: "1" }),
+    inp({ weightKg: "200", volumeCbm: "1", comparisonEnabled: true, comparisonValue: 0 }),
   );
   eq("coerce: basis=kg", r.basis, "kg");
   near("coerce: subtotal = 200*12.5 = 2500", r.transportSubtotal, 2500);
@@ -302,17 +335,17 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("manual+doctier: discountApplied=0", r.docDiscountApplied, 0);
 }
 
-// ── 10f. discount can FLIP the winner CBM→KG in ราคามากสุด ──
+// ── 10f. default-CBM + doc-tier → CBM, NO max-of-both flip (owner 2026-06-23) ──
 {
-  // KG: 60×100=6000. CBM base 6500×1=6500 → CBM would win (6500>6000). With
-  // −800 → 5700×1=5700 < 6000 → KG now wins.
+  // KG would be 60×100=6000; CBM 6500−800=5700. Pre-2026-06-23 max-of-both would
+  // FLIP to KG (6000>5700); the new default ignores KG → bills the discounted CBM.
   const r = resolveForwarderRate(
     cand({ isGeneral: true, generalKg: { tier1: 60, tier2: 60, tier3: 60 }, generalCbm: { tier1: 6500, tier2: 6500, tier3: 6500 } }),
     inp({ weightKg: 100, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }),
   );
-  eq("flip: basis=kg (discounted CBM 5700 < KG 6000)", r.basis, "kg");
-  near("flip: subtotal=6000 (KG wins)", r.transportSubtotal, 6000);
-  near("flip: discountApplied=0 (KG won → no CBM discount)", r.docDiscountApplied, 0);
+  eq("default-CBM+doctier: basis=cbm (no flip)", r.basis, "cbm");
+  near("default-CBM+doctier: subtotal=5700 (6500−800)", r.transportSubtotal, 5700);
+  near("default-CBM+doctier: discountApplied=800", r.docDiscountApplied, 800);
 }
 
 // ── 10g. back-compat — every existing result now carries docDiscountApplied=0 ──
@@ -362,10 +395,12 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("total: KG subtotal = row weight 100 × 10", agg.transportSubtotal, 1000);
 }
 {
-  // back-compat: comparison OFF → comparisonKgPerCbm is ignored (ราคามากสุด path).
+  // comparison OFF → DEFAULT CBM (owner 2026-06-23). comparisonKgPerCbm ignored;
+  // KG is not billed without the tick.
   const c = cand({ isSvip: true, svipKg: 50, svipCbm: 2000 });
   const r = resolveForwarderRate(c, inp({ weightKg: 50, volumeCbm: 1, comparisonKgPerCbm: 999 }));
-  eq("total: comparison OFF ignores aggregate → KG wins (2500>2000)", r.basis, "kg");
+  eq("total: comparison OFF → default CBM (aggregate ignored)", r.basis, "cbm");
+  near("total: OFF subtotal=2000 (cbm 1 × 2000)", r.transportSubtotal, 2000);
 }
 
 // ── resolveBothBasisRates — DISPLAY helper: BOTH unit rates, no winner picked ──

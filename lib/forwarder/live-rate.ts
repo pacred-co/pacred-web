@@ -28,6 +28,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveForwarderRate,
   resolveBothBasisRates,
+  clampComparison,
   type ResolveRateCandidates,
   type ResolveRateInput,
   type ResolvedRate,
@@ -246,11 +247,14 @@ export async function resolveLiveForwarderRate(
   // resolver's EXISTING comparisonEnabled/comparisonValue inputs (force ON +
   // the admin-typed threshold), so NO rate math changes. When OFF (the default
   // for MOMO import / preview), the stored values flow through unchanged.
-  const comparisonEnabled = ctx.customComparisonSwitch === true ? true : ctx.userComparison;
-  const comparisonValue =
-    ctx.customComparisonSwitch === true
-      ? (ctx.customComparisonValue ?? 0)
-      : ctx.userComparisonValue;
+  // owner 2026-06-23: DEFAULT = คิดตามคิว (CBM). The KG-for-dense comparison is now
+  // OPT-IN per order via the ค่าเทียบ TICK ONLY — the customer's stored userComparison
+  // flag no longer auto-enables it (that flag is what billed PR106's dense boxes by
+  // KG when the owner wanted CBM). Ticked → clamp the typed ค่าเทียบ to [250, 350].
+  const comparisonEnabled = ctx.customComparisonSwitch === true;
+  const comparisonValue = ctx.customComparisonSwitch === true
+    ? clampComparison(ctx.customComparisonValue)
+    : ctx.userComparisonValue;
 
   // Build the resolver INPUT once + share it between the winner (the bill) and
   // the both-basis probe (the display) so the per-basis unit rates shown match

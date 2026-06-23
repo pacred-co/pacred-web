@@ -509,27 +509,27 @@ export function AdminForwarderEditForm({
                 className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
               />
               <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>
-                คิดค่าเทียบแบบกำหนดเอง
+                ใช้ค่าเทียบ — คิดกิโลของหนัก
               </span>
             </label>
             {customComparison === "1" ? (
               <div className="mt-1.5 flex items-end gap-2">
                 <label className="block">
-                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก.)</span>
+                  <span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก. · 250–350)</span>
                   <input
-                    type="number" min={0} step="1"
+                    type="number" min={250} max={350} step="1"
                     value={comparisonValue}
                     onChange={(e) => setComparisonValue(e.target.value)}
                     disabled={pending}
-                    placeholder="150"
+                    placeholder="250"
                     className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60"
                   />
                 </label>
-                {/* 2026-06-16 — wired: the save recomputes the price with this ค่าเทียบ. */}
-                <p className="text-[11px] text-amber-700 leading-snug max-w-[150px]">ใช้ตอนบันทึก · แทนค่าเทียบลูกค้าเฉพาะออเดอร์นี้</p>
+                {/* 2026-06-23 — default คิว · ติ๊กนี้ = ของหนักเกินค่าเทียบ คิดเป็นกิโล (250–350). */}
+                <p className="text-[11px] text-amber-700 leading-snug max-w-[160px]">ของหนักเกิน N กก./คิว → คิดตามกิโล · เฉพาะออเดอร์นี้</p>
               </div>
             ) : (
-              <p className="mt-1 text-[11px] text-muted leading-snug">ปิด = ค่าเทียบลูกค้า · เปิด = กำหนด KG/คิว เอง (&gt;ค่าเทียบ → คิดกก.)</p>
+              <p className="mt-1 text-[11px] text-muted leading-snug">ปิด = คิดตามคิว (ค่าเริ่มต้น) · เปิด = ของหนักเกินค่าเทียบ คิดเป็นกิโล</p>
             )}
           </div>
         </div>
