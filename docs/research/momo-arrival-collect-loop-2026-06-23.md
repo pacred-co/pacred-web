@@ -81,6 +81,17 @@ fstatus 7 ส่งแล้ว = จบ
   - **🚩 DECISION ต้องเคาะ:** เช้าโกดัง re-measure แล้วได้ cbm/น้ำหนัก **ต่างจาก MOMO** (MOMO ชอบมั่ว) → บิลที่เก็บล่วงหน้าไปแล้วจะ**ปรับยังไง?** (ก) เก็บส่วนต่างเพิ่ม/คืน · (ข) ล็อกราคาตาม MOMO ไม่ปรับ · (ค) re-measure ต้องตรง MOMO ±x% ไม่งั้นเตือน. = money policy เจ้าของเคาะ.
   - likely needs mig (track advance-billed + measurement-source) · test-first · NOT browser-test money on prod.
 
+### ✅ DECISION LOCKED (owner 2026-06-23 turn 2) — advance-billing = "ล็อกตาม MOMO + จุดเฟิม + แต้ม Excel"
+Owner chose **option 1**: bill on MOMO's scanned numbers (locked price · เก็บรอบเดียว) + **flag** if the morning re-measure differs > threshold (no silent auto-adjust). **PLUS a requirement:** ต้องมี **"จุดเฟิม" (confirm point)** และ/หรือ **ระบบอัพเดท คิว/น้ำหนัก จากไฟล์แพคกิ้งลิส Excel ของตู้ (จากแต้ม/iTAM)** — แต้ม's packing list is the authoritative measure (more reliable than MOMO).
+- **Foundation already exists:** the แต้ม warehouse-reconcile tool (`/admin/api-forwarder-momo/warehouse-reconcile` · 2026-06-19 · paste sheet → preview → apply → re-price non-billed rows · parser `lib/admin/taem-reconcile-parser.ts`). The owner now wants (a) an **Excel-upload** variant (needs an xlsx lib · the flagged follow-up) + (b) a **confirm step** before the advance bill locks.
+- **B-core build steps (NEXT focused build · money · test-first · likely a migration):**
+  1. แต้ม Excel-upload → reconcile cbm/weight onto tb_forwarder (extend the paste tool · xlsx lib) = the "firm" data source.
+  2. flow MOMO measure → tb_forwarder.fweight/fvolume (fallback when no แต้ม sheet yet) + tag measurement-source (MOMO vs แต้ม vs TH-remeasure).
+  3. eligibility relax: billable at fstatus 2/3 WHEN MOMO-confirmed (fcabinetnumber set) + measured + **a confirm flag (จุดเฟิม) is set** by staff.
+  4. advance bill = freight (locked on the firmed cbm/weight) + in-TH เหมาๆ, once per shipment → fstatus 5 → collect → 6.
+  5. morning TH re-measure: if |new − billed| > threshold → **flag for review** (no auto re-collect · option 1). Else proceed to dispatch (already works).
+- **= multi-piece money build + new dep (xlsx) + migration → do with fresh context, not rushed.**
+
 ### 🔧 CBM-default + manual basis toggle — precise spec (owner 2026-06-23: "ยึดตามคิวเป็น default · คนสลับ คิว↔กิโล ได้เอง")
 **Engine fact (must not get wrong):** `lib/forwarder/live-rate.ts:249` `comparisonEnabled = customComparisonSwitch || userComparison`. Two existing modes — **(A)** comparison ON → KG เมื่อ kg/คิว > ค่าเทียบ ; **(B)** comparison OFF → `max(คิว×rate, กิโล×rate)` (ราคามากสุด). **⚠️ ทั้ง 2 โหมด ของหนักออกมาเป็นกิโลอยู่ดี — ไม่มีโหมด "CBM ล้วน" วันนี้.** So owner's model needs:
 1. **โหมดใหม่ force-CBM** = default basis = CBM เสมอ (ข้าม ค่าเทียบ + ข้าม max) — `resolve-rate.ts` รับ input ใหม่ `forcedBasis?: 'cbm'|'kg'` (เมื่อ set → ใช้ basis นั้นตรงๆ, refPrice ตาม basis).
