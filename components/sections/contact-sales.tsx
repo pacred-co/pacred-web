@@ -25,6 +25,20 @@ function safeImageSrc(src: string | null | undefined): string {
   return FALLBACK_IMAGE;
 }
 
+/**
+ * Fisher-Yates shuffle (copy) → first N. Owner 2026-06-23: "สุ่ม 3 การ์ด ตลอด".
+ * Uses Math.random → CLIENT-ONLY (call inside an effect, never during SSR/initial
+ * render) or the server/client first paint diverge → hydration mismatch.
+ */
+function pickRandom<T>(list: T[], n: number): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
 type SalesPerson = {
   id: string;
   name: string;
@@ -61,36 +75,44 @@ interface ContactSalesProps {
 export function ContactSales({ hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
   const t = useTranslations("contactSales");
 
-  // Live roster (owner 2026-06-15: "ลูกค้าด้วย … ผูกกันออโต้") — the displayed
-  // team = the REAL flagged sales reps. Start from the curated cards (SSR/SEO +
-  // instant paint), then on mount swap to the live flagged set: each flagged rep
-  // keeps its curated card when one matches (art + copy), else a default card.
-  // Read failure / empty roster → keep the curated list (never empty).
-  const [displaySales, setDisplaySales] = useState<SalesPerson[]>(CURATED_SALES);
+  // Live roster (owner 2026-06-15 "ผูกกันออโต้" · 2026-06-23 "ต่อกับ user จริง · คน
+  // โดนปิดใช้งานหายไปเลย · สุ่ม 3 การ์ดตลอด"). Initial state = a DETERMINISTIC 3 (no
+  // Math.random during the SSR/first paint → no hydration mismatch); the random
+  // pick happens post-mount in the effect. SEO crawlers still see 3 real cards.
+  const [displaySales, setDisplaySales] = useState<SalesPerson[]>(() => CURATED_SALES.slice(0, 3));
   useEffect(() => {
     let alive = true;
     getPublicSalesRoster()
       .then((reps) => {
-        if (!alive || reps.length === 0) return;
-        const list: SalesPerson[] = reps.map((r) => {
-          const shortId = r.adminID.replace(/^admin_/, "");
-          const curated = CURATED_SALES.find((c) => c.name === r.name || c.id === shortId);
-          if (curated) return curated;
-          const photo = safeImageSrc(r.photo);
-          return {
-            id: r.adminID,
-            name: r.name,
-            roleKey: "roleSales",
-            taglineKey: "taglineGeneric",
-            phone: r.phone,
-            image: photo,
-            useContain: photo === FALLBACK_IMAGE,
-            altKey: "altGeneric",
-          };
-        });
-        setDisplaySales(list);
+        if (!alive) return;
+        // Display = the LIVE active sales pool. getActiveSalesReps already filters
+        // adminStatusA='1', so a deactivated rep is gone here automatically — no
+        // stale curated card shows. Each live rep keeps its curated art/copy when
+        // matched, else a default card. Empty/failed read → the curated marketing
+        // list (never blank).
+        const source: SalesPerson[] =
+          reps.length > 0
+            ? reps.map((r) => {
+                const shortId = r.adminID.replace(/^admin_/, "");
+                const curated = CURATED_SALES.find((c) => c.name === r.name || c.id === shortId);
+                if (curated) return curated;
+                const photo = safeImageSrc(r.photo);
+                return {
+                  id: r.adminID,
+                  name: r.name,
+                  roleKey: "roleSales",
+                  taglineKey: "taglineGeneric",
+                  phone: r.phone,
+                  image: photo,
+                  useContain: photo === FALLBACK_IMAGE,
+                  altKey: "altGeneric",
+                };
+              })
+            : CURATED_SALES;
+        // Always a RANDOM 3, re-rolled every page load (this effect runs each mount).
+        setDisplaySales(pickRandom(source, 3));
       })
-      .catch(() => { /* keep the curated fallback — never break the page */ });
+      .catch(() => { if (alive) setDisplaySales(pickRandom(CURATED_SALES, 3)); });
     return () => { alive = false; };
   }, []);
 
@@ -112,10 +134,11 @@ export function ContactSales({ hideAssuranceStrip = false, compact = false }: Co
           </p>
         </div>
 
-        {/* Team cards — ONE horizontal row on mobile showing 2 cards at a time,
-            swipe for the rest (ปอน 2026-06-21 "แถวเดียว แสดงผล 2 การ์ด เลื่อนได้");
-            3-up static grid on desktop. Internals scale down on mobile so the
-            narrow 2-up card never clips the phone pill (verified 360 + 320px). */}
+        {/* Team cards — always a RANDOM 3 (owner 2026-06-23 "สุ่ม 3 การ์ด ตลอด"), one
+            row: 3-up static grid on desktop (never wraps now); on mobile ONE
+            horizontal row showing 2 at a time, swipe for the 3rd (ปอน 2026-06-21).
+            Internals scale down on mobile so the narrow 2-up card never clips the
+            phone pill (verified 360 + 320px). */}
         <div className="mt-4 md:mt-10 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-[10px] px-[10px] items-stretch [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-5 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
           {displaySales.map((s) => (
             <div
