@@ -875,7 +875,9 @@ export function ForwardersTable({
                   return (
                     <Fragment key={group ? `g-${group.key}` : r.id}>
                     <tr
-                      className={`border-t border-border hover:bg-surface-alt/30 ${listRowTint(r.status, false, isOn)}`}
+                      // hover gray ONLY when NOT selected — else the hover wash
+                      // covered the green selected-highlight (owner 2026-06-23 bug).
+                      className={`border-t border-border ${isOn ? "" : "hover:bg-surface-alt/30"} ${listRowTint(r.status, false, isOn)}`}
                     >
                       <td className="px-2 py-2.5 w-8">
                         {group && memberIds ? (
