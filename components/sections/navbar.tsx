@@ -307,10 +307,18 @@ function UserMenu({ user, profile, prefetch }: { user: User; profile: ProfileLit
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Never surface the synthetic legacy email (`pcs-legacy-<code>@users.pacred.invalid`)
+  // to the customer — it's an internal auth placeholder, not their address
+  // (owner 2026-06-24: "ไหนจะมาขึ้น pcs โชว์ให้ลูกค้าเห็นอีก").
+  const isSynthetic = (e: string | null | undefined) =>
+    !!e && e.toLowerCase().endsWith("@users.pacred.invalid");
+  const realEmail =
+    (profile?.email && !isSynthetic(profile.email) ? profile.email : null) ??
+    (user.email && !isSynthetic(user.email) ? user.email : null);
   const displayName =
     profile?.first_name || profile?.last_name
       ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()
-      : (profile?.email ?? user.email ?? user.phone ?? "Member");
+      : (realEmail ?? profile?.member_code ?? user.phone ?? "Member");
   const initial = (displayName?.[0] ?? "U").toUpperCase();
   const isIncomplete = profile?.status === "incomplete";
 

@@ -136,29 +136,27 @@ export async function bridgeLegacyLogin(
     return { ok: false };
   }
 
-  // Password verified against the legacy passTam hash. Provision a Supabase
-  // user with that same plaintext password.
+  // Password verified against the legacy passTam hash. Now establish the
+  // Supabase session.
   //
-  // ⚠️ ALWAYS use the synthetic legacy email as the auth credential — NOT
-  // the customer's phone. The Phase-A bulk migration provisioned every
-  // legacy customer with `pcs-legacy-pr<n>@users.pacred.invalid` + no
-  // phone in auth.users (only the profile row carries the real number for
-  // SMS). Switching to a phone credential would:
-  //   1. Collide with Pacred-web staff/test accounts that registered with
-  //      the SAME phone (36+ such pairs observed 2026-05-24 — e.g. PR321
-  //      legacy customer วิสิฐ + PR132 admin วิสิฐ share +66948782006);
-  //      `signInWithPassword({phone})` resolves to the staff auth user
-  //      → the legacy customer signs in AS THE STAFF MEMBER. Wrong
-  //      identity. Tracked in docs/learnings/pacred-domain-knowledge.md.
-  //   2. Fail for the 8,896 legacy auth users that have NO phone column —
-  //      `signInWithPassword({phone})` returns "no user" because lookup
-  //      is by phone.
-  // The real phone stays on `profiles.phone` for SMS notifications and
-  // contact lookups — it's not load-bearing for auth.
-  const credential = { email: legacySyntheticEmail(row.userID) };
-
-  // We keep the phone normalized + diagnostic-logged when usable; the
-  // profile-row insert later reads `row.userTel` directly anyway.
+  // ⚠️ AUTHORITATIVE LINK = profiles.member_code → profiles.ID = auth.users.id
+  // (Phase-A 1:1). We resolve the EXISTING auth user through that link and use
+  // its REAL email — we do NOT re-derive the synthetic email and createUser.
+  //
+  // WHY (owner 2026-06-24, the PR050 fire): migration 0103 padded member_codes
+  // to ≥3 digits (PR50 → PR050), but the bulk-provisioned auth.users.email kept
+  // the OLD form (`pcs-legacy-pr50`), and ~34 migrated customers' emails are
+  // even scrambled (PR045 → `pcs-legacy-pr121`). `legacySyntheticEmail(member)`
+  // therefore no longer matches the real auth email for them. The old code
+  // derived that email and called createUser → since the derived email did NOT
+  // exist, Supabase CREATED A DUPLICATE auth user with an empty profile → the
+  // customer was bounced to /complete-profile and shown the synthetic email
+  // ("เละๆ มั่วๆ"). Resolving via member_code first eliminates the whole class.
+  //
+  // The auth credential is ALWAYS the synthetic email (never the phone): the
+  // bulk migration left auth.users with no phone, and 36+ staff/test accounts
+  // share customer phones — a phone credential would sign in as the wrong
+  // identity. The real phone lives on profiles.phone for SMS only.
   const e164 = normalizePhone(row.userTel ?? "");
   if (!isUsablePhone(e164)) {
     logger.debug(SCOPE, "legacy row has no usable phone — phone field on the profile stays empty", {
@@ -168,66 +166,36 @@ export async function bridgeLegacyLogin(
   }
 
   const admin = createAdminClient();
-  const { data: createData, error: createErr } = await admin.auth.admin.createUser({
-    ...credential,
-    password,
-    email_confirm: true,
-    user_metadata: {
-      legacy_user_id:     row.userID,
-      first_name:         row.userName,
-      last_name:          row.userLastName,
-      legacy_provisioned: true,
-    },
-  });
 
-  // If createUser failed because the synthetic email already exists (Phase-A
-  // bulk-provisioned all 8,895 legacy customers with these emails — but with
-  // a placeholder password, since the migration doesn't know the customer's
-  // plaintext password), we MUST update the existing user's password to the
-  // one the customer just typed (already verified against the legacy hash).
-  // Without this step, signInWithPassword would compare against the migration-
-  // time placeholder and fail — making the entire bridge unusable for migrated
-  // customers. We find the existing user by joining through profiles.ID and
-  // force-set the password via the admin API.
-  //
-  // Note: createData here is `{ user: User | null }` not `null` — supabase-js
-  // returns an object with a null `user` field on failure. So we check
-  // `!createData?.user` (the user object), not `!createData` itself.
-  if (createErr && !createData?.user) {
-    logger.debug(SCOPE, "createUser failed — existing legacy user, syncing password", {
+  // 1. Resolve the existing auth user via the authoritative profiles link.
+  const { data: existingProfile, error: profileLookupErr } = await admin
+    .from("profiles")
+    .select("ID")
+    .eq("member_code", row.userID)
+    .maybeSingle<{ ID: string }>();
+  if (profileLookupErr) {
+    logger.warn(SCOPE, "profile lookup failed", {
       userID: row.userID,
-      reason: createErr.message,
+      reason: profileLookupErr.message,
     });
-    // Find the existing auth.users.ID by joining through profiles.member_code:
-    // Phase-A migration created profiles.ID = auth.users.ID 1:1 for every
-    // legacy customer, so the profile row's UUID IS the auth user's UUID.
-    // We avoid `.schema("auth").from("users")` because the auth schema is
-    // not exposed via PostgREST by default in Supabase — that lookup would
-    // silently return null and the password sync would never apply.
-    const { data: existingProfile, error: profileLookupErr } = await admin
-      .from("profiles")
-      .select("ID")
-      .eq("member_code", row.userID)
-      .maybeSingle<{ ID: string }>();
+    return { ok: false };
+  }
 
-    if (profileLookupErr) {
-      logger.warn(SCOPE, "profile lookup for password sync failed", {
+  let authEmail: string;
+
+  if (existingProfile?.ID) {
+    // Existing migrated customer — use their REAL auth user (whatever email the
+    // migration stored), and force-set the password to the one just typed
+    // (verified against the legacy hash). No createUser → no duplicate.
+    const { data: existingUser, error: getErr } = await admin.auth.admin.getUserById(existingProfile.ID);
+    if (getErr || !existingUser?.user) {
+      logger.warn(SCOPE, "existing profile maps to a missing auth user", {
         userID: row.userID,
-        reason: profileLookupErr.message,
+        reason: getErr?.message,
       });
       return { ok: false };
     }
-    if (!existingProfile?.ID) {
-      // No profile bridges this member_code to an auth user — bail. The
-      // surface should be the "create new profile" branch below; we got
-      // here because createUser said the email exists, which means there
-      // IS an auth user without a matching profile. That's an inconsistent
-      // state that the bridge can't safely auto-recover from.
-      logger.warn(SCOPE, "createUser said email exists but no profile maps to this member_code", {
-        userID: row.userID,
-      });
-      return { ok: false };
-    }
+    authEmail = existingUser.user.email ?? legacySyntheticEmail(row.userID);
     const { error: updErr } = await admin.auth.admin.updateUserById(existingProfile.ID, {
       password,
       user_metadata: {
@@ -244,20 +212,42 @@ export async function bridgeLegacyLogin(
       });
       return { ok: false };
     }
-    logger.info(SCOPE, "password synced to existing legacy auth user", {
-      userID: row.userID,
+  } else {
+    // No profile yet — a never-provisioned legacy customer. Create the auth user
+    // with the synthetic email; ensureLegacyProfile creates the profile below.
+    authEmail = legacySyntheticEmail(row.userID);
+    const { data: createData, error: createErr } = await admin.auth.admin.createUser({
+      email:         authEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        legacy_user_id:     row.userID,
+        first_name:         row.userName,
+        last_name:          row.userLastName,
+        legacy_provisioned: true,
+      },
     });
+    if (createErr && !createData?.user) {
+      // The synthetic email exists but no profile maps to this member_code — an
+      // orphan auth user (an inconsistent/legacy-scaffold state). Do NOT create
+      // a second user (that was the dup bug). Bail safely → manual reconcile.
+      logger.warn(SCOPE, "createUser failed + no profile for member_code — manual reconcile needed", {
+        userID: row.userID,
+        reason: createErr.message,
+      });
+      return { ok: false };
+    }
   }
 
   const supabase = await createClient();
   const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-    ...credential,
+    email: authEmail,
     password,
   });
   if (signInErr || !signInData.user) {
     logger.warn(SCOPE, "legacy bridge sign-in failed after provisioning", {
       userID:     row.userID,
-      credential: credential.email,
+      credential: authEmail,
       errCode:    signInErr?.code,
       errStatus:  signInErr?.status,
       errMessage: signInErr?.message,
@@ -289,9 +279,9 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
 
   const { data: existing, error: existingErr } = await admin
     .from("profiles")
-    .select("ID")
+    .select("ID, status, first_name, last_name")
     .eq("member_code", row.userID)
-    .maybeSingle();
+    .maybeSingle<{ ID: string; status: string; first_name: string | null; last_name: string | null }>();
   if (existingErr) {
     console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
   }
@@ -303,6 +293,21 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
       logger.warn(SCOPE, "member_code already bound to a different profile — manual reconcile", {
         userID: row.userID,
       });
+      return;
+    }
+    // owner 2026-06-24 — migrated customers ALREADY have name/phone/address in
+    // tb_users; the migration left ~6,931 of them at status='incomplete', which
+    // bounced them to /complete-profile on every login ("ก็มีหมดแล้ว ยังต้องตั้ง
+    // ใหม่อีกทำไม"). Heal on login: flip to 'active' + backfill the name from
+    // tb_users if the profile's is blank. Never touch 'suspended'.
+    if (existing.status === "incomplete") {
+      const patch: Record<string, string> = { status: "active" };
+      if (!existing.first_name && row.userName) patch.first_name = row.userName;
+      if (!existing.last_name && row.userLastName) patch.last_name = row.userLastName;
+      const { error: healErr } = await admin.from("profiles").update(patch).eq("ID", authUserId);
+      if (healErr) {
+        logger.warn(SCOPE, "profile heal incomplete→active failed", { userID: row.userID, reason: healErr.message });
+      }
     }
     return;
   }
