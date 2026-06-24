@@ -88,6 +88,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const [deliveryTh, setDeliveryTh]   = useState("0");
   const [other, setOther]             = useState("0");
   const [discount, setDiscount]       = useState("0");
+  const [maoFeeEdit, setMaoFeeEdit]   = useState<string | null>(null); // null = follow auto เหมาๆ
   const [note, setNote]               = useState("");
 
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -168,6 +169,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     setEligible(null);
     setSelectedIds(new Set());
     setAmountEdit(new Map());
+    setMaoFeeEdit(null);
     setFwdErr(null);
     setLoadingFwd(uid !== "");
   }
@@ -205,7 +207,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   // เหมาๆ (PCSF flat ฿100 · ภูม 2026-06-23) — Σ of the SELECTED rows' anchor fee
   // (once per shipment · SAME engine as createBillingRunInvoice via mao_fee_thb). Was
   // MISSING → the preview ran ฿100 short of the saved bill; now they match exactly.
-  const maoFee = useMemo(() => {
+  const autoMaoFee = useMemo(() => {
     if (!eligible) return 0;
     let sum = 0;
     for (const f of eligible) {
@@ -213,6 +215,12 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     }
     return Math.round(sum * 100) / 100;
   }, [eligible, selectedIds]);
+  // EDITABLE (ภูม 2026-06-23: เซลเก็บรอบเดียว ลูกค้าหลายออเดอร์ → คิดเหมาๆครั้งเดียว ไม่ใช่
+  // ฿100×N). null = follow the auto Σ; a typed value overrides it (clamped ≥0).
+  const maoFee =
+    maoFeeEdit !== null && maoFeeEdit.trim() !== "" && Number.isFinite(Number(maoFeeEdit))
+      ? Math.max(0, Number(maoFeeEdit))
+      : autoMaoFee;
 
   const numChn = Number(deliveryChn) || 0;
   const numTh  = Number(deliveryTh)  || 0;
@@ -290,6 +298,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         deliveryThThb:    numTh,
         otherThb:         numOther,
         discountThb:      numDiscount,
+        maoFeeThb:        maoFee,
         noteForCustomer:  note,
         allowUnmeasured:  zeroIds.length > 0,
         overrides,
@@ -577,14 +586,16 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             hint={`จาก ${selectedIds.size} รายการที่ tick`}
             value={subtotal}
           />
-          {/* เหมาๆ (PCSF ฿100/ชิปเมนต์) — auto · only when a เหมาๆ row is selected.
-              ภูม 2026-06-23: แสดงให้เห็น พนักงานจะได้ไม่กรอกเองในช่องค่าขนส่งไทย. */}
-          {maoFee > 0 && (
+          {/* เหมาๆ (PCSF ฿100/ชิปเมนต์) — EDITABLE input (ภูม 2026-06-23: เซลเก็บรอบเดียว
+              ลูกค้าหลายออเดอร์ → แก้เป็นคิดครั้งเดียว). Default = the auto Σ; shows for a
+              เหมาๆ order, or once the admin has typed an override. */}
+          {(autoMaoFee > 0 || maoFeeEdit !== null) && (
             <LedgerRow
-              kind="auto"
-              label="+ ค่าส่งเหมาๆ"
-              hint="PCSF · ฿100 ต่อชิปเมนต์ (บวกอัตโนมัติ · ไม่ต้องกรอกในช่องค่าขนส่งไทย)"
-              value={maoFee}
+              kind="input"
+              label="+ ค่าส่งเหมาๆ (PCSF)"
+              hint="auto ฿100/ชิปเมนต์ · แก้ได้ (เซลเก็บรอบเดียว ลูกค้าหลายออเดอร์ → คิดครั้งเดียว)"
+              value={maoFeeEdit ?? String(autoMaoFee)}
+              onChange={setMaoFeeEdit}
             />
           )}
           {/* 4 admin-override rows — input pinned right */}

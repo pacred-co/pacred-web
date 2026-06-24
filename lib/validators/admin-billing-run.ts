@@ -63,6 +63,11 @@ export const createBillingRunInvoiceSchema = z.object({
   deliveryThThb:  positiveMoney.default(0),
   otherThb:       positiveMoney.default(0),
   discountThb:    positiveMoney.default(0),
+  /** ค่าส่งเหมาๆ (PCSF flat ฿100/shipment · ภูม 2026-06-23) — admin-EDITABLE on the create
+   *  form (default = the auto Σ once-per-shipment fee). The override exists for "เซลเก็บ
+   *  รอบเดียว แต่ลูกค้ามีหลายออเดอร์" → charge เหมาๆ once instead of ฿100×N. When absent the
+   *  action computes the auto value. Bounded by positiveMoney. */
+  maoFeeThb: positiveMoney.optional(),
   /** หมายเหตุสำหรับลูกค้า — free text. Max 2000 to bound payload. */
   noteForCustomer: z.string().trim().max(2000, "หมายเหตุยาวเกินไป").default(""),
   /** Build A guard 2026-06-19 — explicit ack that the admin is billing row(s) with

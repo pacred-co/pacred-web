@@ -1151,9 +1151,13 @@ export async function createBillingRunInvoice(
       // เหมาๆ (PCSF ฿100) — a SEPARATE summary line, Σ the anchor fee over the
       // selected rows (once per shipment). Kept OFF subtotal so subtotal = Σ items
       // (mig 0138 invariant) holds — it rides total_thb only, stored in mao_fee_thb.
-      const maoFeeTotal = Math.round(
+      const autoMaoFee = Math.round(
         v.forwarderIds.reduce((sum, id) => sum + (maoFeeByID.get(id) ?? 0), 0) * 100,
       ) / 100;
+      // ภูม 2026-06-23 — the admin can EDIT the เหมาๆ on the create form (เซลเก็บรอบเดียว
+      // แต่ลูกค้ามีหลายออเดอร์ → คิดเหมาๆครั้งเดียว ไม่ใช่ ฿100×N). Use the submitted value
+      // when present (bounded by the schema's positiveMoney), else the auto Σ.
+      const maoFeeTotal = v.maoFeeThb != null ? Math.round(v.maoFeeThb * 100) / 100 : autoMaoFee;
       const total = Math.max(
         0,
         subtotal + maoFeeTotal + v.deliveryChnThb + v.deliveryThThb + v.otherThb - v.discountThb,
