@@ -851,13 +851,13 @@ export async function renderLegacyCustomerView(
                     <Td>
                       <div className="flex flex-col gap-1">
                         <Link
-                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          href={`/admin/forwarders/${r.id}`}
                           className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50 text-center"
                         >
                           ดูรายละเอียด
                         </Link>
                         <Link
-                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          href={`/admin/forwarders/${r.id}`}
                           className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500 text-center"
                         >
                           อัปเดตรายการ

@@ -520,7 +520,7 @@ function RunRow({ row }: { row: {
               {STATUS_LABEL[row.item.fdistatus] ?? `?${row.item.fdistatus}?`}
             </span>
             <Link
-              href={`/admin/forwarders/${encodeURIComponent(fNo)}`}
+              href={`/admin/forwarders/${fwd.id}`}
               className="font-mono text-xs text-primary-600 hover:underline"
             >
               {fNo}

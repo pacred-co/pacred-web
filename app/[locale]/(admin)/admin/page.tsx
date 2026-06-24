@@ -699,7 +699,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           detail: `<span class="font-semibold text-foreground">#${escapeHtmlInline(fno)}</span> · ${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg` +
             (track ? ` · 🔖 ${escapeHtmlInline(track)}` : "") +
             (cab ? ` · 📦 ตู้ ${escapeHtmlInline(cab)}` : ""),
-          link: `/admin/forwarders/${encodeURIComponent(fno)}`,
+          link: `/admin/forwarders/${r.id}`,
           status: r.fstatus ?? "1",
           slipUrl: fcoverMap[String(r.id)] ?? null,
         };

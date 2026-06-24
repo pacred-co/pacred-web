@@ -531,7 +531,7 @@ function Card({
       {/* Top row: F-no + status badge */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Link
-          href={`/admin/forwarders/${encodeURIComponent(fNo)}`}
+          href={`/admin/forwarders/${forwarder.id}`}
           className="font-mono text-base font-bold text-primary-600 hover:underline"
         >
           {fNo}

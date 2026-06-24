@@ -651,7 +651,7 @@ export default async function AdminDriverBatchDetailPage({
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img src={coverUrl} alt="" className="h-8 w-8 rounded border border-border object-cover flex-shrink-0" />
                                     )}
-                                    <Link href={`/admin/forwarders/${fNo}`} className="font-mono text-primary-600 hover:underline">
+                                    <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600 hover:underline">
                                       {fNo}
                                     </Link>
                                   </div>
@@ -664,7 +664,7 @@ export default async function AdminDriverBatchDetailPage({
                                   ) : "—"}
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <Link href={`/admin/forwarders/${fNo}`} className="hover:underline">
+                                  <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline">
                                     {forwarder.ftrackingchn ?? "—"}
                                   </Link>
                                   {forwarder.fpallet && (

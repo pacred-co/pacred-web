@@ -1612,10 +1612,11 @@ export default async function ServiceImportDetailPage({
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(priceOther)}</dd>
                               <dt className="text-muted">{t("colDiscount")}</dt>
                               <dd className="text-right font-medium tabular-nums">฿{numberFormat2(fDiscount)}</dd>
-                              {fUserCompany === "1" && (
-                                <>
-                                  <dt className="text-muted">LESS WITHHOLDING TAX 1%</dt>
-                                  <dd className="text-right font-medium tabular-nums">
+                              {/* owner 2026-06-24: always show (— when no WHT applies). */}
+                              <dt className="text-muted">LESS WITHHOLDING TAX 1%</dt>
+                              <dd className="text-right font-medium tabular-nums">
+                                {fUserCompany === "1" ? (
+                                  <>
                                     ฿
                                     {numberFormat2(
                                       (fTotalPrice +
@@ -1628,9 +1629,11 @@ export default async function ServiceImportDetailPage({
                                         fDiscount) *
                                         0.01,
                                     )}
-                                  </dd>
-                                </>
-                              )}
+                                  </>
+                                ) : (
+                                  <span className="text-muted">—</span>
+                                )}
+                              </dd>
                               <dt className="font-semibold text-foreground border-t border-border pt-2">{t("colTotalPrice")}</dt>
                               <dd className="text-right font-bold tabular-nums text-red-600 border-t border-border pt-2">
                                 ฿{numberFormat2(priceAllUser)}
@@ -1659,13 +1662,14 @@ export default async function ServiceImportDetailPage({
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colService")}</th>
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colOther")}</th>
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colDiscount")}</th>
-                                    {fUserCompany === "1" && (
-                                      <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
-                                        LESS
-                                        <br /> WITHHOLDING <br />
-                                        TAX 1%
-                                      </th>
-                                    )}
+                                    {/* owner 2026-06-24: ALWAYS show this column for every
+                                        customer (นิติ/บุคคล) — when no WHT applies the cell is
+                                        just blank ("—"), the column never disappears. */}
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
+                                      LESS
+                                      <br /> WITHHOLDING <br />
+                                      TAX 1%
+                                    </th>
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colTotalPrice")}</th>
                                   </tr>
                                 </thead>
@@ -1704,22 +1708,26 @@ export default async function ServiceImportDetailPage({
                                     <td className="px-2 py-2 text-right tabular-nums border-b border-border">
                                       ฿{numberFormat2(fDiscount)}
                                     </td>
-                                    {fUserCompany === "1" && (
-                                      <td className="px-2 py-2 text-right tabular-nums border-b border-border">
-                                        ฿
-                                        {numberFormat2(
-                                          (fTotalPrice +
-                                            fTransportPrice +
-                                            fPriceUpdate +
-                                            fShippingService +
-                                            fTransportPriceChnThb +
-                                            priceCrate +
-                                            priceOther -
-                                            fDiscount) *
-                                            0.01,
-                                        )}
-                                      </td>
-                                    )}
+                                    <td className="px-2 py-2 text-right tabular-nums border-b border-border">
+                                      {fUserCompany === "1" ? (
+                                        <>
+                                          ฿
+                                          {numberFormat2(
+                                            (fTotalPrice +
+                                              fTransportPrice +
+                                              fPriceUpdate +
+                                              fShippingService +
+                                              fTransportPriceChnThb +
+                                              priceCrate +
+                                              priceOther -
+                                              fDiscount) *
+                                              0.01,
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-muted">—</span>
+                                      )}
+                                    </td>
                                     <td className="px-2 py-2 text-right tabular-nums font-bold text-red-600 border-b border-border">
                                       ฿{numberFormat2(priceAllUser)}
                                     </td>

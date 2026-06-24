@@ -277,9 +277,12 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
   const refPriceCell = uniqRef.size === 1 ? [...uniqRef][0] : "—";
   const rateCell = uniqRate.size === 1 ? fmtMoney([...uniqRate][0]) : "—";
 
-  // LESS WITHHOLDING TAX 1% — PCS column (owner ภูม 2026-06-18). Juristic
-  // customer (นิติบุคคล) ≥ ฿1,000 → ราคารวม shown NET (gross − 1% WHT), matching
-  // legacy detail.php L374 + the PCS update box. Non-juristic → no column.
+  // LESS WITHHOLDING TAX 1% — PCS column (owner ภูม 2026-06-18 · owner 2026-06-24).
+  // The legacy "รายการสินค้า" table ALWAYS renders this column for EVERY customer
+  // (นิติ/บุคคล · ยอดถึง/ไม่ถึง) — when no WHT applies the cell is just blank, the
+  // column never disappears (owner: "ขึ้นโชว์ตลอด ถ้าไม่หักก็ไม่ต้องใส่ยอด").
+  // WHT is only DEDUCTED for a juristic customer (นิติบุคคล) on ยอด ≥ ฿1,000
+  // (legacy detail.php L374) — so `applyWHT` gates the AMOUNT, never the column.
   const applyWHT = isJuristic && totals.priceAllUser >= 1000;
   const wht1 = applyWHT ? Math.round(totals.priceAllUser * 0.01 * 100) / 100 : 0;
   const netAfterWht = totals.priceAllUser - wht1;
@@ -307,9 +310,7 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
             <th className={TH}>ค่าบริการ</th>
             <th className={TH}>ค่าอื่นๆ</th>
             <th className={TH}>ส่วนลด</th>
-            {applyWHT && (
-              <th className={`${TH} text-[11px] leading-tight text-blue-700`}>LESS<br />WITHHOLDING<br />TAX 1%</th>
-            )}
+            <th className={`${TH} text-[11px] leading-tight text-blue-700`}>LESS<br />WITHHOLDING<br />TAX 1%</th>
             <th className={`${TH} font-bold`}>ราคารวม</th>
           </tr>
         </thead>
@@ -335,7 +336,7 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
             <td className={TD}>{fmtMoney(totals.fShippingService)}</td>
             <td className={TD}>{fmtMoney(totals.priceOther)}</td>
             <td className={`${TD} text-amber-700`}>{totals.fDiscount > 0 ? `−${fmtMoney(totals.fDiscount)}` : fmtMoney(0)}</td>
-            {applyWHT && <td className={`${TD} text-blue-700`}>−{fmtMoney(wht1)}</td>}
+            <td className={`${TD} text-blue-700`}>{applyWHT ? `−${fmtMoney(wht1)}` : <span className="text-muted">—</span>}</td>
             <td className={`${TD} font-bold text-red-600`}>{fmtMoney(netAfterWht)}</td>
           </tr>
         </tbody>

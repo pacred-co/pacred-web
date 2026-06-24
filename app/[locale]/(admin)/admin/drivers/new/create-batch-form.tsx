@@ -371,7 +371,7 @@ export function CreateBatchForm({
                           <tr key={it.id} className="border-t border-border/60 odd:bg-white even:bg-surface-alt/20 hover:bg-primary-50/30">
                             <td className="px-3 py-2 align-top">
                               <Link
-                                href={`/admin/forwarders/${it.fidorco}`}
+                                href={`/admin/forwarders/${it.id}`}
                                 className="font-mono text-primary-600 hover:underline"
                                 target="_blank"
                               >

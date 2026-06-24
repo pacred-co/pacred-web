@@ -700,7 +700,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                         `/admin/forwarders/[fNo]` (plural) and accepts either
                         `fidorco` or numeric `id` via legacy-fallback lookup. */}
                     <Link
-                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                      href={`/admin/forwarders/${r.id}`}
                       className="text-primary-600 hover:underline"
                     >
                       {r.ftrackingchn ?? "-"}
@@ -861,7 +861,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       <div className="mt-1">
                         {/* ภูม #5 2026-05-29: same path-fix as tracking link above. */}
                         <Link
-                          href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
+                          href={`/admin/forwarders/${r.id}`}
                           className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[11px] px-1.5 py-0.5"
                         >
                           เครดิตได้
