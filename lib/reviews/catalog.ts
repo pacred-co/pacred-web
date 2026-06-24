@@ -41,6 +41,14 @@ export type Review = {
   rating: number;
   tagKeys: TagKey[];
   image?: string;
+  /** Optional explicit gallery (Trip.com-style mosaic). Falls back to same-type real photos. */
+  images?: string[];
+  // ── case-specific ops detail (owner 2026-06-24) — override the service-type default ──
+  term?: string;          // EXW/FOB/CIF/DDP — else derived from tags
+  truck?: string;         // หัวลาก / รถ 6 ล้อ … — else derived from FCL/LCL/air
+  labor?: string;         // มี/ไม่มี/ลูกค้าจัดเอง — else "มีบริการ (แจ้งล่วงหน้า)"
+  durationHours?: number; // total hours — else a per-mode typical range (days)
+  deliveryZone?: string;  // กรุงเทพฯ/ปริมณฑล/… — else derived from dest
   // ── product / route / HS-code dimension (SEO slug source · 2026-06-11) ──
   // Keys into COUNTRY / ORIGIN / DEST / PRODUCT below. Optional with safe
   // fallbacks so the page never breaks if a row is missing one.
@@ -364,4 +372,90 @@ export function getRelatedReviews(id: string, limit = 6): Review[] {
     (r) => r.id !== id && r.titleKey !== current.titleKey,
   );
   return [...sameTitle, ...others].slice(0, limit);
+}
+
+/**
+ * Gallery image set for a case's hero (Trip.com-style mosaic + lightbox). Uses the
+ * review's own cover first, then tops up with REAL Pacred work photos from the SAME
+ * service type so the mosaic is always full — every image is a genuine portfolio
+ * photo, category-matched (an FCL case shows other FCL work, etc.). A review may set
+ * an explicit `images` list for exact per-case photos (takes precedence).
+ */
+export function reviewGalleryImages(r: Review, max = 8): string[] {
+  const own = r.image ? [r.image] : [];
+  const sameType = REVIEWS.filter((x) => x.type === r.type && x.image).map((x) => x.image as string);
+  const ordered = r.images && r.images.length ? r.images : [...own, ...sameType];
+  return [...new Set(ordered)].slice(0, Math.max(1, max));
+}
+
+// ───────────────────── logistics fact grid (owner 2026-06-24) ─────────────────
+// The "ข้อมูลขนส่ง" cards the owner asked to surface on a case page: service/mode ·
+// Term · port/route · delivery zone · truck · labor · product · lead time · HS.
+// Derived from the review's REAL tags/route/product where possible; the case-
+// specific ops fields (term/truck/labor/durationHours/deliveryZone) take a per-
+// review override and otherwise fall back to the service-type standard.
+
+function transportLabel(r: Review, locale: Loc): string {
+  if (r.tagKeys.includes("tagAir")) return locale === "en" ? "Air" : "ทางอากาศ";
+  if (r.tagKeys.includes("tagRoad")) return locale === "en" ? "Road" : "ทางรถ";
+  return locale === "en" ? "Sea" : "ทางเรือ";
+}
+
+function termLabel(r: Review, locale: Loc): string {
+  if (r.term) return r.term;
+  if (r.tagKeys.includes("tagDdp")) return "DDP";
+  if (r.tagKeys.includes("tagCif")) return "CIF";
+  return locale === "en" ? "As agreed" : "ตามตกลง";
+}
+
+function deliveryZoneLabel(r: Review, locale: Loc): string {
+  if (r.deliveryZone) return r.deliveryZone;
+  const en = locale === "en";
+  switch (r.dest) {
+    case "bangkok": return en ? "Bangkok & vicinity" : "กรุงเทพฯ และปริมณฑล";
+    case "suvarnabhumi": return en ? "Bangkok & vicinity" : "กรุงเทพฯ และปริมณฑล";
+    case "laemchabang": return en ? "Laem Chabang · onward nationwide" : "แหลมฉบัง · ต่อรถทั่วไทย";
+    default: return en ? "Nationwide" : "ทั่วประเทศ";
+  }
+}
+
+function truckLabel(r: Review, locale: Loc): string {
+  if (r.truck) return r.truck;
+  const en = locale === "en";
+  if (r.tagKeys.includes("tagAir")) return en ? "Van / pickup" : "รถตู้ / กระบะ";
+  if (r.tagKeys.includes("tagFcl")) return en ? "Trailer (container)" : "หัวลาก (ตู้คอนเทนเนอร์)";
+  if (r.tagKeys.includes("tagLcl")) return en ? "6–10 wheeler (by volume)" : "รถ 6 / 10 ล้อ ตามปริมาณ";
+  return en ? "By cargo size" : "ตามขนาดสินค้า";
+}
+
+function laborLabel(r: Review, locale: Loc): string {
+  if (r.labor) return r.labor;
+  return locale === "en" ? "Available (on request)" : "มีบริการ (แจ้งล่วงหน้า)";
+}
+
+function leadTimeLabel(r: Review, locale: Loc): string {
+  if (r.durationHours) return `${r.durationHours} ${locale === "en" ? "hrs" : "ชม."}`;
+  const en = locale === "en";
+  if (r.tagKeys.includes("tagAir")) return en ? "~1–3 days" : "ประมาณ 1-3 วัน";
+  if (r.tagKeys.includes("tagRoad")) return en ? "~4–6 days" : "ประมาณ 4-6 วัน";
+  return en ? "~7–14 days" : "ประมาณ 7-14 วัน";
+}
+
+export type LogisticsFact = { key: string; label: string; value: string };
+
+export function reviewLogisticsFacts(r: Review, locale: Loc): LogisticsFact[] {
+  const en = locale === "en";
+  const mode = transportLabel(r, locale);
+  const container = containerModeLabel(r, locale);
+  return [
+    { key: "service", label: en ? "Service / mode" : "บริการ / ช่องทาง", value: container ? `${mode} · ${container}` : mode },
+    { key: "term", label: "Term", value: termLabel(r, locale) },
+    { key: "port", label: en ? "Port / route" : "Port / เส้นทาง", value: reviewRoute(r, locale) },
+    { key: "zone", label: en ? "Delivery area" : "เขตจัดส่ง", value: deliveryZoneLabel(r, locale) },
+    { key: "truck", label: en ? "Truck" : "รถขนส่ง", value: truckLabel(r, locale) },
+    { key: "labor", label: en ? "Labor" : "แรงงาน", value: laborLabel(r, locale) },
+    { key: "product", label: en ? "Product" : "สินค้า", value: reviewProductLabel(r, locale) },
+    { key: "duration", label: en ? "Lead time" : "ระยะเวลาดำเนินการ", value: leadTimeLabel(r, locale) },
+    { key: "hs", label: "HS Code", value: reviewHsCode(r) },
+  ];
 }
