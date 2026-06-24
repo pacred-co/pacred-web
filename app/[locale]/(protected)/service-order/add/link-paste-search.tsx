@@ -104,9 +104,9 @@ export function LinkPasteSearch({ rsDefault }: LinkPasteSearchProps) {
         setQty(1);
         setAddNote("");
       } else {
-        // The 151-cap trigger raises a postgres error with the literal
-        // phrase "cart cap reached (151 items)" — surface a friendlier
-        // message when we detect it.
+        // The 10000-cap trigger raises a postgres error with the literal
+        // phrase "cart cap reached (10000 items)" — surface a friendlier
+        // message when we detect it. (Matched number-agnostically.)
         const isCartFull = /cart cap reached/i.test(r.error);
         setFlash(
           isCartFull

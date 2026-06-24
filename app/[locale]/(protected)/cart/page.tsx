@@ -58,9 +58,10 @@ import {
 // Server Components reading cookies/auth under a layout must be dynamic.
 export const dynamic = "force-dynamic";
 
-// cart.php L17 / L76 — cart capacity cap: countFor = 151 - countCart.
+// cart.php L17 / L76 — cart capacity cap: countFor = 10000 - countCart.
 // Kept for parity (the legacy add-flow uses it; the read view does not).
-const CART_CAPACITY = 151;
+// 2026-06-23 (ภูม · owner-approved): raised 151 → 10000.
+const CART_CAPACITY = 10000;
 
 // "รับเองที่โกดัง" (self pick-up) — wired to Pacred's TH receiving warehouse
 // (ADDRESSES.warehouseTh — สมุทรสาคร). Legacy PCS hardcoded a Bangkok address;

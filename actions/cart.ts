@@ -834,10 +834,11 @@ export async function addCartItem(
 
   const admin = createAdminClient();
 
-  // Legacy cart cap: COUNT(tb_cart) for this user must stay < 151
-  // (cart.php L17/L76 `151 - countCart`). The rebuilt twin enforced this via
+  // Legacy cart cap: COUNT(tb_cart) for this user must stay < 10000
+  // (cart.php L17/L76 `10000 - countCart`). The rebuilt twin enforced this via
   // a Postgres trigger on `cart_items`; tb_cart has no such trigger, so we
-  // pre-check in code — keep the customer-visible "151 items" guard.
+  // pre-check in code — keep the customer-visible "10000 items" guard.
+  // 2026-06-23 (ภูม · owner-approved): raised 151 → 10000.
   const { count: cartCount, error: countErr } = await admin
     .from("tb_cart")
     .select("id", { count: "exact", head: true })
@@ -845,8 +846,8 @@ export async function addCartItem(
   if (countErr) {
     console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
   }
-  if ((cartCount ?? 0) >= 151) {
-    return { ok: false, error: "cart cap reached (151 items)" };
+  if ((cartCount ?? 0) >= 10000) {
+    return { ok: false, error: "cart cap reached (10000 items)" };
   }
 
   const { data: created, error } = await admin
@@ -1026,8 +1027,9 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 
   const admin = createAdminClient();
 
-  // Cap-gate the whole batch: existing count + new rows must stay ≤ 151
+  // Cap-gate the whole batch: existing count + new rows must stay ≤ 10000
   // (legacy cart.php L17/L76). Refuse the batch rather than partial-insert.
+  // 2026-06-23 (ภูม · owner-approved): raised 151 → 10000.
   const { count: cartCount, error: countErr } = await admin
     .from("tb_cart")
     .select("id", { count: "exact", head: true })
@@ -1035,8 +1037,8 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
   if (countErr) {
     console.error(`[tb_cart cap count] failed`, { code: countErr.code, message: countErr.message });
   }
-  if ((cartCount ?? 0) + validated.length > 151) {
-    return { ok: false, error: "cart cap reached (151 items)" };
+  if ((cartCount ?? 0) + validated.length > 10000) {
+    return { ok: false, error: "cart cap reached (10000 items)" };
   }
 
   const payload = validated.map((d) => ({

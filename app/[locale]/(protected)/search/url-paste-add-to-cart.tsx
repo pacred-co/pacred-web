@@ -321,7 +321,7 @@ export function UrlPasteAddToCart({
           setTimeout(() => setSuccess(false), 4000);
         } else {
           const msg =
-            res.error === "cart cap reached (151 items)"
+            res.error === "cart cap reached (10000 items)"
               ? t("cartFullMessage")
               : t("addFailed");
           setError(msg);
@@ -376,7 +376,7 @@ export function UrlPasteAddToCart({
       } else {
         // Translate the few error codes the customer cares about.
         const msg =
-          res.error === "cart cap reached (151 items)"
+          res.error === "cart cap reached (10000 items)"
             ? t("cartFullError")
             : res.error === "not_signed_in"
               ? t("sessionExpiredError")
