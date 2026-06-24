@@ -882,6 +882,13 @@ async function tryRenderTbForwarder(
                 )}
                 คุณ{u?.userName ?? ""} {u?.userLastName ?? ""}
               </Link>
+              {/* owner 2026-06-24: ต้องบอกชัดทุกลูกค้าว่าเป็นนิติบุคคลหรือบุคคลธรรมดา
+                  (ใช้ tb_users.userCompany หรือ tb_corporate ที่ผูกกับ userid) */}
+              {(u?.userCompany === "1" || collectIsCorporate) ? (
+                <span className="ml-1.5 inline-block rounded-full bg-purple-100 text-purple-700 border border-purple-300 text-[11px] font-medium px-2 py-0.5 align-middle">นิติบุคคล</span>
+              ) : (
+                <span className="ml-1.5 inline-block rounded-full bg-slate-100 text-slate-600 border border-slate-300 text-[11px] font-medium px-2 py-0.5 align-middle">บุคคลธรรมดา</span>
+              )}
             </div>
             <EditUserIdField fId={r.id} userid={r.userid} />
             <p className="text-foreground"><b className="font-semibold">อีเมล : </b>{u?.userEmail ? <a href={`mailto:${u.userEmail}`} className="text-sky-600 hover:underline break-all">{u.userEmail}</a> : "—"}</p>
