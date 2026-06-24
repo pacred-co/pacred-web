@@ -317,7 +317,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
         : segment === "closed" ? l.call_status === "closed"
         : segment === "no_answer" ? l.call_status === "no_answer"
         : segment === "not_interested" ? l.call_status === "not_interested"
-        : segment === "called_today" ? Boolean(l.last_called_at && new Date(l.last_called_at).getTime() >= startOfToday)
+        : segment === "called_today" ? Boolean(l.last_called_at && new Date(l.last_called_at).getTime() >= startOfToday && l.call_status !== "no_answer" && l.call_status !== "not_interested")
         : true,
     )
     // ปอน 2026-06-23: free-text search across ชื่อ/LINE/email/ที่อยู่ + เบอร์ (เทียบเฉพาะตัวเลข).

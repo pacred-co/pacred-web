@@ -16,7 +16,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAssignableAdmins } from "@/actions/admin/crm";
-import { isGodRole, type AdminRole } from "@/lib/auth/require-admin";
+import { type AdminRole } from "@/lib/auth/require-admin";
 import { withAdmin, type AdminActionResult, logAdminAction } from "./common";
 import {
   saveImportedLeadsSchema,
@@ -47,9 +47,17 @@ const SELECT_COLS = `${SELECT_COLS_BASE}, note, pr_code`;
 const WORK_ROLES = ["super", "manager", "sales_admin", "sales", "ops"] as const;
 const IMPORT_ROLES = ["super", "manager", "sales_admin"] as const;
 
-/** Senior = may see/mutate ANY lead (supervisor); else scoped to own assigned. */
+/**
+ * "Sees / mutates ANY lead" = ULTRA ONLY (owner 2026-06-24: "ให้เขาเห็นแค่ของ
+ * ตัวเอง · เฉพาะลูกค้าที่เป็นไอดีของเขา · ชื่อเซลล์อื่นไม่ได้เลย · ลูกค้าที่ยังไม่ได้
+ * ดำเนินการด้วย · ยกเว้น id ultra"). EVERY other role — incl. super / manager /
+ * sales_admin / sales / ops — is FORCE-scoped to their OWN assigned leads
+ * (assigned_admin_id = their profile_id) on every read, the stat cards, and every
+ * per-lead mutation. Deliberately NOT isGodRole() (that also passes `super`),
+ * matching the page's ultra-only "มอบหมายโทรเซลล์" gate (super ไม่เห็น).
+ */
 function isSenior(roles: AdminRole[]): boolean {
-  return isGodRole(roles) || roles.some((r) => (IMPORT_ROLES as readonly string[]).includes(r));
+  return roles.includes("ultra");
 }
 
 export type ImportedLead = {
@@ -112,7 +120,9 @@ export async function getImportedLeads(
 
     // Enrich other_rep leads with their handoff source (ปอน 2026-06-23 "ใครย้ายไป
     // เข้าใคร"): the latest handoff call-row's note holds the FROM rep legacyId.
-    const otherIds = leads.filter((l) => l.call_status === "other_rep").map((l) => l.id);
+    // owner 2026-06-24: ONLY ultra/senior sees "ย้ายมาจาก <เซลล์อื่น>" — a normal rep
+    // must not see another sales rep's name at all ("ชื่อเซลล์อื่นนี่ไม่ได้เลย").
+    const otherIds = isSenior(roles) ? leads.filter((l) => l.call_status === "other_rep").map((l) => l.id) : [];
     if (otherIds.length) {
       const { data: hcalls, error: hErr } = await admin
         .from("imported_lead_calls")
@@ -146,7 +156,8 @@ export async function getImportedLeadCalls(input: { id?: number } | unknown): Pr
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "invalid_input" };
   return withAdmin<{ calls: ImportedLeadCall[] }>([...WORK_ROLES], async ({ adminId, roles }) => {
     const admin = createAdminClient();
-    if (!isSenior(roles)) {
+    const senior = isSenior(roles);
+    if (!senior) {
       const { data: own, error: ownErr } = await admin
         .from(TABLE).select("id").eq("id", id).eq("assigned_admin_id", adminId).maybeSingle<{ id: number }>();
       if (ownErr) {
@@ -155,10 +166,14 @@ export async function getImportedLeadCalls(input: { id?: number } | unknown): Pr
       }
       if (!own) return { ok: false, error: "not_found" };
     }
-    const { data, error } = await admin
+    // owner 2026-06-24 "เห็นแค่การกระทำของตัวเอง" — a non-ultra sees ONLY their OWN call
+    // logs on the lead (other staff's calls + the handoff rows are hidden). Ultra: all.
+    let cq = admin
       .from("imported_lead_calls")
       .select("id, admin_id, status, note, called_at")
-      .eq("lead_id", id)
+      .eq("lead_id", id);
+    if (!senior) cq = cq.eq("admin_id", adminId);
+    const { data, error } = await cq
       .order("called_at", { ascending: false })
       .limit(100);
     if (error) {
@@ -222,8 +237,15 @@ export async function getImportedLeadStats(): Promise<AdminActionResult<Imported
       const ph = digits(r.phone);
       if (!ph) continue; // no callable number → hidden in the list too
       sets.all.add(ph);
-      if (r.last_called_at && new Date(r.last_called_at).getTime() >= startMs) sets.calledToday.add(ph);
       const st = r.call_status || "";
+      // owner 2026-06-24: "ติดต่อแล้ววันนี้" = โทรแล้วติดต่อได้จริงเท่านั้น — ผล
+      // "ไม่รับสาย"/"ไม่สนใจ" ไม่นับว่าติดต่อแล้ว (ไปกองที่ลิสต์ไม่รับสาย/ไม่สนใจ ของมันเอง).
+      const contactedToday =
+        !!r.last_called_at &&
+        new Date(r.last_called_at).getTime() >= startMs &&
+        st !== "no_answer" &&
+        st !== "not_interested";
+      if (contactedToday) sets.calledToday.add(ph);
       if (st === "") sets.pending.add(ph);
       else if (st === "closed") sets.closed.add(ph);
       else if (st === "no_answer") sets.noAnswer.add(ph);
