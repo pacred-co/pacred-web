@@ -14,9 +14,21 @@
 #      load PROD's data (incl. sequence setvals) → COMMIT.
 #   4. Verify a few table counts match.
 #
-# PRESERVED (so the TEAM never loses dev access / RBAC): profiles, admins, tb_admin.
-#   → DEV keeps its own staff accounts + roles; everything else (customers + transactional
-#     + feature data) becomes == prod. Adjust PRESERVE below if you want a fuller/looser sync.
+# TWO MODES (owner 2026-06-23 round 2: "data ยังไม่เท่ากันหมด · user/admin login ไม่ได้ ·
+# ทำให้ dev = prod ทั้งหมด"):
+#   • DEFAULT (preserve staff-login): keeps DEV's own profiles/admins/tb_admin so the team
+#     keeps its dev login + RBAC; everything else becomes == prod.
+#   • FULL (SYNC_IDENTITY=1): ALSO replaces profiles/admins/tb_admin AND auth.users +
+#     auth.identities from PROD → DEV becomes COMPLETELY == prod, and PROD staff/customers
+#     log into DEV with their PROD passwords (the encrypted_password hashes are copied).
+#     ⚠️ This logs everyone out of DEV (auth.sessions cleared) and the team must use PROD
+#     credentials on DEV afterward. This is the mode used 2026-06-23 (dev was missing
+#     admin_dev/admin_poom + user data didn't match → FULL fixed login + parity).
+#
+# 🖼  IMAGES are in Supabase STORAGE, not the DB — this script does NOT copy them.
+#   After a FULL sync, also mirror the small image buckets (member-docs/slips/
+#   forwarder-covers/avatars) prod→dev so the synced rows' image refs resolve
+#   (download via prod service-role + upload via dev service-role · ~dozens of files).
 #
 # ⚠️ PII: this copies REAL customer data (names/phones/addresses/financials) into DEV.
 #   Only run for the team's own dev project. The dumps contain PII — delete them after.
@@ -25,34 +37,63 @@
 # USAGE (passwords via env — NEVER hardcode):
 #   PROD_DB_URL='postgresql://postgres.<prodref>:<pw>@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres' \
 #   DEV_DB_URL='postgresql://postgres.<devref>:<pw>@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres' \
+#   [SYNC_IDENTITY=1] \
 #   bash scripts/sync-dev-from-prod.sh
 set -euo pipefail
 
 : "${PROD_DB_URL:?set PROD_DB_URL}"
 : "${DEV_DB_URL:?set DEV_DB_URL}"
-PRESERVE_EXCLUDES="--exclude-table=public.profiles --exclude-table=public.admins --exclude-table=public.tb_admin"
+SYNC_IDENTITY="${SYNC_IDENTITY:-0}"
+if [ "$SYNC_IDENTITY" = "1" ]; then
+  PRESERVE_EXCLUDES=""          # FULL: profiles/admins/tb_admin also become == prod
+  AUTH_TABLES="-t auth.users -t auth.identities"
+  echo "MODE: FULL identity+auth sync (DEV login becomes == PROD)"
+else
+  PRESERVE_EXCLUDES="--exclude-table=public.profiles --exclude-table=public.admins --exclude-table=public.tb_admin"
+  AUTH_TABLES=""
+  echo "MODE: default (DEV keeps its own staff-login tables)"
+fi
 STAMP="$(date +%Y%m%d-%H%M%S)"
 TMP="${TMPDIR:-/tmp}"
 BACKUP="$TMP/dev-backup-$STAMP.dump"
 PRODSQL="$TMP/prod-data-$STAMP.sql"
 LOADSQL="$TMP/dev-load-$STAMP.sql"
 
+AUTHSQL="$TMP/prod-auth-$STAMP.sql"
+
 echo "1/4 · backup DEV → $BACKUP"
 pg_dump "$DEV_DB_URL" --data-only --schema=public $PRESERVE_EXCLUDES -Fc -f "$BACKUP"
+[ "$SYNC_IDENTITY" = "1" ] && pg_dump "$DEV_DB_URL" --data-only $AUTH_TABLES -Fc -f "$TMP/dev-backup-auth-$STAMP.dump"
 
 echo "2/4 · dump PROD → $PRODSQL"
 pg_dump "$PROD_DB_URL" --data-only --schema=public $PRESERVE_EXCLUDES --no-owner --no-privileges -f "$PRODSQL"
+[ "$SYNC_IDENTITY" = "1" ] && pg_dump "$PROD_DB_URL" --data-only $AUTH_TABLES --no-owner --no-privileges -f "$AUTHSQL"
 
 echo "3/4 · build + run atomic load on DEV"
-TRUNC="$(psql "$DEV_DB_URL" -tA -c "select string_agg(format('%I',table_name), ', ') from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not in ('profiles','admins','tb_admin')")"
-{ echo "SET session_replication_role = replica;"; echo "TRUNCATE $TRUNC ;"; cat "$PRODSQL"; } > "$LOADSQL"
+# FULL mode truncates ALL public base tables + auth.users CASCADE (clears auth children +
+# re-truncates profiles). Default mode keeps the 3 staff-login tables.
+if [ "$SYNC_IDENTITY" = "1" ]; then
+  TRUNC="$(psql "$DEV_DB_URL" -tA -c "select string_agg(format('%I',table_name), ', ') from information_schema.tables where table_schema='public' and table_type='BASE TABLE'")"
+  { echo "SET session_replication_role = replica;";
+    echo "TRUNCATE $TRUNC, auth.identities, auth.users CASCADE ;";
+    cat "$AUTHSQL"; cat "$PRODSQL"; } > "$LOADSQL"
+else
+  TRUNC="$(psql "$DEV_DB_URL" -tA -c "select string_agg(format('%I',table_name), ', ') from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not in ('profiles','admins','tb_admin')")"
+  { echo "SET session_replication_role = replica;"; echo "TRUNCATE $TRUNC ;"; cat "$PRODSQL"; } > "$LOADSQL"
+fi
 psql "$DEV_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -q -f "$LOADSQL"
 
 echo "4/4 · verify (DEV should match PROD)"
-for t in tb_users tb_forwarder tb_order tb_payment momo_import_tracks; do
+VERIFY_TABLES="tb_users tb_forwarder tb_order tb_payment momo_import_tracks"
+[ "$SYNC_IDENTITY" = "1" ] && VERIFY_TABLES="$VERIFY_TABLES profiles admins tb_admin"
+for t in $VERIFY_TABLES; do
   p=$(psql "$PROD_DB_URL" -tA -c "select count(*) from $t")
   d=$(psql "$DEV_DB_URL" -tA -c "select count(*) from $t")
   printf "  %-20s prod=%-8s dev=%-8s %s\n" "$t" "$p" "$d" "$([ "$p" = "$d" ] && echo ✓ || echo '✗ DIFF')"
 done
+if [ "$SYNC_IDENTITY" = "1" ]; then
+  p=$(psql "$PROD_DB_URL" -tA -c "select count(*) from auth.users"); d=$(psql "$DEV_DB_URL" -tA -c "select count(*) from auth.users")
+  printf "  %-20s prod=%-8s dev=%-8s %s\n" "auth.users" "$p" "$d" "$([ "$p" = "$d" ] && echo ✓ || echo '✗ DIFF')"
+fi
 
-echo "done. ⚠️ delete the PII dumps when finished: rm -f '$PRODSQL' '$LOADSQL' '$BACKUP'"
+echo "done. ⚠️ delete the PII dumps when finished: rm -f '$PRODSQL' '$LOADSQL' '$BACKUP' '$AUTHSQL'"
