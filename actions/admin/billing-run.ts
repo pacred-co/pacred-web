@@ -36,6 +36,8 @@ import {
   calcForwarderOutstanding,
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
+import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import {
   isBillableForwarder,
   type ForwarderBillingEligibilityFields,
@@ -82,6 +84,9 @@ export type EligibleForwarderRow = {
    * chn-th/other + discount).
    */
   outstanding_thb: number;
+  /** เหมาๆ (PCSF flat ฿100) carried on this row (the shipment's anchor) else 0 —
+   *  the create-bill preview adds Σ of the selected rows so it matches the saved bill. */
+  mao_fee_thb: number;
   fstatus: string | null;
   fcredit: string | null;
   already_billed: boolean;
@@ -179,7 +184,7 @@ export type BillingRunInvoiceDetail = {
 // allowance (lib/forwarder/outstanding.ts). fcredit/paydeposit are pulled for
 // the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
 const FWD_BILLING_SELECT =
-  "id, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
+  "id, fshipby, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
   "fcredit, paydeposit, fusercompany, advance_bill_confirmed, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount";
@@ -188,6 +193,7 @@ const FWD_BILLING_SELECT =
 type FwdBillingRaw = ForwarderPriceFields &
   ForwarderBillingEligibilityFields & {
     id: number;
+    fshipby: string | null;        // for the เหมาๆ (PCSF) batch fee — computeForwarderDebitBatch
     ftrackingchn: string | null;
     fdate: string | null;
     famount: number | string | null;
@@ -516,6 +522,15 @@ export async function listEligibleForwarders(
         }
       }
 
+      // เหมาๆ (PCSF flat ฿100 · ภูม 2026-06-23) — surface the per-row เหมาๆ so the
+      // create-bill preview shows + adds it (was missing → preview ฿4,083.96 vs the
+      // created bill ฿4,183.96). SAME engine as createBillingRunInvoice (anchored to
+      // each shipment's base tracking · once per shipment). isCorporate affects only
+      // the 1%, not the fee — false is fine here.
+      const maoBatch = computeForwarderDebitBatch(fwd, { userId: userid, isCorporate: false });
+      const maoFeeById = new Map<number, number>();
+      for (const ln of maoBatch.lines) maoFeeById.set(Number(ln.id), ln.breakdown.maoFee);
+
       const rows: EligibleForwarderRow[] = fwd.map((f) => ({
         id:              f.id,
         ftrackingchn:    f.ftrackingchn ?? "",
@@ -526,6 +541,8 @@ export async function listEligibleForwarders(
         ftotalprice:     Number(f.ftotalprice ?? 0),
         // BUG A — the FULL composite the customer owes (drives subtotal + bill).
         outstanding_thb: calcForwarderOutstanding(f),
+        // เหมาๆ ฿100 on this row (the shipment's anchor) else 0 — preview adds Σ selected.
+        mao_fee_thb:     maoFeeById.get(f.id) ?? 0,
         fstatus:         f.fstatus,
         fcredit:         f.fcredit,
         already_billed:  alreadyBilledIds.has(f.id),
@@ -1088,6 +1105,22 @@ export async function createBillingRunInvoice(
       // are NOT inside calcForwarderOutstanding, so no double-count.
       const outstandingByID = new Map<number, number>();
       for (const f of fwd) outstandingByID.set(f.id, calcForwarderOutstanding(f));
+
+      // เหมาๆ (PCSF flat ฿100) — the bill was MISSING it vs the detail page's
+      // ยอดเก็บจริง (ภูม 2026-06-23: บิล 4,083.96 แต่ detail 4,183.96). Pull JUST the
+      // maoFee per line from the batch engine — the SAME once-per-shipment anchor
+      // logic the detail page uses (anchored to the base tracking · เดฟ "กันเก็บเบิ้ล")
+      // — and ADD it on top of the per-row outstanding. We deliberately do NOT swap
+      // the whole engine (computeForwarderDebitBatch applies its 1% at batch≥฿1000,
+      // calcForwarderOutstanding per-row) so juristic <฿1000 bills don't shift — the
+      // ONLY money delta introduced here is the ฿100 เหมาๆ.
+      const maoBatch = computeForwarderDebitBatch(fwd, {
+        userId: v.userid,
+        isCorporate: isJuristic,
+      });
+      const maoFeeByID = new Map<number, number>();
+      for (const ln of maoBatch.lines) maoFeeByID.set(Number(ln.id), ln.breakdown.maoFee);
+
       // Build A D2 — per-line override: an admin-typed amount wins over the auto
       // calcForwarderOutstanding for THAT row. Only ids being billed are read;
       // stray override keys are ignored. The override is bounded by the Zod schema
@@ -1100,9 +1133,14 @@ export async function createBillingRunInvoice(
       // money-review fix — quantize EACH line to satang BEFORE summing, so the
       // header subtotal_thb == Σ item amount_thb exactly (the mig 0138 invariant).
       // An override can carry >2dp (z.number isn't 2dp-quantized); round-each-then-
-      // sum keeps header + items identical to the satang.
-      const lineAmount = (id: number): number =>
-        Math.round((overrideAmt(id) ?? outstandingByID.get(id) ?? 0) * 100) / 100;
+      // sum keeps header + items identical to the satang. The ฿100 เหมาๆ rides the
+      // anchor row (added to its outstanding); an OVERRIDDEN row takes the admin's
+      // exact amount as-is (no auto เหมาๆ on top — the admin set the figure).
+      const lineAmount = (id: number): number => {
+        const ov = overrideAmt(id);
+        if (ov != null) return Math.round(ov * 100) / 100;
+        return Math.round(((outstandingByID.get(id) ?? 0) + (maoFeeByID.get(id) ?? 0)) * 100) / 100;
+      };
       const overriddenIds = v.forwarderIds.filter((id) => overrideAmt(id) != null);
       const subtotal = v.forwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
       const total = Math.max(
@@ -1257,9 +1295,9 @@ export async function markBillingRunPaid(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb")
+        .select("id, doc_no, status, total_thb, userid")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; userid: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1369,6 +1407,29 @@ export async function markBillingRunPaid(
               await logAdminAction(adminId, "billing_run.receipt_synced_paid", "tb_receipt", rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no,
               });
+            }
+          }
+
+          // #3 (ภูม 2026-06-23) — CLOSE THE LOOP: auto-create the ใบเสร็จ now if none
+          // exists yet for this paid bill (กดรับชำระ → ใบเสร็จออกเอง ตรงวางบิล · ไม่ต้องกดมือ).
+          // Mints tb_receipt at rstatus='1' (paid) from the SAME forwarder rows, so the
+          // receipt mirrors the วางบิล (incl เหมาๆ from #2). autoIssueReceiptOnPaymentLand
+          // has its OWN idempotency guard (alreadyIssued → no-op when a receipt already
+          // covers these fids) so the flip loop above + this never double-issue.
+          // Best-effort — never fails the paid flip.
+          if (cur.userid) {
+            const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+              userid:   cur.userid,
+              fids:     Array.from(invFids),
+              dateSlip: new Date(paidAtIso),
+              source:   "billing_run.mark_paid",
+            });
+            if (rcpt.ok) {
+              await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {
+                invoice_id: v.invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
+              });
+            } else if (!rcpt.alreadyIssued) {
+              console.error("[markBillingRunPaid auto-receipt] failed", { error: rcpt.error, invoiceId: v.invoiceId });
             }
           }
         }

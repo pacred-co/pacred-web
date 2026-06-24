@@ -202,11 +202,23 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     return sum;
   }, [eligible, selectedIds, amountEdit]);
 
+  // เหมาๆ (PCSF flat ฿100 · ภูม 2026-06-23) — Σ of the SELECTED rows' anchor fee
+  // (once per shipment · SAME engine as createBillingRunInvoice via mao_fee_thb). Was
+  // MISSING → the preview ran ฿100 short of the saved bill; now they match exactly.
+  const maoFee = useMemo(() => {
+    if (!eligible) return 0;
+    let sum = 0;
+    for (const f of eligible) {
+      if (selectedIds.has(f.id)) sum += f.mao_fee_thb ?? 0;
+    }
+    return Math.round(sum * 100) / 100;
+  }, [eligible, selectedIds]);
+
   const numChn = Number(deliveryChn) || 0;
   const numTh  = Number(deliveryTh)  || 0;
   const numOther = Number(other) || 0;
   const numDiscount = Number(discount) || 0;
-  const totalAmount = Math.max(0, subtotal + numChn + numTh + numOther - numDiscount);
+  const totalAmount = Math.max(0, subtotal + maoFee + numChn + numTh + numOther - numDiscount);
 
   // WHT 1% — mirrors the server rule (computeBillWht in billing-run.ts) + the
   // ใบเสร็จ: a นิติบุคคล buyer withholds 1% on the transport fee when the bill
@@ -565,6 +577,16 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             hint={`จาก ${selectedIds.size} รายการที่ tick`}
             value={subtotal}
           />
+          {/* เหมาๆ (PCSF ฿100/ชิปเมนต์) — auto · only when a เหมาๆ row is selected.
+              ภูม 2026-06-23: แสดงให้เห็น พนักงานจะได้ไม่กรอกเองในช่องค่าขนส่งไทย. */}
+          {maoFee > 0 && (
+            <LedgerRow
+              kind="auto"
+              label="+ ค่าส่งเหมาๆ"
+              hint="PCSF · ฿100 ต่อชิปเมนต์ (บวกอัตโนมัติ · ไม่ต้องกรอกในช่องค่าขนส่งไทย)"
+              value={maoFee}
+            />
+          )}
           {/* 4 admin-override rows — input pinned right */}
           <LedgerRow
             kind="input"
