@@ -36,6 +36,7 @@ type RawReceipt = {
   issuedate:              string | null;
   ramount:                number | string | null;
   totalbeforewithholding: number | string | null;
+  mao_fee_thb:            number | string | null;
   rstatus:                string;
   userid:                 string;
   adminid:                string | null;
@@ -181,7 +182,7 @@ export async function loadReceiptDocument(
   const { data: receiptData, error: rErr } = await admin
     .from("tb_receipt")
     .select(
-      "id, rid, refid, rdate, rdatecreate, issuedate, ramount, totalbeforewithholding, " +
+      "id, rid, refid, rdate, rdatecreate, issuedate, ramount, totalbeforewithholding, mao_fee_thb, " +
         "rstatus, userid, adminid, statusprint, adminidprint, rdateprint, corporatetype, " +
         "recompnumber, recompname, recompaddress, documentissuer, documentapprover, " +
         "wht_cert_status, wht_cert_path, wht_cert_no, wht_cert_uploaded_at",
@@ -394,21 +395,28 @@ export async function loadReceiptDocument(
   const headerRamount      = toNumber(receipt.ramount);
   const itemsMissing       = computedItems.length === 0 && (headerTotalBefore > 0 || headerRamount > 0);
 
+  // เหมาๆ (PCSF flat ฿100/shipment · ภูม 2026-06-23) — a header-level charge that is
+  // NOT in the per-item sum (items carry only the base). Fold it into the displayed
+  // total so the receipt reconciles to the ใบวางบิล, and surface it as its own line.
+  const maoFee = toNumber(receipt.mao_fee_thb);
+  const lineSumWithMao = totals.totalLineSum + maoFee;
+
   // WHT 1% — legacy: only for corporate AND totalbeforewithholding ≥ 1000
-  const totalBeforeWithholding = headerTotalBefore || totals.totalLineSum;
+  const totalBeforeWithholding = headerTotalBefore || lineSumWithMao;
   const showWht = isCorporate && totalBeforeWithholding >= 1000;
   // When items are missing, derive WHT from the header difference instead of
   // re-applying the 1% rule (the header values are post-fact authoritative).
+  // The เหมาๆ is part of the bill total → it's in the WHT base too (consistent w/ the bill).
   const whtAmount =
     itemsMissing
       ? Math.max(0, headerTotalBefore - headerRamount)
       : showWht
-        ? totals.totalLineSum * 0.01
+        ? lineSumWithMao * 0.01
         : 0;
   const grandTotal =
     itemsMissing
       ? headerRamount
-      : totals.totalLineSum - whtAmount;
+      : lineSumWithMao - whtAmount;
   const grandTotalThaiWord = readThaiBaht(grandTotal);
 
   // When items are missing, also patch the totals BREAKDOWN to put the
@@ -465,6 +473,7 @@ export async function loadReceiptDocument(
     customerTaxId,
     customerAddress,
     totals:              totalsForRender,
+    maoFee,
     showWht:             showWht || (itemsMissing && whtAmount > 0),
     whtAmount,
     grandTotal,

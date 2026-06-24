@@ -49,6 +49,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
+import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
@@ -210,12 +211,16 @@ export async function autoIssueReceiptOnPaymentLand(
 
   // 2. Read the forwarder rows to compute totals (re-fetch — never trust
   //    cached row data from the caller's snapshot).
-  type FwRow = ForwarderPriceFields & { id: number; userid: string; tax_doc_pref: string | null };
+  type FwRow = ForwarderPriceFields & {
+    id: number; userid: string; tax_doc_pref: string | null;
+    fshipby: string | null; ftrackingchn: string | null;
+  };
   const { data: fwRows, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, userid, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-      "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, tax_doc_pref",
+      "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, tax_doc_pref, " +
+      "fshipby, ftrackingchn",
     )
     .in("id", fids)
     .eq("userid", userid);
@@ -275,11 +280,33 @@ export async function autoIssueReceiptOnPaymentLand(
     num(r.priceother) -
     num(r.fdiscount);
 
-  const pricePayAll = rows.reduce((s, r) => s + perRowRaw(r), 0);
+  const pricePayBase = rows.reduce((s, r) => s + perRowRaw(r), 0);
+
+  // เหมาๆ (PCSF flat ฿100/shipment · ภูม 2026-06-23) — the receipt ran SHORT by ฿100
+  // vs the ใบวางบิล because perRowRaw (= the calcForwarderOutstanding base buckets)
+  // excludes the เหมาๆ. Pull JUST the maoFee from the SAME once-per-shipment anchor
+  // engine the pay path + the bill use, and fold it into the receipt total so the
+  // two docs reconcile to the satang. Stored separately (mao_fee_thb) → shown as its
+  // own line on the receipt paper, mirroring the bill.
+  const maoBatch = computeForwarderDebitBatch(
+    rows.map((r) => ({
+      id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn,
+      ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
+      fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
+      pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
+      priceother: r.priceother, fdiscount: r.fdiscount,
+    })),
+    { userId: userid, isCorporate: corporate === 1 },
+  );
+  const maoFeeThb = Math.round(
+    maoBatch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0) * 100,
+  ) / 100;
+  const pricePayAll = pricePayBase + maoFeeThb;
 
   // Legacy L557-559: 1% WHT applies only to juristic AND total ≥ 1000.
   // Shared, unit-tested rule (lib/tax/wht.ts:legacyReceiptAmount) so the
   // grenrateReceiptF juristic-1% behaviour can't silently drift untested.
+  // The เหมาๆ is part of the bill total → it's in the WHT base too (consistent w/ the bill).
   const { totalBeforeWithholding, rAmount, applied: applyJuristic1Pct } =
     legacyReceiptAmount(pricePayAll, corporate === 1);
 
@@ -367,8 +394,9 @@ export async function autoIssueReceiptOnPaymentLand(
     rdate:                  dateSlipIso,                  // legacy `$date` = the dateSlip
     rdatecreate:            nowIso,
     issuedate:              dateSlipIso,                  // legacy keys the rid sequence to this
-    ramount:                rAmount,                      // post-juristic-1% (what customer pays)
-    totalbeforewithholding: totalBeforeWithholding,       // pre-WHT raw sum
+    ramount:                rAmount,                      // post-juristic-1% (what customer pays · incl เหมาๆ)
+    totalbeforewithholding: totalBeforeWithholding,       // pre-WHT raw sum (incl เหมาๆ)
+    mao_fee_thb:            maoFeeThb,                    // ค่าส่งเหมาๆ — its own line · already part of the totals above
     adminid:                "system-auto",                // legacy `$adminID` — we mark as system
     userid,
     statusprint:            "0",

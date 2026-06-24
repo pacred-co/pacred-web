@@ -128,6 +128,8 @@ export type BillingRunInvoiceDetail = {
     delivery_th_thb: number;
     other_thb: number;
     discount_thb: number;
+    /** ค่าส่งเหมาๆ (PCSF flat ฿100/shipment) — its own line, included in total_thb. */
+    mao_fee_thb: number;
     total_thb: number;
     status: "issued" | "paid" | "cancelled";
     note_for_customer: string;
@@ -757,6 +759,7 @@ export async function getInvoiceDetail(
         delivery_th_thb: number | string;
         other_thb: number | string;
         discount_thb: number | string;
+        mao_fee_thb: number | string | null;
         total_thb: number | string;
         status: "issued" | "paid" | "cancelled";
         note_for_customer: string;
@@ -851,6 +854,7 @@ export async function getInvoiceDetail(
             delivery_th_thb:    Number(hdrRaw.delivery_th_thb),
             other_thb:          Number(hdrRaw.other_thb),
             discount_thb:       Number(hdrRaw.discount_thb),
+            mao_fee_thb:        Number(hdrRaw.mao_fee_thb ?? 0),
             total_thb:          Number(hdrRaw.total_thb),
             status:             hdrRaw.status,
             note_for_customer:  hdrRaw.note_for_customer,
@@ -1109,11 +1113,12 @@ export async function createBillingRunInvoice(
       // เหมาๆ (PCSF flat ฿100) — the bill was MISSING it vs the detail page's
       // ยอดเก็บจริง (ภูม 2026-06-23: บิล 4,083.96 แต่ detail 4,183.96). Pull JUST the
       // maoFee per line from the batch engine — the SAME once-per-shipment anchor
-      // logic the detail page uses (anchored to the base tracking · เดฟ "กันเก็บเบิ้ล")
-      // — and ADD it on top of the per-row outstanding. We deliberately do NOT swap
-      // the whole engine (computeForwarderDebitBatch applies its 1% at batch≥฿1000,
-      // calcForwarderOutstanding per-row) so juristic <฿1000 bills don't shift — the
-      // ONLY money delta introduced here is the ฿100 เหมาๆ.
+      // logic the detail page uses (anchored to the base tracking · เดฟ "กันเก็บเบิ้ล").
+      // We deliberately do NOT swap the whole engine (computeForwarderDebitBatch
+      // applies its 1% at batch≥฿1000, calcForwarderOutstanding per-row) so juristic
+      // <฿1000 bills don't shift — the ONLY money delta is the ฿100 เหมาๆ, stored as
+      // its OWN summary line (mao_fee_thb · NOT folded into a row) so the customer
+      // SEES it and the ใบเสร็จ reconciles to it (ภูม flag: แยกให้เห็น + ใบเสร็จต้องตรง).
       const maoBatch = computeForwarderDebitBatch(fwd, {
         userId: v.userid,
         isCorporate: isJuristic,
@@ -1133,19 +1138,25 @@ export async function createBillingRunInvoice(
       // money-review fix — quantize EACH line to satang BEFORE summing, so the
       // header subtotal_thb == Σ item amount_thb exactly (the mig 0138 invariant).
       // An override can carry >2dp (z.number isn't 2dp-quantized); round-each-then-
-      // sum keeps header + items identical to the satang. The ฿100 เหมาๆ rides the
-      // anchor row (added to its outstanding); an OVERRIDDEN row takes the admin's
-      // exact amount as-is (no auto เหมาๆ on top — the admin set the figure).
+      // sum keeps header + items identical to the satang. The เหมาๆ is NOT folded
+      // into any row (it's a separate header line · maoFeeTotal below) so the rows
+      // stay = base outstanding; an OVERRIDDEN row takes the admin's exact amount.
       const lineAmount = (id: number): number => {
         const ov = overrideAmt(id);
         if (ov != null) return Math.round(ov * 100) / 100;
-        return Math.round(((outstandingByID.get(id) ?? 0) + (maoFeeByID.get(id) ?? 0)) * 100) / 100;
+        return Math.round((outstandingByID.get(id) ?? 0) * 100) / 100;
       };
       const overriddenIds = v.forwarderIds.filter((id) => overrideAmt(id) != null);
       const subtotal = v.forwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
+      // เหมาๆ (PCSF ฿100) — a SEPARATE summary line, Σ the anchor fee over the
+      // selected rows (once per shipment). Kept OFF subtotal so subtotal = Σ items
+      // (mig 0138 invariant) holds — it rides total_thb only, stored in mao_fee_thb.
+      const maoFeeTotal = Math.round(
+        v.forwarderIds.reduce((sum, id) => sum + (maoFeeByID.get(id) ?? 0), 0) * 100,
+      ) / 100;
       const total = Math.max(
         0,
-        subtotal + v.deliveryChnThb + v.deliveryThThb + v.otherThb - v.discountThb,
+        subtotal + maoFeeTotal + v.deliveryChnThb + v.deliveryThThb + v.otherThb - v.discountThb,
       );
       // money-review fix — per-line override is capped (positiveMoney ≤9,999,999,999.99)
       // but the AGGREGATE subtotal/total over up to 500 rows can exceed the
@@ -1184,6 +1195,7 @@ export async function createBillingRunInvoice(
             delivery_th_thb:   v.deliveryThThb,
             other_thb:         v.otherThb,
             discount_thb:      v.discountThb,
+            mao_fee_thb:       maoFeeTotal,
             total_thb:         Math.round(total * 100) / 100,
             status:            "issued",
             note_for_customer: v.noteForCustomer,

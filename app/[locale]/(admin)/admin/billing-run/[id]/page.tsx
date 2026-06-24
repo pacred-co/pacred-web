@@ -106,6 +106,9 @@ export default async function BillingRunDetailPage({
           </div>
           <div className="text-xs text-muted text-right">
             <div>Subtotal ฿{thbFmt(header.subtotal_thb)}</div>
+            {header.mao_fee_thb > 0 && (
+              <div>+ ค่าส่งเหมาๆ (PCSF) ฿{thbFmt(header.mao_fee_thb)}</div>
+            )}
             <div>+ CHN ฿{thbFmt(header.delivery_chn_thb)} + TH ฿{thbFmt(header.delivery_th_thb)} + อื่นๆ ฿{thbFmt(header.other_thb)}</div>
             <div>− ส่วนลด ฿{thbFmt(header.discount_thb)}</div>
             {header.wht_amount > 0 && (

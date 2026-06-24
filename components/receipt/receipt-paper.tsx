@@ -76,6 +76,8 @@ export type ReceiptCommonProps = {
   customerTaxId:      string;
   customerAddress:    string;
   totals:             ReceiptTotals;
+  /** ค่าส่งเหมาๆ (PCSF flat ฿100/shipment) — its own line · already in grandTotal/preTax. */
+  maoFee:             number;
   showWht:            boolean;
   whtAmount:          number;
   grandTotal:         number;
@@ -148,6 +150,7 @@ export function ReceiptPage({
   customerAddress,
   items,
   totals,
+  maoFee,
   showWht,
   whtAmount,
   grandTotal,
@@ -169,11 +172,13 @@ export function ReceiptPage({
   // Peak orange tint bg: rgba(255,163,10,0.165) ≈ #FFF0CC; gray tint ≈ #EBEBEA
   const tintBg       = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
 
-  // preTax = sum of every charge leg − discount = the PRE-WHT grand total
-  // (= totalLineSum upstream). For cargo freight there's no VAT, so this is
-  // also the VAT-exempt value shown on the left.
+  // preTax = sum of every charge leg − discount + เหมาๆ = the PRE-WHT grand total
+  // (= lineSumWithMao upstream). For cargo freight there's no VAT, so this is
+  // also the VAT-exempt value shown on the left. The เหมาๆ (PCSF ฿100/shipment) is a
+  // header-level charge not in the per-leg sums → add it so preTax == grandTotal+WHT
+  // (it reconciles to the ใบวางบิล · ภูม 2026-06-23).
   const preTax = totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
-                 totals.priceOther - totals.fDiscount;
+                 totals.priceOther - totals.fDiscount + maoFee;
   // netPaid = the real amount the customer settles. `grandTotal` is ALREADY
   // net of WHT upstream (grandTotal = totalLineSum − whtAmount), so netPaid IS
   // grandTotal — do NOT subtract WHT again (that double-counted it). This is
@@ -451,6 +456,12 @@ export function ReceiptPage({
                     <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
                   </div>
                   <div style={{ flex: 1 }}>
+                    {maoFee > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>รวมค่าส่งเหมาๆ (PCSF)</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(maoFee)} บาท</p>
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>มูลค่าไม่มีหรือยกเว้นภาษี</p>
                       <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(preTax)} บาท</p>

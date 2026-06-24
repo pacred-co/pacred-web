@@ -55,6 +55,8 @@ export type BillingRunPaperProps = {
   buyerAddress:  string;
   isJuristic:    boolean;
   subtotal:      number;
+  /** ค่าส่งเหมาๆ (PCSF flat ฿100/shipment) — own summary line · included in total. */
+  maoFee:        number;
   deliveryChn:   number;
   deliveryTh:    number;
   other:         number;
@@ -207,6 +209,7 @@ function BillingRunPage({
                 <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
                 <div style={{ flex: 1 }}>
                   <SumLine k="ค่าขนส่งรายการ" v={`${fmt2(p.subtotal)} บาท`} />
+                  {p.maoFee > 0 && <SumLine k="+ ค่าส่งเหมาๆ (PCSF)" v={`${fmt2(p.maoFee)} บาท`} />}
                   {p.deliveryChn > 0 && <SumLine k="+ ค่าขนส่งจีน" v={`${fmt2(p.deliveryChn)} บาท`} />}
                   {p.deliveryTh > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(p.deliveryTh)} บาท`} />}
                   {p.other > 0 && <SumLine k="+ อื่นๆ" v={`${fmt2(p.other)} บาท`} />}
