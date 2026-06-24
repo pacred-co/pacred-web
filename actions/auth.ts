@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { bridgeLegacyLogin } from "@/lib/auth/pcs-legacy-bridge";
 import { bridgeLegacyAdminLogin } from "@/lib/auth/pcs-legacy-admin-bridge";
 import { legacySyntheticEmail } from "@/lib/auth/pcs-legacy-password";
+import { syncLegacyUserPass } from "@/lib/auth/sync-legacy-userpass";
 import {
   setAdminSessionCookie,
   clearAdminSessionCookie,
@@ -1047,9 +1048,9 @@ export async function confirmPasswordResetByPhone(
   const admin = createAdminClient();
   const { data: profile, error: profileErr } = await admin
     .from("profiles")
-    .select("id")
+    .select("id, member_code")
     .eq("phone", phone)
-    .maybeSingle<{ id: string }>();
+    .maybeSingle<{ id: string; member_code: string | null }>();
 
   if (profileErr) {
     console.error(`[profiles mutation lookup] failed`, { code: profileErr.code, message: profileErr.message });
@@ -1062,13 +1063,25 @@ export async function confirmPasswordResetByPhone(
   });
   if (updErr) return { ok: false, error: "update_failed" };
 
-  // Sign in with the new password so user lands authenticated
+  // owner 2026-06-24 — also write the legacy passTam hash so a migrated PCS
+  // customer who logs in BY PHONE (auth row = synthetic email + no phone →
+  // native miss → legacy bridge checks tb_users."userPass") can use the reset
+  // password. Without this the reset was inert on the phone-login path.
+  await syncLegacyUserPass(profile.member_code, d.password);
+
+  // Sign in with the new password so user lands authenticated. A migrated PCS
+  // customer's auth row has the synthetic email + NO phone, so phone sign-in
+  // misses → fall back to the legacy bridge (now valid, userPass synced above)
+  // instead of the old hard "signin_failed".
   const supabase = await createClient();
   const { error: signInErr } = await supabase.auth.signInWithPassword({
     phone,
     password: d.password,
   });
-  if (signInErr) return { ok: false, error: "signin_failed" };
+  if (signInErr) {
+    const bridged = await bridgeLegacyLogin(phone, d.password);
+    if (!bridged.ok) return { ok: false, error: "signin_failed" };
+  }
 
   return { ok: true };
 }
@@ -1127,6 +1140,17 @@ export async function updatePasswordAfterRecovery(
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return { ok: false, error: error.message };
+
+  // owner 2026-06-24 — keep the legacy passTam hash in sync (phone-login path).
+  const admin = createAdminClient();
+  const { data: prof, error: profErr } = await admin
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  if (profErr) console.error("[updatePasswordAfterRecovery profile]", { code: profErr.code, message: profErr.message });
+  await syncLegacyUserPass(prof?.member_code, parsed.data.password);
+
   return { ok: true };
 }
 

@@ -15,12 +15,13 @@
  *     at `profiles.id`. We look that up before calling `admin.auth.admin
  *     .updateUserById(..., { password })` — the exact pattern used by
  *     `lib/auth/pcs-legacy-bridge.ts:231`.
- *   - `tb_users.userpass` (the legacy passTam hash) is left untouched.
- *     Pacred's source-of-truth password lives in `auth.users.encrypted_password`;
- *     the legacy-bridge code path only fires when a legacy hash exists and
- *     the customer is signing in for the first time. After this reset, the
- *     legacy hash is stale but harmless — every subsequent sign-in goes
- *     straight through Supabase Auth with the new password.
+ *   - `tb_users."userPass"` (the legacy passTam hash) IS now re-written via
+ *     `syncLegacyUserPass` (owner 2026-06-24). The old assumption — "every
+ *     subsequent sign-in goes straight through Supabase Auth" — is FALSE for a
+ *     migrated customer who logs in BY PHONE: their auth row has the synthetic
+ *     email + no phone, so native signIn misses and the legacy bridge verifies
+ *     against `userPass`. Leaving it stale broke login after every reset
+ *     (PR050 + many legacy customers). We now write BOTH.
  *   - Role gate: `super` + `sales_admin` (and `accounting` for the
  *     telephone-support workflow). Matches the legacy users.php gate.
  *   - Generated password: 6 chars from an alphanumeric set excluding the
@@ -30,6 +31,7 @@
 
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncLegacyUserPass } from "@/lib/auth/sync-legacy-userpass";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 const inputSchema = z.object({
@@ -92,6 +94,13 @@ export async function adminResetCustomerPassword(
       password: newPassword,
     });
     if (updErr) return { ok: false, error: updErr.message };
+
+    // owner 2026-06-24 — ALSO write the legacy passTam hash so a migrated PCS
+    // customer who logs in BY PHONE (auth row has the synthetic email + no
+    // phone → native miss → legacy bridge checks tb_users."userPass") can log
+    // in with the reset password. Previously this was left stale → "ลูกค้าเก่า
+    // login ไม่ได้หลังรีรหัส" (PR050 + many). Best-effort.
+    await syncLegacyUserPass(userid, newPassword);
 
     await logAdminAction(adminId, "tb_users.password_reset", "tb_users", userid, {
       reset_by:   adminId,

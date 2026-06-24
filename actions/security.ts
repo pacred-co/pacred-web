@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncLegacyUserPass } from "@/lib/auth/sync-legacy-userpass";
 import { headers } from "next/headers";
 import { requestOtp, verifyOtp } from "@/actions/otp";
 import { normalizePhone } from "@/lib/utils/phone";
@@ -73,6 +74,20 @@ export async function changePassword(input: ChangePasswordInput): Promise<Action
   // Update to the new password
   const { error: updErr } = await supabase.auth.updateUser({ password: d.newPassword });
   if (updErr) return { ok: false, error: updErr.message };
+
+  // owner 2026-06-24 — keep the legacy passTam hash in sync so a migrated PCS
+  // customer (synthetic email + no phone) who logs in BY PHONE via the bridge
+  // can use the changed password too. Best-effort.
+  {
+    const admin = createAdminClient();
+    const { data: prof, error: profErr } = await admin
+      .from("profiles")
+      .select("member_code")
+      .eq("id", user.id)
+      .maybeSingle<{ member_code: string | null }>();
+    if (profErr) console.error("[changePassword profile]", { code: profErr.code, message: profErr.message });
+    await syncLegacyUserPass(prof?.member_code, d.newPassword);
+  }
 
   revalidatePath("/profile");
   return { ok: true };
