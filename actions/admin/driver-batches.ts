@@ -52,8 +52,10 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 const createBatchSchema = z.object({
   // The list of tb_forwarder.id rows the ops staff ticked on /admin/drivers/new
   forwarderIds: z.array(z.number().int().positive()).min(1, "เลือกอย่างน้อย 1 รายการ").max(500),
-  // Driver's member_code (PR-format) — required.
-  driverMemberCode: z.string().trim().regex(/^PR\d{3,}$/i, "ระบุรหัสคนขับ (PR-format)"),
+  // Driver's member_code — required. Accept PR (customer pool) OR AD (admin pool):
+  // Pacred drivers are admins (role='driver') and may carry an AD-format code
+  // (e.g. AD020 admin Ben) — the legacy PR-only regex blocked every assignment.
+  driverMemberCode: z.string().trim().regex(/^(PR|AD)\d{3,}$/i, "ระบุรหัสคนขับ (PR หรือ AD)"),
   // Deadline duration in hours — legacy preset: 17, 24, 30.
   endTimeHours: z.union([z.literal(17), z.literal(24), z.literal(30)]).default(17),
   // Number of distinct delivery stops — legacy `fdamount`. The UI knows
@@ -536,7 +538,7 @@ export async function updateBatchEndtime(
 
 const reassignSchema = z.object({
   batchId: z.number().int().positive(),
-  driverMemberCode: z.string().trim().regex(/^PR\d{3,}$/i, "ระบุรหัสคนขับ (PR-format)"),
+  driverMemberCode: z.string().trim().regex(/^(PR|AD)\d{3,}$/i, "ระบุรหัสคนขับ (PR หรือ AD)"),
 });
 export type ReassignInput = z.infer<typeof reassignSchema>;
 
