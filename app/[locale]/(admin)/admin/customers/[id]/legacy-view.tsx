@@ -573,6 +573,23 @@ export async function renderLegacyCustomerView(
                   SVIP · เรทเฉพาะตัว
                 </span>
               ) : null}
+              {/* owner 2026-06-25 — tag บุคคล/นิติ + เงินสด/เครดิต ข้าง Sales/CS
+                  ให้คนทำงาน+ลูกค้ารู้รายละเอียดทันที (§0g self-explaining). */}
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${isJuristic ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                {isJuristic ? "นิติบุคคล" : "บุคคล"}
+              </span>
+              {creditLimit > 0 ? (
+                <span
+                  className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800"
+                  title={`ลูกค้าเครดิต · เทอม ${creditDays} วัน · วงเงิน ฿${creditLimit.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ถ้ายอดเกินวงเงินต้องโอนเพิ่ม/ติดต่อ CS-Sale ขอเพิ่มวงหรือจ่ายส่วนเกิน`}
+                >
+                  💳 เครดิต {creditDays} วัน · วงเงิน ฿{creditLimit.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+                </span>
+              ) : (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  💵 เงินสด (Cash)
+                </span>
+              )}
               <SaleRepEditor compact userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
               <CsRepEditor compact userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
             </div>
