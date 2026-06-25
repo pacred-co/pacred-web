@@ -60,7 +60,7 @@ const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
 // up-country carriers (12-47) almost never appear in a local run, so we map the
 // common set + fall back to the raw code.
 const SHIP_BY_LABEL: Record<string, string> = {
-  PCS: "รับเองโกดัง PCS", PCSE: "PCS Express", PCSF: "PCS เหมาเหมา",
+  PCS: "รับเองโกดัง (Pacred)", PCSE: "Pacred Express", PCSF: "Pacred เหมาๆ",
   F: "บริษัทจัดหาให้อัตโนมัติ",
   "1": "DHL Express", "2": "Flash Express", "3": "J.K. เอ็กซ์เพรส", "4": "Kerry Express",
   "5": "Nim Express", "8": "SCG Express", "11": "ไปรษณีย์ไทย",
@@ -205,6 +205,31 @@ export default async function AdminDriverBatchDetailPage({
     forwarders = (fwdData ?? []) as unknown as Forwarder[];
   }
   const fwdById = new Map(forwarders.map((f) => [f.id, f]));
+
+  // 3b. Resolve the CUSTOMER name for every forwarder row (legacy links by
+  // `userid` TEXT, not an FK → one tb_users .in() lookup · same local pattern
+  // as the driver-name lookup below + loadDriverDirectory on /drivers/work).
+  // The driver must see WHOSE parcel it is (PR + name + tracking), not just an
+  // order number. tb_users uses CAMELCASE cols (CLAUDE.md exception).
+  const custIds = Array.from(
+    new Set(forwarders.map((f) => (f.userid ?? "").trim()).filter(Boolean)),
+  );
+  const custNameById = new Map<string, string>();
+  if (custIds.length > 0) {
+    const { data: custRows, error: custErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName")
+      .in("userID", custIds);
+    if (custErr) {
+      console.error(`/admin/drivers/${id}: customer name lookup failed`, custErr);
+    }
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
+      const name = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+      if (name) custNameById.set(u.userID, name);
+    }
+  }
+  const customerNameOf = (uid: string | null | undefined): string =>
+    custNameById.get((uid ?? "").trim()) ?? "—";
 
   // 4. Driver display info
   // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
@@ -588,8 +613,25 @@ export default async function AdminDriverBatchDetailPage({
                     )}
                   </div>
 
-                  {/* ZONE 2 — บริษัทขนส่ง + ผู้รับ + ที่อยู่ + โทร */}
+                  {/* ZONE 2 — ลูกค้า (PR + ชื่อ) + บริษัทขนส่ง + ผู้รับ + ที่อยู่ + โทร */}
                   <div className="p-3 space-y-1.5">
+                    {/* WHOSE parcel — PR code + customer name (the driver leads with
+                        the customer, not the order number). */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {f.userid ? (
+                        <Link
+                          href={`/admin/customers/${f.userid}`}
+                          className="font-mono text-sm font-bold text-primary-600 hover:underline"
+                        >
+                          {f.userid}
+                        </Link>
+                      ) : (
+                        <span className="font-mono text-sm font-bold text-muted">—</span>
+                      )}
+                      <span className="font-semibold text-sm text-foreground">
+                        {customerNameOf(f.userid)}
+                      </span>
+                    </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
                         self ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-700 border border-slate-200"
@@ -605,8 +647,8 @@ export default async function AdminDriverBatchDetailPage({
                         <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
                     </div>
-                    <p className="font-semibold text-sm text-foreground">
-                      คุณ{f.faddressname ?? ""} {f.faddresslastname ?? ""}
+                    <p className="text-xs text-muted">
+                      ผู้รับ: คุณ{f.faddressname ?? ""} {f.faddresslastname ?? ""}
                     </p>
                     <p className="text-xs text-foreground/80 leading-relaxed">
                       {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
@@ -656,12 +698,13 @@ export default async function AdminDriverBatchDetailPage({
                                     </Link>
                                   </div>
                                 </td>
-                                <td className="px-2 py-1.5 font-mono">
+                                <td className="px-2 py-1.5">
                                   {forwarder.userid ? (
-                                    <Link href={`/admin/customers/${forwarder.userid}`} className="text-primary-600 hover:underline">
+                                    <Link href={`/admin/customers/${forwarder.userid}`} className="font-mono text-primary-600 hover:underline">
                                       {forwarder.userid}
                                     </Link>
-                                  ) : "—"}
+                                  ) : <span className="font-mono text-muted">—</span>}
+                                  <div className="text-[11px] text-foreground/80">{customerNameOf(forwarder.userid)}</div>
                                 </td>
                                 <td className="px-2 py-1.5">
                                   <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline">
