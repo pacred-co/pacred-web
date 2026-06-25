@@ -314,8 +314,8 @@ export function StatCards({
     { label: "ฝากนำเข้าสินค้า", value: fmtInt(counts.forwarder), icon: <Package className="w-5 h-5" />, href: `/admin/forwarders?focus=search&q=${enc}`, tone: "indigo" },
     { label: "ฝากชำระเงิน/โอน", value: fmtInt(counts.payment), icon: <Ship className="w-5 h-5" />, href: `/admin/yuan-payments?q=${enc}`, tone: "violet" },
     { label: "กระเป๋าพักเงิน", value: `฿${walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <Wallet className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "primary" },
-    { label: "รายการชำระเงิน", value: fmtInt(counts.walletAdd), icon: <ArrowDownCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "emerald" },
-    { label: "รายการชำระเงิน", value: fmtInt(counts.walletPay), icon: <CreditCard className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "amber" },
+    { label: "ชำระเงินเข้า (เติมกระเป๋า)", value: fmtInt(counts.walletAdd), icon: <ArrowDownCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "emerald" },
+    { label: "ตัดชำระจากกระเป๋า", value: fmtInt(counts.walletPay), icon: <CreditCard className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "amber" },
     { label: "รายการถอนเงิน", value: fmtInt(counts.walletWithdraw), icon: <ArrowUpCircle className="w-5 h-5" />, href: `/admin/wallet?userid=${enc}`, tone: "rose" },
     { label: "ประวัติ Cash Back", value: fmtInt(counts.cashBack), icon: <Gift className="w-5 h-5" />, tone: "fuchsia" },
   ];
