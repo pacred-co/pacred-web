@@ -22,8 +22,6 @@ const KNOWN_ICON: Record<string, string> = {
   เมย์: "/images/Character_Icon/may.png",
   admin_pee: "/images/Character_Icon/pee01.png",
   พี: "/images/Character_Icon/pee01.png",
-  admin_toey: "/images/Character_Icon/Toey01.png",
-  เตย: "/images/Character_Icon/Toey01.png",
   admin_win: "/images/Character_Icon/win01.png",
   วิน: "/images/Character_Icon/win01.png",
 };

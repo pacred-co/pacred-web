@@ -1,20 +1,35 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { Camera, X, ChevronLeft, ChevronRight } from "lucide-react";
 
-// Gutter between slide cards (matches gap-3 = 12px) — used by the scroll math.
-const GAP = 12;
-
 /**
- * Edge-flush rounded peek filmstrip (design panel 2026-06-25). A horizontal
- * scroll-snap rail of framed rounded cards: the active card sits flush ~16px
- * from the left edge with the next card peeking ~28% on the right (Trip.com
- * "see-more, swipe-me" feel, with NO dead gray gap at the ends). Slide via the
- * arrows, native swipe, or the dots; the active card carries a red inset ring.
- * A single image renders on its own. Tapping opens the fullscreen lightbox.
+ * Mosaic case gallery (ปอน 2026-06-25 redesign — "จัดเรียงภาพแบบ collage").
+ * A Facebook / Trip.com album-style collage: one large hero image + a grid of
+ * thumbnails, with a "+N" overlay on the last visible tile when more images
+ * exist. Replaces the horizontal scroll-filmstrip. Any tile opens the
+ * fullscreen lightbox (keyboard arrows · swipe · click-out to close).
+ * Degrades cleanly for 2 / 3 / 4 images; a single image renders on its own.
  */
+const MAX_TILES = 5;
+
+// Grid template per image count — the hero+thumbnails mosaic only kicks in at
+// 5+; smaller sets get a tidy equal/2-up layout so there are never empty cells.
+function gridClass(total: number): string {
+  if (total === 2) return "grid-cols-2 grid-rows-1";
+  if (total === 3 || total === 4) return "grid-cols-2 grid-rows-2";
+  // 5+ : mobile = wide hero on top + 2×2 thumbs · desktop = tall hero left + 2×2
+  return "grid-cols-2 grid-rows-[2fr_1fr_1fr] md:grid-cols-4 md:grid-rows-2";
+}
+
+// Span for the hero tile (index 0). Everything else is a 1×1 cell.
+function tileSpan(i: number, total: number): string {
+  if (total >= 5) return i === 0 ? "col-span-2 row-span-1 md:row-span-2" : "";
+  if (total === 3) return i === 0 ? "row-span-2" : ""; // tall hero on the left
+  return "";
+}
+
 export function CaseGallery({
   images,
   alt,
@@ -24,8 +39,6 @@ export function CaseGallery({
   verifiedLabel?: string;
 }) {
   const total = images.length;
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
 
@@ -52,41 +65,6 @@ export function CaseGallery({
       document.body.style.overflow = "";
     };
   }, [open, close, prevLb, nextLb]);
-
-  // Align a card's LEFT edge to the rail (snap-start) — direct scrollLeft= only.
-  const go = useCallback(
-    (i: number) => {
-      const clamped = (i + total) % total;
-      setActive(clamped);
-      const c = scrollRef.current;
-      const el = c?.children[clamped] as HTMLElement | undefined;
-      if (c && el) c.scrollLeft = el.offsetLeft - c.clientLeft;
-    },
-    [total],
-  );
-
-  // Arrow step — read the current first-visible index from scroll position
-  // (immune to a stale closure), step one card, re-align left.
-  const nudge = useCallback((dir: number) => {
-    const c = scrollRef.current;
-    const first = c?.firstElementChild as HTMLElement | null;
-    if (!c || !first) return;
-    const cardW = first.offsetWidth + GAP;
-    const cur = Math.round(c.scrollLeft / cardW);
-    const target = Math.max(0, Math.min(c.children.length - 1, cur + dir));
-    const el = c.children[target] as HTMLElement | undefined;
-    if (el) c.scrollLeft = el.offsetLeft - c.clientLeft;
-    setActive(target);
-  }, []);
-
-  // Keep the active ring / dot / pill-target in sync with the scroll position.
-  const onScroll = useCallback(() => {
-    const c = scrollRef.current;
-    const first = c?.firstElementChild as HTMLElement | null;
-    if (!c || !first) return;
-    const cardW = first.offsetWidth + GAP;
-    setActive(Math.max(0, Math.min(c.children.length - 1, Math.round(c.scrollLeft / cardW))));
-  }, []);
 
   if (total === 0) return null;
 
@@ -120,7 +98,7 @@ export function CaseGallery({
     </div>
   ) : null;
 
-  // Single image — one framed photo, no carousel chrome
+  // Single image — one framed photo, no collage chrome
   if (total === 1) {
     return (
       <>
@@ -137,70 +115,52 @@ export function CaseGallery({
     );
   }
 
-  // Filmstrip — flush rail of framed cards, active card emphasised
+  // Mosaic collage — hero + thumbnails, "+N" on the last visible tile
+  const shown = images.slice(0, MAX_TILES);
+  const extra = total - shown.length;
+
   return (
     <>
       <div className="relative">
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="flex h-[230px] snap-x snap-mandatory items-stretch gap-3 overflow-x-auto scroll-px-4 px-4 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] md:h-[360px] [&::-webkit-scrollbar]:hidden"
-        >
-          {images.map((src, i) => (
-            <button
-              key={`${src}-${i}`}
-              type="button"
-              onClick={() => (i === active ? openAt(i) : go(i))}
-              aria-label={i === active ? "ดูรูปใหญ่" : `ไปรูปที่ ${i + 1}`}
-              className={[
-                "group relative h-full w-[72%] shrink-0 snap-start overflow-hidden rounded-2xl bg-black/5 transition-[transform,box-shadow] duration-300 will-change-transform md:w-[46%]",
-                i === active ? "shadow-[0_8px_24px_-8px_rgba(0,0,0,0.35)]" : "scale-[0.97] opacity-95",
-              ].join(" ")}
-            >
-              <Image
-                src={src}
-                alt={`${alt} — ${i + 1}`}
-                fill
-                sizes="(max-width: 768px) 72vw, 46vw"
-                quality={92}
-                priority={i === 0}
-                className="object-cover"
-              />
-              <span
+        <div className={`grid h-[360px] gap-2 md:h-[440px] ${gridClass(total)}`}>
+          {shown.map((src, i) => {
+            const isLast = i === shown.length - 1;
+            const showMore = isLast && extra > 0;
+            return (
+              <button
+                key={`${src}-${i}`}
+                type="button"
+                onClick={() => openAt(i)}
+                aria-label={showMore ? `ดูรูปทั้งหมด ${total} รูป` : `ดูรูปที่ ${i + 1}`}
                 className={[
-                  "pointer-events-none absolute inset-0 rounded-2xl ring-inset",
-                  i === active ? "ring-2 ring-primary-600/70" : "ring-1 ring-black/10",
+                  "group relative overflow-hidden rounded-2xl bg-black/5",
+                  tileSpan(i, total),
                 ].join(" ")}
-              />
-            </button>
-          ))}
+              >
+                <Image
+                  src={src}
+                  alt={`${alt} — ${i + 1}`}
+                  fill
+                  sizes={i === 0 ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 50vw, 25vw"}
+                  quality={92}
+                  priority={i === 0}
+                  className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                />
+                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-black/10" />
+                {showMore ? (
+                  <span className="absolute inset-0 grid place-items-center rounded-2xl bg-black/55 text-white backdrop-blur-[1px] transition group-hover:bg-black/65">
+                    <span className="text-[22px] font-black leading-none md:text-[30px]">+{extra}</span>
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Slide arrows */}
-        <button type="button" aria-label="ก่อนหน้า" onClick={() => nudge(-1)} className="absolute left-2 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#111827] shadow-md backdrop-blur transition hover:bg-white md:left-3">
-          <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
-        </button>
-        <button type="button" aria-label="ถัดไป" onClick={() => nudge(1)} className="absolute right-2 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#111827] shadow-md backdrop-blur transition hover:bg-white md:right-3">
-          <ChevronRight className="h-5 w-5" strokeWidth={2.4} />
-        </button>
-
-        {/* Pagination dots */}
-        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
-          {images.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`รูปที่ ${i + 1}`}
-              onClick={() => go(i)}
-              className={["h-1.5 rounded-full shadow-sm transition-all", active === i ? "w-4 bg-primary-600" : "w-1.5 bg-black/25 hover:bg-black/40"].join(" ")}
-            />
-          ))}
-        </div>
-
-        {/* "ดูรูปทั้งหมด" — bottom-right */}
+        {/* ดูรูปทั้งหมด — bottom-right */}
         <button
           type="button"
-          onClick={() => openAt(active)}
+          onClick={() => openAt(0)}
           className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[12px] font-bold text-white backdrop-blur-sm transition hover:bg-black/75"
         >
           <Camera className="h-3.5 w-3.5" strokeWidth={2.6} />

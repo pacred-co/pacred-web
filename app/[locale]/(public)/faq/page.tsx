@@ -14,12 +14,12 @@ import { STAFF } from "@/components/seo/site";
 
 const PATH = "/faq";
 
-// Sales contact line shown in the FAQ support answers (= แนท · STAFF.sales[3]),
-// sourced from the single SOT instead of a hardcoded literal.
+// Sales contact line shown in the FAQ support answers (= แนท · STAFF.sales[2]
+// after เตย removed 2026-06-25), sourced from the single SOT instead of a literal.
 // NOTE (flagged to เดฟ): the FAQ email "contact@pacred.co" has NO matching
 // entry in components/seo/site.ts CONTACT (which exposes sales@ / docs@ / acc@
 // …). Left as-is pending a decision on whether contact@ is a real mailbox.
-const FAQ_PHONE = STAFF.sales[3].phone;
+const FAQ_PHONE = STAFF.sales[2].phone;
 
 export async function generateMetadata({
   params,

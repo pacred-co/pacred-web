@@ -40,8 +40,10 @@ export const CONTACT = {
   /** Customer Service (CS) — routed to พลอย (new line as of 2026-05-25; old `066-090-1217` retired). */
   phoneCs:             "+66626034456",
   phoneCsDisplay:      "062-603-4456",
-  /** Sales reps — used by booking-data + sales-carousel + cards. 4 named reps; a 5th rep `099-234-5196` is in the org but unnamed pending HR confirm. */
-  phoneSalesDisplay:   ["061-779-9299", "099-253-1415", "066-125-3006", "066-131-0253"],
+  /** Sales rep display numbers (พี · เมย์ · แนท). เตย removed 2026-06-25. The LIVE
+   *  customer-facing sales cards are DB-driven (tb_admin.adminStatusSale via the
+   *  sales-roster SOT), not this list. */
+  phoneSalesDisplay:   ["061-779-9299", "066-125-3006", "066-131-0253"],
   /**
    * Customer-facing default — shown in footer / JSON-LD ContactPoint / signup
    * confirmation. Per เดฟ 2026-05-15: pair `sales` + `docs` side-by-side on
@@ -190,9 +192,10 @@ export const LINE_OA = {
  *   - `02-421-3325` ← still company main, but no longer แนท's personal line
  */
 export const STAFF = {
+  // เตย removed from the sales roster (ปอน 2026-06-25 · owner-confirmed). NOTE:
+  // indices shifted — แนท is now sales[2] (footer QR + FAQ contact updated).
   sales: [
     { name: "พี",       phone: "061-779-9299", phoneIntl: "+66617799299" },
-    { name: "เตย",       phone: "099-253-1415", phoneIntl: "+66992531415" },
     { name: "เมย์",      phone: "066-125-3006", phoneIntl: "+66661253006" },
     { name: "แนท",      phone: "066-131-0253", phoneIntl: "+66661310253" },
   ],

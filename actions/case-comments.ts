@@ -18,6 +18,7 @@ export type CaseComment = {
   authorName: string;
   authorAvatar: string | null;
   body: string;
+  rating: number | null;
   createdAt: string;
 };
 
@@ -26,6 +27,7 @@ type Row = {
   author_name: string | null;
   author_avatar: string | null;
   body: string | null;
+  rating: number | null;
   created_at: string;
 };
 
@@ -34,6 +36,7 @@ const toComment = (r: Row): CaseComment => ({
   authorName: r.author_name || "ลูกค้า Pacred",
   authorAvatar: r.author_avatar || null,
   body: r.body || "",
+  rating: r.rating ?? null,
   createdAt: r.created_at,
 });
 
@@ -44,7 +47,7 @@ export async function listCaseComments(caseSlug: string): Promise<CaseComment[]>
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("case_comments")
-      .select("id, author_name, author_avatar, body, created_at")
+      .select("id, author_name, author_avatar, body, rating, created_at")
       .eq("case_slug", caseSlug)
       .eq("status", "visible")
       .order("created_at", { ascending: false })
@@ -86,9 +89,10 @@ export async function postCaseComment(
         author_name: name,
         author_avatar: profile?.avatar_url ?? null,
         body: parsed.data.body,
+        rating: parsed.data.rating ?? null,
         status: "visible",
       })
-      .select("id, author_name, author_avatar, body, created_at")
+      .select("id, author_name, author_avatar, body, rating, created_at")
       .single();
     if (error || !data) {
       return { ok: false, error: "ส่งความคิดเห็นไม่สำเร็จ — ระบบคอมเมนต์ยังไม่เปิด (รอ migration)" };
