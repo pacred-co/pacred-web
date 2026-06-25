@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown, Building2 } from "lucide-react";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
+import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 import { ResetPwdButton } from "./reset-pwd-button";
 import { HoverZoomImage } from "@/components/admin/hover-zoom-image";
 import {
@@ -60,6 +61,9 @@ export type CustomerTableRow = {
   /** Profile avatar signed URL (tb_users.userimage → "profile" bucket). null = no image. */
   avatarUrl: string | null;
   isJuristic: boolean;
+  /** CUSTTAG (owner 2026-06-25) — tb_users.userCreditValue (วงเงิน) + userCreditDate (เทอม) → the cash/credit pill. */
+  creditLimit: number;
+  creditDays: number;
   status: DerivedStatus;
   fullName: string;
   tel: string;
@@ -206,9 +210,8 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
-                          {r.isJuristic ? "นิติบุคคล" : "บุคคล"}
-                        </span>
+                        {/* CUSTTAG (owner 2026-06-25) — type + cash/credit pills, shared component */}
+                        <CustomerTypeTag isJuristic={r.isJuristic} creditLimit={r.creditLimit} creditDays={r.creditDays} compact />
                         {r.juristic && (
                           <span className={`ml-1 rounded-full border px-1.5 py-0.5 text-[11px] ${
                             r.juristic.corpStatus === "verified" ? "bg-green-50 text-green-700 border-green-200"

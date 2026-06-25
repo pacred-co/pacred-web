@@ -156,6 +156,8 @@ export type Row = {
     is_corporate: boolean;
     is_comparison: boolean;
     is_juristic: boolean;
+    credit_limit: number;   // CUSTTAG — วงเงินเครดิต (>0 = ลูกค้าเครดิต)
+    credit_days: number;    // CUSTTAG — เทอม (วัน)
     sale_admin: string | null;
   } | null;
 };
@@ -992,6 +994,16 @@ export function ForwardersTable({
                             isJuristic={r.customer.is_juristic}
                             saleAdmin={r.customer.sale_admin}
                           />
+                        )}
+                        {/* CUSTTAG (owner 2026-06-25) — credit pill so staff see
+                            "ลูกค้าเครดิต · เทอม Nวัน" on the order row → ติดตามให้จ่ายภายในเทอม. */}
+                        {r.customer && r.customer.credit_limit > 0 && (
+                          <span
+                            className="mt-0.5 inline-block rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                            title={`ลูกค้าเครดิต · เทอม ${r.customer.credit_days} วัน · วงเงิน ฿${r.customer.credit_limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ติดตามให้ลูกค้าจ่ายภายในเทอม`}
+                          >
+                            💳 เครดิต {r.customer.credit_days}ว
+                          </span>
                         )}
                         {/* Wave 18-B — จะมาถึงไทย ETA range (port of legacy
                             forwarder.php L595-609). Transport=1 = ±2d ·

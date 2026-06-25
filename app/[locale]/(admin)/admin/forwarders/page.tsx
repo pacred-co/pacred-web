@@ -255,6 +255,8 @@ type RawUserRow = {
   coID: string | null;            // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc.
   userComparison: string | null;  // '1' = CPS (รคา่เทียบ)
   userCompany: string | null;     // '1' = นิติบุคคล
+  userCreditValue: number | string | null;  // CUSTTAG — วงเงินเครดิต (THB)
+  userCreditDate: number | string | null;   // CUSTTAG — เทอมเครดิต (วัน)
   adminIDSale: string | null;     // sale rep code · '' = ไม่ระบุ
 };
 
@@ -333,6 +335,8 @@ export type Row = {
     is_corporate: boolean;     // row in tb_corporate
     is_comparison: boolean;    // tb_users.usercomparison='1'
     is_juristic: boolean;      // tb_users.usercompany='1'
+    credit_limit: number;      // CUSTTAG — tb_users.userCreditValue (วงเงิน · >0 = ลูกค้าเครดิต)
+    credit_days: number;       // CUSTTAG — tb_users.userCreditDate (เทอม วัน)
     sale_admin: string | null; // tb_users.adminidsale
   } | null;
 };
@@ -1115,7 +1119,7 @@ export async function fetchForwarderList(
       admin
         .from("tb_users")
         .select(
-          "userID,userName,userLastName,userTel,coID,userComparison,userCompany,adminIDSale",
+          "userID,userName,userLastName,userTel,coID,userComparison,userCompany,userCreditValue,userCreditDate,adminIDSale",
         )
         .in("userID", uniqueUserIds),
       admin
@@ -1213,6 +1217,8 @@ export async function fetchForwarderList(
             is_corporate: corporateUserIds.has(user.userID),
             is_comparison: user.userComparison === "1",
             is_juristic: user.userCompany === "1",
+            credit_limit: Number(user.userCreditValue ?? 0),
+            credit_days: Number(user.userCreditDate ?? 0),
             sale_admin:
               user.adminIDSale && user.adminIDSale.trim() !== ""
                 ? user.adminIDSale.trim()

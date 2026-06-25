@@ -218,7 +218,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     .select(`
       userID, userName, userLastName, userCompany,
       userTel, userEmail, userActive, userStatus, adminIDSale, userRegistered,
-      coID, userLineID, userFacebook, userBirthday, userPicture
+      coID, userLineID, userFacebook, userBirthday, userPicture,
+      userCreditValue, userCreditDate
     `, { count: "exact" })
     .order("userRegistered", { ascending: false })
     .range(from, to);
@@ -270,6 +271,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     userFacebook: string | null;
     userBirthday: string | null;
     userPicture: string | null;
+    userCreditValue: number | string | null;
+    userCreditDate: number | string | null;
   };
   const rows = (data ?? []) as Row[];
 
@@ -472,6 +475,8 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       userID: r.userID,
       avatarUrl: avatarByUser[r.userID] ?? null,
       isJuristic: r.userCompany === "1" || juristicByMember.has(r.userID),
+      creditLimit: Number(r.userCreditValue ?? 0),
+      creditDays: Number(r.userCreditDate ?? 0),
       status: deriveStatus(r),
       fullName: displayName,
       tel: r.userTel ?? "",
