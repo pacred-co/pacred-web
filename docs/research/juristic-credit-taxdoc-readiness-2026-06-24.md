@@ -63,3 +63,27 @@
 - **เอกสารภาษี: owner เคาะ "ให้เลือกทุกครั้ง · ไม่ตั้ง default"** → §3.1(b)/§5-ข้อ2 (default ต่อลูกค้า) **ยกเลิก.** ✅ **DONE:** ดัน `EditTaxDocModeField` เป็นกล่องเด่นบนหน้า forwarder detail (commit `feat(forwarder · tax-doc · owner 2026-06-24)`) — เลือก/แก้ ใบกำกับ/ใบขน/ไม่เอา รายชิป ได้ชัด · §0f confirm · ไม่กระทบเอกสารที่ออกแล้ว.
 - **เปิดค้าง (accounting's call):** ยอดค้างเครดิตเก่าฝั่ง PCS (PR099 โน้ต ~3,296 บาท) ยังไม่ seed เข้า `tb_credit` (เริ่มที่ 0 · สะสมจากออเดอร์ใหม่). ถ้าจะยกยอดเก่ามา = ตัดสินใจโดยบัญชี.
 - **ยังเหลือ (optional · ไม่เร่ง):** §3.3 audit WHT หักครั้งเดียว end-to-end · §3.4 report ปิดชุดงาน · §5-ข้อ6 QA เดินจริง 1 รอบกับ PR099.
+
+---
+
+## 🔎 Audit WHT 1% (item 1 · 2026-06-24) — เจอบั๊กจริง (หักซ้อนบนใบวางบิล)
+
+**สรุป:** 1% WHT ถูก apply **2 ชั้น** บนใบวางบิลของลูกค้านิติ.
+- `calcForwarderOutstanding` ([lib/forwarder/outstanding.ts:64](../../lib/forwarder/outstanding.ts)) **หัก 1% ไปแล้ว** (juristic → `priceFull*0.99`).
+- billing-run เก็บ `subtotal/total_thb` = Σ `calcForwarderOutstanding` (= **net แล้ว**) ([billing-run.ts:1147,1203](../../actions/admin/billing-run.ts)).
+- แล้ว `computeBillWht(is_juristic, total_thb)` ([billing-run.ts:705,873](../../actions/admin/billing-run.ts)) **หัก 1% ซ้ำ** → `net_payable` ที่โชว์ ≈ gross×0.98 (ควร gross×0.99) + `wht_amount` ผิด (1% ของ net ไม่ใช่ของ gross).
+
+**ผลกระทบ:** `total_thb` ที่บันทึก (ยอดเก็บจริง) = net หักครั้งเดียว → **ยอดที่ charge ถูก**. แต่ **ยอดชำระสุทธิ + บรรทัด WHT ที่โชว์บนใบ ผิด** (ต่ำไป ~1% ของ gross). **กระทบใบวางบิลนิติที่ออกแล้ว 12 ใบ** (รวม ฿21,159 · PR107/PR005/PR7429). ถ้าลูกค้าจ่ายตามยอดสุทธิที่โชว์ = จ่ายขาด ~1%.
+
+**ขัดกับ save-point 2026-06-14** ที่เคยสรุปว่า "1% NOT on the วางบิล" — `computeBillWht` ถูกเพิ่มทีหลังแล้ว apply ซ้ำบนวางบิล = regression.
+
+**ทางแก้ (money-critical · ต้องเคาะ policy ก่อนทำ):**
+- **โลกที่ถูกตามมาตรฐานใบกำกับไทย:** `total_thb` ควร = **GROSS** (subtotal ก่อนหัก) → `computeBillWht(gross)` ให้ WHT + net เดียว ถูกต้อง. แต่กระทบ `markBillingRunPaid` (บันทึกยอดจ่าย) + AR → cascade.
+- **โลก net (เปลี่ยนน้อย · ledger-neutral):** `total_thb` = net cash อยู่แล้ว → display ให้ `net_payable = total_thb` + gross/WHT คำนวณย้อน (`gross = total_thb/0.99`). ไม่แตะ ledger.
+
+**🔴 ยังไม่แก้** — เป็น money-formula กระทบ 12 ใบจริง + ledger → ต้องเคาะ policy (ใบวางบิลโชว์ยอด GROSS หรือ NET) + เขียน test + review ก่อน. ห้ามแก้ลวกๆ.
+
+## ✅ Item 2 (report ปิดชุดงาน) — มีอยู่แล้ว ครบ
+- `/admin/accounting/forwarder` = **faithful 1:1 port ของ `acc-forwarder.php`** (รายงานฝากนำเข้า · date-range · per-customer · WHT 1% นิติ · CSV export `acc-forwarder.ts`) · reachable (accounting menubar).
+- `/admin/accounting/closing` = "ปิดงบรายเดือน (ใบเสร็จ)" = port ของ `closingAccReportForwarder.php` · reachable.
+→ ไม่ต้อง build เพิ่ม.
