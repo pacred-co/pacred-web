@@ -35,6 +35,7 @@ import {
   TAX_ID,
   CONTACT,
   BANK,
+  DOC_SIGNATORY,
 } from "@/components/seo/site";
 
 // ── Shared render types (single source of truth) ─────────────
@@ -155,8 +156,6 @@ export function ReceiptPage({
   whtAmount,
   grandTotal,
   grandTotalThaiWord,
-  documentIssuer,
-  documentApprover,
   pageNumber,
   pageCount,
   qrDataUrl,
@@ -622,7 +621,7 @@ export function ReceiptPage({
                       />
                     </div>
                     <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{documentIssuer}</p>
+                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
                       <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
                     </div>
                   </div>
@@ -642,7 +641,7 @@ export function ReceiptPage({
                     </div>
                     <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
                       <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>
-                        {documentApprover || documentIssuer}
+                        {DOC_SIGNATORY.name}
                       </p>
                       <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
                     </div>

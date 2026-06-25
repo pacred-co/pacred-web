@@ -28,6 +28,7 @@ import {
   TAX_ID,
   CONTACT,
   BANK,
+  DOC_SIGNATORY,
 } from "@/components/seo/site";
 import { fmt2, fmt5, fmt0 } from "@/components/receipt/receipt-paper";
 
@@ -308,7 +309,7 @@ function BillingRunPage({
                 <Image src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายมือชื่อ" width={70} height={28} unoptimized style={{ width: "20mm", height: "auto" }} />
               </div>
               <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{p.issuedBy}</p>
+                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
                 <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{p.dateIssued}</p>
               </div>
             </div>

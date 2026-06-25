@@ -224,6 +224,17 @@ export const STAFF = {
 
 export const LOGO_PATH = "/images/pacred-logo-red.png";
 
+/**
+ * Authorized document signatory — the person whose signature is pre-printed on
+ * customer-facing issued documents (ใบเสร็จ / ใบวางบิล / …). owner 2026-06-25 (B):
+ * เอกสารส่งลูกค้าโชว์ "ชื่อนี้คงที่" ให้ตรงกับลายเซ็นที่ปั๊มไว้ — ไม่ใช่ id ของแอดมินที่กดออก.
+ * เปลี่ยนทั้ง name + signature พร้อมกันถ้าผู้มีอำนาจเซ็นเปลี่ยน.
+ */
+export const DOC_SIGNATORY = {
+  name: "Wandee Prikyai",
+  signature: "/legacy/pcs/assets/images/theme/sin-wandee.jpg",
+} as const;
+
 export function absoluteUrl(path: string, locale: SiteLocale = DEFAULT_LOCALE): string {
   const clean = path.startsWith("/") ? path : `/${path}`;
   const prefix = locale === DEFAULT_LOCALE ? "" : `/${locale}`;
