@@ -10,6 +10,8 @@ Owner: "ลุยต่อไปยาวๆจนครบจบเลย · lo
 | YUAN cost-editable | `af41b1d2` | `<YuanCostEditor>` — edit real yuan cost at ANY status (cost-editable, sell-locked) · server re-derives paythbcost/profit |
 | HIST | `0515dbbd` | `/admin/accounting/document-history` — unified ประวัติออกเอกสาร (ใบเสร็จ+บิล+ใบกำกับ · tabs/search/date-range/print) |
 | status-sync PR018 | `d858ae50` | `<MarkArrivedChinaButton>` — 1-click manual "ถึงโกดังจีน" (4→40) on a stuck shop order |
+| PPAY dynamic QR | `50bc7862` | re-enabled dynamic amount-PromptPay QR (tax-ID 0105564077716) · FLAG-GATED `PROMPTPAY_DYNAMIC_ENABLED` (default static) · 16-assert decode test proves EMVCo correctness w/o a scan · 🔴 owner flips flag after 1 real scan |
+| CUSTTAG service-orders | `b6fc25b1` | credit pill on the ฝากสั่งซื้อ list too (symmetric w/ forwarders) — CUSTTAG now on header + customer list + both order lists |
 
 ## 🟡 Audited + DEFERRED (money-doc A4-layout · need LIVE render to fix safely)
 
