@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
@@ -75,6 +76,10 @@ export async function adminDeleteForwarder(
         .delete()
         .eq("id", id);
       if (delErr) return { ok: false, error: delErr.message };
+
+      // ภูม 2026-06-25 — ลบออเดอร์แล้วต้องเคลียร์สลิป pending ที่ค้างในคิว "ชำระเงิน"
+      // (best-effort · money-safe: reject เฉพาะ status='1' = เงินยังไม่เข้า/ออก).
+      await rejectPendingSlipsForCancelledOrder(admin, id, adminId);
 
       await logAdminAction(adminId, "forwarder.delete", "tb_forwarder", String(id), {
         fstatus:  row.fstatus,

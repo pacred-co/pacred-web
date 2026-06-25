@@ -104,6 +104,8 @@ type Forwarder = {
   id:                   number;
   fidorco:              string | null;
   fstatus:              string;
+  userid:               string | null;
+  ftrackingchn:         string | null;
   fcabinetnumber:       string | null;
   ftotalprice:          number | null;
   fweight:              number | null;
@@ -273,7 +275,7 @@ export default async function DriverWorkPage({
       ? admin
           .from("tb_forwarder")
           .select(
-            "id, fidorco, fstatus, fcabinetnumber, ftotalprice, fweight, fvolume, " +
+            "id, fidorco, fstatus, userid, ftrackingchn, fcabinetnumber, ftotalprice, fweight, fvolume, " +
             "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
             "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, fnote",
           )
@@ -285,6 +287,28 @@ export default async function DriverWorkPage({
   const batchById = new Map(batches.map((b) => [b.id, b]));
   const forwarders = (fwdRes.data ?? []) as unknown as Forwarder[];
   const forwarderById = new Map(forwarders.map((f) => [f.id, f]));
+
+  // Resolve the CUSTOMER name for each parcel's userid (legacy links by
+  // `userid` TEXT, not an FK → one tb_users .in() lookup · same pattern as
+  // loadDriverDirectory below). The driver must see WHOSE parcel it is
+  // (PR + name + tracking), not just an order number. CAMELCASE cols.
+  const custIds = Array.from(
+    new Set(forwarders.map((f) => (f.userid ?? "").trim()).filter(Boolean)),
+  );
+  const customerNameById = new Map<string, string>();
+  if (custIds.length > 0) {
+    const { data: custRows, error: custErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName")
+      .in("userID", custIds);
+    if (custErr) {
+      console.error(`[drivers/work] customer name lookup failed`, { code: custErr.code, message: custErr.message });
+    }
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
+      const name = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+      if (name) customerNameById.set(u.userID, name);
+    }
+  }
 
   // 5. Materialise card rows (item + batch + forwarder).
   const baseCards = items
@@ -311,7 +335,8 @@ export default async function DriverWorkPage({
         c.item.fdipictureon  ? getSignedBucketUrl("forwarder-covers", c.item.fdipictureon)  : Promise.resolve(null),
         c.item.fdipictureoff ? getSignedBucketUrl("forwarder-covers", c.item.fdipictureoff) : Promise.resolve(null),
       ]);
-      return { ...c, photoOnUrl: onUrl, photoOffUrl: offUrl };
+      const customerName = customerNameById.get((c.forwarder.userid ?? "").trim()) ?? "—";
+      return { ...c, photoOnUrl: onUrl, photoOffUrl: offUrl, customerName };
     }),
   );
 
@@ -362,11 +387,12 @@ async function loadDriverDirectory(admin: ReturnType<typeof createAdminClient>) 
 // can short-circuit without losing the chrome.
 // ─────────────────────────────────────────────────────────────────────
 type CardData = {
-  item:        Item;
-  batch:       Batch;
-  forwarder:   Forwarder;
-  photoOnUrl:  string | null;
-  photoOffUrl: string | null;
+  item:         Item;
+  batch:        Batch;
+  forwarder:    Forwarder;
+  photoOnUrl:   string | null;
+  photoOffUrl:  string | null;
+  customerName: string;
 };
 
 function renderShell(props: {
@@ -476,6 +502,7 @@ function renderShell(props: {
                 item={c.item}
                 batch={c.batch}
                 forwarder={c.forwarder}
+                customerName={c.customerName}
                 photoOnUrl={c.photoOnUrl}
                 photoOffUrl={c.photoOffUrl}
               />
@@ -505,17 +532,21 @@ function Card({
   item,
   batch,
   forwarder,
+  customerName,
   photoOnUrl,
   photoOffUrl,
 }: {
   item: Item;
   batch: Batch;
   forwarder: Forwarder;
+  customerName: string;
   photoOnUrl: string | null;
   photoOffUrl: string | null;
 }) {
   const fNo        = forwarder.fidorco ?? `#${forwarder.id}`;
-  const customer   = `${forwarder.faddressname ?? ""} ${forwarder.faddresslastname ?? ""}`.trim() || "—";
+  const pr         = (forwarder.userid ?? "").trim();
+  const tracking   = (forwarder.ftrackingchn ?? "").trim();
+  const recipient  = `${forwarder.faddressname ?? ""} ${forwarder.faddresslastname ?? ""}`.trim();
   const fullAddr   = [
     forwarder.faddressno,
     forwarder.faddresssubdistrict ? `ต.${forwarder.faddresssubdistrict}` : null,
@@ -528,15 +559,23 @@ function Card({
 
   return (
     <div className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-      {/* Top row: F-no + status badge */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Link
-          href={`/admin/forwarders/${forwarder.id}`}
-          className="font-mono text-base font-bold text-primary-600 hover:underline"
-        >
-          {fNo}
-        </Link>
-        <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Top row: WHOSE parcel (PR + customer name) leads · status badge right.
+          The driver identifies the parcel by the customer, not the order #. */}
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            {pr && (
+              <span className="font-mono text-base font-bold text-primary-600">{pr}</span>
+            )}
+            <span className="text-lg font-bold leading-tight">{customerName}</span>
+          </div>
+          {tracking && (
+            <p className="text-base font-mono text-foreground/90 mt-0.5 break-all">
+              📦 {tracking}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CLS[item.fdistatus] ?? STATUS_CLS[""]}`}>
             {STATUS_LABEL[item.fdistatus] ?? `?${item.fdistatus}?`}
           </span>
@@ -548,9 +587,13 @@ function Card({
         </div>
       </div>
 
-      {/* Customer + phone */}
+      {/* Recipient (the name on the delivery label) + phone */}
       <div className="space-y-1">
-        <p className="text-base font-semibold">{customer}</p>
+        {recipient && (
+          <p className="text-base text-foreground">
+            <span className="text-muted">ผู้รับ:</span> {recipient}
+          </p>
+        )}
         {phone1 && phone1 !== "-" && (
           <a
             href={`tel:${phone1}`}
@@ -614,9 +657,13 @@ function Card({
         </p>
       )}
 
-      {/* Batch context (small text) */}
+      {/* Batch context + order # (small / secondary — the driver leads with the
+          customer above; the order number stays reachable here). */}
       <p className="text-[11px] text-muted">
-        รอบ #{batch.id}
+        <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600/80 hover:underline">
+          {fNo}
+        </Link>
+        {` · รอบ #${batch.id}`}
         {batch.fdname ? ` · ${batch.fdname}` : ""}
         {batch.fddate ? ` · ${new Date(batch.fddate).toLocaleDateString("th-TH")}` : ""}
       </p>

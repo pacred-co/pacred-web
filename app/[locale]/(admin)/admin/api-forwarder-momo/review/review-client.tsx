@@ -96,6 +96,9 @@ type RowFormState = {
 
 // Reuse the same ship-by option list as the manual-form (Wave 17 P1).
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
+  // ภูม 2026-06-25 ("ตัดออก") — default ว่าง · ไม่บังคับเลือกตอน commit MOMO.
+  // เซล/ลูกค้ากรอกที่อยู่จัดส่ง + เลือกขนส่งเองภายหลัง (เลิก default "รับเองโกดัง").
+  { value: "",     label: "— ยังไม่ระบุ (เซล/ลูกค้ากรอกภายหลัง) —" },
   { value: "PCS",  label: "รับเองโกดัง Pacred (สมุทรสาคร)"  },
   { value: "2",    label: "Flash Express"           },
   { value: "3",    label: "J.K. เอ็กซ์เพรส"          },
@@ -134,10 +137,11 @@ export function ReviewGridClient({
     const m: Record<string, RowFormState> = {};
     for (const r of pendingRows) {
       // Prefill with the MOMO-guessed userID (admin verifies).
-      // PCS is a safe default for fShipBy — it bypasses address lookup.
+      // ภูม 2026-06-25 ("ตัดออก") — fShipBy default ว่าง (ไม่ default PCS รับเองโกดัง).
+      // เซล/ลูกค้าจะกรอกที่อยู่จัดส่ง + เลือกขนส่งเองภายหลัง.
       m[r.id] = {
         userID:        r.guessedUserId ?? "",
-        fShipBy:       "PCS",
+        fShipBy:       "",
         fProductsType: "1",
       };
     }
@@ -249,7 +253,8 @@ export function ReviewGridClient({
       const f = formState[r.id];
       if (!f) return { row: r, kind: "missing-form" as const };
       const userID = f.userID.trim().toUpperCase();
-      if (!/^PR\d+$/i.test(userID) || !f.fShipBy) {
+      // ภูม 2026-06-25 ("ตัดออก") — ขนส่งไม่บังคับ · พร้อม commit แค่มี userID ถูกต้อง.
+      if (!/^PR\d+$/i.test(userID)) {
         return { row: r, kind: "incomplete" as const };
       }
       // If the admin typed the same guessedUserId that's known-missing →
@@ -369,7 +374,7 @@ export function ReviewGridClient({
         const f = formState[r.id];
         if (!f) return false;
         const userID = f.userID.trim().toUpperCase();
-        if (!/^PR\d+$/i.test(userID) || !f.fShipBy) return false;
+        if (!/^PR\d+$/i.test(userID)) return false; // ภูม "ตัดออก" — ขนส่งไม่บังคับ
         const typedMatchesGuess =
           r.guessedUserId && userID === r.guessedUserId.toUpperCase();
         if (typedMatchesGuess && r.userIdValid === false) return false;
@@ -404,7 +409,7 @@ export function ReviewGridClient({
               </span>
               <span className="leading-tight">
                 <span className="block text-lg font-extrabold tabular-nums text-primary-700">{totalReady}</span>
-                <span className="block text-[11px] text-primary-700/70">พร้อม commit · มี userID + ขนส่ง</span>
+                <span className="block text-[11px] text-primary-700/70">พร้อม commit · มี userID (ขนส่งกรอกภายหลัง)</span>
               </span>
             </div>
             {totalUserMissing > 0 && (
@@ -520,7 +525,7 @@ export function ReviewGridClient({
                   const f = formState[r.id];
                   const result = rowResults[r.id];
                   const isCommitting = committingRow === r.id;
-                  const isReady = !!f && /^PR\d+$/i.test(f.userID.trim()) && !!f.fShipBy;
+                  const isReady = !!f && /^PR\d+$/i.test(f.userID.trim()); // ภูม "ตัดออก" — ขนส่งไม่บังคับ
 
                   return (
                     <tr key={r.id} className={`border-b border-border align-top transition-colors ${
@@ -652,7 +657,7 @@ export function ReviewGridClient({
                       {/* ship-by select */}
                       <td className="px-3 py-3">
                         <select
-                          value={f?.fShipBy ?? "PCS"}
+                          value={f?.fShipBy ?? ""}
                           onChange={(e) =>
                             setRowField(r.id, "fShipBy", e.target.value)
                           }

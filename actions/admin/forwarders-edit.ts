@@ -220,6 +220,10 @@ export type AdminUpdateForwarderDimensionsData = {
   rateSource: "manual" | "svip" | "vip" | "general";
   /** Recomputed grand total (transport + adders − discount). */
   grandTotal: number;
+  /** ภูม 2026-06-25 — did this save advance ถึงไทยแล้ว(4)→รอชำระเงิน(5)? false when
+   *  the freight rate is still 0 (เซลยังไม่ตั้งเรท) — the UI shows a "ตั้งเรทก่อน" hint
+   *  instead of falsely claiming the order moved to billing. */
+  advancedToFive: boolean;
   /**
    * Lane C min-sell guardrail (global-trade-group §5). Evaluates the resolved
    * China→Thailand transport price against the per-route floor (business_config
@@ -562,11 +566,18 @@ export async function adminUpdateForwarderDimensions(
       // flip the status by hand every time. Forward-only by construction:
       //   • ONLY from fstatus 4 → a credit-6 (juristic credit) or an already-
       //     paid/shipped 5/6/7 row is NEVER touched.
-      //   • ONLY when a real bill exists (newGrandTotal > 0).
+      //   • ONLY when the FREIGHT rate is actually set (newFTotalPrice > 0).
+      //     ภูม 2026-06-25: gate on the FREIGHT (เรทนำเข้าจีน-ไทย = ftotalprice),
+      //     NOT newGrandTotal. A manually-created import (เคสเซลได้ลูกค้าใหม่ →
+      //     ภูมสร้างรายการเอง → โกดังคีย์น้ำหนัก/ขนาด แต่เซลยังไม่ตั้งเรท) has
+      //     freight=0 yet a ฿100 ค่าจัดส่งไทย → newGrandTotal=100>0 เลย "เด้งไป
+      //     รอชำระเงิน" ทั้งที่ราคายังไม่ตั้ง. Stay at "ถึงไทยแล้ว(4)" until the
+      //     pricer fills a real rate (> 0). (MOMO sync ส่งน้ำหนัก+เรทมาครบ ปกติ
+      //     freight>0 → advance เหมือนเดิม — กระทบเฉพาะเคสสร้างมือที่ยังไม่ตั้งเรท.)
       // Mirrors the accounting bulk-bill stamp (forwarder-check.ts → fstatus '5'
       // + fdatestatus5), so the order shows up correctly in AR aging (which dates
       // the receivable from fdatestatus5).
-      const advancedToFive = String(before.fstatus ?? "") === "4" && newGrandTotal > 0;
+      const advancedToFive = String(before.fstatus ?? "") === "4" && newFTotalPrice > 0;
       if (advancedToFive) {
         update.fstatus = "5";
         update.fdatestatus5 = nowIso;
@@ -762,6 +773,7 @@ export async function adminUpdateForwarderDimensions(
           basis:       resolved.basis,
           rateSource:  resolved.source,
           grandTotal:  newGrandTotal,
+          advancedToFive,
           minSell,
         },
       };

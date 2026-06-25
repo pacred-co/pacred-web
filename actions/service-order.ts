@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
 import { submitCartOrder } from "@/actions/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
@@ -821,6 +822,10 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
     });
     return { ok: false, error: updErr.message };
   }
+
+  // ภูม 2026-06-25 — ยกเลิกออเดอร์แล้วต้องเคลียร์สลิปที่ค้างในคิว "ชำระเงิน" ด้วย
+  // (best-effort · money-safe: reject เฉพาะสลิป pending status='1' = เงินยังไม่เข้า/ออก).
+  await rejectPendingSlipsForCancelledOrder(admin, header.hno, memberCode);
 
   revalidatePath("/service-order");
   revalidatePath("/service-order/pending");
