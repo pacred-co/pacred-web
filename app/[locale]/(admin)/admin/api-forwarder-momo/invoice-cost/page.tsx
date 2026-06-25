@@ -48,6 +48,24 @@ export default async function MomoInvoiceCostPage() {
         ถ้าเห็นสถานะขยับตอนลงต้นทุน คือ MOMO sync บังเอิญมาเวลาไล่เลี่ยกัน ไม่ใช่ผลจากการกดบันทึก.
       </GuideNote>
 
+      {/* owner 2026-06-25 — เชื่อม flow: ลงต้นทุน (หน้านี้) → จ่าย MOMO (report-cnt).
+          owner งงว่า "จ่ายตรงไหน" เพราะคนละหน้า. ทำให้เป็น path เดียวที่เห็นชัด. */}
+      <GuideNote variant="tip" title="ขั้นต่อไป — จ่ายเงิน MOMO (รวมจ่ายยอดเดียว)">
+        ลงต้นทุนแล้ว → ไป{" "}
+        <Link
+          href="/admin/report-cnt?actionPay=1"
+          className="font-semibold text-primary-600 underline hover:text-primary-700"
+        >
+          ทำรายการจ่ายเงินตู้
+        </Link>{" "}
+        : <strong>ติ๊กเลือกตู้/แทรคกิ้งที่จะจ่าย → กด “💸 ทำรายการจ่ายเงินตู้”</strong> —
+        ระบบ<strong>รวมต้นทุน MOMO ของตู้ที่เลือกเป็นยอดเดียวให้อัตโนมัติ</strong> (แก้ได้ถ้า MOMO เก็บต่าง) →
+        แนบสลิป → อนุมัติที่{" "}
+        <Link href="/admin/cnt-hs?q=1" className="font-semibold text-primary-600 underline hover:text-primary-700">
+          /admin/cnt-hs
+        </Link>.
+      </GuideNote>
+
       <MomoInvoiceCostClient />
     </main>
   );
