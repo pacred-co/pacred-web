@@ -36,7 +36,7 @@ const fmtDate = (iso: string) => {
   return `${d}/${m}/${Number(y) + 543 - 0}`; // พ.ศ.
 };
 
-export function DocumentHistoryTable({ rows, from, to }: { rows: DocRow[]; from: string; to: string }) {
+export function DocumentHistoryTable({ rows, from, to, capped = false, perTable }: { rows: DocRow[]; from: string; to: string; capped?: boolean; perTable?: number }) {
   const router = useRouter();
   const [tab, setTab] = useState<"all" | "juristic" | "personal">("all");
   const [kind, setKind] = useState<"all" | DocRow["kind"]>("all");
@@ -105,6 +105,12 @@ export function DocumentHistoryTable({ rows, from, to }: { rows: DocRow[]; from:
         </label>
         <button type="submit" className="rounded-md bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700">ดูช่วงนี้</button>
       </form>
+
+      {capped && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
+          ⚠ ช่วงวันที่นี้มีเอกสารมากกว่า {perTable?.toLocaleString() ?? "หลายพัน"} รายการต่อชนิด — แสดงเฉพาะที่ใหม่สุด · <b>แคบช่วงวันที่</b> เพื่อดูให้ครบ
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">

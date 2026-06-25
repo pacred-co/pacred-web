@@ -36,21 +36,26 @@ export default async function DocumentHistoryPage({
   const toEnd = `${to}T23:59:59`;
 
   const admin = createAdminClient();
+  const PER_TABLE = 2000; // per-source cap (hardening: surface if hit, never silently truncate)
   const [rcptRes, billRes, ftaxRes, staxRes] = await Promise.all([
     admin.from("tb_receipt").select("rid,userid,rdate,ramount,rstatus")
-      .gte("rdate", from).lte("rdate", to).order("rdate", { ascending: false }).limit(3000),
+      .gte("rdate", from).lte("rdate", to).order("rdate", { ascending: false }).limit(PER_TABLE),
     admin.from("tb_forwarder_invoice").select("id,doc_no,userid,buyer_name,date_issued,total_thb,is_juristic,status")
-      .gte("date_issued", from).lte("date_issued", to).order("date_issued", { ascending: false }).limit(3000),
+      .gte("date_issued", from).lte("date_issued", to).order("date_issued", { ascending: false }).limit(PER_TABLE),
     admin.from("tb_forwarder_tax_invoice").select("id,serial_no,userid,buyer_name,gross_before_wht,is_juristic,status,issued_at")
-      .gte("issued_at", from).lte("issued_at", toEnd).order("issued_at", { ascending: false }).limit(3000),
+      .gte("issued_at", from).lte("issued_at", toEnd).order("issued_at", { ascending: false }).limit(PER_TABLE),
     admin.from("tb_shop_tax_invoice").select("id,serial_no,userid,buyer_name,gross_before_wht,is_juristic,status,issued_at")
-      .gte("issued_at", from).lte("issued_at", toEnd).order("issued_at", { ascending: false }).limit(3000),
+      .gte("issued_at", from).lte("issued_at", toEnd).order("issued_at", { ascending: false }).limit(PER_TABLE),
   ]);
   for (const [name, res] of [["receipt", rcptRes], ["bill", billRes], ["ftax", ftaxRes], ["stax", staxRes]] as const) {
     if (res.error) console.error(`[document-history ${name}] failed`, { code: res.error.code, message: res.error.message });
   }
+  // Hardening (no-silent-caps · AGENTS): flag when any source hit the row cap so
+  // the UI tells staff to narrow the date range instead of silently dropping docs.
+  const capped = [rcptRes, billRes, ftaxRes, staxRes].some((r) => (r.data?.length ?? 0) >= PER_TABLE);
 
-  // Resolve customer name + นิติ flag via a single tb_users batch.
+  // Resolve customer name + นิติ flag via tb_users — CHUNKED .in() (hardening: a
+  // wide range could collect thousands of ids → a single .in() blows the URL limit).
   const userids = Array.from(new Set([
     ...((rcptRes.data ?? []) as ReceiptRow[]).map((r) => r.userid),
     ...((billRes.data ?? []) as BillRow[]).map((r) => r.userid),
@@ -58,12 +63,13 @@ export default async function DocumentHistoryPage({
     ...((staxRes.data ?? []) as TaxRow[]).map((r) => r.userid),
   ].filter((u): u is string => !!u)));
   const userMap = new Map<string, { name: string; juristic: boolean }>();
-  if (userids.length > 0) {
+  for (let i = 0; i < userids.length; i += 300) {
+    const chunk = userids.slice(i, i + 300);
     const { data: us, error: usErr } = await admin
       .from("tb_users")
       .select("userID,userName,userLastName,userCompany")
-      .in("userID", userids);
-    if (usErr) console.error("[document-history tb_users] failed", { code: usErr.code, message: usErr.message });
+      .in("userID", chunk);
+    if (usErr) { console.error("[document-history tb_users] failed", { code: usErr.code, message: usErr.message }); continue; }
     for (const u of (us ?? []) as { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }[]) {
       userMap.set(u.userID, { name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(), juristic: u.userCompany === "1" });
     }
@@ -100,5 +106,5 @@ export default async function DocumentHistoryPage({
   }
   rows.sort((a, b) => b.dateISO.localeCompare(a.dateISO));
 
-  return <DocumentHistoryTable rows={rows} from={from} to={to} />;
+  return <DocumentHistoryTable rows={rows} from={from} to={to} capped={capped} perTable={PER_TABLE} />;
 }

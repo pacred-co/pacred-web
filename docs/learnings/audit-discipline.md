@@ -225,3 +225,23 @@ Verdict: warehouse/driver/cnt port is ~85–90% faithful; the genuinely-missing 
 3. When the code-audit + a live page-walk BOTH show the pages are mostly faithful, the remaining real gaps are usually **user-experienced** (a broken button, an awkward flow) that a presence-audit can't see — fastest path is a screenshot from the operator, then a surgical fix (proven same session: the billing-run invoice-link fix took minutes from ภูม's screenshot).
 
 **Cross-links:** [[verify-deep-flow]] · AGENTS §0b (deep-audit from source) · §0e (reachable dead-write traps) · the `branch-integrate-loop` "trust-but-verify agent output" note.
+
+## [2026-06-26] "The feature already EXISTS — the gap is discoverability/wiring, not building" (long backlog session)
+
+A whole backlog of owner-flagged "missing" features turned out to be ALREADY BUILT + wired + reachable — the real gap was that the pieces sat on separate pages / buried in a panel, so the owner couldn't connect them. **Always grep the codebase for the capability BEFORE building it** (extends §0e/§0d): four lanes this session were "verify → it exists → improve discoverability" not "build":
+
+- **MOMO cost-pay** ("เลือกแทรคกิ้ง → รวมจ่าย MOMO ยอดเดียว"): the ENTIRE flow existed — `applyMomoInvoiceCost` (ingest cost) + `/report-cnt` tick-containers + `CntPaymentModal` that AUTO-SUMS the selected containers' `fcosttotalprice` into one `cntAmount` (L222) + `adminCreateCntPayment`. The fix was a 1-line GuideNote linking the ingest page → the pay page. **~0 lines of feature code.**
+- **tax-doc edit** ("หาที่แก้ไม่เจอ"): `EditTaxDocModeField` + `adminUpdateForwarderTaxDocMode` existed on the detail page but as a buried compact row → just promoted it to a prominent labeled box.
+- **manual "ถึงโกดังจีน"** (PR018 stuck): `SHOP_STATUSES` already had `"40"` + `bulkUpdateShopOrderStatus` accepted it (list bulk) → added a 1-click per-order button reusing the same money-safe action.
+- **CUSTTAG**: the header pills existed (`legacy-view.tsx`) → extracted to a shared `<CustomerTypeTag>` + rolled to the lists.
+
+Lesson: when the owner says "ทำ X" for a money/admin workflow, the first move is `grep` (actions/ + app/ + the relevant `tb_*` writer) — the capability is often there. Building a 2nd copy = a §0e dead-twin risk; the right deliverable is usually wiring + discoverability + a shared component.
+
+### + money-doc visual-layout needs a LIVE render — don't blind-tune
+RCPT (ใบเสร็จ "ของล่างตก") + DOC footer share one root: `components/receipt/receipt-paper.tsx:367` `.detail` is a FIXED `height:"182px"` `overflow:"visible"` → 13 rows that exceed 182px spill onto the summary. The page-chunking CODE is correct; this is a CSS A4-layout bug. **A money-doc layout fix can't be verified by `build` — it needs rendering a 14+ row receipt + measuring.** Deferred rather than blind-tune (a wrong tune mis-prints a money doc). Capture the root + the fix-with-repro so it's 1-step on a machine that can render.
+
+### + prove a money-QR without a phone: decode-test the EMVCo payload
+PPAY (re-enable dynamic amount-PromptPay QR): can't scan on a dev box, but you CAN prove correctness by DECODING the generated EMVCo payload — `lib/promptpay-payload.test.ts` parses the TLV + asserts the merchant AID + tax-ID + amount + currency 764 + a recomputed CRC16-CCITT. That proves the payload is structurally right; only the bank-registration of the ID needs a real scan → ship it FLAG-GATED (`PROMPTPAY_DYNAMIC_ENABLED`, default OFF) so a wide-blast-radius money feature (every pay modal) goes live only after the owner's one scan.
+
+### + Row-type extension cascade
+Adding a field to a list row (CUSTTAG credit) is never one edit: the page's inline `type Row`/`RawUserRow` (the query-result cast) AND the table component's own `Row` type are SEPARATE — tsc catches the second one. Expect: query select + page Row type + page mapping + table Row type + render. Five edits, every time.
