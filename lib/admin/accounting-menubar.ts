@@ -295,6 +295,8 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // surfaces wired into PEAK การบัญชี topic. Pages shipped sitting-I
       // (commits afa15f1c + 5b6cbc0a).
       { label: "เอกสารบัญชี (Lifecycle)",      href: "/admin/accounting/documents" },
+      // owner 2026-06-25 (HIST) — unified ประวัติออกเอกสารทั้งหมด (ใบเสร็จ/บิล/ใบกำกับ).
+      { label: "ประวัติออกเอกสาร",            href: "/admin/accounting/document-history" },
       { label: "ลูกหนี้ค้างชำระ (AR Aging)",   href: "/admin/accounting/ar-aging" },
       // 2026-06-02 sitting-I §3.5 (ภูม poom-wave brief): PEAK/FlowAccount
       // CSV export hub — 4 datasets (receipts · bills · sale/interp comm batches).
