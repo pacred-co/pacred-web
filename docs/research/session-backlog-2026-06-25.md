@@ -33,6 +33,13 @@
 | **AUTOBILL** | owner: "ทำไมต้องรอสร้างใบวางบิล — ตรวจสลิป/สแกนก็จบแล้ว" → ออกเอกสาร auto ตอน slip-verify/scan (ลดขั้น manual) | flow redesign · เงิน |
 | **🎯 PPAY** | **เปิด dynamic amount-PromptPay QR กลับ · PromptPay = เลขนิติ Pacred `0105564077716` (juristic 13-หลัก · เก็บเป็น string คงเลข 0 นำหน้า) · auto ใส่ยอด**. ⚠️ `lib/promptpay.ts` ตอนนี้ static-only (ปิด dynamic ตั้งแต่ 2026-06-08 กันเลขผิด). ต้อง re-impl `buildPromptPayPayload` (EMVCo) + `buildPromptPayQrDataUrl` (qrcode) + set default PROMPTPAY_ID=0105564077716 + **เทสว่า scan แล้วปลายทาง+ยอดถูก** ก่อน ship. money path. | careful · เทส QR จริง |
 
+## 📋 Lane เพิ่ม (รอบ 2026-06-25 ค่ำ-2 · หลัง integration push 1c5c1150)
+| lane | งาน | ต้อง |
+|---|---|---|
+| **PAYDUP** | customer-360 มีการ์ด "รายการชำระเงิน" **ซ้ำ 2 อัน** → อันนึงต้องเป็น **"รายการรอชำระเงิน"** (pending). หา customer-360 page (app/.../admin/customers/[id]) แก้ label การ์ดที่ซ้ำ | fix เล็ก |
+| **CUSTTAG** | customer header (ข้าง Sales/CS) เพิ่ม **tag บุคคล/นิติ** + **tag เครดิต** = เงินสด `Cash` หรือ `Credit-7d` (กี่วัน) + **วงเงิน** + ยอดใช้ไป. owner: ถ้ายอดไม่พอ → โอนเพิ่ม/ติดต่อ cs-sale ขอจ่ายตัดส่วนเกิน/ขอเพิ่มวง (common sense) + **ติดตามให้ลูกค้าจ่าย**. โชว์ tag ใน **รายการ** ด้วย (staff+ลูกค้ารู้ทั่วกัน · §0g/§0f). data: tb_users userCompany (นิติ) · userCreditValue (วงเงิน) · userCreditDate (เทอม) · tb_credit.creditValue (ใช้ไป) | กลาง · self-explaining |
+| **INT** | ✅ DONE — รวม ภูม(5)+ปอน(1)+session → push ทุก branch (1c5c1150) · mig 0212 prod+dev · gate verify+build เขียว |
+
 ## 🔴 รอ owner เคาะ
 1. วิธีจ่ายต้นทุน MOMO (ลงเฉยๆ / ปุ่มจ่ายต่อ invoice-ตู้?)
 2. push prod ตอนนี้ไหม
