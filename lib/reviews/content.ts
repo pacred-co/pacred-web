@@ -635,9 +635,11 @@ export function getReviewContent(review: Review, locale: SiteLocale): ReviewCont
   const modeLabel = MODE[mode].label;
 
   const termSuffix = terms.length ? ` ${terms.join(" / ")}` : "";
+  // Brand sits as a SUFFIX, pattern across every case (ปอน 2026-06-25
+  // "เอาคำว่า ผลงาน Pacred ต่อท้าย เป็นแพทเทิร์นทุกอัน · | ผลงาน Pacred").
   const h1 = isTh
-    ? `ผลงาน Pacred — ${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix}`
-    : `Pacred case — ${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix}`;
+    ? `${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix} | ผลงาน Pacred`
+    : `${productLabel} · ${block.titleNoun} ${modeLabel}${termSuffix} | Pacred Case`;
   const metaTitle = isTh
     ? `${productLabel} — ${block.titleNoun} ${modeLabel}${termSuffix} · ${code} | Pacred`
     : `${productLabel} — ${block.titleNoun} ${modeLabel}${termSuffix} · ${code} | Pacred`;

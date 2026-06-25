@@ -35,8 +35,8 @@ const YOUTUBE_URL = SOCIAL.youtube;
 const FACEBOOK_URL = SOCIAL.facebook;
 const TIKTOK_URL = SOCIAL.tiktok;
 const INSTAGRAM_URL = SOCIAL.instagram;
-// Footer QR contact line = แนท's sales line (STAFF.sales[3]).
-const FOOTER_QR_PHONE = STAFF.sales[3].phone;
+// Footer QR contact line = แนท's sales line (STAFF.sales[2] after เตย removed 2026-06-25).
+const FOOTER_QR_PHONE = STAFF.sales[2].phone;
 
 const PARTNERS = [
   { file: "upspartner.png",         name: "UPS",                        url: "https://www.ups.com/th" },

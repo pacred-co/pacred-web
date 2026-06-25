@@ -3,22 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import {
-  ArrowRight,
-  ChevronRight,
-  Star,
-  BadgeCheck,
-  Tag,
-  MapPin,
-  Package,
-  Truck,
-  Clock,
-  Users,
-  FileText,
-  Ship,
-  Anchor,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, ChevronRight, Star, BadgeCheck } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
@@ -70,26 +55,54 @@ const TYPE_LABEL_KEY: Record<ServiceType, "labelImport" | "labelExport" | "label
   clearance: "labelClearance",
 };
 
-// Icon per logistics-fact key (the "ข้อมูลขนส่ง" grid).
-const FACT_ICON: Record<string, LucideIcon> = {
-  service: Ship,
-  term: FileText,
-  port: Anchor,
-  zone: MapPin,
-  truck: Truck,
-  labor: Users,
-  product: Package,
-  duration: Clock,
-  hs: Tag,
-};
-
 // Minimal content (ปอน 2026-06-25): only the facts a customer needs — บริการ ·
 // สินค้า · พอร์ทต้นทาง→ปลายทาง · ระยะเวลา · เขตในไทย+รถ · พิกัด HS. (term/labor dropped.)
 const FACT_ORDER = ["service", "product", "port", "duration", "zone", "truck"];
 
+// Weave the logistics facts into one readable prose line under "ข้อมูลขนส่ง"
+// (ปอน 2026-06-25 "เอาข้อมูลขนส่งเข้าไปเขียนข้างในเนื้อหา · เก็บการ์ดไว้"). Each fact is
+// optional — a review missing one just drops that clause. Values come already
+// localized from reviewLogisticsFacts, so we only add connective words.
+function buildLogisticsProse(facts: { key: string; value: string }[], locale: "th" | "en"): string {
+  const v: Record<string, string> = {};
+  for (const f of facts) v[f.key] = f.value;
+  const hs = (v.hs ?? "").replace(/^HS\s*/i, "").trim();
+  if (locale === "en") {
+    const dur = (v.duration ?? "").replace(/^~/, "");
+    return [
+      `Pacred handled this ${(v.product ?? "goods").toLowerCase()} import from China`,
+      v.service ? ` via ${v.service}` : "",
+      v.port ? `, route ${v.port}` : "",
+      dur ? `, taking about ${dur}` : "",
+      v.truck ? `, shipped by ${v.truck}` : "",
+      v.zone ? ` to ${v.zone}` : "",
+      hs ? ` (HS code ${hs})` : "",
+      " — end-to-end from booking the container in China through freight, customs clearance, to the destination warehouse in Thailand.",
+    ].join("");
+  }
+  return [
+    `ผลงานนี้ Pacred รับดูแลการนำเข้า${v.product ?? "สินค้า"}จากจีน`,
+    v.service ? `แบบ${v.service}` : "",
+    v.port ? ` เส้นทาง${v.port}` : "",
+    v.duration ? ` ใช้เวลา${v.duration}` : "",
+    v.truck ? ` ขนส่งด้วย${v.truck}` : "",
+    v.zone ? ` จัดส่งถึง${v.zone}` : "",
+    hs ? ` (พิกัดศุลกากร HS ${hs})` : "",
+    " — ครบวงจรตั้งแต่จองตู้ที่จีน ขนส่ง เคลียร์พิธีศุลกากร จนส่งถึงโกดังปลายทางในไทย",
+  ].join("");
+}
+
 // One section-heading scale for the whole page (audit 2026-06-25 · §0h hierarchy).
 const H2 = "text-[18px] md:text-[22px] font-black tracking-[-0.03em] text-[#111827] dark:text-white";
 const EYEBROW = "flex items-center gap-1.5 mb-1 text-primary-600 text-[12px] font-black tracking-[0.06em] uppercase";
+
+// Booking-card price pulled from the linked service page's OWN published rate
+// (ปอน 2026-06-25 "ดึงราคาจากในหน้าเว็บมาเลย"). Only services that publish a price
+// get an entry — the rest fall back to "ขอใบเสนอราคาฟรี". Read live from that
+// page's i18n (no duplicated number), so it never drifts from the service page.
+const SERVICE_PUBLISHED_PRICE: Record<string, { ns: string; key: string }> = {
+  "/services/import-china-fcl": { ns: "svcImportChinaFcl", key: "pricing0Price" },
+};
 
 function extractYouTubeId(url: string): string | null {
   const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
@@ -303,6 +316,19 @@ export default async function ReviewLandingPage({
                   </section>
                 ) : null}
 
+                {/* Comments — ABOVE ผลงานอื่นๆ · full-width left-aligned with ข้อมูลขนส่ง per ปอน 2026-06-25 */}
+                <div className="w-full">
+                  <CaseComments
+                    caseSlug={cmsSlug}
+                    initialComments={cmsInitialComments}
+                    isLoggedIn={!!cmsSession?.user}
+                    currentUserName={cmsCommenterName}
+                    currentUserAvatar={cmsSession?.profile?.avatar_url ?? null}
+                    locale={typedLocale}
+                    ui={cmsCommentsUi}
+                  />
+                </div>
+
                 {/* Related catalog cases */}
                 {relatedCases.length > 0 ? (
                   <section>
@@ -336,18 +362,6 @@ export default async function ReviewLandingPage({
                   </section>
                 ) : null}
 
-                {/* Comments */}
-                <div className="mx-auto w-full max-w-[760px]">
-                  <CaseComments
-                    caseSlug={cmsSlug}
-                    initialComments={cmsInitialComments}
-                    isLoggedIn={!!cmsSession?.user}
-                    currentUserName={cmsCommenterName}
-                    currentUserAvatar={cmsSession?.profile?.avatar_url ?? null}
-                    locale={typedLocale}
-                    ui={cmsCommentsUi}
-                  />
-                </div>
               </div>
             </div>
           </article>
@@ -365,10 +379,6 @@ export default async function ReviewLandingPage({
   const serviceTitle = t(review.titleKey);
   const heading = reviewHeading(review, typedLocale);
   const typeLabel = t(TYPE_LABEL_KEY[review.type]);
-  const ratingWord =
-    typedLocale === "en"
-      ? review.rating >= 5 ? "Excellent" : review.rating >= 4 ? "Very good" : "Good"
-      : review.rating >= 5 ? "ยอดเยี่ยม" : review.rating >= 4 ? "ดีมาก" : "ดี";
   const galleryImages = reviewGalleryImages(review);
   const logisticsFacts = reviewLogisticsFacts(review, typedLocale);
   const localeSlug = reviewSlug(review, typedLocale);
@@ -387,12 +397,37 @@ export default async function ReviewLandingPage({
       value: `HS ${hsCode}`,
     },
   ];
+  const logisticsProse = buildLogisticsProse(keyFacts, typedLocale);
 
   // Comments (login-gated · ปอน 2026-06-25) — keyed by the stable review id so
   // th + en share one thread. Fails soft to [] until migration 0210 is applied.
   const commentCaseSlug = String(review.id);
   const session = await getCurrentUserWithProfile();
   const initialComments = await listCaseComments(commentCaseSlug);
+
+  // Hero score = AVERAGE of the comment star-ratings (ปอน 2026-06-25 "คะแนนดาว
+  // โชว์เป็นค่าเฉลี่ยจากคอมเมนต์"). Falls back to the curated review.rating when
+  // no rated comment exists yet, so a brand-new case never shows 0.0.
+  const ratedComments = initialComments.filter((c) => typeof c.rating === "number" && (c.rating ?? 0) > 0);
+  const reviewCount = ratedComments.length;
+  const displayRating = reviewCount
+    ? ratedComments.reduce((s, c) => s + (c.rating ?? 0), 0) / reviewCount
+    : review.rating;
+  const ratingWord =
+    typedLocale === "en"
+      ? displayRating >= 4.5 ? "Excellent" : displayRating >= 3.5 ? "Very good" : "Good"
+      : displayRating >= 4.5 ? "ยอดเยี่ยม" : displayRating >= 3.5 ? "ดีมาก" : "ดี";
+
+  // Real starting price pulled from the linked service page's i18n (ปอน "ดึงราคา
+  // จากในหน้าเว็บ"); null when that service publishes no price → quote fallback.
+  // (`ui` is defined further down, so the label is composed inline in the JSX.)
+  const priceSrc = SERVICE_PUBLISHED_PRICE[content.cta.href];
+  let realPriceFrom: string | null = null;
+  if (priceSrc) {
+    const tp = await getTranslations({ locale, namespace: priceSrc.ns });
+    realPriceFrom = tp(priceSrc.key);
+  }
+
   const commenterName =
     [session?.profile?.first_name, session?.profile?.last_name].filter(Boolean).join(" ").trim() ||
     session?.profile?.member_code ||
@@ -512,10 +547,10 @@ export default async function ReviewLandingPage({
                     {content.h1}
                   </h1>
 
-                  {/* Score row — pill + word + stars + verified */}
+                  {/* Score row — avg pill + word + stars + review count + verified */}
                   <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
                     <span className="inline-flex items-baseline gap-0.5 rounded-md rounded-tr-none bg-primary-700 px-2 py-0.5 text-white">
-                      <span className="text-[15px] font-black leading-none tabular-nums">{review.rating}.0</span>
+                      <span className="text-[15px] font-black leading-none tabular-nums">{displayRating.toFixed(1)}</span>
                       <span className="text-[11px] font-bold text-white/70">/5</span>
                     </span>
                     <span className="text-[14px] font-black text-primary-700 dark:text-primary-300">{ratingWord}</span>
@@ -523,11 +558,16 @@ export default async function ReviewLandingPage({
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
-                          className={["h-3.5 w-3.5", i < review.rating ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")}
+                          className={["h-3.5 w-3.5", i < Math.round(displayRating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")}
                           strokeWidth={1.8}
                         />
                       ))}
                     </div>
+                    {reviewCount > 0 ? (
+                      <span className="text-[12.5px] font-bold text-muted tabular-nums">
+                        ({reviewCount} {typedLocale === "en" ? "reviews" : "รีวิว"})
+                      </span>
+                    ) : null}
                     <span className="hidden h-3 w-px bg-border sm:block" />
                     <span className="inline-flex items-center gap-1 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
                       <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
@@ -535,14 +575,16 @@ export default async function ReviewLandingPage({
                     </span>
                   </div>
 
-                  <p className="mt-3 text-[14px] leading-relaxed text-muted">{content.intro}</p>
+                  <p className="mt-3 text-[14px] leading-relaxed text-muted">{logisticsProse}</p>
                 </header>
 
                 {/* Booking card — quote-based (no fake price) */}
                 <aside className="self-start rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
-                  <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{ui.priceLead}</p>
+                  <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">
+                    {realPriceFrom ? (typedLocale === "en" ? "Starting price" : "ราคาเริ่มต้น") : ui.priceLead}
+                  </p>
                   <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">
-                    {ui.quoteFree}
+                    {realPriceFrom ?? ui.quoteFree}
                   </p>
                   <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{content.cta.description}</p>
                   <Link
@@ -568,26 +610,18 @@ export default async function ReviewLandingPage({
 
             {/* Stacked sections — one consistent rhythm (32 / 40) */}
             <div className="mt-8 space-y-8 md:mt-10 md:space-y-10">
-              {/* ข้อมูลขนส่ง — the key facts (the page's core content) */}
-              <section>
-                <h2 className={H2}>{ui.logistics}</h2>
-                <div className="mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
-                  {keyFacts.map((f) => {
-                    const Icon = FACT_ICON[f.key] ?? Tag;
-                    return (
-                      <div key={f.key} className="rounded-xl border border-border bg-white p-3.5 dark:bg-surface">
-                        <div className="mb-1 flex items-center gap-1.5 text-[11.5px] text-muted">
-                          <Icon className="h-3.5 w-3.5 text-primary-600" strokeWidth={2.4} />
-                          {f.label}
-                        </div>
-                        <div className="text-[13.5px] font-black leading-snug text-[#111827] dark:text-white md:text-[14px]">
-                          {f.value}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
+              {/* ความคิดเห็น — comments (login-gated · ABOVE ผลงานอื่นๆ · full-width left-aligned with ข้อมูลขนส่ง per ปอน 2026-06-25) */}
+              <div className="w-full">
+                <CaseComments
+                  caseSlug={commentCaseSlug}
+                  initialComments={initialComments}
+                  isLoggedIn={!!session?.user}
+                  currentUserName={commenterName}
+                  currentUserAvatar={session?.profile?.avatar_url ?? null}
+                  locale={typedLocale}
+                  ui={commentsUi}
+                />
+              </div>
 
               {/* ผลงานอื่นๆ — related cases (full-frame, Trip-style cards) */}
               {related.length > 0 && (
@@ -659,18 +693,6 @@ export default async function ReviewLandingPage({
                 </section>
               )}
 
-              {/* ความคิดเห็น — comments (reading column · login-gated) */}
-              <div className="mx-auto w-full max-w-[760px]">
-                <CaseComments
-                  caseSlug={commentCaseSlug}
-                  initialComments={initialComments}
-                  isLoggedIn={!!session?.user}
-                  currentUserName={commenterName}
-                  currentUserAvatar={session?.profile?.avatar_url ?? null}
-                  locale={typedLocale}
-                  ui={commentsUi}
-                />
-              </div>
             </div>
           </div>
         </article>

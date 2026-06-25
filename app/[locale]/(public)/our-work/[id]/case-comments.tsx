@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MessageCircle, Send, LogIn, User as UserIcon } from "lucide-react";
+import { MessageCircle, Send, LogIn, User as UserIcon, Star } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { postCaseComment, type CaseComment } from "@/actions/case-comments";
 
@@ -33,6 +34,22 @@ function Avatar({ src, name, size }: { src: string | null; name: string; size: n
   );
 }
 
+// Read-only star row shown next to a posted comment's author.
+function StarRow({ value, size = 13 }: { value: number; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${value}/5`}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          style={{ width: size, height: size }}
+          strokeWidth={1.8}
+          className={i < value ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface-alt dark:text-surface-alt"}
+        />
+      ))}
+    </span>
+  );
+}
+
 function fmtDate(iso: string, locale: string) {
   try {
     return new Date(iso).toLocaleDateString(locale === "en" ? "en-US" : "th-TH", {
@@ -46,10 +63,11 @@ function fmtDate(iso: string, locale: string) {
 }
 
 /**
- * Login-gated case-study comment section (ปอน 2026-06-25). Signed-in customers
- * get a compose box; guests get a familiar "log in to comment" bar (avatar +
- * faux-input + button) instead of an empty dashed panel. New comments prepend
- * optimistically; an empty thread shows a tidy centered placeholder.
+ * Login-gated case-study review section (ปอน 2026-06-25). Signed-in customers
+ * get a compose box WITH a 1–5 star picker (a mini-review); each posted comment
+ * shows its star score, and the page hero shows the AVERAGE of these ratings.
+ * Guests get a familiar "log in to review" bar. New comments prepend
+ * optimistically + router.refresh() so the hero average updates live.
  */
 export function CaseComments({
   caseSlug,
@@ -68,10 +86,15 @@ export function CaseComments({
   locale: string;
   ui: CommentsUi;
 }) {
+  const router = useRouter();
   const [comments, setComments] = useState<CaseComment[]>(initialComments);
   const [body, setBody] = useState("");
+  const [rating, setRating] = useState(5); // default 5 ★ — the user can lower it
+  const [hover, setHover] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const rateLabel = locale === "en" ? "Your rating" : "ให้คะแนนรีวิว";
 
   const submit = () => {
     const text = body.trim();
@@ -81,10 +104,15 @@ export function CaseComments({
     }
     setErr(null);
     startTransition(async () => {
-      const res = await postCaseComment({ caseSlug, body: text });
+      const res = await postCaseComment({ caseSlug, body: text, rating });
       if (res.ok) {
         setComments((c) => [res.comment, ...c]);
         setBody("");
+        setRating(5);
+        setHover(0);
+        // Re-render the server component so the hero's average score reflects
+        // this new review (the optimistic list state above is preserved).
+        router.refresh();
       } else {
         setErr(res.error);
       }
@@ -101,7 +129,7 @@ export function CaseComments({
         </h2>
       </div>
 
-      {/* Compose (signed-in) OR a familiar gated comment bar (guest) */}
+      {/* Compose (signed-in) OR a familiar gated review bar (guest) */}
       {isLoggedIn ? (
         <div className="rounded-2xl border border-border bg-white p-4 dark:bg-surface">
           <div className="flex items-start gap-3">
@@ -110,6 +138,38 @@ export function CaseComments({
               <p className="mb-1.5 text-[12.5px] font-black text-[#111827] dark:text-white">
                 {currentUserName || ui.asYou}
               </p>
+
+              {/* Star picker — 1–5, default 5 */}
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-[12px] font-bold text-muted">{rateLabel}</span>
+                <span className="inline-flex items-center gap-0.5" onMouseLeave={() => setHover(0)}>
+                  {Array.from({ length: 5 }).map((_, i) => {
+                    const n = i + 1;
+                    const on = (hover || rating) >= n;
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`${n} ดาว`}
+                        aria-pressed={rating === n}
+                        onMouseEnter={() => setHover(n)}
+                        onClick={() => setRating(n)}
+                        className="p-0.5 transition-transform hover:scale-110 active:scale-95"
+                      >
+                        <Star
+                          className={[
+                            "h-5 w-5 transition-colors",
+                            on ? "fill-yellow-400 text-yellow-400" : "fill-transparent text-gray-300 dark:text-surface-alt",
+                          ].join(" ")}
+                          strokeWidth={1.8}
+                        />
+                      </button>
+                    );
+                  })}
+                </span>
+                <span className="text-[12px] font-black tabular-nums text-yellow-600 dark:text-yellow-400">{rating}.0</span>
+              </div>
+
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -168,6 +228,7 @@ export function CaseComments({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="text-[13.5px] font-black text-[#111827] dark:text-white">{c.authorName}</span>
+                  {c.rating ? <StarRow value={c.rating} size={13} /> : null}
                   <span className="text-[11.5px] text-muted">{fmtDate(c.createdAt, locale)}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">

@@ -11,5 +11,7 @@ export const postCaseCommentSchema = z.object({
     .trim()
     .min(2, "พิมพ์ความคิดเห็นอย่างน้อย 2 ตัวอักษร")
     .max(2000, "ความคิดเห็นยาวเกินไป (สูงสุด 2,000 ตัวอักษร)"),
+  // 1–5 star review (optional — a comment can be posted without a rating).
+  rating: z.coerce.number().int().min(1).max(5).optional(),
 });
 export type PostCaseCommentInput = z.infer<typeof postCaseCommentSchema>;

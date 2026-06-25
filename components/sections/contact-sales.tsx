@@ -58,7 +58,10 @@ const CURATED_SALES: SalesPerson[] = [
   { id: "may",  name: "เมย์", roleKey: "roleSales",     taglineKey: "taglineMay",  phone: "066-125-3006", image: "/images/Character_Icon/may.png",   altKey: "altMay"  },
   { id: "nat",  name: "แนท",  roleKey: "roleSales",     taglineKey: "taglineNat",  phone: "066-131-0253", image: "/images/pacred-logo-red.png", useContain: true, altKey: "altNat" },
   { id: "pee",  name: "พี",   roleKey: "roleSales",     taglineKey: "taglinePee",  phone: "061-779-9299", image: "/images/Character_Icon/pee01.png", altKey: "altPee" },
-  { id: "toey", name: "เตย",  roleKey: "roleSales",     taglineKey: "taglineToey", phone: "099-253-1415", image: "/images/Character_Icon/Toey01.png", altKey: "altToey" },
+  // เตย removed from the sales team (ปอน 2026-06-25 · owner-confirmed "ไม่มีเตย เอาออก").
+  // Real removal = the DB flag (tb_admin.admin_toey.adminStatusSale='0' via
+  // /admin/admins/sales-team); dropping the curated entry keeps the empty-roster
+  // fallback from resurrecting a departed rep. i18n keys taglineToey/altToey stay.
   { id: "win",  name: "วิน",  roleKey: "roleLogistics", taglineKey: "taglineWin",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png",  altKey: "altWin" },
   // CS พลอย card removed from the on-site display (ปอน 2026-06-08 — "เอา cs ploy
   // ออกจากหน้าเซลล์"). The i18n keys (taglinePloy/altPloy/roleCs) + the central
