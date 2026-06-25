@@ -458,7 +458,7 @@ export function ReceiptPage({
                   <div style={{ flex: 1 }}>
                     {maoFee > 0 && (
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>รวมค่าส่งเหมาๆ (PCSF)</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>รวมค่าส่งเหมาๆ (PRF)</p>
                         <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(maoFee)} บาท</p>
                       </div>
                     )}

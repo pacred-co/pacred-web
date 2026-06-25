@@ -657,9 +657,9 @@ export function CarrierManualForm({
           >
             <option value="">— กรุณาเลือกบริษัทขนส่ง —</option>
             {freeShipping && (
-              <option value="PCSF">📦 Pacred เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
+              <option value="PCSF">📦 PRF เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
             )}
-            <option value="PCSE">📦 Pacred ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
+            <option value="PCSE">📦 PRE ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
             {SHIP_BY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -668,7 +668,7 @@ export function CarrierManualForm({
           {/* Live transport-price preview — only when PCSE is picked */}
           {shipBy === "PCSE" && (
             <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-              💰 ค่าขนส่งไทย (PCSE): <strong>{transportPricePreview.toLocaleString()} ฿</strong>
+              💰 ค่าขนส่งไทย (PRE): <strong>{transportPricePreview.toLocaleString()} ฿</strong>
               <span className="ml-2 text-[11px] text-blue-700">
                 ({volumeNum > 0 ? `${volumeNum.toFixed(3)} CBM × 120 = ${(volumeNum * 120).toFixed(2)}; ขั้นต่ำ 50` : "ใส่ปริมาตร CBM ก่อน"})
               </span>
@@ -676,7 +676,7 @@ export function CarrierManualForm({
           )}
           {shipBy === "PCSF" && (
             <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-              💰 ค่าขนส่งไทย (PCSF · โปร): <strong>0 ฿</strong>
+              💰 ค่าขนส่งไทย (PRF · โปร): <strong>0 ฿</strong>
             </div>
           )}
         </div>

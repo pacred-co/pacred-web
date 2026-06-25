@@ -60,7 +60,7 @@ const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
 // up-country carriers (12-47) almost never appear in a local run, so we map the
 // common set + fall back to the raw code.
 const SHIP_BY_LABEL: Record<string, string> = {
-  PCS: "รับเองโกดัง PCS", PCSE: "PCS Express", PCSF: "PCS เหมาเหมา",
+  PCS: "รับเองโกดัง Pacred", PCSE: "PRE Express", PCSF: "PRF เหมาๆ",
   F: "บริษัทจัดหาให้อัตโนมัติ",
   "1": "DHL Express", "2": "Flash Express", "3": "J.K. เอ็กซ์เพรส", "4": "Kerry Express",
   "5": "Nim Express", "8": "SCG Express", "11": "ไปรษณีย์ไทย",
