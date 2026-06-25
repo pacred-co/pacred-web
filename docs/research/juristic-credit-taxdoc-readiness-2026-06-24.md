@@ -20,13 +20,13 @@
 | ส่วน | ของเรา (file:line) | สถานะ |
 |---|---|---|
 | เอกสารภาษี 3 โหมด | `lib/tax/tax-doc-mode.ts` (`tax_invoice`=ใบกำกับ · `customs`=ใบขน · `none`=ใบเสร็จ) | ✅ มี |
-| แก้เอกสารภาษี/รายการ | `adminUpdateForwarderTaxDocMode` ([forwarders-field-edits.ts:1089](actions/admin/forwarders-field-edits.ts)) · UI `forwarder-inline-edits.tsx`/`tb-edit-panel.tsx` | ⚠️ มี แต่**หายาก** (pain ของ owner) |
+| แก้เอกสารภาษี/รายการ | `adminUpdateForwarderTaxDocMode` ([forwarders-field-edits.ts:1089](../../actions/admin/forwarders-field-edits.ts)) · UI `forwarder-inline-edits.tsx`/`tb-edit-panel.tsx` | ⚠️ มี แต่**หายาก** (pain ของ owner) |
 | เลือกตอนสร้าง | `CartTaxDocPref` (cart) · `forwarders-new` · quick-add | ✅ มี |
-| ตั้งวงเงินเครดิต | `adminSetCustomerCreditLimit` ([admin/credit.ts:52](actions/admin/credit.ts)) · `adminSetUserCredit` (users-pricing.ts → `tb_users.userCreditValue`) | ✅ มี |
+| ตั้งวงเงินเครดิต | `adminSetCustomerCreditLimit` ([admin/credit.ts:52](../../actions/admin/credit.ts)) · `adminSetUserCredit` (users-pricing.ts → `tb_users.userCreditValue`) | ✅ มี |
 | ลงเครดิต / ยอดค้าง | `adminChargeToCredit` (credit.ts:147) · ยอดค้าง lazy ใน `tb_credit` · `calcForwarderOutstanding` | ✅ มี |
-| ชำระเครดิต | `customerPayCreditFromWallet` ([credit.ts:186](actions/credit.ts)) · AR aging `reports-ar` | ✅ มี |
-| วางบิล | `createBillingRunInvoice`/`markBillingRunPaid` ([admin/billing-run.ts](actions/admin/billing-run.ts)) · `billing-eligibility.ts` | ✅ มี |
-| ใบเสร็จอัตโนมัติ | `autoIssueReceiptOnPaymentLand` ([lib/admin/auto-issue-receipt.ts](lib/admin/auto-issue-receipt.ts)) · mao_fee mig 0209 | ✅ มี |
+| ชำระเครดิต | `customerPayCreditFromWallet` ([credit.ts:186](../../actions/credit.ts)) · AR aging `reports-ar` | ✅ มี |
+| วางบิล | `createBillingRunInvoice`/`markBillingRunPaid` ([admin/billing-run.ts](../../actions/admin/billing-run.ts)) · `billing-eligibility.ts` | ✅ มี |
+| ใบเสร็จอัตโนมัติ | `autoIssueReceiptOnPaymentLand` ([lib/admin/auto-issue-receipt.ts](../../lib/admin/auto-issue-receipt.ts)) · mao_fee mig 0209 | ✅ มี |
 | ใบหัก 50 ทวิ | `actions/admin/wht-cert.ts` · `receipt-wht-cert.ts` (mig 0175 gate พิมพ์ใบเสร็จจนกว่าจะอัปใบหัก) | ✅ มี |
 
 ## 3. ช่องโหว่จริง (สิ่งที่ต้องทำ)
@@ -54,3 +54,12 @@
 ## คำถามถึง owner (ปลดล็อกสเต็ป 2-3)
 1. **PR099/PR999 (+ ลูกค้าเครดิตเจ้าไหนบ้าง) เป็นนิติบุคคลจริงไหม?** ถ้าใช่ ขอ เลขผู้เสียภาษี + ชื่อบริษัท + ที่อยู่ (เพื่อออกใบกำกับ + หัก 1% ถูกต้อง). ถ้าเป็นบุคคลที่ให้เครดิต = ปล่อยเป็นบุคคลได้.
 2. **ลูกค้านิติ+เครดิต ตั้ง default เอกสาร = "ใบกำกับ" เลยไหม?** (ออเดอร์ใหม่จะออกใบกำกับอัตโนมัติ ไม่ต้องติ๊กทีละชิป)
+
+---
+
+## ✅ ผลสรุป (resolved 2026-06-24 — แทนที่สมมุติฐานข้างบนในส่วนที่ขัดกัน)
+
+- **PR099 + PR999 = บุคคลธรรมดา + เครดิต (legacy ยืนยัน · userCompany='' ทั้งคู่).** ที่ระบบขึ้น "บุคคล" **ถูกแล้ว — ไม่ต้องตั้งเป็นนิติ.** วงเงิน (300k / 1M · เทอม 15) + ที่อยู่ (5/1 + main) + โน้ต = migrate มาครบ. ดังนั้น §3.2/§4/§5-ข้อ3 ที่ว่า "ต้องตั้งนิติ" = ไม่ต้องทำ. ลูกค้านิติจริง 364 เจ้ามี `tb_corporate` (362 แถว) ครบ → WHT 1% + ใบกำกับ ทำงานเฉพาะเจ้านิติตามกฎ legacy.
+- **เอกสารภาษี: owner เคาะ "ให้เลือกทุกครั้ง · ไม่ตั้ง default"** → §3.1(b)/§5-ข้อ2 (default ต่อลูกค้า) **ยกเลิก.** ✅ **DONE:** ดัน `EditTaxDocModeField` เป็นกล่องเด่นบนหน้า forwarder detail (commit `feat(forwarder · tax-doc · owner 2026-06-24)`) — เลือก/แก้ ใบกำกับ/ใบขน/ไม่เอา รายชิป ได้ชัด · §0f confirm · ไม่กระทบเอกสารที่ออกแล้ว.
+- **เปิดค้าง (accounting's call):** ยอดค้างเครดิตเก่าฝั่ง PCS (PR099 โน้ต ~3,296 บาท) ยังไม่ seed เข้า `tb_credit` (เริ่มที่ 0 · สะสมจากออเดอร์ใหม่). ถ้าจะยกยอดเก่ามา = ตัดสินใจโดยบัญชี.
+- **ยังเหลือ (optional · ไม่เร่ง):** §3.3 audit WHT หักครั้งเดียว end-to-end · §3.4 report ปิดชุดงาน · §5-ข้อ6 QA เดินจริง 1 รอบกับ PR099.
