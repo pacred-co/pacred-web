@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import {
-  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search,
+  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search, Video,
 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { ArticleContent } from "@/components/knowledge/article-content";
 import {
   saveCmsArticle, submitCmsArticle, approveCmsArticle, rejectCmsArticle,
-  unpublishCmsArticle, deleteCmsArticle, uploadCmsCover, type AdminArticle,
+  unpublishCmsArticle, deleteCmsArticle, uploadCmsCover, uploadCmsVideo, type AdminArticle,
 } from "@/actions/admin/cms-articles";
 import {
   CMS_CATEGORIES, CMS_CATEGORY_META, KNOWLEDGE_SUBCATS, CMS_STATUS_LABEL,
@@ -51,14 +51,20 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [metaDescription, setMetaDescription] = useState(initial?.metaDescription ?? "");
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
+  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? "");
+  const [galleryImages, setGalleryImages] = useState<string[]>(initial?.galleryImages ?? []);
   const [seoOpen, setSeoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
   const [insertingImg, setInsertingImg] = useState(false);
   const [preview, setPreview] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const bodyFileRef = useRef<HTMLInputElement>(null);
+  const videoFileRef = useRef<HTMLInputElement>(null);
+  const galleryFileRef = useRef<HTMLInputElement>(null);
 
   const status = initial?.status ?? "draft";
   const isNew = !initial;
@@ -77,6 +83,8 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       metaTitle: metaTitle.trim(),
       metaDescription: metaDescription.trim(),
       tags,
+      videoUrl: category === "our_work" ? videoUrl.trim() : "",
+      galleryImages: category === "our_work" ? galleryImages : [],
     };
   }
 
@@ -90,8 +98,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
     setTags((cur) => cur.filter((x) => x !== t));
   }
 
-  /** Upload an image and insert a markdown ![](url) marker at the body cursor
-   *  (owner 2026-06-23: "แนบรูปในเนื้อหาได้หลายรูปแบบเว็บบทความทั่วไป"). */
+  /** Upload an image and insert a markdown ![](url) marker at the body cursor. */
   async function insertBodyImage(file: File) {
     setErr(null); setInsertingImg(true);
     const fd = new FormData();
@@ -107,7 +114,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
     const next = body.slice(0, start) + marker + body.slice(end);
     setBody(next);
     if (el) queueMicrotask(() => { el.focus(); const pos = start + marker.length; el.setSelectionRange(pos, pos); });
-    setNotice("แทรกรูปในเนื้อหาแล้ว — กด “ดูตัวอย่าง” เพื่อเช็ค");
+    setNotice("แทรกรูปในเนื้อหาแล้ว — กด \"ดูตัวอย่าง\" เพื่อเช็ค");
   }
 
   async function doUpload(file: File) {
@@ -118,6 +125,28 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
     setUploading(false);
     if (res.ok && res.data) { setCoverUrl(res.data.url); setNotice("อัปโหลดรูปปกแล้ว"); }
     else if (!res.ok) setErr(errText(res.error));
+  }
+
+  async function doUploadVideo(file: File) {
+    setErr(null); setUploadingVideo(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadCmsVideo(fd);
+    setUploadingVideo(false);
+    if (res.ok && res.data) { setVideoUrl(res.data.url); setNotice("อัปโหลดวิดีโอแล้ว"); }
+    else if (!res.ok) setErr(errText(res.error));
+  }
+
+  async function addGalleryImage(file: File) {
+    setErr(null); setUploadingGallery(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadCmsCover(fd);
+    setUploadingGallery(false);
+    if (res.ok && res.data) {
+      setGalleryImages((cur) => [...cur, res.data!.url]);
+      setNotice("เพิ่มรูปแกลเลอรีแล้ว");
+    } else if (!res.ok) setErr(errText(res.error));
   }
 
   /** Save; returns the id (existing or freshly-created), or null on error. */
@@ -205,7 +234,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
             {CMS_STATUS_LABEL[status]}
           </span>
           {isPublished && initial?.slug ? (
-            <a href={`/articles/${initial.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline">
+            <a
+              href={category === "our_work" ? `/our-work/${initial.slug}` : `/articles/${initial.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline"
+            >
               <ExternalLink className="h-3.5 w-3.5" /> ดูหน้าเว็บ
             </a>
           ) : null}
@@ -243,7 +277,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
 
           <div>
             <label className={labelCls}>หัวข้อบทความ</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น นำเข้าจีนยังไงให้คุ้ม…" className={inputCls} />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น นำเข้าของจีนยังไงให้คุ้ม…" className={inputCls} />
           </div>
 
           <div>
@@ -267,6 +301,90 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
               </div>
             </div>
           </div>
+
+          {/* ── สื่อผลงาน — only for ผลงานของเรา ── */}
+          {category === "our_work" ? (
+            <div className="rounded-xl border border-primary-100 bg-primary-50/30 p-3 space-y-3 dark:border-primary-900/30 dark:bg-primary-950/10">
+              <p className="text-[13px] font-black text-foreground">สื่อผลงาน</p>
+
+              {/* Video */}
+              <div>
+                <label className={labelCls}>วิดีโอ (ไม่บังคับ)</label>
+                <div className="flex gap-2">
+                  <input
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=… หรือ URL วิดีโอ"
+                    className={`${inputCls} flex-1`}
+                    type="url"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => videoFileRef.current?.click()}
+                    disabled={uploadingVideo}
+                    title="อัปโหลดไฟล์วิดีโอโดยตรง (≤ 50 MB)"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-alt disabled:opacity-50 dark:bg-surface"
+                  >
+                    {uploadingVideo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5" />}
+                    อัปโหลด
+                  </button>
+                  <input
+                    ref={videoFileRef}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) doUploadVideo(f); if (e.target) e.target.value = ""; }}
+                  />
+                </div>
+                {videoUrl ? (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="flex-1 truncate text-[11px] text-muted">{videoUrl}</span>
+                    <button type="button" onClick={() => setVideoUrl("")} className="text-[11px] font-semibold text-rose-600 hover:underline">ลบ</button>
+                  </div>
+                ) : null}
+                <p className="mt-1 text-[11px] text-muted">วาง YouTube URL หรืออัปโหลดคลิปสั้น (≤ 50 MB) · ไม่มีก็ได้</p>
+              </div>
+
+              {/* Gallery */}
+              <div>
+                <label className={labelCls}>รูปแกลเลอรี (ต่อจากรูปปก)</label>
+                {galleryImages.length > 0 ? (
+                  <div className="mb-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                    {galleryImages.map((url, i) => (
+                      <div key={`${url}-${i}`} className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-surface-alt">
+                        <Image src={url} alt={`แกลเลอรีรูปที่ ${i + 1}`} fill sizes="80px" className="object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setGalleryImages((cur) => cur.filter((_, idx) => idx !== i))}
+                          aria-label={`ลบรูปที่ ${i + 1}`}
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <X className="h-5 w-5 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => galleryFileRef.current?.click()}
+                  disabled={uploadingGallery || galleryImages.length >= 20}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                >
+                  {uploadingGallery ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                  เพิ่มรูปแกลเลอรี {galleryImages.length > 0 ? `(${galleryImages.length}/20)` : ""}
+                </button>
+                <input
+                  ref={galleryFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) addGalleryImage(f); if (e.target) e.target.value = ""; }}
+                />
+                <p className="mt-1 text-[11px] text-muted">รูปจะแสดงใน filmstrip ต่อจากรูปปก · Hover เพื่อลบ · สูงสุด 20 รูป · ≤ 5 MB/รูป</p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Tags (HS code · product category …) — the /our-work filter bar */}
           <div>
@@ -299,7 +417,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
           {/* Body */}
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className={labelCls + " mb-0"}>เนื้อหา</label>
+              <label className={labelCls + " mb-0"}>
+                เนื้อหา{" "}
+                {category === "our_work" ? (
+                  <span className="text-[11px] font-normal text-muted">(ไม่บังคับ ถ้ามี gallery/video แล้ว)</span>
+                ) : null}
+              </label>
               <div className="flex items-center gap-3">
                 <button type="button" onClick={() => bodyFileRef.current?.click()} disabled={insertingImg} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline disabled:opacity-50">
                   {insertingImg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} แทรกรูป
@@ -310,7 +433,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
               </div>
             </div>
             <input ref={bodyFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) insertBodyImage(f); if (e.target) e.target.value = ""; }} />
-            <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n“ครอบด้วยอัญประกาศ” = คำพูดเน้น\nกด “แทรกรูป” เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
+            <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n\"ครอบด้วยอัญประกาศ\" = คำพูดเน้น\nกด \"แทรกรูป\" เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
             <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นบทความสวยเอง · กด “แทรกรูป” ใส่ได้หลายรูปในเนื้อหา · กด “ดูตัวอย่าง” เพื่อเช็ค</p>
           </div>
 

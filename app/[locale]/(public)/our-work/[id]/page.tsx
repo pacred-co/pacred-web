@@ -4,18 +4,13 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import {
-  ArrowLeft,
   ArrowRight,
   ChevronRight,
   Star,
   BadgeCheck,
-  HelpCircle,
   Tag,
-  Sparkles,
   MapPin,
   Package,
-  Phone,
-  Award,
   Truck,
   Clock,
   Users,
@@ -34,7 +29,7 @@ import {
   faqPageSchema,
   serviceSchema,
 } from "@/components/seo/schemas";
-import { SITE_URL, CONTACT } from "@/components/seo/site";
+import { SITE_URL } from "@/components/seo/site";
 import {
   REVIEWS,
   getReviewBySlugOrId,
@@ -45,7 +40,6 @@ import {
   ourWorkPath,
   reviewMetaPath,
   reviewCanonicalSlug,
-  reviewProductLabel,
   reviewHsCode,
   reviewRoute,
   reviewGalleryImages,
@@ -53,8 +47,12 @@ import {
   type ServiceType,
 } from "@/lib/reviews/catalog";
 import { getReviewContent } from "@/lib/reviews/content";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { listCaseComments } from "@/actions/case-comments";
+import { getPublishedArticleBySlug } from "@/lib/cms/articles";
+import { ArticleContent } from "@/components/knowledge/article-content";
 import { CaseGallery } from "./case-gallery";
-import { CaseTabs } from "./case-tabs";
+import { CaseComments } from "./case-comments";
 
 // Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
 // static prerender would throw DYNAMIC_SERVER_USAGE in production.
@@ -72,7 +70,7 @@ const TYPE_LABEL_KEY: Record<ServiceType, "labelImport" | "labelExport" | "label
   clearance: "labelClearance",
 };
 
-// Icon per logistics-fact key (the "ข้อมูลขนส่ง" grid · owner 2026-06-24).
+// Icon per logistics-fact key (the "ข้อมูลขนส่ง" grid).
 const FACT_ICON: Record<string, LucideIcon> = {
   service: Ship,
   term: FileText,
@@ -84,6 +82,19 @@ const FACT_ICON: Record<string, LucideIcon> = {
   duration: Clock,
   hs: Tag,
 };
+
+// Minimal content (ปอน 2026-06-25): only the facts a customer needs — บริการ ·
+// สินค้า · พอร์ทต้นทาง→ปลายทาง · ระยะเวลา · เขตในไทย+รถ · พิกัด HS. (term/labor dropped.)
+const FACT_ORDER = ["service", "product", "port", "duration", "zone", "truck"];
+
+// One section-heading scale for the whole page (audit 2026-06-25 · §0h hierarchy).
+const H2 = "text-[18px] md:text-[22px] font-black tracking-[-0.03em] text-[#111827] dark:text-white";
+const EYEBROW = "flex items-center gap-1.5 mb-1 text-primary-600 text-[12px] font-black tracking-[0.06em] uppercase";
+
+function extractYouTubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
 
 export function generateStaticParams() {
   // SEO-pattern slug is the canonical URL; legacy short ids still resolve
@@ -98,7 +109,26 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale, id } = await params;
   const review = getReviewBySlugOrId(id);
-  if (!review) return { title: locale === "en" ? "Case not found" : "ไม่พบผลงาน" };
+
+  if (!review) {
+    // Try CMS article
+    const cmsArticle = await getPublishedArticleBySlug(id);
+    if (cmsArticle?.category === "our_work") {
+      const metaTitle = cmsArticle.metaTitle || cmsArticle.title;
+      const metaDesc = cmsArticle.metaDescription || cmsArticle.excerpt || cmsArticle.title;
+      return {
+        title: { absolute: `${metaTitle} | Pacred Shipping` },
+        description: metaDesc,
+        openGraph: {
+          title: metaTitle,
+          description: metaDesc,
+          type: "article",
+          images: cmsArticle.coverUrl ? [{ url: cmsArticle.coverUrl, alt: cmsArticle.title }] : undefined,
+        },
+      };
+    }
+    return { title: locale === "en" ? "Case not found" : "ไม่พบผลงาน" };
+  }
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const content = getReviewContent(review, typedLocale);
@@ -146,62 +176,279 @@ export default async function ReviewLandingPage({
   params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = await params;
-  const review = getReviewBySlugOrId(id);
-  if (!review) notFound();
-
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const review = getReviewBySlugOrId(id);
+
+  // ── CMS article fallback — when slug doesn't match any catalog review ──
+  if (!review) {
+    const [cmsArticle, cmsSession] = await Promise.all([
+      getPublishedArticleBySlug(id),
+      getCurrentUserWithProfile(),
+    ]);
+    if (!cmsArticle || cmsArticle.category !== "our_work") notFound();
+
+    const t = await getTranslations({ locale, namespace: "reviews" });
+    const cmsSlug = `cms-${cmsArticle.id}`;
+    const cmsInitialComments = await listCaseComments(cmsSlug);
+    const cmsCommenterName =
+      [cmsSession?.profile?.first_name, cmsSession?.profile?.last_name].filter(Boolean).join(" ").trim() ||
+      cmsSession?.profile?.member_code ||
+      null;
+
+    const galleryImages = [
+      ...(cmsArticle.coverUrl ? [cmsArticle.coverUrl] : []),
+      ...(cmsArticle.galleryImages ?? []),
+    ];
+    const ytId = extractYouTubeId(cmsArticle.videoUrl ?? "");
+    const relatedCases = REVIEWS.slice(0, 4);
+
+    const cmsUi = typedLocale === "th"
+      ? { home: "หน้าหลัก", reviews: "ผลงานของเรา", quoteFree: "ขอใบเสนอราคาฟรี", priceLead: "ราคาประเมินตามงาน", fastReply: "ปรึกษาฟรี · ทีมงานตอบกลับเร็ว", verified: "ผลงานจริงของ Pacred", relatedEyebrow: "Our Case Studies", related: "ผลงานอื่นๆ", viewAll: "ดูผลงานทั้งหมด", readMore: "ดูผลงาน" }
+      : { home: "Home", reviews: "Our work", quoteFree: "Get a free quote", priceLead: "Quote based on the job", fastReply: "Free consult · fast reply", verified: "Real Pacred case", relatedEyebrow: "Our Case Studies", related: "More cases", viewAll: "View all cases", readMore: "View case" };
+
+    const cmsCommentsUi = typedLocale === "th"
+      ? { title: "ความคิดเห็น", placeholder: "เขียนความคิดเห็นของคุณเกี่ยวกับงานนี้...", submit: "ส่งความคิดเห็น", posting: "กำลังส่ง...", loginPrompt: "เข้าสู่ระบบเพื่อแสดงความคิดเห็น", loginCta: "เข้าสู่ระบบ", empty: "ยังไม่มีความคิดเห็น — เป็นคนแรกที่แสดงความคิดเห็น!", tooShort: "พิมพ์ความคิดเห็นอย่างน้อย 2 ตัวอักษร", asYou: "คุณ" }
+      : { title: "Comments", placeholder: "Write your comment about this case...", submit: "Post comment", posting: "Posting...", loginPrompt: "Log in to leave a comment", loginCta: "Log in", empty: "No comments yet — be the first to comment!", tooShort: "Please write at least 2 characters", asYou: "You" };
+
+    return (
+      <>
+        <JsonLd data={[breadcrumbSchema([{ name: cmsUi.home, path: "/" }, { name: cmsUi.reviews, path: ourWorkPath(typedLocale) }, { name: cmsArticle.title, path: `/our-work/${cmsArticle.slug}` }], typedLocale)]} />
+        <NavBar />
+        <SearchBar />
+        <main>
+          <article className="relative pb-10 pt-4 md:pb-16 md:pt-6">
+            <div className="mx-auto w-full max-w-[1140px] px-4 md:px-6">
+              {/* Breadcrumb */}
+              <nav className="mb-3 flex flex-wrap items-center gap-1 text-[11.5px] text-muted md:mb-4 md:text-[12.5px]">
+                <Link href="/" className="font-bold transition-colors hover:text-primary-600">{cmsUi.home}</Link>
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                <Link href={ourWorkPath(typedLocale)} prefetch={false} className="font-bold transition-colors hover:text-primary-600">{cmsUi.reviews}</Link>
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+                <span className="line-clamp-1 font-bold text-[#111827] dark:text-white">{cmsArticle.title}</span>
+              </nav>
+
+              {/* Hero card */}
+              <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_18px_44px_-16px_rgba(15,23,42,0.3)] dark:bg-surface md:rounded-3xl">
+                {galleryImages.length > 0 ? (
+                  <CaseGallery images={galleryImages} alt={cmsArticle.title} />
+                ) : null}
+
+                {/* Video embed */}
+                {cmsArticle.videoUrl ? (
+                  ytId ? (
+                    <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+                      <iframe
+                        src={`https://www.youtube-nocookie.com/embed/${ytId}`}
+                        className="absolute inset-0 h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        title="วิดีโอผลงาน"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <video src={cmsArticle.videoUrl} controls preload="metadata" className="w-full rounded-xl" />
+                    </div>
+                  )
+                ) : null}
+
+                {/* Info + booking sidebar */}
+                <div className="grid gap-6 p-5 md:grid-cols-[1fr_minmax(0,340px)] md:gap-8 md:p-6">
+                  <header>
+                    <span className="inline-flex items-center gap-1 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
+                      {cmsUi.verified}
+                    </span>
+                    <h1 className="mt-2.5 text-[24px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white md:text-[30px]">
+                      {cmsArticle.title}
+                    </h1>
+                    {cmsArticle.excerpt ? (
+                      <p className="mt-3 text-[14px] leading-relaxed text-muted">{cmsArticle.excerpt}</p>
+                    ) : null}
+                    {cmsArticle.tags.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {cmsArticle.tags.map((tg) => (
+                          <Link key={tg} href={`/our-work?tag=${encodeURIComponent(tg)}`} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-[12px] font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-900/40 dark:bg-primary-900/20 dark:text-primary-300">
+                            #{tg}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </header>
+
+                  <aside className="self-start rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
+                    <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{cmsUi.priceLead}</p>
+                    <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">{cmsUi.quoteFree}</p>
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                      {typedLocale === "th" ? "ทีมงาน Pacred พร้อมให้คำปรึกษาฟรี ตั้งแต่นำเข้าจีน เคลียร์ศุลกากร ถึงปลายทาง" : "Pacred team offers free consultation for China import, customs clearance and last-mile delivery"}
+                    </p>
+                    <Link href="/line" className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 text-[14px] font-black text-white shadow-[0_8px_18px_rgba(179,0,0,0.28)] transition-all duration-300 hover:scale-[1.02] hover:bg-primary-700 active:scale-95">
+                      ทักไลน์ Pacred <ArrowRight className="h-4 w-4" strokeWidth={3} />
+                    </Link>
+                    <p className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.8} />
+                      {cmsUi.fastReply}
+                    </p>
+                  </aside>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-8 md:mt-10 md:space-y-10">
+                {/* Body content */}
+                {cmsArticle.body.trim() ? (
+                  <section>
+                    <div className="mx-auto w-full max-w-[760px]">
+                      <ArticleContent text={cmsArticle.body} title={cmsArticle.title} />
+                    </div>
+                  </section>
+                ) : null}
+
+                {/* Related catalog cases */}
+                {relatedCases.length > 0 ? (
+                  <section>
+                    <div className="mb-4 flex items-end justify-between gap-4">
+                      <div>
+                        <div className={EYEBROW}>
+                          <Star className="h-3.5 w-3.5 fill-primary-600" strokeWidth={2.6} />
+                          {cmsUi.relatedEyebrow}
+                        </div>
+                        <h2 className={H2}>{cmsUi.related}</h2>
+                      </div>
+                      <Link href={ourWorkPath(typedLocale)} prefetch={false} className="hidden h-9 items-center gap-1.5 rounded-full border border-border bg-white px-3.5 text-[12px] font-black text-[#111827] transition-all duration-300 hover:border-primary-600 hover:bg-primary-600 hover:text-white sm:inline-flex dark:bg-surface dark:text-white">
+                        {cmsUi.viewAll} <ArrowRight className="h-3.5 w-3.5" strokeWidth={3} />
+                      </Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      {relatedCases.map((r) => (
+                        <Link key={r.id} href={reviewUrl(reviewSlug(r, typedLocale), typedLocale)} prefetch={false} className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-[0_4px_14px_rgba(15,23,42,0.05)] transition-all duration-300 hover:-translate-y-1 hover:border-primary-200 hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] dark:bg-surface dark:hover:border-primary-900">
+                          <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-surface-alt">
+                            {r.image && <Image src={r.image} alt={t(r.titleKey)} fill sizes="(max-width: 1024px) 50vw, 260px" quality={92} className="object-cover transition-transform duration-500 group-hover:scale-[1.05]" />}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-1.5 p-3">
+                            <h3 className="line-clamp-2 text-[13px] font-black leading-snug tracking-tight text-[#111827] transition-colors group-hover:text-primary-700 dark:text-white dark:group-hover:text-primary-300">{t(r.titleKey)}</h3>
+                            <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[11.5px] font-black text-primary-600 opacity-80 transition-opacity group-hover:opacity-100">
+                              {cmsUi.readMore} <ArrowRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {/* Comments */}
+                <div className="mx-auto w-full max-w-[760px]">
+                  <CaseComments
+                    caseSlug={cmsSlug}
+                    initialComments={cmsInitialComments}
+                    isLoggedIn={!!cmsSession?.user}
+                    currentUserName={cmsCommenterName}
+                    currentUserAvatar={cmsSession?.profile?.avatar_url ?? null}
+                    locale={typedLocale}
+                    ui={cmsCommentsUi}
+                  />
+                </div>
+              </div>
+            </div>
+          </article>
+          <HomeBottomBanner />
+        </main>
+        <Footer />
+      </>
+    );
+  }
+  // ── end CMS fallback ──
   const t = await getTranslations({ locale, namespace: "reviews" });
   const content = getReviewContent(review, typedLocale);
   const related = getRelatedReviews(review.id, 6);
 
   const serviceTitle = t(review.titleKey);
-  // Breadcrumb leaf uses the URL-pattern as a natural (space-separated) heading
-  // — ปอน "แพทเทิร์นแบบ url แต่ไม่มี - ทุกหน้า".
   const heading = reviewHeading(review, typedLocale);
   const typeLabel = t(TYPE_LABEL_KEY[review.type]);
-  // Trip.com-style word for the score (5→ยอดเยี่ยม) — display only.
   const ratingWord =
     typedLocale === "en"
       ? review.rating >= 5 ? "Excellent" : review.rating >= 4 ? "Very good" : "Good"
       : review.rating >= 5 ? "ยอดเยี่ยม" : review.rating >= 4 ? "ดีมาก" : "ดี";
-  // Trip.com-style gallery set — own cover + same-type real Pacred work photos.
   const galleryImages = reviewGalleryImages(review);
   const logisticsFacts = reviewLogisticsFacts(review, typedLocale);
-  // product / HS-code / route dimension (ปอน 2026-06-11 · owner ".csv pattern + HS code")
   const localeSlug = reviewSlug(review, typedLocale);
-  const productLabel = reviewProductLabel(review, typedLocale);
   const hsCode = reviewHsCode(review);
   const routeLabel = reviewRoute(review, typedLocale);
+
+  // The minimal fact set, in ปอน's order, always ending with พิกัด HS.
+  const keyFacts = [
+    ...FACT_ORDER.flatMap((k) => {
+      const f = logisticsFacts.find((x) => x.key === k);
+      return f ? [f] : [];
+    }),
+    logisticsFacts.find((f) => f.key === "hs") ?? {
+      key: "hs",
+      label: typedLocale === "th" ? "พิกัดศุลกากร (HS)" : "HS code",
+      value: `HS ${hsCode}`,
+    },
+  ];
+
+  // Comments (login-gated · ปอน 2026-06-25) — keyed by the stable review id so
+  // th + en share one thread. Fails soft to [] until migration 0210 is applied.
+  const commentCaseSlug = String(review.id);
+  const session = await getCurrentUserWithProfile();
+  const initialComments = await listCaseComments(commentCaseSlug);
+  const commenterName =
+    [session?.profile?.first_name, session?.profile?.last_name].filter(Boolean).join(" ").trim() ||
+    session?.profile?.member_code ||
+    null;
+  const commentsUi =
+    typedLocale === "th"
+      ? {
+          title: "ความคิดเห็น",
+          placeholder: "เขียนความคิดเห็นของคุณเกี่ยวกับงานนี้...",
+          submit: "ส่งความคิดเห็น",
+          posting: "กำลังส่ง...",
+          loginPrompt: "เข้าสู่ระบบเพื่อแสดงความคิดเห็น",
+          loginCta: "เข้าสู่ระบบ",
+          empty: "ยังไม่มีความคิดเห็น — เป็นคนแรกที่แสดงความคิดเห็น!",
+          tooShort: "พิมพ์ความคิดเห็นอย่างน้อย 2 ตัวอักษร",
+          asYou: "คุณ",
+        }
+      : {
+          title: "Comments",
+          placeholder: "Write your comment about this case...",
+          submit: "Post comment",
+          posting: "Posting...",
+          loginPrompt: "Log in to leave a comment",
+          loginCta: "Log in",
+          empty: "No comments yet — be the first to comment!",
+          tooShort: "Please write at least 2 characters",
+          asYou: "You",
+        };
 
   const ui =
     typedLocale === "th"
       ? {
           home: "หน้าหลัก",
           reviews: "ผลงานของเรา",
-          overview: "ภาพรวม",
           logistics: "ข้อมูลขนส่ง",
-          keywords: "คีย์เวิร์ดที่เกี่ยวข้อง",
-          faq: "คำถามที่พบบ่อย",
           related: "ผลงานอื่นๆ",
           relatedEyebrow: "Our Case Studies",
           viewAll: "ดูผลงานทั้งหมด",
-          back: "กลับไปดูผลงานทั้งหมด",
           verified: "ผลงานจริงของ Pacred",
           readMore: "ดูผลงาน",
+          quoteFree: "ขอใบเสนอราคาฟรี",
+          priceLead: "ราคาประเมินตามงาน",
+          fastReply: "ปรึกษาฟรี · ทีมงานตอบกลับเร็ว",
         }
       : {
           home: "Home",
           reviews: "Our work",
-          overview: "Overview",
           logistics: "Shipping details",
-          keywords: "Related keywords",
-          faq: "Frequently asked questions",
           related: "More cases",
           relatedEyebrow: "Our Case Studies",
           viewAll: "View all cases",
-          back: "Back to all cases",
           verified: "Real Pacred case",
           readMore: "View case",
+          quoteFree: "Get a free quote",
+          priceLead: "Quote based on the job",
+          fastReply: "Free consult · fast reply",
         };
 
   return (
@@ -231,151 +478,76 @@ export default async function ReviewLandingPage({
       <SearchBar />
       <main>
         <article className="relative pt-4 md:pt-6 pb-10 md:pb-16">
-          <div className="mx-auto w-full max-w-[1140px] px-[10px]">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-6">
             {/* Breadcrumb */}
-            <nav className="flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-3 md:mb-4 flex-wrap">
-              <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
+            <nav className="mb-3 flex flex-wrap items-center gap-1 text-[11.5px] text-muted md:mb-4 md:text-[12.5px]">
+              <Link href="/" className="font-bold transition-colors hover:text-primary-600">
                 {ui.home}
               </Link>
-              <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <Link href={ourWorkPath(typedLocale)} prefetch={false} className="hover:text-primary-600 transition-colors font-bold">
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+              <Link href={ourWorkPath(typedLocale)} prefetch={false} className="font-bold transition-colors hover:text-primary-600">
                 {ui.reviews}
               </Link>
-              <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <span className="font-bold text-[#111827] dark:text-white line-clamp-1">{heading}</span>
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+              <span className="line-clamp-1 font-bold text-[#111827] dark:text-white">{heading}</span>
             </nav>
 
-            {/* Hero card — gallery band + facts/CTA (draft pattern · Pacred theme · dynamic) */}
-            <div className="overflow-hidden rounded-2xl md:rounded-3xl border border-border bg-white shadow-[0_18px_44px_-16px_rgba(15,23,42,0.3)] dark:bg-surface">
-              {/* Gallery — Trip.com-style mosaic + lightbox (real Pacred work photos) */}
+            {/* HERO — gallery + a light title/score/intro on the left, booking on the right */}
+            <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_18px_44px_-16px_rgba(15,23,42,0.3)] dark:bg-surface md:rounded-3xl">
               <CaseGallery images={galleryImages} alt={content.h1} verifiedLabel={ui.verified} />
 
-              {/* Hero content — facts (left) + CTA side-card (right) */}
-              <div className="grid gap-6 p-5 md:grid-cols-[1fr_minmax(0,340px)] md:gap-8 md:p-7">
-                {/* Left — badges, headline, rating, dynamic facts */}
+              <div className="grid gap-6 p-5 md:grid-cols-[1fr_minmax(0,340px)] md:gap-8 md:p-6">
                 <header>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className={["inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10.5px] font-black tracking-wider", TYPE_BADGE[review.type]].join(" ")}>
+                  {/* Meta — type + route only (at-a-glance) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black tracking-wider", TYPE_BADGE[review.type]].join(" ")}>
                       {typeLabel}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[10.5px] font-black tracking-wider text-muted">
-                      {content.code}
-                    </span>
-                    {/* product + HS code (ปอน 2026-06-11 · owner "ติด hs code ให้เหมาะกับสินค้า") */}
-                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-gray-100 px-2.5 py-1 text-[10.5px] font-black tracking-wider text-[#111827] dark:bg-surface dark:text-white">
-                      {productLabel}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-primary-600 bg-primary-600 px-2.5 py-1 text-[10.5px] font-black tracking-wider tabular-nums text-white">
-                      HS {hsCode}
+                    <span className="inline-flex items-center rounded-full border border-border bg-gray-100 px-2.5 py-1 text-[11px] font-bold tracking-wider text-[#455873] dark:bg-surface dark:text-white">
+                      {routeLabel}
                     </span>
                   </div>
 
-                  <h1 className="text-[24px] md:text-[32px] leading-[1.2] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+                  <h1 className="mt-2.5 text-[24px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white md:text-[30px]">
                     {content.h1}
                   </h1>
 
-                  {/* Rating block — Trip.com-style: bold score chip + word + stars */}
-                  <div className="mt-3.5 flex flex-wrap items-center gap-3">
-                    <span className="grid h-12 w-12 flex-none place-items-center rounded-xl rounded-bl-sm bg-primary-600 text-[20px] font-black leading-none text-white tabular-nums shadow-[0_6px_14px_rgba(179,0,0,0.28)]">
-                      {review.rating}.0
+                  {/* Score row — pill + word + stars + verified */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex items-baseline gap-0.5 rounded-md rounded-tr-none bg-primary-700 px-2 py-0.5 text-white">
+                      <span className="text-[15px] font-black leading-none tabular-nums">{review.rating}.0</span>
+                      <span className="text-[11px] font-bold text-white/70">/5</span>
                     </span>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[15px] font-black text-[#111827] dark:text-white">{ratingWord}</span>
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className={["w-3.5 h-3.5", i < review.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300 fill-gray-200 dark:text-surface-alt dark:fill-surface"].join(" ")}
-                              strokeWidth={1.8}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-bold text-primary-600">
-                        <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.8} />
-                        {ui.verified}
-                      </p>
+                    <span className="text-[14px] font-black text-primary-700 dark:text-primary-300">{ratingWord}</span>
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={["h-3.5 w-3.5", i < review.rating ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")}
+                          strokeWidth={1.8}
+                        />
+                      ))}
                     </div>
-                  </div>
-
-                  {/* Distinction line (Trip.com "award badge" slot) */}
-                  <div className="mt-3">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[11.5px] font-black text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                      <Award className="h-3.5 w-3.5" strokeWidth={2.6} />
-                      ดูแลครบวงจร · ต้นทางจีน → ส่งถึงปลายทางในไทย
+                    <span className="hidden h-3 w-px bg-border sm:block" />
+                    <span className="inline-flex items-center gap-1 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
+                      {ui.verified}
                     </span>
                   </div>
 
-                  {/* Tag chips — route (ต้นทาง → ปลายทาง) leads, then mode/term tags */}
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-[11px] font-black text-primary-700 dark:border-primary-900/40 dark:bg-primary-900/20 dark:text-primary-300">
-                      {routeLabel}
-                    </span>
-                    {review.tagKeys.map((tagKey) => (
-                      <span key={tagKey} className="inline-flex items-center rounded-md border border-border bg-gray-100 px-2 py-1 text-[11px] font-black text-[#111827] dark:bg-surface dark:text-white">
-                        {t(tagKey)}
-                      </span>
-                    ))}
-                  </div>
-
-                  <p className="mt-4 text-[14px] md:text-[15.5px] leading-[1.7] text-muted">
-                    {content.intro}
-                  </p>
-
-                  {/* Quick facts — dynamic per case (เส้นทาง · บริการ · HS · ติดต่อ) */}
-                  <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <div className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30">
-                        <MapPin className="h-3.5 w-3.5" strokeWidth={2.4} />
-                      </span>
-                      <div className="text-[13.5px] leading-snug">
-                        <dt className="font-black text-[#111827] dark:text-white">เส้นทางขนส่ง</dt>
-                        <dd className="text-muted">{routeLabel}</dd>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30">
-                        <Package className="h-3.5 w-3.5" strokeWidth={2.4} />
-                      </span>
-                      <div className="text-[13.5px] leading-snug">
-                        <dt className="font-black text-[#111827] dark:text-white">ประเภทบริการ</dt>
-                        <dd className="text-muted">{typeLabel}</dd>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30">
-                        <Tag className="h-3.5 w-3.5" strokeWidth={2.4} />
-                      </span>
-                      <div className="text-[13.5px] leading-snug">
-                        <dt className="font-black text-[#111827] dark:text-white">พิกัดศุลกากร (HS)</dt>
-                        <dd className="text-muted">HS {hsCode} · {productLabel}</dd>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30">
-                        <Phone className="h-3.5 w-3.5" strokeWidth={2.4} />
-                      </span>
-                      <div className="text-[13.5px] leading-snug">
-                        <dt className="font-black text-[#111827] dark:text-white">ติดต่อทีม Pacred</dt>
-                        <dd className="text-muted">
-                          <a href={`tel:${CONTACT.phone}`} className="font-bold text-primary-600 hover:underline">{CONTACT.phoneDisplay}</a>
-                          {" · "}
-                          <Link href="/line" className="font-bold text-primary-600 hover:underline">LINE OA</Link>
-                        </dd>
-                      </div>
-                    </div>
-                  </dl>
+                  <p className="mt-3 text-[14px] leading-relaxed text-muted">{content.intro}</p>
                 </header>
 
-                {/* Right — CTA side-card (real CTA + contact · no fake price) */}
-                <aside className="self-start rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 dark:border-primary-900/50 dark:from-primary-900/20 dark:to-surface">
-                  <p className="text-[12px] font-bold uppercase tracking-wide text-primary-600">สนใจบริการนี้?</p>
-                  <p className="mt-1 text-[17px] font-black leading-snug text-[#111827] dark:text-white">{content.cta.label}</p>
+                {/* Booking card — quote-based (no fake price) */}
+                <aside className="self-start rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
+                  <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{ui.priceLead}</p>
+                  <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">
+                    {ui.quoteFree}
+                  </p>
                   <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{content.cta.description}</p>
                   <Link
                     href={content.cta.href}
-                    className="mt-3.5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 text-[14px] font-black text-white shadow-[0_8px_18px_rgba(179,0,0,0.28)] transition-all duration-300 hover:bg-primary-700 hover:scale-[1.02] active:scale-95"
+                    className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 text-[14px] font-black text-white shadow-[0_8px_18px_rgba(179,0,0,0.28)] transition-all duration-300 hover:scale-[1.02] hover:bg-primary-700 active:scale-95"
                   >
                     {content.cta.label}
                     <ArrowRight className="h-4 w-4" strokeWidth={3} />
@@ -386,31 +558,21 @@ export default async function ReviewLandingPage({
                   >
                     ทักไลน์ Pacred
                   </Link>
-                  <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-                    ราคาประเมินตามประเภทสินค้า น้ำหนัก/ปริมาตร เอกสาร และเงื่อนไขศุลกากร — ทีมงานช่วยตรวจให้ก่อนเริ่มงาน
+                  <p className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.8} />
+                    {ui.fastReply}
                   </p>
                 </aside>
               </div>
             </div>
 
-            {/* Sticky section tabs (Trip.com-style scroll-spy) */}
-            <CaseTabs
-              tabs={[
-                { id: "overview", label: ui.overview },
-                ...(content.faq.length > 0 ? [{ id: "faq", label: ui.faq }] : []),
-                ...(related.length > 0 ? [{ id: "related", label: ui.related }] : []),
-              ]}
-            />
-
-            {/* Body sections */}
-            <div className="mx-auto mt-9 md:mt-12 w-full max-w-[820px] space-y-7 md:space-y-9">
-              {/* ข้อมูลขนส่ง — logistics fact grid (owner 2026-06-24) */}
-              <section id="overview" className="scroll-mt-[195px]">
-                <h2 className="mb-3 text-[18px] md:text-[22px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                  {ui.logistics}
-                </h2>
-                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3">
-                  {logisticsFacts.map((f) => {
+            {/* Stacked sections — one consistent rhythm (32 / 40) */}
+            <div className="mt-8 space-y-8 md:mt-10 md:space-y-10">
+              {/* ข้อมูลขนส่ง — the key facts (the page's core content) */}
+              <section>
+                <h2 className={H2}>{ui.logistics}</h2>
+                <div className="mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
+                  {keyFacts.map((f) => {
                     const Icon = FACT_ICON[f.key] ?? Tag;
                     return (
                       <div key={f.key} className="rounded-xl border border-border bg-white p-3.5 dark:bg-surface">
@@ -418,7 +580,7 @@ export default async function ReviewLandingPage({
                           <Icon className="h-3.5 w-3.5 text-primary-600" strokeWidth={2.4} />
                           {f.label}
                         </div>
-                        <div className="text-[13.5px] md:text-[14px] font-black leading-snug text-[#111827] dark:text-white">
+                        <div className="text-[13.5px] font-black leading-snug text-[#111827] dark:text-white md:text-[14px]">
                           {f.value}
                         </div>
                       </div>
@@ -427,180 +589,93 @@ export default async function ReviewLandingPage({
                 </div>
               </section>
 
-              {content.sections.map((section) => (
-                <section key={section.heading}>
-                  <h2 className="text-[18px] md:text-[22px] font-black tracking-[-0.03em] text-[#111827] dark:text-white mb-2.5">
-                    {section.heading}
-                  </h2>
-                  <div className="space-y-3">
-                    {section.paragraphs.map((p, i) => (
-                      <p key={i} className="text-[14px] md:text-[15.5px] leading-[1.75] text-muted">
-                        {p}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ))}
-
-              {/* Keyword chips */}
-              <section>
-                <div className="flex items-center gap-2 mb-3 text-primary-600 text-[12px] md:text-[13px] font-black tracking-[0.06em] uppercase">
-                  <Tag className="w-3.5 h-3.5" strokeWidth={2.8} />
-                  {ui.keywords}
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {content.keywords.map((kw) => (
-                    <span
-                      key={kw}
-                      className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 text-[11.5px] md:text-[12.5px] font-bold border border-primary-100 dark:border-primary-900/40"
+              {/* ผลงานอื่นๆ — related cases (full-frame, Trip-style cards) */}
+              {related.length > 0 && (
+                <section>
+                  <div className="mb-4 flex items-end justify-between gap-4">
+                    <div>
+                      <div className={EYEBROW}>
+                        <Star className="h-3.5 w-3.5 fill-primary-600" strokeWidth={2.6} />
+                        {ui.relatedEyebrow}
+                      </div>
+                      <h2 className={H2}>{ui.related}</h2>
+                    </div>
+                    <Link
+                      href={ourWorkPath(typedLocale)}
+                      prefetch={false}
+                      className="hidden h-9 items-center gap-1.5 rounded-full border border-border bg-white px-3.5 text-[12px] font-black text-[#111827] transition-all duration-300 hover:border-primary-600 hover:bg-primary-600 hover:text-white sm:inline-flex dark:bg-surface dark:text-white"
                     >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              </section>
-
-              {/* FAQ */}
-              {content.faq.length > 0 && (
-                <section id="faq" className="scroll-mt-[195px]">
-                  <div className="flex items-center gap-2 mb-3.5 text-primary-600 text-[12px] md:text-[13px] font-black tracking-[0.06em] uppercase">
-                    <HelpCircle className="w-3.5 h-3.5" strokeWidth={2.8} />
-                    {ui.faq}
+                      {ui.viewAll}
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={3} />
+                    </Link>
                   </div>
-                  <div className="space-y-2.5">
-                    {content.faq.map((item) => (
-                      <details
-                        key={item.question}
-                        className="group rounded-2xl border border-border bg-white dark:bg-surface px-4 py-3.5 [&_summary::-webkit-details-marker]:hidden"
+
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {related.map((r) => (
+                      <Link
+                        key={r.id}
+                        href={reviewUrl(reviewSlug(r, typedLocale), typedLocale)}
+                        prefetch={false}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-[0_4px_14px_rgba(15,23,42,0.05)] transition-all duration-300 hover:-translate-y-1 hover:border-primary-200 hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] dark:bg-surface dark:hover:border-primary-900"
                       >
-                        <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-[13.5px] md:text-[15px] font-black text-[#111827] dark:text-white">
-                          {item.question}
-                          <ChevronRight className="w-4 h-4 shrink-0 text-primary-600 transition-transform duration-300 group-open:rotate-90" strokeWidth={2.8} />
-                        </summary>
-                        <p className="mt-2.5 text-[13px] md:text-[14.5px] leading-[1.7] text-muted">
-                          {item.answer}
-                        </p>
-                      </details>
+                        <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-surface-alt">
+                          {r.image && (
+                            <Image
+                              src={r.image}
+                              alt={t(r.titleKey)}
+                              fill
+                              sizes="(max-width: 1024px) 50vw, 260px"
+                              quality={92}
+                              className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+                            />
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-1.5 p-3">
+                          <h3 className="line-clamp-2 text-[13px] font-black leading-snug tracking-tight text-[#111827] transition-colors group-hover:text-primary-700 dark:text-white dark:group-hover:text-primary-300">
+                            {t(r.titleKey)}
+                          </h3>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-baseline gap-0.5 rounded rounded-tr-none bg-primary-700 px-1.5 py-0.5 text-white">
+                              <span className="text-[11.5px] font-black leading-none tabular-nums">{r.rating}.0</span>
+                              <span className="text-[11px] font-bold text-white/70">/5</span>
+                            </span>
+                            <span className="text-[11px] font-bold text-muted">{t(TYPE_LABEL_KEY[r.type])}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {r.tagKeys.slice(0, 2).map((tk) => (
+                              <span key={tk} className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-[#455873] dark:bg-surface-alt dark:text-white">
+                                {t(tk)}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[11.5px] font-black text-primary-600 opacity-80 transition-opacity group-hover:opacity-100">
+                            {ui.readMore}
+                            <ArrowRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
+                          </span>
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 </section>
               )}
 
-              {/* CTA card → matching service */}
-              <section className="rounded-3xl border border-primary-200 dark:border-primary-900/50 bg-gradient-to-br from-primary-50 to-white dark:from-primary-900/20 dark:to-surface p-5 md:p-7">
-                <div className="flex items-start gap-3">
-                  <div className="shrink-0 w-11 h-11 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
-                    <Sparkles className="w-5 h-5" strokeWidth={2.4} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-[17px] md:text-[20px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                      {content.cta.label}
-                    </h2>
-                    <p className="mt-1 text-[13px] md:text-[14.5px] leading-[1.6] text-muted">
-                      {content.cta.description}
-                    </p>
-                    <Link
-                      href={content.cta.href}
-                      className="mt-3.5 inline-flex items-center gap-2 h-10 px-4.5 rounded-full bg-primary-600 text-white text-[12.5px] md:text-[13.5px] font-black hover:bg-primary-700 hover:scale-[1.02] active:scale-95 transition-all duration-300"
-                    >
-                      {content.cta.label}
-                      <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
-                    </Link>
-                  </div>
-                </div>
-              </section>
+              {/* ความคิดเห็น — comments (reading column · login-gated) */}
+              <div className="mx-auto w-full max-w-[760px]">
+                <CaseComments
+                  caseSlug={commentCaseSlug}
+                  initialComments={initialComments}
+                  isLoggedIn={!!session?.user}
+                  currentUserName={commenterName}
+                  currentUserAvatar={session?.profile?.avatar_url ?? null}
+                  locale={typedLocale}
+                  ui={commentsUi}
+                />
+              </div>
             </div>
           </div>
         </article>
 
         <HomeBottomBanner />
-
-        {/* Related reviews */}
-        {related.length > 0 && (
-          <article id="related" className="relative pt-2 md:pt-4 pb-10 md:pb-16 scroll-mt-[195px]">
-            <div className="mx-auto w-full max-w-[1140px] px-[10px]">
-              <div className="mx-auto w-full max-w-[1080px]">
-                <div className="flex items-end justify-between gap-4 mb-4 md:mb-5">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1 text-primary-600 text-[12px] md:text-[13px] font-black tracking-[0.08em] uppercase">
-                      <Star className="w-3.5 h-3.5 fill-primary-600" strokeWidth={2.6} />
-                      {ui.relatedEyebrow}
-                    </div>
-                    <h2 className="text-[20px] md:text-[26px] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                      {ui.related}
-                    </h2>
-                  </div>
-                  <Link
-                    href={ourWorkPath(typedLocale)}
-                    prefetch={false}
-                    className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[12px] font-black hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all duration-300"
-                  >
-                    {ui.viewAll}
-                    <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
-                  </Link>
-                </div>
-
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-4">
-                  {related.map((r) => (
-                    <Link
-                      key={r.id}
-                      href={reviewUrl(reviewSlug(r, typedLocale), typedLocale)}
-                      prefetch={false}
-                      className="group relative flex flex-col bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border overflow-hidden shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] hover:border-primary-200 dark:hover:border-primary-900 hover:-translate-y-1 transition-all duration-300"
-                    >
-                      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background">
-                        {r.image && (
-                          <Image
-                            src={r.image}
-                            alt={t(r.titleKey)}
-                            fill
-                            sizes="(max-width: 1024px) 50vw, 340px"
-                            quality={92}
-                            className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                          />
-                        )}
-                        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-                        <div className="absolute bottom-2 left-2.5 flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className={[
-                                "w-3 h-3",
-                                i < r.rating ? "text-yellow-400 fill-yellow-400" : "text-white/40 fill-white/20",
-                              ].join(" ")}
-                              strokeWidth={1.8}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex flex-col p-3 md:p-4 gap-1.5 flex-1">
-                        <h3 className="text-[12.5px] md:text-[14px] font-black text-[#111827] dark:text-white leading-[1.3] tracking-tight line-clamp-2 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                          {t(r.titleKey)}
-                        </h3>
-                        <div className="mt-auto pt-1.5 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[11.5px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                          {ui.readMore}
-                          <ArrowRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              {/* Back to listing */}
-              <div className="mx-auto mt-10 md:mt-12 w-full max-w-[1080px]">
-                <Link
-                  href={ourWorkPath(typedLocale)}
-                  prefetch={false}
-                  className="inline-flex items-center gap-1.5 text-[12.5px] md:text-[14px] font-black text-primary-600 hover:text-primary-700 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" strokeWidth={2.6} />
-                  {ui.back}
-                </Link>
-              </div>
-            </div>
-          </article>
-        )}
       </main>
       <Footer />
     </>

@@ -213,7 +213,7 @@ export default async function ReviewsListingPage({
                   {dbArticles.map((a) => (
                     <Link
                       key={`db-${a.id}`}
-                      href={`/articles/${a.slug}`}
+                      href={`/our-work/${a.slug}`}
                       className="group relative bg-white dark:bg-surface rounded-2xl overflow-hidden border border-border shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] hover:border-primary-200 hover:-translate-y-1 transition-all duration-300"
                     >
                       <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
