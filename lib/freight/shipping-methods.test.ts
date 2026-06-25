@@ -93,10 +93,10 @@ const auto = getShippingMethodByCode("F");
 eq("code 'F' Thai = 'บริษัทจัดหาให้อัตโนมัติ'", auto?.nameTh, "บริษัทจัดหาให้อัตโนมัติ");
 
 const pcsf = getShippingMethodByCode("PCSF");
-eq("code 'PCSF' Thai = 'Pacred เหมาเหมา'", pcsf?.nameTh, "Pacred เหมาเหมา");
+eq("code 'PCSF' Thai = 'PRF เหมาๆ'", pcsf?.nameTh, "PRF เหมาๆ");
 
 const pcse = getShippingMethodByCode("PCSE");
-eq("code 'PCSE' Thai = 'Pacred Express'", pcse?.nameTh, "Pacred Express");
+eq("code 'PCSE' Thai = 'PRE Express'", pcse?.nameTh, "PRE Express");
 
 // ── (c) lookup not found ─────────────────────────────────────────
 console.log("\n(c) lookup not found");
