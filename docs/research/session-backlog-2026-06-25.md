@@ -26,6 +26,13 @@
 | **PUSH** | push 8 commit+งานน้อง→prod | 🔴 owner เคาะ |
 | **FRI06** | FRI2606-00006 ฿21.57 re-issue/ปล่อย | 🔴 owner |
 
+## 📋 Lane เพิ่ม (รอบ 2026-06-25 ค่ำ)
+| lane | งาน | ต้อง |
+|---|---|---|
+| **HIST** | หน้า **ประวัติออกเอกสารทั้งหมด** (ทุกใบ: ใบเสร็จ/บิล/ใบกำกับ · tab ทั้งหมด/นิติ/ทั่วไป · date-range · ค้นหา · สถานะพิมพ์ · ปุ่มพิมพ์) + **ประวัติงานทั้งหมด** · แบบ legacy "ประวัติการออกบิลฝากนำเข้า" | port legacy |
+| **AUTOBILL** | owner: "ทำไมต้องรอสร้างใบวางบิล — ตรวจสลิป/สแกนก็จบแล้ว" → ออกเอกสาร auto ตอน slip-verify/scan (ลดขั้น manual) | flow redesign · เงิน |
+| **🎯 PPAY** | **เปิด dynamic amount-PromptPay QR กลับ · PromptPay = เลขนิติ Pacred `0105564077716` (juristic 13-หลัก · เก็บเป็น string คงเลข 0 นำหน้า) · auto ใส่ยอด**. ⚠️ `lib/promptpay.ts` ตอนนี้ static-only (ปิด dynamic ตั้งแต่ 2026-06-08 กันเลขผิด). ต้อง re-impl `buildPromptPayPayload` (EMVCo) + `buildPromptPayQrDataUrl` (qrcode) + set default PROMPTPAY_ID=0105564077716 + **เทสว่า scan แล้วปลายทาง+ยอดถูก** ก่อน ship. money path. | careful · เทส QR จริง |
+
 ## 🔴 รอ owner เคาะ
 1. วิธีจ่ายต้นทุน MOMO (ลงเฉยๆ / ปุ่มจ่ายต่อ invoice-ตู้?)
 2. push prod ตอนนี้ไหม
