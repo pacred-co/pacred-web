@@ -42,6 +42,7 @@ import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { YuanCostEditor } from "@/components/admin/yuan-cost-editor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
@@ -386,6 +387,18 @@ export default async function AdminYuanPaymentDetail({
                   emphasis
                 />
               </div>
+            ) : null}
+            {/* owner 2026-06-25 (YUAN · cost-editable-sell-locked) — edit the REAL
+                yuan cost at ANY status (incl. settled/refunded) · sell stays locked. */}
+            {showCostProfit ? (
+              <YuanCostEditor
+                id={row.id}
+                payYuan={Number(row.payyuan ?? 0)}
+                payThb={Number(row.paythb ?? 0)}
+                payRateCost={row.payratecost ?? null}
+                payThbCost={row.paythbcost ?? null}
+                payProfitThb={row.payprofitthb ?? null}
+              />
             ) : null}
           </div>
         </div>

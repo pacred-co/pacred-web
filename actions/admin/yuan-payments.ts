@@ -240,10 +240,27 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
       update.payprofitthb = payProfitThb;
     }
 
-    // Cost/profit fields → legacy column names.
-    if (d.cost_rate  != null) update.payratecost  = d.cost_rate;
-    if (d.cost_thb   != null) update.paythbcost   = d.cost_thb;
-    if (d.profit_thb != null) update.payprofitthb = d.profit_thb;
+    // Cost/profit fields → legacy column names. owner 2026-06-25 (YUAN cost-editable
+    // ALL statuses · [[cost-editable-sell-locked]]): editing the real cost RATE
+    // re-derives paythbcost (= payyuan × rate) + payprofitthb (= paythb − cost)
+    // server-side so the breakdown stays consistent — unless an explicit cost_thb/
+    // profit_thb override is also sent. This update path has NO status gate (a
+    // cost-only edit keeps the unconditional UPDATE), so cost is correctable at any
+    // status incl. completed/refunded. SELL (paythb/payrate/payyuan) is NOT in the
+    // schema → never editable here = cost-editable, sell-locked.
+    if (d.cost_rate != null) {
+      update.payratecost = d.cost_rate;
+      if (d.cost_thb == null) {
+        update.paythbcost = Math.round(Number(existing.payyuan) * d.cost_rate * 100) / 100;
+      }
+    }
+    if (d.cost_thb != null) update.paythbcost = d.cost_thb;
+    if (d.profit_thb != null) {
+      update.payprofitthb = d.profit_thb;
+    } else if ((d.cost_rate != null || d.cost_thb != null) && update.paythbcost != null) {
+      update.payprofitthb =
+        Math.round((Number(existing.paythb) - Number(update.paythbcost)) * 100) / 100;
+    }
 
     // ── Single UPDATE on tb_payment.
     //
