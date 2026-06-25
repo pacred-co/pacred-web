@@ -324,6 +324,8 @@ export function PerTrackingEditorClient({
     startTransition(async () => {
       const fails: string[] = [];
       const nextResults: Record<number, RowResult> = {};
+      // ภูม 2026-06-25 — trackings whose save did NOT advance to รอชำระเงิน (freight=0).
+      const notAdvanced: string[] = [];
       for (const r of rows) {
         const res = await adminUpdateForwarderDimensions({
           fNo: String(r.id),
@@ -362,6 +364,7 @@ export function PerTrackingEditorClient({
             basis: res.data.basis,
             frefrate: res.data.frefrate,
           };
+          if (!res.data.advancedToFive) notAdvanced.push(r.tracking);
         }
       }
       setResults(nextResults);
@@ -369,11 +372,20 @@ export function PerTrackingEditorClient({
         setError(`บันทึกไม่สำเร็จ ${fails.length}/${rows.length} แถว — ${fails[0]}`);
         return;
       }
-      // The save itself auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side
-      // (adminUpdateForwarderDimensions · ภูม 2026-06-22) — forward-only, only when
-      // grandTotal>0. router.refresh re-renders with the new status pill + the
-      // "สร้างใบวางบิล" button (which shows at fstatus 5/6).
-      setSuccess(`✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่ + อัปเดตสถานะให้แล้ว 🧾`);
+      // The save auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side — forward-only,
+      // ONLY when the FREIGHT rate (ftotalprice) > 0 (ภูม 2026-06-25). A row whose rate
+      // is still 0 (เซลยังไม่ตั้งเรท · เคสสร้างมือ) stays at "ถึงไทยแล้ว" — don't falsely
+      // claim it moved to billing; tell the pricer to set the rate. router.refresh
+      // re-renders the new status pill + the "สร้างใบวางบิล" button (fstatus 5/6).
+      if (notAdvanced.length > 0) {
+        setSuccess(
+          `✓ บันทึกขนาด/น้ำหนักแล้ว — แต่ ${notAdvanced.length}/${rows.length} แทรคกิงยังไม่ส่งไปรอชำระเงิน ` +
+          `เพราะราคา/เรท ยังเป็น 0 (${notAdvanced.slice(0, 3).join(", ")}${notAdvanced.length > 3 ? "…" : ""}) — ` +
+          `ตั้งเรทลูกค้า หรือใส่ราคาเอง (คิดราคาแบบกำหนดเอง) แล้วบันทึกอีกครั้ง`,
+        );
+      } else {
+        setSuccess(`✓ บันทึกสำเร็จทั้ง ${rows.length} แทรคกิง — คำนวณราคาขายใหม่ + ส่งไปรอชำระเงินแล้ว 🧾`);
+      }
       router.refresh();
       setTimeout(() => setSuccess(null), 8000);
     });
