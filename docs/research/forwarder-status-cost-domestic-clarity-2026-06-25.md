@@ -7,7 +7,7 @@
 - **การกดจ่ายต้นทุน ไม่แตะสถานะ.** `applyMomoInvoiceCost` ([actions/admin/momo-invoice-ingest.ts](../../actions/admin/momo-invoice-ingest.ts)) + พี่น้อง cost-pay ทุกตัว (`adminApplyContainerCostFromSheet`/`adminUpdatePaidContainerCost`/`adminUpdateForwarderCost`/`adminCreateCntPayment`) เขียนแค่ `fcosttotalprice` (+`fprofittotal=0`) — **ไม่เขียน fstatus เลย** (§0e money-isolated ถูกต้อง).
 - **สถานะ 1-4 มาจาก MOMO จริง** (ตอบคำถาม owner = ใช่): cron `/api/cron/momo-sync` ทุก ~5 นาที → `propagateMomoToForwarders` ([lib/integrations/momo-isolated/propagate.ts:79-98,325-332](../../lib/integrations/momo-isolated/propagate.ts)) แมป MOMO shipmentStatus → fstatus (AT_WAREHOUSE_CN/CONSOLIDATING/TRUCK_CLOSED → '2' ถึงโกดังจีน) forward-only. Gate `MOMO_SYNC_PROPAGATE_STATUS !== 'false'` = **default-ON ตั้งแต่ 2026-06-19**. + MOMO เป็น SoT ตั้งแต่สร้างแถว (`commit-momo-row-core.ts:391` set fstatus 2/3 จาก MOMO).
 - **ทำไมดูเหมือนกดจ่ายแล้วสถานะเด้ง:** บังเอิญ — ตอนจ่ายต้นทุน ข้อมูล MOMO ชุดเดียวกันเพิ่งมา → cron เลื่อนสถานะเวลาไล่เลี่ยกัน. **คนละ trigger.**
-- **ตัวเร่งความงง:** [cnt-list-table.tsx:582](../../app/[locale]/(admin)/admin/report-cnt/cnt-list-table.tsx) hard-โชว์ badge "3 กำลังส่งมาไทย" ทั้งแท็บ waiting ไม่ว่าสถานะจริงเป็นอะไร → สถานะดูกระโดดมั่ว. + JSDoc เก่า `propagate.ts:331` / `sync.ts:73` ยังเขียนว่า sync "ปิด default" (จริงๆ เปิด) = misleading.
+- **ตัวเร่งความงง:** `app/[locale]/(admin)/admin/report-cnt/cnt-list-table.tsx:582` hard-โชว์ badge "3 กำลังส่งมาไทย" ทั้งแท็บ waiting ไม่ว่าสถานะจริงเป็นอะไร → สถานะดูกระโดดมั่ว. + JSDoc เก่า `propagate.ts:331` / `sync.ts:73` ยังเขียนว่า sync "ปิด default" (จริงๆ เปิด) = misleading.
 
 ## 3 แกนที่ owner ปน — เป็นคนละเรื่องจริงๆ
 
