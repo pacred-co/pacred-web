@@ -43,6 +43,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 
@@ -595,6 +596,10 @@ export async function adminCancelOrder(
         });
         return { ok: false, error: `db_error:${updErr.code ?? "unknown"}` };
       }
+
+      // ภูม 2026-06-25 — ยกเลิกออเดอร์แล้วต้องเคลียร์สลิป pending ที่ค้างในคิว
+      // "ชำระเงิน" (best-effort · money-safe: reject เฉพาะ status='1').
+      await rejectPendingSlipsForCancelledOrder(admin, header.hno, legacyAdminId);
 
       await logAdminAction(
         adminId,

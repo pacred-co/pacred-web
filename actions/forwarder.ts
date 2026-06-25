@@ -6,6 +6,7 @@ import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { BANK } from "@/components/seo/site";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
 import { assertOwnsRecord } from "@/lib/auth/owned-write";
 import { sendNotification } from "@/lib/notifications";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
@@ -698,6 +699,11 @@ export async function cancelOwnForwarder(
     // processing). Treat as not-cancellable rather than a hard error.
     return { ok: false, error: "not_cancellable" };
   }
+
+  // ภูม 2026-06-25 — ลบออเดอร์แล้วต้องเคลียร์สลิป pending ที่ค้างในคิว "ชำระเงิน"
+  // (best-effort · money-safe). ที่ fstatus='1' มักยังไม่มีสลิป แต่ลูกค้าที่จ่ายเร็ว
+  // แล้วยกเลิกก็ถูกครอบคลุม.
+  await rejectPendingSlipsForCancelledOrder(admin, id, userID);
 
   // Refresh the list pages + purge the chrome cache. The sidebar badge counts
   // (loadPcsChromeData) are served from the 60s-TTL pcs-chrome cache; a hard-
