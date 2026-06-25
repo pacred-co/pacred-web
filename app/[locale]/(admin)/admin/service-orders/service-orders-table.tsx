@@ -62,6 +62,9 @@ export type ServiceOrderRow = {
   adminidupdate: string | null;
   userid: string;
   customerName: string | null;
+  isJuristic: boolean;   // CUSTTAG — บุคคล/นิติ
+  creditLimit: number;   // CUSTTAG — วงเงินเครดิต (>0 = ลูกค้าเครดิต)
+  creditDays: number;    // CUSTTAG — เทอม (วัน)
   isVip: boolean;
   vipTier: string | null;
   isCorporate: boolean;
@@ -394,6 +397,15 @@ export function ServiceOrdersTable({
                           <div className="truncate max-w-[140px] text-[11px] text-muted" title={r.customerName}>
                             {r.customerName}
                           </div>
+                        )}
+                        {/* CUSTTAG (owner 2026-06-25) — credit pill so staff see เครดิต on the shop-order row */}
+                        {r.creditLimit > 0 && (
+                          <span
+                            className="mt-0.5 inline-block rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                            title={`ลูกค้าเครดิต · เทอม ${r.creditDays} วัน · วงเงิน ฿${r.creditLimit.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ติดตามให้ลูกค้าจ่ายภายในเทอม`}
+                          >
+                            💳 เครดิต {r.creditDays}ว
+                          </span>
                         )}
                         <div className="mt-0.5 flex flex-wrap gap-1">
                           {r.isVip && r.vipTier && (

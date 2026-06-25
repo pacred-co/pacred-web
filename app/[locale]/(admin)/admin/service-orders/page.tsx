@@ -168,6 +168,9 @@ type RawUserRow = {
   userLastName: string | null;
   coID:         string | null;
   adminIDSale:  string | null;
+  userCompany:     string | null;            // CUSTTAG — '1' = นิติบุคคล
+  userCreditValue: number | string | null;   // CUSTTAG — วงเงินเครดิต
+  userCreditDate:  number | string | null;   // CUSTTAG — เทอม (วัน)
 };
 
 type RawCorpRow = {
@@ -337,7 +340,7 @@ export default async function AdminServiceOrdersPage({
   if (uniqueUserIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,coID,adminIDSale")
+      .select("userID,userName,userLastName,coID,adminIDSale,userCompany,userCreditValue,userCreditDate")
       .in("userID", uniqueUserIds);
     if (userErr) {
       console.error("[/admin/service-orders] tb_users join failed", {
@@ -414,6 +417,9 @@ export default async function AdminServiceOrdersPage({
       adminidupdate: r.adminidupdate,
       userid: r.userid,
       customerName: name,
+      isJuristic: user?.userCompany === "1" || corporateUserIds.has(r.userid),
+      creditLimit: Number(user?.userCreditValue ?? 0),
+      creditDays: Number(user?.userCreditDate ?? 0),
       isVip,
       vipTier: isVip ? coid : null,
       isCorporate: corporateUserIds.has(r.userid),
