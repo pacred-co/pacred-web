@@ -23,6 +23,7 @@ import {
 } from "@/actions/admin/billing-run";
 import { confirm } from "@/components/ui/confirm";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
+import { GuideNote } from "@/components/ui/guide-note";
 
 type Props = {
   customers: EligibleCustomerRow[];
@@ -658,6 +659,16 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             </>
           )}
         </div>
+
+        {/* WHT explainer — owner 2026-06-25 "แจงไปเลย ไม่ต้องซ่อน": always-visible
+            (not a hover ⓘ) with the concrete amounts for THIS bill. */}
+        {showWht && (
+          <GuideNote variant="info" title="หัก ณ ที่จ่าย 1% — ทำงานยังไง" className="mt-3">
+            ลูกค้านิติบุคคลหักภาษี ณ ที่จ่าย 1% = <strong>฿{thbFmt(whtAmount)}</strong> ไว้ นำส่งสรรพากรแทนเรา →
+            จ่ายเรา <strong>ยอดสุทธิ ฿{thbFmt(netPayable)}</strong> (จากยอดรวม ฿{thbFmt(totalAmount)}).
+            ขอ <strong>ใบ 50 ทวิ</strong> จากลูกค้าเพื่อเอา 1% ที่ถูกหักคืนเป็นเครดิตภาษี.
+          </GuideNote>
+        )}
 
         {selectedCustomer?.is_juristic && totalAmount > 0 && totalAmount < 1000 && !showWht && (
           <p className="text-xs text-muted mt-2">* นิติบุคคล แต่ยอดน้อยกว่า ฿1,000 — ไม่หักภาษี ณ ที่จ่าย</p>
