@@ -56,6 +56,7 @@ import { ShopFieldsBoard } from "../shop-fields-board";
 import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
+import { MarkArrivedChinaButton } from "@/components/admin/mark-arrived-china-button";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
@@ -508,6 +509,10 @@ export default async function AdminServiceOrderEditPage({
       {(status === "3" || status === "4" || status === "5") && shopFields.length > 0 && (
         <ShopFieldsBoard hNo={r.hno} status={status} shops={shopFields} />
       )}
+
+      {/* owner 2026-06-25 (status-sync · PR018) — manual "ถึงโกดังจีน" escape for a
+          stuck status-4 order whose SF tracking never matched MOMO auto-sync. */}
+      {status === "4" && <MarkArrivedChinaButton hno={r.hno} />}
 
       {/* status 4 → 🚛 spawn forwarder per tracking + auto-spawn-to-completed */}
       {showSpawn && (
