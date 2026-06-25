@@ -945,10 +945,19 @@ async function tryRenderTbForwarder(
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
-            {/* 2026-06-11 (Lane B) — เอกสารภาษีที่ลูกค้าเลือก (ใบกำกับ/ใบขน/ไม่รับฯ) ·
-                แสดง + แก้ไขได้ (un-orphan adminUpdateForwarderTaxDocMode · confirm
-                ก่อนบันทึก §0f). */}
-            <EditTaxDocModeField fId={r.id} taxDocPref={r.tax_doc_pref} />
+            {/* 2026-06-24 (owner) — เอกสารภาษี ต้อง "เลือกได้ทุกครั้ง · หาที่แก้ง่าย":
+                ดันขึ้นเป็นกล่องเด่น พร้อมหัวข้อชัด แทนที่จะฝังเป็นแถว compact กลางหน้า
+                (เดิม owner หาไม่เจอว่าแก้ตรงไหน). ใช้ adminUpdateForwarderTaxDocMode
+                เดิม · §0f confirm · ไม่ตั้ง default — เลือกเองทุกชิป. */}
+            <div className="my-2 rounded-lg border-2 border-indigo-200 bg-indigo-50/60 p-3">
+              <p className="mb-1.5 text-sm font-bold text-indigo-800">
+                📄 เอกสารภาษี — เลือก/แก้ได้ทุกเมื่อ (ก่อนชำระเงิน)
+              </p>
+              <EditTaxDocModeField fId={r.id} taxDocPref={r.tax_doc_pref} />
+              <p className="mt-1.5 text-[11px] leading-snug text-indigo-700/80">
+                ใบกำกับภาษี = สินค้านำเข้าในนามเรา (VAT 7%) · ใบขน = บริการเคลียร์ (ลูกค้าเจ้าของของ) · ไม่เอาเอกสาร = ใบเสร็จเฉยๆ. เลือกต่อรายการนี้ — ไม่กระทบเอกสารที่ออกไปแล้ว.
+              </p>
+            </div>
             <p className="text-foreground"><b className="font-semibold">ประเภทสินค้า : </b>{PRODUCT_TYPE_LABEL[r.fproductstype ?? ""] ?? "—"}</p>
             {/* รายละเอียดสินค้า (ชื่อสินค้า + รูปปก) — ต่อจากประเภทสินค้า ตาม legacy admin */}
             <div className="pt-1">
