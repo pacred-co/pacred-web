@@ -249,14 +249,15 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const yuanToday      = sumNum(revYuanToday.data, "paythb");
   const walletTotals   = await walletTotalsPromise;
   const walletAll      = walletTotals.sumWallet;
-  // Explain a negative TOTAL (owner 2026-06-22 "ติดลบ ดูเหมือนบัค"): it's not a code
-  // bug — it's customers whose wallet went negative from an unbalanced legacy
-  // "เติม-แล้วจ่าย" pay (the −pay settled without its +topup). Surface who + how much
-  // so it reads as "รอบัญชีกระทบยอด", not a mystery.
+  // Negative TOTAL = customers whose wallet went negative from an unbalanced
+  // legacy "เติม-แล้วจ่าย" pay (the −pay leg settled without its +topup credit).
+  // owner 2026-06-25: ติดลบ "ไม่ควรปล่อย" — ลูกค้าจ่ายมาแล้ว ต้องแก้ได้ในระบบ → guide
+  // staff ไป "บันทึกการชำระ + แนบสลิป" ที่หน้า wallet (เติม +|ติดลบ| ลง tb_wallet.wallettotal
+  // = เคลียร์จริง). การ์ดลิงก์ /admin/wallet อยู่แล้ว · per-customer deep-link = งานต่อ.
   const walletNote = walletTotals.negCount > 0
     ? `มีลูกค้า ${walletTotals.negCount} ราย ยอดติดลบรวม ฿${formatTHB(walletTotals.negSum)}` +
       (walletTotals.topNegUserid ? ` (เช่น ${walletTotals.topNegUserid} ฿${formatTHB(walletTotals.topNegAmount)})` : "") +
-      ` — รอบัญชีตรวจ/กระทบยอด (ไม่ใช่บัคระบบ)`
+      ` — ลูกค้าจ่ายมาแล้วยังไม่บันทึก · กด “บันทึกการชำระ + แนบสลิป” ที่หน้ากระเป๋าเงินเพื่อเคลียร์`
     : undefined;
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
