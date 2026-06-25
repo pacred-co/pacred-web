@@ -45,8 +45,31 @@ function toNumber(v: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function calcForwarderOutstanding(row: ForwarderPriceFields): number {
-  const priceFull =
+/**
+ * The GROSS composite the customer owes — Σ 7 price columns − discount, with
+ * NO juristic 1% allowance applied. This is the legacy `priceFull` BEFORE the
+ * `fUserCompany1Per` step (forwarder function.php L1878).
+ *
+ * Use this in the ใบวางบิล (billing-run) flow: the bill stores GROSS line/
+ * subtotal/total and shows the หัก ณ ที่จ่าย 1% as its OWN line, then a net
+ * payable — the standard Thai tax-document layout (and what the auto-issued
+ * ใบเสร็จ already does · lib/admin/auto-issue-receipt.ts `pricePayBase`). The
+ * 1% is then applied EXACTLY ONCE at display time via `computeBillWht(gross)`.
+ *
+ * Do NOT use this for the "ยอดค้างชำระ / ยอดเก็บจริง" operational figures on the
+ * forwarders list, forwarder-check, credit + AR reports — those keep showing
+ * the NET `calcForwarderOutstanding` (the cash we actually collect, legacy
+ * `calPriceForwarderMain`). The 1% gap between the two is the withholding, not
+ * a discrepancy.
+ */
+export function calcForwarderGross(row: ForwarderPriceFields): number {
+  const safe = forwarderPriceFull(row);
+  return Math.round((safe > 0 ? safe : 0) * 100) / 100;
+}
+
+/** Σ 7 price columns − discount (the legacy `priceFull`, pre-allowance · raw). */
+function forwarderPriceFull(row: ForwarderPriceFields): number {
+  return (
     toNumber(row.ftotalprice) +
     toNumber(row.ftransportprice) +
     toNumber(row.fpriceupdate) +
@@ -54,7 +77,12 @@ export function calcForwarderOutstanding(row: ForwarderPriceFields): number {
     toNumber(row.pricecrate) +
     toNumber(row.ftransportpricechnthb) +
     toNumber(row.priceother) -
-    toNumber(row.fdiscount);
+    toNumber(row.fdiscount)
+  );
+}
+
+export function calcForwarderOutstanding(row: ForwarderPriceFields): number {
+  const priceFull = forwarderPriceFull(row);
 
   // Juristic-person (นิติบุคคล) 1% allowance — fusercompany='1' on legacy
   const isJuristic =

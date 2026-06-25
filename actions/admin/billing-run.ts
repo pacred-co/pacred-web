@@ -33,7 +33,7 @@ import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { baseTracking, filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 import { computeBillWht } from "@/lib/billing/wht";
 import {
-  calcForwarderOutstanding,
+  calcForwarderGross,
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
@@ -77,11 +77,14 @@ export type EligibleForwarderRow = {
   /** Legacy single column — kept for the row display compat (ค่าขนส่งหลัก). */
   ftotalprice: number;
   /**
-   * BUG A fix (2026-06-14) — the FULL composite the customer actually owes,
-   * via calcForwarderOutstanding (Σ 7 price columns − discount − 1% juristic).
-   * This is what the subtotal + the line amount_thb must use. `ftotalprice`
-   * alone silently under-charged (dropped freight/update/service/crate/
-   * chn-th/other + discount).
+   * The FULL composite the customer owes, GROSS (Σ 7 price columns − discount,
+   * NO juristic 1%) — via calcForwarderGross. This is the bill's per-line FACE
+   * value; it drives the create-form subtotal + the saved line amount_thb. The
+   * หัก ณ ที่จ่าย 1% is then deducted ONCE as a header line (computeBillWht).
+   *   · BUG A fix (2026-06-14): use the composite, not `ftotalprice` alone
+   *     (which dropped freight/update/service/crate/chn-th/other + discount).
+   *   · WHT fix (2026-06-25): GROSS not NET (was calcForwarderOutstanding) — net
+   *     storage made the bill withhold 1% twice (= gross×0.98) for juristic.
    */
   outstanding_thb: number;
   /** เหมาๆ (PCSF flat ฿100) carried on this row (the shipment's anchor) else 0 —
@@ -327,7 +330,13 @@ export async function listEligibleCustomers(): Promise<
         if (!isBillableForwarder(r)) continue; // defensive — Set B narrows to 5/6
         const cur = aggByUser.get(r.userid) ?? { count: 0, total: 0 };
         cur.count += 1;
-        cur.total += calcForwarderOutstanding(r); // BUG A — full composite
+        // WHT-fix 2026-06-25 — GROSS composite (Σ 7 cols − discount, no 1%).
+        // The ใบวางบิล stores gross + shows the หัก ณ ที่จ่าย 1% as its own line
+        // (computeBillWht). This dropdown preview is the bill's gross total; the
+        // create-form's สรุปยอด section then breaks out the WHT + net. Was
+        // calcForwarderOutstanding (NET) → previewed a pre-deducted total that
+        // then got 1% withheld AGAIN on the bill = double-deduct.
+        cur.total += calcForwarderGross(r);
         aggByUser.set(r.userid, cur);
       }
 
@@ -541,8 +550,12 @@ export async function listEligibleForwarders(
         fweight:         f.fweight != null ? Number(f.fweight) : null,
         fvolume:         f.fvolume != null ? Number(f.fvolume) : null,
         ftotalprice:     Number(f.ftotalprice ?? 0),
-        // BUG A — the FULL composite the customer owes (drives subtotal + bill).
-        outstanding_thb: calcForwarderOutstanding(f),
+        // WHT-fix 2026-06-25 — GROSS composite (Σ 7 cols − discount, NO 1%).
+        // This is the per-row bill FACE value; it drives the create-form subtotal
+        // + the saved line. The create-form's สรุปยอด then deducts the หัก ณ ที่จ่าย
+        // 1% ONCE (totalAmount × 0.01) → net. Was calcForwarderOutstanding (NET) →
+        // the form previewed net then withheld 1% again = double-deduct on juristic.
+        outstanding_thb: calcForwarderGross(f),
         // เหมาๆ ฿100 on this row (the shipment's anchor) else 0 — preview adds Σ selected.
         mao_fee_thb:     maoFeeById.get(f.id) ?? 0,
         fstatus:         f.fstatus,
@@ -1102,13 +1115,21 @@ export async function createBillingRunInvoice(
       }
 
       // (d) Compute subtotal + final total.
-      // BUG A — the per-line amount = calcForwarderOutstanding (Σ 7 price
-      // columns − discount − 1% juristic), the canonical per-row outstanding,
-      // NOT ftotalprice alone. The 4 admin adjustment fields (deliveryChn/Th/
-      // other/discount) are ADDITIONAL on top of the composite subtotal — they
-      // are NOT inside calcForwarderOutstanding, so no double-count.
+      // The per-line amount = calcForwarderGross (Σ 7 price columns − discount,
+      // GROSS · NO juristic 1%), NOT ftotalprice alone. The 4 admin adjustment
+      // fields (deliveryChn/Th/other/discount) are ADDITIONAL on top of the
+      // composite subtotal — they are NOT inside the gross, so no double-count.
+      //
+      // WHT-fix 2026-06-25 — store GROSS (was calcForwarderOutstanding = NET).
+      // The bill is a Thai tax document: subtotal/total are gross, and the หัก ณ
+      // ที่จ่าย 1% is shown as ITS OWN line via computeBillWht(total_thb=gross) on
+      // every display surface (getInvoiceList :705 · getInvoiceDetail :873 · print).
+      // Storing NET here meant computeBillWht then withheld 1% a SECOND time →
+      // displayed net ≈ gross×0.98 (the regression). Gross-stored ⇒ net_payable =
+      // gross−1% reconciles to the satang with the auto-issued ใบเสร็จ (which
+      // already sums the raw priceFull · auto-issue-receipt.ts `pricePayBase`).
       const outstandingByID = new Map<number, number>();
-      for (const f of fwd) outstandingByID.set(f.id, calcForwarderOutstanding(f));
+      for (const f of fwd) outstandingByID.set(f.id, calcForwarderGross(f));
 
       // เหมาๆ (PCSF flat ฿100) — the bill was MISSING it vs the detail page's
       // ยอดเก็บจริง (ภูม 2026-06-23: บิล 4,083.96 แต่ detail 4,183.96). Pull JUST the
@@ -1227,14 +1248,14 @@ export async function createBillingRunInvoice(
       }
 
       // (f) INSERT items (bulk · ON DELETE CASCADE protects rollback semantics).
-      // BUG A — line amount = the composite outstanding (Σ subtotal of these
-      // lines == the header subtotal, both from calcForwarderOutstanding).
+      // Line amount = the GROSS composite (Σ subtotal of these lines == the
+      // header subtotal, both from calcForwarderGross · WHT-fix 2026-06-25).
       const itemsToInsert = v.forwarderIds.map((fid) => ({
         invoice_id:   invoiceId!,
         forwarder_id: fid,
         // D2 — the line bill amount: admin override if present, else the auto
-        // composite outstanding. Same value the subtotal summed, so header +
-        // items always reconcile to satang.
+        // GROSS composite. Same value the subtotal summed, so header + items
+        // always reconcile to satang. The 1% WHT is a header-level display line.
         amount_thb:   Math.round(lineAmount(fid) * 100) / 100,
       }));
       const { error: itemErr } = await admin
@@ -1311,9 +1332,9 @@ export async function markBillingRunPaid(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, userid")
+        .select("id, doc_no, status, total_thb, is_juristic, userid")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; userid: string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1343,9 +1364,15 @@ export async function markBillingRunPaid(
         return { ok: false, error: updErr.message };
       }
 
+      // total_thb is the GROSS invoice face (WHT-fix 2026-06-25). The actual cash
+      // a juristic buyer remits = net_payable (gross − หัก ณ ที่จ่าย 1%); the 1%
+      // is withheld + paid to the revenue dept on our behalf (we reclaim it via
+      // the 50-ทวิ cert). Log BOTH so the audit trail shows face vs cash collected.
+      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
       await logAdminAction(adminId, "billing_run.mark_paid", "forwarder_invoice", String(v.invoiceId), {
         doc_no: cur.doc_no, payment_method: v.paymentMethod, reference: v.paymentReference,
-        total_thb: Number(cur.total_thb), paid_at: paidAtIso,
+        total_thb: Number(cur.total_thb), wht_amount: paidWht.wht_amount,
+        net_payable: paidWht.net_payable, paid_at: paidAtIso,
       });
 
       // ภูม 2026-06-22 — sync the linked ใบเสร็จ to "ออกแล้ว/paid". A receipt issued

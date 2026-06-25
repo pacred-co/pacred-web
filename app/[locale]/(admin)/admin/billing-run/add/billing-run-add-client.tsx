@@ -182,11 +182,11 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     return f.outstanding_thb;
   }
 
-  // Subtotal = Σ outstanding_thb of selected forwarders (BUG A fix 2026-06-14).
-  // outstanding_thb = the FULL composite the customer owes
-  // (calcForwarderOutstanding: Σ 7 price columns − discount − 1% juristic),
-  // NOT ftotalprice alone — which silently under-charged. Matches the server
-  // subtotal in createBillingRunInvoice exactly.
+  // Subtotal = Σ outstanding_thb of selected forwarders. outstanding_thb is the
+  // GROSS composite (Σ 7 price columns − discount, NO 1% · calcForwarderGross ·
+  // WHT-fix 2026-06-25), matching the server subtotal in createBillingRunInvoice
+  // exactly. The หัก ณ ที่จ่าย 1% is deducted ONCE below (totalAmount × 0.01 →
+  // netPayable), so the บิล shows gross subtotal → WHT line → net — never twice.
   const subtotal = useMemo(() => {
     if (!eligible) return 0;
     let sum = 0;
