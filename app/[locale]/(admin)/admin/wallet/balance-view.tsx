@@ -266,8 +266,20 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                         ) : null}
                       </td>
                       <td className="px-3 py-3 text-sm text-foreground">{fullName}</td>
-                      <td className="px-3 py-3 text-right font-mono text-base font-bold text-foreground">
-                        ฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      <td className="px-3 py-3 text-right">
+                        <div className={`font-mono text-base font-bold ${wt < 0 ? "text-rose-600" : "text-foreground"}`}>
+                          ฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </div>
+                        {/* owner 2026-06-25: ติดลบ = ลูกค้าจ่ายแล้วยังไม่บันทึก → ทางเข้าเคลียร์ได้เลย
+                            (เติม +|ติดลบ| + แนบสลิป → tb_wallet.wallettotal = หายจริง · §0d reachability) */}
+                        {wt < 0 && (
+                          <Link
+                            href={`/admin/wallet/add?q=${r.userid}`}
+                            className="mt-1 inline-flex items-center rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+                          >
+                            บันทึกการชำระ + แนบสลิป →
+                          </Link>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-right font-mono text-xs text-purple-600">
                         {cb > 0
