@@ -22,6 +22,7 @@ import {
   type EligibleForwarderRow,
 } from "@/actions/admin/billing-run";
 import { confirm } from "@/components/ui/confirm";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 type Props = {
   customers: EligibleCustomerRow[];
@@ -633,6 +634,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
           <LedgerRow
             kind="grand"
             label="ยอดรวมทั้งสิ้น"
+            tip={showWht ? GUIDE.bill_gross : undefined}
             value={totalAmount}
           />
 
@@ -643,12 +645,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                 kind="auto"
                 label="− หัก ณ ที่จ่าย 1% (นิติบุคคล)"
                 hint="ลูกค้าหักจ่ายเงินสุทธิ"
+                tip={GUIDE.wht_1pct_bill}
                 value={whtAmount}
                 isDiscount
               />
               <LedgerRow
                 kind="net"
                 label="ยอดชำระสุทธิ"
+                tip={GUIDE.bill_net_payable}
                 value={netPayable}
               />
             </>
@@ -776,6 +780,7 @@ function LedgerRow({
   kind,
   label,
   hint,
+  tip,
   value,
   onChange,
   isDiscount = false,
@@ -783,6 +788,8 @@ function LedgerRow({
   kind: "auto" | "input" | "grand" | "net";
   label: string;
   hint?: string;
+  /** Optional in-system guide hint — renders an ⓘ next to the label (GUIDE[...]). */
+  tip?: string;
   value: number | string;
   onChange?: (v: string) => void;
   isDiscount?: boolean;
@@ -817,8 +824,9 @@ function LedgerRow({
     <div className={`flex items-center gap-3 px-3 py-2.5 ${rowCls}`}>
       <span className={`inline-block h-2.5 w-2.5 rounded-full ${dotCls} shrink-0`} aria-hidden />
       <div className="flex-1 min-w-0">
-        <div className={kind === "net" || kind === "grand" ? "text-sm font-semibold" : "text-sm"}>
-          {label}
+        <div className={`flex items-center gap-1 ${kind === "net" || kind === "grand" ? "text-sm font-semibold" : "text-sm"}`}>
+          <span>{label}</span>
+          {tip && <Explain def={tip} align="left" />}
         </div>
         {hint && <div className="text-[11px] text-muted">{hint}</div>}
       </div>
