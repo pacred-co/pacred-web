@@ -83,6 +83,14 @@
 
 **🔴 ยังไม่แก้** — เป็น money-formula กระทบ 12 ใบจริง + ledger → ต้องเคาะ policy (ใบวางบิลโชว์ยอด GROSS หรือ NET) + เขียน test + review ก่อน. ห้ามแก้ลวกๆ.
 
+### ✅ RESOLVED 2026-06-25 (owner เคาะ ทาง 1 · GROSS + บรรทัด WHT) — commit `3e529b42`
+
+**fix (forward-only · gated tsc/verify/build 0 · adversarial 2-agent review SAFE+CORRECT):** เพิ่ม `calcForwarderGross()` (Σ price − discount · ไม่หัก 1%) ใช้แทน `calcForwarderOutstanding` ใน 3 จุด billing-run (`listEligibleCustomers`/`listEligibleForwarders`/`createBillingRunInvoice`) → บิลเก็บ **GROSS** เสมอ → `computeBillWht` หัก 1% **ครั้งเดียว** ทุก case. **ไม่มี ledger cascade** (AR `reports-ar.ts` / credit `credit.ts`+`reconcile-drift.ts` / ใบเสร็จ `auto-issue-receipt.ts` คำนวณเองจาก `tb_forwarder` ไม่อ่าน bill total). ใบเสร็จ gross-based อยู่แล้ว → fix นี้ทำให้ **บิล reconcile ตรง satang กับใบเสร็จ**.
+
+**⚠️ แก้ความเข้าใจ "12 ใบ ฿21,159" ข้างบน = OVER-COUNT (prod probe 2026-06-25).** การหัก 1% ตอน storage ขึ้นกับ **`tb_forwarder.fusercompany` (flag ระดับ row)** ไม่ใช่ invoice `is_juristic` (flag ผู้ซื้อ) — สองตัวนี้มัก**ไม่ตรงกัน**. หักซ้อนจริงต้อง flag เป็นนิติ **ทั้งสอง**. ผล probe 12 ใบนิติ: **10 = stored gross อยู่แล้ว (forwarder ไม่ flag) → โชว์ถูกมาตลอด · 0 = หักซ้อนจริง · 2 = STALE (forwarder เปลี่ยนหลังออกบิล)** = `FRI2606-00019` (cancelled · ข้าม) + `FRI2606-00006` (PR7429 · issued unpaid · ฿21.57 · forwarder 52093 เปลี่ยน 2077.78→2107 → **ควร re-issue** ไม่ใช่ backfill). **ไม่ต้อง backfill เงิน.** fix นี้กันหักซ้อนสำหรับบิลใหม่ที่บิล forwarder flagged/mixed.
+
+**carryover (owner/บัญชี เคาะ):** `FRI2606-00006` re-issue (ยกเลิก+ออกใหม่ · ฿21.57) หรือปล่อยให้บัญชีจัดตอนเก็บเงิน.
+
 ## ✅ Item 2 (report ปิดชุดงาน) — มีอยู่แล้ว ครบ
 - `/admin/accounting/forwarder` = **faithful 1:1 port ของ `acc-forwarder.php`** (รายงานฝากนำเข้า · date-range · per-customer · WHT 1% นิติ · CSV export `acc-forwarder.ts`) · reachable (accounting menubar).
 - `/admin/accounting/closing` = "ปิดงบรายเดือน (ใบเสร็จ)" = port ของ `closingAccReportForwarder.php` · reachable.
