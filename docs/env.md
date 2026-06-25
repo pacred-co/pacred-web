@@ -200,6 +200,7 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 | Var | Value | Powers |
 |---|---|---|
 | `PROMPTPAY_ID` | `0105564077716` — Pacred tax-ID 13 digit (ผูกบัญชี กสิกร `225-2-91144-0`) | `/wallet/deposit` QR generation |
+| `PROMPTPAY_DYNAMIC_ENABLED` | `false` (default) = static company QR · `true` = dynamic amount-encoded QR (merchant=`PROMPTPAY_ID`). Flip to `true` ONLY after a real scan confirms the destination (PPAY · owner 2026-06-25) | all payment-QR surfaces (lib/promptpay.ts) |
 
 ✅ Set by ลูกพี่ in Vercel dashboard 2026-05-17. Tax-ID is the canonical PromptPay binding for Pacred biz account.
 

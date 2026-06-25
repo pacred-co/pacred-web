@@ -28,9 +28,22 @@
 import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import QRCode from "qrcode";
+import { composePromptPayPayload, DEFAULT_PROMPTPAY_ID } from "./promptpay-payload";
 
 /** Public path of the static company payment QR (drop the K-Shop image here). */
 export const STATIC_PAYMENT_QR_PATH = "/images/payment/pacred-qr.png";
+
+// ── owner 2026-06-25 (PPAY) — dynamic amount-QR re-enablement, FLAG-GATED ──
+// Company PromptPay = the juristic tax ID `0105564077716` (env-overridable).
+// DYNAMIC stays OFF by default → every surface keeps serving the static QR (zero
+// blast radius). Flip PROMPTPAY_DYNAMIC_ENABLED=true ONLY after ONE real scan
+// confirms the QR lands on the right account (the tax-ID's bank registration
+// can't be verified in code — lib/promptpay-payload.test.ts proves the payload
+// is EMVCo-correct). When ON, buildPromptPayQrDataUrl(amount) returns a real
+// amount-encoded PromptPay QR; OFF → the static image as before.
+const PROMPTPAY_ID = (process.env.PROMPTPAY_ID ?? DEFAULT_PROMPTPAY_ID).trim();
+const DYNAMIC_ENABLED = process.env.PROMPTPAY_DYNAMIC_ENABLED === "true";
 
 export type PromptPayErrorCode = "promptpay_not_configured" | "promptpay_invalid_amount";
 
@@ -78,8 +91,18 @@ async function loadStaticQrDataUrl(): Promise<string> {
  * argument is accepted for call-site back-compat but IGNORED — the QR is static
  * and the customer types the amount. Returns "" if the asset isn't placed yet.
  */
-export async function buildPromptPayQrDataUrl(_amountThb?: number): Promise<string> {
-  return loadStaticQrDataUrl();
+export async function buildPromptPayQrDataUrl(amountThb?: number): Promise<string> {
+  // FLAG OFF (default) → static image · zero risk.
+  if (!DYNAMIC_ENABLED) return loadStaticQrDataUrl();
+  // FLAG ON → real amount-encoded PromptPay QR for the company tax-ID.
+  const payload = composePromptPayPayload(PROMPTPAY_ID, amountThb);
+  if (!payload) return loadStaticQrDataUrl(); // missing id → degrade to static
+  try {
+    return await QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, width: 512 });
+  } catch (err) {
+    console.error("[promptpay] dynamic QR render failed → static fallback", { err: String(err) });
+    return loadStaticQrDataUrl();
+  }
 }
 
 /**
@@ -87,6 +110,7 @@ export async function buildPromptPayQrDataUrl(_amountThb?: number): Promise<stri
  * static QR has no EMVCo payload string; returns "" (callers render the image
  * via buildPromptPayQrDataUrl, not the raw payload).
  */
-export function buildPromptPayPayload(_amountThb?: number): string {
-  return "";
+export function buildPromptPayPayload(amountThb?: number): string {
+  if (!DYNAMIC_ENABLED) return ""; // static mode has no EMVCo payload
+  return composePromptPayPayload(PROMPTPAY_ID, amountThb);
 }
