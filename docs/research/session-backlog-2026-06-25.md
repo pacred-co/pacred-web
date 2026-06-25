@@ -15,7 +15,7 @@
 | lane | งาน | ต้อง |
 |---|---|---|
 | **DOC** | เอกสารครบ-ละเอียดเท่า PCS (footer แจง Delivery CHN/TH·Other·Discount·WHT line·order-no·page) + apply ทุกเอกสาร (ใบเสร็จ/บิล/ใบกำกับ) · เทียบ legacy `create-f-receipt.php` | legacy-fidelity-check |
-| **RCPT** | แก้ชื่อ-uuid (#1) + 4หน้า (#2) | fix เล็ก |
+| **RCPT** | ✅ ชื่อ-uuid แก้แล้ว (`f6c3c87c` · owner B · DOC_SIGNATORY="Wandee Prikyai" ใน site.ts · receipt-paper + billing-run-paper) · ⏳ เหลือ 4หน้า/ของล่างตก (pagination · `ROWS_PER_PAGE` repro) + optional เติมชื่อ signatory ใน freight-receipt/shop-order PDF (ตอนนี้ว่าง/ตราประทับ · ไม่ใช่บั๊ก) | pagination = ทำต่อ |
 | **INT** | integrate ภูม(5)+ปอน(1)→dave-pacred+gate | ผมทำ |
 | **M1** | MOMO cost: อ่าน 4 invoice (`วางบิลต้นทุน MOMO`) + packing-list xlsx (`Packing List/MOMO`) → ingest `fcosttotalprice` + **วิธีจ่าย** | 🔴 owner เคาะวิธีจ่าย + เจาะ legacy |
 | **M2** | backfill ต้นทุน MOMO ย้อนหลัง | dry-run→owner→apply (เงิน) |
