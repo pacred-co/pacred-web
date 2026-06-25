@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
@@ -46,6 +46,9 @@ export default async function CmsArticlePage({
   const { locale, slug } = await params;
   const a = await getPublishedArticleBySlug(slug);
   if (!a) notFound();
+
+  // our_work articles render at /our-work/[slug] (Trip.com layout) — redirect.
+  if (a.category === "our_work") redirect(`/our-work/${a.slug}`);
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const cat = CMS_CATEGORY_META[a.category];

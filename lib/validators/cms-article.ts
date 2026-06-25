@@ -34,13 +34,17 @@ export const saveCmsArticleSchema = z.object({
   title: z.string().trim().min(1, "ใส่หัวข้อบทความ").max(300),
   excerpt: z.string().trim().max(600).default(""),
   coverUrl: z.string().trim().max(2000).default(""),
-  body: z.string().trim().min(1, "ใส่เนื้อหาบทความ").max(60_000),
+  // body optional for our_work (gallery + video may be the primary content).
+  body: z.string().trim().max(60_000).default(""),
   subCategory: z.string().trim().max(40).default(""),
   // SEO overrides — blank falls back to title / excerpt on the public page.
   metaTitle: z.string().trim().max(200).default(""),
   metaDescription: z.string().trim().max(400).default(""),
   // Free-form tags (HS code · product category …) — the /our-work filter bar.
   tags: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
+  // our_work media — ignored (saved as empty) for knowledge / news.
+  videoUrl: z.string().trim().max(2000).default(""),
+  galleryImages: z.array(z.string().trim().max(2000)).max(20).default([]),
 });
 export type SaveCmsArticleInput = z.infer<typeof saveCmsArticleSchema>;
 

@@ -63,6 +63,9 @@ const SECURITY_HEADERS = [
       // <iframe>. Without this, frame-src blocked the PDFs ("This content is
       // blocked") — only image docs rendered (img-src already allows https:).
       "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com https://*.supabase.co",
+      // CMS our_work articles can embed a direct-upload <video src="..."> from Supabase
+      // Storage. Without media-src the browser blocks it (defaults to default-src 'self').
+      "media-src 'self' https:",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -79,7 +82,7 @@ const nextConfig: NextConfig = {
   /**
    * Server Actions default body limit (Next 16) = 1 MB.
    *
-   * Bumped to 12 MB to cover ALL upload paths:
+   * Bumped to 50 MB to cover ALL upload paths:
    *   - Admin file-upload forms — cover photos · slip uploads · driver
    *     photos. Per-form client-side validation caps at 5 MB but phone-
    *     shot HEIC files routinely land at 8-12 MB. Fixed the silent
@@ -93,12 +96,12 @@ const nextConfig: NextConfig = {
    *     even runs — looked like "stuck on click" in prod (2026-05-25
    *     P0 #4 survived the requireGuest() + resume-flow fixes).
    *
-   * 12 MB chosen so both upload caps (5 MB + 10 MB) have safety margin
-   * for multipart overhead.
+   * 50 MB chosen to cover CMS video uploads (uploadCmsVideo caps at 50 MB);
+   * still covers the doc (10 MB) and cover-photo (5 MB) paths with room.
    */
   experimental: {
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "50mb",
     },
   },
   images: {

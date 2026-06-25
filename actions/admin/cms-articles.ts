@@ -51,6 +51,8 @@ export type AdminArticle = {
   metaTitle: string;
   metaDescription: string;
   tags: string[];
+  videoUrl: string;
+  galleryImages: string[];
   status: CmsStatus;
   authorAdminId: string | null;
   approvedBy: string | null;
@@ -62,7 +64,7 @@ export type AdminArticle = {
 
 const SELECT_COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, status, " +
-  "meta_title, meta_description, tags, " +
+  "meta_title, meta_description, tags, video_url, gallery_images, " +
   "author_admin_id, approved_by, reject_note, published_at, created_at, updated_at";
 
 type Row = {
@@ -77,6 +79,8 @@ type Row = {
   meta_title: string | null;
   meta_description: string | null;
   tags: string[] | null;
+  video_url: string | null;
+  gallery_images: string[] | null;
   status: string | null;
   author_admin_id: string | null;
   approved_by: string | null;
@@ -99,6 +103,8 @@ function mapRow(r: Row): AdminArticle {
     metaTitle: r.meta_title ?? "",
     metaDescription: r.meta_description ?? "",
     tags: r.tags ?? [],
+    videoUrl: r.video_url ?? "",
+    galleryImages: r.gallery_images ?? [],
     status: (r.status as CmsStatus) ?? "draft",
     authorAdminId: r.author_admin_id,
     approvedBy: r.approved_by,
@@ -205,6 +211,8 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         meta_title: d.metaTitle,
         meta_description: d.metaDescription,
         tags: d.tags,
+        video_url: d.videoUrl || null,
+        gallery_images: d.galleryImages,
         updated_at: nowIso,
       };
       // Editing a live article without ultra rights → back to pending review.
@@ -237,6 +245,8 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           meta_title: d.metaTitle,
           meta_description: d.metaDescription,
           tags: d.tags,
+          video_url: d.videoUrl || null,
+          gallery_images: d.galleryImages,
           status: "draft",
           author_admin_id: adminId,
         })
@@ -421,6 +431,44 @@ export async function uploadCmsCover(formData: FormData): Promise<AdminActionRes
     if (!url) return { ok: false, error: "ไม่สามารถสร้าง URL รูปได้" };
 
     void logAdminAction(adminId, "cms_article.upload_cover", "storage", up.filename, { bucket: COVER_BUCKET });
+    return { ok: true, data: { url } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// uploadCmsVideo — upload a short video clip for our_work articles
+// (owner ปอน 2026-06-25). Stored in the same `avatars` bucket under
+// articles/videos/. Bypasses uploadToBucket (image-only) — direct upload.
+// Max 50 MB; longer videos → YouTube link instead.
+// ════════════════════════════════════════════════════════════════════════
+export async function uploadCmsVideo(formData: FormData): Promise<AdminActionResult<{ url: string }>> {
+  return withAdmin<{ url: string }>([...WRITE_ROLES], async ({ adminId }) => {
+    const file = formData.get("file");
+    if (!(file instanceof File)) return { ok: false, error: "ไม่พบไฟล์" };
+    if (!/^video\//i.test(file.type)) return { ok: false, error: `ต้องเป็นไฟล์วิดีโอ (${file.type || "unknown"})` };
+
+    const MAX_VIDEO = 50 * 1024 * 1024;
+    if (file.size > MAX_VIDEO) {
+      const mb = Math.round((file.size / (1024 * 1024)) * 10) / 10;
+      return { ok: false, error: `วิดีโอใหญ่เกิน 50 MB (${mb} MB) — อัปโหลด YouTube แล้ววางลิงก์แทน` };
+    }
+
+    const safeName = file.name.replace(/[^\w.\-]/g, "_").slice(-80);
+    const filename = `articles/videos/${Date.now()}-${safeName}`;
+    const admin = createAdminClient();
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const { error } = await admin.storage.from(COVER_BUCKET).upload(filename, buffer, {
+      contentType: file.type,
+      upsert: false,
+    });
+    if (error) return { ok: false, error: `อัปโหลดวิดีโอไม่สำเร็จ: ${error.message}` };
+
+    const { data } = admin.storage.from(COVER_BUCKET).getPublicUrl(filename);
+    const url = data?.publicUrl ?? "";
+    if (!url) return { ok: false, error: "ไม่สามารถสร้าง URL วิดีโอได้" };
+
+    void logAdminAction(adminId, "cms_article.upload_video", "storage", filename, {});
     return { ok: true, data: { url } };
   });
 }

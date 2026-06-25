@@ -25,12 +25,14 @@ export type CmsArticle = {
   metaTitle: string;
   metaDescription: string;
   tags: string[];
+  videoUrl: string;
+  galleryImages: string[];
   publishedAt: string | null;
 };
 
 const COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, " +
-  "meta_title, meta_description, tags, published_at";
+  "meta_title, meta_description, tags, video_url, gallery_images, published_at";
 
 type Row = {
   id: number;
@@ -44,6 +46,8 @@ type Row = {
   meta_title: string | null;
   meta_description: string | null;
   tags: string[] | null;
+  video_url: string | null;
+  gallery_images: string[] | null;
   published_at: string | null;
 };
 
@@ -60,6 +64,8 @@ function mapRow(r: Row): CmsArticle {
     metaTitle: r.meta_title ?? "",
     metaDescription: r.meta_description ?? "",
     tags: r.tags ?? [],
+    videoUrl: r.video_url ?? "",
+    galleryImages: r.gallery_images ?? [],
     publishedAt: r.published_at,
   };
 }
