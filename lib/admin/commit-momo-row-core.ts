@@ -80,6 +80,23 @@ export const PCS_PICKUP_ADDRESS: ResolvedAddress = {
   addressnote:        "",
 };
 
+// ภูม 2026-06-25 ("ตัดออก") — เมื่อ admin ไม่ได้เลือกขนส่ง (fShipBy ว่าง) และลูกค้า
+// ยังไม่มีที่อยู่จัดส่งที่บันทึกไว้ → เว้นที่อยู่ผู้รับ "ว่าง" แทนที่จะ default ไป
+// "รับที่โกดัง Pacred" (PCS_PICKUP_ADDRESS). เซล/ลูกค้าจะกรอกที่อยู่จัดส่งจริงเอง
+// ภายหลัง (ไม่งั้น MOMO ที่ commit มาจะกลายเป็น "รับเองโกดัง" หมด = เละ).
+export const EMPTY_ADDRESS: ResolvedAddress = {
+  addressname:        "",
+  addresslastname:    "",
+  addresstel:         "",
+  addresstel2:        "",
+  addressno:          "",
+  addresssubdistrict: "",
+  addressdistrict:    "",
+  addressprovince:    "",
+  addresszipcode:     "",
+  addressnote:        "",
+};
+
 // ────────────────────────────────────────────────────────────
 // Zod schema — admin-supplied overrides for a single MOMO commit.
 // The base row data (tracking · cabinet · dates) comes from
@@ -94,7 +111,9 @@ export const commitMomoRowSchema = z.object({
   rowId:        z.string().uuid("rowId ต้องเป็น uuid"),
   userID:       z.string().trim().regex(/^PR\d+$/i, "userID ต้องเป็น PR####").max(20),
   subUserID:    z.string().trim().max(20).optional().default(""),
-  fShipBy:      z.string().trim().min(1, "เลือกบริษัทขนส่ง").max(10),
+  // ภูม 2026-06-25 ("ตัดออก") — ขนส่งเป็น optional ตอน commit MOMO. ว่าง = ยังไม่ระบุ
+  // → เซล/ลูกค้ากรอกที่อยู่จัดส่ง+เลือกขนส่งเองภายหลัง (เลิก default "รับเองโกดัง").
+  fShipBy:      z.string().trim().max(10),
   fProductsType: z.enum(PRODUCT_TYPE_OPTIONS),
   fTransportType: z.enum(TRANSPORT_OPTIONS).optional(),
   fAmount:      z.number().int().min(1).max(10000).optional().default(1),
@@ -342,9 +361,10 @@ export async function commitMomoRowCore(
         addressnote:        addrRow.addressnote ?? "",
         addresstel:         addrRow.addresstel,
         addresstel2:        addrRow.addresstel2 ?? "",
-      } : { ...PCS_PICKUP_ADDRESS };
+      } : { ...EMPTY_ADDRESS };
     } else {
-      addr = { ...PCS_PICKUP_ADDRESS };
+      // ภูม 2026-06-25 ("ตัดออก") — ไม่มีที่อยู่ลูกค้า → เว้นว่าง (ไม่ default โกดัง).
+      addr = { ...EMPTY_ADDRESS };
     }
   }
 
