@@ -69,8 +69,8 @@ export type RunMomoSyncResult = {
   syncLogId:           string | null;
   /** Wave 30.6 #230 — tb_forwarder propagation result. `null` when no
    *  import_track records were scanned. See lib/integrations/momo-isolated/
-   *  propagate.ts for the safety rules + the env gate
-   *  `MOMO_SYNC_PROPAGATE_STATUS=true`. */
+   *  propagate.ts for the safety rules + the env gate MOMO_SYNC_PROPAGATE_STATUS
+   *  (DEFAULT-ON since 2026-06-19 · disables only when set to "false"). */
   propagation:         PropagationResult | null;
 };
 
@@ -328,9 +328,12 @@ export async function runMomoSync(
   // After the isolated momo_* writes land, walk the import_track records and
   // forward-propagate to any tb_forwarder rows that share the same tracking
   // number. Safety: only fills empty fcabinetnumber + fdatetothai by default;
-  // fstatus advancement is gated behind MOMO_SYNC_PROPAGATE_STATUS=true (off
-  // by default — flipping it fires customer notifications). See
-  // docs/research/momo-status-drift-2026-05-30.md for ภูม's diagnosis.
+  // fstatus advancement is gated by MOMO_SYNC_PROPAGATE_STATUS — DEFAULT-ON
+  // since 2026-06-19 (disables only when ="false"). Status-only + forward-only
+  // and fires NO customer notification (verified in propagate.ts). So a row
+  // reaching ถึงโกดังจีน (fstatus '2') from MOMO is AUTOMATIC every ~5 min —
+  // NOT a side-effect of any cost-pay or admin click. See momo-status-drift-
+  // 2026-05-30.md + forwarder-status-cost-domestic-clarity-2026-06-25.md.
   let propagation: PropagationResult | null = null;
   if (importMapped.length > 0) {
     try {

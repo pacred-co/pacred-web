@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
+import { GuideNote } from "@/components/ui/guide-note";
 import { MomoInvoiceCostClient } from "./invoice-cost-client";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,14 @@ export default async function MomoInvoiceCostPage() {
           ตรวจตัวอย่างก่อนบันทึกเสมอ · เฉพาะสิทธิ์ ultra / accounting / pricing.
         </p>
       </header>
+
+      {/* owner 2026-06-25 — กันงงเรื่อง "กดลงต้นทุนแล้วสถานะเด้งไปถึงโกดังจีน".
+          อธิบายชัดว่าหน้านี้แตะแค่เงิน ไม่แตะสถานะ. */}
+      <GuideNote variant="info" title="หน้านี้บันทึกแค่ “ต้นทุน” — ไม่เปลี่ยนสถานะ">
+        ลงต้นทุนเฟรท = เงินที่เราจ่าย MOMO เท่านั้น · <strong>ไม่ทำให้สถานะรายการขยับ</strong>.
+        สถานะ (เช่น “ถึงโกดังจีน”) <strong>อัปเดตอัตโนมัติจาก MOMO ทุก ~5 นาที</strong> เป็นคนละส่วนกัน —
+        ถ้าเห็นสถานะขยับตอนลงต้นทุน คือ MOMO sync บังเอิญมาเวลาไล่เลี่ยกัน ไม่ใช่ผลจากการกดบันทึก.
+      </GuideNote>
 
       <MomoInvoiceCostClient />
     </main>
