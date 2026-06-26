@@ -15,6 +15,7 @@ import { useTranslations } from "next-intl";
 import { Camera, Loader2 } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { updateMyAvatar } from "@/actions/profile-avatar";
+import { compressImageFile } from "@/lib/image-compress";
 
 export function ProfileAvatarUpload() {
   const t = useTranslations("profileAvatar");
@@ -33,13 +34,15 @@ export function ProfileAvatarUpload() {
       setError(t("errorImageOnly"));
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError(t("errorTooLarge"));
-      return;
-    }
-    const fd = new FormData();
-    fd.append("avatar", file);
     startTransition(async () => {
+      // owner 2026-06-26 — ย่อรูปก่อนอัป (รูปมือถือ 3-8MB เคยถูกตัดที่ >5MB = "ใช้ไม่ได้จริง").
+      const img = await compressImageFile(file);
+      if (img.size > 5 * 1024 * 1024) {
+        setError(t("errorTooLarge"));
+        return;
+      }
+      const fd = new FormData();
+      fd.append("avatar", img);
       const res = await updateMyAvatar(fd);
       if (!res.ok) {
         setError(res.error);

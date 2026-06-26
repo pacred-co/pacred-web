@@ -13,6 +13,7 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { adminUploadAvatarImage } from "@/actions/admin/avatar-upload";
+import { compressImageFile } from "@/lib/image-compress";
 
 export function AdminAvatarUploadField({
   value,
@@ -36,22 +37,25 @@ export function AdminAvatarUploadField({
       setErr("รับเฉพาะไฟล์รูปภาพ");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setErr("ไฟล์ใหญ่เกิน 5 MB");
-      return;
-    }
     setUploading(true);
     try {
+      // owner 2026-06-26 — ย่อรูปก่อนอัป (รูปมือถือ 3-8MB เคยถูกตัดทันทีที่ >5MB
+      // = "ใช้ไม่ได้จริง"). ย่อ ~1024px แล้วค่อยเช็คขนาด.
+      const img = await compressImageFile(file);
+      if (img.size > 5 * 1024 * 1024) {
+        setErr("ไฟล์ใหญ่เกิน 5 MB แม้ย่อแล้ว — เลือกไฟล์อื่น");
+        return;
+      }
       const fd = new FormData();
-      fd.append("avatar", file);
+      fd.append("avatar", img);
       const res = await adminUploadAvatarImage(fd);
       if (!res.ok) {
         setErr(res.error);
         return;
       }
       onChange(res.data?.url ?? "");
-    } catch {
-      setErr("อัปโหลดไม่สำเร็จ — ลองใหม่อีกครั้ง");
+    } catch (ex) {
+      setErr(ex instanceof Error ? `อัปโหลดไม่สำเร็จ: ${ex.message}` : "อัปโหลดไม่สำเร็จ — ลองใหม่อีกครั้ง");
     } finally {
       setUploading(false);
     }
