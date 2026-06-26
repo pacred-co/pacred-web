@@ -464,6 +464,11 @@ export default async function ForwarderLabelPrintPage({
           .label-page {
             break-after: page;
             page-break-after: always;
+            break-inside: avoid;
+            page-break-inside: avoid;
+            height: 75mm;
+            max-height: 75mm;
+            overflow: hidden;
             border: none !important;
             box-shadow: none !important;
             margin: 0 !important;
@@ -593,16 +598,15 @@ export default async function ForwarderLabelPrintPage({
                 <div key={`addr-${f.id}-${copy}`} className="label-page">
                   {/* Row 1 — ผู้ส่ง/FROM (Pacred company · ภูม 2026-06-26) · id + tracking */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-1.5 min-w-0">
+                    <div className="flex items-start gap-1 min-w-0">
                       {showLogo && (
-                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[6mm] w-auto shrink-0" />
+                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[5mm] w-auto shrink-0" />
                       )}
-                      <div className="min-w-0 text-[2.3mm] leading-tight text-gray-700">
-                        <span className="rounded bg-gray-200 px-1 text-[2.4mm] font-bold text-black">ผู้ส่ง / From</span>
-                        <p className="mt-[0.3mm] font-bold text-black">{SITE_LEGAL_NAME_TH}</p>
-                        <p>{ADDRESSES.office.full}</p>
-                        <p>โทร. {CONTACT.phoneCompanyDisplay}</p>
-                      </div>
+                      <p className="min-w-0 text-[1.9mm] leading-[2.3mm] text-gray-700">
+                        <span className="font-bold text-black">ผู้ส่ง/From: </span>
+                        <span className="font-bold text-black">{SITE_LEGAL_NAME_TH}</span>{" "}
+                        {ADDRESSES.office.full} โทร. {CONTACT.phoneCompanyDisplay}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="rounded bg-gray-300 px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
@@ -618,11 +622,11 @@ export default async function ForwarderLabelPrintPage({
                   <hr className="my-[1mm] border-gray-400" />
 
                   {/* Row 2 — TO + full ship-to address (large, faithful) */}
-                  <div className="flex-1 overflow-hidden">
+                  <div className="flex-1 min-h-0 overflow-hidden">
                     <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <p className="mt-[1mm] text-[4.6mm] font-semibold leading-snug">
+                    <p className="mt-[0.8mm] text-[4mm] font-semibold leading-snug">
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
                     {addrNote && (
