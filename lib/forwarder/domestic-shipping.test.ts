@@ -55,4 +55,42 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   assert.equal(options[0].cost, 0);
 }
 
+// ── upcountry MULTI-PARCEL (MOMO -N/M boxes): Flash summed PER PARCEL ──
+// Mirrors the 2026-06-26 bug: a MOMO order's หัวบิล row has 0 weight, so the
+// fee was ฿25 (min); the real 6 boxes (each ≤50kg) must each be priced + summed.
+{
+  const parcels = Array.from({ length: 6 }, () => ({ weightKg: 17, width: 55, length: 44, height: 31 }));
+  const { options } = domesticShippingOptions({
+    addressID: "123", zip: "74130", province: "สมุทรสาคร", amphoe: "กระทุ่มแบน", parcels,
+  });
+  const flash = options.find((o) => o.carrier === "2");
+  assert.ok(flash, "multi-parcel Flash offered");
+  assert.ok(flash!.cost > 0, "multi-parcel Flash cost > 0 (summed per box)");
+  const single = domesticShippingOptions({
+    addressID: "123", zip: "74130", parcels: [{ weightKg: 17, width: 55, length: 44, height: 31 }],
+  }).options.find((o) => o.carrier === "2");
+  assert.ok(single && single.cost > 0, "single-box Flash offered");
+  assert.ok(Math.abs(flash!.cost - single!.cost * 6) < 0.01, "6 boxes = 6× the single-box Flash price (per-parcel sum)");
+  assert.ok(flash!.label.includes("6 กล่อง"), "label shows box count for multi-parcel");
+  assert.ok(flash!.label.includes("102"), "label shows total kg (6×17=102)");
+}
+
+// ── a single combined >50kg parcel trips Flash's 50kg cap → Flash omitted ──
+{
+  const { options } = domesticShippingOptions({
+    addressID: "123", zip: "74130", weightKg: 104, width: 55, length: 44, height: 31,
+  });
+  assert.ok(!options.some((o) => o.carrier === "2"), "single 104kg parcel exceeds Flash 50kg cap → Flash omitted");
+  assert.ok(options.some((o) => o.carrier === "24"), "manual J&T still offered when Flash unavailable");
+}
+
+// ── any one box >50kg in the parcel set → Flash omitted (can't auto-quote) ──
+{
+  const { options } = domesticShippingOptions({
+    addressID: "123", zip: "74130",
+    parcels: [{ weightKg: 17, width: 55, length: 44, height: 31 }, { weightKg: 60, width: 55, length: 44, height: 31 }],
+  });
+  assert.ok(!options.some((o) => o.carrier === "2"), "a 60kg box in the set → Flash omitted (over cap)");
+}
+
 console.log("domestic-shipping.test.ts — all assertions passed");

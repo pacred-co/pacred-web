@@ -56,6 +56,14 @@ export type DomesticShipArgs = {
   width?: number | null;
   length?: number | null;
   height?: number | null;
+  /**
+   * Per-parcel weight+dims for a multi-box shipment (MOMO `-N/M` siblings).
+   * Flash is then summed PER PARCEL — faithful to legacy (1 forwarder row = 1
+   * parcel) AND necessary, because Flash rejects any single parcel >50kg
+   * (calPriceFlash returns 0). A MOMO order of 6×17kg boxes works; the combined
+   * 104kg would not. Falls back to the single weightKg/dims when absent.
+   */
+  parcels?: { weightKg: number; width: number; length: number; height: number }[];
 };
 
 const SELF_PICKUP: DomesticShipOption = {
@@ -97,21 +105,46 @@ export function domesticShippingOptions(args: DomesticShipArgs): { zone: Domesti
     });
   } else {
     // upcountry / out-of-zone → Flash by weight (auto) + manual carriers · FORCE COD.
-    const kg = Math.max(0, Number(args.weightKg) || 0);
-    const w = Math.max(0, Number(args.width) || 0);
-    const l = Math.max(0, Number(args.length) || 0);
-    const h = Math.max(0, Number(args.height) || 0);
-    const flash = calPriceFlash(1, "", (args.zip ?? "").trim(), w, l, h, kg, 0, 1);
-    const surcharge = flash.remoteArea || flash.touristArea;
-    if (flash.price > 0) {
+    // Flash is computed PER PARCEL and summed: legacy is per-row (1 forwarder row
+    // = 1 parcel), and Flash rejects any single parcel >50kg (returns 0). A MOMO
+    // order passes each -N/M box via `parcels`; a normal one-box order falls back
+    // to the single weightKg/dims. If ANY box exceeds Flash's cap → omit Flash
+    // (staff picks a manual carrier instead).
+    const zipTrim = (args.zip ?? "").trim();
+    const parcels =
+      args.parcels && args.parcels.length > 0
+        ? args.parcels.map((p) => ({
+            weightKg: Math.max(0, Number(p.weightKg) || 0),
+            width: Math.max(0, Number(p.width) || 0),
+            length: Math.max(0, Number(p.length) || 0),
+            height: Math.max(0, Number(p.height) || 0),
+          }))
+        : [{
+            weightKg: Math.max(0, Number(args.weightKg) || 0),
+            width: Math.max(0, Number(args.width) || 0),
+            length: Math.max(0, Number(args.length) || 0),
+            height: Math.max(0, Number(args.height) || 0),
+          }];
+    let flashTotal = 0;
+    let flashOk = true;
+    let surcharge = false;
+    let totalKg = 0;
+    for (const p of parcels) {
+      totalKg += p.weightKg;
+      const f = calPriceFlash(1, "", zipTrim, p.width, p.length, p.height, p.weightKg, 0, 1);
+      if (f.price <= 0) { flashOk = false; break; }
+      flashTotal += f.price;
+      if (f.remoteArea || f.touristArea) surcharge = true;
+    }
+    if (flashOk && flashTotal > 0) {
       options.push({
         carrier: "2", // Flash Express
-        label: `Flash Express (${kg} กก.)`,
-        cost: flash.price,
+        label: `Flash Express (${totalKg.toLocaleString("th-TH")} กก.${parcels.length > 1 ? ` · ${parcels.length} กล่อง` : ""})`,
+        cost: flashTotal,
         payMethod: "2",
         forceCod: true,
         manual: false,
-        note: surcharge ? "รวมพื้นที่ห่างไกล/ท่องเที่ยว +50 · เก็บปลายทาง" : "คิดตามน้ำหนัก · เก็บปลายทาง",
+        note: surcharge ? "รวมพื้นที่ห่างไกล/ท่องเที่ยว +50 · เก็บปลายทาง" : "คิดตามน้ำหนัก/กล่อง · เก็บปลายทาง",
       });
     }
     // J&T + ไปรษณีย์ — manual cost (legacy shows them; price entered by staff).
