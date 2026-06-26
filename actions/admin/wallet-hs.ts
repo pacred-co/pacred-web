@@ -782,8 +782,15 @@ export async function adminUpdateWalletHsPendingAmount(
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
       }
       if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
-      if (rowRaw.status !== "1") {
-        return { ok: false, error: `แก้ไขจำนวนเงินได้เฉพาะรายการที่ยัง 'รอตรวจสอบ' เท่านั้น (status=${rowRaw.status ?? "null"})` };
+      // Editable while PENDING (status='1' · types 1/4/8) — OR, for an APPROVED
+      // ฝากสั่งซื้อ slip (status='2' · type='8'), as a RECORD-ONLY correction:
+      // type='8' moves NO wallet balance (delta=0), so fixing its recorded amount
+      // after approve is money-neutral (owner 2026-06-26 · the #105519 case got
+      // approved at a 0.01-wrong figure 11,470.52 vs slip 11,470.51). Approved
+      // type 1/4 stay LOCKED — their wallet balance already moved by the old amount.
+      const isApprovedShopFix = rowRaw.status === "2" && rowRaw.type === "8";
+      if (rowRaw.status !== "1" && !isApprovedShopFix) {
+        return { ok: false, error: `แก้ไขจำนวนเงินได้เฉพาะรายการที่ 'รอตรวจสอบ' หรือ ฝากสั่งซื้อที่อนุมัติแล้ว (status=${rowRaw.status ?? "null"} · type=${rowRaw.type ?? "null"})` };
       }
 
       // Only the slip-bearing customer-payment types carry an editable amount.
@@ -817,13 +824,14 @@ export async function adminUpdateWalletHsPendingAmount(
         return { ok: false, error: "จำนวนเงินใหม่ต้องไม่เท่ากับจำนวนเดิม" };
       }
 
-      // Rewrite the amount — ATOMIC on status='1' (a concurrent approve/reject
-      // that already settled the row wins; this edit then no-ops safely).
+      // Rewrite the amount — ATOMIC on the status we read (a concurrent
+      // approve/reject that changed it wins; this edit then no-ops safely).
+      // Pending → status='1'; approved-shop-fix → status='2' (type='8', delta=0).
       const { data: claimed, error: updErr } = await admin
         .from("tb_wallet_hs")
         .update({ amount: newAmount, adminidupdate: legacyAdminId })
         .eq("id", id)
-        .eq("status", "1")
+        .eq("status", rowRaw.status ?? "1")
         .select("id")
         .maybeSingle();
       if (updErr) {

@@ -498,10 +498,13 @@ export default async function AdminWalletDetail({
                   </span>
                 </>
               )}
-              {/* #6 (ภูม 2026-06-26) — correct the slip amount during review.
-                  Pending customer-slip rows only (type 1/4/8); the server
-                  refuses linked "เติม-แล้วจ่าย" topups. */}
-              {isPending && (typeKey === "1" || typeKey === "4" || typeKey === "8") && (
+              {/* #6 (owner 2026-06-26) — correct the slip amount.
+                  Pending customer-slip rows (type 1/4/8 · server refuses linked
+                  "เติม-แล้วจ่าย" topups) — PLUS an APPROVED ฝากสั่งซื้อ slip
+                  (status='2' · type='8', delta=0 = money-neutral record fix, e.g.
+                  #105519 approved at a 0.01-wrong figure). */}
+              {((isPending && (typeKey === "1" || typeKey === "4" || typeKey === "8")) ||
+                (status === "2" && typeKey === "8")) && (
                 <EditAmountForm id={row.id} currentAmount={amount} />
               )}
             </div>

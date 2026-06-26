@@ -18,6 +18,7 @@ import { TagChips } from "@/components/admin/tag-chips";
 import { CallStatusBadge, LeadCallAction } from "./lead-call-action";
 import { LeadKanban } from "./lead-kanban";
 import { LeadAssignPanel } from "./lead-assign-bar";
+import { LeadCallReport } from "./lead-call-report";
 
 // Reads PII (customer phones) via createAdminClient (RLS-bypass) on every
 // request — must be dynamic + cannot be statically rendered.
@@ -71,6 +72,10 @@ export default async function AdminLeadsPage({
   // "มอบหมายโทรเซลล์" bar = Ultra Admin Z only — gate on `ultra` itself, NOT
   // isGodRole() (which also passes `super`). ปอน 2026-06-22: super ไม่เห็น.
   const isUltra = roles.includes("ultra");
+  // รายงานการโทร (audit · read-only) — owner 2026-06-26: HR/หัวหน้า (admin_vam = super)
+  // ติดตามผลงานเซล (ใครโทร · ปิดได้กี่ราย · ต่อเซล/ต่อช่วงเวลา). SEPARATE from the
+  // ultra-only assign tab — senior sees the REPORT only, NOT the assign controls.
+  const isSenior = isUltra || roles.includes("super") || roles.includes("manager");
 
   const sp = await searchParams;
   const rawSegment = typeof sp.segment === "string" ? sp.segment : "";
@@ -79,6 +84,7 @@ export default async function AdminLeadsPage({
   // default landing = pending. (mine/callback/pending/all/assign = UI segments · filter
   // อยู่ใน LeadAssignPanel · non-ultra hitting ?segment=assign ตกมา work view + backend gate.)
   const isAssignTab = isUltra && rawSegment === "assign";
+  const isReportTab = isSenior && rawSegment === "report";
   const workSegment =
     // owner 2026-06-23: the stat cards link to no_answer/not_interested/called_today too.
     ["mine", "callback", "pending", "closed", "all", "no_answer", "not_interested", "called_today"].includes(rawSegment)
@@ -232,6 +238,21 @@ export default async function AdminLeadsPage({
               <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none ${isAssignTab ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>Ultra</span>
             </Link>
           ) : null}
+          {/* รายงานการโทร (สรุปผลงานเซล · audit) — owner 2026-06-26: HR/หัวหน้า
+              (super) ติดตามว่าใครโทร · ปิดได้กี่ราย. READ-ONLY (ไม่มีปุ่มมอบหมาย). */}
+          {isSenior ? (
+            <Link
+              href="/admin/leads?segment=report"
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                isReportTab
+                  ? "border-indigo-500 bg-indigo-600 text-white"
+                  : "border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              }`}
+            >
+              📊 รายงานการโทร (สรุปผลงานเซล)
+              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none ${isReportTab ? "bg-white/25 text-white" : "bg-indigo-600 text-white"}`}>HR/หัวหน้า</span>
+            </Link>
+          ) : null}
           {/* ปอน 2026-06-23: เอา toggle "รายการ/บอร์ด" ออก — ไม่ได้สลับอะไรจริง
               (หน้านี้แสดง LeadAssignPanel เสมอเพราะ LEAD_DATA_HIDDEN · kanban/board
               อยู่ใน dead branch). `view` var คงไว้ (carry preserve · default list). */}
@@ -317,7 +338,12 @@ export default async function AdminLeadsPage({
           // ปอน 2026-06-22 ("เข้าใจใหม่"): every admin works the leads assigned to
           // them in the normal tabs (mode="work" · NO assign control). Import +
           // assign-to-rep live ONLY in the ultra "มอบหมายโทรเซลล์" tab (mode="assign").
-          <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
+          isReportTab ? (
+            // รายงานการโทร (audit · read-only) — HR/หัวหน้า ดูผลงานเซลทุกคน · owner 2026-06-26
+            <LeadCallReport reps={assignableAdmins} />
+          ) : (
+            <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
+          )
         ) : queueErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
             โหลดรายการไม่สำเร็จ: {queueErr}
