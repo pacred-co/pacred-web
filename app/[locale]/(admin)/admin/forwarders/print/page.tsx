@@ -440,7 +440,16 @@ export default async function ForwarderLabelPrintPage({
   return (
     <div className="bg-white text-black min-h-screen">
       <style>{`
+        /* The physical label stock is 100mm WIDE × 150mm TALL (portrait feed on
+           the ES-9910UB 4" thermal head). The label READS landscape, so the
+           content is a 150×100 landscape box (.label-rot) that prints ROTATED 90°
+           to fit the 100×150 portrait page — and shows UPRIGHT on screen. */
         .label-page {
+          background: #fff;
+          color: #000;
+          overflow: hidden;
+        }
+        .label-rot {
           width: 150mm;
           height: 100mm;
           box-sizing: border-box;
@@ -453,6 +462,8 @@ export default async function ForwarderLabelPrintPage({
         }
         @media screen {
           .label-page {
+            width: 150mm;
+            height: 100mm;
             border: 1px dashed #cbd5e1;
             margin: 0 auto 6mm;
             box-shadow: 0 1px 4px rgba(0,0,0,.08);
@@ -462,20 +473,28 @@ export default async function ForwarderLabelPrintPage({
           aside, .no-print { display: none !important; }
           html, body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
           .label-page {
+            position: relative;
+            width: 100mm;
+            height: 150mm;
+            max-height: 150mm;
+            overflow: hidden;
             break-after: page;
             page-break-after: always;
             break-inside: avoid;
             page-break-inside: avoid;
-            height: 100mm;
-            max-height: 100mm;
-            overflow: hidden;
             border: none !important;
             box-shadow: none !important;
             margin: 0 !important;
           }
+          .label-rot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(90deg);
+          }
           .label-page:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 150mm 100mm; margin: 0; }
+        @page { size: 100mm 150mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar — hidden on print */}
@@ -505,6 +524,7 @@ export default async function ForwarderLabelPrintPage({
               const totalVolume = Number(f.fvolume ?? 0) * Number(f.famount ?? 1);
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`box-${f.id}-${copy}`} className="label-page">
+                  <div className="label-rot">
                   {/* Row 1 — id badge + logo · detail QR */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -583,6 +603,7 @@ export default async function ForwarderLabelPrintPage({
                       <p>location : {f.fpallet || "—"}</p>
                     </div>
                   </div>
+                  </div>
                 </div>
               ));
             })
@@ -596,6 +617,7 @@ export default async function ForwarderLabelPrintPage({
               const addrNote = resolved?.note ?? null;
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`addr-${f.id}-${copy}`} className="label-page">
+                  <div className="label-rot">
                   {/* Row 1 — ผู้ส่ง/FROM (Pacred company · ภูม 2026-06-26) · id + tracking */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-1 min-w-0">
@@ -645,13 +667,14 @@ export default async function ForwarderLabelPrintPage({
                     </p>
                     <p className="shrink-0 font-bold">จำนวน : {fmt(f.famount, 0)} กล่อง</p>
                   </div>
+                  </div>
                 </div>
               ));
             })}
 
         <p className="no-print mt-2 text-center text-[11px] text-gray-500">
-          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ฉลาก thermal 100×150 มม. ·
-          ตั้ง Orientation = Landscape (แนวนอน) · Margins = None · Scale = 100% (ไม่งั้นป้ายจะเลยหน้า)
+          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · เลือกกระดาษ (Paper) = 100×150 มม. ·
+          Margins = None · Scale = 100% (ป้ายจะหมุนเป็นแนวนอนให้เองตอนพิมพ์ · ไม่ต้องตั้ง Landscape)
         </p>
       </main>
     </div>
