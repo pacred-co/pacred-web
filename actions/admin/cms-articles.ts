@@ -26,6 +26,7 @@ import {
   rejectCmsArticleSchema,
   CMS_CATEGORIES,
   type CmsStatus,
+  type CaseFact,
 } from "@/lib/validators/cms-article";
 
 const TABLE = "cms_articles";
@@ -53,6 +54,10 @@ export type AdminArticle = {
   tags: string[];
   videoUrl: string;
   galleryImages: string[];
+  casePrice: string;
+  caseRating: number | null;
+  caseRoute: string;
+  caseFacts: CaseFact[];
   status: CmsStatus;
   authorAdminId: string | null;
   approvedBy: string | null;
@@ -65,6 +70,7 @@ export type AdminArticle = {
 const SELECT_COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, status, " +
   "meta_title, meta_description, tags, video_url, gallery_images, " +
+  "case_price, case_rating, case_route, case_facts, " +
   "author_admin_id, approved_by, reject_note, published_at, created_at, updated_at";
 
 type Row = {
@@ -81,6 +87,10 @@ type Row = {
   tags: string[] | null;
   video_url: string | null;
   gallery_images: string[] | null;
+  case_price: string | null;
+  case_rating: number | string | null;
+  case_route: string | null;
+  case_facts: CaseFact[] | null;
   status: string | null;
   author_admin_id: string | null;
   approved_by: string | null;
@@ -105,6 +115,10 @@ function mapRow(r: Row): AdminArticle {
     tags: r.tags ?? [],
     videoUrl: r.video_url ?? "",
     galleryImages: r.gallery_images ?? [],
+    casePrice: r.case_price ?? "",
+    caseRating: r.case_rating == null ? null : Number(r.case_rating),
+    caseRoute: r.case_route ?? "",
+    caseFacts: Array.isArray(r.case_facts) ? r.case_facts : [],
     status: (r.status as CmsStatus) ?? "draft",
     authorAdminId: r.author_admin_id,
     approvedBy: r.approved_by,
@@ -213,6 +227,10 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         tags: d.tags,
         video_url: d.videoUrl || null,
         gallery_images: d.galleryImages,
+        case_price: d.category === "our_work" ? d.casePrice : "",
+        case_rating: d.category === "our_work" ? d.caseRating : null,
+        case_route: d.category === "our_work" ? d.caseRoute : "",
+        case_facts: d.category === "our_work" ? d.caseFacts : [],
         updated_at: nowIso,
       };
       // Editing a live article without ultra rights → back to pending review.
@@ -247,6 +265,10 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           tags: d.tags,
           video_url: d.videoUrl || null,
           gallery_images: d.galleryImages,
+          case_price: d.category === "our_work" ? d.casePrice : "",
+          case_rating: d.category === "our_work" ? d.caseRating : null,
+          case_route: d.category === "our_work" ? d.caseRoute : "",
+          case_facts: d.category === "our_work" ? d.caseFacts : [],
           status: "draft",
           author_admin_id: adminId,
         })

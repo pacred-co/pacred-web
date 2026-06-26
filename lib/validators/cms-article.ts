@@ -45,8 +45,17 @@ export const saveCmsArticleSchema = z.object({
   // our_work media — ignored (saved as empty) for knowledge / news.
   videoUrl: z.string().trim().max(2000).default(""),
   galleryImages: z.array(z.string().trim().max(2000)).max(20).default([]),
+  // our_work case-study pattern fields (mig 0213) — match the website case page.
+  casePrice: z.string().trim().max(80).default(""),          // "เริ่ม $500"
+  caseRating: z.number().min(0).max(5).nullable().default(null),
+  caseRoute: z.string().trim().max(120).default(""),         // "กวางโจว → แหลมฉบัง"
+  caseFacts: z
+    .array(z.object({ label: z.string().trim().max(60), value: z.string().trim().max(200) }))
+    .max(20)
+    .default([]),
 });
 export type SaveCmsArticleInput = z.infer<typeof saveCmsArticleSchema>;
+export type CaseFact = { label: string; value: string };
 
 export const cmsArticleIdSchema = z.object({ id: z.number().int().positive() });
 

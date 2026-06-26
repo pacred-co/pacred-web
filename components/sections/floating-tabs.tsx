@@ -2,12 +2,14 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import Image from "next/image";
 import { Phone, Menu } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { SOCIAL } from "@/components/seo/site";
 import { createClient } from "@/lib/supabase/client";
 import { trackSignOut } from "@/lib/analytics";
 
@@ -56,7 +58,9 @@ export function FloatingTabs({
   hideLineBubble?: boolean;
 }) {
   const t = useTranslations("floatingTabs");
+  const locale = useLocale();
   const [active, setActive] = useState<number | null>(null);
+  const [chatOpen, setChatOpen] = useState(false); // the "แชทกับเรา" FAB expand state
   const [user, setUser] = useState<User | null>(null);
   // Live "ชำระ" badge count. Seeded from the SSR prop (protected layout) or the
   // last-known value (avoids a 0-flash on remount), then refreshed client-side.
@@ -353,20 +357,64 @@ export function FloatingTabs({
           ·  Gated off in the customer back-office via `hideLineBubble`
              (shown only on the public site / home page). */}
       {!hideLineBubble && (
-        <div className="pacred-line-bubble fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[48] flex items-center gap-2 md:gap-3">
-          <span className="hidden md:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
-            {t("askMore")}
-          </span>
-          <TrackedExternalLink
-            href="/line"
-            cta="line_consult"
-            surface="floating_tabs"
-            suppressHydrationWarning
-            className="w-[48px] h-[48px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
-            aria-label={t("chatAria")}
+        <div className="pacred-line-bubble group fixed bottom-[84px] right-3 z-[48] md:bottom-6 md:right-6">
+          {/* LINE + Messenger — fan out above on hover (desktop) / tap (mobile).
+              `pb-3` (not mb-3) keeps a hover BRIDGE: the panel box touches the main
+              button so moving the mouse up into LINE/Messenger never crosses a dead
+              gap that would collapse the group-hover. */}
+          <div
+            className={`absolute bottom-full right-0 flex flex-col items-end gap-2.5 pb-3 transition-all duration-300 md:group-hover:pointer-events-auto md:group-hover:translate-y-0 md:group-hover:opacity-100 ${
+              chatOpen ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0"
+            }`}
           >
-            <LineIcon className="h-6 w-6 md:h-9 md:w-9" />
-          </TrackedExternalLink>
+            <TrackedExternalLink
+              href="/line"
+              cta="line_consult"
+              surface="floating_tabs"
+              suppressHydrationWarning
+              aria-label={t("chatAria")}
+              className="flex items-center gap-2"
+            >
+              <span className="rounded-full border border-border bg-white px-3 py-1 text-[13px] font-black text-foreground shadow-md dark:bg-surface dark:text-white">LINE</span>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[#06C755] text-white shadow-lg ring-2 ring-white transition-transform hover:scale-105 md:h-[52px] md:w-[52px]">
+                <LineIcon className="h-6 w-6 md:h-7 md:w-7" />
+              </span>
+            </TrackedExternalLink>
+            <TrackedExternalLink
+              href={SOCIAL.messenger}
+              cta="messenger"
+              surface="floating_tabs"
+              suppressHydrationWarning
+              aria-label="แชทผ่าน Messenger"
+              className="flex items-center gap-2"
+            >
+              <span className="rounded-full border border-border bg-white px-3 py-1 text-[13px] font-black text-foreground shadow-md dark:bg-surface dark:text-white">Messenger</span>
+              <span className="grid h-12 w-12 place-items-center transition-transform hover:scale-105 md:h-[52px] md:w-[52px]">
+                <Image src="/images/mainpage/messenger.png" alt="" width={52} height={52} className="h-full w-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.22)]" />
+              </span>
+            </TrackedExternalLink>
+          </div>
+
+          {/* Main "แชทกับเรา" button — toggles the fan-out (desktop also opens on hover) */}
+          <button
+            type="button"
+            onClick={() => setChatOpen((o) => !o)}
+            aria-label={t("chatAria")}
+            aria-expanded={chatOpen}
+            suppressHydrationWarning
+            className="block h-[60px] w-[60px] transition-transform duration-300 hover:scale-105 active:scale-95 md:h-[82px] md:w-[82px]"
+          >
+            {/* Full image — already a circular "แชทกับเรา" graphic; show it whole
+                (object-contain) so the bottom banner isn't cropped. drop-shadow
+                follows the circle's alpha, not a square box. */}
+            <Image
+              src={locale === "en" ? "/images/mainpage/chat-with-us-en.png" : "/images/mainpage/chat-with-us01.png"}
+              alt={t("chatAria")}
+              width={82}
+              height={82}
+              className="h-full w-full object-contain drop-shadow-[0_5px_14px_rgba(0,0,0,0.28)]"
+            />
+          </button>
         </div>
       )}
     </>

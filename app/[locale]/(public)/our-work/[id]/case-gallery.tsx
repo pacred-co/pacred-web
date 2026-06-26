@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Camera, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
- * Mosaic case gallery (ปอน 2026-06-25 redesign — "จัดเรียงภาพแบบ collage").
- * A Facebook / Trip.com album-style collage: one large hero image + a grid of
- * thumbnails, with a "+N" overlay on the last visible tile when more images
- * exist. Replaces the horizontal scroll-filmstrip. Any tile opens the
- * fullscreen lightbox (keyboard arrows · swipe · click-out to close).
+ * Case gallery — responsive split (ปอน 2026-06-25 collage · มือถือ swipe 2026-06-26).
+ *   • Mobile  : a full-width horizontal swipe carousel (scroll-snap) — one photo
+ *               per view, page-dots + a live "n / total" counter. Feels native
+ *               on a phone (เลื่อนซ้าย-ขวา) instead of cramming a grid.
+ *   • Desktop : the Facebook / Trip.com album-style collage — one large hero
+ *               image + a grid of thumbnails, "+N" overlay on the last tile.
+ * Either side opens the same fullscreen lightbox (keyboard arrows · click-out).
  * Degrades cleanly for 2 / 3 / 4 images; a single image renders on its own.
  */
 const MAX_TILES = 5;
@@ -49,6 +51,16 @@ export function CaseGallery({
   const close = useCallback(() => setOpen(false), []);
   const prevLb = useCallback(() => setIdx((i) => (i - 1 + total) % total), [total]);
   const nextLb = useCallback(() => setIdx((i) => (i + 1) % total), [total]);
+
+  // Mobile swipe-carousel — track the active slide for the dots + counter.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [slide, setSlide] = useState(0);
+  const onTrackScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || total === 0) return;
+    const stride = el.scrollWidth / total; // per-slide width incl. gap
+    setSlide(Math.min(total - 1, Math.max(0, Math.round(el.scrollLeft / stride))));
+  }, [total]);
 
   // Lightbox keyboard nav + scroll lock
   useEffect(() => {
@@ -121,7 +133,57 @@ export function CaseGallery({
 
   return (
     <>
-      <div className="relative">
+      {/* Mobile — full-width swipe carousel (เลื่อนซ้าย-ขวา) */}
+      <div className="md:hidden">
+        <div className="relative">
+          <div
+            ref={trackRef}
+            onScroll={onTrackScroll}
+            className="flex h-[260px] snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {images.map((src, i) => (
+              <button
+                key={`m-${src}-${i}`}
+                type="button"
+                onClick={() => openAt(i)}
+                aria-label={`ดูรูปที่ ${i + 1}`}
+                className="group relative h-full w-full shrink-0 snap-center overflow-hidden rounded-2xl bg-black/5"
+              >
+                <Image
+                  src={src}
+                  alt={`${alt} — ${i + 1}`}
+                  fill
+                  sizes="100vw"
+                  quality={92}
+                  priority={i === 0}
+                  className="object-cover"
+                />
+                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-black/10" />
+              </button>
+            ))}
+          </div>
+          {/* live counter */}
+          <span className="pointer-events-none absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[12px] font-bold tabular-nums text-white backdrop-blur-sm">
+            <Camera className="h-3 w-3" strokeWidth={2.6} />
+            {slide + 1} / {total}
+          </span>
+        </div>
+        {/* page dots */}
+        <div className="mt-2.5 flex items-center justify-center gap-1.5">
+          {images.map((_, i) => (
+            <span
+              key={`dot-${i}`}
+              aria-hidden
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === slide ? "w-5 bg-primary-600" : "w-1.5 bg-black/20"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop — mosaic collage (hero + thumbnails · "+N" on the last tile) */}
+      <div className="relative hidden md:block">
         <div className={`grid h-[360px] gap-2 md:h-[440px] ${gridClass(total)}`}>
           {shown.map((src, i) => {
             const isLast = i === shown.length - 1;

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import {
-  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search, Video,
+  Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search, Video, Plus, Star,
 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { ArticleContent } from "@/components/knowledge/article-content";
@@ -53,6 +53,11 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [tagDraft, setTagDraft] = useState("");
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? "");
   const [galleryImages, setGalleryImages] = useState<string[]>(initial?.galleryImages ?? []);
+  // our_work case-study pattern (mig 0213) — match the website case page.
+  const [casePrice, setCasePrice] = useState(initial?.casePrice ?? "");
+  const [caseRating, setCaseRating] = useState<number | null>(initial?.caseRating ?? null);
+  const [caseRoute, setCaseRoute] = useState(initial?.caseRoute ?? "");
+  const [caseFacts, setCaseFacts] = useState<{ label: string; value: string }[]>(initial?.caseFacts ?? []);
   const [seoOpen, setSeoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -85,6 +90,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       tags,
       videoUrl: category === "our_work" ? videoUrl.trim() : "",
       galleryImages: category === "our_work" ? galleryImages : [],
+      casePrice: category === "our_work" ? casePrice.trim() : "",
+      caseRating: category === "our_work" ? caseRating : null,
+      caseRoute: category === "our_work" ? caseRoute.trim() : "",
+      caseFacts: category === "our_work"
+        ? caseFacts.map((f) => ({ label: f.label.trim(), value: f.value.trim() })).filter((f) => f.label || f.value)
+        : [],
     };
   }
 
@@ -383,6 +394,56 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 />
                 <p className="mt-1 text-[11px] text-muted">รูปจะแสดงใน filmstrip ต่อจากรูปปก · Hover เพื่อลบ · สูงสุด 20 รูป · ≤ 5 MB/รูป</p>
               </div>
+
+              {/* ── ข้อมูลเคส (แพทเทิร์นหน้าเว็บ) — ราคา · เรต · เส้นทาง · ข้อมูลขนส่ง ── */}
+              <div className="border-t border-primary-100 pt-3 dark:border-primary-900/30">
+                <p className="text-[13px] font-black text-foreground">ข้อมูลเคส (แพทเทิร์นหน้าเว็บ)</p>
+                <p className="mb-2 text-[11px] text-muted">เติมให้ตรงหน้า /our-work — ราคา · เรตดาว · เส้นทาง · ข้อมูลขนส่ง (ไม่ใส่ก็ได้)</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>ราคาเริ่มต้น</label>
+                    <input value={casePrice} onChange={(e) => setCasePrice(e.target.value)} placeholder="เช่น เริ่ม $500" className={inputCls} />
+                    <p className="mt-1 text-[11px] text-muted">โชว์กล่องขวา · ว่าง = “ขอใบเสนอราคาฟรี”</p>
+                  </div>
+                  <div>
+                    <label className={labelCls}><Star className="mr-0.5 inline h-3 w-3 fill-yellow-400 text-yellow-400" />เรตดาว (0–5)</label>
+                    <input
+                      type="number" min={0} max={5} step={0.1}
+                      value={caseRating ?? ""}
+                      onChange={(e) => setCaseRating(e.target.value === "" ? null : Math.max(0, Math.min(5, Number(e.target.value))))}
+                      placeholder="เช่น 5"
+                      className={inputCls}
+                    />
+                    <p className="mt-1 text-[11px] text-muted">ว่าง = ค่าเฉลี่ยจากรีวิว / 5.0</p>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className={labelCls}>เส้นทาง</label>
+                  <input value={caseRoute} onChange={(e) => setCaseRoute(e.target.value)} placeholder="เช่น กวางโจว → แหลมฉบัง" className={inputCls} />
+                </div>
+
+                <div className="mt-3">
+                  <label className={labelCls}>ข้อมูลขนส่ง <span className="text-[11px] font-normal text-muted">(หัวข้อ · ค่า)</span></label>
+                  {caseFacts.length > 0 ? (
+                    <div className="space-y-2">
+                      {caseFacts.map((f, i) => (
+                        <div key={i} className="flex gap-2">
+                          <input value={f.label} onChange={(e) => setCaseFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} placeholder="หัวข้อ เช่น บริการ / ช่องทาง" className={`${inputCls} flex-1`} />
+                          <input value={f.value} onChange={(e) => setCaseFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)))} placeholder="ค่า เช่น ทางเรือ · FCL" className={`${inputCls} flex-1`} />
+                          <button type="button" onClick={() => setCaseFacts((cur) => cur.filter((_, idx) => idx !== i))} aria-label={`ลบแถวที่ ${i + 1}`} className="inline-flex shrink-0 items-center rounded-lg border border-border px-2 text-muted hover:bg-surface-alt">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button type="button" onClick={() => setCaseFacts((cur) => (cur.length >= 20 ? cur : [...cur, { label: "", value: "" }]))} disabled={caseFacts.length >= 20} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50">
+                    <Plus className="h-3.5 w-3.5" /> เพิ่มแถวข้อมูล
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -411,7 +472,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 className="min-w-[120px] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm outline-none"
               />
             </div>
-            <p className="mt-1 text-[11px] text-muted">ใช้กรองผลงานบนหน้าเว็บ — ผู้เข้าชมกดแท็กแล้วจะเห็นผลงานในแท็กนั้น (เด่นในหน้า “ผลงานของเรา”)</p>
+            <p className="mt-1 text-[11px] text-muted">ใช้กรองผลงานบนหน้าเว็บ + เป็น <b>SEO keyword</b> ของหน้านี้ด้วย — ผู้เข้าชมกดแท็กแล้วจะเห็นผลงานในแท็กนั้น (เด่นในหน้า “ผลงานของเรา”)</p>
           </div>
 
           {/* Body */}

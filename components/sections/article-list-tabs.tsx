@@ -1,5 +1,5 @@
 import { Link } from "@/i18n/navigation";
-import { BookOpen, Newspaper, Briefcase } from "lucide-react";
+import { BookOpen, Newspaper, Briefcase, Video } from "lucide-react";
 
 /**
  * Tab strip rendered above the article listing on `/knowledge`, `/news`, and
@@ -15,27 +15,39 @@ export function ArticleListTabs({
   active,
   className = "",
 }: {
-  active: "knowledge" | "news" | "our-work";
+  active: "knowledge" | "news" | "our-work" | "videos";
   className?: string;
 }) {
+  // `labelShort` is the trimmed mobile label (owner 2026-06-26 "ในมือถือ ย่อคำ");
+  // the full `label` shows from md up so the narrow phone strip stays on one line.
   const tabs = [
     {
       id: "knowledge" as const,
       href: "/knowledge",
-      label: "สาระน่ารู้",
+      label: "ความรู้",
+      labelShort: "ความรู้",
       icon: BookOpen,
     },
     {
       id: "news" as const,
       href: "/news",
       label: "ข่าวสาร Pacred",
+      labelShort: "ข่าวสาร",
       icon: Newspaper,
     },
     {
       id: "our-work" as const,
       href: "/our-work",
       label: "ผลงานของเรา",
+      labelShort: "ผลงาน",
       icon: Briefcase,
+    },
+    {
+      id: "videos" as const,
+      href: "/videos",
+      label: "วิดีโอ",
+      labelShort: "วิดีโอ",
+      icon: Video,
     },
   ];
 
@@ -52,14 +64,17 @@ export function ArticleListTabs({
             href={tab.href}
             aria-current={isActive ? "page" : undefined}
             className={[
-              "inline-flex items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full text-[12.5px] md:text-[13.5px] font-black transition-all duration-300",
+              "inline-flex items-center gap-1.5 h-9 md:h-10 px-3 md:px-4 rounded-full text-[12.5px] md:text-[13.5px] font-black whitespace-nowrap transition-all duration-300",
               isActive
                 ? "bg-primary-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.30)]"
                 : "text-muted hover:text-primary-700 hover:bg-primary-50/60 dark:hover:bg-primary-900/20",
             ].join(" ")}
           >
-            <Icon className="w-3.5 h-3.5" strokeWidth={2.6} />
-            {tab.label}
+            {/* Icon hidden on mobile — 4 tabs + icons overflow a 360px phone
+                (the label alone is clear); icons return from md up. */}
+            <Icon className="hidden md:block w-3.5 h-3.5" strokeWidth={2.6} />
+            <span className="md:hidden">{tab.labelShort}</span>
+            <span className="hidden md:inline">{tab.label}</span>
           </Link>
         );
       })}
