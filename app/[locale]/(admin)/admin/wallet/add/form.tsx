@@ -45,17 +45,26 @@ type TypeService = typeof TYPESERVICE_OPTIONS[number]["value"];
 export function AdminWalletAddForm({
   preset,
   recent,
+  presetBalance,
 }: {
   preset: CustomerLite | null;
   recent: CustomerLite[];
+  /** Current wallet balance of the preset customer — when negative, the form
+   *  pre-fills the exact amount to clear it (owner 2026-06-26 · จ่ายนอกระบบ). */
+  presetBalance?: number | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
+  // When the preset customer is negative, pre-fill the deposit amount that
+  // nets the balance back to exactly 0 (clear the legacy "เติม-แล้วจ่าย" gap).
+  const clearAmount =
+    presetBalance != null && presetBalance < 0 ? Math.abs(presetBalance) : null;
+
   const [userid, setUserid]         = useState<string>(preset?.userid ?? "");
   const [kind, setKind]             = useState<Kind>("deposit");
   const [typeService, setTypeService] = useState<TypeService>("1");
-  const [amount, setAmount]         = useState<string>("");
+  const [amount, setAmount]         = useState<string>(clearAmount != null ? String(clearAmount) : "");
   const [bankName, setBankName]     = useState<string>("");
   const [acctName, setAcctName]     = useState<string>("");
   const [acctNumber, setAcctNumber] = useState<string>("");

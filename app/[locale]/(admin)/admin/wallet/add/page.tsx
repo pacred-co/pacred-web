@@ -23,6 +23,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { GuideNote } from "@/components/ui/guide-note";
 import { AdminWalletAddForm, type CustomerLite } from "./form";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,24 @@ export default async function AdminWalletAddPage({
       console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
     }
     preset = data ?? null;
+  }
+
+  // Current wallet balance for the preset customer — so the form can pre-fill
+  // the exact amount to CLEAR a negative balance (owner 2026-06-26: "จ่ายนอกระบบ
+  // → แนบสลิป+ตรวจ ในขั้นตอนเดียว → ไม่ติดลบ"). Negative = a legacy "เติม-แล้วจ่าย"
+  // pair whose top-up leg was never recorded; recording the missing payment here
+  // (status='2' = ตรวจแล้วทันที) nets it back to ≥0.
+  let presetBalance: number | null = null;
+  if (preset) {
+    const { data: wRow, error: wErr } = await admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", preset.userid)
+      .maybeSingle<{ wallettotal: number | string | null }>();
+    if (wErr) {
+      console.error(`[tb_wallet balance] failed`, { code: wErr.code, message: wErr.message });
+    }
+    presetBalance = wRow ? Number(wRow.wallettotal ?? 0) : 0;
   }
 
   // Recent customers — order by registered desc · cap 20 for the dropdown.
@@ -93,35 +112,24 @@ export default async function AdminWalletAddPage({
         </p>
       </div>
 
-      {/* Wave 20 status banner */}
-      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
-        <span aria-hidden>ℹ️</span>
-        <div className="flex-1">
-          <span className="font-medium">Wave 20 P1 status:</span>{" "}
-          ✅ Tailwind page chrome · breadcrumb · role gate · form wired ·{" "}
-          <span className="opacity-75">
-            ⏳ Wave 21: restyle form island (Bootstrap-4 → Tailwind)
-          </span>
-        </div>
-      </div>
+      {/* owner 2026-06-26 — จ่ายนอกระบบ = แนบสลิป + ตรวจ ในขั้นตอนเดียว. ย้ำให้ชัดว่า
+          บันทึกที่นี่ = ตรวจแล้วทันที (ไม่เข้าคิว pending) เพราะแอดมินที่กด = ผู้ตรวจ. */}
+      <GuideNote variant="tip" title="จ่ายนอกระบบ → แนบสลิป + ตรวจ จบในขั้นตอนเดียว">
+        ลูกค้าโอนจ่ายนอกแอป (โอนเข้าบัญชีตรง) → เลือกลูกค้า → ใส่ยอดตรงสลิป → <strong>แนบสลิป</strong> → กดบันทึก.
+        บันทึกที่นี่ <strong>= ตรวจแล้วทันที</strong> (แอดมินที่กด = ผู้ตรวจ) — <strong>ไม่เข้าคิวรอตรวจ ไม่ค้าง pending</strong> —
+        ยอดกระเป๋าเด้งขึ้นทันที จึง<strong>ไม่ทำให้ติดลบ</strong>.
+      </GuideNote>
 
-      {/* How-to card */}
-      <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <p className="font-medium mb-1.5">วิธีใช้</p>
-        <ol className="list-decimal list-inside space-y-1 text-xs">
-          <li>ใช้เมื่อ auto-verify จับสลิปลูกค้าไม่ได้ · หรือต้องการปรับยอดด้วยมือ</li>
-          <li>เลือกประเภท ชำระเงิน / ถอนเงิน / ปรับยอด แล้วใส่จำนวนเงินที่ตรงกับสลิป</li>
-          <li>
-            เมื่อบันทึกสำเร็จ ยอด{" "}
-            <code className="rounded bg-white px-1 py-0.5">tb_wallet.wallettotal</code>{" "}
-            ของลูกค้าจะถูกอัปเดตอัตโนมัติ
-          </li>
-        </ol>
-      </section>
+      {preset && presetBalance != null && presetBalance < 0 && (
+        <GuideNote variant="warn" title={`ลูกค้ารายนี้ยอดติดลบอยู่ −฿${Math.abs(presetBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
+          ติดลบ = เคยมีรายการ “เติม-แล้วจ่าย” ที่ขาเติม (เงินเข้า) ไม่ถูกบันทึก. ฟอร์มด้านล่าง
+          <strong>ใส่ยอดให้เคลียร์พอดีเป็น 0 ไว้แล้ว</strong> — แค่แนบสลิปการโอนของลูกค้า → กดบันทึก → ติดลบหายทันที.
+        </GuideNote>
+      )}
 
       {/* Form card — wraps the existing wired client island */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-        <AdminWalletAddForm preset={preset} recent={recent} />
+        <AdminWalletAddForm preset={preset} recent={recent} presetBalance={presetBalance} />
       </section>
     </main>
   );
