@@ -17,7 +17,7 @@
  * file owns ONLY the non-rate editable profile sections.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import {
@@ -31,6 +31,12 @@ import {
   adminUpdateUserSaleRep,
   adminUpdateUserCsRep,
   adminUpdateCorporate,
+  adminConvertToJuristic,
+  adminUploadCorporateDoc,
+  adminRemoveCorporateDoc,
+  adminSetCorporateStatus,
+  CORPORATE_DOC_TYPES,
+  type CorporateDocType,
   adminAddAddress,
   adminUpdateAddress,
   adminDeleteAddress,
@@ -1156,8 +1162,8 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
                 className={inputCls}
               />
             </Field>
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-              อัปโหลดเอกสาร (หนังสือรับรอง / ภพ.20) = รอบหน้า
+            <p className="text-[11px] text-muted">
+              เอกสารนิติบุคคล (ภพ.20 / หนังสือรับรอง / บัตรกรรมการ / อื่นๆ) แนบได้ที่กล่อง “เอกสารนิติบุคคล” ด้านล่าง
             </p>
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setEditing(false)}>
@@ -1169,6 +1175,216 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
             </div>
           </>
         )}
+      </div>
+    </SectionShell>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 4b) Convert บุคคล → นิติบุคคล (owner 2026-06-26) — for PERSONAL customers
+// ──────────────────────────────────────────────────────────────────────────
+export function ConvertToJuristic({ userid }: { userid: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ corporatenumber: "", corporatename: "", corporateaddress: "" });
+
+  function submit() {
+    setError(null);
+    start(async () => {
+      const res = await adminConvertToJuristic({ userid, ...form });
+      if (!res.ok) { setError(res.error); return; }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+  const valid = form.corporatename.trim() !== "" && /^\d{13}$/.test(form.corporatenumber) && form.corporateaddress.trim() !== "";
+
+  return (
+    <SectionShell
+      title="ประเภทลูกค้า: บุคคลธรรมดา"
+      action={
+        !open ? (
+          <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
+            <Plus className="w-3.5 h-3.5" /> อัปเกรดเป็นนิติบุคคล
+          </button>
+        ) : null
+      }
+    >
+      <div className="p-4 space-y-3 text-sm">
+        {error && <ErrBox msg={error} />}
+        {!open ? (
+          <p className="text-muted">
+            ลูกค้ารายนี้เป็น <b>บุคคลธรรมดา</b> — ถ้าต้องการออกใบกำกับภาษี/เป็นนิติบุคคล กด
+            <b> “อัปเกรดเป็นนิติบุคคล”</b> แล้วกรอกข้อมูลบริษัท + แนบเอกสาร (ภพ.20 / หนังสือรับรอง / บัตรกรรมการ)
+            ในกล่อง “เอกสารนิติบุคคล” ที่จะปรากฏ.
+          </p>
+        ) : (
+          <>
+            <Field label="ชื่อบริษัท">
+              <input type="text" value={form.corporatename} disabled={pending} maxLength={300}
+                onChange={(e) => setForm((f) => ({ ...f, corporatename: e.target.value }))} className={inputCls} />
+            </Field>
+            <Field label="เลขผู้เสียภาษี (13 หลัก)">
+              <input type="text" inputMode="numeric" value={form.corporatenumber} disabled={pending} maxLength={13}
+                onChange={(e) => setForm((f) => ({ ...f, corporatenumber: e.target.value.replace(/\D/g, "") }))} className={`${inputCls} font-mono`} />
+            </Field>
+            <Field label="ที่อยู่บริษัท">
+              <textarea value={form.corporateaddress} disabled={pending} rows={2} maxLength={2000}
+                onChange={(e) => setForm((f) => ({ ...f, corporateaddress: e.target.value }))} className={inputCls} />
+            </Field>
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              กดยืนยัน = ตั้งลูกค้าเป็น <b>นิติบุคคล</b> (สถานะ “รอตรวจสอบ”) → แนบเอกสาร + กดอนุมัติได้ในกล่องด้านล่าง
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setOpen(false)}>ยกเลิก</Button>
+              <Button type="button" size="sm" disabled={pending || !valid} onClick={submit}>
+                <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "ยืนยันอัปเกรดเป็นนิติบุคคล"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </SectionShell>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 4c) Corporate document gallery (owner 2026-06-26) — multi-doc + verify
+// ──────────────────────────────────────────────────────────────────────────
+const CORP_DOC_LABEL: Record<string, string> = {
+  vat: "ภพ.20",
+  affidavit: "หนังสือรับรองบริษัท",
+  director_id: "บัตรกรรมการ",
+  other: "เอกสารอื่นๆ",
+};
+export type CorporateDocView = { type: string; key: string; name: string; at: string; url: string | null };
+
+export function CorporateDocGallery({
+  userid, docs, status,
+}: {
+  userid: string;
+  docs: CorporateDocView[];
+  status: string | null;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [docType, setDocType] = useState<CorporateDocType>("vat");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  function onPick(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setError(null);
+    setBusy(true);
+    const list = Array.from(files);
+    (async () => {
+      let firstErr: string | null = null;
+      for (const f of list) {
+        const fd = new FormData();
+        fd.set("userid", userid);
+        fd.set("docType", docType);
+        fd.set("file", f);
+        const res = await adminUploadCorporateDoc(fd);
+        if (!res.ok && !firstErr) firstErr = res.error;
+      }
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+      if (firstErr) setError(firstErr);
+      router.refresh();
+    })();
+  }
+
+  function remove(key: string, name: string) {
+    start(async () => {
+      const ok = await confirm(`ลบเอกสารนี้?\n${name}`);
+      if (!ok) return;
+      const res = await adminRemoveCorporateDoc({ userid, key });
+      if (!res.ok) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
+
+  function setStatus(s: "1" | "2" | "3", label: string) {
+    start(async () => {
+      const ok = await confirm(`ตั้งสถานะนิติบุคคลเป็น “${label}”?`);
+      if (!ok) return;
+      const res = await adminSetCorporateStatus({ userid, status: s });
+      if (!res.ok) { setError(res.error); return; }
+      router.refresh();
+    });
+  }
+
+  const statusPill =
+    status === "2"
+      ? { txt: "อนุมัติแล้ว", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+      : status === "3"
+        ? { txt: "ไม่ผ่าน", cls: "bg-rose-50 text-rose-700 border-rose-200" }
+        : { txt: "รอตรวจสอบ", cls: "bg-amber-50 text-amber-800 border-amber-200" };
+
+  return (
+    <SectionShell
+      title="เอกสารนิติบุคคล"
+      action={<span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${statusPill.cls}`}>{statusPill.txt}</span>}
+    >
+      <div className="p-4 space-y-4 text-sm">
+        {error && <ErrBox msg={error} />}
+
+        {/* Upload row — ประเภท + เลือกไฟล์ (หลายไฟล์ได้) */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <span className="block text-xs text-muted mb-1">ประเภทเอกสาร</span>
+            <select value={docType} disabled={busy} onChange={(e) => setDocType(e.target.value as CorporateDocType)} className={inputCls}>
+              {CORPORATE_DOC_TYPES.map((t) => (
+                <option key={t} value={t}>{CORP_DOC_LABEL[t]}</option>
+              ))}
+            </select>
+          </div>
+          <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            disabled={busy} onChange={(e) => onPick(e.currentTarget.files)} className="hidden" id={`corpdoc-${userid}`} />
+          <label htmlFor={`corpdoc-${userid}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs ${busy ? "opacity-60 cursor-not-allowed" : "cursor-pointer border-primary-300 text-primary-700 hover:bg-primary-50"}`}>
+            <Plus className="w-3.5 h-3.5" /> {busy ? "กำลังอัปโหลด..." : "เลือกไฟล์ (อัปได้หลายไฟล์ · JPG/PNG/PDF ≤ 5MB)"}
+          </label>
+        </div>
+
+        {/* Doc list */}
+        {docs.length === 0 ? (
+          <p className="text-muted text-xs">ยังไม่มีเอกสารแนบ — เลือกประเภท + อัปโหลดด้านบน</p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {docs.map((d) => (
+              <li key={d.key} className="flex items-center gap-3 px-3 py-2">
+                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 shrink-0">
+                  {CORP_DOC_LABEL[d.type] ?? "เอกสาร"}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs" title={d.name}>{d.name || d.key}</span>
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 hover:underline shrink-0">ดู</a>
+                ) : (
+                  <span className="text-xs text-muted shrink-0">เปิดไม่ได้</span>
+                )}
+                <button type="button" disabled={pending} onClick={() => remove(d.key, d.name)} className="text-rose-600 hover:text-rose-700 disabled:opacity-60 shrink-0" title="ลบ">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Verify (ตรวจ) — approve / reject */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <span className="text-xs text-muted">ตรวจเอกสาร:</span>
+          <Button type="button" size="sm" variant="outline" disabled={pending || status === "1"} onClick={() => setStatus("1", "รอตรวจสอบ")}>รอตรวจสอบ</Button>
+          <Button type="button" size="sm" disabled={pending || status === "2"} onClick={() => setStatus("2", "อนุมัติแล้ว")} className="bg-emerald-600 hover:bg-emerald-700">
+            <Check className="size-4" /> อนุมัติ
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={pending || status === "3"} onClick={() => setStatus("3", "ไม่ผ่าน")} className="border-rose-300 text-rose-700 hover:bg-rose-50">
+            ไม่ผ่าน
+          </Button>
+        </div>
       </div>
     </SectionShell>
   );

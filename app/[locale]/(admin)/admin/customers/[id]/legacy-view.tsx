@@ -61,8 +61,12 @@ import {
   ComparisonEditor,
   CreditLineEditor,
   CorporateEditor,
+  ConvertToJuristic,
+  CorporateDocGallery,
+  type CorporateDocView,
   AddressManager,
 } from "./profile-sections";
+import { parseCorporateDocs } from "@/actions/admin/customer-profile";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 
 type URow = {
@@ -167,6 +171,9 @@ type CRow = {
   corporatenumber: string | null;     // tax id (เลขผู้เสียภาษี · 13 digits)
   corporateaddress: string | null;
   corporatestatus: string | null;
+  corporate_docs: unknown;            // multi-doc gallery jsonb (mig 0214)
+  corporatefile: string | null;      // legacy single หนังสือรับรอง
+  corporatefile20: string | null;    // legacy single ภพ.20
 };
 // Wave 20 P0-1: shipping addresses — legacy `tb_address` keyed by userid
 // (mirrors `/addresses` page reads). `addressstatus`='1' filters out
@@ -305,7 +312,7 @@ export async function renderLegacyCustomerView(
     admin.from("tb_wallet").select("wallettotal").eq("userid", u.userID).maybeSingle(),
     admin
       .from("tb_corporate")
-      .select("id, corporatename, corporatenumber, corporateaddress, corporatestatus")
+      .select("id, corporatename, corporatenumber, corporateaddress, corporatestatus, corporate_docs, corporatefile, corporatefile20")
       .eq("userid", u.userID)
       .maybeSingle(),
     admin
@@ -419,6 +426,24 @@ export async function renderLegacyCustomerView(
     resolveLegacyUrlMap(hos.map((r) => ({ id: r.id, filename: r.hcover })), "cover"),
     resolveLegacyUrlMap(whs.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip"),
   ]);
+
+  // owner 2026-06-26 — resolve signed URLs for the นิติบุคคล documents (multi-doc
+  // gallery `corporate_docs` in the member-docs bucket + the 2 legacy single files
+  // corporatefile/corporatefile20 = legacy-uploads/file). Best-effort: a null url
+  // renders "เปิดไม่ได้" in the gallery (graceful).
+  const corpDocViews: CorporateDocView[] = [];
+  if (corp) {
+    const parsedDocs = parseCorporateDocs(corp.corporate_docs);
+    for (const d of parsedDocs) {
+      corpDocViews.push({ type: d.type, key: d.key, name: d.name, at: d.at, url: await getSignedBucketUrl("member-docs", d.key, 3600) });
+    }
+    if (corp.corporatefile && !parsedDocs.some((d) => d.key === corp.corporatefile)) {
+      corpDocViews.push({ type: "affidavit", key: corp.corporatefile, name: "หนังสือรับรอง (ไฟล์เดิม)", at: "", url: await resolveLegacyUrl(corp.corporatefile, "file") });
+    }
+    if (corp.corporatefile20 && !parsedDocs.some((d) => d.key === corp.corporatefile20)) {
+      corpDocViews.push({ type: "vat", key: corp.corporatefile20, name: "ภพ.20 (ไฟล์เดิม)", at: "", url: await resolveLegacyUrl(corp.corporatefile20, "file") });
+    }
+  }
 
   // Main shipping address (legacy "ที่อยู่จัดส่ง (หลัก)" summary in the profile
   // detail). Falls back to "—" when none flagged.
@@ -1069,9 +1094,18 @@ export async function renderLegacyCustomerView(
         </div>
       </div>
 
-      {/* Juristic company info (tb_corporate) — editable in-place (UPDATE-only,
-          file upload deferred). Only render for นิติบุคคล customers. */}
-      {isJuristic ? <CorporateEditor userid={u.userID} corp={corp} /> : null}
+      {/* Juristic company info + multi-doc (owner 2026-06-26):
+          - PERSONAL → ปุ่มอัปเกรดเป็นนิติบุคคล (สร้าง tb_corporate + ตั้ง userCompany='1')
+          - นิติบุคคล → แก้ข้อมูลบริษัท + กล่องเอกสารนิติ (ภพ.20/หนังสือรับรอง/บัตรกรรมการ/
+            อื่นๆ · อัปได้หลายไฟล์) + ตรวจ/อนุมัติ. */}
+      {isJuristic ? (
+        <div className="space-y-5">
+          <CorporateEditor userid={u.userID} corp={corp} />
+          <CorporateDocGallery userid={u.userID} docs={corpDocViews} status={corp?.corporatestatus ?? null} />
+        </div>
+      ) : (
+        <ConvertToJuristic userid={u.userID} />
+      )}
 
       {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).
           Only for truly-empty (test/orphan) accounts; the panel shows the

@@ -41,6 +41,7 @@ import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // Role gate for every write here (per task brief).
@@ -483,6 +484,236 @@ export async function adminUpdateCorporate(
         corporateaddress: d.corporateaddress,
       },
     });
+    revalidatePath(`/admin/customers/${userid}`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Task 4b — บุคคล → นิติบุคคล: convert + multi-doc upload + verify
+// (owner 2026-06-26 · BEYOND legacy: legacy set juristic at signup only +
+// 2 single doc files. Here an admin can UPGRADE a personal customer, attach
+// MANY typed docs [ภพ.20/หนังสือรับรอง/บัตรกรรมการ/อื่นๆ], and verify.)
+// LIVE tables: juristic marker = tb_users.userCompany='1' · data = tb_corporate
+// · docs = tb_corporate.corporate_docs jsonb (mig 0214 · legacy
+// corporatefile/corporatefile20 kept + mirrored for the 2 legacy types).
+// ────────────────────────────────────────────────────────────
+
+export const CORPORATE_DOC_TYPES = ["vat", "affidavit", "director_id", "other"] as const;
+export type CorporateDocType = (typeof CORPORATE_DOC_TYPES)[number];
+export type CorporateDoc = { type: CorporateDocType; key: string; name: string; at: string };
+const CORPORATE_DOCS_CAP = 30;
+
+/** Tolerant parse of tb_corporate.corporate_docs (jsonb array, or a string, or null). */
+export function parseCorporateDocs(raw: unknown): CorporateDoc[] {
+  if (!raw) return [];
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    if (raw.trim() === "") return [];
+    try { arr = JSON.parse(raw); } catch { return []; }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (d): d is CorporateDoc =>
+      !!d && typeof d === "object" &&
+      typeof (d as CorporateDoc).key === "string" && (d as CorporateDoc).key.trim() !== "" &&
+      (CORPORATE_DOC_TYPES as readonly string[]).includes((d as CorporateDoc).type),
+  );
+}
+
+function isMissingDocsColumn(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  return err.code === "42703" || /corporate_docs/i.test(err.message ?? "");
+}
+const DOCS_NOT_READY =
+  "คลังเอกสารนิติฯ ยังไม่พร้อม — ต้องรัน migration 0214 (corporate_docs) บน prod ก่อน · แจ้งทีม backend";
+
+// adminConvertToJuristic — upgrade a PERSONAL customer → นิติบุคคล (set the
+// userCompany='1' marker + INSERT the tb_corporate row, pending verify).
+const convertSchema = z.object({
+  userid: useridSchema,
+  corporatenumber: z.string().trim().regex(/^\d{13}$/, "เลขผู้เสียภาษีต้อง 13 หลัก"),
+  corporatename: z.string().trim().min(1, "กรอกชื่อบริษัท").max(300),
+  corporateaddress: z.string().trim().min(1, "กรอกที่อยู่บริษัท").max(2000),
+});
+export async function adminConvertToJuristic(
+  input: z.infer<typeof convertSchema>,
+): Promise<AdminActionResult> {
+  const parsed = convertSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const userid = d.userid.toUpperCase();
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: u, error: uErr } = await admin
+      .from("tb_users").select("userID, userCompany").eq("userID", userid)
+      .maybeSingle<{ userID: string; userCompany: string | null }>();
+    if (uErr) {
+      console.error(`[adminConvertToJuristic user] failed`, { userid, code: uErr.code, message: uErr.message });
+      return { ok: false, error: uErr.message };
+    }
+    if (!u) return { ok: false, error: "ไม่พบลูกค้า" };
+
+    const { data: existing, error: exErr } = await admin
+      .from("tb_corporate").select("id").eq("userid", userid).maybeSingle<{ id: number }>();
+    if (exErr) {
+      console.error(`[adminConvertToJuristic existing] failed`, { userid, code: exErr.code, message: exErr.message });
+      return { ok: false, error: exErr.message };
+    }
+    if (existing) {
+      // Repair the flag if it drifted, but don't double-insert.
+      if (u.userCompany !== "1") await admin.from("tb_users").update({ userCompany: "1" }).eq("userID", userid);
+      return { ok: false, error: "ลูกค้ารายนี้มีข้อมูลนิติบุคคลอยู่แล้ว — แก้ที่ฟอร์มข้อมูลบริษัท" };
+    }
+
+    const { error: flagErr } = await admin.from("tb_users").update({ userCompany: "1" }).eq("userID", userid);
+    if (flagErr) {
+      console.error(`[adminConvertToJuristic flag] failed`, { userid, code: flagErr.code, message: flagErr.message });
+      return { ok: false, error: flagErr.message };
+    }
+
+    const { error: insErr } = await admin.from("tb_corporate").insert({
+      userid,
+      corporatenumber: d.corporatenumber,
+      corporatename: d.corporatename,
+      corporateaddress: d.corporateaddress,
+      corporatefile: "",
+      corporatefile20: "",
+      corporatestatus: "1", // รอตรวจสอบ
+      cpdatecreate: new Date().toISOString(),
+    });
+    if (insErr) {
+      // Roll back the flag so we never leave a juristic-marked customer with no row.
+      await admin.from("tb_users").update({ userCompany: u.userCompany ?? "" }).eq("userID", userid);
+      console.error(`[adminConvertToJuristic insert] failed`, { userid, code: insErr.code, message: insErr.message });
+      return { ok: false, error: insErr.message };
+    }
+
+    await logAdminAction(adminId, "tb_corporate.convert", "tb_corporate", userid, {
+      corporatenumber: d.corporatenumber, corporatename: d.corporatename,
+    });
+    revalidatePath(`/admin/customers/${userid}`);
+    return { ok: true };
+  });
+}
+
+// adminUploadCorporateDoc — attach ONE typed doc (multi-call for many). FormData:
+// `userid` + `docType` (vat|affidavit|director_id|other) + `file`. Appends to the
+// corporate_docs jsonb gallery; mirrors the 2 legacy single columns when empty.
+export async function adminUploadCorporateDoc(formData: FormData): Promise<AdminActionResult> {
+  const userid = String(formData.get("userid") ?? "").trim().toUpperCase();
+  const docType = String(formData.get("docType") ?? "").trim();
+  const file = formData.get("file");
+  if (!userid) return { ok: false, error: "ไม่พบรหัสลูกค้า" };
+  if (!(CORPORATE_DOC_TYPES as readonly string[]).includes(docType)) return { ok: false, error: "ประเภทเอกสารไม่ถูกต้อง" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์" };
+  if (file.size > 5 * 1024 * 1024) return { ok: false, error: "ไฟล์ใหญ่เกิน 5 MB — เลือกไฟล์ใหม่" };
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: corp, error: cErr } = await admin
+      .from("tb_corporate").select("id, corporate_docs, corporatefile, corporatefile20").eq("userid", userid)
+      .maybeSingle<{ id: number; corporate_docs: unknown; corporatefile: string | null; corporatefile20: string | null }>();
+    if (cErr) {
+      if (isMissingDocsColumn(cErr)) return { ok: false, error: DOCS_NOT_READY };
+      console.error(`[adminUploadCorporateDoc read] failed`, { userid, code: cErr.code, message: cErr.message });
+      return { ok: false, error: cErr.message };
+    }
+    if (!corp) return { ok: false, error: "ลูกค้ายังไม่เป็นนิติบุคคล — กดอัปเกรดเป็นนิติฯ ก่อน" };
+
+    const current = parseCorporateDocs(corp.corporate_docs);
+    if (current.length >= CORPORATE_DOCS_CAP) return { ok: false, error: `อัปได้สูงสุด ${CORPORATE_DOCS_CAP} ไฟล์ — ลบบางไฟล์ก่อน` };
+
+    const upload = await uploadToBucket(file, "member-docs", `corporate/${userid}/${docType}`);
+    if (!upload.ok) return { ok: false, error: upload.error ?? "อัปโหลดไม่สำเร็จ" };
+
+    const next: CorporateDoc[] = [
+      ...current,
+      { type: docType as CorporateDocType, key: upload.filename, name: file.name.slice(0, 200), at: new Date().toISOString() },
+    ];
+    const update: Record<string, unknown> = { corporate_docs: next };
+    if (docType === "affidavit" && !(corp.corporatefile && corp.corporatefile.trim() !== "")) update.corporatefile = upload.filename;
+    if (docType === "vat" && !(corp.corporatefile20 && corp.corporatefile20.trim() !== "")) update.corporatefile20 = upload.filename;
+
+    const { error: upErr } = await admin.from("tb_corporate").update(update).eq("id", corp.id);
+    if (upErr) {
+      if (isMissingDocsColumn(upErr)) return { ok: false, error: DOCS_NOT_READY };
+      console.error(`[adminUploadCorporateDoc update] failed`, { userid, code: upErr.code, message: upErr.message });
+      return { ok: false, error: upErr.message };
+    }
+
+    await logAdminAction(adminId, "tb_corporate.add_doc", "tb_corporate", userid, { type: docType, name: file.name, count: next.length });
+    revalidatePath(`/admin/customers/${userid}`);
+    return { ok: true };
+  });
+}
+
+// adminRemoveCorporateDoc — drop one doc KEY from the gallery (storage GC'd later).
+const removeDocSchema = z.object({ userid: useridSchema, key: z.string().trim().min(1).max(500) });
+export async function adminRemoveCorporateDoc(input: z.infer<typeof removeDocSchema>): Promise<AdminActionResult> {
+  const parsed = removeDocSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data; const userid = d.userid.toUpperCase();
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: corp, error: cErr } = await admin
+      .from("tb_corporate").select("id, corporate_docs, corporatefile, corporatefile20").eq("userid", userid)
+      .maybeSingle<{ id: number; corporate_docs: unknown; corporatefile: string | null; corporatefile20: string | null }>();
+    if (cErr) {
+      if (isMissingDocsColumn(cErr)) return { ok: false, error: DOCS_NOT_READY };
+      console.error(`[adminRemoveCorporateDoc read] failed`, { userid, code: cErr.code, message: cErr.message });
+      return { ok: false, error: cErr.message };
+    }
+    if (!corp) return { ok: false, error: "ไม่พบข้อมูลนิติบุคคล" };
+
+    const current = parseCorporateDocs(corp.corporate_docs);
+    const next = current.filter((x) => x.key !== d.key);
+    const isLegacyKey = (corp.corporatefile ?? "") === d.key || (corp.corporatefile20 ?? "") === d.key;
+    // Not in the gallery AND not one of the 2 legacy single columns → nothing to remove.
+    if (next.length === current.length && !isLegacyKey) return { ok: false, error: "ไม่พบเอกสารที่จะลบ" };
+
+    const update: Record<string, unknown> = { corporate_docs: next };
+    if ((corp.corporatefile ?? "") === d.key) update.corporatefile = "";
+    if ((corp.corporatefile20 ?? "") === d.key) update.corporatefile20 = "";
+
+    const { error: upErr } = await admin.from("tb_corporate").update(update).eq("id", corp.id);
+    if (upErr) {
+      console.error(`[adminRemoveCorporateDoc update] failed`, { userid, code: upErr.code, message: upErr.message });
+      return { ok: false, error: upErr.message };
+    }
+    await logAdminAction(adminId, "tb_corporate.remove_doc", "tb_corporate", userid, { key: d.key, count: next.length });
+    revalidatePath(`/admin/customers/${userid}`);
+    return { ok: true };
+  });
+}
+
+// adminSetCorporateStatus — the verify step (ตรวจ): 1=รอตรวจสอบ · 2=อนุมัติ · 3=ไม่ผ่าน.
+const statusSchema = z.object({ userid: useridSchema, status: z.enum(["1", "2", "3"]) });
+export async function adminSetCorporateStatus(input: z.infer<typeof statusSchema>): Promise<AdminActionResult> {
+  const parsed = statusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data; const userid = d.userid.toUpperCase();
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: corp, error: cErr } = await admin
+      .from("tb_corporate").select("id, corporatestatus").eq("userid", userid)
+      .maybeSingle<{ id: number; corporatestatus: string | null }>();
+    if (cErr) {
+      console.error(`[adminSetCorporateStatus read] failed`, { userid, code: cErr.code, message: cErr.message });
+      return { ok: false, error: cErr.message };
+    }
+    if (!corp) return { ok: false, error: "ไม่พบข้อมูลนิติบุคคล" };
+
+    const { error: upErr } = await admin.from("tb_corporate").update({ corporatestatus: d.status }).eq("id", corp.id);
+    if (upErr) {
+      console.error(`[adminSetCorporateStatus update] failed`, { userid, code: upErr.code, message: upErr.message });
+      return { ok: false, error: upErr.message };
+    }
+    await logAdminAction(adminId, "tb_corporate.set_status", "tb_corporate", userid, { from: corp.corporatestatus, to: d.status });
     revalidatePath(`/admin/customers/${userid}`);
     return { ok: true };
   });
