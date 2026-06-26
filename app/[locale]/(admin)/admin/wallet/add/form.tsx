@@ -12,6 +12,7 @@
 import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateWalletHsManual } from "@/actions/admin/wallet-hs";
+import { THAI_BANKS, BANK_OTHER, bankOptionLabel } from "@/lib/banks";
 
 export type CustomerLite = {
   userid:       string;
@@ -65,7 +66,14 @@ export function AdminWalletAddForm({
   const [kind, setKind]             = useState<Kind>("deposit");
   const [typeService, setTypeService] = useState<TypeService>("1");
   const [amount, setAmount]         = useState<string>(clearAmount != null ? String(clearAmount) : "");
-  const [bankName, setBankName]     = useState<string>("");
+  // Bank: a dropdown of canonical Thai banks (owner 2026-06-26 — "เอาเป็นตัวเลือก
+  // ไม่ต้องพิมพ์"). `bankChoice` holds the picked bank NAME (the canonical string
+  // we store) OR the BANK_OTHER sentinel → then `bankOther` free-text is used.
+  // The stored value (`bankName`) stays a plain string, compatible with the
+  // free-text `depositnamebank` column.
+  const [bankChoice, setBankChoice] = useState<string>("");
+  const [bankOther, setBankOther]   = useState<string>("");
+  const bankName = bankChoice === BANK_OTHER ? bankOther.trim() : bankChoice;
   const [acctName, setAcctName]     = useState<string>("");
   const [acctNumber, setAcctNumber] = useState<string>("");
   const [slipDate, setSlipDate]     = useState<string>("");
@@ -262,17 +270,32 @@ export function AdminWalletAddForm({
       {/* Bank info */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label htmlFor="bankName" className="block text-xs text-muted mb-1">ธนาคารปลายทาง</label>
-          <input
-            id="bankName"
-            type="text"
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-            placeholder="เช่น KBANK / SCB"
+          <label htmlFor="bankChoice" className="block text-xs text-muted mb-1">ธนาคารปลายทาง</label>
+          <select
+            id="bankChoice"
+            value={bankChoice}
+            onChange={(e) => setBankChoice(e.target.value)}
             disabled={pending}
-            maxLength={100}
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
-          />
+          >
+            <option value="">— เลือกธนาคาร —</option>
+            {THAI_BANKS.map((b) => (
+              <option key={b.code} value={b.name}>{bankOptionLabel(b)}</option>
+            ))}
+            <option value={BANK_OTHER}>อื่นๆ (พิมพ์เอง)</option>
+          </select>
+          {bankChoice === BANK_OTHER && (
+            <input
+              id="bankOther"
+              type="text"
+              value={bankOther}
+              onChange={(e) => setBankOther(e.target.value)}
+              placeholder="ระบุชื่อธนาคาร"
+              disabled={pending}
+              maxLength={100}
+              className="mt-2 w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
+            />
+          )}
         </div>
         <div>
           <label htmlFor="acctName" className="block text-xs text-muted mb-1">ชื่อบัญชี</label>
@@ -409,7 +432,7 @@ export function AdminWalletAddForm({
         <button
           type="button"
           onClick={() => {
-            setAmount(""); setNote(""); setBankName(""); setAcctName("");
+            setAmount(""); setNote(""); setBankChoice(""); setBankOther(""); setAcctName("");
             setAcctNumber(""); setSlipDate(""); setError(null); setSuccess(null);
             selectSlip(null);
             if (slipInputRef.current) slipInputRef.current.value = "";

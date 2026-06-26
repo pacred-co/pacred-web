@@ -717,6 +717,138 @@ export async function adminReviewSlipRound1(
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// #6 (ภูม 2026-06-26) — EDIT the slip amount during review.
+//
+//   The customer typed the wrong amount (e.g. 11,470.52) but the bank slip
+//   shows a slightly different figure (11,470.51). The accountant who is
+//   eyeballing the slip should be able to CORRECT the amount BEFORE approve
+//   so the approve credits/debits the right number — instead of rejecting
+//   the slip and forcing the customer to re-submit.
+//
+// MONEY-SAFETY (conservative — this is the row the approve later reads):
+//   - PENDING-ONLY (status='1'). After approve/reject the amount is locked
+//     (the money has already moved · re-pricing a settled row would desync
+//     the wallet/credit/cashback ledger). Atomic guard `.eq("status","1")`.
+//   - LINKED-TOPUP REFUSAL: a type='1' topup WITH tb_wallet_paydeposit links
+//     is part of the "เติม-แล้วจ่าย" cascade — its amount must equal the SUM
+//     of the type='7' sibling debits + each parent's bill. Editing the head
+//     amount alone would silently desync the cascade math, so we REFUSE it
+//     here (the accountant rejects + the customer re-submits for that shape).
+//     A BARE topup (no links) is safe to re-price.
+//   - Bounded (0 < amount ≤ MONEY_COL_MAX) · 2dp rounded · must differ.
+//   - Logs before/after (the money-confirming edit is the most audit-worthy).
+//   - NO wallet/parent mutation here — this ONLY rewrites the pending row's
+//     amount; the approve (which reads `amount` fresh) applies the money.
+//
+//   Applies to every queue type that carries a customer slip amount:
+//     '1' bare topup · '4' direct forwarder-pay · '8' direct shop-pay.
+//   ('8' delta=0 → amount is informational, but accounting still wants it
+//    right on the record / receipt; '4' amount is the debit the approve fires.)
+// ─────────────────────────────────────────────────────────────
+
+const MONEY_COL_MAX = 999_999_999_999.99; // matches actions/cart.ts (mig 0196)
+
+const updatePendingAmountSchema = z.object({
+  id:     z.number().int().positive(),
+  amount: z.number().positive("จำนวนเงินต้องมากกว่า 0").max(MONEY_COL_MAX, "จำนวนเงินเกินขีดจำกัด"),
+});
+export type AdminUpdateWalletHsPendingAmountInput = z.infer<typeof updatePendingAmountSchema>;
+
+export async function adminUpdateWalletHsPendingAmount(
+  input: AdminUpdateWalletHsPendingAmountInput,
+): Promise<AdminActionResult<{ id: number; amount: number }>> {
+  const parsed = updatePendingAmountSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+  const newAmount = Math.round(parsed.data.amount * 100) / 100; // 2dp money
+
+  return withAdmin<{ id: number; amount: number }>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+
+      // Read the row — must be pending; capture old amount for the audit.
+      const { data: rowRaw, error: rowErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, userid, amount, type, status")
+        .eq("id", id)
+        .maybeSingle<{ id: number; userid: string; amount: number | string | null; type: string | null; status: string | null }>();
+      if (rowErr) {
+        console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
+      if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
+      if (rowRaw.status !== "1") {
+        return { ok: false, error: `แก้ไขจำนวนเงินได้เฉพาะรายการที่ยัง 'รอตรวจสอบ' เท่านั้น (status=${rowRaw.status ?? "null"})` };
+      }
+
+      // Only the slip-bearing customer-payment types carry an editable amount.
+      if (rowRaw.type !== "1" && rowRaw.type !== "4" && rowRaw.type !== "8") {
+        return { ok: false, error: `แก้ไขจำนวนเงินรองรับเฉพาะสลิปลูกค้า (type='1'/'4'/'8') · พบ type='${rowRaw.type ?? "null"}'` };
+      }
+
+      // LINKED-TOPUP REFUSAL — a type='1' WITH paydeposit links is a cascade
+      // head whose amount must match the sibling/parent math. Editing it alone
+      // desyncs the cascade → refuse (the accountant rejects + customer re-pays).
+      if (rowRaw.type === "1") {
+        const { data: linksRaw, error: linksErr } = await admin
+          .from("tb_wallet_paydeposit")
+          .select("id")
+          .eq("whid", id)
+          .limit(1);
+        if (linksErr) {
+          console.error(`[tb_wallet_paydeposit probe] failed`, { code: linksErr.code, message: linksErr.message });
+          return { ok: false, error: `db_error:${linksErr.code ?? "unknown"}` };
+        }
+        if ((linksRaw ?? []).length > 0) {
+          return {
+            ok: false,
+            error: "รายการนี้เป็น 'เติม-แล้วจ่าย' ที่ผูกกับออเดอร์/รายการนำเข้า — แก้ไขจำนวนเงินตรงนี้ไม่ได้ (ยอดต้องตรงกับรายการที่ผูกไว้) · ถ้ายอดไม่ถูก กรุณาปฏิเสธแล้วให้ลูกค้าทำรายการใหม่",
+          };
+        }
+      }
+
+      const oldAmount = Number(rowRaw.amount ?? 0);
+      if (Math.abs(oldAmount - newAmount) < 0.005) {
+        return { ok: false, error: "จำนวนเงินใหม่ต้องไม่เท่ากับจำนวนเดิม" };
+      }
+
+      // Rewrite the amount — ATOMIC on status='1' (a concurrent approve/reject
+      // that already settled the row wins; this edit then no-ops safely).
+      const { data: claimed, error: updErr } = await admin
+        .from("tb_wallet_hs")
+        .update({ amount: newAmount, adminidupdate: legacyAdminId })
+        .eq("id", id)
+        .eq("status", "1")
+        .select("id")
+        .maybeSingle();
+      if (updErr) {
+        console.error(`[tb_wallet_hs amount edit] failed`, { code: updErr.code, message: updErr.message, id });
+        return { ok: false, error: updErr.message };
+      }
+      if (!claimed) {
+        return { ok: false, error: "แก้ไขไม่ได้ — รายการนี้ถูกอนุมัติ/ปฏิเสธไปแล้ว" };
+      }
+
+      await logAdminAction(adminId, "tb_wallet_hs.edit_pending_amount", "tb_wallet_hs", String(id), {
+        userid:     rowRaw.userid,
+        type:       rowRaw.type,
+        old_amount: oldAmount,
+        new_amount: newAmount,
+      });
+
+      revalidatePath(`/admin/wallet/${id}`);
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin");
+      return { ok: true, data: { id, amount: newAmount } };
+    },
+  );
+}
+
 export async function adminApproveWalletDeposit(
   input: AdminApproveWalletDepositInput,
 ): Promise<AdminActionResult<ApproveResult>> {

@@ -321,6 +321,69 @@ export type HsLookupRow = {
   default_stat_code: string | null;
 };
 
+// ────────────────────────────────────────────────────────────
+// searchHsCodes — typeahead over the คลัง HS dictionary (#3).
+// Staff TYPE the HS into the cost editor / triage / library — typos misroute
+// duty + the ใบขน. This auto-search lets them PICK from the dictionary instead.
+// Matches code OR description (Thai/EN) · returns the duty/form-e/stat fields
+// the picker shows. Read-only reference lookup (§0e · no write).
+// ────────────────────────────────────────────────────────────
+export type HsSearchRow = {
+  code:             string;
+  description:      string;
+  description_en:   string | null;
+  default_duty_pct: number;
+  form_e_duty_pct:  number;
+  default_stat_code: string | null;
+};
+
+const searchSchema = z.object({
+  q:     z.string().trim().max(100),
+  limit: z.coerce.number().int().min(1).max(30).optional(),
+});
+
+/**
+ * Typeahead search over hs_codes for the HS picker. `q` matches code OR
+ * description (TH) OR description_en (ILIKE, wildcards escaped). Active codes
+ * only, capped (default 12). An empty/short `q` (< 2 chars) returns []. The
+ * SAME read-roles as lookupHsCode so CS-lane (sales/ops) can pick too.
+ * Reference read only — never writes (AGENTS.md §0e). §0c: error destructured.
+ */
+export async function searchHsCodes(
+  q: string,
+  limit?: number,
+): Promise<AdminActionResult<HsSearchRow[]>> {
+  const parsed = searchSchema.safeParse({ q, limit });
+  if (!parsed.success) return { ok: true, data: [] };
+  const term = parsed.data.q.trim();
+  const cap = parsed.data.limit ?? 12;
+  // < 2 chars is too broad for a typeahead → empty (the UI shows a "type more" hint).
+  if (term.length < 2) return { ok: true, data: [] };
+
+  return withAdmin([...HS_LOOKUP_ROLES], async () => {
+    const admin = createAdminClient();
+    // Escape PostgREST ILIKE wildcards/commas/parens so the term stays literal.
+    const safe = term.replace(/[%_,()]/g, (m) => `\\${m}`);
+    const { data, error } = await admin
+      .from("hs_codes")
+      .select("code, description, description_en, default_duty_pct, form_e_duty_pct, default_stat_code")
+      .eq("is_active", true)
+      .or(`code.ilike.%${safe}%,description.ilike.%${safe}%,description_en.ilike.%${safe}%`)
+      .order("code", { ascending: true })
+      .limit(cap);
+    if (error) {
+      console.error("[hs_codes search]", { code: error.code, message: error.message });
+      return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+    }
+    const rows = ((data ?? []) as unknown as HsSearchRow[]).map((r) => ({
+      ...r,
+      default_duty_pct: Number(r.default_duty_pct),
+      form_e_duty_pct:  Number(r.form_e_duty_pct),
+    }));
+    return { ok: true, data: rows };
+  });
+}
+
 const lookupSchema = z.object({ code: z.string().trim().min(1).max(20) });
 
 /**

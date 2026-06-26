@@ -14,6 +14,7 @@ import { useState, useEffect, useTransition, useMemo } from "react";
 import { Link } from "@/i18n/navigation";
 import { setLineHsCode, setBulkHsCode, listHsTriage } from "@/actions/admin/hs-triage";
 import { lookupHsCode, type HsLookupRow } from "@/actions/admin/hs-codes";
+import { HsCodePicker } from "@/components/admin/hs-code-picker";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { HsTriageForwarderLine, HsTriageShopLine } from "@/actions/admin/hs-triage";
 
@@ -145,7 +146,16 @@ function TriageRow({
         </div>
         <div className="sm:w-80 space-y-0.5">
           <div className="flex gap-1.5">
-            <input value={hs} onChange={(e) => setHs(e.target.value)} placeholder="HS 8471.30.20" maxLength={40} className={inputCls} />
+            <div className="flex-1 min-w-0">
+              <HsCodePicker
+                value={hs}
+                onChange={setHs}
+                onPick={(row) => { if (stat.trim() === "" && row.default_stat_code) setStat(row.default_stat_code); }}
+                placeholder="HS 8471.30.20 หรือชื่อสินค้า"
+                inputClassName={inputCls + " pr-7"}
+                aria-label="พิกัด HS"
+              />
+            </div>
             <input value={stat} onChange={(e) => setStat(e.target.value)} placeholder="สถิติ" maxLength={10} className={inputCls + " w-20 tabular-nums"} />
             <button type="button" disabled={pending || !dirty} onClick={save}
               className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-40 whitespace-nowrap">
@@ -274,7 +284,16 @@ export function HsTriageClient({
         <div className="sticky top-2 z-10 rounded-xl border border-primary-300 bg-primary-50 dark:bg-surface p-3 shadow-sm space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-primary-800">เลือก {selectedRows.length} รายการ → เพิ่มเข้าพิกัด:</span>
-            <input value={bulkHs} onChange={(e) => setBulkHs(e.target.value)} placeholder="HS เช่น 3926.90.99" maxLength={40} className={inputCls + " w-44"} />
+            <div className="w-52">
+              <HsCodePicker
+                value={bulkHs}
+                onChange={setBulkHs}
+                onPick={(row) => { if (bulkStat.trim() === "" && row.default_stat_code) setBulkStat(row.default_stat_code); }}
+                placeholder="HS หรือชื่อสินค้า"
+                inputClassName={inputCls + " pr-7"}
+                aria-label="พิกัด HS (กลุ่ม)"
+              />
+            </div>
             <input value={bulkStat} onChange={(e) => setBulkStat(e.target.value)} placeholder="สถิติ 000" maxLength={10} className={inputCls + " w-24 tabular-nums"} />
             <button type="button" disabled={bulkPending} onClick={applyBulk}
               className="rounded-md bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50">

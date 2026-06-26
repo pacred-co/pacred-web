@@ -37,11 +37,25 @@ export function TaemReconcileClient() {
     });
   }
 
+  // Anything the apply will actually write: measurement updates OR classification
+  // (HS/box-mark/raw-type) reference fills + ETD/ETA. So apply is enabled even when
+  // only classification changed (willUpdate can be 0 while CG./box-mark fill rows).
+  const hasWork =
+    !!preview &&
+    (preview.summary.willUpdate > 0 ||
+      preview.summary.classWillWrite > 0 ||
+      preview.rows.some((r) => r.taemEtd || r.taemEta));
+
   function doApply() {
     if (!preview) return;
+    if (!hasWork) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องอัปเดต" }); return; }
     const n = preview.summary.willUpdate;
-    if (n === 0) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องอัปเดต" }); return; }
-    if (!window.confirm(`อัปเดตข้อมูล ${n} แทรคกิ้ง ให้ตรงกับฝั่งแต้ม แล้วคิดราคาขายใหม่?\n(รายการที่วางบิลแล้วจะถูกข้าม)`)) return;
+    const cls = preview.summary.classWillWrite;
+    const parts = [
+      n > 0 ? `อัปเดต ${n} แทรคกิ้ง (น้ำหนัก/คิว/ตู้) + คิดราคาขายใหม่` : null,
+      cls > 0 ? `บันทึก HS(CG.)/มาร์คกล่อง ${cls} รายการ` : null,
+    ].filter(Boolean);
+    if (!window.confirm(`${parts.join("\n")}\nให้ตรงกับฝั่งแต้ม?\n(รายการที่วางบิลแล้วจะถูกข้าม)`)) return;
     setMsg(null);
     start(async () => {
       const res = await applyTaemReconcile({ text });
@@ -50,8 +64,10 @@ export function TaemReconcileClient() {
       setMsg({
         kind: "ok",
         text: `อัปเดตแล้ว ${d.basisUpdated} แทรคกิ้ง · คิดราคาใหม่ ${d.repriced}` +
+          (d.classUpdated > 0 ? ` · บันทึก HS/มาร์ค ${d.classUpdated}` : "") +
           (d.etdEtaUpserted > 0 ? ` · บันทึก ETD/ETA ${d.etdEtaUpserted} ตู้` : "") +
           (d.repriceFailed > 0 ? ` · ⚠ ไม่มีเรท ${d.repriceFailed} (ตั้งราคาเอง)` : "") +
+          (d.classConflicts > 0 ? ` · ⚠ HS/มาร์คต่าง ${d.classConflicts} (ตรวจเอง)` : "") +
           (d.skippedBilled > 0 ? ` · ข้าม(วางบิลแล้ว) ${d.skippedBilled}` : ""),
       });
       const re = await previewTaemReconcile({ text });
@@ -66,7 +82,8 @@ export function TaemReconcileClient() {
         <label className="block text-sm font-medium">วางข้อมูลจากชีตแต้ม (MOMO Pacred)</label>
         <p className="text-xs text-muted">
           เปิด Google ชีต → เลือกแถว (รวมหัวตารางก็ได้) → คัดลอก → วางที่นี่ ระบบจะอ่านคอลัมน์
-          ftrackingchn · Container Name · Trans · etd · eta · Code · Total Parcel · Total Wt. · Total Vol.
+          Tracking · Container Name · Trans · Type · Code · Total Parcel · Total Wt. · Total Vol. ·
+          Remark Number (มาร์คกล่อง) · CG. (HS) · etd · eta
         </p>
         <textarea
           value={text}
@@ -84,14 +101,15 @@ export function TaemReconcileClient() {
           >
             {pending ? "กำลังอ่าน…" : "ดูตัวอย่าง (Preview)"}
           </button>
-          {preview && preview.summary.willUpdate > 0 && (
+          {hasWork && (
             <button
               type="button"
               onClick={doApply}
               disabled={pending}
               className="rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
             >
-              ยืนยันอัปเดต ({preview.summary.willUpdate} แทรคกิ้ง)
+              ยืนยันอัปเดต ({preview!.summary.willUpdate} แทรคกิ้ง
+              {preview!.summary.classWillWrite > 0 ? ` · HS/มาร์ค ${preview!.summary.classWillWrite}` : ""})
             </button>
           )}
         </div>
@@ -111,6 +129,9 @@ export function TaemReconcileClient() {
             {preview.summary.billedDiffer > 0 && <span className="rounded-full bg-orange-100 text-orange-800 px-2 py-0.5">⚠ วางบิลแล้วแต่ต่าง {preview.summary.billedDiffer}</span>}
             {preview.summary.noMatch > 0 && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5">ไม่พบในระบบ {preview.summary.noMatch}</span>}
             {preview.summary.noteRows > 0 && <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">ยังไม่มีข้อมูล {preview.summary.noteRows}</span>}
+            {preview.summary.classWillWrite > 0 && <span className="rounded-full bg-sky-100 text-sky-800 px-2 py-0.5">บันทึก HS/มาร์ค {preview.summary.classWillWrite}</span>}
+            {preview.summary.classConflict > 0 && <span className="rounded-full bg-rose-100 text-rose-700 px-2 py-0.5">⚠ HS/มาร์คต่าง {preview.summary.classConflict}</span>}
+            {preview.summary.productTypeMismatch > 0 && <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5">⚠ ประเภทสินค้าต่าง {preview.summary.productTypeMismatch}</span>}
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs">
@@ -122,6 +143,7 @@ export function TaemReconcileClient() {
                   <th className="px-2 py-2 text-right">นน. ระบบ→แต้ม</th>
                   <th className="px-2 py-2 text-right">คิว ระบบ→แต้ม</th>
                   <th className="px-2 py-2 text-right">กล่อง</th>
+                  <th className="px-2 py-2 text-left">HS / มาร์ค / ประเภท (แต้ม)</th>
                   <th className="px-2 py-2 text-right">ETD/ETA (แต้ม)</th>
                   <th className="px-2 py-2 text-center">ผล</th>
                 </tr>
@@ -148,6 +170,32 @@ export function TaemReconcileClient() {
                       <td className={`px-2 py-1.5 text-right ${r.amtDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
                         {r.isData ? `${r.curAmt ?? "—"}→${r.taemParcel ?? "—"}` : "—"}
                       </td>
+                      {/* HS (CG.) / box-mark / product-type from แต้ม — REFERENCE capture.
+                          A conflict (different stored value) shows ⚠ + the รหัสจะไม่ถูกเขียนทับ.
+                          A product-type mismatch flags the price-feeding fproductstype for
+                          manual review (never auto-changed). */}
+                      <td className="px-2 py-1.5 text-left text-[11px] leading-snug">
+                        {r.isData ? (
+                          <div className="space-y-0.5">
+                            {r.taemCg && (
+                              <div className={r.hsConflict ? "text-rose-700 font-semibold" : "text-sky-700"}>
+                                HS {r.taemCg}{r.hsConflict ? ` ⚠ (เดิม ${r.curTaemHsCode})` : ""}
+                              </div>
+                            )}
+                            {r.taemBoxMark && (
+                              <div className={r.boxMarkConflict ? "text-rose-700 font-semibold" : "text-muted"}>
+                                มาร์ค {r.taemBoxMark}{r.boxMarkConflict ? ` ⚠ (เดิม ${r.curBoxMark})` : ""}
+                              </div>
+                            )}
+                            {r.productTypeMismatch && (
+                              <div className="text-fuchsia-700 font-semibold" title="ประเภทสินค้าตามแต้มไม่ตรงกับที่ระบบใช้คิดราคา — ตรวจ/แก้เอง (ไม่เปลี่ยนอัตโนมัติ)">
+                                ⚠ ประเภท {r.taemProductType}
+                              </div>
+                            )}
+                            {!r.taemCg && !r.taemBoxMark && !r.productTypeMismatch && <span className="text-gray-400">—</span>}
+                          </div>
+                        ) : "—"}
+                      </td>
                       {/* ETD/ETA จากแต้ม — preview shows what will be stored per-container.
                           "—" when แต้ม's packing list has no date for this row. */}
                       <td className="px-2 py-1.5 text-right text-[11px] text-muted">
@@ -166,7 +214,10 @@ export function TaemReconcileClient() {
           </div>
           <p className="text-[11px] text-muted">
             [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · ⚠ วางบิลแล้ว = ข้าม (ตรวจ/แก้บิลเอง) ·
-            ยังไม่มีข้อมูล = แต้มยังไม่ปิดตู้/กระสอบรวม/ซ้ำ → ข้าม
+            ยังไม่มีข้อมูล = แต้มยังไม่ปิดตู้/กระสอบรวม/ซ้ำ → ข้าม ·
+            HS(CG.)/มาร์คกล่อง = บันทึกเป็นข้อมูลอ้างอิง (ไม่กระทบราคา) เติมเฉพาะที่ยังว่าง ·
+            ถ้าค่าเดิมต่าง (⚠) จะไม่ทับให้ — ตรวจเอง · ประเภทสินค้าที่ต่าง = แจ้งเตือนให้ตรวจ
+            (ไม่เปลี่ยน fproductstype ที่ใช้คิดราคาให้อัตโนมัติ)
           </p>
         </section>
       )}

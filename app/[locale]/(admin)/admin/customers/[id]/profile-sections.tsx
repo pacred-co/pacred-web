@@ -30,6 +30,9 @@ import {
   adminUpdateUserNote,
   adminUpdateUserSaleRep,
   adminUpdateUserCsRep,
+  adminUpdateUserInterpreter,
+  adminUpdateUserPricing,
+  adminUpdateUserPurchaser,
   adminUpdateCorporate,
   adminConvertToJuristic,
   adminUploadCorporateDoc,
@@ -730,6 +733,200 @@ export function CsRepEditor({
         {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
         {editing && admins.length === 0 && (
           <p className="text-xs text-amber-600 mt-1">ไม่พบ CS ที่ active ใน tb_admin</p>
+        )}
+      </div>
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => {
+            setChoice(rep);
+            setEditing(true);
+          }}
+          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline shrink-0"
+        >
+          <Pencil className="w-3.5 h-3.5" /> แก้ไข
+        </button>
+      ) : (
+        <div className="flex gap-2 shrink-0">
+          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setEditing(false)}>
+            ยกเลิก
+          </Button>
+          <Button type="button" size="sm" disabled={pending} onClick={save}>
+            <Save className="size-4" /> {pending ? "..." : "บันทึก"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3e) Extra owner-reps — ล่ามจีน / Pricing / ผู้สั่งซื้อ (owner 2026-06-26)
+//   Generic twin of SaleRepEditor / CsRepEditor: same compact pill + full
+//   variant, one component parameterized by `kind` so the three reps are
+//   provably identical. Each writes its own tb_users column (mig 0217) via the
+//   matching server action. (No money — just the assigned-staff string.)
+// ──────────────────────────────────────────────────────────────────────────
+type ExtraRepKind = "interpreter" | "pricing" | "purchaser";
+
+const EXTRA_REP_CFG: Record<
+  ExtraRepKind,
+  { label: string; action: (i: { userid: string; adminID: string }) => Promise<{ ok: boolean; error?: string }>; chooseErr: string; emptyErr: string }
+> = {
+  interpreter: {
+    label: "ล่ามจีน",
+    action: adminUpdateUserInterpreter,
+    chooseErr: "เลือกล่ามจีน",
+    emptyErr: "ไม่พบผู้ดูแลที่ active ใน tb_admin",
+  },
+  pricing: {
+    label: "Pricing",
+    action: adminUpdateUserPricing,
+    chooseErr: "เลือก Pricing",
+    emptyErr: "ไม่พบผู้ดูแลที่ active ใน tb_admin",
+  },
+  purchaser: {
+    label: "ผู้สั่งซื้อ",
+    action: adminUpdateUserPurchaser,
+    chooseErr: "เลือกผู้สั่งซื้อ",
+    emptyErr: "ไม่พบผู้ดูแลที่ active ใน tb_admin",
+  },
+};
+
+export function ExtraRepEditor({
+  userid,
+  kind,
+  currentRep,
+  admins,
+  compact = false,
+}: {
+  userid: string;
+  kind: ExtraRepKind;
+  currentRep: string | null;
+  admins: SalesAdminOption[];
+  compact?: boolean;
+}) {
+  const cfg = EXTRA_REP_CFG[kind];
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [rep, setRep] = useState(currentRep ?? "");
+  const [choice, setChoice] = useState(currentRep ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    if (!choice) {
+      setError(cfg.chooseErr);
+      return;
+    }
+    start(async () => {
+      const res = await cfg.action({ userid, adminID: choice });
+      if (!res.ok) {
+        setError(res.error ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      setRep(choice);
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  const repLabel = (() => {
+    const found = admins.find((a) => a.adminID === rep);
+    if (found) return `${found.nickname ? found.nickname + " · " : ""}${found.name} (${found.adminID})`;
+    return rep || "ยังไม่กำหนด";
+  })();
+
+  // Compact "tag" variant — small pill for the profile meta row (FB pattern).
+  if (compact) {
+    const found = admins.find((a) => a.adminID === rep);
+    const short = found ? found.nickname || found.adminID : rep || "ยังไม่กำหนด";
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/50 px-2.5 py-1 text-xs">
+        <span className="text-muted">{cfg.label}</span>
+        {!editing ? (
+          <>
+            <span className="font-medium">{short}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setChoice(rep);
+                setEditing(true);
+              }}
+              className="shrink-0 text-primary-600 hover:text-primary-700"
+              aria-label={`แก้ไข${cfg.label}`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="max-w-[150px] rounded border border-border bg-white px-1 py-0.5 text-xs dark:bg-surface"
+            >
+              <option value="">— เลือก —</option>
+              {admins.map((a) => (
+                <option key={a.adminID} value={a.adminID}>
+                  {a.nickname ? `${a.nickname} · ` : ""}
+                  {a.name} ({a.adminID})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending}
+              className="text-primary-600 disabled:opacity-50"
+              aria-label="บันทึก"
+            >
+              <Save className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={pending}
+              className="text-muted hover:text-foreground"
+              aria-label="ยกเลิก"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
+        {error && <span className="text-red-600">{error}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted">{cfg.label}</p>
+        {!editing ? (
+          <p className="font-medium truncate">{repLabel}</p>
+        ) : (
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="rounded-lg border border-border px-2 py-1.5 text-sm bg-white dark:bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            >
+              <option value="">— เลือก{cfg.label} —</option>
+              {admins.map((a) => (
+                <option key={a.adminID} value={a.adminID}>
+                  {a.nickname ? `${a.nickname} · ` : ""}{a.name} ({a.adminID})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+        {editing && admins.length === 0 && (
+          <p className="text-xs text-amber-600 mt-1">{cfg.emptyErr}</p>
         )}
       </div>
       {!editing ? (

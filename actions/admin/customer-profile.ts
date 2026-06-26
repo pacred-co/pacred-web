@@ -224,6 +224,126 @@ export async function listCsAdmins(): Promise<AdminActionResult<{ rows: SalesAdm
 }
 
 // ────────────────────────────────────────────────────────────
+// Extra-reps reader — active admins for the ล่ามจีน / Pricing / ผู้สั่งซื้อ
+// dropdowns (owner 2026-06-26). FEATURE D.
+// ────────────────────────────────────────────────────────────
+//
+// Unlike sales/CS there is no dedicated tb_admin status flag for these three
+// roles, so the dropdown lists every ACTIVE admin (adminStatusA='1'). Same
+// shape as listSalesAdmins/listCsAdmins so the UI components are interchangeable.
+export async function listActiveAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return withAdmin<{ rows: SalesAdminOption[] }>([...WRITE_ROLES], async () => {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname")
+      .eq("adminStatusA", "1")
+      .order("adminNickname", { ascending: true })
+      .limit(500);
+    if (error) {
+      console.error(`[listActiveAdmins tb_admin] failed`, { code: error.code, message: error.message });
+      return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+    }
+    type Raw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null };
+    const rows: SalesAdminOption[] = ((data ?? []) as unknown as Raw[])
+      .filter((r) => !!r.adminID)
+      .map((r) => ({
+        adminID: r.adminID,
+        name: `${r.adminName ?? ""} ${r.adminLastName ?? ""}`.trim() || r.adminID,
+        nickname: r.adminNickname,
+      }));
+    return { ok: true, data: { rows } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// editInterpreter / editPricing / editPurchaser — extra owner-reps
+// (owner 2026-06-26 · FEATURE D · twins of editCs / editSale).
+// ────────────────────────────────────────────────────────────
+//
+// Each is a 1:1 mirror of adminUpdateUserCsRep: UPDATE tb_users SET <col>=$adminID
+// after VALIDATING the chosen adminID exists + is active in tb_admin
+// (adminStatusA='1'). Writes the legacy varchar(20) column (migration 0217)
+// the profile page reads. No money/status side-effects.
+//
+// Factored into ONE helper so the three are provably identical (same ownership,
+// audit, validation, revalidate shape) — only the target column + the log action
+// name differ.
+const extraRepSchema = z.object({
+  userid: useridSchema,
+  adminID: z.string().trim().min(1, "เลือกผู้ดูแล").max(20),
+});
+
+async function updateUserExtraRep(
+  input: z.infer<typeof extraRepSchema>,
+  opts: { column: "adminIDInterpreter" | "adminIDPricing" | "adminIDPurchaser"; logAction: string; roleLabel: string },
+): Promise<AdminActionResult> {
+  const parsed = extraRepSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const userid = parsed.data.userid.toUpperCase();
+  const adminID = parsed.data.adminID;
+  const { column, logAction, roleLabel } = opts;
+
+  return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Validate the target admin.
+    const { data: rep, error: repErr } = await admin
+      .from("tb_admin")
+      .select("adminID, adminStatusA")
+      .eq("adminID", adminID)
+      .maybeSingle<{ adminID: string; adminStatusA: string | null }>();
+    if (repErr) {
+      console.error(`[updateUserExtraRep ${column} rep read] failed`, { adminID, code: repErr.code, message: repErr.message });
+      return { ok: false, error: repErr.message };
+    }
+    if (!rep) return { ok: false, error: `ไม่พบ${roleLabel}ปลายทาง (adminID ไม่ตรงกับ tb_admin)` };
+    if (rep.adminStatusA !== "1") return { ok: false, error: `${roleLabel}ปลายทางถูกปิดใช้งาน` };
+
+    const { data: before, error: beforeErr } = await admin
+      .from("tb_users")
+      .select(`userID, ${column}`)
+      .eq("userID", userid)
+      .maybeSingle<{ userID: string } & Record<string, string | null>>();
+    if (beforeErr) {
+      console.error(`[updateUserExtraRep ${column} customer read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: beforeErr.message };
+    }
+    if (!before) return { ok: false, error: "ไม่พบลูกค้า" };
+    if (before[column] === adminID) return { ok: true }; // no-op
+
+    const { error } = await admin
+      .from("tb_users")
+      .update({ [column]: adminID })
+      .eq("userID", userid);
+    if (error) {
+      console.error(`[updateUserExtraRep ${column} update] failed`, { userid, code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    await logAdminAction(adminId, logAction, "tb_users", userid, {
+      before: before[column] ?? null,
+      after: adminID,
+    });
+    revalidatePath(`/admin/customers/${userid}`);
+    // Bust the customer-chrome cache so any sidebar surface that ever reads these
+    // refreshes immediately (mirrors the sales/CS rep busts).
+    bustCustomerChrome();
+    return { ok: true };
+  });
+}
+
+export async function adminUpdateUserInterpreter(input: z.infer<typeof extraRepSchema>): Promise<AdminActionResult> {
+  return updateUserExtraRep(input, { column: "adminIDInterpreter", logAction: "tb_users.update_interpreter", roleLabel: "ล่ามจีน" });
+}
+export async function adminUpdateUserPricing(input: z.infer<typeof extraRepSchema>): Promise<AdminActionResult> {
+  return updateUserExtraRep(input, { column: "adminIDPricing", logAction: "tb_users.update_pricing", roleLabel: "Pricing" });
+}
+export async function adminUpdateUserPurchaser(input: z.infer<typeof extraRepSchema>): Promise<AdminActionResult> {
+  return updateUserExtraRep(input, { column: "adminIDPurchaser", logAction: "tb_users.update_purchaser", roleLabel: "ผู้สั่งซื้อ" });
+}
+
+// ────────────────────────────────────────────────────────────
 // Task 3 — inline edit note (tb_users.userNote)
 // ────────────────────────────────────────────────────────────
 const noteSchema = z.object({

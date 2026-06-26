@@ -22,8 +22,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
 import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
+import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 // ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
 // `wallet-trans.ts` (no paydeposit cascade) → `wallet-hs.ts` (cascade-aware
 // per D-2 rule 3). The dateslip edit stays in `wallet-trans.ts` since it's
@@ -119,6 +120,114 @@ export function EditDateSlipForm({
             <button
               type="button"
               onClick={() => { setOpen(false); setError(null); setValue(toLocalInput(initialDateSlip)); }}
+              disabled={pending}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// <EditAmountForm> — #6 (ภูม 2026-06-26)
+//
+// Lets the accountant CORRECT the slip amount while the row is still
+// pending (status='1') — e.g. the customer typed 11,470.52 but the bank
+// slip shows 11,470.51. Calls adminUpdateWalletHsPendingAmount, which is
+// pending-only + refuses linked "เติม-แล้วจ่าย" topups (cascade-locked).
+// §0f confirm-before-mutate: a window.confirm shows old → new before firing.
+// ────────────────────────────────────────────────────────────
+
+export function EditAmountForm({
+  id,
+  currentAmount,
+}: {
+  id: number;
+  currentAmount: number;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<string>(String(currentAmount));
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const next = Number(value);
+    if (!Number.isFinite(next) || next <= 0) {
+      setError("กรุณากรอกจำนวนเงินที่มากกว่า 0");
+      return;
+    }
+    const rounded = Math.round(next * 100) / 100;
+    if (Math.abs(rounded - currentAmount) < 0.005) {
+      setError("จำนวนเงินใหม่ต้องไม่เท่ากับจำนวนเดิม");
+      return;
+    }
+    // §0f confirm-before-mutate — show the exact old → new figures.
+    if (
+      !window.confirm(
+        `แก้ไขจำนวนเงินของสลิปนี้?\n\nจาก  ฿${currentAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\nเป็น ฿${rounded.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n(ระบบจะใช้จำนวนเงินใหม่นี้ตอนกดอนุมัติ + ตัดจ่าย)`,
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await adminUpdateWalletHsPendingAmount({ id, amount: rounded });
+      if (res.ok) {
+        router.refresh();
+        setOpen(false);
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2">
+      {!open && (
+        <button
+          type="button"
+          onClick={() => { setOpen(true); setValue(String(currentAmount)); setError(null); }}
+          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
+        >
+          <Pencil className="h-3.5 w-3.5" /> แก้ไขจำนวนเงิน (ให้ตรงสลิป)
+        </button>
+      )}
+      {open && (
+        <form onSubmit={onSubmit} className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <p className="text-[11px] font-semibold text-amber-900">
+            แก้ไขจำนวนเงินให้ตรงกับสลิปจริง (แก้ได้เฉพาะตอน &lsquo;รอตรวจสอบ&rsquo; · ระบบจะใช้ยอดนี้ตอนตัดจ่าย)
+          </p>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono"
+            required
+          />
+          {error && <p className="text-[11px] text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600 disabled:opacity-50"
+            >
+              {pending ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> กำลังบันทึก…</>
+              ) : (
+                "บันทึกจำนวนเงินใหม่"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setError(null); setValue(String(currentAmount)); }}
               disabled={pending}
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
             >

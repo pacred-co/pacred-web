@@ -43,6 +43,7 @@ import {
   setForwarderImportDuty,
 } from "@/actions/admin/cargo-cost";
 import { lookupHsCode, type HsLookupRow } from "@/actions/admin/hs-codes";
+import { HsCodePicker } from "@/components/admin/hs-code-picker";
 import { computeImportDutyVat, dutyThbFromPct } from "@/lib/forwarder/import-duty-vat";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
@@ -410,13 +411,12 @@ function CostEditorBody({
           </div>
           <label className="space-y-0.5">
             <span className="block text-[11px] text-muted">HS Code</span>
-            <input
-              type="text"
-              maxLength={40}
+            <HsCodePicker
               value={hsCode}
-              onChange={(e) => setHsCode(e.target.value)}
-              placeholder="เช่น 8471.30.20"
-              className={textInputCls}
+              onChange={setHsCode}
+              placeholder="เช่น 8471.30.20 หรือชื่อสินค้า"
+              inputClassName={textInputCls + " pr-7"}
+              aria-label="HS Code"
             />
             <HsLookupHint hint={hsHint} />
           </label>

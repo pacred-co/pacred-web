@@ -75,7 +75,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
-import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
+import { EditDateSlipForm, EditAmountForm, ApproveRejectForm } from "./edit-form";
 
 export const dynamic = "force-dynamic";
 
@@ -497,6 +497,12 @@ export default async function AdminWalletDetail({
                     {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
                 </>
+              )}
+              {/* #6 (ภูม 2026-06-26) — correct the slip amount during review.
+                  Pending customer-slip rows only (type 1/4/8); the server
+                  refuses linked "เติม-แล้วจ่าย" topups. */}
+              {isPending && (typeKey === "1" || typeKey === "4" || typeKey === "8") && (
+                <EditAmountForm id={row.id} currentAmount={amount} />
               )}
             </div>
 

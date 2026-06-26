@@ -26,6 +26,10 @@ export type TaemRow = {
   trans: string | null;       // SEA / ROAD / AIR
   type: string | null;        // 普通货物/ทั่วไป/A · 电器/มอก./M · 药和食物/อย./O …
   code: string | null;        // customer code (PR…/PCS…)
+  /** CG. (col T) — แต้ม's HS / customs-classification code for this tracking. */
+  cg: string | null;
+  /** Remark Number (col S) — the box marking / shipping mark แต้ม wrote on the parcel. */
+  boxMark: string | null;
   parcel: number | null;      // Total Parcel
   totalWt: number | null;     // Total Wt. (kg)
   totalVol: number | null;    // Total Vol. (m³)
@@ -64,6 +68,8 @@ const CANON: Record<keyof Omit<TaemRow, "isData" | "note">, number> = {
   parcel: 13,     // N Total Parcel
   totalWt: 16,    // Q Total Wt. (NOT O "Wt." — the per-box weight)
   totalVol: 17,   // R Total Vol. (NOT P "Vol.")
+  boxMark: 18,    // S Remark Number (box marking / shipping mark)
+  cg: 19,         // T CG. (แต้ม's HS / customs classification)
   etd: 24,        // Y etd (date-guarded by parseTaemDate)
   eta: 25,        // Z eta (date-guarded)
 };
@@ -83,6 +89,10 @@ const HEADER_MAP: Record<string, keyof typeof CANON> = {
   "total wt": "totalWt",
   "total vol.": "totalVol",
   "total vol": "totalVol",
+  "remark number": "boxMark",   // col S — box marking / shipping mark
+  "remark": "boxMark",
+  "cg.": "cg",                  // col T — HS / customs classification
+  "cg": "cg",
 };
 
 function toNum(v: string | undefined | null): number | null {
@@ -179,6 +189,10 @@ export function parseTaemReconcile(text: string): TaemParseResult {
       trans: cellStr(cells[idx.trans]),
       type: cellStr(cells[idx.type]),
       code: cellStr(cells[idx.code]),
+      // CG. (HS) + Remark Number (box mark) — reference-capture for the ingest.
+      // cg may be blank on continuation rows / when แต้ม hasn't classified yet.
+      cg: cellStr(cells[idx.cg]),
+      boxMark: cellStr(cells[idx.boxMark]),
       parcel: toNum(cells[idx.parcel]),
       totalWt,
       totalVol,

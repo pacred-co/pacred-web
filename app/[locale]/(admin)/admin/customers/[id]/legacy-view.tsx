@@ -38,7 +38,7 @@ import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getSellFloorCbm } from "@/lib/admin/sell-floor-config";
-import { getCustomerStatCounts, listSalesAdmins, listCsAdmins } from "@/actions/admin/customer-profile";
+import { getCustomerStatCounts, listSalesAdmins, listCsAdmins, listActiveAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
 // single-char tb_* status codes the order tables show.
@@ -58,6 +58,7 @@ import {
   NoteEditor,
   SaleRepEditor,
   CsRepEditor,
+  ExtraRepEditor,
   ComparisonEditor,
   CreditLineEditor,
   CorporateEditor,
@@ -81,6 +82,11 @@ type URow = {
   userLastLogin: string | null;   // ← correct column (legacy schema)
   adminIDSale: string | null;
   adminIDCS: string | null;        // FEATURE 1: assigned CS rep (migration 0141)
+  // FEATURE D (owner 2026-06-26 · migration 0217): per-customer extra owner-reps
+  // — ล่ามจีน / Pricing / ผู้สั่งซื้อ (mirror adminIDSale / adminIDCS).
+  adminIDInterpreter: string | null;
+  adminIDPricing: string | null;
+  adminIDPurchaser: string | null;
   userNote: string | null;
   userPicture: string | null;     // Wave 13: legacy avatar filename (col is `userPicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
   // P0-17: identity-edit fields (faithful editUser modal).
@@ -263,7 +269,7 @@ export async function renderLegacyCustomerView(
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID,userComparison,userComparisonValue,userCredit,userCreditValue,userCreditDate",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,adminIDInterpreter,adminIDPricing,adminIDPurchaser,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID,userComparison,userComparisonValue,userCredit,userCreditValue,userCreditDate",
     )
     .eq("userID", id)
     .maybeSingle();
@@ -470,11 +476,13 @@ export async function renderLegacyCustomerView(
   // is fetched here in parallel with the other profile sub-readers. Best-
   // effort — never throws (the loader degrades to "0 delivered ตู้" empty
   // state if tb_forwarder query fails).
-  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
+  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, activeAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
     getCustomerRateMatrix(u.userID),
     getCustomerStatCounts(u.userID),
     listSalesAdmins(),
     listCsAdmins(),
+    // FEATURE D (owner 2026-06-26) — active-admin list for ล่ามจีน/Pricing/ผู้สั่งซื้อ.
+    listActiveAdmins(),
     getCustomerMarginSummary(u.userID),
     // CRM depth (2026-06-08) — best-effort: degrade to empty on error.
     getTags(u.userID),
@@ -482,6 +490,7 @@ export async function renderLegacyCustomerView(
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
   const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
+  const activeAdmins = activeAdminsRes.ok ? activeAdminsRes.data?.rows ?? [] : [];
   const customerTags = tagsRes.ok ? (tagsRes.data ?? []).map((t) => t.tag) : [];
   const customerActivity = activityRes.ok ? (activityRes.data ?? []) : [];
   const walletBalance = Number(wallet?.wallettotal ?? 0);
@@ -610,6 +619,11 @@ export async function renderLegacyCustomerView(
               />
               <SaleRepEditor compact userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
               <CsRepEditor compact userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
+              {/* FEATURE D (owner 2026-06-26) — ล่ามจีน / Pricing / ผู้สั่งซื้อ ของลูกค้า
+                  ข้าง Sales/CS (หลังบ้านเห็นหมด · §0g self-explaining row). */}
+              <ExtraRepEditor compact kind="interpreter" userid={u.userID} currentRep={u.adminIDInterpreter} admins={activeAdmins} />
+              <ExtraRepEditor compact kind="pricing" userid={u.userID} currentRep={u.adminIDPricing} admins={activeAdmins} />
+              <ExtraRepEditor compact kind="purchaser" userid={u.userID} currentRep={u.adminIDPurchaser} admins={activeAdmins} />
             </div>
           </div>
           {/* Action buttons — moved into the name row (right-aligned · FB-style)
@@ -639,35 +653,14 @@ export async function renderLegacyCustomerView(
         </div>
       </div>
 
-      {/* ── SECTION 2 · Profile detail — 2-col (owner 2026-06-12: สลับตำแหน่ง
-          ข้อมูลบัญชี ↔ ข้อมูลส่วนตัวลูกค้า + โน้ตใต้ข้อมูลบัญชี). LEFT = identity
-          editor (ข้อมูลส่วนตัวลูกค้า · tall) · RIGHT = ข้อมูลบัญชี + หมายเหตุภายใน
-          stacked, so the two columns balance to roughly equal height. ── */}
-      <div className="grid lg:grid-cols-2 gap-5 lg:items-stretch">
-        {/* Left: identity editor (faithful editUser — email/phone/sex/birthday/
-            line/fb + senior-only rep/coID) */}
-        <IdentityEditor
-          userid={u.userID}
-          isSenior={isSeniorAdmin}
-          admins={salesAdmins}
-          initial={{
-            userName:     u.userName ?? "",
-            userLastName: u.userLastName ?? "",
-            userEmail:    u.userEmail ?? "",
-            userTel:      u.userTel ?? "",
-            userSex:      u.userSex ?? "",
-            userBirthday: u.userBirthday ?? "",
-            userLineID:   u.userLineID ?? "",
-            userFacebook: u.userFacebook ?? "",
-            adminIDSale:  u.adminIDSale ?? "",
-            coID:         u.coID ?? "",
-          }}
-        />
-
-        {/* Right: account meta (ข้อมูลบัญชี) + the internal note stacked under it
-            (legacy โน้ต) — compact padding/gap so the stack is "บาง" (thin) and,
-            with the grid's lg:items-stretch, the two columns end equal-height. */}
-        <div className="flex h-full flex-col gap-4">
+      {/* ── SECTION 2 · Profile detail — ข้อมูลบัญชี + หมายเหตุภายใน.
+          (owner 2026-06-26: ย้าย "ข้อมูลส่วนตัวลูกค้า" [IdentityEditor] ไปไว้ใน
+          "เครื่องมือผู้ดูแล" ใต้ PIN lock ด้านล่าง · ส่วนนี้เหลือ ข้อมูลบัญชี +
+          หมายเหตุภายใน stacked เต็มแถว.) ── */}
+      <div className="grid grid-cols-1 gap-5">
+        {/* Account meta (ข้อมูลบัญชี) + the internal note stacked under it
+            (legacy โน้ต) — compact padding/gap so the stack is "บาง" (thin). */}
+        <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 space-y-2 text-sm">
             <SectionHeading>ข้อมูลบัญชี</SectionHeading>
             {/* วันที่สมัคร + ล่าสุดล็อกอิน on ONE row (2 cols, label-over-value)
@@ -1093,6 +1086,27 @@ export async function renderLegacyCustomerView(
           <CustomerActivityTimeline userid={u.userID} initialEntries={customerActivity} />
         </div>
       </div>
+
+      {/* ข้อมูลส่วนตัวลูกค้า (faithful editUser — email/phone/sex/birthday/line/fb
+          + senior-only rep/coID). owner 2026-06-26: ย้ายมาไว้ใต้ PIN lock (เครื่องมือ
+          ผู้ดูแล) จัดกลุ่มใกล้บล็อกนิติบุคคล/อัปเกรดด้านล่าง · ทุกฟังก์ชันเดิมทำงานครบ. */}
+      <IdentityEditor
+        userid={u.userID}
+        isSenior={isSeniorAdmin}
+        admins={salesAdmins}
+        initial={{
+          userName:     u.userName ?? "",
+          userLastName: u.userLastName ?? "",
+          userEmail:    u.userEmail ?? "",
+          userTel:      u.userTel ?? "",
+          userSex:      u.userSex ?? "",
+          userBirthday: u.userBirthday ?? "",
+          userLineID:   u.userLineID ?? "",
+          userFacebook: u.userFacebook ?? "",
+          adminIDSale:  u.adminIDSale ?? "",
+          coID:         u.coID ?? "",
+        }}
+      />
 
       {/* Juristic company info + multi-doc (owner 2026-06-26):
           - PERSONAL → ปุ่มอัปเกรดเป็นนิติบุคคล (สร้าง tb_corporate + ตั้ง userCompany='1')

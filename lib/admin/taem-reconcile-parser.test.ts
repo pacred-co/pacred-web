@@ -14,8 +14,8 @@ const SR_HEADER = [
 ].join("\t");
 
 // Build a 26-col Shipment-Report data row from named fields at their REAL indices.
-type SF = "container"|"trans"|"smDate"|"type"|"code"|"tracking"|"parcel"|"totalWt"|"totalVol"|"etd"|"eta";
-const IDX: Record<SF, number> = { container:0, trans:1, smDate:2, type:7, code:8, tracking:9, parcel:13, totalWt:16, totalVol:17, etd:24, eta:25 };
+type SF = "container"|"trans"|"smDate"|"type"|"code"|"tracking"|"parcel"|"totalWt"|"totalVol"|"boxMark"|"cg"|"etd"|"eta";
+const IDX: Record<SF, number> = { container:0, trans:1, smDate:2, type:7, code:8, tracking:9, parcel:13, totalWt:16, totalVol:17, boxMark:18, cg:19, etd:24, eta:25 };
 function srow(f: Partial<Record<SF, string>>): string {
   const cols = new Array(26).fill("");
   for (const k of Object.keys(f) as SF[]) cols[IDX[k]] = f[k]!;
@@ -24,7 +24,7 @@ function srow(f: Partial<Record<SF, string>>): string {
 
 // ── header-mapped paste (real iTAM "Shipment Report" · real GZS260622 data) ──
 {
-  const r1 = srow({ container:"GZS260622-1", trans:"SEA", smDate:"2026/06/17", type:"普通货物/ทั่วไป/A", code:"PR015", tracking:"1781675788-1/4", parcel:"1", totalWt:"398", totalVol:"0.6555", etd:"2026-06-21", eta:"2026-07-05" });
+  const r1 = srow({ container:"GZS260622-1", trans:"SEA", smDate:"2026/06/17", type:"普通货物/ทั่วไป/A", code:"PR015", tracking:"1781675788-1/4", parcel:"1", totalWt:"398", totalVol:"0.6555", boxMark:"PR015-A", cg:"3926.90.99", etd:"2026-06-21", eta:"2026-07-05" });
   const r2 = srow({ container:"GZS260622-1", trans:"SEA", smDate:"2026/06/17", type:"普通货物/ทั่วไป/A", code:"PR053", tracking:"1782029840", parcel:"10", totalWt:"628", totalVol:"0.5025" });
   const note = srow({ tracking:"1779529270", container:"กระสอบรวม" });
   const { rows, headerSeen } = parseTaemReconcile([SR_HEADER, r1, r2, note].join("\n"));
@@ -35,10 +35,27 @@ function srow(f: Partial<Record<SF, string>>): string {
   ok(rows[0].type === "普通货物/ทั่วไป/A", "row1 type(H)");
   ok(rows[0].totalWt === 398 && Math.abs(rows[0].totalVol! - 0.6555) < 1e-9, "row1 totalWt(Q)+totalVol(R)");
   ok(rows[0].parcel === 1, "row1 parcel(N)");
+  ok(rows[0].cg === "3926.90.99", "row1 cg(T · HS classification)");
+  ok(rows[0].boxMark === "PR015-A", "row1 boxMark(S · Remark Number)");
   ok(rows[0].etd === "2026-06-21" && rows[0].eta === "2026-07-05", "row1 etd(Y)+eta(Z) by header name");
   ok(rows[0].isData === true, "row1 isData");
   ok(rows[1].isData === true && rows[1].totalVol === 0.5025, "row2 data");
+  ok(rows[1].cg === null && rows[1].boxMark === null, "row2 cg/boxMark blank → null");
   ok(rows[2].isData === false && rows[2].note === "กระสอบรวม", "note row flagged + note carried");
+}
+
+// ── CG. + Remark Number mapped by header NAME (not just canonical index) ──
+{
+  const header = ["Container Name","Trans","Type","Code","Tracking","Total Wt.","Total Vol.","Remark Number","CG."].join("\t");
+  // Columns now in a DIFFERENT order than canonical → only header-name mapping works.
+  const row = ["GZS260625-1","SEA","ทั่วไป","PR099","1782999111","100","0.5","MARK-XYZ","8471.30.20"].join("\t");
+  const { rows, headerSeen } = parseTaemReconcile([header, row].join("\n"));
+  ok(headerSeen, "header detected (custom order)");
+  ok(rows.length === 1, "1 row");
+  ok(rows[0].tracking === "1782999111", "tracking by header name");
+  ok(rows[0].cg === "8471.30.20", "cg by header name 'CG.'");
+  ok(rows[0].boxMark === "MARK-XYZ", "boxMark by header name 'Remark Number'");
+  ok(rows[0].totalWt === 100 && rows[0].totalVol === 0.5, "wt/vol by header name");
 }
 
 // ── note variants are all isData=false ──
