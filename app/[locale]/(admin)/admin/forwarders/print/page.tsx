@@ -440,10 +440,10 @@ export default async function ForwarderLabelPrintPage({
   return (
     <div className="bg-white text-black min-h-screen">
       <style>{`
-        /* Label stock = 100mm WIDE × 150mm TALL (portrait feed · ES-9910UB 4" head).
-           Print UPRIGHT to match the paper exactly — NO rotation, NO scaling.
-           (CSS rotate broke in real thermal print: content came out crossways +
-           Chrome scaled it down → faint. Upright-portrait prints crisp + aligned.) */
+        /* FAITHFUL to legacy PCS printAll.php case 4 — mPDF format [100,75] =
+           100mm WIDE × 75mm TALL (landscape · wider than tall · the PCS label).
+           Same 100mm width as before, but 75mm tall (legacy) not 150mm → content
+           is dense + fills the label like legacy (150mm was too tall → sparse). */
         .label-page {
           background: #fff;
           color: #000;
@@ -451,9 +451,9 @@ export default async function ForwarderLabelPrintPage({
         }
         .label-rot {
           width: 100mm;
-          height: 150mm;
+          height: 75mm;
           box-sizing: border-box;
-          padding: 4mm;
+          padding: 2.5mm;
           background: #fff;
           color: #000;
           overflow: hidden;
@@ -463,7 +463,7 @@ export default async function ForwarderLabelPrintPage({
         @media screen {
           .label-page {
             width: 100mm;
-            height: 150mm;
+            height: 75mm;
             border: 1px dashed #cbd5e1;
             margin: 0 auto 6mm;
             box-shadow: 0 1px 4px rgba(0,0,0,.08);
@@ -474,8 +474,8 @@ export default async function ForwarderLabelPrintPage({
           html, body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
           .label-page {
             width: 100mm;
-            height: 150mm;
-            max-height: 150mm;
+            height: 75mm;
+            max-height: 75mm;
             overflow: hidden;
             break-after: page;
             page-break-after: always;
@@ -487,7 +487,7 @@ export default async function ForwarderLabelPrintPage({
           }
           .label-page:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 100mm 150mm; margin: 0; }
+        @page { size: 100mm 75mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar — hidden on print */}
@@ -524,28 +524,28 @@ export default async function ForwarderLabelPrintPage({
                       {showLogo && (
                         <img src={LOGO_PATH} alt={SITE_NAME} className="h-[6mm] w-auto shrink-0" />
                       )}
-                      <span className="rounded border border-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
+                      <span className="rounded border border-black px-1.5 py-0 text-[2.2mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
                     </div>
                     {q && (
-                      <img src={q.detail} alt="QR" className="h-[20mm] w-[20mm] shrink-0" />
+                      <img src={q.detail} alt="QR" className="h-[11mm] w-[11mm] shrink-0" />
                     )}
                   </div>
 
-                  <hr className="my-[2.5mm] border-black" />
+                  <hr className="my-[1mm] border-black" />
 
                   {/* Row 2 — TO + customer member code (large) */}
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
+                    <span className="rounded bg-black px-1.5 py-0 text-[2.2mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <span className="truncate text-[13mm] font-black leading-none tracking-tight">
+                    <span className="truncate text-[8mm] font-black leading-none tracking-tight">
                       {displayUser}
                     </span>
                   </div>
 
-                  <hr className="my-[2.5mm] border-black" />
+                  <hr className="my-[1mm] border-black" />
 
                   {/* Row 3 — tracking text + (optional Code128) + tracking QR
                       Faithful to legacy printAll.php L162-175:
@@ -553,10 +553,10 @@ export default async function ForwarderLabelPrintPage({
                       else        → text + QR only (no barcode) */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[2.6mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
+                      <p className="text-[1.9mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
                       <p
                         className={`break-all leading-tight ${
-                          barcode ? "text-[3mm] font-semibold" : "text-[4mm] font-bold"
+                          barcode ? "text-[2.2mm] font-semibold" : "text-[3mm] font-bold"
                         }`}
                       >
                         {f.ftrackingchn || "—"}
@@ -565,7 +565,7 @@ export default async function ForwarderLabelPrintPage({
                         <img
                           src={barcode}
                           alt="tracking barcode"
-                          className="mt-[0.5mm] h-[9mm] w-auto max-w-full"
+                          className="mt-[0.5mm] h-[6mm] w-auto max-w-full"
                         />
                       )}
                     </div>
@@ -573,12 +573,12 @@ export default async function ForwarderLabelPrintPage({
                       <img
                         src={q.tracking}
                         alt="tracking QR"
-                        className={`shrink-0 ${barcode ? "h-[11mm] w-[11mm]" : "h-[13mm] w-[13mm]"}`}
+                        className={`shrink-0 ${barcode ? "h-[7mm] w-[7mm]" : "h-[8mm] w-[8mm]"}`}
                       />
                     )}
                   </div>
 
-                  <hr className="my-[2.5mm] border-black" />
+                  <hr className="my-[1mm] border-black" />
 
                   {/* Row 4 — gateway-pickup QR · weight / volume / qty / location */}
                   <div className="mt-auto flex items-end justify-between gap-2">
@@ -586,10 +586,10 @@ export default async function ForwarderLabelPrintPage({
                       <img
                         src={q.gateway}
                         alt="gateway QR"
-                        className="h-[22mm] w-[22mm] shrink-0"
+                        className="h-[12mm] w-[12mm] shrink-0"
                       />
                     )}
-                    <div className="text-right text-[5mm] leading-snug">
+                    <div className="text-right text-[3mm] leading-snug">
                       <p>น้ำหนัก : {fmt(f.fweight, 2)} kg.</p>
                       <p>ปริมาตรรวม : {fmt(totalVolume, 3)} CBM</p>
                       <p className="font-bold">จำนวน : {fmt(f.famount, 0)} กล่อง</p>
@@ -615,46 +615,46 @@ export default async function ForwarderLabelPrintPage({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-1 min-w-0">
                       {showLogo && (
-                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[7mm] w-auto shrink-0" />
+                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[5mm] w-auto shrink-0" />
                       )}
-                      <p className="min-w-0 text-[2.6mm] leading-[3mm] text-black">
+                      <p className="min-w-0 text-[1.8mm] leading-[2.1mm] text-black">
                         <span className="font-bold text-black">ผู้ส่ง/From: </span>
                         <span className="font-bold text-black">{SITE_LEGAL_NAME_TH}</span>{" "}
                         {ADDRESSES.office.full} โทร. {CONTACT.phoneCompanyDisplay}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="rounded border border-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
+                      <span className="rounded border border-black px-1.5 py-0 text-[2.2mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
-                      <p className="mt-[0.5mm] break-all text-[5mm] font-bold leading-tight">
+                      <p className="mt-[0.5mm] break-all text-[3.5mm] font-bold leading-tight">
                         {f.ftrackingchn || "—"}
                       </p>
-                      <p className="text-[3.2mm] leading-tight text-gray-600">แทรคกิ้ง</p>
+                      <p className="text-[2.2mm] leading-tight text-gray-600">แทรคกิ้ง</p>
                     </div>
                   </div>
 
-                  <hr className="my-[2.5mm] border-black" />
+                  <hr className="my-[1mm] border-black" />
 
                   {/* Row 2 — TO + full ship-to address (large, faithful) */}
                   <div className="flex-1 min-h-0 overflow-hidden">
-                    <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
+                    <span className="rounded bg-black px-1.5 py-0 text-[2.2mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <p className="mt-[1.5mm] text-[6mm] font-semibold leading-snug">
+                    <p className="mt-[1mm] text-[3.6mm] font-semibold leading-snug">
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
                     {addrNote && (
-                      <p className="mt-[0.5mm] text-[3.4mm] leading-snug text-gray-700">
+                      <p className="mt-[0.5mm] text-[2.3mm] leading-snug text-gray-700">
                         (* {addrNote})
                       </p>
                     )}
                   </div>
 
-                  <hr className="my-[2.5mm] border-black" />
+                  <hr className="my-[1mm] border-black" />
 
                   {/* Row 3 — carrier · qty */}
-                  <div className="flex items-end justify-between gap-2 text-[5mm]">
+                  <div className="flex items-end justify-between gap-2 text-[3.2mm]">
                     <p className="min-w-0 truncate">
                       บริษัทขนส่ง : <span className="font-bold">{nameShipBy(f.fshipby)}</span>
                     </p>
