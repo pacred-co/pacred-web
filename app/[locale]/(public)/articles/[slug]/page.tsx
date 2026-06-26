@@ -12,6 +12,7 @@ import { getPublishedArticleBySlug } from "@/lib/cms/articles";
 import { CMS_CATEGORY_META } from "@/lib/validators/cms-article";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
+import { SITE_URL } from "@/components/seo/site";
 
 // Reads the DB (+ <NavBar> reads auth cookies) → must be dynamic.
 export const dynamic = "force-dynamic";
@@ -21,19 +22,45 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const a = await getPublishedArticleBySlug(slug);
   if (!a) return { title: "ไม่พบบทความ · Pacred Shipping" };
-  // SEO overrides (owner 2026-06-23) — fall back to title / excerpt when blank.
+  // Fully back-office editable SEO (ปอน 2026-06-26 · same as /our-work): title ·
+  // description · keywords (= the article's tags) · canonical · OG · twitter — all
+  // fall back to title / excerpt when blank.
   const metaTitle = a.metaTitle || a.title;
   const metaDesc = a.metaDescription || a.excerpt || a.title;
+  const path = `${locale === "en" ? "/en" : ""}/articles/${a.slug}`;
+  const ogImage = a.coverUrl
+    ? a.coverUrl.startsWith("http")
+      ? a.coverUrl
+      : `${SITE_URL}${a.coverUrl}`
+    : undefined;
   return {
-    title: `${metaTitle} · Pacred Shipping`,
+    // `absolute` bypasses the layout title template (else the brand suffix doubles).
+    title: { absolute: `${metaTitle} | Pacred Shipping` },
     description: metaDesc,
+    keywords: a.tags.length ? a.tags : undefined,
+    alternates: {
+      canonical: path,
+      languages: {
+        "th-TH": `/articles/${a.slug}`,
+        "en-US": `/en/articles/${a.slug}`,
+        "x-default": `/articles/${a.slug}`,
+      },
+    },
     openGraph: {
       title: metaTitle,
       description: metaDesc,
-      images: a.coverUrl ? [{ url: a.coverUrl }] : undefined,
+      type: "article",
+      url: path,
+      images: ogImage ? [{ url: ogImage, alt: a.title }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: metaTitle,
+      description: metaDesc,
+      images: ogImage ? [ogImage] : undefined,
     },
   };
 }

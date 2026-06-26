@@ -108,6 +108,8 @@ export const ADDRESSES = {
 export const SOCIAL = {
   line:      "https://lin.ee/Yg3fU0I",
   facebook:  "https://www.facebook.com/PacredShippingCustomsClearanceImportExport/",
+  /** Messenger chat with the FB page (m.me deep link → opens the page's chat). */
+  messenger: "https://m.me/PacredShippingCustomsClearanceImportExport",
   youtube:   "https://www.youtube.com/@PacredShipping",
   tiktok:    "https://www.tiktok.com/@pacred.co",
   instagram: "https://www.instagram.com/pacred.co/",

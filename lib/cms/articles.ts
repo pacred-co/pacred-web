@@ -11,7 +11,7 @@ import "server-only";
  * "just the static cards" instead of 500-ing.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { CmsCategory } from "@/lib/validators/cms-article";
+import type { CmsCategory, CaseFact } from "@/lib/validators/cms-article";
 
 export type CmsArticle = {
   id: number;
@@ -27,12 +27,18 @@ export type CmsArticle = {
   tags: string[];
   videoUrl: string;
   galleryImages: string[];
+  // our_work case-study pattern (mig 0213)
+  casePrice: string;
+  caseRating: number | null;
+  caseRoute: string;
+  caseFacts: CaseFact[];
   publishedAt: string | null;
 };
 
 const COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, " +
-  "meta_title, meta_description, tags, video_url, gallery_images, published_at";
+  "meta_title, meta_description, tags, video_url, gallery_images, " +
+  "case_price, case_rating, case_route, case_facts, published_at";
 
 type Row = {
   id: number;
@@ -48,6 +54,10 @@ type Row = {
   tags: string[] | null;
   video_url: string | null;
   gallery_images: string[] | null;
+  case_price: string | null;
+  case_rating: number | string | null;
+  case_route: string | null;
+  case_facts: CaseFact[] | null;
   published_at: string | null;
 };
 
@@ -66,6 +76,10 @@ function mapRow(r: Row): CmsArticle {
     tags: r.tags ?? [],
     videoUrl: r.video_url ?? "",
     galleryImages: r.gallery_images ?? [],
+    casePrice: r.case_price ?? "",
+    caseRating: r.case_rating == null ? null : Number(r.case_rating),
+    caseRoute: r.case_route ?? "",
+    caseFacts: Array.isArray(r.case_facts) ? r.case_facts : [],
     publishedAt: r.published_at,
   };
 }
@@ -93,6 +107,31 @@ export async function getPublishedArticles(
     return ((data ?? []) as unknown as Row[]).map(mapRow);
   } catch (e) {
     console.error("[cms getPublished] threw", { category, message: (e as Error)?.message });
+    return [];
+  }
+}
+
+/** Published articles that carry a video (ANY category), newest first — powers
+ *  the public /videos gallery. Fail-soft → []. The non-empty `video_url` filter
+ *  is re-checked in JS so a stray whitespace row never renders a broken player. */
+export async function getPublishedVideoArticles(): Promise<CmsArticle[]> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("cms_articles")
+      .select(COLS)
+      .eq("status", "published")
+      .not("video_url", "is", null)
+      .neq("video_url", "")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(500);
+    if (error) {
+      console.error("[cms getVideos] failed", { code: error.code, message: error.message });
+      return [];
+    }
+    return ((data ?? []) as unknown as Row[]).map(mapRow).filter((a) => a.videoUrl.trim() !== "");
+  } catch (e) {
+    console.error("[cms getVideos] threw", { message: (e as Error)?.message });
     return [];
   }
 }

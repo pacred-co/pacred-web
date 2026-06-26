@@ -17,6 +17,7 @@ import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { ArticleContent } from "@/components/knowledge/article-content";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
+import { RelatedServices } from "@/components/knowledge/related-services";
 import {
   KNOWLEDGE_ARTICLES,
   getArticleBySlug,
@@ -122,7 +123,12 @@ export default async function ArticlePage({
       <SearchBar />
       <main>
         <article className="relative pt-4 md:pt-6 pb-10 md:pb-16">
-          <div className="mx-auto w-full max-w-[1140px] px-[10px]">
+          {/* lg:pr clears the floating right quick-nav rail (fixed to the viewport
+              edge) so the sticky service sidebar never sits under it. */}
+          <div className="mx-auto w-full max-w-[1240px] px-[10px] lg:pr-[84px] 2xl:pr-[10px]">
+            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-8 xl:gap-10">
+              {/* ── Article column ── */}
+              <div className="min-w-0">
 
             {/* Breadcrumb */}
             <nav className="mx-auto w-full max-w-[920px] flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5">
@@ -191,6 +197,21 @@ export default async function ArticlePage({
               <ArticleContent text={content} title={article.title} />
             </div>
 
+                {/* Related services — MOBILE inline block (desktop uses the sticky aside) */}
+                <div className="mx-auto mt-8 w-full max-w-[760px] lg:hidden">
+                  <RelatedServices max={4} />
+                </div>
+              </div>
+
+              {/* ── Service sidebar — sticky on desktop, releases at the bottom banner.
+                  top-[156px] clears the full sticky chrome (NavBar 56px + SearchBar/
+                  category row ~85px = 141px) so the whole block sits nicely below it. ── */}
+              <aside className="hidden lg:block">
+                <div className="sticky top-[156px]">
+                  <RelatedServices />
+                </div>
+              </aside>
+            </div>
           </div>
         </article>
 

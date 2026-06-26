@@ -121,29 +121,60 @@ export async function generateMetadata({
   params: Promise<{ locale: string; id: string }>;
 }): Promise<Metadata> {
   const { locale, id } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const review = getReviewBySlugOrId(id);
 
-  if (!review) {
-    // Try CMS article
-    const cmsArticle = await getPublishedArticleBySlug(id);
-    if (cmsArticle?.category === "our_work") {
-      const metaTitle = cmsArticle.metaTitle || cmsArticle.title;
-      const metaDesc = cmsArticle.metaDescription || cmsArticle.excerpt || cmsArticle.title;
-      return {
-        title: { absolute: `${metaTitle} | Pacred Shipping` },
-        description: metaDesc,
-        openGraph: {
-          title: metaTitle,
-          description: metaDesc,
-          type: "article",
-          images: cmsArticle.coverUrl ? [{ url: cmsArticle.coverUrl, alt: cmsArticle.title }] : undefined,
+  // CMS-FIRST (Stage 2) — the case page's SEO (title · description · keywords · OG ·
+  // canonical) comes from the EDITABLE CMS article so the WHOLE page is back-office
+  // editable. Matched by URL slug or the catalog review's canonical slug (TH/EN/
+  // legacy-id all resolve). Keywords = the article's tags (HS code · product · mode).
+  const cmsBySlug = await getPublishedArticleBySlug(id);
+  const cmsArticle =
+    cmsBySlug?.category === "our_work"
+      ? cmsBySlug
+      : review
+        ? await getPublishedArticleBySlug(reviewCanonicalSlug(review))
+        : null;
+
+  if (cmsArticle && cmsArticle.category === "our_work") {
+    const metaTitle = cmsArticle.metaTitle || cmsArticle.title;
+    const metaDesc = cmsArticle.metaDescription || cmsArticle.excerpt || cmsArticle.title;
+    const canonical = reviewMetaPath(cmsArticle.slug, typedLocale);
+    const ogImage = cmsArticle.coverUrl
+      ? cmsArticle.coverUrl.startsWith("http")
+        ? cmsArticle.coverUrl
+        : `${SITE_URL}${cmsArticle.coverUrl}`
+      : undefined;
+    return {
+      title: { absolute: `${metaTitle} | Pacred Shipping` },
+      description: metaDesc,
+      keywords: cmsArticle.tags.length ? cmsArticle.tags : undefined,
+      alternates: {
+        canonical,
+        languages: {
+          "th-TH": reviewMetaPath(cmsArticle.slug, "th"),
+          "en-US": reviewMetaPath(cmsArticle.slug, "en"),
+          "x-default": reviewMetaPath(cmsArticle.slug, "th"),
         },
-      };
-    }
-    return { title: locale === "en" ? "Case not found" : "ไม่พบผลงาน" };
+      },
+      openGraph: {
+        title: metaTitle,
+        description: metaDesc,
+        type: "article",
+        url: canonical,
+        images: ogImage ? [{ url: ogImage, alt: cmsArticle.title }] : undefined,
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: metaTitle,
+        description: metaDesc,
+        images: ogImage ? [ogImage] : undefined,
+      },
+    };
   }
 
-  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  // catalog fallback — only for a case not in CMS
+  if (!review) return { title: locale === "en" ? "Case not found" : "ไม่พบผลงาน" };
   const content = getReviewContent(review, typedLocale);
   // Canonical = the locale-correct SEO slug (not the raw param, which may be a
   // legacy id or the other locale's slug) so duplicate URLs dedupe cleanly.
@@ -192,14 +223,21 @@ export default async function ReviewLandingPage({
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const review = getReviewBySlugOrId(id);
 
-  // ── CMS article fallback — when slug doesn't match any catalog review ──
-  if (!review) {
-    const [cmsArticle, cmsSession] = await Promise.all([
-      getPublishedArticleBySlug(id),
-      getCurrentUserWithProfile(),
-    ]);
-    if (!cmsArticle || cmsArticle.category !== "our_work") notFound();
+  // ── CMS-FIRST (Stage 2) — the catalog cases are migrated to cms_articles and are
+  // back-office editable. Resolve the editable CMS version by the URL slug, or by the
+  // matched catalog review's canonical (TH) slug — so every URL form (TH slug · EN
+  // slug · legacy short-id) renders the editable CMS case. The catalog branch below
+  // is the fallback only for a case not (yet) in CMS. ──
+  const cmsBySlug = await getPublishedArticleBySlug(id);
+  const cmsArticle =
+    cmsBySlug?.category === "our_work"
+      ? cmsBySlug
+      : review
+        ? await getPublishedArticleBySlug(reviewCanonicalSlug(review))
+        : null;
 
+  if (cmsArticle && cmsArticle.category === "our_work") {
+    const cmsSession = await getCurrentUserWithProfile();
     const t = await getTranslations({ locale, namespace: "reviews" });
     const cmsSlug = `cms-${cmsArticle.id}`;
     const cmsInitialComments = await listCaseComments(cmsSlug);
@@ -214,6 +252,15 @@ export default async function ReviewLandingPage({
     ];
     const ytId = extractYouTubeId(cmsArticle.videoUrl ?? "");
     const relatedCases = REVIEWS.slice(0, 4);
+
+    // Rating: average of rated comments → else the editor's caseRating → else 5.0.
+    const cmsRated = cmsInitialComments.filter((c) => typeof c.rating === "number" && (c.rating ?? 0) > 0);
+    const cmsRating = cmsRated.length
+      ? cmsRated.reduce((s, c) => s + (c.rating ?? 0), 0) / cmsRated.length
+      : (cmsArticle.caseRating ?? 5);
+    const cmsRatingWord = typedLocale === "en"
+      ? cmsRating >= 4.5 ? "Excellent" : cmsRating >= 3.5 ? "Very good" : "Good"
+      : cmsRating >= 4.5 ? "ยอดเยี่ยม" : cmsRating >= 3.5 ? "ดีมาก" : "ดี";
 
     const cmsUi = typedLocale === "th"
       ? { home: "หน้าหลัก", reviews: "ผลงานของเรา", quoteFree: "ขอใบเสนอราคาฟรี", priceLead: "ราคาประเมินตามงาน", fastReply: "ปรึกษาฟรี · ทีมงานตอบกลับเร็ว", verified: "ผลงานจริงของ Pacred", relatedEyebrow: "Our Case Studies", related: "ผลงานอื่นๆ", viewAll: "ดูผลงานทั้งหมด", readMore: "ดูผลงาน" }
@@ -275,6 +322,24 @@ export default async function ReviewLandingPage({
                     <h1 className="mt-2.5 text-[24px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white md:text-[30px]">
                       {cmsArticle.title}
                     </h1>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <div className="inline-flex items-center gap-1.5">
+                        <span className="text-[14px] font-black text-primary-700 dark:text-primary-300">{cmsRatingWord}</span>
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={["h-3.5 w-3.5", i < Math.round(cmsRating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")} strokeWidth={1.8} />
+                          ))}
+                        </div>
+                        {cmsRated.length > 0 ? (
+                          <span className="text-[12.5px] font-bold text-muted tabular-nums">({cmsRated.length} {typedLocale === "en" ? "reviews" : "รีวิว"})</span>
+                        ) : null}
+                      </div>
+                      {cmsArticle.caseRoute ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/60 px-2.5 py-0.5 text-[12.5px] font-bold text-foreground">
+                          {cmsArticle.caseRoute}
+                        </span>
+                      ) : null}
+                    </div>
                     {cmsArticle.excerpt ? (
                       <p className="mt-3 text-[14px] leading-relaxed text-muted">{cmsArticle.excerpt}</p>
                     ) : null}
@@ -290,8 +355,8 @@ export default async function ReviewLandingPage({
                   </header>
 
                   <aside className="self-start rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
-                    <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{cmsUi.priceLead}</p>
-                    <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">{cmsUi.quoteFree}</p>
+                    <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{cmsArticle.casePrice ? (typedLocale === "en" ? "Starting price" : "ราคาเริ่มต้น") : cmsUi.priceLead}</p>
+                    <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">{cmsArticle.casePrice || cmsUi.quoteFree}</p>
                     <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
                       {typedLocale === "th" ? "ทีมงาน Pacred พร้อมให้คำปรึกษาฟรี ตั้งแต่นำเข้าจีน เคลียร์ศุลกากร ถึงปลายทาง" : "Pacred team offers free consultation for China import, customs clearance and last-mile delivery"}
                     </p>
@@ -307,6 +372,25 @@ export default async function ReviewLandingPage({
               </div>
 
               <div className="mt-8 space-y-8 md:mt-10 md:space-y-10">
+                {/* ข้อมูลขนส่ง — case facts grid */}
+                {cmsArticle.caseFacts.length > 0 ? (
+                  <section>
+                    <div className={EYEBROW}>
+                      <Star className="h-3.5 w-3.5 fill-primary-600" strokeWidth={2.6} />
+                      {typedLocale === "en" ? "Shipment details" : "ข้อมูลขนส่ง"}
+                    </div>
+                    <h2 className={H2}>{typedLocale === "en" ? "Shipment details" : "ข้อมูลขนส่ง"}</h2>
+                    <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                      {cmsArticle.caseFacts.map((f, i) => (
+                        <div key={i} className="rounded-xl border border-border bg-white p-3 dark:bg-surface">
+                          <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{f.label}</p>
+                          <p className="mt-0.5 text-[14px] font-black text-foreground">{f.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
                 {/* Body content */}
                 {cmsArticle.body.trim() ? (
                   <section>
@@ -371,7 +455,8 @@ export default async function ReviewLandingPage({
       </>
     );
   }
-  // ── end CMS fallback ──
+  // ── catalog fallback — only reached for a case not in CMS ──
+  if (!review) notFound();
   const t = await getTranslations({ locale, namespace: "reviews" });
   const content = getReviewContent(review, typedLocale);
   const related = getRelatedReviews(review.id, 6);
@@ -427,6 +512,20 @@ export default async function ReviewLandingPage({
     const tp = await getTranslations({ locale, namespace: priceSrc.ns });
     realPriceFrom = tp(priceSrc.key);
   }
+
+  // Starting price for each "ผลงานอื่นๆ" card — same source as the hero booking
+  // card (ปอน "ดึงราคาจากในหน้าเว็บ"): the linked service page's published i18n
+  // price. Only services that publish a price get a number; the rest stay
+  // price-less (no fake number). Namespaces resolved once each (deduped).
+  const relatedPriceSrc = related.map((r) => SERVICE_PUBLISHED_PRICE[getReviewContent(r, typedLocale).cta.href] ?? null);
+  const relatedPriceTranslators = new Map(
+    await Promise.all(
+      [...new Set(relatedPriceSrc.filter(Boolean).map((s) => s!.ns))].map(
+        async (ns) => [ns, await getTranslations({ locale, namespace: ns })] as const,
+      ),
+    ),
+  );
+  const relatedPrices = relatedPriceSrc.map((s) => (s ? relatedPriceTranslators.get(s.ns)!(s.key) : null));
 
   const commenterName =
     [session?.profile?.first_name, session?.profile?.last_name].filter(Boolean).join(" ").trim() ||
@@ -645,7 +744,7 @@ export default async function ReviewLandingPage({
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    {related.map((r) => (
+                    {related.map((r, i) => (
                       <Link
                         key={r.id}
                         href={reviewUrl(reviewSlug(r, typedLocale), typedLocale)}
@@ -682,10 +781,17 @@ export default async function ReviewLandingPage({
                               </span>
                             ))}
                           </div>
-                          <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[11.5px] font-black text-primary-600 opacity-80 transition-opacity group-hover:opacity-100">
-                            {ui.readMore}
-                            <ArrowRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
-                          </span>
+                          <div className="mt-auto flex items-center justify-between gap-1.5 pt-1.5">
+                            {relatedPrices[i] ? (
+                              <span className="text-[14px] font-black leading-none tracking-[-0.02em] text-primary-600">
+                                {relatedPrices[i]}
+                              </span>
+                            ) : null}
+                            <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] font-black text-primary-600 opacity-80 transition-opacity group-hover:opacity-100">
+                              {ui.readMore}
+                              <ArrowRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
+                            </span>
+                          </div>
                         </div>
                       </Link>
                     ))}
