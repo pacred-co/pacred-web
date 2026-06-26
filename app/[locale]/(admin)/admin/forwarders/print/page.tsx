@@ -305,7 +305,7 @@ export default async function ForwarderLabelPrintPage({
               📋 หน้านี้พิมพ์ป้ายสติกเกอร์ — ต้องเลือกรายการก่อน
             </h1>
             <p className="text-sm text-amber-900">
-              หน้านี้สร้างป้ายสติกเกอร์ขนาด 100×75 มม. สำหรับติดบนกล่องพัสดุ
+              หน้านี้สร้างป้ายสติกเกอร์ฉลาก 100×150 มม. (พิมพ์แนวนอน) สำหรับติดบนกล่องพัสดุ
               (พิมพ์จากหน้ากล่อง) หรือใช้เป็นป้ายที่อยู่ส่งสินค้า — ไม่ใช่หน้าที่เปิดตรงๆ
               แต่ต้องเลือกรายการจากหน้ารายการพัสดุก่อน
             </p>
@@ -441,10 +441,10 @@ export default async function ForwarderLabelPrintPage({
     <div className="bg-white text-black min-h-screen">
       <style>{`
         .label-page {
-          width: 100mm;
-          height: 150mm;
+          width: 150mm;
+          height: 100mm;
           box-sizing: border-box;
-          padding: 4mm;
+          padding: 3.5mm;
           background: #fff;
           color: #000;
           overflow: hidden;
@@ -466,8 +466,8 @@ export default async function ForwarderLabelPrintPage({
             page-break-after: always;
             break-inside: avoid;
             page-break-inside: avoid;
-            height: 150mm;
-            max-height: 150mm;
+            height: 100mm;
+            max-height: 100mm;
             overflow: hidden;
             border: none !important;
             box-shadow: none !important;
@@ -475,7 +475,7 @@ export default async function ForwarderLabelPrintPage({
           }
           .label-page:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 100mm 150mm; margin: 0; }
+        @page { size: 150mm 100mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar — hidden on print */}
@@ -650,8 +650,8 @@ export default async function ForwarderLabelPrintPage({
             })}
 
         <p className="no-print mt-2 text-center text-[11px] text-gray-500">
-          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ตั้งขนาดกระดาษ 100×150 มม.
-          (สติกเกอร์ฉลาก thermal · Margins = None · Scale = 100%)
+          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ฉลาก thermal 100×150 มม. ·
+          ตั้ง Orientation = Landscape (แนวนอน) · Margins = None · Scale = 100% (ไม่งั้นป้ายจะเลยหน้า)
         </p>
       </main>
     </div>
