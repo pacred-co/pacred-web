@@ -1774,8 +1774,15 @@ export async function adminRejectWalletDeposit(
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
       }
-      if (rowRaw.type !== "1") {
-        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการชำระเงิน (type='1') · พบ type='${rowRaw.type ?? "null"}'` };
+      // type='1' = "เติม-แล้วจ่าย" topup-and-pay (cascades to its pay siblings +
+      // parent order/forwarder in the `if (hasLinks)` block below). type='4'
+      // (direct forwarder-pay) + type='8' (direct shop-pay) are SINGLE pending
+      // slips with NO paydeposit links — for them the flip-to-'3' below IS the
+      // whole reject (hasLinks=false → the cascade is skipped). The 2026-06-25
+      // fix taught APPROVE to handle 4/8; REJECT was missed, so "ปฏิเสธรายการ"
+      // errored on those slips (ภูม 2026-06-26 · wallet/105496 type='4').
+      if (rowRaw.type !== "1" && rowRaw.type !== "4" && rowRaw.type !== "8") {
+        return { ok: false, error: `ฟังก์ชันนี้รองรับเฉพาะรายการชำระเงิน (type='1'/'4'/'8') · พบ type='${rowRaw.type ?? "null"}'` };
       }
 
       const userid = rowRaw.userid;

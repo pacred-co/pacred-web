@@ -778,3 +778,19 @@ hint. Before declaring a money number wrong, find the legacy code that WRITES th
 previews it). And a confusing money DISPLAY (3 numbers, the chosen one matching none) erodes trust even when
 the stored value is correct — surface the actual basis breakdown, don't show reference numbers that aren't the
 charge. Cross-link: [[sell-floor-rate-model]] · `lib/forwarder/resolve-rate.ts` · `per-tracking-editor-client.tsx`.
+
+## [2026-06-26] Driver-batch "จุดส่ง" grouping MUST key on userID, not address alone
+
+**Context:** `/admin/drivers/[id]` (รายละเอียดรอบส่งคนขับ) — ภูม flagged PR7429 + PR10190 (สองลูกค้าคนละคน) ยุบรวมเป็นจุดส่งเดียว และ "ผู้รับ" โชว์ placeholder "คุณรับที่โกดัง Pacred" แทนชื่อลูกค้า.
+
+**Symptom:** two different customers (different `userid`) collapsed into ONE delivery stop; the ผู้รับ line showed the warehouse self-pickup placeholder, not the customer name. Both name AND address rendered wrong because one stop block covered two customers.
+
+**Root cause:** our stop key used the `fAddress*` fields ONLY. Orders committed without a real delivery address all carry the SAME warehouse placeholder (`faddressname="รับที่โกดัง Pacred"` + identical warehouse address), so the address-only key collided → different customers merged. (Old MOMO/commit rows from before the 2026-06-25 "เลิก default รับเองโกดัง" fix.)
+
+**Legacy truth (`forwarder-driver.php`):** the create/assign grouping keys on `CONCAT(userID, fAddressName, …)` — userID FIRST (L918, `ORDER BY userID, fAddress…` L924). The detail page groups by full address (~L1670) but that works only because legacy driver batches always carry a REAL recipient address (self-pickup PCS/2/4 → a separate tab). Pacred's data has placeholder addresses → must key userID-first like the create page.
+
+**Fix (`7ed874bf`):** add `f.userid` to the stop key (drivers/[id]); add `isWarehousePlaceholder()` → when `faddressname` is the warehouse placeholder, show the customer's `tb_users` name as ผู้รับ + a "⚠️ ยังไม่ระบุที่อยู่จัดส่ง" warning and hide the warehouse address. Same recipient fix on the work (mobile) page.
+
+**Why this matters next time:** ANY "group by recipient/address" over `tb_forwarder` MUST include `userid` in the key. Placeholder/empty addresses are common (MOMO/commit defaults), and an address-only key silently merges unrelated customers — a data-correctness bug that *looks* like a display bug.
+
+**Audit-discipline reminder:** the follow-up deep-audit (Explore agent) flagged 5 "gaps" — 4 FALSE (auto-timeout cron `expire-driver-assignments`, route-order in `create-batch-form`, photo upload Wave 12-B, ส่งไม่ได้-reason via `prompt()` ALL already exist; the agent read the pages but not the cron / create-form / action). Verify every claimed gap against `actions/` + `lib/` + `app/api/cron/` before building — the driver/warehouse system is faithful + ~complete. Cross-link: [[audit-discipline]] · `drivers/[id]/page.tsx` · legacy `forwarder-driver.php` L918/L924.

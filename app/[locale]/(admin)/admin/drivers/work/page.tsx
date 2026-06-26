@@ -90,6 +90,7 @@ type Item = {
   fdistatus:    string;
   fdipictureon: string | null;
   fdipictureoff: string | null;
+  fdinote:      string | null;  // 0213: เหตุผล "ส่งไม่ได้" (โชว์คาแถว)
 };
 
 type Batch = {
@@ -243,7 +244,7 @@ export default async function DriverWorkPage({
   //    filter at the SQL layer, limit 200 for the display window.
   let itemQ = admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff, fdinote")
     .order("id", { ascending: false })
     .limit(200);
   if (tab === "pending")     itemQ = itemQ.or("fdistatus.eq.,fdistatus.is.null");
@@ -528,6 +529,15 @@ function renderShell(props: {
 // and works inside a Server Component. Clicking the thumbnail expands
 // the full image inline; clicking again collapses.
 // ─────────────────────────────────────────────────────────────────────
+// A delivery row left on the warehouse self-pickup placeholder
+// ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
+// recipient/address. The card already leads with the customer (PR + name), so
+// show "ยังไม่ระบุที่อยู่" instead of the placeholder + hide the warehouse address.
+function isWarehousePlaceholder(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim();
+  return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+}
+
 function Card({
   item,
   batch,
@@ -547,6 +557,7 @@ function Card({
   const pr         = (forwarder.userid ?? "").trim();
   const tracking   = (forwarder.ftrackingchn ?? "").trim();
   const recipient  = `${forwarder.faddressname ?? ""} ${forwarder.faddresslastname ?? ""}`.trim();
+  const noRealAddress = isWarehousePlaceholder(forwarder.faddressname);
   const fullAddr   = [
     forwarder.faddressno,
     forwarder.faddresssubdistrict ? `ต.${forwarder.faddresssubdistrict}` : null,
@@ -587,13 +598,24 @@ function Card({
         </div>
       </div>
 
+      {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
+      {item.fdistatus === "3" && item.fdinote && (
+        <p className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1.5 text-sm text-rose-800">
+          ⚠️ ส่งไม่ได้: {item.fdinote}
+        </p>
+      )}
+
       {/* Recipient (the name on the delivery label) + phone */}
       <div className="space-y-1">
-        {recipient && (
+        {noRealAddress ? (
+          <p className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-sm text-amber-800">
+            ⚠️ ยังไม่ระบุที่อยู่จัดส่ง — รับเองที่โกดัง / รอเซล–ลูกค้ากรอก
+          </p>
+        ) : recipient ? (
           <p className="text-base text-foreground">
             <span className="text-muted">ผู้รับ:</span> {recipient}
           </p>
-        )}
+        ) : null}
         {phone1 && phone1 !== "-" && (
           <a
             href={`tel:${phone1}`}
@@ -615,8 +637,8 @@ function Card({
         )}
       </div>
 
-      {/* Address */}
-      {fullAddr && (
+      {/* Address — hidden when it's the warehouse self-pickup placeholder */}
+      {!noRealAddress && fullAddr && (
         <p className="text-base leading-relaxed text-foreground">
           📍 {fullAddr}
         </p>

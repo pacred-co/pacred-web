@@ -95,6 +95,7 @@ type Item = {
   fdistatus:      string | null;
   fdipictureon:   string | null;
   fdipictureoff:  string | null;
+  fdinote:        string | null;  // 0213: เหตุผล "ส่งไม่ได้" (โชว์คาแถว)
 };
 
 type Forwarder = {
@@ -177,7 +178,7 @@ export default async function AdminDriverBatchDetailPage({
   // 2. All items in batch
   const { data: itemsData, error: itemsErr } = await admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff, fdinote")
     .eq("fdid", batchId);
   if (itemsErr) {
     console.error(`/admin/drivers/${id}: item read failed`, itemsErr);
@@ -230,6 +231,19 @@ export default async function AdminDriverBatchDetailPage({
   }
   const customerNameOf = (uid: string | null | undefined): string =>
     custNameById.get((uid ?? "").trim()) ?? "—";
+
+  // A delivery row still on the warehouse self-pickup placeholder
+  // ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
+  // recipient/address. Show WHOSE parcel it is (the customer) instead of the
+  // placeholder, and flag that the delivery address isn't set yet.
+  const isWarehousePlaceholder = (name: string | null | undefined): boolean => {
+    const n = (name ?? "").trim();
+    return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+  };
+  const recipientNameOf = (f: Forwarder): string => {
+    if (isWarehousePlaceholder(f.faddressname)) return customerNameOf(f.userid);
+    return `คุณ${(f.faddressname ?? "").trim()} ${(f.faddresslastname ?? "").trim()}`.trim();
+  };
 
   // 4. Driver display info
   // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
@@ -286,7 +300,13 @@ export default async function AdminDriverBatchDetailPage({
   for (const it of items) {
     const f = fwdById.get(it.fid);
     if (!f) continue;
+    // Legacy keys a driver stop on CONCAT(userID, address) (forwarder-driver.php
+    // L918) so DIFFERENT customers never merge — critical when several orders
+    // share the warehouse self-pickup placeholder address ("รับที่โกดัง Pacred").
+    // Without userid, two customers left at that placeholder collapse into one
+    // stop (the PR7429 + PR10190 "ปนกัน" bug ภูม flagged 2026-06-26).
     const key = [
+      f.userid ?? "",
       f.fshipby ?? "", f.faddressname ?? "", f.faddresslastname ?? "",
       f.faddressno ?? "", f.faddresssubdistrict ?? "",
       f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",
@@ -365,7 +385,7 @@ export default async function AdminDriverBatchDetailPage({
     const cabinets = Array.from(
       new Set(stop.items.map(({ forwarder }) => (forwarder.fcabinetnumber ?? "").trim()).filter(Boolean)),
     ).join(", ");
-    const recipient = `คุณ${f.faddressname ?? ""} ${f.faddresslastname ?? ""}`.trim();
+    const recipient = recipientNameOf(f);
     const address = [
       f.faddressno, f.faddresssubdistrict && `ต.${f.faddresssubdistrict}`,
       f.faddressdistrict && `อ.${f.faddressdistrict}`,
@@ -647,14 +667,28 @@ export default async function AdminDriverBatchDetailPage({
                         <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
                     </div>
-                    <p className="text-xs text-muted">
-                      ผู้รับ: คุณ{f.faddressname ?? ""} {f.faddresslastname ?? ""}
-                    </p>
-                    <p className="text-xs text-foreground/80 leading-relaxed">
-                      {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
-                      <span className="bg-amber-100 px-1 rounded text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
-                      จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
-                    </p>
+                    {isWarehousePlaceholder(f.faddressname) ? (
+                      <>
+                        <p className="text-xs">
+                          <span className="text-muted">ผู้รับ: </span>
+                          <span className="font-semibold text-foreground">{customerNameOf(f.userid)}</span>
+                        </p>
+                        <p className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[11px] text-amber-800">
+                          ⚠️ ยังไม่ระบุที่อยู่จัดส่ง — รับเองที่โกดัง / รอเซล–ลูกค้ากรอก
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted">
+                          ผู้รับ: {recipientNameOf(f)}
+                        </p>
+                        <p className="text-xs text-foreground/80 leading-relaxed">
+                          {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
+                          <span className="bg-amber-100 px-1 rounded text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
+                          จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
+                        </p>
+                      </>
+                    )}
                     {phones.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         {phones.map((p) => (
@@ -735,6 +769,19 @@ export default async function AdminDriverBatchDetailPage({
                         </tbody>
                       </table>
                     </div>
+
+                    {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
+                    {stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) && (
+                      <div className="mt-2 space-y-1">
+                        {stop.items
+                          .filter((e) => e.item.fdistatus === "3" && e.item.fdinote)
+                          .map(({ item, forwarder }) => (
+                            <p key={`fail-${item.id}`} className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1.5 text-xs text-rose-800">
+                              ⚠️ {forwarder.fidorco ?? `#${forwarder.id}`} ส่งไม่ได้: {item.fdinote}
+                            </p>
+                          ))}
+                      </div>
+                    )}
 
                     {/* per-stop actions — ยกเลิกรายการ + ลิงก์ติดตามขนส่ง (ops only · compact) */}
                     {isOpsOverride && (

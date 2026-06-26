@@ -657,6 +657,7 @@ async function tryRenderTbForwarder(
   // นิติ 1% gate on the BATCH total), so passing every sibling is correct.
   const collectSiblings = await fetchCountableForwarderSiblings(admin, {
     id: r.id, ftrackingchn: r.ftrackingchn, userid: r.userid, fweight: r.fweight,
+    fwidth: r.fwidth, flength: r.flength, fheight: r.fheight,
     fshipby: r.fshipby, ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
     fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice, pricecrate: r.pricecrate,
     ftransportpricechnthb: r.ftransportpricechnthb, priceother: r.priceother, fdiscount: r.fdiscount,
@@ -1117,6 +1118,18 @@ async function tryRenderTbForwarder(
            computed server-side from THIS order's delivery address; the save
            re-derives + validates (action gates RBAC ops/accounting/super/warehouse). ── */}
         {(() => {
+          // Flash domestic fee = sum PER PARCEL (legacy is per-row · Flash caps a
+          // single parcel at 50kg → a combined 104kg would return 0). MOMO orders
+          // split into -N/M boxes; the หัวบิล row carries 0 weight/dims, so we feed
+          // the countable siblings (the real boxes) as parcels.
+          const domParcels = collectSiblings
+            .map((s) => ({
+              weightKg: Math.max(0, Number(s.fweight) || 0),
+              width: Math.max(0, Number(s.fwidth) || 0),
+              length: Math.max(0, Number(s.flength) || 0),
+              height: Math.max(0, Number(s.fheight) || 0),
+            }))
+            .filter((p) => p.weightKg > 0 || p.width > 0);
           const dom = domesticShippingOptions({
             addressID: isSelfPickup ? "PCS" : null,
             zip: r.faddresszipcode,
@@ -1126,6 +1139,7 @@ async function tryRenderTbForwarder(
             width: Number(r.fwidth) || 0,
             length: Number(r.flength) || 0,
             height: Number(r.fheight) || 0,
+            parcels: domParcels.length > 0 ? domParcels : undefined,
           });
           const addrText = [r.faddresssubdistrict, r.faddressdistrict, r.faddressprovince, r.faddresszipcode]
             .map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
