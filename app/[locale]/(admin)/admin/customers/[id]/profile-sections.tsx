@@ -35,8 +35,6 @@ import {
   adminUploadCorporateDoc,
   adminRemoveCorporateDoc,
   adminSetCorporateStatus,
-  CORPORATE_DOC_TYPES,
-  type CorporateDocType,
   adminAddAddress,
   adminUpdateAddress,
   adminDeleteAddress,
@@ -44,6 +42,7 @@ import {
   type CustomerStatCounts,
   type SalesAdminOption,
 } from "@/actions/admin/customer-profile";
+import { CORPORATE_DOC_TYPES, type CorporateDocType } from "@/lib/admin/corporate-docs";
 import { adminUpdateUserIdentity } from "@/actions/admin/customers";
 import {
   adminSetUserComparison,

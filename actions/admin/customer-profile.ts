@@ -42,6 +42,12 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
+import {
+  CORPORATE_DOC_TYPES,
+  type CorporateDoc,
+  type CorporateDocType,
+  parseCorporateDocs,
+} from "@/lib/admin/corporate-docs";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // Role gate for every write here (per task brief).
@@ -499,27 +505,10 @@ export async function adminUpdateCorporate(
 // corporatefile/corporatefile20 kept + mirrored for the 2 legacy types).
 // ────────────────────────────────────────────────────────────
 
-export const CORPORATE_DOC_TYPES = ["vat", "affidavit", "director_id", "other"] as const;
-export type CorporateDocType = (typeof CORPORATE_DOC_TYPES)[number];
-export type CorporateDoc = { type: CorporateDocType; key: string; name: string; at: string };
+// CORPORATE_DOC_TYPES / CorporateDoc / parseCorporateDocs live in
+// @/lib/admin/corporate-docs (this is a "use server" file → only async
+// functions may be exported, so the const + pure parser + types moved out).
 const CORPORATE_DOCS_CAP = 30;
-
-/** Tolerant parse of tb_corporate.corporate_docs (jsonb array, or a string, or null). */
-export function parseCorporateDocs(raw: unknown): CorporateDoc[] {
-  if (!raw) return [];
-  let arr: unknown = raw;
-  if (typeof raw === "string") {
-    if (raw.trim() === "") return [];
-    try { arr = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(arr)) return [];
-  return arr.filter(
-    (d): d is CorporateDoc =>
-      !!d && typeof d === "object" &&
-      typeof (d as CorporateDoc).key === "string" && (d as CorporateDoc).key.trim() !== "" &&
-      (CORPORATE_DOC_TYPES as readonly string[]).includes((d as CorporateDoc).type),
-  );
-}
 
 function isMissingDocsColumn(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false;

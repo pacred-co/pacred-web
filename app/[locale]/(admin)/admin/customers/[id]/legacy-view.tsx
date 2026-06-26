@@ -66,7 +66,7 @@ import {
   type CorporateDocView,
   AddressManager,
 } from "./profile-sections";
-import { parseCorporateDocs } from "@/actions/admin/customer-profile";
+import { parseCorporateDocs } from "@/lib/admin/corporate-docs";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 
 type URow = {
