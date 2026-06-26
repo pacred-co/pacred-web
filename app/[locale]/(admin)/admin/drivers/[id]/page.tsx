@@ -95,6 +95,7 @@ type Item = {
   fdistatus:      string | null;
   fdipictureon:   string | null;
   fdipictureoff:  string | null;
+  fdinote:        string | null;  // 0213: เหตุผล "ส่งไม่ได้" (โชว์คาแถว)
 };
 
 type Forwarder = {
@@ -177,7 +178,7 @@ export default async function AdminDriverBatchDetailPage({
   // 2. All items in batch
   const { data: itemsData, error: itemsErr } = await admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff, fdinote")
     .eq("fdid", batchId);
   if (itemsErr) {
     console.error(`/admin/drivers/${id}: item read failed`, itemsErr);
@@ -768,6 +769,19 @@ export default async function AdminDriverBatchDetailPage({
                         </tbody>
                       </table>
                     </div>
+
+                    {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
+                    {stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) && (
+                      <div className="mt-2 space-y-1">
+                        {stop.items
+                          .filter((e) => e.item.fdistatus === "3" && e.item.fdinote)
+                          .map(({ item, forwarder }) => (
+                            <p key={`fail-${item.id}`} className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1.5 text-xs text-rose-800">
+                              ⚠️ {forwarder.fidorco ?? `#${forwarder.id}`} ส่งไม่ได้: {item.fdinote}
+                            </p>
+                          ))}
+                      </div>
+                    )}
 
                     {/* per-stop actions — ยกเลิกรายการ + ลิงก์ติดตามขนส่ง (ops only · compact) */}
                     {isOpsOverride && (

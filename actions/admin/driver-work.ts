@@ -499,7 +499,9 @@ export async function markDriverItemFailed(input: MarkFailedInput): Promise<Admi
 
     const { error } = await admin
       .from("tb_forwarder_driver_item")
-      .update({ fdistatus: "3" })
+      // 0213: persist the failure reason on the row (fdinote) so it shows inline
+      // on /admin/drivers/[id] + /work — was previously only in the audit log.
+      .update({ fdistatus: "3", fdinote: reason ?? null })
       .eq("id", itemId);
     if (error) return { ok: false, error: error.message };
 

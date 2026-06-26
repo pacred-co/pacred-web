@@ -25,6 +25,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
@@ -477,12 +478,18 @@ export default async function AdminDriversPage({
                             <div className="text-[11px] text-muted">ส่งแล้ว</div>
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}
-                            >
-                              {STATUS_ICON[fdstatus]}
-                              {STATUS_LABEL[fdstatus]}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}
+                              >
+                                {STATUS_ICON[fdstatus]}
+                                {STATUS_LABEL[fdstatus]}
+                              </span>
+                              {/* ลบรอบจากหน้า list (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ */}
+                              {fdstatus === "1" && agg.doneCount === 0 && (
+                                <BatchDeleteInline batchId={r.id} />
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

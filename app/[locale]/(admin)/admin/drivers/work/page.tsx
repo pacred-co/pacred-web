@@ -90,6 +90,7 @@ type Item = {
   fdistatus:    string;
   fdipictureon: string | null;
   fdipictureoff: string | null;
+  fdinote:      string | null;  // 0213: เหตุผล "ส่งไม่ได้" (โชว์คาแถว)
 };
 
 type Batch = {
@@ -243,7 +244,7 @@ export default async function DriverWorkPage({
   //    filter at the SQL layer, limit 200 for the display window.
   let itemQ = admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff, fdinote")
     .order("id", { ascending: false })
     .limit(200);
   if (tab === "pending")     itemQ = itemQ.or("fdistatus.eq.,fdistatus.is.null");
@@ -596,6 +597,13 @@ function Card({
           )}
         </div>
       </div>
+
+      {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
+      {item.fdistatus === "3" && item.fdinote && (
+        <p className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1.5 text-sm text-rose-800">
+          ⚠️ ส่งไม่ได้: {item.fdinote}
+        </p>
+      )}
 
       {/* Recipient (the name on the delivery label) + phone */}
       <div className="space-y-1">
