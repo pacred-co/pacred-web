@@ -464,6 +464,20 @@ export async function loadReceiptDocument(
   const documentIssuer   = receipt.documentissuer  || receipt.adminid || "-";
   const documentApprover = receipt.documentapprover || "";
 
+  // ── อ้างอิง (meta-box) = the forwarder order-no(s) this receipt covers ──
+  // The receipt's `refid` column is the หมายเหตุ/notes field (set only on the
+  // manual path), NOT an order reference — so it can't drive อ้างอิง. The real
+  // order-no is the per-line forwarder id (the "ออเดอร์ #N" column). Dedup the
+  // line fids; cap at 3 + "(+N)" so the meta-box never overflows. Empty (e.g.
+  // itemsMissing) → "" → the render falls back to the receipt no.
+  const orderNos = Array.from(new Set(computedItems.map((it) => it.row.fid))).filter(Boolean);
+  const referenceOrder =
+    orderNos.length === 0
+      ? ""
+      : orderNos.length <= 3
+        ? orderNos.map((n) => `#${n}`).join(", ")
+        : `${orderNos.slice(0, 3).map((n) => `#${n}`).join(", ")} (+${orderNos.length - 3})`;
+
   const commonProps: ReceiptCommonProps = {
     rid:                 receipt.rid,
     issuerAddress,
@@ -481,6 +495,7 @@ export async function loadReceiptDocument(
     documentIssuer,
     documentApprover,
     pageCount,
+    referenceOrder,
   };
 
   // ── 10. 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10) ──

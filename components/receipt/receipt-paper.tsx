@@ -86,6 +86,10 @@ export type ReceiptCommonProps = {
   documentIssuer:     string;
   documentApprover:   string;
   pageCount:          number;
+  /** Order reference for the meta-box "อ้างอิง" — the forwarder order-no(s) this
+   *  receipt covers (e.g. "#52114" or "#52114, #52120"). Empty → falls back to
+   *  the receipt no. (rid) so the box is never blank. */
+  referenceOrder:     string;
 };
 
 /** Props for the full `<ReceiptPaper>` wrapper. */
@@ -156,6 +160,7 @@ export function ReceiptPage({
   whtAmount,
   grandTotal,
   grandTotalThaiWord,
+  referenceOrder,
   pageNumber,
   pageCount,
   qrDataUrl,
@@ -355,16 +360,37 @@ export function ReceiptPage({
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px" }}>
                   <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>อ้างอิง :</p>
-                  <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{rid}</p>
+                  {/* Order-no(s) this receipt covers — falls back to the receipt
+                      no. only when no order is resolvable (never blank). */}
+                  <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "32mm", textAlign: "right", wordBreak: "break-word" }}>
+                    {referenceOrder || rid}
+                  </p>
                 </div>
+                {/* หน้า X/N — re-added 2026-06-26 (the height is now flex, so it
+                    no longer overflows the page box like the old footer strip
+                    that printed a 2-page receipt as 4). Lives in the meta-box so
+                    it appears on EVERY page, only when the receipt has >1 page. */}
+                {pageCount > 1 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px" }}>
+                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>หน้า :</p>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{pageNumber}/{pageCount}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
         </div>{/* end INFO ROW */}
 
-        {/* ── ITEMS TABLE — Pacred 7-col cargo table (verbatim — do not modify) ── */}
-        <div className="detail" style={{ height: "182px", overflow: "visible" }}>
+        {/* ── ITEMS TABLE — Pacred 7-col cargo table (verbatim — do not modify) ──
+            2026-06-26: was a FIXED height:"182px" + overflow:"visible" — 13 rows
+            grew taller than 182px and SPILLED OUT, colliding with the summary /
+            falling off the page (a 13-row receipt printed across 4 pages). Now
+            the items area FLEX-GROWS to fill the space above the bottom summary
+            (flex:1 minHeight:0), so the rows lay out naturally and the page-chunk
+            (ROWS_PER_PAGE) decides where a page breaks. The separate flex:1
+            spacer below is removed (this area is the grower now). */}
+        <div className="detail" style={{ flex: 1, minHeight: 0, overflow: "visible" }}>
           <div id="product">
             {/* Header row with orange tint bg */}
             <div id="headerItemColumn">
@@ -419,7 +445,10 @@ export function ReceiptPage({
                     </tr>
                   ) : (
                     items.map((row) => (
-                      <tr key={`${pageNumber}-${row.no}`} style={{ background: "#fff" }}>
+                      <tr
+                        key={`${pageNumber}-${row.no}`}
+                        style={{ background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}
+                      >
                         <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
@@ -440,8 +469,8 @@ export function ReceiptPage({
           </div>
         </div>
 
-        {/* ── SPACER: flex:1 pushes summary to bottom of the page ─────────── */}
-        <div style={{ flex: 1 }} />
+        {/* ── (spacer removed 2026-06-26 — the .detail items area above is now the
+              flex-grower that pushes the summary to the bottom of the page) ──── */}
 
         {/* ── SUMMARY + PAYMENT + REMARK + CERTIFIED (last page only) ─────── */}
         {pageNumber === pageCount && (
