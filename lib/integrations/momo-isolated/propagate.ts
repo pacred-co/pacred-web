@@ -368,7 +368,12 @@ export async function propagateMomoToForwarders(
       if (statusGate && fstatusRank(newFstatus) >= fstatusRank("2")) {
         const advanced = await advanceLinkedShopOrder(
           admin,
-          { reforder: f.reforder, ftrackingchn: f.ftrackingchn },
+          {
+            reforder: f.reforder,
+            ftrackingchn: f.ftrackingchn,
+            fcabinetnumber: updates.fcabinetnumber ?? f.fcabinetnumber,
+            fstatus: newFstatus,
+          },
           today,
         );
         if (advanced) result.shopOrdersAdvanced += 1;

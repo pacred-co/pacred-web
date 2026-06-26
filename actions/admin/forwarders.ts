@@ -837,7 +837,7 @@ export async function adminBulkUpdateForwarderTbStatus(
         seenKey.add(key);
         const advanced = await advanceLinkedShopOrder(
           admin,
-          { reforder: row.reforder, ftrackingchn: row.ftrackingchn },
+          { reforder: row.reforder, ftrackingchn: row.ftrackingchn, fcabinetnumber: row.fcabinetnumber, fstatus: derivedFstatus },
           nowIso,
         );
         if (advanced) shopOrdersAdvanced.push(advanced);

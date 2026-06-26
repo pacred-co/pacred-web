@@ -27,7 +27,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 export async function advanceLinkedShopOrder(
   admin: SupabaseClient,
-  forwarder: { reforder: string | null | undefined; ftrackingchn: string | null | undefined },
+  forwarder: {
+    reforder: string | null | undefined;
+    ftrackingchn: string | null | undefined;
+    // owner 2026-06-26 — two-stage: ถึงโกดังจีน(fstatus=2, ไม่มีเลขตู้)→40 ·
+    // ได้เลขตู้/fstatus≥3→5. The DB trigger (mig 0216) is the systemic SOT that
+    // fires from EVERY path; these are passed best-effort so the in-action
+    // result + audit match (the trigger corrects any stale-data drift).
+    fcabinetnumber?: string | null;
+    fstatus?: string | null;
+  },
   nowIso: string,
 ): Promise<string | null> {
   // 1. Resolve the linked shop-order hno — reforder first, else by tracking.
@@ -50,16 +59,23 @@ export async function advanceLinkedShopOrder(
   }
   if (!hno) return null;
 
-  // 2. Forward-only complete — from '4' (รอร้านจีนจัดส่ง) OR '40' (ถึงโกดังจีน) → '5'
-  //    (สำเร็จ). The .in(...) guard makes it idempotent (0-row no-op once at 5/6).
-  const { data: advRows, error } = await admin
-    .from("tb_header_order")
-    .update({ hstatus: "5", hdateupdate: nowIso })
-    .eq("hno", hno)
-    .in("hstatus", ["4", "40"])
-    .select("hno");
+  // 2. Two-stage forward-only advance (owner 2026-06-26):
+  //    - ได้เลขตู้ (fcabinetnumber) OR fstatus≥3 (ออกจากจีน/ถึงไทย/…) → '5' สำเร็จ (from 4/40)
+  //    - ถึงโกดังจีน เฉยๆ (fstatus=2, ไม่มีเลขตู้)                     → '40' ถึงโกดังจีน (from 4 only)
+  //    Idempotent (.in/.eq guard → 0-row no-op once past). Matches the mig-0216 trigger.
+  const hasContainer = (forwarder.fcabinetnumber ?? "").trim() !== "";
+  const fs = (forwarder.fstatus ?? "").trim();
+  const toFive = hasContainer || ["3", "4", "5", "6", "7"].includes(fs);
+
+  const q = admin.from("tb_header_order").update(
+    toFive ? { hstatus: "5", hdateupdate: nowIso } : { hstatus: "40", hdateupdate: nowIso },
+  ).eq("hno", hno);
+  const { data: advRows, error } = await (toFive
+    ? q.in("hstatus", ["4", "40"])
+    : q.eq("hstatus", "4")
+  ).select("hno");
   if (error) {
-    console.error("[advanceLinkedShopOrder] header complete failed", { hno, code: error.code, message: error.message });
+    console.error("[advanceLinkedShopOrder] header advance failed", { hno, toFive, code: error.code, message: error.message });
     return null;
   }
   return advRows && advRows.length > 0 ? hno : null;
