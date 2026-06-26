@@ -47,8 +47,9 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
-import { SITE_URL, SITE_NAME, LOGO_PATH } from "@/components/seo/site";
+import { SITE_URL, SITE_NAME, LOGO_PATH, SITE_LEGAL_NAME_TH, CONTACT, ADDRESSES } from "@/components/seo/site";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress } from "@/lib/legacy/customer-address-options";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,50 @@ function buildFullAddress(r: ForwarderRow): string {
   return s;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Effective ship-to (ภูม 2026-06-26) — mirror the [fNo] detail page (L399-444):
+// a DELIVERY order whose stored faddress is the warehouse default
+// ("รับที่โกดัง Pacred" / empty) prints the customer's saved primary address
+// (tb_address) — or, for a juristic customer, the company address — instead of
+// the placeholder. A real custom faddress is respected as-is. Self-pickup (PCS)
+// keeps the warehouse address (the customer collects there).
+// ─────────────────────────────────────────────────────────────
+type ResolvedShipTo = { fullAddress: string; note: string | null; fromProfile: boolean };
+
+async function resolveShipTo(
+  admin: ReturnType<typeof createAdminClient>,
+  f: ForwarderRow,
+): Promise<ResolvedShipTo> {
+  const isSelfPickup = (f.fshipby ?? "").trim() === "PCS";
+  const warehouseDefault =
+    !(f.faddressname ?? "").trim() ||
+    /รับที่โกดัง|โกดัง\s*pacred/i.test(f.faddressname ?? "");
+  if (!isSelfPickup && warehouseDefault) {
+    const primary = await loadCustomerPrimaryAddress(admin, f.userid);
+    if (primary && (primary.no.trim() || primary.province.trim())) {
+      const parts = [
+        `คุณ ${primary.name} ${primary.lastname}`.trim(),
+        primary.no.trim(),
+        primary.subdistrict ? `ตำบล/แขวง ${primary.subdistrict}` : "",
+        primary.district ? `อำเภอ/เขต ${primary.district}` : "",
+        primary.province ? `จังหวัด ${primary.province}` : "",
+        primary.zipcode.trim(),
+      ].filter((s) => s.trim().length > 0);
+      let s = parts.join(" ");
+      const tels = [primary.tel, primary.tel2]
+        .filter((t): t is string => Boolean(t && t.trim().length > 0))
+        .map((t) => t.trim());
+      if (tels.length > 0) s += ` โทร. ${tels.join(", ")}`;
+      return { fullAddress: s, note: primary.note?.trim() || null, fromProfile: true };
+    }
+    const corp = await loadJuristicCorporateAddress(admin, f.userid);
+    if (corp) {
+      return { fullAddress: `${corp.name} ${corp.addressLine}`.trim(), note: null, fromProfile: true };
+    }
+  }
+  return { fullAddress: buildFullAddress(f), note: f.faddressnote?.trim() || null, fromProfile: false };
+}
+
 // QR data-url helper — same options lib/promptpay.ts uses.
 async function qr(payload: string): Promise<string> {
   return QRCode.toDataURL(payload, { margin: 1, scale: 6 });
@@ -260,7 +305,7 @@ export default async function ForwarderLabelPrintPage({
               📋 หน้านี้พิมพ์ป้ายสติกเกอร์ — ต้องเลือกรายการก่อน
             </h1>
             <p className="text-sm text-amber-900">
-              หน้านี้สร้างป้ายสติกเกอร์ขนาด 100×75 มม. สำหรับติดบนกล่องพัสดุ
+              หน้านี้สร้างป้ายสติกเกอร์ฉลาก 100×150 มม. (พิมพ์แนวนอน) สำหรับติดบนกล่องพัสดุ
               (พิมพ์จากหน้ากล่อง) หรือใช้เป็นป้ายที่อยู่ส่งสินค้า — ไม่ใช่หน้าที่เปิดตรงๆ
               แต่ต้องเลือกรายการจากหน้ารายการพัสดุก่อน
             </p>
@@ -378,16 +423,37 @@ export default async function ForwarderLabelPrintPage({
     }
   }
 
+  // Resolve the effective ship-to per row for the ADDRESS label (ภูม 2026-06-26):
+  // a delivery order on the warehouse placeholder gets the customer's real saved
+  // address instead of printing "รับที่โกดัง Pacred".
+  const addrMap = new Map<number, ResolvedShipTo>();
+  if (labelType === "address") {
+    await Promise.all(
+      orderedForwarders.map(async (f) => {
+        addrMap.set(f.id, await resolveShipTo(admin, f));
+      }),
+    );
+  }
+
   const totalLabels = orderedForwarders.reduce((s, f) => s + copyCount(f.famount), 0);
 
   return (
     <div className="bg-white text-black min-h-screen">
       <style>{`
+        /* ภูม's actual label = 100×150mm PORTRAIT (Easy Print thermal · 350/roll).
+           Legacy PCS layout (printAll.php case 4: ผู้ส่ง+เลขที่/แทรกกิ้ง · ถึง/TO+ที่อยู่
+           · ขนส่ง+จำนวน) scaled to FILL the taller 100×150 — recipient is the big
+           centrepiece so it fills the label (no sparse gap), carrier anchored bottom. */
         .label-page {
+          background: #fff;
+          color: #000;
+          overflow: hidden;
+        }
+        .label-rot {
           width: 100mm;
-          height: 75mm;
+          height: 150mm;
           box-sizing: border-box;
-          padding: 2.5mm;
+          padding: 4mm;
           background: #fff;
           color: #000;
           overflow: hidden;
@@ -396,6 +462,8 @@ export default async function ForwarderLabelPrintPage({
         }
         @media screen {
           .label-page {
+            width: 100mm;
+            height: 150mm;
             border: 1px dashed #cbd5e1;
             margin: 0 auto 6mm;
             box-shadow: 0 1px 4px rgba(0,0,0,.08);
@@ -405,15 +473,21 @@ export default async function ForwarderLabelPrintPage({
           aside, .no-print { display: none !important; }
           html, body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
           .label-page {
+            width: 100mm;
+            height: 150mm;
+            max-height: 150mm;
+            overflow: hidden;
             break-after: page;
             page-break-after: always;
+            break-inside: avoid;
+            page-break-inside: avoid;
             border: none !important;
             box-shadow: none !important;
             margin: 0 !important;
           }
           .label-page:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 100mm 75mm; margin: 0; }
+        @page { size: 100mm 150mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar — hidden on print */}
@@ -443,34 +517,35 @@ export default async function ForwarderLabelPrintPage({
               const totalVolume = Number(f.fvolume ?? 0) * Number(f.famount ?? 1);
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`box-${f.id}-${copy}`} className="label-page">
+                  <div className="label-rot">
                   {/* Row 1 — id badge + logo · detail QR */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {showLogo && (
                         <img src={LOGO_PATH} alt={SITE_NAME} className="h-[6mm] w-auto shrink-0" />
                       )}
-                      <span className="rounded bg-gray-300 px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
+                      <span className="rounded border border-black px-2 py-0.5 text-[3.2mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
                     </div>
                     {q && (
-                      <img src={q.detail} alt="QR" className="h-[14mm] w-[14mm] shrink-0" />
+                      <img src={q.detail} alt="QR" className="h-[17mm] w-[17mm] shrink-0" />
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2mm] border-black" />
 
                   {/* Row 2 — TO + customer member code (large) */}
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
+                    <span className="rounded bg-black px-2 py-0.5 text-[3.2mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <span className="truncate text-[8mm] font-black leading-none tracking-tight">
+                    <span className="truncate text-[14mm] font-black leading-none tracking-tight">
                       {displayUser}
                     </span>
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2mm] border-black" />
 
                   {/* Row 3 — tracking text + (optional Code128) + tracking QR
                       Faithful to legacy printAll.php L162-175:
@@ -478,10 +553,10 @@ export default async function ForwarderLabelPrintPage({
                       else        → text + QR only (no barcode) */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[2.6mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
+                      <p className="text-[3mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
                       <p
                         className={`break-all leading-tight ${
-                          barcode ? "text-[3mm] font-semibold" : "text-[4mm] font-bold"
+                          barcode ? "text-[3.5mm] font-semibold" : "text-[5mm] font-bold"
                         }`}
                       >
                         {f.ftrackingchn || "—"}
@@ -490,7 +565,7 @@ export default async function ForwarderLabelPrintPage({
                         <img
                           src={barcode}
                           alt="tracking barcode"
-                          className="mt-[0.5mm] h-[9mm] w-auto max-w-full"
+                          className="mt-[0.5mm] h-[10mm] w-auto max-w-full"
                         />
                       )}
                     </div>
@@ -503,7 +578,7 @@ export default async function ForwarderLabelPrintPage({
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2mm] border-black" />
 
                   {/* Row 4 — gateway-pickup QR · weight / volume / qty / location */}
                   <div className="mt-auto flex items-end justify-between gap-2">
@@ -511,15 +586,16 @@ export default async function ForwarderLabelPrintPage({
                       <img
                         src={q.gateway}
                         alt="gateway QR"
-                        className="h-[15mm] w-[15mm] shrink-0"
+                        className="h-[19mm] w-[19mm] shrink-0"
                       />
                     )}
-                    <div className="text-right text-[3.4mm] leading-snug">
+                    <div className="text-right text-[5mm] leading-snug">
                       <p>น้ำหนัก : {fmt(f.fweight, 2)} kg.</p>
                       <p>ปริมาตรรวม : {fmt(totalVolume, 3)} CBM</p>
                       <p className="font-bold">จำนวน : {fmt(f.famount, 0)} กล่อง</p>
                       <p>location : {f.fpallet || "—"}</p>
                     </div>
+                  </div>
                   </div>
                 </div>
               ));
@@ -529,60 +605,69 @@ export default async function ForwarderLabelPrintPage({
               const copies = copyCount(f.famount);
               const showLogo = !isFamilyAccount(f.userid);
               const displayUser = displayBoxUserId(f.userid, f.ftrackingchn2);
-              const fullAddress = buildFullAddress(f);
+              const resolved = addrMap.get(f.id);
+              const fullAddress = resolved?.fullAddress ?? buildFullAddress(f);
+              const addrNote = resolved?.note ?? null;
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`addr-${f.id}-${copy}`} className="label-page">
-                  {/* Row 1 — logo · id + tracking */}
+                  <div className="label-rot">
+                  {/* Row 1 — ผู้ส่ง/FROM (Pacred company · ภูม 2026-06-26) · id + tracking */}
                   <div className="flex items-start justify-between gap-2">
-                    {showLogo ? (
-                      <img src={LOGO_PATH} alt={SITE_NAME} className="h-[7mm] w-auto shrink-0" />
-                    ) : (
-                      <span />
-                    )}
-                    <div className="text-right">
-                      <span className="rounded bg-gray-300 px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
+                    <div className="flex items-start gap-1 min-w-0">
+                      {showLogo && (
+                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[8mm] w-auto shrink-0" />
+                      )}
+                      <p className="min-w-0 text-[2.8mm] leading-[3.4mm] text-black">
+                        <span className="font-bold text-black">ผู้ส่ง/From: </span>
+                        <span className="font-bold text-black">{SITE_LEGAL_NAME_TH}</span>{" "}
+                        {ADDRESSES.office.full} โทร. {CONTACT.phoneCompanyDisplay}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="rounded border border-black px-2 py-0.5 text-[3.2mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
-                      <p className="mt-[0.5mm] break-all text-[4mm] font-bold leading-tight">
+                      <p className="mt-[0.5mm] break-all text-[5.5mm] font-bold leading-tight">
                         {f.ftrackingchn || "—"}
                       </p>
-                      <p className="text-[2.6mm] leading-tight text-gray-600">แทรคกิ้ง</p>
+                      <p className="text-[3.4mm] leading-tight text-gray-600">แทรคกิ้ง</p>
                     </div>
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2mm] border-black" />
 
                   {/* Row 2 — TO + full ship-to address (large, faithful) */}
-                  <div className="flex-1 overflow-hidden">
-                    <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
+                  <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-center">
+                    <span className="w-fit rounded bg-black px-2 py-0.5 text-[3.2mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <p className="mt-[1mm] text-[4.6mm] font-semibold leading-snug">
+                    <p className="mt-[2mm] text-[6.5mm] font-semibold leading-snug">
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
-                    {f.faddressnote && (
-                      <p className="mt-[0.5mm] text-[3.4mm] leading-snug text-gray-700">
-                        (* {f.faddressnote})
+                    {addrNote && (
+                      <p className="mt-[0.5mm] text-[3.6mm] leading-snug text-gray-700">
+                        (* {addrNote})
                       </p>
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2mm] border-black" />
 
                   {/* Row 3 — carrier · qty */}
-                  <div className="flex items-end justify-between gap-2 text-[3.6mm]">
+                  <div className="flex items-end justify-between gap-2 text-[5mm]">
                     <p className="min-w-0 truncate">
                       บริษัทขนส่ง : <span className="font-bold">{nameShipBy(f.fshipby)}</span>
                     </p>
                     <p className="shrink-0 font-bold">จำนวน : {fmt(f.famount, 0)} กล่อง</p>
+                  </div>
                   </div>
                 </div>
               ));
             })}
 
         <p className="no-print mt-2 text-center text-[11px] text-gray-500">
-          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ตั้งขนาดกระดาษ 100×75 มม.
-          (สติกเกอร์ฉลาก)
+          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · เลือกกระดาษ (Paper) = 100×150 มม. ·
+          Margins = None · Scale = 100% (ป้ายจะหมุนเป็นแนวนอนให้เองตอนพิมพ์ · ไม่ต้องตั้ง Landscape)
         </p>
       </main>
     </div>
