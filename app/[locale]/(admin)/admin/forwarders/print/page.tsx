@@ -442,9 +442,9 @@ export default async function ForwarderLabelPrintPage({
       <style>{`
         .label-page {
           width: 100mm;
-          height: 75mm;
+          height: 150mm;
           box-sizing: border-box;
-          padding: 2.5mm;
+          padding: 4mm;
           background: #fff;
           color: #000;
           overflow: hidden;
@@ -466,8 +466,8 @@ export default async function ForwarderLabelPrintPage({
             page-break-after: always;
             break-inside: avoid;
             page-break-inside: avoid;
-            height: 75mm;
-            max-height: 75mm;
+            height: 150mm;
+            max-height: 150mm;
             overflow: hidden;
             border: none !important;
             box-shadow: none !important;
@@ -475,7 +475,7 @@ export default async function ForwarderLabelPrintPage({
           }
           .label-page:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 100mm 75mm; margin: 0; }
+        @page { size: 100mm 150mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar — hidden on print */}
@@ -516,23 +516,23 @@ export default async function ForwarderLabelPrintPage({
                       </span>
                     </div>
                     {q && (
-                      <img src={q.detail} alt="QR" className="h-[14mm] w-[14mm] shrink-0" />
+                      <img src={q.detail} alt="QR" className="h-[20mm] w-[20mm] shrink-0" />
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2.5mm] border-gray-400" />
 
                   {/* Row 2 — TO + customer member code (large) */}
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <span className="truncate text-[8mm] font-black leading-none tracking-tight">
+                    <span className="truncate text-[13mm] font-black leading-none tracking-tight">
                       {displayUser}
                     </span>
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2.5mm] border-gray-400" />
 
                   {/* Row 3 — tracking text + (optional Code128) + tracking QR
                       Faithful to legacy printAll.php L162-175:
@@ -565,7 +565,7 @@ export default async function ForwarderLabelPrintPage({
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2.5mm] border-gray-400" />
 
                   {/* Row 4 — gateway-pickup QR · weight / volume / qty / location */}
                   <div className="mt-auto flex items-end justify-between gap-2">
@@ -573,10 +573,10 @@ export default async function ForwarderLabelPrintPage({
                       <img
                         src={q.gateway}
                         alt="gateway QR"
-                        className="h-[15mm] w-[15mm] shrink-0"
+                        className="h-[22mm] w-[22mm] shrink-0"
                       />
                     )}
-                    <div className="text-right text-[3.4mm] leading-snug">
+                    <div className="text-right text-[5mm] leading-snug">
                       <p>น้ำหนัก : {fmt(f.fweight, 2)} kg.</p>
                       <p>ปริมาตรรวม : {fmt(totalVolume, 3)} CBM</p>
                       <p className="font-bold">จำนวน : {fmt(f.famount, 0)} กล่อง</p>
@@ -600,9 +600,9 @@ export default async function ForwarderLabelPrintPage({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-1 min-w-0">
                       {showLogo && (
-                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[5mm] w-auto shrink-0" />
+                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[7mm] w-auto shrink-0" />
                       )}
-                      <p className="min-w-0 text-[1.9mm] leading-[2.3mm] text-gray-700">
+                      <p className="min-w-0 text-[2.6mm] leading-[3mm] text-gray-700">
                         <span className="font-bold text-black">ผู้ส่ง/From: </span>
                         <span className="font-bold text-black">{SITE_LEGAL_NAME_TH}</span>{" "}
                         {ADDRESSES.office.full} โทร. {CONTACT.phoneCompanyDisplay}
@@ -612,21 +612,21 @@ export default async function ForwarderLabelPrintPage({
                       <span className="rounded bg-gray-300 px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
-                      <p className="mt-[0.5mm] break-all text-[4mm] font-bold leading-tight">
+                      <p className="mt-[0.5mm] break-all text-[5mm] font-bold leading-tight">
                         {f.ftrackingchn || "—"}
                       </p>
-                      <p className="text-[2.6mm] leading-tight text-gray-600">แทรคกิ้ง</p>
+                      <p className="text-[3.2mm] leading-tight text-gray-600">แทรคกิ้ง</p>
                     </div>
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2.5mm] border-gray-400" />
 
                   {/* Row 2 — TO + full ship-to address (large, faithful) */}
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <span className="rounded bg-black px-2 py-0.5 text-[3mm] font-bold leading-tight text-white">
                       ถึง / TO
                     </span>
-                    <p className="mt-[0.8mm] text-[4mm] font-semibold leading-snug">
+                    <p className="mt-[1.5mm] text-[6mm] font-semibold leading-snug">
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
                     {addrNote && (
@@ -636,10 +636,10 @@ export default async function ForwarderLabelPrintPage({
                     )}
                   </div>
 
-                  <hr className="my-[1mm] border-gray-400" />
+                  <hr className="my-[2.5mm] border-gray-400" />
 
                   {/* Row 3 — carrier · qty */}
-                  <div className="flex items-end justify-between gap-2 text-[3.6mm]">
+                  <div className="flex items-end justify-between gap-2 text-[5mm]">
                     <p className="min-w-0 truncate">
                       บริษัทขนส่ง : <span className="font-bold">{nameShipBy(f.fshipby)}</span>
                     </p>
@@ -650,8 +650,8 @@ export default async function ForwarderLabelPrintPage({
             })}
 
         <p className="no-print mt-2 text-center text-[11px] text-gray-500">
-          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ตั้งขนาดกระดาษ 100×75 มม.
-          (สติกเกอร์ฉลาก)
+          กดปุ่ม &quot;พิมพ์ป้าย / Save PDF&quot; ด้านบน หรือ Ctrl+P · ตั้งขนาดกระดาษ 100×150 มม.
+          (สติกเกอร์ฉลาก thermal · Margins = None · Scale = 100%)
         </p>
       </main>
     </div>
