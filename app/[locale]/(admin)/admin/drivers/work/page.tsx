@@ -528,6 +528,15 @@ function renderShell(props: {
 // and works inside a Server Component. Clicking the thumbnail expands
 // the full image inline; clicking again collapses.
 // ─────────────────────────────────────────────────────────────────────
+// A delivery row left on the warehouse self-pickup placeholder
+// ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
+// recipient/address. The card already leads with the customer (PR + name), so
+// show "ยังไม่ระบุที่อยู่" instead of the placeholder + hide the warehouse address.
+function isWarehousePlaceholder(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim();
+  return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+}
+
 function Card({
   item,
   batch,
@@ -547,6 +556,7 @@ function Card({
   const pr         = (forwarder.userid ?? "").trim();
   const tracking   = (forwarder.ftrackingchn ?? "").trim();
   const recipient  = `${forwarder.faddressname ?? ""} ${forwarder.faddresslastname ?? ""}`.trim();
+  const noRealAddress = isWarehousePlaceholder(forwarder.faddressname);
   const fullAddr   = [
     forwarder.faddressno,
     forwarder.faddresssubdistrict ? `ต.${forwarder.faddresssubdistrict}` : null,
@@ -589,11 +599,15 @@ function Card({
 
       {/* Recipient (the name on the delivery label) + phone */}
       <div className="space-y-1">
-        {recipient && (
+        {noRealAddress ? (
+          <p className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-sm text-amber-800">
+            ⚠️ ยังไม่ระบุที่อยู่จัดส่ง — รับเองที่โกดัง / รอเซล–ลูกค้ากรอก
+          </p>
+        ) : recipient ? (
           <p className="text-base text-foreground">
             <span className="text-muted">ผู้รับ:</span> {recipient}
           </p>
-        )}
+        ) : null}
         {phone1 && phone1 !== "-" && (
           <a
             href={`tel:${phone1}`}
@@ -615,8 +629,8 @@ function Card({
         )}
       </div>
 
-      {/* Address */}
-      {fullAddr && (
+      {/* Address — hidden when it's the warehouse self-pickup placeholder */}
+      {!noRealAddress && fullAddr && (
         <p className="text-base leading-relaxed text-foreground">
           📍 {fullAddr}
         </p>

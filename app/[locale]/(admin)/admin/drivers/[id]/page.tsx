@@ -231,6 +231,19 @@ export default async function AdminDriverBatchDetailPage({
   const customerNameOf = (uid: string | null | undefined): string =>
     custNameById.get((uid ?? "").trim()) ?? "—";
 
+  // A delivery row still on the warehouse self-pickup placeholder
+  // ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
+  // recipient/address. Show WHOSE parcel it is (the customer) instead of the
+  // placeholder, and flag that the delivery address isn't set yet.
+  const isWarehousePlaceholder = (name: string | null | undefined): boolean => {
+    const n = (name ?? "").trim();
+    return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+  };
+  const recipientNameOf = (f: Forwarder): string => {
+    if (isWarehousePlaceholder(f.faddressname)) return customerNameOf(f.userid);
+    return `คุณ${(f.faddressname ?? "").trim()} ${(f.faddresslastname ?? "").trim()}`.trim();
+  };
+
   // 4. Driver display info
   // tb_users uses CAMELCASE columns (CLAUDE.md exception · userID/userName).
   let driverName = "—";
@@ -286,7 +299,13 @@ export default async function AdminDriverBatchDetailPage({
   for (const it of items) {
     const f = fwdById.get(it.fid);
     if (!f) continue;
+    // Legacy keys a driver stop on CONCAT(userID, address) (forwarder-driver.php
+    // L918) so DIFFERENT customers never merge — critical when several orders
+    // share the warehouse self-pickup placeholder address ("รับที่โกดัง Pacred").
+    // Without userid, two customers left at that placeholder collapse into one
+    // stop (the PR7429 + PR10190 "ปนกัน" bug ภูม flagged 2026-06-26).
     const key = [
+      f.userid ?? "",
       f.fshipby ?? "", f.faddressname ?? "", f.faddresslastname ?? "",
       f.faddressno ?? "", f.faddresssubdistrict ?? "",
       f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",
@@ -365,7 +384,7 @@ export default async function AdminDriverBatchDetailPage({
     const cabinets = Array.from(
       new Set(stop.items.map(({ forwarder }) => (forwarder.fcabinetnumber ?? "").trim()).filter(Boolean)),
     ).join(", ");
-    const recipient = `คุณ${f.faddressname ?? ""} ${f.faddresslastname ?? ""}`.trim();
+    const recipient = recipientNameOf(f);
     const address = [
       f.faddressno, f.faddresssubdistrict && `ต.${f.faddresssubdistrict}`,
       f.faddressdistrict && `อ.${f.faddressdistrict}`,
@@ -647,14 +666,28 @@ export default async function AdminDriverBatchDetailPage({
                         <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
                     </div>
-                    <p className="text-xs text-muted">
-                      ผู้รับ: คุณ{f.faddressname ?? ""} {f.faddresslastname ?? ""}
-                    </p>
-                    <p className="text-xs text-foreground/80 leading-relaxed">
-                      {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
-                      <span className="bg-amber-100 px-1 rounded text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
-                      จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
-                    </p>
+                    {isWarehousePlaceholder(f.faddressname) ? (
+                      <>
+                        <p className="text-xs">
+                          <span className="text-muted">ผู้รับ: </span>
+                          <span className="font-semibold text-foreground">{customerNameOf(f.userid)}</span>
+                        </p>
+                        <p className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[11px] text-amber-800">
+                          ⚠️ ยังไม่ระบุที่อยู่จัดส่ง — รับเองที่โกดัง / รอเซล–ลูกค้ากรอก
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted">
+                          ผู้รับ: {recipientNameOf(f)}
+                        </p>
+                        <p className="text-xs text-foreground/80 leading-relaxed">
+                          {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
+                          <span className="bg-amber-100 px-1 rounded text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
+                          จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
+                        </p>
+                      </>
+                    )}
                     {phones.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         {phones.map((p) => (
