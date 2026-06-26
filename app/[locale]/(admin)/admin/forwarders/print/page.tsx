@@ -47,8 +47,9 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
-import { SITE_URL, SITE_NAME, LOGO_PATH } from "@/components/seo/site";
+import { SITE_URL, SITE_NAME, LOGO_PATH, SITE_LEGAL_NAME_TH, CONTACT, ADDRESSES } from "@/components/seo/site";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress } from "@/lib/legacy/customer-address-options";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +158,50 @@ function buildFullAddress(r: ForwarderRow): string {
     .map((t) => t.trim());
   if (tels.length > 0) s += ` โทร. ${tels.join(", ")}`;
   return s;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Effective ship-to (ภูม 2026-06-26) — mirror the [fNo] detail page (L399-444):
+// a DELIVERY order whose stored faddress is the warehouse default
+// ("รับที่โกดัง Pacred" / empty) prints the customer's saved primary address
+// (tb_address) — or, for a juristic customer, the company address — instead of
+// the placeholder. A real custom faddress is respected as-is. Self-pickup (PCS)
+// keeps the warehouse address (the customer collects there).
+// ─────────────────────────────────────────────────────────────
+type ResolvedShipTo = { fullAddress: string; note: string | null; fromProfile: boolean };
+
+async function resolveShipTo(
+  admin: ReturnType<typeof createAdminClient>,
+  f: ForwarderRow,
+): Promise<ResolvedShipTo> {
+  const isSelfPickup = (f.fshipby ?? "").trim() === "PCS";
+  const warehouseDefault =
+    !(f.faddressname ?? "").trim() ||
+    /รับที่โกดัง|โกดัง\s*pacred/i.test(f.faddressname ?? "");
+  if (!isSelfPickup && warehouseDefault) {
+    const primary = await loadCustomerPrimaryAddress(admin, f.userid);
+    if (primary && (primary.no.trim() || primary.province.trim())) {
+      const parts = [
+        `คุณ ${primary.name} ${primary.lastname}`.trim(),
+        primary.no.trim(),
+        primary.subdistrict ? `ตำบล/แขวง ${primary.subdistrict}` : "",
+        primary.district ? `อำเภอ/เขต ${primary.district}` : "",
+        primary.province ? `จังหวัด ${primary.province}` : "",
+        primary.zipcode.trim(),
+      ].filter((s) => s.trim().length > 0);
+      let s = parts.join(" ");
+      const tels = [primary.tel, primary.tel2]
+        .filter((t): t is string => Boolean(t && t.trim().length > 0))
+        .map((t) => t.trim());
+      if (tels.length > 0) s += ` โทร. ${tels.join(", ")}`;
+      return { fullAddress: s, note: primary.note?.trim() || null, fromProfile: true };
+    }
+    const corp = await loadJuristicCorporateAddress(admin, f.userid);
+    if (corp) {
+      return { fullAddress: `${corp.name} ${corp.addressLine}`.trim(), note: null, fromProfile: true };
+    }
+  }
+  return { fullAddress: buildFullAddress(f), note: f.faddressnote?.trim() || null, fromProfile: false };
 }
 
 // QR data-url helper — same options lib/promptpay.ts uses.
@@ -378,6 +423,18 @@ export default async function ForwarderLabelPrintPage({
     }
   }
 
+  // Resolve the effective ship-to per row for the ADDRESS label (ภูม 2026-06-26):
+  // a delivery order on the warehouse placeholder gets the customer's real saved
+  // address instead of printing "รับที่โกดัง Pacred".
+  const addrMap = new Map<number, ResolvedShipTo>();
+  if (labelType === "address") {
+    await Promise.all(
+      orderedForwarders.map(async (f) => {
+        addrMap.set(f.id, await resolveShipTo(admin, f));
+      }),
+    );
+  }
+
   const totalLabels = orderedForwarders.reduce((s, f) => s + copyCount(f.famount), 0);
 
   return (
@@ -529,17 +586,25 @@ export default async function ForwarderLabelPrintPage({
               const copies = copyCount(f.famount);
               const showLogo = !isFamilyAccount(f.userid);
               const displayUser = displayBoxUserId(f.userid, f.ftrackingchn2);
-              const fullAddress = buildFullAddress(f);
+              const resolved = addrMap.get(f.id);
+              const fullAddress = resolved?.fullAddress ?? buildFullAddress(f);
+              const addrNote = resolved?.note ?? null;
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`addr-${f.id}-${copy}`} className="label-page">
-                  {/* Row 1 — logo · id + tracking */}
+                  {/* Row 1 — ผู้ส่ง/FROM (Pacred company · ภูม 2026-06-26) · id + tracking */}
                   <div className="flex items-start justify-between gap-2">
-                    {showLogo ? (
-                      <img src={LOGO_PATH} alt={SITE_NAME} className="h-[7mm] w-auto shrink-0" />
-                    ) : (
-                      <span />
-                    )}
-                    <div className="text-right">
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      {showLogo && (
+                        <img src={LOGO_PATH} alt={SITE_NAME} className="h-[6mm] w-auto shrink-0" />
+                      )}
+                      <div className="min-w-0 text-[2.3mm] leading-tight text-gray-700">
+                        <span className="rounded bg-gray-200 px-1 text-[2.4mm] font-bold text-black">ผู้ส่ง / From</span>
+                        <p className="mt-[0.3mm] font-bold text-black">{SITE_LEGAL_NAME_TH}</p>
+                        <p>{ADDRESSES.office.full}</p>
+                        <p>โทร. {CONTACT.phoneCompanyDisplay}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
                       <span className="rounded bg-gray-300 px-2 py-0.5 text-[3mm] font-bold leading-tight text-black">
                         เลขที่ #{f.id}
                       </span>
@@ -560,9 +625,9 @@ export default async function ForwarderLabelPrintPage({
                     <p className="mt-[1mm] text-[4.6mm] font-semibold leading-snug">
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
-                    {f.faddressnote && (
+                    {addrNote && (
                       <p className="mt-[0.5mm] text-[3.4mm] leading-snug text-gray-700">
-                        (* {f.faddressnote})
+                        (* {addrNote})
                       </p>
                     )}
                   </div>
