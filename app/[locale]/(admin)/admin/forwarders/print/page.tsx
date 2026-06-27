@@ -553,7 +553,7 @@ export default async function ForwarderLabelPrintPage({
                       else        → text + QR only (no barcode) */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[1.9mm] leading-tight text-gray-600">เลขแทรคกิ้ง</p>
+                      <p className="text-[1.9mm] leading-tight text-black">เลขแทรคกิ้ง</p>
                       <p
                         className={`break-all leading-tight ${
                           barcode ? "text-[2.2mm] font-semibold" : "text-[3mm] font-bold"
@@ -630,7 +630,7 @@ export default async function ForwarderLabelPrintPage({
                       <p className="mt-[0.5mm] break-all text-[3.5mm] font-bold leading-tight">
                         {f.ftrackingchn || "—"}
                       </p>
-                      <p className="text-[2.2mm] leading-tight text-gray-600">แทรคกิ้ง</p>
+                      <p className="text-[2.2mm] leading-tight text-black">แทรคกิ้ง</p>
                     </div>
                   </div>
 
@@ -645,7 +645,7 @@ export default async function ForwarderLabelPrintPage({
                       <span className="font-bold">{displayUser}</span> {fullAddress}
                     </p>
                     {addrNote && (
-                      <p className="mt-[0.5mm] text-[2.3mm] leading-snug text-gray-700">
+                      <p className="mt-[0.5mm] text-[2.3mm] leading-snug text-black">
                         (* {addrNote})
                       </p>
                     )}
