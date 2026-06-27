@@ -1,8 +1,19 @@
 # 🧾 SAVE-POINT 2026-06-26 (ภูม · คอมที่ทำงาน → กลับไปทำต่อที่บ้าน)
 
-> **Branch `Poom-pacred` = `2c1950bb`** (= HEAD · pushed · clean · local==origin 0/0).
+> **Branch `Poom-pacred` = `691116e8`** (= HEAD · pushed · clean · local==origin 0/0 · **synced กับ dave-pacred แล้ว** — FF 15 commit ของเดฟเข้ามา · Poom==dave · เดฟ ไม่แตะป้ายพิมพ์).
 > **คอมบ้าน resume:** `git fetch && git pull origin Poom-pacred` + copy `.env.local` จาก main repo (`C:\Users\Admin\pacred-web`) + connect browser ใหม่ (work machine = Browser deviceId `c0898978-…` · authed admin "Pasit Pappornpisit · Ultra Admin Z" · ที่บ้าน re-connect).
-> **Gate เขียวทุก commit:** tsc 0 · eslint 0 (อ่าน exit จริง · กรอง `grep 'error TS' \| grep -v '.next'`). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod = เดฟ จัดการ (ผม read-only) · **NEXT FREE mig = 0214** (วันนี้ใช้ 0213 driver fail-note). กฎ: push เฉพาะ Poom-pacred · ห้ามงานหาย · explain ภาษาพูด.
+> **Gate เขียวทุก commit:** tsc 0 · eslint 0 (อ่าน exit จริง · กรอง `grep 'error TS' \| grep -v '.next'`). localhost/.env.local = **DEV** (`lozntlidlqqzzcaathnm` · pw `n61OKDy28QcrB1ZJ`) · prod = เดฟ จัดการ (ผม read-only) · **NEXT FREE mig = 0220** (0213 driver fail-note=ของผม · 0214-0219=เดฟ/ปอน · sync แล้ว). กฎ: push เฉพาะ Poom-pacred · ห้ามงานหาย · explain ภาษาพูด.
+
+## 🔁 รอบ 2 (บ่าย · หลัง sync เดฟ) — ป้ายพิมพ์กลับ legacy + คู่มือ + ปรึกษางานโกดัง
+
+**(A) ป้ายพิมพ์ → ย้อนเป็น legacy 100×75** (`035502cb`+`7e196d96`) — ภูม ถามพนักงาน PCS: เครื่องพิมพ์ "นิดเดียว" ส่วนนึงเพราะกระดาษ → ภูม **เปลี่ยนกระดาษเป็นขนาด PCS (100×75)** แล้ว → revert ป้ายจาก 100×150 กลับเป็น legacy faithful (restore จาก `a28ddbb9` · @page 100×75 · layout printAll.php case 1+4) + content ดำเข้มสุด (เทา→ดำ). verify สด: page 100×75 · fits · 0px.
+> **🖨 เครื่องพิมพ์ ES-9910UB — diagnose จบ (ฝั่งภูม · ไม่ใช่โค้ด):** "นิดเดียว" = ไดรเวอร์ตั้ง Height ไม่ตรง label (Windows Test Page ก็นิดเดียว = ยืนยัน 100% ที่ไดรเวอร์) · "จาง" = **Darkness/Density ต่ำ + Speed สูง** → ตั้งที่ไดรเวอร์ (วิดีโอทางการ `easyprinterthailand.com/driveres9910` "ตั้งค่ากระดาษและปรับความเข้ม"). เว็บเรา render ถูกแล้ว.
+
+**(B) คู่มือสอนงานโกดัง+คนขับ** (`691116e8` · [docs/training/warehouse-driver-daily-guide.md](../training/warehouse-driver-daily-guide.md)) — ภูม ขอไว้สอนพนักงานใหม่ · flow จริง (สถานะ 1-7 + หน้า admin จริง) · flag กติกาบริษัท (เวลา/คน/COD/ผัง) ให้ภูมเติม.
+
+**(C) ปรึกษา (ยังไม่ทำโค้ด · รอภูม/ทีมเคาะ):**
+- **location/ผังโกดัง:** เช็ค legacy แล้ว — มีแค่ field `fPallet` (free-text · พิมพ์เองตอนสแกน · จำค่าล่าสุดด้วย cookie) · **ไม่มี**หน้าจัดการโซน/พิมพ์ป้ายโซน → "A1=โซนอะไร" เป็นกติกานอกระบบ. ภูม อยากทำโซน+ป้ายแปะผนัง = enhancement ใหม่ที่ดีกว่า legacy → **ภูม ปรึกษาทีมก่อน**.
+- **ระบบแพลนงานโกดัง:** มีอยู่แล้ว 3 ตัว — **`/admin/logistics-board`** (ภาพรวม pipeline แยกสถานะ · ระบบนับให้ · "วันนี้ทำอะไร" — เปิดดูในจอแล้ว ใช้ได้จริง) · `/admin/board` (กระดานจดงาน/มอบหมาย) · `/admin/warehouse/worker` (คิวโกดัง · ⚠️ทำเผื่อจีน). **สรุป: ยังไม่คุ้มสร้าง "โน้ตส่วนตัว" ใหม่ตอนโกดังคนเดียว** → สอนพี่โกดังใช้ logistics-board ก่อน (ฟรี · ได้ 80%) · ไว้โกดังโต/หลายคนค่อยทำ "ไวท์บอร์ดรวม".
 
 ## ✅ งานวันนี้ (push Poom-pacred ครบ · gate เขียว · verify สด authed browser)
 
