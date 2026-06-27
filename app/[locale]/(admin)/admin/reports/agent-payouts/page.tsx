@@ -30,7 +30,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -71,7 +71,7 @@ export default async function AgentPayoutsReportPage({
   // Commission amounts (1% · WHT · net · pending/paid payout) = money-internal
   // (owner 2026-06-18): only ultra/accounting/pricing. The agent/team + รายการค้าง
   // (count) + ค่าขนส่งจีน (selling) columns stay visible to all.
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
 
   const sp = await searchParams;
   const range = resolveDateRange(sp);

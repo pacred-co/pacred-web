@@ -3,6 +3,7 @@ import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { verifyAdminSession } from "@/lib/auth/admin-session";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
+import { getStafferWorkspaceRole } from "@/lib/admin/positions";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
@@ -35,9 +36,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   // Fetch the sidebar badge counts + the signed-in admin's display name
   // in parallel — both feed the per-role sidebar chrome.
-  const [counts, withProfile] = await Promise.all([
+  const [counts, withProfile, workspaceRole] = await Promise.all([
     getSidebarCounts(),
     getCurrentUserWithProfile(),
+    // 2026-06-27 (ปอน) — the staffer's POSITION workspace_role scopes the sidebar
+    // menu (null = no position → falls back to full/role menu in menuForStaffer).
+    getStafferWorkspaceRole(user.id),
   ]);
 
   const profile = withProfile?.profile ?? null;
@@ -89,7 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           sidebar on print so receipts/invoices/tax-invoices don't show admin
           chrome bleeding into the page. Side-effect-free for screen rendering. */}
       <div className="print:hidden">
-        <AdminSidebar roles={roles} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
+        <AdminSidebar roles={roles} workspaceRole={workspaceRole} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
         {/* 2026-06-13 (ปอน · owner "ทำให้ left sidebar responsive เหมือนหน้านำเข้าทุกหน้า"):
             collapse the desktop sidebar to a hover-expand icon rail on EVERY admin
             page (was page-scoped to /admin/forwarders/[fNo]). Lifted here so the

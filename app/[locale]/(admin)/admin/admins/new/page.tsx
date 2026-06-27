@@ -19,6 +19,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { AdminCreateNewForm } from "./new-form";
+import { listActivePositions } from "@/lib/admin/positions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,9 @@ export default async function AdminCreatePage({
 }) {
   await requireAdmin(["super"]);
   const sp = await searchParams;
+
+  // Positions (ตำแหน่ง) for the dropdown — filtered by department client-side.
+  const positions = await listActivePositions();
 
   // Optional preset: /admin/admins/new?legacy=admin_pop pre-fills the
   // legacy_admin_id field. Used when ภูม walks down the 13-row reference
@@ -71,7 +75,7 @@ export default async function AdminCreatePage({
       </div>
 
       {/* Form */}
-      <AdminCreateNewForm legacyPreset={legacyPreset} />
+      <AdminCreateNewForm legacyPreset={legacyPreset} positions={positions} />
 
       {/* Footer */}
       <div className="flex gap-2 flex-wrap pt-2">

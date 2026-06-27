@@ -42,7 +42,7 @@ import {
 import type { AdminRole } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
 import {
-  menuForRoles, menuShowAll, primaryRole,
+  menuForStaffer, menuShowAll, primaryRole,
   type BadgeCounts, type MenuItem, type MenuSection,
 } from "@/lib/admin/sidebar-menu";
 
@@ -168,6 +168,7 @@ function Icon({ name, active }: { name?: string; active: boolean }) {
 const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   ultra:       "role.ultra",   // Ultra Admin Z (mig 0189)
   super:       "role.super",
+  normies:     "role.normies", // 2026-06-27 (ปอน) — god-nav, money-blind tier
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // G4 (synthesis §3) added a dedicated role.manager i18n key + the
   // separate `menuManager` (super menu minus HR + Settings) in
@@ -460,11 +461,15 @@ function SidebarHeader({
 
 export function AdminSidebar({
   roles,
+  workspaceRole = null,
   counts = {},
   adminLabel = "Admin",
   adminAvatar = null,
 }: {
   roles: AdminRole[];
+  /** The staffer's POSITION workspace_role (ปอน 2026-06-27) — scopes the menu
+   *  when set. null = no position → full/role menu (back-compat). */
+  workspaceRole?: AdminRole | null;
   /** Live-count badges, resolved server-side (getSidebarCounts). */
   counts?: BadgeCounts;
   /** The signed-in admin's display name / member code for the header. */
@@ -486,19 +491,26 @@ export function AdminSidebar({
   // can flip this to expose the full CEO toolbox even when their role
   // would normally show a narrower menu (e.g. when super wears a
   // sales/warehouse hat for a day). Non-super never sees the toggle.
-  const isSuper = isGodRole(roles);
+  // "Show all" oversight toggle = ultra/super ONLY (ปอน 2026-06-27). NOT normies:
+  // a position-scoped normies must not be able to escape their workspace via the
+  // toggle. (isGodRole still includes normies elsewhere for action back-compat.)
+  const isSuper = roles.includes("ultra") || roles.includes("super");
   const [showAll, setShowAll] = useState(false);
 
   // Per-role purpose-built menu — faithful to the legacy per-role .php.
   // After role-routing, apply the Phase-gate filter (2026-05-20 brief): items
   // tagged `phase: 2/3/4` are hidden from everyone except `super`.
-  const role = primaryRole(roles);
+  // Effective role for the Phase filter + role badge: a position-scoped staffer
+  // (non-oversight WITH a workspace_role) is filtered as their WORKSPACE role, so
+  // their position's menu renders coherently; everyone else = their primary role.
+  const role = (!isSuper && workspaceRole) ? workspaceRole : primaryRole(roles);
   // When `super` ticks "Show all menus", swap to the full CEO toolbox
-  // regardless of any in-page role simulation. Non-super never reaches
-  // this branch (showAll always false for them).
+  // regardless of any in-page role simulation. Otherwise the menu is
+  // position-scoped (menuForStaffer): ultra/super = full · has-position = that
+  // workspace · no-position = role menu (normies → full, back-compat).
   const rawSections: MenuSection[] = (isSuper && showAll)
     ? menuShowAll()
-    : menuForRoles(roles);
+    : menuForStaffer(roles, workspaceRole);
   const sections: MenuSection[] = rawSections.map((sec) => ({
     ...sec,
     items: filterByPhase(sec.items, role),

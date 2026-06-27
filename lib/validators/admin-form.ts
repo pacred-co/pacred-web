@@ -47,6 +47,11 @@ export const ADMIN_ROLES = [
   // cost/profit visibility). Listed first = top of the role dropdown.
   "ultra",
   "super",
+  // 2026-06-27 (owner ปอน) — `normies` = 3rd visibility tier (god-nav, sees
+  // neither cost nor profit). The picker (ASSIGNABLE_ROLES below) now offers
+  // ONLY ultra/super/normies; the rest stay in this enum for back-compat with
+  // the operational requireAdmin([...]) gates but are not assignable.
+  "normies",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   "manager",
   "ops",
@@ -88,8 +93,11 @@ export type AdminRoleEnum = z.infer<typeof adminRoleSchema>;
  * makes a missing/extra key a compile error if the enum changes.
  */
 export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
-  ultra:                     "Ultra Admin Z (เห็นทุกอย่าง รวมต้นทุน/กำไร/คอม)",
-  super:                     "Super Admin (เห็นทุกอย่าง ยกเว้นต้นทุน/กำไร/คอม)",
+  // 2026-06-27 (owner ปอน) — the 3 visibility tiers. Labels describe what each
+  // tier SEES (ต้นทุน=cost · กำไร=profit · ยอดขาย=sales). All 3 are god-nav.
+  ultra:                     "Ultra Admin Z (เห็นทุกอย่าง: ต้นทุน · กำไร · ยอดขาย)",
+  super:                     "Super Admin (เห็นกำไร · ยอดขาย — ไม่เห็นต้นทุน)",
+  normies:                   "Normies Admin (เห็นยอดขาย — ไม่เห็นต้นทุน · ไม่เห็นกำไร)",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
   ops:                       "Ops (forwarder/บริการคลังจีน)",
@@ -115,6 +123,23 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   freight_import_clearance:  "Freight Import Clearance (#27)",
   freight_import_messenger:  "Freight Import Messenger (#28)",
 };
+
+/**
+ * ASSIGNABLE_ROLES — the roles the create/edit/change-role pickers OFFER
+ * (owner ปอน 2026-06-27: "ลบ role ไปเลย แก้เป็นสิทธิ์การมองเห็นแทน · เดี๋ยว role
+ * ทำเพิ่มมาอีกอัน"). The admin model is now THREE visibility tiers — every admin
+ * is god-nav, differentiated only by what money they see:
+ *   • ultra   → cost + profit + sales
+ *   • super   → profit + sales (no cost)
+ *   • normies → sales only (no cost, no profit)
+ *
+ * The other AdminRole values still EXIST (operational requireAdmin([...]) gates
+ * compile + god-nav bypasses them) but are no longer assignable from the UI. To
+ * bring a functional role back, add it here. The dropdowns map over this list;
+ * ROLE_LABELS stays exhaustive so any legacy/inert grant still renders a label.
+ */
+export const ASSIGNABLE_ROLES = ["ultra", "super", "normies"] as const satisfies readonly AdminRoleEnum[];
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 /**
  * `admin_contact_extras.company` CHECK constraint (migration 0018).
@@ -216,8 +241,15 @@ export const AdminCreateSchema = z
     nickname:      optionalText(120),
     company:       companySchema.optional().default("pacred"),
     employee_type: employeeTypeSchema.optional().default("full_time"),
+    // department = a key from lib/admin/departments.ts (the form constrains to a
+    // 6-value dropdown). Kept as free text in the schema so a legacy free-text
+    // department value on an existing admin doesn't break a save (owner ปอน 2026-06-27).
     department:    optionalText(100),
     section:       optionalText(100),
+    // position (ตำแหน่ง) — FK to admin_positions; drives the workspace. Picked as
+    // a dropdown (filtered by department). Optional so a bare admin can be created
+    // first + assigned a position later via /edit.
+    position_id:   z.uuid("position_id ต้องเป็น UUID").optional(),
     work_email:    optionalEmail,
     work_phone:    optionalText(50),
     hired_at:      optionalDate,
@@ -275,6 +307,7 @@ export const AdminUpdateSchema = z
     employee_type:      employeeTypeSchema.optional(),
     department:         optionalText(100),
     section:            optionalText(100),
+    position_id:        z.uuid("position_id ต้องเป็น UUID").optional(),
     work_email:         optionalEmail,
     work_phone:         optionalText(50),
     hired_at:           optionalDate,
@@ -326,6 +359,7 @@ export function hasAnyHRField(input: AdminCreateInput | AdminUpdateInput): boole
     input.employee_type ||
     input.department ||
     input.section ||
+    input.position_id ||
     input.work_email ||
     input.work_phone ||
     input.hired_at ||

@@ -1,5 +1,5 @@
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import {
   getFreightCommissionState,
   adminListCommissionAccruals,
@@ -31,7 +31,7 @@ export default async function AdminFreightCommissionPage() {
     "freight_sales_manager", "freight_sales", "freight_import_manager", "freight_export_manager",
   ]);
   // PAID flip = god roles (ultra + super) — the explicit money-out gate · mirror
-  // the action. (ACTION gate, not money-visibility → isGodRole, NOT canViewCostProfit.)
+  // the action. (ACTION gate, not money-visibility → isGodRole, NOT canViewProfit.)
   const canPay = isGodRole(roles);
   // Approve/reject = god roles + accounting.
   const canApprove = isGodRole(roles) || roles.includes("accounting");
@@ -41,7 +41,7 @@ export default async function AdminFreightCommissionPage() {
   // Commission AMOUNTS (base/accrued · gross/WHT/net) = money-internal (owner
   // 2026-06-18): only ultra/accounting/pricing. Drives the amount columns in the
   // client; super keeps approve/pay reach but does NOT see the money figures.
-  const canViewMoney = canViewCostProfit(roles);
+  const canViewMoney = canViewProfit(roles);
 
   const [stateRes, accrualsRes, withdrawalsRes] = await Promise.all([
     getFreightCommissionState(),

@@ -1,6 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -59,7 +59,7 @@ export default async function AdminWithdrawCommSalePage({
   // Commission batch amounts (commbefore/WHT/net) = money-internal (owner
   // 2026-06-18): only ultra/accounting/pricing. Non-cost viewers keep the batch
   // list (date/payee/title/status) but the money columns + summary + CSV drop.
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
   const sp = await searchParams;
   const status = sp.status === "1" || sp.status === "2" || sp.status === "3" ? sp.status : undefined;
   const repId = (sp.rep ?? "").trim() || undefined;

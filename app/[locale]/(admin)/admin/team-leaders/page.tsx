@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { AddTeamLeaderForm } from "./add-form";
 import { TeamLeaderRowActions } from "./row-actions";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
@@ -16,7 +16,7 @@ export default async function AdminTeamLeadersPage() {
   // Commission % = money-internal (owner 2026-06-18): only ultra/accounting/
   // pricing may see + edit it. Non-cost viewers (super, sales_admin) keep the
   // page (toggle active/inactive) but the % column + edit + CSV are dropped.
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
 
   const admin = createAdminClient();
 

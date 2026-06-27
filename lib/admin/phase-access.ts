@@ -171,8 +171,9 @@ export function isPhase2PlusRoute(pathname: string): boolean {
  * gates on admin-vs-non-admin) — it composes WITH it.
  */
 export function canAccessRoute(pathname: string, role: AdminRole | null): boolean {
-  // `ultra` (Ultra Admin Z) + `super` are god roles — no Phase gating.
-  if (role === "ultra" || role === "super") return true;
+  // `ultra` · `super` · `normies` are the god-nav visibility tiers — no Phase
+  // gating (owner ปอน 2026-06-27; normies sees every menu, only money is hidden).
+  if (role === "ultra" || role === "super" || role === "normies") return true;
   if (!role) return false;
   return !isPhase2PlusRoute(pathname);
 }

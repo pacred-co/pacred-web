@@ -28,7 +28,7 @@ import { Link } from "@/i18n/navigation";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -143,7 +143,7 @@ export default async function AdminYuanPaymentsPage({
   // column is a profit figure — visible ONLY to ultra/accounting/pricing,
   // NOT super/ops. Gate at the DATA layer (omit the field from the CSV row +
   // skip the column) — never CSS.
-  const showProfit = canViewCostProfit(roles);
+  const showProfit = canViewProfit(roles);
 
   const sp = await searchParams;
   const admin = createAdminClient();

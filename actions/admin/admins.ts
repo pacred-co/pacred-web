@@ -1059,6 +1059,7 @@ export async function adminCreateNew(
               employee_type:     d.employee_type ?? "full_time",
               department:        d.department ?? null,
               section:           d.section ?? null,
+              position_id:       d.position_id ?? null,   // ตำแหน่ง → workspace (ปอน 2026-06-27)
               work_email:        d.work_email ?? null,
               work_phone:        d.work_phone ?? null,
               hired_at:          d.hired_at ?? null,
@@ -1258,6 +1259,7 @@ export async function adminUpdateProfileFields(
       if (d.employee_type      !== undefined) extrasRow.employee_type      = d.employee_type;
       if (d.department         !== undefined) extrasRow.department         = d.department ?? null;
       if (d.section            !== undefined) extrasRow.section            = d.section ?? null;
+      if (d.position_id        !== undefined) extrasRow.position_id        = d.position_id ?? null;
       if (d.work_email         !== undefined) extrasRow.work_email         = d.work_email ?? null;
       if (d.work_phone         !== undefined) extrasRow.work_phone         = d.work_phone ?? null;
       if (d.hired_at           !== undefined) extrasRow.hired_at           = d.hired_at ?? null;
@@ -1455,6 +1457,7 @@ export type AdminEditLoad = {
   employee_type:      string | null;
   department:         string | null;
   section:            string | null;
+  position_id:        string | null;
   work_email:         string | null;
   work_phone:         string | null;
   hired_at:           string | null;
@@ -1488,12 +1491,12 @@ export async function loadAdminForEdit(
       admin
         .from("admin_contact_extras")
         .select(
-          "nickname, company, employee_type, department, section, work_email, work_phone, hired_at, contract_end_date, legacy_admin_id, admin_note",
+          "nickname, company, employee_type, department, section, position_id, work_email, work_phone, hired_at, contract_end_date, legacy_admin_id, admin_note",
         )
         .eq("profile_id", profileId)
         .maybeSingle<{
           nickname: string | null; company: string | null; employee_type: string | null;
-          department: string | null; section: string | null;
+          department: string | null; section: string | null; position_id: string | null;
           work_email: string | null; work_phone: string | null;
           hired_at: string | null; contract_end_date: string | null;
           legacy_admin_id: string | null; admin_note: string | null;
@@ -1549,6 +1552,7 @@ export async function loadAdminForEdit(
           employee_type:      e?.employee_type      ?? null,
           department:         e?.department         ?? null,
           section:            e?.section            ?? null,
+          position_id:        e?.position_id        ?? null,
           work_email:         e?.work_email         ?? null,
           work_phone:         e?.work_phone         ?? null,
           hired_at:           e?.hired_at           ?? null,
