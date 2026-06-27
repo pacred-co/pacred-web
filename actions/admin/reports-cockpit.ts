@@ -27,6 +27,7 @@ import { LEGACY_FORWARDER_STATUS, type LegacyForwarderCode } from "@/lib/legacy-
 import {
   SHIP_BY_LABEL,
   WAREHOUSE_NAME_LABEL,
+  TRANSPORT_TYPE_LABEL,
 } from "./reports-profit-types";
 import { getArAgingReport } from "./reports-ar";
 import { getForwarderSlaReport } from "./reports-sla";
@@ -37,6 +38,7 @@ import type {
   CockpitProfitRow,
   FunnelStage,
   VolumeRow,
+  AnomalyRow,
 } from "./reports-cockpit-types";
 
 type Ok<T> = { ok: true; data: T };
@@ -69,6 +71,7 @@ function monthStartIso(now: Date): string {
 
 /** MTD forwarder row shape (lowercase cols · migration 0081). */
 type MtdRow = {
+  id: number | string | null;
   fstatus: string | null;
   ftotalprice: number | null;
   ftransportprice: number | null;
@@ -78,8 +81,27 @@ type MtdRow = {
   fprofittotal: number | null;
   fshipby: string | null;
   fwarehousename: string | null;
+  ftransporttype: string | null;
   userid: string | null;
 };
+
+/**
+ * Cost-anomaly detector (owner 2026-06-27 · "มั่วจัดๆ"). A row is anomalous when
+ * its cost is impossibly larger than its sale — a fat-finger / mis-keyed cost
+ * that would otherwise tank the company P&L (one ฿467,500-on-฿2,057 row made the
+ * cockpit read −372% margin). Conservative on purpose: a genuine loss-making
+ * order rarely has cost > 5× the sale AND a huge absolute cost. Excluded rows
+ * are surfaced for accounting to fix — not silently dropped.
+ */
+const ANOMALY_ABS_THB = 50_000;
+const ANOMALY_RATIO = 5;
+function costAnomaly(revenue: number, cost: number): string | null {
+  if (cost <= ANOMALY_ABS_THB) return null;
+  if (revenue > 0 && cost <= revenue * ANOMALY_RATIO) return null; // a big but plausible cost
+  return revenue > 0
+    ? `ต้นทุน ฿${cost.toLocaleString("th-TH")} > ${ANOMALY_RATIO}× ยอดขาย ฿${revenue.toLocaleString("th-TH")}`
+    : `ต้นทุน ฿${cost.toLocaleString("th-TH")} แต่ยังไม่มียอดขาย`;
+}
 
 /** Finalize a volume bucket map → sorted VolumeRow[] (count desc), top-N. */
 function topVolume(
@@ -130,7 +152,7 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
     const mtdQ = admin
       .from("tb_forwarder")
       .select(
-        "fstatus, ftotalprice, ftransportprice, fpriceupdate, fcosttotalprice, fdiscount, fprofittotal, fshipby, fwarehousename, userid",
+        "id, fstatus, ftotalprice, ftransportprice, fpriceupdate, fcosttotalprice, fdiscount, fprofittotal, fshipby, fwarehousename, ftransporttype, userid",
       )
       .gte("fdate", monthStartTs)
       .neq("fstatus", "99")
@@ -187,7 +209,9 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
     // Profit drill-down buckets (revenue + profit per group · MTD).
     const profitCarrier = new Map<string, ProfitAcc>();
     const profitWarehouse = new Map<string, ProfitAcc>();
+    const profitMode = new Map<string, ProfitAcc>(); // ftransporttype → acc (รถ/เรือ/แอร์)
     const profitByUser = new Map<string, ProfitAcc>(); // userid → acc (rep resolved after)
+    const anomalies: AnomalyRow[] = []; // corrupt cost ≫ revenue — excluded from P&L
     let capped = false;
     if (mtdErr) {
       logger.error("reports", "cockpit MTD forwarder query failed", mtdErr);
@@ -200,22 +224,37 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
         // links to. Adding ftransportprice/fpriceupdate here made the cockpit margin
         // systematically lower than the report → BI-trust mismatch. (audit SF-4)
         const { revenue, cost, profit } = forwarderRowProfit(r);
+        const carrierKey = (r.fshipby ?? "").trim() || "(ไม่ระบุ)";
+        const whKey = (r.fwarehousename ?? "").trim() || "(ไม่ระบุ)";
+        const modeKey = (r.ftransporttype ?? "").trim() || "(ไม่ระบุ)";
+
+        // Volume leaderboards count EVERY order (incl. anomalies) — volume is
+        // about activity, not money.
+        byCarrier.set(carrierKey, (byCarrier.get(carrierKey) ?? 0) + 1);
+        byWarehouse.set(whKey, (byWarehouse.get(whKey) ?? 0) + 1);
+        mtdOrders += 1;
+
+        // Cost-anomaly guard: a corrupt cost ≫ revenue is quarantined OUT of
+        // every P&L aggregate (else one fat-finger reads as −372% company margin)
+        // and surfaced for accounting to fix — never silently folded in.
+        const anomalyReason = costAnomaly(revenue, cost);
+        if (anomalyReason) {
+          anomalies.push({ id: String(r.id ?? ""), userid: (r.userid ?? "").trim(), revenue, cost, reason: anomalyReason });
+          continue;
+        }
+
         mtdRevenue += revenue;
         mtdProfit += profit;
-        mtdOrders += 1;
         if (profit > MARGIN_CAP_PER_CONTAINER_THB) {
           marginOverCount += 1;
           marginOverProfit += profit;
         }
-        const carrierKey = (r.fshipby ?? "").trim() || "(ไม่ระบุ)";
-        const whKey = (r.fwarehousename ?? "").trim() || "(ไม่ระบุ)";
-        byCarrier.set(carrierKey, (byCarrier.get(carrierKey) ?? 0) + 1);
-        byWarehouse.set(whKey, (byWarehouse.get(whKey) ?? 0) + 1);
 
-        // Profit drill-down accumulation (carrier / warehouse / per-user).
+        // Profit drill-down accumulation (carrier / warehouse / mode / per-user).
         for (const [map, key] of [
           [profitCarrier, carrierKey],
           [profitWarehouse, whKey],
+          [profitMode, modeKey],
         ] as [Map<string, ProfitAcc>, string][]) {
           const a = map.get(key) ?? emptyProfitAcc();
           a.count += 1; a.revenue += revenue; a.profit += profit;
@@ -364,6 +403,8 @@ export async function getCockpitReport(): Promise<Result<CockpitReport>> {
         profitByCarrier: topProfit(profitCarrier, (k) => SHIP_BY_LABEL[k] ?? (k === "(ไม่ระบุ)" ? k : `รหัส ${k}`), TOP_PROFIT_N),
         profitByWarehouse: topProfit(profitWarehouse, (k) => WAREHOUSE_NAME_LABEL[k] ?? k, TOP_PROFIT_N),
         profitBySalesRep,
+        profitByMode: topProfit(profitMode, (k) => TRANSPORT_TYPE_LABEL[k] ?? (k === "(ไม่ระบุ)" ? k : `รหัส ${k}`), 4),
+        anomalies,
         sla,
         marginOverCount,
         marginOverProfit,

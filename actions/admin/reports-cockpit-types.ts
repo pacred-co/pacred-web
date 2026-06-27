@@ -51,6 +51,27 @@ export type CockpitProfitRow = {
 };
 
 /**
+ * An anomalous-cost row excluded from the P&L (owner 2026-06-27 — "มั่วจัดๆ").
+ * The cockpit headline margin was tanked by ONE corrupt row (cost ≫ revenue,
+ * e.g. ฿467,500 cost on a ฿2,057 sale). Rather than let a single fat-finger
+ * silently turn the company margin to −372%, such rows are detected, EXCLUDED
+ * from every profit aggregate (carrier/warehouse/rep/mode/headline), and
+ * surfaced in a "ต้นทุนผิดปกติ — ตรวจสอบ" panel so accounting fixes the real cost.
+ */
+export type AnomalyRow = {
+  /** tb_forwarder.id — links to the forwarder detail to fix the cost. */
+  id: string;
+  /** Owner member code (userid). */
+  userid: string;
+  /** Σ ftotalprice — the sale (THB). */
+  revenue: number;
+  /** Σ fcosttotalprice — the suspicious cost (THB). */
+  cost: number;
+  /** Why it was flagged (human-readable). */
+  reason: string;
+};
+
+/**
  * SLA dwell-time summary for the cockpit (a condensed view of the full
  * /admin/reports/sla-cycle-time report). Derived from tb_forwarder
  * fdatestatus2..7 timestamps — ZERO new schema.
@@ -108,6 +129,10 @@ export type CockpitReport = {
    * profit-analytics report only groups by carrier/warehouse/mode.
    */
   profitBySalesRep: CockpitProfitRow[];
+  /** MTD profit/margin drill-down by ขนส่งจีน→ไทย mode (ftransporttype: รถ/เรือ/แอร์). */
+  profitByMode: CockpitProfitRow[];
+  /** Cost-anomaly rows excluded from the P&L (corrupt cost ≫ revenue · owner 2026-06-27). */
+  anomalies: AnomalyRow[];
   /** Condensed SLA dwell-time summary (from tb_forwarder fdatestatus2..7). */
   sla: CockpitSlaSummary;
   /** MTD orders whose profit exceeds the soft ฿15k/ตู้ guidance (CEO §4 · advisory, never blocks). */

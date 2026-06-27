@@ -87,6 +87,15 @@ export const TRANSPORT_TYPE_LABEL: Record<string, string> = {
  */
 export const SHIP_BY_LABEL: Record<string, string> = {
   PCS: "รับเองโกดัง Pacred (สมุทรสาคร)",
+  // PRF/PRE rebrand (2026-06-25 · display-only — the stored fshipby code stays
+  // 'PCSF'/'PCSE', only the LABEL shows the Pacred brand). Both the new code
+  // ('PRF'/'PRE', written by new orders) AND the legacy code ('PCSF'/'PCSE',
+  // on migrated rows) must map to the same label so the cockpit never leaks a
+  // raw "รหัส PCSF". See drivers SHIP_BY_LABEL + nameShipBy SOT.
+  PRF: "Pacred เหมาๆ (PRF)",
+  PCSF: "Pacred เหมาๆ (PRF)",
+  PRE: "Pacred Express (PRE)",
+  PCSE: "Pacred Express (PRE)",
   "1": "DHL Express",
   "2": "Flash Express",
   "3": "J.K. เอ็กซ์เพรส",

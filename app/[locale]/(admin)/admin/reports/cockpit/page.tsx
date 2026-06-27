@@ -48,6 +48,8 @@ export default async function ExecCockpitPage() {
         profitByCarrier: [],
         profitByWarehouse: [],
         profitBySalesRep: [],
+        profitByMode: [],
+        anomalies: [],
         sla: {
           cycleAvgDays: 0,
           cycleP90Days: 0,
@@ -134,6 +136,35 @@ export default async function ExecCockpitPage() {
         )
       )}
 
+      {/* Cost-anomaly guard (owner 2026-06-27) — corrupt cost ≫ revenue rows are
+          quarantined out of the P&L above; flag them so accounting fixes the real
+          cost. Keeps one fat-finger from ever tanking the exec margin again. */}
+      {res.ok && r.anomalies.length > 0 && (
+        <section className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 space-y-2">
+          <h2 className="text-sm font-bold text-amber-900">
+            ⚠️ ต้นทุนผิดปกติ — กันไว้ไม่ให้กระทบกำไร ({intTh(r.anomalies.length)} ออเดอร์)
+          </h2>
+          <p className="text-xs text-amber-800">
+            ออเดอร์เหล่านี้มีต้นทุนสูงผิดปกติเทียบกับยอดขาย (น่าจะกรอกผิด) — <b>ไม่ถูกนับ</b>ในกำไร/มาร์จิ้นด้านบน · กดเข้าไปแก้ต้นทุนให้ถูกต้อง
+          </p>
+          <div className="space-y-1">
+            {r.anomalies.map((a) => (
+              <Link
+                key={a.id}
+                href={`/admin/forwarders/${a.id}`}
+                className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs hover:border-amber-500"
+              >
+                <span className="font-mono font-bold text-amber-700">F{a.id}</span>
+                <span className="text-muted">{a.userid}</span>
+                <span>ยอดขาย <b className="font-mono">{thb(a.revenue)}</b></span>
+                <span className="text-red-700">ต้นทุน <b className="font-mono">{thb(a.cost)}</b></span>
+                <span className="ml-auto text-amber-600">{a.reason} →</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Orders funnel */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <div className="border-b border-border px-4 py-3">
@@ -191,6 +222,20 @@ export default async function ExecCockpitPage() {
           okEmpty={res.ok}
         />
       </section>
+      <ProfitTable
+        title="กำไรตามรูปแบบขนส่งจีน→ไทย (รถ / เรือ / แอร์)"
+        firstColLabel="รูปแบบ"
+        rows={r.profitByMode}
+        okEmpty={res.ok}
+      />
+      {/* รวม — the all-mode total line so the exec sees one bottom line + the split. */}
+      {res.ok && r.profitByMode.length > 0 && (
+        <p className="text-[11px] text-muted -mt-2">
+          รวมทุกรูปแบบ: ออเดอร์ {intTh(r.profitByMode.reduce((s, x) => s + x.count, 0))} ·
+          ยอดขาย {thb(r.profitByMode.reduce((s, x) => s + x.revenue, 0))} ·
+          กำไร {thb(r.profitByMode.reduce((s, x) => s + x.profit, 0))}
+        </p>
+      )}
       <ProfitTable
         title="กำไรตามเซลล์ผู้ดูแล (sales rep · จากเซลล์ที่ลูกค้าถูก assign)"
         firstColLabel="เซลล์"
