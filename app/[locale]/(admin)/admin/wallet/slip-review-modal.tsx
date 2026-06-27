@@ -31,6 +31,7 @@ import {
   adminGetWalletTxSlipSignedUrl,
 } from "@/actions/admin/wallet-hs";
 import { WorkNoteField } from "@/components/admin/work-note-field";
+import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
 
 type Props = {
   open:    boolean;
@@ -293,16 +294,15 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
 
             {rejectMode && (
               <div className="space-y-2 rounded-lg border border-red-300 bg-red-50 p-3">
-                <p className="text-xs font-bold text-red-900">เหตุผลที่ปฏิเสธ (≥3 ตัวอักษร)</p>
-                <textarea
-                  rows={3}
-                  maxLength={500}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs"
-                  placeholder="เช่น ยอดในสลิปไม่ตรงกับที่กรอก / สลิปอ่านไม่ออก / เลขที่อ้างอิงไม่ตรง"
-                  autoFocus
-                />
+                {/* แก้ไขแทนการปฏิเสธ (owner 2026-06-27) — minor amount/date
+                    mismatches are fixable on the detail page without bouncing
+                    the customer; reject only when the slip is truly unusable. */}
+                <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900">
+                  💡 ถ้าแค่ยอด/วันที่ไม่ตรงเล็กน้อย — เปิดหน้ารายละเอียด (ดู/แก้ไข)
+                  แก้ยอด/เวลาแล้วอนุมัติได้เลย ไม่ต้องให้ลูกค้าทำสลิปใหม่
+                </div>
+                <p className="text-xs font-bold text-red-900">เลือกเหตุผลที่ปฏิเสธ (กดเลือก · จำเป็น)</p>
+                <RejectReasonPicker kind="deposit" onChange={setReason} disabled={pending} />
                 <div className="flex gap-2">
                   <button
                     type="button"

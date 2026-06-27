@@ -23,6 +23,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
+import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
 import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
 import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 // ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
@@ -338,8 +339,15 @@ export function ApproveRejectForm({
 
   function reject() {
     setError(null);
-    if (reason.trim().length > 0 && reason.trim().length < 3) {
-      setError("เหตุผลต้องมีอย่างน้อย 3 ตัวอักษร (หรือเว้นว่างไว้)");
+    // ห้ามพิมพ์ · กดเลือก (owner 2026-06-27): a reason is now REQUIRED + comes
+    // from the preset picker (or the "อื่นๆ" custom text), so every rejection
+    // carries a systematic, groupable reason on the row's note.
+    if (!reason.trim()) {
+      setError("กรุณาเลือกเหตุผลที่ปฏิเสธ");
+      return;
+    }
+    if (reason.trim().length < 3) {
+      setError("เหตุผลสั้นเกินไป");
       return;
     }
     startTransition(async () => {
@@ -424,20 +432,26 @@ export function ApproveRejectForm({
 
       {mode === "reject" && (
         <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3">
+          {/* แก้ไขแทนการปฏิเสธ (owner 2026-06-27): for a deposit slip, most
+              "ปฏิเสธ" cases are really just a wrong amount/date — fixable inline
+              on the LEFT pane without bouncing the customer to re-upload. Point
+              the admin there first; reject only when the slip is truly unusable. */}
+          {!isWithdraw && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900">
+              💡 ถ้าแค่ <b>ยอด</b> หรือ <b>วันที่</b> ไม่ตรงเล็กน้อย — กด
+              &lsquo;แก้ไขจำนวนเงิน&rsquo; / &lsquo;แก้ไขเวลา&rsquo; ทางด้านซ้าย
+              แล้วกด <b>อนุมัติ</b> ได้เลย <b>ไม่ต้อง</b>ให้ลูกค้าทำสลิปใหม่ ·
+              ปฏิเสธเฉพาะเมื่อสลิปใช้ไม่ได้จริง
+            </div>
+          )}
           <p className="text-xs font-bold text-red-900">
-            เหตุผลที่ปฏิเสธ (ตัวเลือก · ระบบจะบันทึกลง note)
+            เลือกเหตุผลที่ปฏิเสธ (กดเลือก · จำเป็น)
             {isWithdraw ? " · เมื่อปฏิเสธ ระบบจะคืนเงินเข้ากระเป๋าลูกค้าอัตโนมัติ" : ""}
           </p>
-          <textarea
-            rows={3}
-            maxLength={500}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs"
-            placeholder={isWithdraw
-              ? "เช่น เอกสารบัญชีไม่ครบ / เลขบัญชีไม่ตรงชื่อ / ลูกค้าขอยกเลิก"
-              : "เช่น ยอดในสลิปไม่ตรง / สลิปอ่านไม่ออก / เลขที่อ้างอิงไม่ตรง"}
-            autoFocus
+          <RejectReasonPicker
+            kind={isWithdraw ? "withdraw" : "deposit"}
+            onChange={setReason}
+            disabled={pending}
           />
           <div className="flex gap-2">
             <button
