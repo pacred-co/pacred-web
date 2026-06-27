@@ -7,10 +7,12 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { confirm, alert } from "@/components/ui/confirm";
 import { createPosition, updatePosition, setPositionActive } from "@/actions/admin/positions";
 import { DEPARTMENTS, departmentLabel, departmentDefaultWorkspace } from "@/lib/admin/departments";
 import { ADMIN_ROLES, ROLE_LABELS, type AdminRoleEnum } from "@/lib/validators/admin-form";
+import { menuForStaffer } from "@/lib/admin/sidebar-menu";
 
 // Sentinel for "สร้าง role ใหม่ อิงแผนก" — resolves to the department's base
 // workspace at submit time (departmentDefaultWorkspace · owner ปอน 2026-06-27).
@@ -39,6 +41,16 @@ const inputCls =
 export function PositionsManager({ positions }: { positions: PositionRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const tNav = useTranslations("pcsAdminNav");
+
+  // Preview: the top-level menu labels a position's workspace_role shows — so the
+  // owner can see what each ตำแหน่ง gets without logging in as that staffer (ปอน
+  // 2026-06-28). menuForStaffer([], role) = the scoped menu (roles=[] → not god).
+  function workspaceMenu(role: AdminRoleEnum): string[] {
+    return menuForStaffer([], role)
+      .flatMap((s) => s.items)
+      .map((it) => { try { return tNav(it.labelKey); } catch { return it.labelKey; } });
+  }
 
   // ── add form ──
   const [name, setName] = useState("");
@@ -182,6 +194,10 @@ export function PositionsManager({ positions }: { positions: PositionRow[] }) {
                     className={`rounded-lg border px-3 py-1.5 text-xs disabled:opacity-50 ${p.is_active ? "border-rose-200 text-rose-700 hover:bg-rose-50" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>
                     {p.is_active ? "ปิด" : "เปิด"}
                   </button>
+                </div>
+                <div className="basis-full text-[11px] text-muted">
+                  <span className="font-medium text-foreground/60">เห็นเมนู:</span>{" "}
+                  {workspaceMenu(p.workspace_role).slice(0, 12).join(" · ") || "—"}
                 </div>
               </div>
             ))}

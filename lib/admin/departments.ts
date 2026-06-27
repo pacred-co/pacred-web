@@ -29,6 +29,7 @@ export type Department = {
 };
 
 export const DEPARTMENTS = [
+  { key: "executive", labelTh: "ฝ่ายบริหาร",                     defaultWorkspace: "super" },
   { key: "biz_cs",    labelTh: "ฝ่ายพัฒนาธุรกิจและบริการลูกค้า", defaultWorkspace: "sales_admin" },
   { key: "marketing", labelTh: "ฝ่ายการตลาด",                   defaultWorkspace: "sales_admin" },
   { key: "logistics", labelTh: "ฝ่ายปฏิบัติการโลจิสติกส์",       defaultWorkspace: "warehouse" },

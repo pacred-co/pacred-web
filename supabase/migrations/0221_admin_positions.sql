@@ -54,15 +54,16 @@ comment on table public.admin_positions is
 --    ROLE_MENUS menu; marketing/hr/it have no dedicated legacy menu yet → broad
 --    base, tailor later via the positions/role builder). Idempotent. ──────────
 insert into public.admin_positions (name_th, department, workspace_role) values
+  ('ผู้บริหาร',               'executive', 'super'),
   ('เซลล์ (Sales)',          'biz_cs',    'sales'),
   ('CS / บริการลูกค้า',       'biz_cs',    'sales_admin'),
   ('Pricing / ตั้งราคา',      'biz_cs',    'pricing'),
   ('การตลาด (Marketing)',     'marketing', 'sales_admin'),
   ('โกดัง (Warehouse)',       'logistics', 'warehouse'),
   ('คนขับรถ (Driver)',        'logistics', 'driver'),
-  ('เอกสาร / Doc',            'logistics', 'freight_import_doc'),
+  ('เอกสาร / Document',       'logistics', 'freight_import_doc'),
   ('ทรัพยากรบุคคล (HR)',      'hr',        'super'),
   ('บัญชี (Accounting)',      'finance',   'accounting'),
   ('การเงิน (Finance)',       'finance',   'accounting'),
-  ('ไอที / พัฒนาระบบ (IT)',   'it',        'super')
+  ('ผู้พัฒนาระบบ/Developer',  'it',        'super')
 on conflict (lower(name_th), department) do nothing;

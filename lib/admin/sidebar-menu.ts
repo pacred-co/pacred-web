@@ -1271,7 +1271,8 @@ const menuManager: MenuSection[] = [
   learningSection,
   extensionSection([
     blockExtKpi,
-    blockExtCockpit,
+    // 2026-06-28 (ปอน) — แดชบอร์ดผู้บริหาร (blockExtCockpit) เห็นแค่ผู้บริหาร →
+    // ถอดออกจาก manager (อยู่ใน menuSuper = ผู้บริหาร/เจ้าของ เท่านั้น).
     blockExtLeadSource,
     blockExtWorkboard,
     blockExtInbox,
@@ -1381,9 +1382,10 @@ const menuAccounting: MenuSection[] = [
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
-  // 2026-06-01 (เดฟ · Wave C BI) — accounting gets the exec cockpit (finance
-  // headline: MTD revenue/profit · AR · wallet liability). phase:2 in-sidebar.
-  extensionSection([blockExtCockpit, blockExtLeadSource, blockExtJuristic, blockExtIncidents]),
+  // 2026-06-28 (ปอน) — แดชบอร์ดผู้บริหาร (blockExtCockpit) เห็นแค่ผู้บริหาร →
+  // ถอดออกจาก accounting (เหลือ lead-source/juristic/incidents). cockpit อยู่ใน
+  // menuSuper (= workspace ผู้บริหาร + เจ้าของระบบ) เท่านั้น.
+  extensionSection([blockExtLeadSource, blockExtJuristic, blockExtIncidents]),
 ];
 
 /**
@@ -1396,61 +1398,31 @@ const menuAccounting: MenuSection[] = [
  * under Cargo & Freight because legacy `OOP/CargoAndFreight/menu-user.php`
  * + `menu-withdrawal-list.php` live in that section.
  */
-const menuSalesAdmin: MenuSection[] = [
-  { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
+// 2026-06-28 (ปอน) — Sales + CS workspace = the super-menu STRUCTURE (sections)
+// MINUS the "Holding" + "Operations" sections, with the Marketing group's Sales
+// tools surfaced flat ("เอาเครื่องมือใน Sales มากาง") and the "Services" section
+// kept 1:1 as super. Cockpit (แดชบอร์ดผู้บริหาร) stays exec-only (not here).
+// CS + Sales share this base for now ("Cs กับ เซลล์ประมาณนี้") — split later if needed.
+const menuSalesBase: MenuSection[] = [
+  { header: "", items: [itemDashboard, blockExtInbox] },
   {
-    header: "Cargo & Freight",
+    // 2026-06-28 (ปอน "เอาออก") — dropped the nested Marketing group; keep only
+    // the surfaced Sales tools (เช็คนิติ · Leads · CRM).
+    header: "Marketing",
     items: [
-      itemHsTriage,
-      {
-        labelKey: "manageCustomers.titleSales",
-        icon: "Users",
-        badge: "corporatePending",
-        children: [
-          { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
-          { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
-          // Wave 28 (2026-05-29 · ภูม flagged): phase:2 demoted — now launch-critical.
-          // E2E loop step 2 = sales picks up new customer · ALL admin roles must see this.
-          { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending" },
-          { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
-          { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
-          { labelKey: "userCargo.recentlyActive", href: "/admin/customers/recently-active", icon: "Activity" },
-          // Phase 2 — sales-rep transfer is QA-like ops (already Phase 2 in blockQA).
-          { labelKey: "userCargo.transferRep", href: "/admin/customers/transfer-rep", icon: "ArrowRightLeft", phase: 2 },
-          // Phase 2 — team-leaders bonus tool aligns with sales-only commissions.
-          { labelKey: "userCargo.teamLeaders", href: "/admin/team-leaders",         icon: "Coins", phase: 2 },
-        ],
-      },
-      {
-        labelKey: "withdrawal.titleSales",
-        icon: "Banknote",
-        badge: "salesPayout",
-        children: [
-          // Phase 2 — sales-only commissions / payouts (not live to customers).
-          { labelKey: "withdrawal.salesBonus",   href: "/admin/sales-payouts",     icon: "BadgePercent", badge: "salesPayout", phase: 2 },
-          { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt", phase: 2 },
-        ],
-      },
-      // — operational items below appended after the 2026-05-20 ค่ำ
-      //   section merge (previously a separate "Cargo" section). Second
-      //   batch (same date) consolidated wallet/purchasing/report to leaves.
-      itemWalletAll,
-      itemPurchasingAll,
-      { ...itemReportsAll, labelKey: "report.titleSales" },
-      // 2026-06-09 (W9 · tax-invoice P4) — CS owns the CS (selling) stage of
-      // the CARGO tax-doc 4-role workspace (choose doc-mode · confirm selling).
-      itemTaxdocWorkspace,
-      // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
-      { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
-      { labelKey: "extension.writeArticle", href: "/admin/articles", icon: "FileText" },
-      { labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent" },
-      { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
+      blockExtJuristic,
+      ...marketingCrmTools,
     ],
   },
+  {
+    // Services — เหมือนเดิม 1:1 กับเมนู super
+    header: "Services",
+    items: [itemCustomersAll, itemPurchasingAll, blockPayment, wrapServiceImport, wrapServiceFreight, wrapServiceCustoms],
+  },
   learningSection,
-  // 2026-06-01 (CEO §6) — sales reps live in the acquisition call-queue.
-  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtIncidents]),
 ];
+
+const menuSalesAdmin: MenuSection[] = menuSalesBase;
 
 /**
  * `warehouse` — Cargo Warehouse worker (legacy Cargo/Warehouse/Warehouse.php).
@@ -1591,40 +1563,8 @@ const menuDriver: MenuSection[] = [
  *   - DROPS the `userCargo.transferRep` + `userCargo.teamLeaders` leaves
  *     (Manager-tier approval / configuration).
  */
-const menuSales: MenuSection[] = [
-  { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
-  {
-    header: "Cargo & Freight",
-    items: [
-      itemHsTriage,
-      {
-        labelKey: "manageCustomers.titleSales",
-        icon: "Users",
-        badge: "corporatePending",
-        children: [
-          { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
-          { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
-          { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
-          { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
-          { labelKey: "userCargo.recentlyActive", href: "/admin/customers/recently-active", icon: "Activity" },
-        ],
-      },
-      {
-        labelKey: "withdrawal.titleSales",
-        icon: "Banknote",
-        badge: "salesPayout",
-        children: [
-          { labelKey: "withdrawal.salesBonus", href: "/admin/sales-payouts", icon: "BadgePercent", badge: "salesPayout", phase: 2 },
-        ],
-      },
-      itemWalletAll,
-      itemPurchasingAll,
-      { ...itemReportsAll, labelKey: "report.titleSales" },
-    ],
-  },
-  learningSection,
-  extensionSection([blockExtJuristic, blockExtIncidents]),
-];
+// 2026-06-28 (ปอน "Cs กับ เซลล์ประมาณนี้") — Sales shares the CS base for now.
+const menuSales: MenuSection[] = menuSalesBase;
 
 /**
  * `qa` — QA & QC staff (legacy doc role #5, lines 358-382). Agent ZZ

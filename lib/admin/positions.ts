@@ -81,6 +81,43 @@ export async function getStafferWorkspaceRole(profileId: string): Promise<AdminR
 }
 
 /**
+ * A staffer's POSITION info in one query — workspace_role (for the menu) +
+ * department + position name (for the sidebar header "แผนก / ตำแหน่ง" line ·
+ * ปอน 2026-06-28). Fail-soft: a read error / no position → all null (header
+ * shows just name + สิทธิ์, menu falls back to full/role).
+ */
+export async function getStafferPositionInfo(profileId: string): Promise<{
+  workspaceRole: AdminRole | null;
+  department: string | null;
+  positionName: string | null;
+}> {
+  const empty = { workspaceRole: null, department: null, positionName: null };
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("admin_contact_extras")
+    .select("department, position:admin_positions!position_id ( name_th, workspace_role, is_active )")
+    .eq("profile_id", profileId)
+    .maybeSingle<{
+      department: string | null;
+      position:
+        | { name_th: string; workspace_role: AdminRole; is_active: boolean }
+        | { name_th: string; workspace_role: AdminRole; is_active: boolean }[]
+        | null;
+    }>();
+  if (error) {
+    console.error("[getStafferPositionInfo] failed", { code: error.code, message: error.message, profileId });
+    return empty;
+  }
+  const pos = Array.isArray(data?.position) ? data?.position[0] : data?.position;
+  const active = pos && pos.is_active ? pos : null;
+  return {
+    workspaceRole: active?.workspace_role ?? null,
+    department:    data?.department ?? null,
+    positionName:  active?.name_th ?? null,
+  };
+}
+
+/**
  * The workspace-role (menu template) for a single position id — used by the
  * sidebar/auth wiring to resolve a staffer's menu from their position. Returns
  * null when the position is missing/inactive (caller falls back to the legacy

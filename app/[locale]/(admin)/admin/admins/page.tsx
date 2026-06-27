@@ -97,6 +97,9 @@ function nameRole(role: string): { label: string; color: string } {
     // 8 staff were moved super→ultra). + manager (0118) + pricing were also absent.
     case "ultra":            return { label: "Ultra Admin Z",     color: "danger" };
     case "super":            return { label: "Super Admin",       color: "danger" };
+    // 2026-06-28 (ปอน · mig 0220) — `normies` = 3rd visibility tier; was MISSING →
+    // fell through to default + rendered a raw lowercase "normies".
+    case "normies":          return { label: "Admin",             color: "secondary" };
     case "manager":          return { label: "Cargo Manager",     color: "info" };
     case "ops":              return { label: "Ops",               color: "primary" };
     case "accounting":       return { label: "Accounting",        color: "success" };
@@ -460,7 +463,7 @@ export default async function AdminTablePage({
     { key: "employee_code",  label: "รหัสพนักงาน" },
     { key: "name",           label: "ชื่อ - นามสกุล" },
     { key: "nickname",       label: "ชื่อเล่น" },
-    { key: "role",           label: "Role" },
+    { key: "role",           label: "สิทธิ์" },
     { key: "company",        label: "บริษัท" },
     { key: "type",           label: "ประเภท" },
     { key: "dept_section",   label: "แผนก / ตำแหน่ง" },
@@ -643,16 +646,16 @@ export default async function AdminTablePage({
                   <Th>รหัสพนักงาน</Th>
                   <SortTh label="ชื่อ - นามสกุล" field="name"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>ชื่อเล่น</Th>
-                  <SortTh label="Role"           field="role"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
+                  <Th>แผนก / ตำแหน่ง</Th>
                   <SortTh label="บริษัท"         field="company"    activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <SortTh label="ประเภท"         field="type"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
-                  <Th>แผนก / ตำแหน่ง</Th>
+                  <SortTh label="สิทธิ์"          field="role"       activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
                   <Th>อีเมลส่วนตัว</Th>
                   <Th>เบอร์ส่วนตัว</Th>
                   <Th>อีเมลบริษัท</Th>
                   <Th>โทรบริษัท</Th>
                   <SortTh label="สถานะ"          field="is_active"  activeKey={sortKeyRaw} activeDir={sortDir} hrefs={sortHrefs} />
-                  {canMutate && <Th>จัดการ (role/สิทธิ์)</Th>}
+                  {canMutate && <Th>จัดการ (สิทธิ์)</Th>}
                   <Th>ตัวเลือก</Th>
                 </tr>
               </thead>
@@ -721,7 +724,11 @@ export default async function AdminTablePage({
                         </div>
                       </Td>
                       <Td>{nickname ?? "-"}</Td>
-                      <Td><Pill {...roleBadge} /></Td>
+                      <Td>
+                        {x?.department && <div className="text-foreground">{x.department}</div>}
+                        {x?.section    && <div className="text-muted text-[11px]">{x.section}</div>}
+                        {!x?.department && !x?.section && <span className="text-muted">-</span>}
+                      </Td>
                       <Td>{companyBadge ? <Pill {...companyBadge} /> : <span className="text-muted">-</span>}</Td>
                       <Td>
                         {typeBadge ? <Pill {...typeBadge} /> : <span className="text-muted">-</span>}
@@ -732,11 +739,7 @@ export default async function AdminTablePage({
                           </div>
                         )}
                       </Td>
-                      <Td>
-                        {x?.department && <div className="text-foreground">{x.department}</div>}
-                        {x?.section    && <div className="text-muted text-[11px]">{x.section}</div>}
-                        {!x?.department && !x?.section && <span className="text-muted">-</span>}
-                      </Td>
+                      <Td><Pill {...roleBadge} /></Td>
                       <Td>
                         {personalEmail
                           ? <a href={`mailto:${personalEmail}`} className="text-primary-600 hover:underline truncate block max-w-[160px]">{personalEmail}</a>

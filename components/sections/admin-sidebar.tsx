@@ -389,10 +389,11 @@ function MenuRow({
 
 // ── Sidebar header — avatar + adminID + role badge (legacy itop). ──────
 function SidebarHeader({
-  adminLabel, adminAvatar, roleKey, t,
+  adminLabel, adminAvatar, positionLabel, roleKey, t,
 }: {
   adminLabel: string;
   adminAvatar?: string | null;
+  positionLabel?: string | null;
   roleKey: string | null;
   t: (k: string) => string;
 }) {
@@ -422,6 +423,10 @@ function SidebarHeader({
         )}
         <span className="admin-rail-hide min-w-0 flex-1">
           <span className="block text-sm font-semibold text-foreground truncate">{adminLabel}</span>
+          {/* แผนก / ตำแหน่ง — between name + สิทธิ์ (ปอน 2026-06-28). Omitted if no position. */}
+          {positionLabel && (
+            <span className="block text-[11px] text-foreground/70 truncate">{positionLabel}</span>
+          )}
           {roleKey && (
             <span className="block text-[11px] text-muted truncate">{t(roleKey)}</span>
           )}
@@ -462,6 +467,7 @@ function SidebarHeader({
 export function AdminSidebar({
   roles,
   workspaceRole = null,
+  positionLabel = null,
   counts = {},
   adminLabel = "Admin",
   adminAvatar = null,
@@ -470,6 +476,8 @@ export function AdminSidebar({
   /** The staffer's POSITION workspace_role (ปอน 2026-06-27) — scopes the menu
    *  when set. null = no position → full/role menu (back-compat). */
   workspaceRole?: AdminRole | null;
+  /** "แผนก / ตำแหน่ง" line for the profile card (ปอน 2026-06-28). null = omit. */
+  positionLabel?: string | null;
   /** Live-count badges, resolved server-side (getSidebarCounts). */
   counts?: BadgeCounts;
   /** The signed-in admin's display name / member code for the header. */
@@ -640,7 +648,7 @@ export function AdminSidebar({
         </div>
 
         {/* Avatar + adminID + role badge — legacy itop block */}
-        <SidebarHeader adminLabel={adminLabel} adminAvatar={adminAvatar} roleKey={roleKey} t={t} />
+        <SidebarHeader adminLabel={adminLabel} adminAvatar={adminAvatar} positionLabel={positionLabel} roleKey={roleKey} t={t} />
 
         {/*
           Per-role nested-accordion menu, grouped by the 6 fixed legacy
