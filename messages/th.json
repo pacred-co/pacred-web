@@ -3191,6 +3191,7 @@
     "role": {
       "ultra": "Ultra Admin Z",
       "super": "ผู้ดูแลระบบสูงสุด",
+      "normies": "Normies (ทั่วไป)",
       "manager": "ผู้จัดการ Cargo",
       "ops": "ฝ่ายปฏิบัติการ Cargo",
       "accounting": "ฝ่ายบัญชี",
@@ -3449,6 +3450,7 @@
       "orgChannels": "ช่องทางองค์กร",
       "orgContacts": "ข้อมูลติดต่อองค์กร",
       "adminUsers": "พนักงาน admin",
+      "positions": "ตำแหน่ง",
       "partners": "พาร์ทเนอร์"
     },
     "userCargo": {

@@ -954,6 +954,7 @@ const wrapClassHr: MenuItem = {
     blockExtKpi,
     // 2026-06-10 (ปอน) — admin-staff + org-info management moved here from Developer/tools.
     { labelKey: "settingsCargo.adminUsers", href: "/admin/admins", icon: "UserCog" },
+    { labelKey: "settingsCargo.positions", href: "/admin/positions", icon: "Network" },
     { labelKey: "settingsCargo.orgEmail", href: "/admin/organization-email", icon: "MessageCircle" },
     { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },
     { labelKey: "settingsCargo.orgContacts", href: "/admin/settings/contacts", icon: "Contact" },
@@ -2023,6 +2024,10 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   // separately by canViewCostProfit, not by the menu).
   ultra:       menuSuper,
   super:       menuSuper,
+  // 2026-06-27 (owner ปอน) — Normies = god-nav visibility tier · FULL CEO
+  // sidebar (identical to super); only the cost/profit DATA inside pages is
+  // gated (canViewCost/canViewProfit), never the menu.
+  normies:     menuSuper,
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // Per ภูม decision #5 (synthesis §6 D6 · "sidebar รก · fix per-role filter
   // ก่อนเปิดได้เลย") — Cargo Manager has cnt-payment approval + cross-team
@@ -2081,6 +2086,7 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
 const ROLE_PRECEDENCE: AdminRole[] = [
   "ultra",                       // Ultra Admin Z — god, outranks super (mig 0189)
   "super",
+  "normies",                     // 2026-06-27 (ปอน) — god-nav, money-blind tier
   // 2026-05-28 ดึก — Wave 26 · manager outranks accounting/qa/ops.
   // Approval-rights inheritance: super → manager → accounting → qa → ops.
   "manager",
@@ -2110,7 +2116,7 @@ const ROLE_PRECEDENCE: AdminRole[] = [
 ];
 
 export function menuForRoles(roles: AdminRole[]): MenuSection[] {
-  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
+  if (roles.includes("ultra") || roles.includes("super") || roles.includes("normies")) return ROLE_MENUS.super;
   for (const r of ROLE_PRECEDENCE) {
     if (roles.includes(r)) return ROLE_MENUS[r];
   }
@@ -2119,10 +2125,32 @@ export function menuForRoles(roles: AdminRole[]): MenuSection[] {
   return [];
 }
 
+/**
+ * Position-aware menu (owner ปอน 2026-06-27). A staffer's WORKSPACE (which menus
+ * they see) is driven by their POSITION's `workspace_role` (admin_positions),
+ * not by their money-tier. Rules (additive · no lockout):
+ *   • ultra / super        → full CEO menu (oversight · see all)
+ *   • has a position        → ONLY that position's workspace_role menu (scoped)
+ *   • no position (legacy)  → fall back to the role menu (normies → full menu,
+ *                              back-compat; a function-role staffer → its menu)
+ *
+ * So a `normies` staffer with no position keeps the full menu (nothing breaks
+ * for the mig-0220 super→normies migration); assigning a position scopes them.
+ */
+export function menuForStaffer(
+  roles: AdminRole[],
+  workspaceRole: AdminRole | null,
+): MenuSection[] {
+  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
+  if (workspaceRole && ROLE_MENUS[workspaceRole]) return ROLE_MENUS[workspaceRole];
+  return menuForRoles(roles);
+}
+
 /** The role whose menu is being shown — for the sidebar role badge. */
 export function primaryRole(roles: AdminRole[]): AdminRole | null {
   if (roles.includes("ultra")) return "ultra";
   if (roles.includes("super")) return "super";
+  if (roles.includes("normies")) return "normies";
   for (const r of ROLE_PRECEDENCE) {
     if (roles.includes(r)) return r;
   }
@@ -2146,7 +2174,7 @@ export function primaryRole(roles: AdminRole[]): AdminRole | null {
 /** Sections + items deduped by header + labelKey. Item children preserved
  *  as-is from the higher-precedence role's copy (no per-leaf merging). */
 export function menuForRolesUnion(roles: AdminRole[]): MenuSection[] {
-  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
+  if (roles.includes("ultra") || roles.includes("super") || roles.includes("normies")) return ROLE_MENUS.super;
   if (roles.length === 0) return [];
 
   // Pick all in-precedence-order so the highest-rank menu sets section order.

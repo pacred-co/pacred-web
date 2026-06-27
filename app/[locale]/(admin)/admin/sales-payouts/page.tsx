@@ -18,7 +18,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getPendingSalesPayoutsTb } from "@/actions/admin/sales-payouts-tb";
@@ -35,7 +35,7 @@ export default async function AdminSalesPayoutsPage() {
   // Commission payout amount = money-internal (owner 2026-06-18): visible only
   // to ultra/accounting/pricing. Page stays reachable; amount column + CSV are
   // dropped at the data layer for everyone else (incl. super, sales_admin).
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
 
   // CSV columns mirror the on-screen table (amount only when cost-allowed).
   const CSV_COLS: CsvCol[] = [

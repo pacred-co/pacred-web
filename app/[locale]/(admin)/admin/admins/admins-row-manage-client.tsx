@@ -27,7 +27,7 @@ import { useRouter } from "next/navigation";
 import { confirm, alert } from "@/components/ui/confirm";
 import { adminChangeRole, adminToggleActive } from "@/actions/admin/admins";
 import {
-  ADMIN_ROLES,
+  ASSIGNABLE_ROLES,
   ROLE_LABELS,
   adminRoleSchema,
   type AdminRoleEnum,
@@ -142,9 +142,11 @@ export function AdminRowManage({
         onChange={(e) => onRoleChange(e.target.value as AdminRoleEnum)}
         className="w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-[11px] text-foreground disabled:opacity-50"
       >
-        {ADMIN_ROLES.map((r) => (
+        {/* 3 visibility tiers + the row's CURRENT role (so an inert legacy role
+            still appears + the select value matches). owner ปอน 2026-06-27. */}
+        {Array.from(new Set<AdminRoleEnum>([...ASSIGNABLE_ROLES, selectedRole as AdminRoleEnum])).map((r) => (
           <option key={r} value={r}>
-            {ROLE_LABELS[r]}
+            {ROLE_LABELS[r] ?? r}
           </option>
         ))}
       </select>

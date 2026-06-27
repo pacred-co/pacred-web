@@ -3191,6 +3191,7 @@
     "role": {
       "ultra": "Ultra Admin Z",
       "super": "Super Admin",
+      "normies": "Normies Admin",
       "manager": "Cargo Manager",
       "ops": "Cargo Operations",
       "accounting": "Accounting",
@@ -3449,6 +3450,7 @@
       "orgChannels": "Organization channels",
       "orgContacts": "Organization contacts",
       "adminUsers": "Admin users",
+      "positions": "Positions",
       "partners": "Partners"
     },
     "userCargo": {

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
@@ -46,7 +46,7 @@ export default async function AdminWithdrawCommSaleDetailPage({
   // Commission amounts (ก่อน WHT / WHT / รับสุทธิ / ค่าคอม 1%) = money-internal
   // (owner 2026-06-18): only ultra/accounting/pricing. Selling-price item columns
   // (ยอดขาย CHN / ส่วนลด / หลังหักลด) stay visible to all.
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
   const { id: idStr } = await params;
   const id = Number.parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();

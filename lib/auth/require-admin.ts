@@ -74,6 +74,14 @@ export type AdminRole =
   // lib/admin/money-visibility.ts to {ultra, accounting, pricing} only.
   | "ultra"
   | "super"
+  // 2026-06-27 (owner ปอน) — `normies` = the third VISIBILITY tier: god-nav like
+  // super (full menu/actions) but sees NEITHER cost NOR profit. All current
+  // `super` holders are migrated → `normies` (mig 0220). super now = "sees
+  // profit, not cost". The 25 function roles below are RETIRED from the role
+  // picker (kept here so the ~250 requireAdmin([...]) operational gates still
+  // compile + god-nav bypasses them); re-add to ASSIGNABLE_ROLES when a real
+  // functional role is needed again ("เดี๋ยว role ทำเพิ่มมาอีกอัน").
+  | "normies"
   | "manager"               // Cargo Manager — approve cnt-payment · cross-team supervise (0118)
   | "ops"
   | "accounting"

@@ -25,7 +25,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateNew, getNextEmployeeCode } from "@/actions/admin/admins";
 import {
-  ADMIN_ROLES,
+  ASSIGNABLE_ROLES,
   COMPANY_VALUES,
   EMPLOYEE_TYPES,
   SEX_VALUES,
@@ -33,7 +33,11 @@ import {
   ROLE_LABELS,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
+import { DEPARTMENTS } from "@/lib/admin/departments";
 import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
+
+/** Position option (client-safe shape · matches AdminPosition from the server). */
+type PositionOption = { id: string; name_th: string; department: string };
 
 const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
   "pacred":         "Pacred (รวม)",
@@ -58,8 +62,10 @@ const SEX_LABELS: Record<(typeof SEX_VALUES)[number], string> = {
 
 export function AdminCreateNewForm({
   legacyPreset,
+  positions,
 }: {
   legacyPreset: string | null;
+  positions: PositionOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -75,15 +81,16 @@ export function AdminCreateNewForm({
   const [password, setPassword]   = useState<string>("");
   const [firstName, setFirstName] = useState<string>("");
   const [lastName, setLastName]   = useState<string>("");
-  const [role, setRole]           = useState<AdminRoleEnum>("ops");
+  const [role, setRole]           = useState<AdminRoleEnum>("normies");
 
   // ─── recommended ─────────────────────────────────────────────────
   const [phone, setPhone]               = useState<string>("");
   const [nickname, setNickname]         = useState<string>("");
   const [company, setCompany]           = useState<(typeof COMPANY_VALUES)[number]>("pacred");
   const [employeeType, setEmployeeType] = useState<(typeof EMPLOYEE_TYPES)[number]>("full_time");
-  const [department, setDepartment]     = useState<string>("");
-  const [section, setSection]           = useState<string>("");
+  const [department, setDepartment]     = useState<string>("");   // department KEY (departments.ts)
+  const [section, setSection]           = useState<string>("");   // legacy ตำแหน่ง label (derived from position)
+  const [positionId, setPositionId]     = useState<string>("");   // ตำแหน่ง → workspace (admin_positions)
   const [workEmail, setWorkEmail]       = useState<string>("");
   const [workPhone, setWorkPhone]       = useState<string>("");
   const [hiredAt, setHiredAt]           = useState<string>("");
@@ -156,13 +163,14 @@ export function AdminCreateNewForm({
     setPassword("");
     setFirstName("");
     setLastName("");
-    setRole("ops");
+    setRole("normies");
     setPhone("");
     setNickname("");
     setCompany("pacred");
     setEmployeeType("full_time");
     setDepartment("");
     setSection("");
+    setPositionId("");
     setWorkEmail("");
     setWorkPhone("");
     setHiredAt("");
@@ -209,8 +217,9 @@ export function AdminCreateNewForm({
         nickname:           nickname.trim() || undefined,
         company,
         employee_type:      employeeType,
-        department:         department.trim() || undefined,
+        department:         department || undefined,
         section:            section.trim() || undefined,
+        position_id:        positionId || undefined,
         work_email:         workEmail.trim() || undefined,
         work_phone:         workPhone.trim() || undefined,
         hired_at:           hiredAt || undefined,
@@ -427,10 +436,10 @@ export function AdminCreateNewForm({
             />
           </div>
 
-          {/* role */}
+          {/* role = ระดับสิทธิ์การมองเห็น (owner ปอน 2026-06-27) */}
           <div className="md:col-span-2">
             <label className="block text-xs font-medium text-muted mb-1">
-              บทบาท (role) <span className="text-red-500">*</span>
+              สิทธิ์การมองเห็น (role) <span className="text-red-500">*</span>
             </label>
             <select
               value={role}
@@ -439,13 +448,14 @@ export function AdminCreateNewForm({
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               required
             >
-              {ADMIN_ROLES.map((r) => (
+              {ASSIGNABLE_ROLES.map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS[r]}</option>
               ))}
             </select>
             <p className="mt-1 text-[11px] text-muted">
-              ดูคำแนะนำการเลือก role ที่ <code className="font-mono">docs/research/tb-admin-13-row-reference.md</code> §&ldquo;Suggested-role mapping logic&rdquo;.
-              เปลี่ยน role ภายหลังได้ที่หน้า /edit.
+              ทุกระดับเข้าถึงทุกเมนู/ทำงานได้เหมือนกัน — ต่างกันแค่ <b>เห็นต้นทุน/กำไรหรือไม่</b>:
+              <b> Ultra</b> เห็นหมด · <b>Super</b> เห็นกำไร+ยอดขาย (ไม่เห็นต้นทุน) · <b>Normies</b> เห็นยอดขายอย่างเดียว.
+              เปลี่ยนภายหลังได้ที่หน้า /edit.
             </p>
           </div>
 
@@ -532,30 +542,49 @@ export function AdminCreateNewForm({
             </select>
           </div>
 
-          {/* department + section */}
+          {/* department + position — dropdowns (owner ปอน 2026-06-27 · เลิกพิมพ์เอง) */}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">แผนก (department)</label>
-            <input
-              type="text"
+            <select
               value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              maxLength={100}
-              placeholder="เช่น Sales Cargo / Accounting / ITDT"
+              onChange={(e) => {
+                setDepartment(e.target.value);
+                // department changed → clear the position (it's filtered by department)
+                setPositionId("");
+                setSection("");
+              }}
               disabled={pending}
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            />
+            >
+              <option value="">— เลือกแผนก —</option>
+              {DEPARTMENTS.map((d) => (
+                <option key={d.key} value={d.key}>{d.labelTh}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">ตำแหน่ง (section)</label>
-            <input
-              type="text"
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-              maxLength={100}
-              placeholder="เช่น Sales Manager / Driver / Warehouse"
-              disabled={pending}
-              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-            />
+            <label className="block text-xs font-medium text-muted mb-1">ตำแหน่ง (กำหนด workspace)</label>
+            <select
+              value={positionId}
+              onChange={(e) => {
+                const pid = e.target.value;
+                setPositionId(pid);
+                const pos = positions.find((p) => p.id === pid);
+                setSection(pos?.name_th ?? "");
+              }}
+              disabled={pending || !department}
+              className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
+            >
+              <option value="">{department ? "— เลือกตำแหน่ง —" : "เลือกแผนกก่อน"}</option>
+              {positions
+                .filter((p) => p.department === department)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.name_th}</option>
+                ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted">
+              ตำแหน่งเป็นตัวกำหนด <b>เมนู/หน้าที่เห็น</b> (workspace) · ไม่มีตำแหน่งที่ต้องการ? เพิ่มได้ที่ <code className="font-mono">/admin/positions</code>
+            </p>
           </div>
 
           {/* work email + work phone */}

@@ -25,7 +25,7 @@ import {
   type AdminEditLoad,
 } from "@/actions/admin/admins";
 import {
-  ADMIN_ROLES,
+  ASSIGNABLE_ROLES,
   COMPANY_VALUES,
   EMPLOYEE_TYPES,
   SEX_VALUES,
@@ -571,9 +571,12 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
               disabled={pending}
               className="flex-1 min-w-[240px] rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             >
-              {ADMIN_ROLES.map((r) => (
+              {/* 3 visibility tiers + the staffer's CURRENT role (so an inert
+                  legacy/function role still shows as "(ปัจจุบัน)" and the select
+                  value always matches an option). owner ปอน 2026-06-27. */}
+              {Array.from(new Set<AdminRoleEnum>([...ASSIGNABLE_ROLES, primaryRole as AdminRoleEnum])).map((r) => (
                 <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
+                  {ROLE_LABELS[r] ?? r}
                   {r === primaryRole ? " (ปัจจุบัน)" : ""}
                 </option>
               ))}

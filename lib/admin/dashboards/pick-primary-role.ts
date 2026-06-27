@@ -50,11 +50,12 @@ export type DashboardVariant =
   | "ops";
 
 export function pickPrimaryRole(roles: AdminRole[]): DashboardVariant {
-  // 2026-06-18 (mig 0189) — Ultra Admin Z renders the full god dashboard, same
-  // variant as super. The cost/profit values on it are gated separately by
-  // canViewCostProfit() against the viewer's REAL roles (ultra passes; super
-  // does not), so reusing the variant is safe.
-  if (roles.includes("ultra")) return "super";
+  // 2026-06-18 (mig 0189) / 2026-06-27 (ปอน) — Ultra Admin Z + Normies both
+  // render the full god dashboard, same variant as super. The cost/profit
+  // values on it are gated separately by canViewCost/canViewProfit against the
+  // viewer's REAL roles (ultra sees both · super sees profit · normies neither),
+  // so reusing the variant is safe.
+  if (roles.includes("ultra") || roles.includes("normies")) return "super";
   for (const r of PRIORITY) {
     // r: DashboardVariant; the includes() narrows on AdminRole because
     // every DashboardVariant IS an AdminRole (one-way subset relation).

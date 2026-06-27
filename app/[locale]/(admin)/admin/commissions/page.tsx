@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
@@ -79,7 +79,7 @@ export default async function AdminCommissionsPage({
   // payout) are visible ONLY to ultra/accounting/pricing — NOT super. The page
   // stays reachable (god roles satisfy the gate for nav) but a non-cost viewer
   // sees the queue *structure* without the commission money.
-  const showMoney = canViewCostProfit(roles);
+  const showMoney = canViewProfit(roles);
   const sp = await searchParams;
   const status = sp.status === "2" || sp.status === "3" ? sp.status : null;
 
