@@ -72,6 +72,22 @@ export type AnomalyRow = {
 };
 
 /**
+ * Employee-audit row (owner 2026-06-28) — per responsible admin (sales rep / CS)
+ * workload + stuck-work. "active" = in-flight orders they're responsible for;
+ * "stuck" = those sitting ≥ stuckDays in their current stage; worstDays/Stage =
+ * the most overdue one (to alert on).
+ */
+export type AdminAuditRow = {
+  adminId: string;
+  adminName: string;
+  role: "เซลล์" | "CS";
+  active: number;
+  stuck: number;
+  worstDays: number;
+  worstStage: string;
+};
+
+/**
  * SLA dwell-time summary for the cockpit (a condensed view of the full
  * /admin/reports/sla-cycle-time report). Derived from tb_forwarder
  * fdatestatus2..7 timestamps — ZERO new schema.

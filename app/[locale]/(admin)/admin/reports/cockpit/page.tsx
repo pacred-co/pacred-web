@@ -17,20 +17,24 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCockpitReport } from "@/actions/admin/reports-cockpit";
+import { getCockpitAdminAudit } from "@/actions/admin/reports-cockpit-audit";
 import type {
   FunnelStage,
   VolumeRow,
   CockpitProfitRow,
   CockpitSlaSummary,
+  AdminAuditRow,
 } from "@/actions/admin/reports-cockpit-types";
 import { thb, intTh, decTh } from "@/lib/admin/reports/types";
+import { Explain } from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExecCockpitPage() {
   await requireAdmin(["super", "accounting"]);
 
-  const res = await getCockpitReport();
+  const [res, auditRes] = await Promise.all([getCockpitReport(), getCockpitAdminAudit()]);
+  const audit = auditRes.ok ? auditRes.data : { rows: [] as AdminAuditRow[], stuckDays: 7 };
   const r = res.ok
     ? res.data
     : {
@@ -250,6 +254,49 @@ export default async function ExecCockpitPage() {
             : `/admin/customers?adminidsale=${encodeURIComponent(key)}`
         }
       />
+
+      {/* Employee audit (owner 2026-06-28) — ภาระงาน + งานค้าง ต่อแอดมินที่รับผิดชอบ (เซลล์+CS) */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+        <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">
+            <Explain label="audit พนักงาน — ภาระงาน & งานค้าง" def="นับงานนำเข้าที่ยังไม่จบ (สถานะ 1–6) ต่อแอดมินที่รับผิดชอบ (เซลล์ที่ลูกค้าถูก assign + CS) · งานค้าง = อยู่สเตจเดิมเกิน 7 วัน — ไว้ตามเร่งคนที่เกี่ยวข้อง" />
+          </h2>
+          <span className="text-[11px] text-muted">งานค้าง = ค้างสเตจเกิน {intTh(audit.stuckDays)} วัน</span>
+        </div>
+        <div className="overflow-x-auto scrollbar-x-visible">
+          {audit.rows.length === 0 ? (
+            <p className="p-8 text-center text-sm text-muted">{auditRes.ok ? "ไม่มีงานค้างต่อแอดมินในขณะนี้ 🎉" : "—"}</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-[11px] uppercase text-muted">
+                <tr>
+                  <th className="px-3 py-2.5">แอดมิน</th>
+                  <th className="px-3 py-2.5">บทบาท</th>
+                  <th className="px-3 py-2.5 text-right">งานในมือ</th>
+                  <th className="px-3 py-2.5 text-right">งานค้าง</th>
+                  <th className="px-3 py-2.5">ค้างนานสุด</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.rows.map((a) => (
+                  <tr key={`${a.role}-${a.adminId}`} className="border-t border-border">
+                    <td className="px-3 py-2 font-medium">{a.adminName}</td>
+                    <td className="px-3 py-2 text-xs text-muted">{a.role}</td>
+                    <td className="px-3 py-2 text-right font-mono">{intTh(a.active)}</td>
+                    <td className={`px-3 py-2 text-right font-mono font-semibold ${a.stuck > 0 ? "text-red-600" : "text-emerald-600"}`}>{intTh(a.stuck)}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {a.worstDays > 0 ? <span className="text-red-700">{intTh(a.worstDays)} วัน · {a.worstStage}</span> : <span className="text-muted">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <p className="px-4 py-2 text-[11px] text-muted border-t border-border">
+          แอดมินที่รับผิดชอบ = เซลล์ (tb_users.adminIDSale) + CS (adminIDCS) ของลูกค้า · นับงานนำเข้าที่ยังไม่จบ · เรียงตามงานค้างมากสุด
+        </p>
+      </section>
 
       <p className="text-[11px] text-muted">
         MTD = ตั้งแต่ต้นเดือนถึงปัจจุบัน · รายได้ = ยอดขาย+ค่าขนส่ง+ปรับราคา ·
