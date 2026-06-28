@@ -139,6 +139,18 @@ export default async function AdminCustomsDeclarationDetailPage({
   if (linesRawErr) {
     console.error(`[customs_declaration_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
   }
+  // Form-E semi-auto eligibility (owner 2026-06-28 #1 · "auto ก่อน รอเฟิม") — a HS code
+  // with a form_e_duty_pct set in the คลัง HS (mig 0180) qualifies for the ACFTA
+  // preferential rate; we auto-FLAG it + suggest the rate, staff confirms (ticks FTA).
+  const lineHsCodes = Array.from(new Set(((linesRaw ?? []) as Array<{ hs_code: string | null }>).map((l) => l.hs_code).filter((c): c is string => !!c)));
+  const formEByHs = new Map<string, number>();
+  if (lineHsCodes.length > 0) {
+    const { data: feRows, error: feErr } = await admin.from("hs_codes").select("code, form_e_duty_pct").in("code", lineHsCodes);
+    if (feErr) console.error(`[hs_codes form-e lookup] failed`, { code: feErr.code, message: feErr.message });
+    for (const r of (feRows ?? []) as Array<{ code: string; form_e_duty_pct: number | null }>) {
+      if (r.form_e_duty_pct !== null && r.form_e_duty_pct !== undefined) formEByHs.set(r.code, Number(r.form_e_duty_pct));
+    }
+  }
   // Resolve declared-value evidence images → signed URLs (owner 2026-06-28 #2 · mig 0222).
   const lines: DeclarationLineData[] = await Promise.all(
     ((linesRaw ?? []) as Array<DeclarationLineData & { declared_value_images?: unknown }>).map(async (l) => {
@@ -146,7 +158,8 @@ export default async function AdminCustomsDeclarationDetailPage({
         ? (l.declared_value_images as unknown[]).filter((x): x is string => typeof x === "string")
         : [];
       const evidence = await Promise.all(keys.map(async (key) => ({ key, url: await getSignedBucketUrl("forwarder-covers", key) })));
-      return { ...l, declared_value_images: keys, evidence };
+      const feRate = l.hs_code ? formEByHs.get(l.hs_code) : undefined;
+      return { ...l, declared_value_images: keys, evidence, formEEligible: feRate !== undefined, formEDutyPct: feRate };
     }),
   );
 

@@ -51,6 +51,9 @@ export type DeclarationLineData = {
   /** declared-value justification images (mig 0222) — keys + resolved signed URLs. */
   declared_value_images?: string[];
   evidence?:          { key: string; url: string | null }[];
+  /** Form-E semi-auto (mig 0180): this HS qualifies for ACFTA + the preferential rate. */
+  formEEligible?:     boolean;
+  formEDutyPct?:      number;
 };
 
 export type DeclarationDetailData = {
@@ -380,7 +383,12 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
         </td>
         <td className="px-2 py-2"><input type="number" min={0} step={0.001} value={kg} onChange={(e) => setKg(e.target.value === "" ? "" : Number(e.target.value) || 0)} className="w-20 rounded border border-border bg-white px-1.5 py-1 text-xs text-right font-mono" /></td>
         <td className="px-2 py-2"><input type="number" min={0} step={0.01} value={declared} onChange={(e) => setDeclared(Number(e.target.value) || 0)} className="w-28 rounded border border-border bg-white px-1.5 py-1 text-xs text-right font-mono" /></td>
-        <td className="px-2 py-2"><input type="number" min={0} max={100} step={0.001} value={dutyPct} onChange={(e) => setDutyPct(Number(e.target.value) || 0)} className="w-16 rounded border border-border bg-white px-1.5 py-1 text-xs text-right font-mono" /></td>
+        <td className="px-2 py-2">
+          <input type="number" min={0} max={100} step={0.001} value={dutyPct} onChange={(e) => setDutyPct(Number(e.target.value) || 0)} className="w-16 rounded border border-border bg-white px-1.5 py-1 text-xs text-right font-mono" />
+          {item.formEEligible && item.formEDutyPct !== undefined && (
+            <button type="button" onClick={() => { setDutyPct(item.formEDutyPct!); setFta(true); }} className="mt-1 block w-full rounded bg-emerald-50 px-1 text-[10px] text-emerald-700 hover:bg-emerald-100" title="ใช้เรท Form-E (ACFTA) + ติ๊ก FTA — กดบันทึกเพื่อยืนยัน">✨ Form-E {item.formEDutyPct}%</button>
+          )}
+        </td>
         <td className="px-2 py-2 text-right font-mono text-xs">{thb(previewTaxes.duty_thb)}</td>
         <td className="px-2 py-2 text-right font-mono text-xs">{thb(previewTaxes.vat_thb)}</td>
         <td className="px-2 py-2 text-center"><input type="checkbox" checked={fta} onChange={(e) => setFta(e.target.checked)} /></td>
@@ -401,6 +409,9 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
       <td className="px-2 py-2 text-sm">
         {item.description}
         {item.fta_applied && <span className="ml-1 text-[11px] text-primary-600">(FTA)</span>}
+        {item.formEEligible && !item.fta_applied && (
+          <span className="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-medium text-emerald-700" title={`พิกัดนี้เข้าเงื่อนไข Form-E (ACFTA) อากร ${item.formEDutyPct}% — ติ๊ก FTA + ใช้เรทได้`}>✨ Form-E ได้</span>
+        )}
       </td>
       <td className="px-2 py-2 text-xs">{item.country_of_origin}</td>
       <td className="px-2 py-2 text-right font-mono text-xs">{item.qty}</td>
