@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { Explain } from "@/components/ui/tooltip";
+import { PaymentBoardSettle } from "./payment-board-settle";
 import type { PaymentBoardRow } from "@/actions/admin/payment-board-types";
 
 const baht = (n: number) => `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -201,10 +202,15 @@ export function PaymentBoardTable({
                     <div>{r.statusLabel}</div>
                     <div className="text-[11px] text-muted">{fmtDate(r.fdate)}</div>
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <Link href={`/admin/forwarders/${r.fid}`} className="rounded border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100">
-                      ดู / แก้ไข
-                    </Link>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col items-stretch gap-1">
+                      {r.payState === "unpaid" && (
+                        <PaymentBoardSettle fid={r.fid} userid={r.userid} customerName={r.customerName} owed={r.owed} />
+                      )}
+                      <Link href={`/admin/forwarders/${r.fid}`} className="inline-flex justify-center rounded border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100">
+                        ดู / แก้ไข
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))
