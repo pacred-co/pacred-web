@@ -1,15 +1,15 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import {
-  ArrowRight, Sparkles, MessageCircle,
+  ArrowRight, Sparkles,
   Container, Boxes, Truck, Stamp, ShoppingBag, HandCoins,
 } from "lucide-react";
 
 /**
- * "บริการที่คุณอาจสนใจ" — related-service cards on a knowledge article, with a
- * "ทักไลน์" contact banner on top (ปอน 2026-06-26). No photos — icon chips only.
- * Desktop = sticky right sidebar; mobile = inline block. Only LIVE service
- * landings (no dead links). Fixed order (owner): เคลียร์ศุลกากร → LCL → the rest.
+ * "บริการที่คุณอาจสนใจ" — related-service cards + popular-keyword chips on a
+ * knowledge article (ปอน 2026-06-29). The category banner is a full-width
+ * <CategoryBanner> above the article; this card is the service cross-sell + SEO
+ * keywords. Desktop = sticky right sidebar; mobile = inline block. LIVE landings only.
  */
 type Svc = { icon: typeof Container; titleKey: string; subKey: string; href: string };
 
@@ -22,29 +22,19 @@ const SERVICES: Svc[] = [
   { icon: HandCoins,   titleKey: "svcYuanTitle",    subKey: "svcYuanSub",    href: "/payment/alipay" },
 ];
 
+// Popular search keywords (SEO · ปอน 2026-06-29 "ใส่คีย์เวิร์ดเพิ่มได้เต็มที่").
+const KEYWORDS = [
+  "นำเข้าสินค้าจีน", "เคลียร์ศุลกากร", "ชิปปิ้งจีน", "LCL รวมตู้", "FCL เหมาตู้",
+  "ฝากสั่งซื้อ 1688", "Taobao", "ภาษีนำเข้า", "Form E", "พิธีการศุลกากร",
+  "ขนส่งจีน-ไทย", "ฝากโอนหยวน", "นำเข้าทางเรือ", "นำเข้าทางรถ",
+];
+
 export async function RelatedServices({ max }: { max?: number }) {
   const t = await getTranslations("servicesIndex");
   const ordered = SERVICES.slice(0, max ?? SERVICES.length);
 
   return (
     <div className="rounded-2xl border border-border bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.05)] dark:bg-surface">
-      {/* ── ทักไลน์ contact banner (top) ── */}
-      <Link
-        href="/line"
-        aria-label="ทักไลน์ Pacred ปรึกษาฟรี"
-        className="group mb-3 flex items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-white shadow-[0_8px_20px_-8px_rgba(6,199,85,0.6)] transition-transform duration-300 hover:-translate-y-0.5"
-        style={{ background: "linear-gradient(135deg, #00B900 0%, #06C755 45%, #02A340 100%)" }}
-      >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/20">
-          <MessageCircle className="h-[18px] w-[18px] fill-white text-white" strokeWidth={0} />
-        </span>
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block text-[13px] font-black">ทักไลน์ Pacred · ปรึกษาฟรี</span>
-          <span className="block text-[11px] font-bold text-white/90">ตอบไว ทุกวัน · ไม่มีขั้นต่ำ</span>
-        </span>
-        <ArrowRight className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:translate-x-0.5" strokeWidth={2.8} />
-      </Link>
-
       {/* ── heading ── */}
       <div className="mb-2.5 flex items-center gap-1.5">
         <Sparkles className="h-4 w-4 fill-primary-600/20 text-primary-600" strokeWidth={2.4} />
@@ -82,6 +72,21 @@ export async function RelatedServices({ max }: { max?: number }) {
       >
         ดูบริการทั้งหมด <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.8} />
       </Link>
+
+      {/* ── คำค้นยอดนิยม (SEO keywords · ปอน 2026-06-29) ── */}
+      <div className="mt-3 border-t border-border pt-3">
+        <p className="mb-2 text-[11px] font-black text-muted">คำค้นยอดนิยม</p>
+        <div className="flex flex-wrap gap-1.5">
+          {KEYWORDS.map((k) => (
+            <span
+              key={k}
+              className="rounded-full border border-border bg-surface-alt/50 px-2 py-0.5 text-[11px] font-bold text-foreground/70 dark:bg-surface-alt/20"
+            >
+              {k}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
