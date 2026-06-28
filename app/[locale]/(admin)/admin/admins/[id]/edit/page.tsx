@@ -23,6 +23,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { loadAdminForEdit } from "@/actions/admin/admins";
+import { listActivePositions } from "@/lib/admin/positions";
 import { AdminEditForm } from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,9 @@ export default async function AdminEditPage({
   }
   const row = load.data?.row;
   if (!row) notFound();
+
+  // Positions (ตำแหน่ง) for the dropdown — filtered by department client-side.
+  const positions = await listActivePositions();
 
   const fullName = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || "(ไม่มีชื่อ)";
 
@@ -104,7 +108,7 @@ export default async function AdminEditPage({
       </div>
 
       {/* Form */}
-      <AdminEditForm initial={row} />
+      <AdminEditForm initial={row} positions={positions} />
 
       {/* Footer */}
       <div className="flex gap-2 flex-wrap pt-2">

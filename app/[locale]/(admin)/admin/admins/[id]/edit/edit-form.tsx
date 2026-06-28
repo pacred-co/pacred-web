@@ -32,6 +32,10 @@ import {
   ROLE_LABELS,
   type AdminRoleEnum,
 } from "@/lib/validators/admin-form";
+import { DEPARTMENTS } from "@/lib/admin/departments";
+
+/** Position option (client-safe · matches AdminPosition from the server). */
+type PositionOption = { id: string; name_th: string; department: string };
 import { AdminAvatarUploadField } from "@/components/admin/admin-avatar-upload-field";
 
 const COMPANY_LABELS: Record<(typeof COMPANY_VALUES)[number], string> = {
@@ -55,7 +59,7 @@ const SEX_LABELS: Record<(typeof SEX_VALUES)[number], string> = {
   other:  "อื่น ๆ",
 };
 
-export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
+export function AdminEditForm({ initial, positions }: { initial: AdminEditLoad; positions: PositionOption[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -85,6 +89,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
   );
   const [department, setDepartment]           = useState<string>(initial.department ?? "");
   const [section, setSection]                 = useState<string>(initial.section ?? "");
+  const [positionId, setPositionId]           = useState<string>(initial.position_id ?? "");
   const [workEmail, setWorkEmail]             = useState<string>(initial.work_email ?? "");
   const [workPhone, setWorkPhone]             = useState<string>(initial.work_phone ?? "");
   const [hiredAt, setHiredAt]                 = useState<string>(initial.hired_at ?? "");
@@ -138,6 +143,7 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
         employee_type:      employeeType,
         department:         department.trim() || undefined,
         section:            section.trim() || undefined,
+        position_id:        positionId || undefined,
         work_email:         workEmail.trim() || undefined,
         work_phone:         workPhone.trim() || undefined,
         hired_at:           hiredAt || undefined,
@@ -408,25 +414,38 @@ export function AdminEditForm({ initial }: { initial: AdminEditLoad }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">แผนก</label>
-              <input
-                type="text"
+              <select
                 value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                maxLength={100}
+                onChange={(e) => { setDepartment(e.target.value); setPositionId(""); setSection(""); }}
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              />
+              >
+                <option value="">— เลือกแผนก —</option>
+                {DEPARTMENTS.map((d) => <option key={d.key} value={d.key}>{d.labelTh}</option>)}
+                {/* preserve a legacy free-text department so editing doesn't drop it */}
+                {department && !DEPARTMENTS.some((d) => d.key === department) && (
+                  <option value={department}>{department} (เดิม)</option>
+                )}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">ตำแหน่ง</label>
-              <input
-                type="text"
-                value={section}
-                onChange={(e) => setSection(e.target.value)}
-                maxLength={100}
-                disabled={pending}
-                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
-              />
+              <label className="block text-xs font-medium text-muted mb-1">ตำแหน่ง (กำหนด workspace)</label>
+              <select
+                value={positionId}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  setPositionId(pid);
+                  setSection(positions.find((p) => p.id === pid)?.name_th ?? "");
+                }}
+                disabled={pending || !department}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60"
+              >
+                <option value="">{department ? "— เลือกตำแหน่ง —" : "เลือกแผนกก่อน"}</option>
+                {positions.filter((p) => p.department === department).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name_th}</option>
+                ))}
+              </select>
+              {section && !positionId && <p className="mt-1 text-[11px] text-muted">ตำแหน่งเดิม: {section}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted mb-1">อีเมลบริษัท</label>

@@ -97,7 +97,7 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   // tier SEES (ต้นทุน=cost · กำไร=profit · ยอดขาย=sales). All 3 are god-nav.
   ultra:                     "Ultra Admin Z (เห็นทุกอย่าง: ต้นทุน · กำไร · ยอดขาย)",
   super:                     "Super Admin (เห็นกำไร · ยอดขาย — ไม่เห็นต้นทุน)",
-  normies:                   "Normies Admin (เห็นยอดขาย — ไม่เห็นต้นทุน · ไม่เห็นกำไร)",
+  normies:                   "Admin (เห็นยอดขาย — ไม่เห็นต้นทุน · ไม่เห็นกำไร)",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
   ops:                       "Ops (forwarder/บริการคลังจีน)",
