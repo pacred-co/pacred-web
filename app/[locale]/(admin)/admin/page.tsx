@@ -32,6 +32,7 @@
  *   tb_settings       — hratecostdefault (เรทสั่งซื้อ/ต้นทุน), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { unstable_cache } from "next/cache";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
@@ -139,12 +140,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   ]);
 
   const sp = await searchParams;
-  const admin = createAdminClient();
-
-  // Month range (1st of this month → now)
+  // Month label for display; the heavy metrics fan-out runs inside the cached
+  // helper below (it computes its own date boundaries).
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const monthLabel = `${THAI_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`;
 
   // Stat cards — revenue & user totals. ALL queries fan-out in parallel.
@@ -175,7 +173,17 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwarder1Count, forwarder5Count, forwarderCreditCount,
     forwarder6Count, forwarder62Count,
     containersInTransitRows,
-  ] = await Promise.all([
+  ] = await unstable_cache(
+    async () => {
+      // PERF (owner 2026-06-29 "ระบบช้า"): the 25-query metrics fan-out runs at
+      // most once per 60 s (global key · same pattern as getWalletSystemTotals),
+      // instead of on every dashboard load. Self-contained: own admin client +
+      // date boundaries so it's safe inside unstable_cache (service-role, no cookies).
+      const admin = createAdminClient();
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      return Promise.all([
     admin.from("tb_settings").select("hratecostdefault,rsdefault,rpdefault").eq("id", 1).maybeSingle<{
       hratecostdefault: number | string | null;
       rsdefault: number | string | null;
@@ -236,7 +244,11 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
       .lt("fstatus", "4")
       .limit(50_000),
-  ]);
+      ]);
+    },
+    ["admin-dashboard-fanout"],
+    { revalidate: 60 },
+  )();
 
   const sumNum = <T extends Record<string, unknown>>(rows: T[] | null, key: keyof T): number =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
