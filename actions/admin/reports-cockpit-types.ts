@@ -72,6 +72,22 @@ export type AnomalyRow = {
 };
 
 /**
+ * Per-service P&L row (owner 2026-06-28 · "แยกแต่ละบริการ · มีรวม"). One row per
+ * service (ฝากสั่ง/หยวน/นำเข้า/freight) for MTD. cost/profit = 0 when the viewer
+ * can't see cost (canViewCostProfit); `failed` = that service's query errored.
+ */
+export type ServicePnlRow = {
+  key: string;
+  label: string;
+  count: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  margin_pct: number;
+  failed: boolean;
+};
+
+/**
  * Employee-audit row (owner 2026-06-28) — per responsible admin (sales rep / CS)
  * workload + stuck-work. "active" = in-flight orders they're responsible for;
  * "stuck" = those sitting ≥ stuckDays in their current stage; worstDays/Stage =

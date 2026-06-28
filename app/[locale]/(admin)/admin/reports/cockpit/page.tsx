@@ -18,12 +18,14 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCockpitReport } from "@/actions/admin/reports-cockpit";
 import { getCockpitAdminAudit } from "@/actions/admin/reports-cockpit-audit";
+import { getCockpitServiceBreakdown } from "@/actions/admin/reports-cockpit-service";
 import type {
   FunnelStage,
   VolumeRow,
   CockpitProfitRow,
   CockpitSlaSummary,
   AdminAuditRow,
+  ServicePnlRow,
 } from "@/actions/admin/reports-cockpit-types";
 import { thb, intTh, decTh } from "@/lib/admin/reports/types";
 import { Explain } from "@/components/ui/tooltip";
@@ -33,8 +35,9 @@ export const dynamic = "force-dynamic";
 export default async function ExecCockpitPage() {
   await requireAdmin(["super", "accounting"]);
 
-  const [res, auditRes] = await Promise.all([getCockpitReport(), getCockpitAdminAudit()]);
+  const [res, auditRes, svcRes] = await Promise.all([getCockpitReport(), getCockpitAdminAudit(), getCockpitServiceBreakdown()]);
   const audit = auditRes.ok ? auditRes.data : { rows: [] as AdminAuditRow[], stuckDays: 7 };
+  const svc = svcRes.ok ? svcRes.data : { rows: [] as ServicePnlRow[], showCost: false };
   const r = res.ok
     ? res.data
     : {
@@ -121,6 +124,59 @@ export default async function ExecCockpitPage() {
         <Stat label="ลีดที่ยังไม่ติดต่อ" value={intTh(r.openLeads)} sub="userActive='' + มีเบอร์" link="/admin/leads" />
         <Stat label="ดูลูกหนี้ตามอายุ" value="AR-aging →" link="/admin/accounting/ar-aging" small />
       </section>
+
+      {/* Per-service P&L (owner 2026-06-28 · แยกแต่ละบริการ + รวม) — the COMPLETE
+          revenue picture: the headline KPIs above count ฝากนำเข้า only, this counts
+          all 4 services so the exec sees the full top line. */}
+      {svcRes.ok && svc.rows.length > 0 && (() => {
+        const totRev = svc.rows.reduce((s, r) => s + r.revenue, 0);
+        const totCost = svc.rows.reduce((s, r) => s + r.cost, 0);
+        const totProfit = svc.rows.reduce((s, r) => s + r.profit, 0);
+        return (
+          <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+            <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">
+                <Explain label="ภาพรวมทุกบริการ (MTD)" def="รายได้/ต้นทุน/กำไร แยกตามบริการที่เข้ามา — ฝากสั่งซื้อ · โอนหยวน · ฝากนำเข้า · freight (เหมาตู้/แชร์ตู้) + รวมทุกบริการ. KPI ด้านบนนับเฉพาะฝากนำเข้า — กล่องนี้คือภาพที่ครบกว่า" />
+              </h2>
+              <span className="text-[11px] text-muted">รวมทุกบริการ: รายได้ <b className="text-foreground font-mono">{thb(totRev)}</b>{svc.showCost && <> · กำไร <b className={totProfit < 0 ? "text-red-600" : "text-emerald-700"}>{thb(totProfit)}</b></>}</span>
+            </div>
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase text-muted">
+                  <tr>
+                    <th className="px-3 py-2.5">บริการ</th>
+                    <th className="px-3 py-2.5 text-right">จำนวน</th>
+                    <th className="px-3 py-2.5 text-right">รายได้</th>
+                    {svc.showCost && <th className="px-3 py-2.5 text-right">ต้นทุน</th>}
+                    {svc.showCost && <th className="px-3 py-2.5 text-right">กำไร</th>}
+                    {svc.showCost && <th className="px-3 py-2.5 text-right">มาร์จิ้น</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {svc.rows.map((r) => (
+                    <tr key={r.key} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">{r.label}{r.failed && <span className="ml-1 text-[11px] text-amber-600">(โหลดไม่ได้)</span>}</td>
+                      <td className="px-3 py-2 text-right font-mono">{intTh(r.count)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{thb(r.revenue)}</td>
+                      {svc.showCost && <td className="px-3 py-2 text-right font-mono text-muted">{thb(r.cost)}</td>}
+                      {svc.showCost && <td className={`px-3 py-2 text-right font-mono ${r.profit < 0 ? "text-red-600" : "text-emerald-700"}`}>{thb(r.profit)}</td>}
+                      {svc.showCost && <td className={`px-3 py-2 text-right font-mono ${marginTone(r.margin_pct)}`}>{decTh(r.margin_pct, 1)}%</td>}
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-border bg-surface-alt/30 font-semibold">
+                    <td className="px-3 py-2">รวมทุกบริการ</td>
+                    <td className="px-3 py-2 text-right font-mono">{intTh(svc.rows.reduce((s, r) => s + r.count, 0))}</td>
+                    <td className="px-3 py-2 text-right font-mono">{thb(totRev)}</td>
+                    {svc.showCost && <td className="px-3 py-2 text-right font-mono text-muted">{thb(totCost)}</td>}
+                    {svc.showCost && <td className={`px-3 py-2 text-right font-mono ${totProfit < 0 ? "text-red-600" : "text-emerald-700"}`}>{thb(totProfit)}</td>}
+                    {svc.showCost && <td className={`px-3 py-2 text-right font-mono ${marginTone(totRev > 0 ? (totProfit / totRev) * 100 : 0)}`}>{decTh(totRev > 0 ? (totProfit / totRev) * 100 : 0, 1)}%</td>}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Pricing-health soft advisory (CEO §4 · ≤15k/ตู้) — NEVER blocks, just a nudge */}
       {res.ok && (
