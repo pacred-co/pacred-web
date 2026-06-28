@@ -42,11 +42,14 @@ export function CargoDeclarationLineEditor({
   declaredValueThb,
   dutyRatePct,
   hsCode,
+  formEDutyPct,
 }: {
   lineId: string;
   declaredValueThb: number | string | null;
   dutyRatePct: number | string | null;
   hsCode: string | null;
+  /** Form-E (ACFTA) preferential rate for this HS (mig 0180) — one-tap apply. */
+  formEDutyPct?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -137,6 +140,16 @@ export function CargoDeclarationLineEditor({
             placeholder="0"
             className={inputCls}
           />
+          {formEDutyPct !== undefined && (
+            <button
+              type="button"
+              onClick={() => setDutyPct(String(formEDutyPct))}
+              className="mt-0.5 block w-full rounded bg-emerald-50 px-1 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+              title="ใช้เรท Form-E (ACFTA) สำหรับพิกัดนี้ — กดบันทึกสำแดงเพื่อยืนยัน (semi-auto)"
+            >
+              ✨ ใช้เรท Form-E {formEDutyPct}%
+            </button>
+          )}
         </label>
         <label className="space-y-0.5">
           <span className="block text-[11px] text-muted">HS Code</span>

@@ -155,6 +155,22 @@ export default async function CargoDeclarationDetailPage({
         vat_thb: null,
       }));
 
+  // Form-E semi-auto (mig 0180 · owner 2026-06-28 #1 "auto ก่อน รอเฟิม"): an HS with a
+  // form_e_duty_pct in the คลัง HS qualifies for the ACFTA preferential rate. Surface
+  // it as a hint + a one-tap apply in the line editor (Docs confirms → save). The
+  // duty rate is money-internal so the hint is shown only to cost roles.
+  const formEByHs = new Map<string, number>();
+  if (canViewMoney) {
+    const lineHsCodes = Array.from(new Set(lines.map((l) => l.hs_code?.trim()).filter((c): c is string => !!c)));
+    if (lineHsCodes.length > 0) {
+      const { data: feRows, error: feErr } = await admin.from("hs_codes").select("code, form_e_duty_pct").in("code", lineHsCodes);
+      if (feErr) console.error("[cargo-decl form-e lookup]", { code: feErr.code, message: feErr.message });
+      for (const r of (feRows ?? []) as Array<{ code: string; form_e_duty_pct: number | null }>) {
+        if (r.form_e_duty_pct != null) formEByHs.set(r.code, Number(r.form_e_duty_pct));
+      }
+    }
+  }
+
   // Audit timeline.
   const { data: auditRaw, error: auditErr } = await admin
     .from("admin_audit_log")
@@ -344,7 +360,17 @@ export default async function CargoDeclarationDetailPage({
                     <td className="px-3 py-2 text-xs max-w-[18rem]">
                       <span className="break-words line-clamp-2">{l.description || "—"}</span>
                     </td>
-                    <td className="px-3 py-2 text-[11px] font-mono">{l.hs_code?.trim() || "—"}</td>
+                    <td className="px-3 py-2 text-[11px] font-mono">
+                      {l.hs_code?.trim() || "—"}
+                      {canViewMoney && l.hs_code && formEByHs.has(l.hs_code.trim()) && (
+                        <span
+                          className="ml-1 rounded bg-emerald-100 px-1 text-[11px] font-medium text-emerald-700"
+                          title={`พิกัดนี้เข้าเงื่อนไข Form-E (ACFTA) อากร ${formEByHs.get(l.hs_code.trim())}% — กด "✨ ใช้เรท Form-E" ในช่องแก้ไขเพื่อใช้เรท`}
+                        >
+                          ✨ Form-E
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono text-[11px]">
                       {num(l.qty)} {l.unit ?? ""}
                     </td>
@@ -359,6 +385,7 @@ export default async function CargoDeclarationDetailPage({
                           declaredValueThb={l.declared_value_thb}
                           dutyRatePct={l.duty_rate_pct}
                           hsCode={l.hs_code}
+                          formEDutyPct={l.hs_code ? formEByHs.get(l.hs_code.trim()) : undefined}
                         />
                       </td>
                     )}
