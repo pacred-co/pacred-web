@@ -8,7 +8,9 @@ import {
   type CustomsDeclarationStatus,
 } from "@/lib/validators/customs-declaration";
 import { CargoDeclarationLineEditor } from "./cargo-declaration-line-editor";
+import { CargoDeclaredValueImages } from "./cargo-declared-value-images";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 
 /**
  * /admin/accounting/cargo-declarations/[id] — CARGO ใบขนรวม detail (P3).
@@ -65,6 +67,7 @@ type Line = {
   duty_thb:           number | string | null;
   vat_thb:            number | string | null;
   notes:              string | null;
+  declared_value_images: unknown;
 };
 
 function thb(n: number | string | null | undefined): string {
@@ -129,7 +132,7 @@ export default async function CargoDeclarationDetailPage({
 
   const { data: linesRaw, error: linesErr } = await admin
     .from("customs_declaration_lines")
-    .select("id, position, hs_code, description, qty, unit, declared_value_thb, duty_rate_pct, duty_thb, vat_thb, notes")
+    .select("id, position, hs_code, description, qty, unit, declared_value_thb, duty_rate_pct, duty_thb, vat_thb, notes, declared_value_images")
     .eq("declaration_id", id)
     .order("position", { ascending: true });
   if (linesErr) {
@@ -170,6 +173,26 @@ export default async function CargoDeclarationDetailPage({
         if (r.form_e_duty_pct != null) formEByHs.set(r.code, Number(r.form_e_duty_pct));
       }
     }
+  }
+
+  // Declared-value evidence images (owner 2026-06-28 #2 "แนบรูป" · mig 0222) — resolve
+  // signed URLs per line for cost roles (the evidence justifies the money-internal
+  // declared value · forwarder-covers bucket, same as the freight evidence).
+  const evidenceByLine = new Map<string, Array<{ key: string; url: string | null }>>();
+  if (canViewMoney) {
+    await Promise.all(
+      linesAll.map(async (l) => {
+        const keys = Array.isArray(l.declared_value_images)
+          ? (l.declared_value_images as unknown[]).filter((x): x is string => typeof x === "string")
+          : [];
+        evidenceByLine.set(
+          l.id,
+          keys.length === 0
+            ? []
+            : await Promise.all(keys.map(async (key) => ({ key, url: await getSignedBucketUrl("forwarder-covers", key) }))),
+        );
+      }),
+    );
   }
 
   // Audit timeline.
@@ -380,7 +403,7 @@ export default async function CargoDeclarationDetailPage({
                     {canViewMoney && <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.duty_thb)}</td>}
                     {canViewMoney && <td className="px-3 py-2 text-right font-mono text-[11px]">{thb(l.vat_thb)}</td>}
                     {canEdit && isDraft && (
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 text-right align-top">
                         <CargoDeclarationLineEditor
                           lineId={l.id}
                           declaredValueThb={l.declared_value_thb}
@@ -389,6 +412,13 @@ export default async function CargoDeclarationDetailPage({
                           notes={l.notes}
                           formEDutyPct={l.hs_code ? formEByHs.get(l.hs_code.trim()) : undefined}
                         />
+                        <div className="text-left">
+                          <CargoDeclaredValueImages
+                            lineId={l.id}
+                            evidence={evidenceByLine.get(l.id) ?? []}
+                            editable={isDraft}
+                          />
+                        </div>
                       </td>
                     )}
                   </tr>
