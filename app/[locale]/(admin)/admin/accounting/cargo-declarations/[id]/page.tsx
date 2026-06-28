@@ -8,6 +8,7 @@ import {
   type CustomsDeclarationStatus,
 } from "@/lib/validators/customs-declaration";
 import { CargoDeclarationLineEditor } from "./cargo-declaration-line-editor";
+import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 
 /**
  * /admin/accounting/cargo-declarations/[id] — CARGO ใบขนรวม detail (P3).
@@ -177,6 +178,40 @@ export default async function CargoDeclarationDetailPage({
   const isDraft = header.status === "draft";
   const TRANSPORT_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "แอร์" };
 
+  // Excel export (owner 2026-06-28 #4 · export Excel). Money columns only for
+  // cost-roles (§0e money-visibility · mirrors the on-page mask above).
+  const csvCols: CsvCol[] = [
+    { key: "position", label: "#" },
+    { key: "description", label: "สินค้า" },
+    { key: "hs_code", label: "HS" },
+    { key: "qty", label: "จำนวน" },
+    { key: "unit", label: "หน่วย" },
+    ...(canViewMoney
+      ? [
+          { key: "declared_value_thb", label: "มูลค่าสำแดง (บาท)" },
+          { key: "duty_rate_pct", label: "อากร %" },
+          { key: "duty_thb", label: "อากร (บาท)" },
+          { key: "vat_thb", label: "VAT (บาท)" },
+        ]
+      : []),
+  ];
+  const csvRows: CsvRow[] = lines.map((l) => ({
+    position:    l.position,
+    description: l.description ?? "",
+    hs_code:     l.hs_code ?? "",
+    qty:         Number(l.qty ?? 0),
+    unit:        l.unit ?? "",
+    ...(canViewMoney
+      ? {
+          declared_value_thb: Number(l.declared_value_thb ?? 0),
+          duty_rate_pct:      Number(l.duty_rate_pct ?? 0),
+          duty_thb:           Number(l.duty_thb ?? 0),
+          vat_thb:            Number(l.vat_thb ?? 0),
+        }
+      : {}),
+  }));
+  const docTag = header.declaration_no ?? header.id.slice(0, 8);
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -203,8 +238,31 @@ export default async function CargoDeclarationDetailPage({
             rel="noopener noreferrer"
             className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
           >
-            📄 ดู / พิมพ์ ใบขน PDF
+            📄 ใบขน PDF
           </a>
+          {/* owner 2026-06-28 #1/#4 — invoice + packing-list + Excel for CARGO ใบขน
+              (the routes are cargo-scoped; freight has its own under /freight). */}
+          <a
+            href={`/api/customs-declaration/${header.id}/packing-list`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
+          >
+            📦 Packing List
+          </a>
+          {canViewMoney && (
+            <a
+              href={`/api/customs-declaration/${header.id}/invoice`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+            >
+              🧾 Commercial Invoice
+            </a>
+          )}
+          {lines.length > 0 && (
+            <CsvButton filename={`ใบขน-${docTag}.csv`} rows={csvRows} cols={csvCols} />
+          )}
           <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[header.status]}`}>
             {CUSTOMS_DECLARATION_STATUS_LABEL[header.status]}
           </span>

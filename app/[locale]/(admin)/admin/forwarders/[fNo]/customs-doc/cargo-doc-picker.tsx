@@ -40,7 +40,10 @@ export function CargoDocPicker({ fid, items, disabled }: { fid: number; items: P
     startTransition(async () => {
       const res = await adminCreateCargoDeclarationFromItems({ forwarderId: fid, itemIds: [...sel], declarationType: docType });
       if (!res.ok) { setErr(res.error); return; }
-      router.push("/admin/accounting/customs-declarations");
+      // Land on the NEW draft's detail (edit มูลค่าสำแดง/HS/Form-E + export
+      // ใบขน/invoice/packing-list/Excel) — not a generic list.
+      const newId = res.data?.id;
+      router.push(newId ? `/admin/accounting/cargo-declarations/${newId}` : "/admin/accounting/cargo-declarations");
     });
   }
 
