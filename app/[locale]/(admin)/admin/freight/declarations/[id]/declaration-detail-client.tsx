@@ -8,6 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import {
   adminUpdateDeclarationHeader,
   adminAddDeclarationLine,
@@ -244,7 +245,27 @@ function LinesPanel({
     <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
       <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-bold text-sm">📦 รายการสินค้า (per HS code)</h2>
-        <span className="text-[11px] text-muted">{lines.length} บรรทัด</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-muted">{lines.length} บรรทัด</span>
+          {lines.length > 0 && (
+            // owner 2026-06-28 #4 — กด export เป็น Excel (CSV เปิดด้วย Excel ได้ · BOM-safe).
+            <CsvButton
+              filename={`ใบขน-${declarationId.slice(0, 8)}.csv`}
+              cols={[
+                { key: "pos", label: "#" }, { key: "hs", label: "พิกัด HS" }, { key: "desc", label: "รายการสินค้า" },
+                { key: "co", label: "ประเทศกำเนิด" }, { key: "qty", label: "จำนวน" }, { key: "unit", label: "หน่วย" },
+                { key: "kg", label: "น้ำหนัก(กก.)" }, { key: "declared", label: "มูลค่าสำแดง(บาท)" }, { key: "dutyPct", label: "อากร%" },
+                { key: "duty", label: "อากร(บาท)" }, { key: "vat", label: "VAT(บาท)" }, { key: "fta", label: "FTA" }, { key: "notes", label: "หมายเหตุ" },
+              ]}
+              rows={lines.map((l): CsvRow => ({
+                pos: l.position, hs: l.hs_code ?? "", desc: l.description, co: l.country_of_origin,
+                qty: l.qty, unit: l.unit, kg: l.gross_weight_kg ?? "", declared: Number(l.declared_value_thb).toFixed(2),
+                dutyPct: Number(l.duty_rate_pct).toFixed(2), duty: Number(l.duty_thb).toFixed(2), vat: Number(l.vat_thb).toFixed(2),
+                fta: l.fta_applied ? "ใช่" : "", notes: l.notes ?? "",
+              }))}
+            />
+          )}
+        </div>
       </div>
       {lines.length === 0 && editable && (
         <p className="px-5 py-3 text-xs text-muted">ยังไม่มี line — เพิ่ม line ด้านล่าง หรือสร้างจาก freight invoice ก่อน</p>
