@@ -64,6 +64,7 @@ type Line = {
   duty_rate_pct:      number | string | null;
   duty_thb:           number | string | null;
   vat_thb:            number | string | null;
+  notes:              string | null;
 };
 
 function thb(n: number | string | null | undefined): string {
@@ -128,7 +129,7 @@ export default async function CargoDeclarationDetailPage({
 
   const { data: linesRaw, error: linesErr } = await admin
     .from("customs_declaration_lines")
-    .select("id, position, hs_code, description, qty, unit, declared_value_thb, duty_rate_pct, duty_thb, vat_thb")
+    .select("id, position, hs_code, description, qty, unit, declared_value_thb, duty_rate_pct, duty_thb, vat_thb, notes")
     .eq("declaration_id", id)
     .order("position", { ascending: true });
   if (linesErr) {
@@ -385,6 +386,7 @@ export default async function CargoDeclarationDetailPage({
                           declaredValueThb={l.declared_value_thb}
                           dutyRatePct={l.duty_rate_pct}
                           hsCode={l.hs_code}
+                          notes={l.notes}
                           formEDutyPct={l.hs_code ? formEByHs.get(l.hs_code.trim()) : undefined}
                         />
                       </td>

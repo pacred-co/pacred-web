@@ -250,6 +250,9 @@ const setCargoDeclarationLineSchema = z.object({
     z.coerce.number().min(0).max(100).optional(),
   ),
   hsCode:           optText,
+  // หมายเหตุมูลค่าสำแดง (owner 2026-06-28 #2 "ต้องใส่หมายเหตุ") — the basis/ground for
+  // the declared value (e.g. supplier invoice ref). Reuses the line's `notes`.
+  notes:            z.preprocess((v) => (v === undefined ? undefined : String(v)), z.string().max(2000).optional()),
 });
 
 export async function setCargoDeclarationLine(
@@ -293,15 +296,18 @@ export async function setCargoDeclarationLine(
     const newDutyPct  = d.dutyRatePct      ?? Number(line.duty_rate_pct);
     const taxes = computeLineTaxes({ declared_value_thb: newDeclared, duty_rate_pct: newDutyPct });
 
+    const linePatch: Record<string, unknown> = {
+      declared_value_thb: roundThb(newDeclared),
+      duty_rate_pct:      newDutyPct,
+      duty_thb:           taxes.duty_thb,
+      vat_thb:            taxes.vat_thb,
+      hs_code:            d.hsCode,
+    };
+    // Only touch notes when the field was sent (avoid wiping it on a value-only save).
+    if (d.notes !== undefined) linePatch.notes = d.notes || null;
     const { error: updErr } = await admin
       .from("customs_declaration_lines")
-      .update({
-        declared_value_thb: roundThb(newDeclared),
-        duty_rate_pct:      newDutyPct,
-        duty_thb:           taxes.duty_thb,
-        vat_thb:            taxes.vat_thb,
-        hs_code:            d.hsCode,
-      })
+      .update(linePatch)
       .eq("id", d.lineId);
     if (updErr) {
       console.error("[cargo-declarations setLine update]", { lineId: d.lineId, code: updErr.code, message: updErr.message });

@@ -42,12 +42,15 @@ export function CargoDeclarationLineEditor({
   declaredValueThb,
   dutyRatePct,
   hsCode,
+  notes,
   formEDutyPct,
 }: {
   lineId: string;
   declaredValueThb: number | string | null;
   dutyRatePct: number | string | null;
   hsCode: string | null;
+  /** หมายเหตุมูลค่าสำแดง (owner 2026-06-28 #2 · the line's `notes`). */
+  notes?: string | null;
   /** Form-E (ACFTA) preferential rate for this HS (mig 0180) — one-tap apply. */
   formEDutyPct?: number;
 }) {
@@ -60,11 +63,13 @@ export function CargoDeclarationLineEditor({
   const [declared, setDeclared] = useState<string>(str(declaredValueThb));
   const [dutyPct, setDutyPct] = useState<string>(str(dutyRatePct));
   const [hs, setHs] = useState<string>(hsCode ?? "");
+  const [note, setNote] = useState<string>(notes ?? "");
 
   function resetDraft() {
     setDeclared(str(declaredValueThb));
     setDutyPct(str(dutyRatePct));
     setHs(hsCode ?? "");
+    setNote(notes ?? "");
   }
 
   async function onSave() {
@@ -82,6 +87,7 @@ export function CargoDeclarationLineEditor({
         declaredValueThb: declared,
         dutyRatePct: dutyPct,
         hsCode: hs,
+        notes: note,
       });
       if (res.ok) {
         setEditing(false);
@@ -163,6 +169,17 @@ export function CargoDeclarationLineEditor({
           />
         </label>
       </div>
+      <label className="mt-2 block space-y-0.5">
+        <span className="block text-[11px] text-muted">หมายเหตุมูลค่าสำแดง (เช่น อ้างอิงใบกำกับซัพพลายเออร์)</span>
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={2000}
+          placeholder="หมายเหตุ / เหตุผลของมูลค่าสำแดง"
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+        />
+      </label>
       <p className="mt-1.5 text-[11px] text-amber-800/80">
         มูลค่าสำแดง ตั้งจากต้นทุน — ปรับลงตามแผนสำแดง · duty = สำแดง × อัตรา% · vat = (สำแดง + duty) × 7%
       </p>
