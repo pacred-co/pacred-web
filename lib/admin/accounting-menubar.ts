@@ -284,6 +284,9 @@ export const CARGO_MENUBAR: MenubarItem[] = [
   {
     label: "การเงิน",
     children: [
+      // owner 2026-06-28 — กระดานสถานะการชำระเงินลูกค้า (ใครจ่าย/ยังไม่จ่าย · ขาย-ต้นทุน · เงินสด/เครดิต · รถเรือแอร์ · admin).
+      { label: "กระดานสถานะการชำระเงิน", href: "/admin/accounting/payment-board" },
+      { label: "ลูกหนี้ค้างชำระ (AR Aging)", href: "/admin/accounting/ar-aging" },
       // TODO — legacy L424-495: ดูภาพรวม / เงินสด-ธนาคาร-eWallet / เช็ครับ / เช็คจ่าย / สำรองรับจ่าย / ภาษีถูกหัก / ภาษีหัก / โอนเงิน.
       { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/finance/coming-soon" },
     ],
@@ -353,6 +356,13 @@ export const CARGO_MENUBAR: MenubarItem[] = [
  * invoice generation.
  */
 export const ACCOUNTING_HUB_CARDS = [
+  // owner 2026-06-28 — กระดานสถานะการชำระเงิน: ใครจ่าย/ยังไม่จ่าย at-a-glance.
+  {
+    title: "กระดานสถานะการชำระเงิน",
+    desc: "ใครจ่ายแล้ว/ยังไม่จ่าย · ยอดค้าง · ขาย-ต้นทุน · เงินสด/เครดิต · รถ/เรือ/แอร์ · เซลล์ดูแล · ค้นหา+แก้ไข",
+    href: "/admin/accounting/payment-board",
+    badge: "ใหม่",
+  },
   // 2026-05-30 sitting-Phase-B (ภูม) — PEAK-style ใบเสร็จ explorer landed.
   // Placed FIRST because new daily-driver for accounting staff per owner
   // brief (matches PEAK accounting UI patterns).
