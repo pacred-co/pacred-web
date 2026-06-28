@@ -20,6 +20,7 @@ import {
   adminRestoreForwarderFromSpecial,
 } from "@/actions/admin/forwarders";
 import { confirm } from "@/components/ui/confirm";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 // 2026-06-11 (Lane B · doc-choice visibility) — per-row tax-document badge.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
@@ -998,11 +999,14 @@ export function ForwardersTable({
                         {/* CUSTTAG (owner 2026-06-25) — credit pill so staff see
                             "ลูกค้าเครดิต · เทอม Nวัน" on the order row → ติดตามให้จ่ายภายในเทอม. */}
                         {r.customer && r.customer.credit_limit > 0 && (
-                          <span
-                            className="mt-0.5 inline-block rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
-                            title={`ลูกค้าเครดิต · เทอม ${r.customer.credit_days} วัน · วงเงิน ฿${r.customer.credit_limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ติดตามให้ลูกค้าจ่ายภายในเทอม`}
-                          >
-                            💳 เครดิต {r.customer.credit_days}ว
+                          <span className="mt-0.5 inline-flex items-center gap-1">
+                            <span
+                              className="inline-block rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                              title={`ลูกค้าเครดิต · เทอม ${r.customer.credit_days} วัน · วงเงิน ฿${r.customer.credit_limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })} · ติดตามให้ลูกค้าจ่ายภายในเทอม`}
+                            >
+                              💳 เครดิต {r.customer.credit_days}ว
+                            </span>
+                            <Explain def={GUIDE.cash_vs_credit} />
                           </span>
                         )}
                         {/* Wave 18-B — จะมาถึงไทย ETA range (port of legacy
@@ -1114,8 +1118,9 @@ export function ForwardersTable({
                           <>
                             {agg.outstanding > 0 ? (
                               // §0h — the money number staff chases sized up to text-sm.
-                              <div className="font-mono text-sm font-semibold text-red-700">
+                              <div className="font-mono text-sm font-semibold text-red-700 inline-flex items-center gap-1 justify-end">
                                 ฿{agg.outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                <Explain def={GUIDE.outstanding_net} align="right" />
                               </div>
                             ) : agg.allPaid ? (
                               <div className="font-mono text-[11px] font-medium text-green-600">
@@ -1140,8 +1145,9 @@ export function ForwardersTable({
                           <>
                             {r.outstanding_thb > 0 ? (
                               // §0h — the money number staff chases sized up to text-sm.
-                              <div className="font-mono text-sm font-semibold text-red-700">
+                              <div className="font-mono text-sm font-semibold text-red-700 inline-flex items-center gap-1 justify-end">
                                 ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                <Explain def={GUIDE.outstanding_net} align="right" />
                               </div>
                             ) : r.paydeposit === "1" ? (
                               <div className="font-mono text-[11px] font-medium text-green-600">
@@ -1282,8 +1288,11 @@ export function ForwardersTable({
                         {fmtDate(r.date_status4)}
                       </td>
                       <td className="px-2 py-2.5">
-                        <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap shadow-sm ${badgeCls}`}>
-                          {sLabel}
+                        <span className="inline-flex items-center gap-1">
+                          <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap shadow-sm ${badgeCls}`}>
+                            {sLabel}
+                          </span>
+                          <Explain def={GUIDE.pay_state} />
                         </span>
                         {/* Sibling group with mixed member statuses: show the
                             main row's pill + a hint so the operator expands
@@ -1539,8 +1548,9 @@ export function ForwardersTable({
               paddings, shorter labels, narrower cabinet input. Long titles
               stay discoverable via the title= tooltips. */}
           <div className="mx-auto flex max-w-7xl flex-nowrap items-center gap-2 overflow-x-auto px-3 py-1.5 lg:px-6">
-            <span className="shrink-0 text-xs font-medium whitespace-nowrap">
+            <span className="shrink-0 text-xs font-medium whitespace-nowrap inline-flex items-center gap-1">
               เลือก <b className="text-primary-600">{selected.size}</b>
+              <Explain def="เปลี่ยนสถานะหลายรายการพร้อมกัน — เลือกสถานะปลายทาง (+เลขตู้ถ้ามี) แล้วกด “อัพเดต” ระบบจะเปลี่ยนทุกรายการที่ติ๊กไว้" />
             </span>
             <select
               value={bulkStatus}
@@ -1605,6 +1615,13 @@ export function ForwardersTable({
               >
                 {inSpecialLane ? "↩ กลับสถานะปกติ" : "⭐ สถานะพิเศษ"}
               </button>
+              <Explain
+                def={
+                  inSpecialLane
+                    ? "กดเพื่อย้ายรายการที่เลือกกลับสู่สถานะปกติ (คืนค่าสถานะเดิมจากประวัติ)"
+                    : "สถานะพิเศษ (99) = พักรายการไว้นอกคิวปกติ (เช่น มีปัญหา/รอตรวจสอบ) — กดเพื่อย้ายรายการที่เลือกเข้าลานพิเศษ"
+                }
+              />
               <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
               <button
                 type="button"

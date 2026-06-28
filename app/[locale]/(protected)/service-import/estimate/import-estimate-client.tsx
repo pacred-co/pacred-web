@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Truck, Ship, Plane, Package, Calculator, Sparkles, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Explain } from "@/components/ui/tooltip";
 import {
   getCustomerImportEstimate,
   type CustomerEstimateMode,
@@ -149,7 +150,10 @@ export function ImportEstimateClient() {
             <input className={inputCls} inputMode="decimal" placeholder={t("heightPlaceholder")} value={h} onChange={(e) => setH(e.target.value)} />
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-muted">{t("orEnterCbm")}</span>
+            <Explain
+              label={<span className="text-xs text-muted">{t("orEnterCbm")}</span>}
+              def="คิว (CBM) = ปริมาตรกล่อง กว้าง×ยาว×สูง (เมตร) — ใช้คิดค่าส่งทางเรือ/แอร์ ถ้ารู้คิวอยู่แล้วกรอกตรงนี้ได้เลย"
+            />
             <input className={`${inputCls} max-w-[120px]`} inputMode="decimal" placeholder={t("cbmPlaceholder")} value={directCbm} onChange={(e) => setDirectCbm(e.target.value)} />
             {cbm > 0 && <span className="text-xs font-bold text-primary-600">{t("cbmEquals", { cbm })}</span>}
           </div>
@@ -163,7 +167,10 @@ export function ImportEstimateClient() {
             </select>
           </div>
           <div>
-            <label className={labelCls}>{t("crateLabel")}</label>
+            <Explain
+              label={<span className={labelCls}>{t("crateLabel")}</span>}
+              def="ตีลังไม้ = ตีกรอบไม้หุ้มสินค้าให้แข็งแรง กันกระแทกตอนขนส่ง — มีค่าใช้จ่ายเพิ่ม เหมาะกับของแตกง่าย/ของหนัก"
+            />
             <div className="flex items-center gap-2 pt-1.5">
               <button
                 type="button"
@@ -183,7 +190,10 @@ export function ImportEstimateClient() {
 
         {/* ── Doc-tier discount toggle (owner 2026-06-16) ── */}
         <div>
-          <label className={labelCls}>{t("docTierLabel")}</label>
+          <Explain
+            label={<span className={labelCls}>{t("docTierLabel")}</span>}
+            def="เปิดรับใบกำกับภาษี/ใบขนสินค้า แล้วชำระค่าสินค้าผ่าน Pacred → ได้ส่วนลดค่าส่งต่อคิว (ราคาดีกว่า)"
+          />
           <button
             type="button"
             onClick={() => setDocTier((v) => !v)}
@@ -207,6 +217,7 @@ export function ImportEstimateClient() {
       <div className="rounded-2xl border border-border bg-gradient-to-br from-rose-50/40 via-white to-white p-4 shadow-sm">
         <h3 className="mb-1 flex items-center gap-2 text-sm font-bold text-foreground">
           <Calculator className="h-4 w-4 text-primary-600" /> {t("resultTitle")}
+          <Explain def="เปรียบเทียบค่าส่ง 3 ทาง: ทางรถ (เร็ว ราคากลาง) · ทางเรือ (ถูกสุด แต่นานกว่า) · ทางอากาศ (เร็วสุด ราคาสูง) — ป้าย ‘ถูกสุด’ ช่วยเลือกได้ง่าย · นี่เป็นราคาประเมิน ราคาจริงคิดหลังชั่ง/วัดที่โกดัง" />
         </h3>
         <p className="mb-3 text-[11px] text-muted">
           {t.rich("resultNote", { b: (chunks) => <b>{chunks}</b> })}

@@ -29,6 +29,7 @@ import { Link } from "@/i18n/navigation";
 import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown, Building2 } from "lucide-react";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
+import { Explain } from "@/components/ui/tooltip";
 import { ResetPwdButton } from "./reset-pwd-button";
 import { HoverZoomImage } from "@/components/admin/hover-zoom-image";
 import {
@@ -165,7 +166,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <Th k="userID"     {...{ sortKey, sortDir, toggleSort }}>รหัส</Th>
-                <Th k="type"       {...{ sortKey, sortDir, toggleSort }}>ประเภท</Th>
+                <Th k="type"       {...{ sortKey, sortDir, toggleSort }} hint="ประเภทลูกค้า — บุคคล (ธรรมดา) หรือ นิติบุคคล (มีเลขผู้เสียภาษี · ต้องตรวจ DBD + ใช้หัก ณ ที่จ่าย 1% ตอนวางบิล) · ป้ายเงินสด/เครดิตบอกวิธีจ่าย">ประเภท</Th>
                 <Th k="name"       {...{ sortKey, sortDir, toggleSort }}>ชื่อ</Th>
                 <th className="px-4 py-3">เบอร์ / อีเมล</th>
                 <Th k="address"    {...{ sortKey, sortDir, toggleSort }}>ที่อยู่หลัก</Th>
@@ -173,9 +174,9 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                 <Th k="vip"        {...{ sortKey, sortDir, toggleSort }}>VIP</Th>
                 <th className="px-4 py-3">LINE</th>
                 <th className="px-4 py-3">Facebook</th>
-                <Th k="sale"       {...{ sortKey, sortDir, toggleSort }}>เซลล์ผู้ดูแล</Th>
-                <Th k="status"     {...{ sortKey, sortDir, toggleSort }}>สถานะ</Th>
-                <Th k="wallet" align="right" {...{ sortKey, sortDir, toggleSort }}>ยอดกระเป๋า</Th>
+                <Th k="sale"       {...{ sortKey, sortDir, toggleSort }} hint="เซลล์ผู้ดูแล = แอดมินฝ่ายขายที่รับผิดชอบลูกค้ารายนี้ (adminIDSale) — คนที่ตามงาน/เสนอราคา/ได้คอมมิชชั่นจากออเดอร์ลูกค้าคนนี้ · CS ดูแลหลังการขายแยกในหน้าโปรไฟล์">เซลล์ผู้ดูแล</Th>
+                <Th k="status"     {...{ sortKey, sortDir, toggleSort }} hint="รอ Approve = สมัครแล้วรอแอดมินอนุมัติ · ใช้งาน = ลูกค้าใช้ระบบได้ปกติ · ระงับ = ถูกปิดการใช้งานชั่วคราว">สถานะ</Th>
+                <Th k="wallet" align="right" {...{ sortKey, sortDir, toggleSort }} hint="ยอดกระเป๋า = เงินคงเหลือในกระเป๋าลูกค้า ใช้ตัดชำระออเดอร์ได้ทันที · ติดลบ = จ่ายแล้วแต่ยังไม่บันทึกเข้ายอด ต้องเคลียร์">ยอดกระเป๋า</Th>
                 <Th k="registered" {...{ sortKey, sortDir, toggleSort }}>สมัครเมื่อ</Th>
                 <th className="px-4 py-3">จัดการ</th>
               </tr>
@@ -452,11 +453,13 @@ export function PendingJuristicReviews({ bundles }: { bundles: JuristicBundle[] 
 }
 
 function Th({
-  k, children, align = "left", sortKey, sortDir, toggleSort,
+  k, children, align = "left", hint, sortKey, sortDir, toggleSort,
 }: {
   k: SortKey;
   children: React.ReactNode;
   align?: "left" | "right";
+  /** Optional one-line plain-Thai guide shown via an ⓘ beside the header. */
+  hint?: string;
   sortKey: SortKey | null;
   sortDir: SortDir;
   toggleSort: (k: SortKey) => void;
@@ -464,14 +467,17 @@ function Th({
   const active = sortKey === k;
   return (
     <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
-      <button
-        type="button"
-        onClick={() => toggleSort(k)}
-        className={`inline-flex items-center gap-1 hover:text-primary-700 ${active ? "text-primary-700 font-semibold" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
-      >
-        {children}
-        {active ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
-      </button>
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""}`}>
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={`inline-flex items-center gap-1 hover:text-primary-700 ${active ? "text-primary-700 font-semibold" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
+        >
+          {children}
+          {active ? (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+        </button>
+        {hint && <Explain def={hint} align={align === "right" ? "right" : "left"} />}
+      </span>
     </th>
   );
 }

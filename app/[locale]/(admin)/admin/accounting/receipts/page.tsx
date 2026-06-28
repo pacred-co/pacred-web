@@ -41,6 +41,7 @@ import {
 } from "@/actions/admin/accounting-receipts";
 import { exportReceiptsAll } from "@/actions/admin/export/acc-receipts";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { Plus, Printer, Search } from "lucide-react";
 
 // CSV columns — mirror the on-screen table (money as the formatted 2dp string,
@@ -382,9 +383,15 @@ export default async function ReceiptsListPage({
                 <th className="px-3 py-2 text-left font-medium">เลขที่เอกสาร</th>
                 <th className="px-3 py-2 text-left font-medium">ลูกค้า</th>
                 <th className="px-3 py-2 text-left font-medium">วันที่</th>
-                <th className="px-3 py-2 text-right font-medium">มูลค่ารวม (ก่อน WHT)</th>
-                <th className="px-3 py-2 text-right font-medium">WHT หัก</th>
-                <th className="px-3 py-2 text-right font-medium">รับสุทธิ</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  <Explain label="มูลค่ารวม (ก่อน WHT)" def={GUIDE.bill_gross} align="right" />
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  <Explain label="WHT หัก" def={GUIDE.wht_1pct_bill} align="right" />
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  <Explain label="รับสุทธิ" def={GUIDE.bill_net_payable} align="right" />
+                </th>
                 <th className="px-3 py-2 text-center font-medium">สถานะ</th>
                 <th className="px-3 py-2 text-center font-medium">รายการ</th>
               </tr>

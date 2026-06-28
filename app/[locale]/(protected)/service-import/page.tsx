@@ -8,6 +8,7 @@ import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { ImportViewTabs } from "./import-view-tabs";
 import { type ForwarderRow } from "./forwarder-row-view";
 import { AddForwarderModal } from "./add/add-forwarder-modal";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * Customer ฝากนำเข้าสินค้า (import / forwarder) screen — a FAITHFUL
@@ -495,8 +496,12 @@ export default async function ServiceImportPage({
 
             {/* ── Status filter chips + content ── */}
             <div className="px-3 py-3 md:px-4 md:py-4">
-              <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
+              <h4 className="mb-2.5 inline-flex items-center text-sm md:text-base font-bold text-foreground">
                 {t("statusListHeading")}
+                <Explain
+                  className="ml-1.5"
+                  def="ลำดับสถานะของสินค้า: รอเข้าโกดังจีน → ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย → รอชำระเงิน → เตรียมส่ง → ส่งแล้ว · กดที่แต่ละสถานะเพื่อกรองดูเฉพาะกลุ่มนั้น"
+                />
               </h4>
               <div className="flex flex-wrap gap-2">
                 {statusChips.map((chip) => {

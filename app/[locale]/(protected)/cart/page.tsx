@@ -27,6 +27,7 @@ import {
   Package,
   PackageOpen,
 } from "lucide-react";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * Customer shopping-cart screen for the ฝากสั่งซื้อ (China shop-order)
@@ -550,7 +551,10 @@ async function ShippingOptionsCard({ userTransportType }: { userTransportType: n
         {/* ── Transport type — EK (รถ) / SEA (เรือ) ── */}
         <div>
           <label className="block text-[12.5px] font-bold text-muted mb-2">
-            {t("transportMode")}
+            <Explain
+              label={t("transportMode")}
+              def="เลือกวิธีขนส่งจีน→ไทย: ทางรถ (เร็วกว่า ~3-7 วัน ราคากลาง) · ทางเรือ (ถูกกว่า แต่นานกว่า ~10-15 วัน)"
+            />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <RadioCard
@@ -577,7 +581,10 @@ async function ShippingOptionsCard({ userTransportType }: { userTransportType: n
         {/* ── Crate option — ไม่ตีลังไม้ / ตีลังไม้ ── */}
         <div>
           <label className="block text-[12.5px] font-bold text-muted mb-2">
-            {t("crateLabel")}
+            <Explain
+              label={t("crateLabel")}
+              def="ตีลังไม้ = หุ้มกรอบไม้รอบสินค้า กันกระแทก/เสียหายตอนขนส่ง — มีค่าใช้จ่ายเพิ่ม เหมาะกับของแตกง่ายหรือของหนัก"
+            />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <RadioCard

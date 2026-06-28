@@ -43,6 +43,7 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { exportForwardersAll } from "@/actions/admin/export/forwarders";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
 
@@ -640,7 +641,9 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
          bold, the ACTIVE tab takes its own VIVID status colour (same palette as the
          end-of-row pill) so the current queue reads at a glance. */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold text-muted mr-0.5">สถานะ:</span>
+        <span className="text-sm font-semibold text-muted mr-0.5 inline-flex items-center gap-1">
+          <Explain def="กรองรายการตามสถานะการเดินทาง/การเงิน — 1 รอเข้าโกดังจีน → 4 ถึงไทย → 5 รอชำระเงิน → 6 เตรียมส่ง → 7 ส่งแล้ว · เครดิต/พิเศษ = ลานพิเศษ" label="สถานะ:" />
+        </span>
         {filterOpts.map((o) => {
           const params = new URLSearchParams();
           if (o.v)          params.set("status", o.v);
@@ -838,8 +841,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
                   ฿{sumTotalPrice.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </strong>
               </span>
-              <span className="text-muted">
-                ยอดค้างชำระ{" "}
+              <span className="text-muted inline-flex items-center gap-1">
+                <Explain def={GUIDE.outstanding_net} label="ยอดค้างชำระ" />{" "}
                 <strong className={sumOutstanding > 0 ? "text-red-600" : "text-foreground"}>
                   ฿{sumOutstanding.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </strong>

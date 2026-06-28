@@ -29,6 +29,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowLeft, Truck, Package, MapPin, Home, Send, CheckCircle2, Zap } from "lucide-react";
+import { Explain } from "@/components/ui/tooltip";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
 
@@ -369,6 +370,22 @@ export default async function CreateDriverBatchPage({
             {(driverCount + pickupCount + expressCount + inProgress).toLocaleString("th-TH")}/{totalReadyToShip.toLocaleString("th-TH")}
           </span>
         </Link>
+      </div>
+
+      {/* Mode-guide hint — explain the 3 work-tabs at a glance (in-system guide) */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+        <Explain
+          label={<span className="font-medium text-foreground">มอบงานให้คนขับรถ</span>}
+          def="มอบงานให้คนขับรถ = ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง + เลือกคนขับ + กำหนดเวลา แล้วสร้างรอบจัดส่ง"
+        />
+        <Explain
+          label={<span className="font-medium text-foreground">รับเองหน้าโกดัง</span>}
+          def="รับเองหน้าโกดัง = ลูกค้ามารับของเองที่โกดัง (ไม่มีคนขับ) — ติ๊กที่รับแล้ว แนบรูปถ้ามี → ปิดงานเป็น “ส่งแล้ว” ได้ทันที"
+        />
+        <Explain
+          label={<span className="font-medium text-foreground">Express (ขนส่งภายนอก)</span>}
+          def="Express = ส่งผ่านบริษัทขนส่งภายนอก (Flash · Kerry · J&T · …) — มอบคนขับ Pacred เอาของไปส่งให้ขนส่งเจ้านั้น · มีตัวกรองเลือกบริษัทขนส่งด้านล่าง"
+        />
       </div>
 
       {/* Stats strip — driver + Express both assign a driver (3 stats); pickup = 2 */}

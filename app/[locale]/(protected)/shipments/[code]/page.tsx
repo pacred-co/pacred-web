@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { getMyShipment } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
 import { CARGO_TYPE_LABEL_TH, isCargoType } from "@/lib/warehouse/cargo-type";
+import { Explain } from "@/components/ui/tooltip";
 
 // Wave 3 cleanup (2026-05-20 ค่ำ): the cargo_shipments + cargo_shipment_tracking
 // spine was retired under D1 Option A. `getMyShipment` is now a STUB that
@@ -118,7 +119,12 @@ export default async function ShipmentDetailPage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p className="text-xs text-muted">{t("currentStatus")}</p>
+            <p className="text-xs text-muted">
+              <Explain
+                label={t("currentStatus")}
+                def="สถานะปัจจุบัน = ขั้นตอนล่าสุดของสินค้าคุณในเส้นทางขนส่ง (จีน → ตู้/ระหว่างทาง → ถึงไทย → ส่งถึงมือคุณ) · ดูทุกขั้นได้ในไทม์ไลน์ด้านล่าง"
+              />
+            </p>
             <p className="mt-1 text-2xl font-bold">{statusLabel}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -214,13 +220,23 @@ export default async function ShipmentDetailPage({
       {/* Shipment metrics */}
       {(s.box_count || s.weight_kg || s.volume_cbm) && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">{t("details")}</h3>
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            <Explain
+              label={t("details")}
+              def="รายละเอียดสินค้า — น้ำหนัก (kg) + ปริมาตร CBM (กว้าง×ยาว×สูง เป็นเมตร) + จำนวนกล่อง · ใช้คิดค่าขนส่ง (ทางเรือ/อากาศคิดจาก CBM)"
+            />
+          </h3>
 
           {/* U1-5: received/expected progress — "ได้รับแล้ว 40 / 85 กล่อง" */}
           {s.box_count != null && s.box_count > 0 && (
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
-                <span className="text-muted">{t("received")}</span>
+                <span className="text-muted">
+                  <Explain
+                    label={t("received")}
+                    def="ได้รับแล้ว/ทั้งหมด = จำนวนกล่องที่โกดังไทยรับเข้าแล้ว เทียบกับที่คาดว่าจะมา · ครบ = ของถึงครบทุกกล่อง"
+                  />
+                </span>
                 <span className="font-medium">
                   <span className="font-mono">{s.received_box_count}</span>
                   {" / "}

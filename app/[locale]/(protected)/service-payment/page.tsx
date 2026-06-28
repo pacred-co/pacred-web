@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { CircleDollarSign, Plus, Inbox } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * Customer ฝากชำระ / โอนหยวน screen — the customer ฝากโอนหยวน list,
@@ -348,7 +349,10 @@ export default async function ServicePaymentPage({
             <div className="flex flex-col gap-2.5 border-b border-border px-3 py-3 md:flex-row md:items-center md:justify-between md:px-5 md:py-4">
               <h1 className="flex items-center gap-2 text-base md:text-xl font-bold text-foreground">
                 <CircleDollarSign className="h-5 w-5 md:h-6 md:w-6 shrink-0 text-primary-600" />
-                <span>{t("listTitle")}</span>
+                <Explain
+                  label={<span>{t("listTitle")}</span>}
+                  def="ฝากโอนหยวน = ให้ Pacred โอนเงินหยวนจ่ายร้าน/คู่ค้าจีนแทนคุณ — คุณกรอกยอดหยวน ระบบคิดเป็นบาทตามเรท แล้วแนบสลิปโอนให้บริษัท"
+                />
               </h1>
               <Link
                 href="/service-payment/add"
@@ -364,7 +368,10 @@ export default async function ServicePaymentPage({
             {/* ── Status filter chips ── */}
             <div className="px-3 py-3 md:px-5 md:py-4">
               <h2 className="mb-2.5 text-sm md:text-base font-bold text-foreground">
-                {t("statusSection")}
+                <Explain
+                  label={t("statusSection")}
+                  def="สถานะการชำระ — รอดำเนินการ = ทีมงานกำลังตรวจสลิป · สำเร็จ = โอนให้คู่ค้าจีนเรียบร้อย · ไม่สำเร็จ = มีปัญหา ติดต่อทีมงาน · กดที่ป้ายเพื่อกรอง"
+                />
               </h2>
               <div className="flex flex-wrap gap-2">
                 {statusChips.map((chip) => (
@@ -461,9 +468,20 @@ export default async function ServicePaymentPage({
                           <th className="px-4 py-3 font-medium">{t("colCreatedDate")}</th>
                           <th className="px-4 py-3 font-medium">{t("colOrderNo")}</th>
                           <th className="px-4 py-3 font-medium">{t("colDetail")}</th>
-                          <th className="px-4 py-3 font-medium">{t("colPayMethod")}</th>
+                          <th className="px-4 py-3 font-medium">
+                            <Explain
+                              label={t("colPayMethod")}
+                              def="วิธีการชำระ = ช่องทางที่คุณส่งคำสั่งโอน (ผ่านเว็บไซต์ / Alipay หน้าร้าน / อื่นๆ)"
+                            />
+                          </th>
                           <th className="px-4 py-3 text-right font-medium">{t("colTotalBaht")}</th>
-                          <th className="px-4 py-3 text-center font-medium">{t("colStatusHead")}</th>
+                          <th className="px-4 py-3 text-center font-medium">
+                            <Explain
+                              align="right"
+                              label={t("colStatusHead")}
+                              def="สถานะ — รอดำเนินการ = กำลังตรวจ · สำเร็จ = โอนให้คู่ค้าจีนแล้ว · ไม่สำเร็จ = มีปัญหา ติดต่อทีมงาน"
+                            />
+                          </th>
                           <th className="px-4 py-3 text-center font-medium">{t("colOptions")}</th>
                         </tr>
                       </thead>

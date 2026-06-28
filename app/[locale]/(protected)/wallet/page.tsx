@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * Customer wallet screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -275,7 +276,10 @@ export default async function WalletPage() {
                   {fullName}
                 </p>
                 <p className="mt-1 text-xs font-medium text-muted md:text-sm">
-                  {t("walletBalanceLabel")}
+                  <Explain
+                    label={t("walletBalanceLabel")}
+                    def="กระเป๋าเงิน = ยอดเงินคงเหลือในระบบของคุณ ใช้ตัดชำระค่าสินค้า/ค่าขนส่งได้ · ถ้าติดลบ = จ่ายมาแล้วแต่ระบบยังบันทึกไม่ครบ แจ้งทีมงานได้"
+                  />
                 </p>
                 <p className="mt-1 flex items-baseline gap-1 leading-none">
                   <span
@@ -350,7 +354,10 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="la la-money" aria-hidden></i>
-                                      {t("tabDeposit")}
+                                      <Explain
+                                        label={t("tabDeposit")}
+                                        def="เงินเข้ากระเป๋า = รายการที่เงินเข้ายอด เช่น ชำระเงินเข้า + เงินคืน (refund)"
+                                      />
                                     </a>
                                   </li>
                                   <li className="nav-item">
@@ -361,7 +368,10 @@ export default async function WalletPage() {
                                       role="tab"
                                     >
                                       <i className="far fa-credit-card" aria-hidden></i>
-                                      {t("tabPayment")}
+                                      <Explain
+                                        label={t("tabPayment")}
+                                        def="ตัดชำระจากกระเป๋า = รายการที่ตัดเงินออกไปจ่ายออเดอร์ (ฝากสั่งซื้อ/ฝากนำเข้า/ค่าบริการ)"
+                                      />
                                     </a>
                                   </li>
                                   <li className="nav-item">
@@ -579,7 +589,10 @@ export default async function WalletPage() {
                           </div>
                           <div className="mb-1 mt-3">
                             <label className="form-control-label mb-1 block text-sm font-medium text-foreground" htmlFor="imagesSlip">
-                              {t("slipEvidenceLabel")}
+                              <Explain
+                                label={t("slipEvidenceLabel")}
+                                def="แนบสลิป = รูปหลักฐานการโอนเงิน (สลิปธนาคาร/แอป) เพื่อให้ทีมงานตรวจสอบแล้วบันทึกยอดให้ — แนบให้ชัด เห็นยอด+เวลา"
+                              />
                             </label>
                             <StyledFileInput
                               name="imagesSlip"

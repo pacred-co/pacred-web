@@ -27,6 +27,7 @@ import { Fragment, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
+import { Explain } from "@/components/ui/tooltip";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { ContainerCompleteness } from "@/lib/warehouse/container-completeness";
@@ -498,6 +499,11 @@ export function CntListTable({
         {search && (
           <span className="whitespace-nowrap text-xs text-muted">พบ {filteredRows.length} ตู้</span>
         )}
+        <Explain
+          className="text-xs text-muted"
+          label="เลขตู้ / กระสอบ คืออะไร?"
+          def="เลขตู้ (container) = ตู้คอนเทนเนอร์ที่ปิดแล้ว เช่น GZS260601-1 · กระสอบ (sack) = เลขกระสอบที่ใช้ชั่วคราวระหว่างตู้ยังไม่ปิด (เช่น CBX… / SEA0x ของ MOMO) — เมื่อตู้ปิดจะได้เลขตู้จริง"
+        />
       </div>
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
@@ -522,9 +528,15 @@ export function CntListTable({
                   (ETA) per container · แต้ม (iTAM) PRIMARY · MOMO fallback (from
                   momo_container_details · the Container Closed sync · 0120).
                   T/T = ETA − ETD (carrier-estimated transit). Plain headers. */}
-              <th className="px-2 py-2 text-right" title="วันเรือออกจากจีน (ETD) — แต้มเป็นหลัก · MOMO มาเทียบ">ETD</th>
-              <th className="px-2 py-2 text-right" title="วันถึงไทยโดยประมาณ (ETA) — แต้มเป็นหลัก · MOMO มาเทียบ">ETA</th>
-              <th className="px-2 py-2 text-right" title="ระยะเวลาเดินทางโดยประมาณ (T/T) = ETA − ETD (วัน)">T/T</th>
+              <th className="px-2 py-2 text-right">
+                <Explain align="right" label="ETD" def="ETD (Estimated Time of Departure) = วันที่เรือ/รถออกจากจีนโดยประมาณ · ยึดของแต้ม (iTAM) เป็นหลัก · MOMO เอามาเทียบ" />
+              </th>
+              <th className="px-2 py-2 text-right">
+                <Explain align="right" label="ETA" def="ETA (Estimated Time of Arrival) = วันที่ถึงไทยโดยประมาณ · ยึดของแต้ม (iTAM) เป็นหลัก · MOMO เอามาเทียบ" />
+              </th>
+              <th className="px-2 py-2 text-right">
+                <Explain align="right" label="T/T" def="T/T (Transit Time) = ระยะเวลาเดินทางโดยประมาณ (วัน) = ETA − ETD" />
+              </th>
               <SortableTH sortKeyValue="ftransporttype"      align="center" activeKey={sortKey} sortDir={sortDir} onSort={onSort}>ขนส่ง</SortableTH>
               <SortableTH sortKeyValue="diffDay"             align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</SortableTH>
               <SortableTH sortKeyValue="fdatestatus4"        align="right"  activeKey={sortKey} sortDir={sortDir} onSort={onSort}>{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</SortableTH>

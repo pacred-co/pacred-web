@@ -45,6 +45,7 @@ import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { Explain } from "@/components/ui/tooltip";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
@@ -458,7 +459,10 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-muted">การจ่ายเงินตู้</span>
+              <Explain
+                label={<span className="text-muted">การจ่ายเงินตู้</span>}
+                def="สถานะจ่ายค่าตู้ — “จ่ายแล้ว” = ทำรายการเบิกจ่ายค่าตู้ (ค่าขนส่งจีน-ไทยให้ต้นทาง) ของตู้นี้แล้ว · “ยังไม่จ่าย” = ยังต้องเบิกจ่าย"
+              />
               <select name="actionPay" defaultValue={actionPay} className="rounded-md border border-border px-2 py-1">
                 <option value="all">ทั้งหมด</option>
                 <option value="1">ยังไม่จ่าย</option>

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { Pencil, Trash2, Plus, Loader2 } from "lucide-react";
 import { PacredDialog, useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { Explain } from "@/components/ui/tooltip";
 import { adminSetUserCredit, adminRemoveUserCredit } from "@/actions/admin/users-pricing";
 
 export type CreditRow = {
@@ -137,13 +138,21 @@ export function CreditTable({ rows, picks }: { rows: CreditRow[]; picks: Custome
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3">รหัส</th>
-                <th className="px-4 py-3">ชื่อ-นามสกุล</th>
+                <th className="px-4 py-3">
+                  <Explain label="ชื่อ-นามสกุล" def="ป้ายใต้ชื่อบอก บุคคล/นิติบุคคล + เซลล์ผู้ดูแล (แอดมินฝ่ายขายที่รับผิดชอบ) — นิติบุคคลใช้หัก ณ ที่จ่าย 1% ตอนวางบิล" />
+                </th>
                 <th className="px-4 py-3">ที่อยู่หลัก</th>
                 <th className="px-4 py-3">ติดต่อ</th>
                 <th className="px-4 py-3">วันที่สมัคร</th>
-                <th className="px-4 py-3 text-right">วันเครดิต</th>
-                <th className="px-4 py-3 text-right">วงเงิน</th>
-                <th className="px-4 py-3 text-right">คงเหลือ</th>
+                <th className="px-4 py-3 text-right">
+                  <Explain label="วันเครดิต" def="เทอมเครดิต = จำนวนวันที่ลูกค้าจ่ายทีหลังได้หลังรับของ (เช่น 7/15/30 วัน) ก่อนถือว่าค้างชำระ" align="right" />
+                </th>
+                <th className="px-4 py-3 text-right">
+                  <Explain label="วงเงิน" def="วงเงินเครดิต = เพดานยอดที่ลูกค้าค้างจ่ายได้พร้อมกัน · เกินวงเงินต้องโอนเพิ่ม/ขอเพิ่มวงก่อนสั่งต่อ" align="right" />
+                </th>
+                <th className="px-4 py-3 text-right">
+                  <Explain label="คงเหลือ" def="วงเงินคงเหลือ = วงเงิน − ยอดที่ใช้ไป (ค้างชำระ) · ติดลบ (แดง) = ใช้เกินวงเงิน ต้องตามเก็บ/จ่ายส่วนเกิน" align="right" />
+                </th>
                 <th className="px-4 py-3">จัดการ</th>
               </tr>
             </thead>
@@ -186,22 +195,28 @@ export function CreditTable({ rows, picks }: { rows: CreditRow[]; picks: Custome
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => openEdit(r)}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg bg-amber-50 px-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                      >
-                        <Pencil className="w-3 h-3" /> แก้ไขเครดิต
-                      </button>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => handleRemove(r)}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg bg-red-50 px-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3 h-3" /> ลบเครดิตออก
-                      </button>
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => openEdit(r)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-amber-50 px-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <Pencil className="w-3 h-3" /> แก้ไขเครดิต
+                        </button>
+                        <Explain def="กดเพื่อปรับวงเงิน + จำนวนวันเครดิตของลูกค้ารายนี้ — มีกล่องยืนยันก่อนบันทึก" align="right" />
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => handleRemove(r)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-red-50 px-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3 h-3" /> ลบเครดิตออก
+                        </button>
+                        <Explain def="กดเพื่อยกเลิกสิทธิ์เครดิต (กลับเป็นลูกค้าเงินสด) — ระบบจะปฏิเสธถ้ายังมียอดค้างชำระเครดิต > 0" align="right" />
+                      </span>
                     </div>
                   </td>
                 </tr>

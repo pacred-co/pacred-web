@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import { listMyShipments, type ShipmentSummary } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * U1-7 freshness pill — displayed prominently so customer knows whether
@@ -76,15 +77,25 @@ export default async function ShipmentsPage() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
-          <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            <Explain
+              label={t("title")}
+              def="สถานะการขนส่ง = ติดตามสินค้าของคุณทีละขั้น (ถึงโกดังจีน → ขึ้นตู้ → ระหว่างทาง → ถึงไทย → ส่งถึงคุณ) · กดที่การ์ดเพื่อดูไทม์ไลน์เต็ม"
+            />
+          </h1>
           <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
         </div>
         {latestEventAt && (
           <div
-            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${FRESHNESS_PILL[freshness]}`}
+            className={`shrink-0 inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${FRESHNESS_PILL[freshness]}`}
             title={new Date(latestEventAt).toLocaleString("th-TH")}
           >
             🔄 {t("latestData")}: {relativeTimeTh(latestEventAt)}
+            <Explain
+              align="right"
+              className="ml-1"
+              def="ข้อมูลล่าสุด = เวลาที่ระบบอัปเดตสถานะสินค้าครั้งล่าสุด · ถ้านานแล้ว (เหลือง/แดง) แปลว่ายังไม่มีการสแกนใหม่ ติดต่อทีมงานได้"
+            />
           </div>
         )}
       </div>
@@ -158,7 +169,12 @@ function ShipmentCard({
       {s.box_count != null && s.box_count > 0 && (
         <div className="text-xs border-t border-border pt-2 space-y-1">
           <div className="flex justify-between">
-            <span className="text-muted">{t("receivedThWarehouse")}</span>
+            <span className="text-muted">
+              <Explain
+                label={t("receivedThWarehouse")}
+                def="ได้รับแล้ว/ทั้งหมด = จำนวนกล่องที่โกดังไทยรับเข้าแล้ว เทียบกับจำนวนที่คาดว่าจะมา · ครบ ✓ = ของถึงครบทุกกล่อง"
+              />
+            </span>
             <span className="font-medium">
               <span className="font-mono">{s.received_box_count}</span>
               {" / "}

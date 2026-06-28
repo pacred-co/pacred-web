@@ -34,6 +34,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportYuanPaymentsAll } from "@/actions/admin/export/yuan-payments";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
+import { Explain } from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
 
@@ -484,25 +485,34 @@ export default async function AdminYuanPaymentsPage({
                         {Number(r.paythb ?? 0).toLocaleString("th-TH", {
                           minimumFractionDigits: 2,
                         })}
-                        <div className="text-muted text-[11px]">
-                          @ {Number(r.payrate ?? 0).toFixed(2)}
+                        <div className="text-muted text-[11px] inline-flex items-center gap-1">
+                          <span>@ {Number(r.payrate ?? 0).toFixed(2)}</span>
+                          <Explain align="right" def="เรท = อัตราแลกเปลี่ยนหยวน→บาท ที่ใช้คิดยอดนี้ (เรทขายที่บริษัทตั้ง · ต้นทุนจริงต่ำกว่านี้ = ส่วนต่างคือกำไร)" />
                         </div>
                       </td>
                       {/* Money-internal กำไร cell — ultra/accounting/pricing only */}
                       {showProfit ? (
                         <td className="px-3 py-3 text-right font-mono text-xs">
-                          {r.payprofitthb !== null
-                            ? `฿${Number(r.payprofitthb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                            : "—"}
+                          <span className="inline-flex items-center gap-1">
+                            <span>
+                              {r.payprofitthb !== null
+                                ? `฿${Number(r.payprofitthb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                : "—"}
+                            </span>
+                            <Explain align="right" def="กำไร = ยอดบาทที่เก็บลูกค้า − ต้นทุนหยวนจริง (เรทขาย − เรททุน) — เห็นเฉพาะ ultra/บัญชี/pricing" />
+                          </span>
                         </td>
                       ) : null}
                       <td className="px-3 py-3">
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                            STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
-                          }`}
-                        >
-                          {STATUS_LABEL[status] ?? "—"}
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}
+                          >
+                            {STATUS_LABEL[status] ?? "—"}
+                          </span>
+                          <Explain def="รอตรวจสอบ = สลิปโอนหยวนเข้ามา ยังไม่ตรวจ · อนุมัติแล้ว = ตรวจผ่าน ตัดจ่าย/โอนหยวนแล้ว · ปฏิเสธ = สลิปไม่ถูกต้อง ไม่ดำเนินการ" />
                         </span>
                         {STATUS_NEXT[status]?.next && status !== "3" ? (
                           <div className={`mt-1 text-[11px] whitespace-nowrap ${STATUS_NEXT[status]!.act ? "font-semibold text-rose-600" : "text-muted"}`}>

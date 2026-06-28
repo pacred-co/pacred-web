@@ -10,6 +10,7 @@ import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 import {
   DeliveryFeedbackCard,
   type DeliveryFeedbackExisting,
@@ -1209,6 +1210,10 @@ export default async function ServiceImportDetailPage({
                 <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
                   <b className="font-bold">{t("statusLabel")} :</b>
                   {statusForwarderBadge(fStatusValue, t)}
+                  <Explain
+                    align="right"
+                    def="สถานะปัจจุบันของสินค้าในเส้นทาง: รอเข้าโกดังจีน → ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย → รอชำระเงิน → เตรียมส่ง → ส่งแล้ว"
+                  />
                 </p>
               )}
               {/* Credit-before-arrival chip — a credit order is flipped to
@@ -1826,7 +1831,9 @@ export default async function ServiceImportDetailPage({
                                   )}
                                   {collect.maoFee > 0 && (
                                     <div className="flex items-center justify-between gap-3">
-                                      <dt className="text-sky-600">+ ค่าส่งเหมาๆ</dt>
+                                      <dt className="text-sky-600">
+                                        <Explain label={<span className="text-sky-600">+ ค่าส่งเหมาๆ</span>} def={GUIDE.mao_fee} />
+                                      </dt>
                                       <dd className="font-mono tabular-nums text-sky-600">{baht2(collect.maoFee)}</dd>
                                     </div>
                                   )}
@@ -1838,7 +1845,9 @@ export default async function ServiceImportDetailPage({
                                   )}
                                   {collect.wht1pct > 0 && (
                                     <div className="flex items-center justify-between gap-3">
-                                      <dt className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1%</dt>
+                                      <dt className="text-orange-600">
+                                        <Explain label={<span className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1%</span>} def={GUIDE.wht_1pct_bill} />
+                                      </dt>
                                       <dd className="font-mono tabular-nums text-orange-600">{baht2(collect.wht1pct)}</dd>
                                     </div>
                                   )}
@@ -1894,7 +1903,9 @@ export default async function ServiceImportDetailPage({
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border">{t("colItemDetail")}</th>
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colBoxCount")}</th>
                                     <th className="px-2 py-2 font-semibold text-foreground border-b border-border">{t("colWeight")}</th>
-                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">{t("colVolume")}</th>
+                                    <th className="px-2 py-2 font-semibold text-foreground border-b border-border whitespace-nowrap">
+                                      <Explain label={t("colVolume")} def={GUIDE.cbm} />
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody>

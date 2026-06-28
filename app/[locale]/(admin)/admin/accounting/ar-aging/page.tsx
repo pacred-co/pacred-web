@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 import {
   getForwarderAgingReport,
   type AgingBucket,
@@ -75,7 +76,10 @@ export default async function AdminARAgingPage() {
             <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · ลูกหนี้</p>
             <h1 className="mt-1 text-2xl font-bold">ลูกหนี้ค้างชำระ (AR Aging)</h1>
             <p className="text-xs text-muted mt-1">
-              คอกพิทดูเงินที่ต้องตามเก็บ · แบ่งเป็นช่วง 0-30/30-60/60-90/เกิน 90 วัน · ทีมเซลส์เอาไปไล่ตามได้
+              <Explain
+                label="คอกพิทดูเงินที่ต้องตามเก็บ · แบ่งเป็นช่วง 0-30/30-60/60-90/เกิน 90 วัน · ทีมเซลส์เอาไปไล่ตามได้"
+                def="AR Aging = จัดกลุ่มหนี้ค้างตามอายุนับจากวันออกบิล (0-30 / 31-60 / 61-90 / เกิน 90 วัน) — ยิ่งช่วงเก่า ยิ่งเสี่ยงเก็บไม่ได้ ต้องเร่งตามก่อน"
+              />
             </p>
             <p className="text-[11px] text-muted mt-1">
               📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_forwarder</code> WHERE <code className="bg-surface-alt px-1 rounded">fstatus=&apos;5&apos;</code>{" "}
@@ -90,7 +94,12 @@ export default async function AdminARAgingPage() {
         <section className="grid sm:grid-cols-3 gap-3">
           <Stat label="จำนวนรายการค้าง" value={report.totalRows.toLocaleString("th-TH")} />
           <Stat label="ลูกค้าค้าง (unique)" value={report.topCustomers.length.toLocaleString("th-TH")} />
-          <Stat label="ยอดค้างรวม" value={thb(report.totalSum)} bold />
+          <Stat
+            label="ยอดค้างรวม"
+            value={thb(report.totalSum)}
+            bold
+            explain={GUIDE.outstanding_net}
+          />
         </section>
 
         {/* Bucket cards — color-coded */}
@@ -153,8 +162,12 @@ export default async function AdminARAgingPage() {
                     <th className="px-3 py-2 text-right">0-30</th>
                     <th className="px-3 py-2 text-right">31-60</th>
                     <th className="px-3 py-2 text-right">61-90</th>
-                    <th className="px-3 py-2 text-right">90+</th>
-                    <th className="px-3 py-2 text-right">รวมค้าง</th>
+                    <th className="px-3 py-2 text-right">
+                      <Explain label="90+" def="ยอดค้างที่อายุเกิน 90 วันนับจากวันออกบิล — กลุ่มเสี่ยงสูงสุด เก็บไม่ได้ง่าย ต้องเร่งทวงเป็นอันดับแรก" align="right" />
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      <Explain label="รวมค้าง" def={GUIDE.outstanding_net} align="right" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -240,10 +253,12 @@ export default async function AdminARAgingPage() {
   );
 }
 
-function Stat({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+function Stat({ label, value, bold, explain }: { label: string; value: string; bold?: boolean; explain?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className="text-xs font-medium text-muted">
+        {explain ? <Explain label={label} def={explain} /> : label}
+      </p>
       <p className={`mt-1 font-bold font-mono ${bold ? "text-2xl text-primary-700" : "text-xl"}`}>
         {value}
       </p>

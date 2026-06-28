@@ -30,6 +30,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { Explain } from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic";
 
@@ -134,8 +135,12 @@ export default async function YuanPaymentDetailPage({
         {/* Summary card */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[yp.status] ?? ""}`}>
+            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[yp.status] ?? ""}`}>
               {statusLabel}
+              <Explain
+                className="ml-1"
+                def="สถานะการชำระ — รอดำเนินการ = ทีมงานกำลังตรวจสลิป · สำเร็จ = โอนให้คู่ค้าจีนเรียบร้อย · ไม่สำเร็จ = มีปัญหา ติดต่อทีมงาน"
+              />
             </span>
             <span className="text-sm text-muted">{t("detailChannelLabel")} <strong className="text-foreground">{channelLabel}</strong></span>
             {yp.paid_via_wallet && (
@@ -150,7 +155,12 @@ export default async function YuanPaymentDetailPage({
               <p className="text-[11px] text-muted">@ ฿{Number(yp.exchange_rate).toFixed(4)} / ¥</p>
             </div>
             <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3">
-              <p className="text-[11px] uppercase tracking-widest text-primary-700">{t("detailAmountThb")}</p>
+              <p className="text-[11px] uppercase tracking-widest text-primary-700">
+                <Explain
+                  label={t("detailAmountThb")}
+                  def="ยอดบาท = จำนวนหยวน × เรท ณ ตอนสร้างรายการ — ยอดเงินที่คุณโอนเข้าบัญชีบริษัทสำหรับรายการนี้"
+                />
+              </p>
               <p className="mt-1 text-xl font-bold font-mono text-primary-700">฿{Number(yp.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
@@ -161,14 +171,17 @@ export default async function YuanPaymentDetailPage({
           </div>
 
           {yp.slip_url && (
-            <a
-              href={yp.slip_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100"
-            >
-              👁 {t("detailViewSlip")}
-            </a>
+            <span className="inline-flex items-center gap-1">
+              <a
+                href={yp.slip_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100"
+              >
+                👁 {t("detailViewSlip")}
+              </a>
+              <Explain def="สลิป = รูปหลักฐานการโอนเงินที่คุณแนบไว้ — กดเพื่อเปิดดูภาพเต็ม" />
+            </span>
           )}
         </section>
 

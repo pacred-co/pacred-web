@@ -43,6 +43,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader, SectionHeading } from "@/components/admin/page-header";
+import { Explain } from "@/components/ui/tooltip";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { toLegacyOrderCode } from "@/lib/legacy-status-map";
@@ -516,12 +517,15 @@ export default async function AdminServiceOrdersPage({
           }
           actions={
             /* Legacy L279-285 — "+ สั่งสินค้าให้ลูกค้า" CTA → /cart/add */
-            <Link
-              href="/admin/service-orders/cart/add"
-              className="rounded-lg border border-green-500 bg-green-500 px-3 py-2 text-sm font-semibold text-white hover:bg-green-600"
-            >
-              + สั่งสินค้าให้ลูกค้า
-            </Link>
+            <span className="inline-flex items-center gap-1.5">
+              <Link
+                href="/admin/service-orders/cart/add"
+                className="rounded-lg border border-green-500 bg-green-500 px-3 py-2 text-sm font-semibold text-white hover:bg-green-600"
+              >
+                + สั่งสินค้าให้ลูกค้า
+              </Link>
+              <Explain def="กดเพื่อสร้างออเดอร์ฝากสั่งซื้อให้ลูกค้าแทน (เปิดหน้าตะกร้า /cart) — ใช้เมื่อพนักงานคีย์รายการสินค้าจีนให้ลูกค้าเอง" align="right" />
+            </span>
           }
         />
 
@@ -533,7 +537,12 @@ export default async function AdminServiceOrdersPage({
 
         {/* Status tabs — legacy &ldquo;สถานะรายการ&rdquo; with COUNT badges */}
         <div>
-          <SectionHeading className="mb-2">สถานะรายการ</SectionHeading>
+          <SectionHeading className="mb-2">
+            <Explain
+              label="สถานะรายการ"
+              def="กรองออเดอร์ตามสถานะในขั้นตอนฝากสั่ง: รอดำเนินการ → รอชำระเงิน → สั่งสินค้า → รอร้านจีนจัดส่ง → ถึงโกดังจีน → สำเร็จ (และ ยกเลิก) · ตัวเลขในป้ายคือจำนวนออเดอร์ในสถานะนั้น"
+            />
+          </SectionHeading>
           <div className="flex flex-wrap gap-2">
             {filterOpts.map((o) => {
               const href = buildTabHref(o.v);
@@ -748,11 +757,12 @@ export default async function AdminServiceOrdersPage({
                   <> · {sumPieces.toLocaleString("th-TH")} ชิ้น</>
                 )}
               </span>
-              <span className="text-muted">
+              <span className="text-muted inline-flex items-center gap-1">
                 ราคารวม{" "}
                 <strong className="text-foreground">
                   ฿{sumTotalThb.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </strong>
+                <Explain def="ผลรวมราคารวมของออเดอร์เฉพาะหน้านี้ (ตามจำนวนที่เลือกแสดง/หน้า) — ไม่ใช่ยอดรวมทุกหน้า" align="right" />
               </span>
             </div>
           );

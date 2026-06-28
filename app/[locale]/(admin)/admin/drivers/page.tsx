@@ -25,6 +25,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
+import { Explain } from "@/components/ui/tooltip";
 import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
@@ -330,8 +331,12 @@ export default async function AdminDriversPage({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-blue-400 bg-blue-50 px-4 py-3">
           <p className="text-sm text-blue-900">
             <Truck className="inline h-4 w-4 mr-1" />
-            <strong>{readyCount}</strong> รายการชำระแล้ว/เตรียมส่ง <strong>รอจัดรถ</strong> (ยังไม่มอบงานคนขับ) —
-            กดจัดรถแล้ว <strong>เฟิมบันทึก</strong> เพื่อมอบงาน
+            <strong>{readyCount}</strong> รายการชำระแล้ว/เตรียมส่ง{" "}
+            <Explain
+              label={<strong>รอจัดรถ</strong>}
+              def="รอจัดรถ = ออเดอร์ที่ชำระเงินแล้ว (สถานะเตรียมส่ง) แต่ยังไม่ถูกมอบให้คนขับคนไหน — ต้องกดจัดรถ + เฟิมบันทึก เพื่อให้คนขับไปส่ง"
+            />{" "}
+            (ยังไม่มอบงานคนขับ) — กดจัดรถแล้ว <strong>เฟิมบันทึก</strong> เพื่อมอบงาน
           </p>
           <Link
             href="/admin/drivers/new"
@@ -431,8 +436,19 @@ export default async function AdminDriversPage({
                       <th className="px-3 py-2.5 whitespace-nowrap">วันที่/ส่งก่อน</th>
                       <th className="px-3 py-2.5">ชื่อรายการ</th>
                       <th className="px-3 py-2.5">ผู้สร้าง</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap text-right">ส่งแล้ว</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">สถานะ</th>
+                      <th className="px-3 py-2.5 whitespace-nowrap text-right">
+                        <Explain
+                          align="right"
+                          label="ส่งแล้ว"
+                          def="ส่งแล้ว / ทั้งหมด — จำนวนจุดที่คนขับส่งสำเร็จ เทียบกับจุดทั้งหมดในรอบนี้ (เช่น 3/5 = ส่งแล้ว 3 จาก 5 จุด)"
+                        />
+                      </th>
+                      <th className="px-3 py-2.5 whitespace-nowrap">
+                        <Explain
+                          label="สถานะ"
+                          def="สถานะรอบจัดส่ง — กำลังดำเนินการ (คนขับกำลังวิ่งงาน) · สำเร็จ (ส่งครบทุกจุด) · ไม่สำเร็จ (เลยเวลาหรือส่งไม่ครบ)"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

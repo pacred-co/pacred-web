@@ -26,6 +26,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportWalletBalanceAll } from "@/actions/admin/export/wallet-balance";
 import { Link } from "@/i18n/navigation";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   active:     { label: "ใช้งาน", cls: "bg-green-50 text-green-700 border-green-200" },
@@ -139,7 +140,9 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Cash Back ทั้งหมด</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <Explain label="Cash Back ทั้งหมด" def="Cash Back = ยอดเงินคืน/แต้มที่ลูกค้าสะสมได้ — แยกจากยอดในกระเป๋า ใช้เป็นส่วนลด/ตัดชำระได้ตามเงื่อนไข" />
+          </p>
           <p className="mt-1 text-3xl font-bold tracking-tight text-purple-600">
             ฿{sumCb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
           </p>
@@ -235,8 +238,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                   <BalanceSortTh label="รหัสสมาชิก"     field="userid"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">ชื่อ-นามสกุล</th>
                   <BalanceSortTh label="ยอดเงินคงเหลือ" field="wallettotal" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
-                  <th className="px-3 py-3 text-right">Cash Back</th>
-                  <th className="px-3 py-3">สถานะ</th>
+                  <th className="px-3 py-3 text-right">
+                    <Explain align="right" label="Cash Back" def="เงินคืน/แต้มสะสมของลูกค้า — แยกจากยอดในกระเป๋า ใช้เป็นส่วนลดได้ตามเงื่อนไข" />
+                  </th>
+                  <th className="px-3 py-3">
+                    <Explain label="สถานะ" def="ใช้งาน = บัญชีลูกค้าปกติ · ระงับ = บัญชีถูกระงับ ใช้กระเป๋าเงินไม่ได้จนกว่าจะปลดระงับ" />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -267,8 +274,9 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                       </td>
                       <td className="px-3 py-3 text-sm text-foreground">{fullName}</td>
                       <td className="px-3 py-3 text-right">
-                        <div className={`font-mono text-base font-bold ${wt < 0 ? "text-rose-600" : "text-foreground"}`}>
-                          ฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        <div className={`flex items-center justify-end gap-1 font-mono text-base font-bold ${wt < 0 ? "text-rose-600" : "text-foreground"}`}>
+                          <span>฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                          {wt < 0 ? <Explain align="right" def={GUIDE.wallet_negative} /> : null}
                         </div>
                         {/* owner 2026-06-25: ติดลบ = ลูกค้าจ่ายแล้วยังไม่บันทึก → ทางเข้าเคลียร์ได้เลย
                             (เติม +|ติดลบ| + แนบสลิป → tb_wallet.wallettotal = หายจริง · §0d reachability) */}

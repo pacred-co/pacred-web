@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { loadCustomerAddressOptions } from "@/lib/legacy/customer-address-options";
+import { Explain } from "@/components/ui/tooltip";
 import { CancelButton } from "./cancel-button";
 import { ShopOrderPayButton } from "./shop-order-pay-modal";
 import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
@@ -201,6 +202,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[o.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
                 {legacyOrderStatusThai(o.status)}
               </span>
+              <Explain def="สถานะออเดอร์ฝากสั่งซื้อ: รอตรวจสอบ → รอชำระเงิน → สั่งซื้อแล้ว → ของถึงโกดังจีน → สำเร็จ · บอกว่าตอนนี้ออเดอร์อยู่ขั้นไหน" />
             </div>
             <p className="text-xs text-muted mt-1">{t("createdAt", { date: new Date(o.created_at).toLocaleString("th-TH") })}</p>
           </div>
@@ -325,7 +327,13 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
           {/* RIGHT: summary + meta */}
           <aside className="space-y-4">
             <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm">
-              <h3 className="font-bold text-sm mb-3">{t("orderSummary")}</h3>
+              <h3 className="inline-flex items-center font-bold text-sm mb-3">
+                {t("orderSummary")}
+                <Explain
+                  className="ml-1.5"
+                  def="ยอดรวม = ค่าสินค้า (แปลงจากหยวนตามเรทที่ล็อก) + ค่าส่งในจีน + ค่าบริการ — นี่คือยอดที่ต้องชำระทั้งหมด (ยังไม่รวมค่าขนส่งจีน→ไทย ที่คิดตอนของถึง)"
+                />
+              </h3>
               <div className="space-y-1.5 text-sm">
                 <Row label={t("itemsSubtotal")} value={`¥${itemsTotalCny.toFixed(2)}`} />
                 {o.yuan_rate_locked && (
@@ -346,7 +354,13 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
             </div>
 
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-              <h3 className="font-bold text-sm">{t("shipmentInfo")}</h3>
+              <h3 className="inline-flex items-center font-bold text-sm">
+                {t("shipmentInfo")}
+                <Explain
+                  className="ml-1.5"
+                  def="วิธีขนส่งจีน→ไทย: ทางรถ (เร็วกว่า) · ทางเรือ (ถูกกว่า แต่นานกว่า) · ต้นทาง = จ่ายค่าส่งตอนสั่ง · ปลายทาง = จ่ายปลายทาง (COD)"
+                />
+              </h3>
               <Meta label={t("warehouseChina")} value={o.warehouse_china === "yiwu" ? t("warehouseYiwu") : t("warehouseGuangzhou")} />
               <Meta label={t("transportType")}  value={t(`transport.${o.transport_type}` as Parameters<typeof t>[0])} />
               {/* บริษัทขนส่ง (carrier) — inline-editable while not completed/cancelled

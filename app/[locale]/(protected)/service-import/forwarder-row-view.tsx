@@ -39,6 +39,7 @@ import { useRouter } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { cancelOwnForwarder } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
+import { Explain } from "@/components/ui/tooltip";
 
 // ────────────────────────────────────────────────────────────────────
 //  Status badge — legacy `statusForwarderAll2($fStatus,$fStatusDriver)`
@@ -540,7 +541,11 @@ export function ForwarderRowView({
             <div className="text-right leading-tight">
               {totalPriceNet > 0 && (
                 <>
-                  <span className="text-[11px] md:text-[11px] text-muted uppercase tracking-wide">{t("total")}</span>
+                  <Explain
+                    align="right"
+                    label={<span className="text-[11px] md:text-[11px] text-muted uppercase tracking-wide">{t("total")}</span>}
+                    def="ค่าขนส่งสินค้าจากจีนมาไทยของรายการนี้ (ยังไม่รวมค่าส่งในไทย/ส่วนลด ที่จะแสดงตอนชำระ)"
+                  />
                   <span className="block text-sm md:text-lg font-bold text-red-600 notranslate">
                     {numberFormat2(totalPriceNet)} {t("baht")}
                   </span>
@@ -550,7 +555,13 @@ export function ForwarderRowView({
                 <span className="block text-[11px] md:text-[11px] text-muted notranslate">
                   {row.fweight > 0 && `${row.fweight} kg`}
                   {row.fweight > 0 && row.fvolume > 0 && " · "}
-                  {row.fvolume > 0 && `${numberFormat2(row.fvolume)} CBM`}
+                  {row.fvolume > 0 && (
+                    <Explain
+                      align="right"
+                      label={<span className="notranslate">{numberFormat2(row.fvolume)} CBM</span>}
+                      def="CBM = คิว (ปริมาตร) กว้าง×ยาว×สูง เป็นเมตร — ใช้คิดค่าส่งทางเรือ/แอร์ คู่กับน้ำหนัก (kg)"
+                    />
+                  )}
                 </span>
               )}
             </div>

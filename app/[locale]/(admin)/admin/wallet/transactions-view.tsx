@@ -21,6 +21,7 @@ import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -356,7 +357,9 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                   <TxSortTh label="จำนวน (THB)"   field="amount" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <th className="px-3 py-3">ธนาคาร</th>
                   <TxSortTh label="สถานะ"         field="status" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
-                  <th className="px-3 py-3">สลิป</th>
+                  <th className="px-3 py-3">
+                    <Explain label="สลิป" def="สลิปโอนเงินที่ลูกค้าแนบมา — กด “ดู” เพื่อเปิดดูเต็มก่อนอนุมัติทุกครั้ง" />
+                  </th>
                   <th className="px-3 py-3">จัดการ</th>
                 </tr>
               </thead>
@@ -476,17 +479,23 @@ function TxRow({
               ) : null}
             </div>
           ) : (
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
-              }`}
-            >
-              {TYPE_LABEL[type] ?? "รายการอื่นๆ"}
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                  TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                }`}
+              >
+                {TYPE_LABEL[type] ?? "รายการอื่นๆ"}
+              </span>
+              <Explain def="ชำระเงิน/เติมเงิน = เงินเข้ากระเป๋า · ตัดจากกระเป๋า = เงินออกไปจ่ายออเดอร์ · ถอนเงิน = ลูกค้าขอถอนยอดออก · ชำระฝากสั่งซื้อ = จ่ายค่าสั่งซื้อด้วยสลิป" />
             </span>
           )}
         </td>
         <td className={`px-3 py-3 text-right font-mono text-sm font-bold ${isNeg ? "text-red-600" : "text-foreground"}`}>
           {isNeg ? "−" : ""}฿{Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          {isNeg ? (
+            <Explain align="right" className="ml-1" def={GUIDE.wallet_negative} />
+          ) : null}
         </td>
         <td className="px-3 py-3 text-xs">
           {row.depositnamebank ? (
@@ -496,12 +505,15 @@ function TxRow({
           )}
         </td>
         <td className="px-3 py-3">
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-              STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
-            }`}
-          >
-            {STATUS_LABEL[rowStatus] ?? "—"}
+          <span className="inline-flex items-center gap-1">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                STATUS_CLS[rowStatus] ?? "bg-gray-100 text-gray-600 border-gray-200"
+              }`}
+            >
+              {STATUS_LABEL[rowStatus] ?? "—"}
+            </span>
+            <Explain def="รอตรวจสอบ = สลิปเข้ามายังไม่ได้ตรวจ · อนุมัติแล้ว = ตรวจผ่าน เงินเข้า/ออกแล้ว · ปฏิเสธ = สลิปไม่ถูกต้อง ไม่ตัดยอด" />
           </span>
           {(row.adminid || row.adminidcrate) ? (
             <div className="text-muted text-[11px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>

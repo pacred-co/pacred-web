@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { getInvoiceDetail } from "@/actions/admin/billing-run";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
 
 export const dynamic = "force-dynamic";
@@ -93,21 +94,29 @@ export default async function BillingRunDetailPage({
         <div className="flex flex-wrap items-baseline gap-3">
           <div className="flex-1 min-w-[200px]">
             <div className="text-xs text-muted">
-              {header.wht_amount > 0 ? "ยอดชำระสุทธิ (หลังหัก ณ ที่จ่าย)" : "ยอดรวมทั้งสิ้น"}
+              {header.wht_amount > 0 ? (
+                <Explain label="ยอดชำระสุทธิ (หลังหัก ณ ที่จ่าย)" def={GUIDE.bill_net_payable} />
+              ) : (
+                <Explain label="ยอดรวมทั้งสิ้น" def={GUIDE.bill_gross} />
+              )}
             </div>
             <div className="text-3xl font-bold text-amber-700">
               ฿{thbFmt(header.wht_amount > 0 ? header.net_payable : header.total_thb)}
             </div>
             {header.wht_amount > 0 && (
               <div className="text-xs text-muted mt-1">
-                รวม ฿{thbFmt(header.total_thb)} <span className="text-red-600">− หัก ณ ที่จ่าย 1% ฿{thbFmt(header.wht_amount)}</span>
+                รวม ฿{thbFmt(header.total_thb)} <span className="text-red-600">
+                  <Explain label={`− หัก ณ ที่จ่าย 1% ฿${thbFmt(header.wht_amount)}`} def={GUIDE.wht_1pct_bill} />
+                </span>
               </div>
             )}
           </div>
           <div className="text-xs text-muted text-right">
             <div>Subtotal ฿{thbFmt(header.subtotal_thb)}</div>
             {header.mao_fee_thb > 0 && (
-              <div>+ ค่าส่งเหมาๆ (PCSF) ฿{thbFmt(header.mao_fee_thb)}</div>
+              <div>
+                <Explain label={`+ ค่าส่งเหมาๆ (PCSF) ฿${thbFmt(header.mao_fee_thb)}`} def={GUIDE.mao_fee} align="right" />
+              </div>
             )}
             <div>+ CHN ฿{thbFmt(header.delivery_chn_thb)} + TH ฿{thbFmt(header.delivery_th_thb)} + อื่นๆ ฿{thbFmt(header.other_thb)}</div>
             <div>− ส่วนลด ฿{thbFmt(header.discount_thb)}</div>

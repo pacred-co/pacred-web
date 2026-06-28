@@ -5,6 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { PcsCarousel } from "@/components/legacy/pcs-carousel";
+import { Explain } from "@/components/ui/tooltip";
 
 /**
  * Customer member home — Tailwind-pure rebuild of the legacy PCS Cargo
@@ -167,7 +168,10 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-xl font-bold text-primary-600">{countShops}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                {t("cardShopOrder")}
+                <Explain
+                  label={t("cardShopOrder")}
+                  def="ฝากสั่งซื้อสินค้า = ให้ Pacred ช่วยสั่งซื้อสินค้าจีนแทนคุณ (จ่ายค่าสินค้า + ค่าบริการ) — ตัวเลขคือจำนวนออเดอร์ที่คุณมี · กดเพื่อดูทั้งหมด"
+                />
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30">
@@ -199,7 +203,10 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-amber-500">{countForwarder}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                {t("cardImport")}
+                <Explain
+                  label={t("cardImport")}
+                  def="ฝากนำเข้าสินค้า = ส่งสินค้าจากจีนเข้าไทยผ่านโกดัง Pacred (คิดค่าขนส่งตามน้ำหนัก/ปริมาตร) — ตัวเลขคือจำนวนรายการนำเข้า · กดเพื่อดูทั้งหมด"
+                />
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30">
@@ -266,7 +273,10 @@ export default async function DashboardPage() {
             <div className="text-left">
               <div className="text-3xl font-bold text-violet-500">{countPayment}</div>
               <div className="mt-1 text-sm font-medium text-foreground/80">
-                {t("cardPayment")}
+                <Explain
+                  label={t("cardPayment")}
+                  def="ฝากชำระเงิน (โอนหยวน) = ให้ Pacred โอนเงินหยวนจ่ายร้าน/คู่ค้าจีนแทนคุณ (Alipay/WeChat/ธนาคาร) — ตัวเลขคือจำนวนรายการ · กดเพื่อดูทั้งหมด"
+                />
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/30">

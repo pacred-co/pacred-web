@@ -35,6 +35,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportBillingRunAll } from "@/actions/admin/export/billing-run";
+import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 // CSV columns — mirror the list <thead> 1:1.
 const CSV_COLS: CsvCol[] = [
@@ -445,7 +446,9 @@ export default async function BillingRunListPage({
           <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/40 to-orange-50/40 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-amber-700 font-medium">ยอดค้างชำระในมุมมองปัจจุบัน</div>
+                <div className="text-xs text-amber-700 font-medium">
+                  <Explain label="ยอดค้างชำระในมุมมองปัจจุบัน" def={GUIDE.owed_amount} />
+                </div>
                 <div className="text-2xl font-bold text-amber-800">{thbFmt(totalUnpaid)} ฿</div>
               </div>
               <div className="text-xs text-amber-600">
@@ -480,7 +483,9 @@ export default async function BillingRunListPage({
                   <th className="px-3 py-2 text-left">เลขที่เอกสาร</th>
                   <th className="px-3 py-2 text-left">ลูกค้า</th>
                   <th className="px-3 py-2 text-right">จำนวนรายการ</th>
-                  <th className="px-3 py-2 text-right">ยอดรวม (฿)</th>
+                  <th className="px-3 py-2 text-right">
+                    <Explain label="ยอดรวม (฿)" def={GUIDE.bill_gross} align="right" />
+                  </th>
                   <th className="px-3 py-2 text-center">วันที่ออก</th>
                   <th className="px-3 py-2 text-center">ครบกำหนด</th>
                   <th className="px-3 py-2 text-center">สถานะ</th>
@@ -510,8 +515,8 @@ export default async function BillingRunListPage({
                       <td className="px-3 py-2.5 text-right font-medium">
                         {thbFmt(r.total_thb)}
                         {r.wht_amount > 0 && (
-                          <div className="text-xs font-normal text-emerald-700" title="ยอดชำระสุทธิหลังหัก ณ ที่จ่าย 1%">
-                            สุทธิ ฿{thbFmt(r.net_payable)}
+                          <div className="text-xs font-normal text-emerald-700">
+                            <Explain label={`สุทธิ ฿${thbFmt(r.net_payable)}`} def={GUIDE.bill_net_payable} align="right" />
                           </div>
                         )}
                       </td>

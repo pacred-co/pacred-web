@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
+import { Explain } from "@/components/ui/tooltip";
 import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
 import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
 
@@ -303,6 +304,7 @@ export function ServiceOrdersTable({
                     currentDir={currentDir}
                     sortHrefs={sortHrefs}
                     align="right"
+                    info="ราคารวมต่อออเดอร์ (บาท) = (มูลค่าสินค้า¥ + ค่าส่งจีน¥) × เรท + ค่าบริการ — ยอดที่ลูกค้าต้องจ่ายสำหรับออเดอร์ฝากสั่งนี้"
                   />
                   <SortableTh
                     label="สถานะ"
@@ -310,6 +312,7 @@ export function ServiceOrdersTable({
                     currentSort={currentSort}
                     currentDir={currentDir}
                     sortHrefs={sortHrefs}
+                    info="สถานะออเดอร์ฝากสั่ง: รอดำเนินการ → รอชำระเงิน → สั่งสินค้า → รอร้านจีนจัดส่ง → ถึงโกดังจีน → สำเร็จ · ใต้ป้ายมี 🔔 บอกว่าพนักงานต้องทำอะไรต่อ"
                   />
                   <th className="px-2 py-3">อัปเดต</th>
                   {/* Action column — sticky-right so admins always see
@@ -497,8 +500,13 @@ export function ServiceOrdersTable({
                         ฿{price.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-2 py-2.5">
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${badgeCls}`}>
-                          {sLabel}
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${badgeCls}`}>
+                            {sLabel}
+                          </span>
+                          {r.hstatus === "40" && (
+                            <Explain def="ถึงโกดังจีนแล้ว — สินค้ามาถึงโกดังจีน รอจัดตู้/ส่งเข้าไทย (มาจากการ sync MOMO อัตโนมัติ) · สถานะนี้อยู่ระหว่าง “รอร้านจีนจัดส่ง” กับ “สำเร็จ”" />
+                          )}
                         </span>
                         {sNext && r.hstatus !== "6" ? (
                           <div className={`mt-1 text-[11px] whitespace-nowrap ${sAct ? "font-semibold text-rose-600" : "text-muted"}`}>
@@ -575,8 +583,9 @@ export function ServiceOrdersTable({
           We show on any tab as it's useful KPI feedback. */}
       {rows.length > 0 && (
         <div className="flex justify-end pr-2">
-          <span className="rounded-full bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1 text-xs font-semibold">
+          <span className="rounded-full bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1 text-xs font-semibold inline-flex items-center gap-1">
             ยอดรวม: <b>฿{totalAll.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+            <Explain def="ยอดรวมของรายการที่แสดงในหน้านี้เท่านั้น (ไม่ใช่ยอดรวมทั้งหมดทุกหน้า) — รวมราคารวมต่อออเดอร์ของทุกแถวที่เห็นด้านบน" align="right" />
           </span>
         </div>
       )}
@@ -597,17 +606,20 @@ export function ServiceOrdersTable({
                 เลือกแล้ว <b className="text-primary-600">{selected.size}</b> รายการ
               </span>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setStatusMode((v) => !v); setOutcome(null); setTopErr(null); }}
-                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
-                    statusMode
-                      ? "border-orange-500 bg-orange-500 text-white"
-                      : "border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100"
-                  }`}
-                >
-                  อัปเดตสถานะ
-                </button>
+                <span className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setStatusMode((v) => !v); setOutcome(null); setTopErr(null); }}
+                    className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                      statusMode
+                        ? "border-orange-500 bg-orange-500 text-white"
+                        : "border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                    }`}
+                  >
+                    อัปเดตสถานะ
+                  </button>
+                  <Explain def="กดเพื่อแก้สถานะหลายออเดอร์พร้อมกันแบบแมนนวล — เป็นการเขียนสถานะตรงๆ ไม่รันระบบปกติ (ไม่ออกใบเสร็จ/คอมมิชชั่นอัตโนมัติ) · มีหน้าต่างยืนยันก่อนทำเสมอ" />
+                </span>
                 <button
                   type="button"
                   onClick={clearSelection}
@@ -704,6 +716,7 @@ function SortableTh({
   currentDir,
   sortHrefs,
   align,
+  info,
 }: {
   label: string;
   field: SortField;
@@ -711,19 +724,24 @@ function SortableTh({
   currentDir: "asc" | "desc";
   sortHrefs: Record<SortField, string>;
   align?: "right";
+  /** Optional ⓘ guide hint (display-only) shown beside the sortable header. */
+  info?: string;
 }) {
   const active = currentSort === field;
   const arrow = active ? (currentDir === "asc" ? "↑" : "↓") : "⇵";
   const cls = align === "right" ? "text-right" : "";
   return (
     <th className={`px-2 py-3 ${cls}`}>
-      <Link
-        href={sortHrefs[field]}
-        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-primary-600" : ""}`}
-      >
-        {label}
-        <span className="text-[11px]" aria-hidden>{arrow}</span>
-      </Link>
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
+        <Link
+          href={sortHrefs[field]}
+          className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-primary-600" : ""}`}
+        >
+          {label}
+          <span className="text-[11px]" aria-hidden>{arrow}</span>
+        </Link>
+        {info && <Explain def={info} align={align === "right" ? "right" : "center"} />}
+      </span>
     </th>
   );
 }

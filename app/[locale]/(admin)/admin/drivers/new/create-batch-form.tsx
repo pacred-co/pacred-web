@@ -14,6 +14,7 @@ import { Link } from "@/i18n/navigation";
 import {
   MapPin, Phone, Package, AlertCircle,
 } from "lucide-react";
+import { Explain } from "@/components/ui/tooltip";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 
 type StopItem = {
@@ -230,7 +231,10 @@ export function CreateBatchForm({
       <section className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">
-            2. เลือกจุดส่ง ({carrierFilter ? `${visibleGroups.length}/${groups.length}` : groups.length} กลุ่ม)
+            <Explain
+              label={`2. เลือกจุดส่ง (${carrierFilter ? `${visibleGroups.length}/${groups.length}` : groups.length} กลุ่ม)`}
+              def="เรียงตามลำดับส่ง — ป้ายส้ม “ลำดับส่ง” คือลำดับเส้นทางวิ่งรถ เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก · เรียงให้คนขับวิ่งเป็นเส้นเดียว ไม่ย้อนไปย้อนมา"
+            />
           </h2>
           <div className="flex gap-2">
             <button

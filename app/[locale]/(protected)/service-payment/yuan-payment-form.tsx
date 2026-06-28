@@ -7,6 +7,7 @@ import { createYuanPayment } from "@/actions/payment";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon } from "lucide-react";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { Explain } from "@/components/ui/tooltip";
 import { trackPlaceOrder } from "@/lib/analytics";
 import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
 
@@ -160,9 +161,13 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           <div className="h-full w-full rounded-full bg-white/80" />
         </div>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-[11px] opacity-80">
+          <p className="text-[11px] opacity-80 inline-flex items-center flex-wrap gap-x-1">
             {t("rateLabel")} <b className="font-mono">1 ¥ = ฿{rate.toFixed(4)}</b>
-            <span className="ml-2 opacity-70">{t("rateUpdatedTime", { time: new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })}</span>
+            <Explain
+              className="text-white"
+              def="เรทหยวน = อัตราแลกเปลี่ยน 1 หยวน เป็นกี่บาท ที่ใช้คิดยอดออเดอร์นี้ · ระบบอัปเดตเรทเป็นช่วงๆ ยอดบาทคิดจากเรท ณ ตอนที่คุณกดสร้างรายการ"
+            />
+            <span className="ml-1 opacity-70">{t("rateUpdatedTime", { time: new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })}</span>
           </p>
           {/* 2026-06-19 (owner) — "เติมเงิน" (wallet top-up) removed platform-wide.
               ฝากโอนหยวน pays by slip directly (DIRECT-CUT), no wallet needed. */}
@@ -230,7 +235,13 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
             {t("oneYuanEquals")} <b className="font-mono">{rate.toFixed(2)}</b> {t("bahtUnit")}
           </p>
           <div className="mt-1 flex items-baseline justify-end gap-2">
-            <span className="text-xs text-muted">{t("amountDue")}</span>
+            <span className="text-xs text-muted">
+              <Explain
+                align="right"
+                label={t("amountDue")}
+                def="ยอดเงินที่ต้องชำระ = จำนวนหยวน × เรท = ยอดบาทที่คุณต้องโอนเข้าบัญชีบริษัทแล้วแนบสลิป"
+              />
+            </span>
             <span className="font-mono text-3xl font-bold text-red-600">
               ฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
             </span>
@@ -273,7 +284,12 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           />
         </div>
         <div className="space-y-1">
-          <span className="text-sm font-medium">{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></span>
+          <span className="text-sm font-medium">
+            <Explain
+              label={<>{t("slipUploadLabel")}<span className="text-red-600 ml-0.5">*</span></>}
+              def="แนบสลิปโอนเงิน = รูปหลักฐานการโอนเข้าบัญชีบริษัท เพื่อให้ทีมงานตรวจสอบ (2 ชั้น) แล้วโอนต่อให้คู่ค้าจีน — แนบให้ชัด เห็นยอด+เวลา"
+            />
+          </span>
           <StyledFileInput
             accept="image/*,application/pdf"
             onChange={onSlipFile}
