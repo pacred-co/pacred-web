@@ -150,19 +150,16 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       admin.from("tb_user_sales_admin_pay").select("id", { count: "exact", head: true })
         .eq("status", "2"),
       // โบนัสล่ามจีน — interpreter commission payouts pending.
-      // ⚠️ 2026-06-04 FLAG (ภูม): the `commissions` table is missing/empty on
-      // prod → badge = 0. The interpreter-commission domain has OVERLAPPING
-      // systems, so the canonical source is a domain decision, not a guess:
-      //   • the badge's nav links to /admin/commissions (reads tb_user_sales +
-      //     tb_user_sales_admin_pay — NOT interpreter-specific), AND
-      //   • the interpreter-SPECIFIC data is `tb_withdraw_comm_interpreter_h`
-      //     (46 batches · status '1'สร้าง/'2'รอจ่าย/'3'จ่ายแล้ว) that
-      //     /admin/accounting/withdraw/comm-interpreter reads — but its PAY flow
-      //     is "CREATE+PAY DEFERRED" (read-only MVP).
-      // Likely fix once ภูม confirms: count tb_withdraw_comm_interpreter_h
-      // status='2' (รอจ่าย). Left as-is (0) to avoid a wrong number / double-count.
-      admin.from("commissions").select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+      // 2026-06-28 (§0e fix · เดฟ): the old `commissions` table DOES NOT EXIST on
+      // prod (to_regclass=null) → the query ERRORED every sidebar load + the badge
+      // could never light. Repointed to the interpreter-SPECIFIC canonical store
+      // `tb_withdraw_comm_interpreter_h` status='2' (รอจ่าย) — same pattern as the
+      // sibling sales-payout badge (tb_user_sales_admin_pay status='2'), and the
+      // table /admin/accounting/withdraw/comm-interpreter reads. ADDITIVE + non-
+      // overlapping with salesPayout (separate domain) → no double-count. 0 rows
+      // today (no pending interpreter payouts) but now future-correct + no error.
+      admin.from("tb_withdraw_comm_interpreter_h").select("id", { count: "exact", head: true })
+        .eq("status", "2"),
       // ── ลูกค้า ──────────────────────────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_users.
       // สมาชิกนิติบุคคล รอตรวจ — usercompany='1' (นิติบุคคล) +

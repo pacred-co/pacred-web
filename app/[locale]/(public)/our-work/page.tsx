@@ -227,7 +227,7 @@ export default async function ReviewsListingPage({
                           <div className="mt-1 flex items-center gap-1">
                             <span className="inline-flex items-baseline gap-0.5 rounded rounded-tr-none bg-primary-700 px-1.5 py-0.5 text-white">
                               <span className="text-[11px] font-black leading-none tabular-nums">{a.caseRating.toFixed(1)}</span>
-                              <span className="text-[10px] font-bold text-white/70">/5</span>
+                              <span className="text-[11px] font-bold text-white/70">/5</span>
                             </span>
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" strokeWidth={1.8} />
                           </div>

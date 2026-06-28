@@ -106,10 +106,10 @@ export function DomesticShippingSelector({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-foreground">{o.label}</span>
                 {(o.forceCod || o.payMethod === "2") && (
-                  <span className="rounded bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 text-[10px] font-bold">COD ปลายทาง</span>
+                  <span className="rounded bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 text-[11px] font-bold">COD ปลายทาง</span>
                 )}
                 {o.carrier === currentCarrier && (
-                  <span className="rounded bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px]">ปัจจุบัน</span>
+                  <span className="rounded bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[11px]">ปัจจุบัน</span>
                 )}
               </div>
               {o.note && <p className="text-[11px] text-muted">{o.note}</p>}

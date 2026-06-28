@@ -301,7 +301,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
             <label className={labelCls}>รูปปก</label>
             <div className="flex items-center gap-3">
               <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-alt">
-                {coverUrl ? <Image src={coverUrl} alt="ปก" fill sizes="64px" className="object-cover" /> : <span className="flex h-full items-center justify-center text-[10px] text-muted">ไม่มีรูป</span>}
+                {coverUrl ? <Image src={coverUrl} alt="ปก" fill sizes="64px" className="object-cover" /> : <span className="flex h-full items-center justify-center text-[11px] text-muted">ไม่มีรูป</span>}
               </div>
               <div className="flex flex-col gap-1.5">
                 <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50">

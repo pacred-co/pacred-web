@@ -75,7 +75,7 @@ export default async function AdminArticlesPage({
               className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${active ? "border-primary-300 bg-primary-50 text-primary-700" : "border-border bg-white dark:bg-surface hover:bg-surface-alt"}`}
             >
               {t.label}
-              {n > 0 ? <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none ${active ? "bg-primary-600 text-white" : "bg-primary-100 text-primary-700"}`}>{n}</span> : null}
+              {n > 0 ? <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-none ${active ? "bg-primary-600 text-white" : "bg-primary-100 text-primary-700"}`}>{n}</span> : null}
             </Link>
           );
         })}

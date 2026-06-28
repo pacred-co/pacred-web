@@ -216,7 +216,7 @@ export default async function AdminLeadsPage({
               >
                 {s.label}
                 {count && count > 0 ? (
-                  <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none ${s.key === "callback" ? "bg-red-500 text-white" : active ? "bg-primary-600 text-white" : "bg-primary-100 text-primary-700"}`}>{count > 99 ? "99+" : count}</span>
+                  <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-none ${s.key === "callback" ? "bg-red-500 text-white" : active ? "bg-primary-600 text-white" : "bg-primary-100 text-primary-700"}`}>{count > 99 ? "99+" : count}</span>
                 ) : null}
                 <span className="ml-1 hidden sm:inline text-[11px] font-normal text-muted">· {s.hint}</span>
               </Link>
@@ -235,7 +235,7 @@ export default async function AdminLeadsPage({
               }`}
             >
               <UserPlus className="h-4 w-4" /> มอบหมายโทรเซลล์
-              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none ${isAssignTab ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>Ultra</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase leading-none ${isAssignTab ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>Ultra</span>
             </Link>
           ) : null}
           {/* รายงานการโทร (สรุปผลงานเซล · audit) — owner 2026-06-26: HR/หัวหน้า
@@ -250,7 +250,7 @@ export default async function AdminLeadsPage({
               }`}
             >
               📊 รายงานการโทร (สรุปผลงานเซล)
-              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none ${isReportTab ? "bg-white/25 text-white" : "bg-indigo-600 text-white"}`}>HR/หัวหน้า</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase leading-none ${isReportTab ? "bg-white/25 text-white" : "bg-indigo-600 text-white"}`}>HR/หัวหน้า</span>
             </Link>
           ) : null}
           {/* ปอน 2026-06-23: เอา toggle "รายการ/บอร์ด" ออก — ไม่ได้สลับอะไรจริง

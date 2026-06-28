@@ -158,7 +158,7 @@ function EditableCell({
       ) : (
         <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} placeholder={placeholder} aria-label={ariaLabel} className={base} />
       )}
-      {saving ? <span className="inline-flex items-center gap-1 text-[10px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> กำลังบันทึก…</span> : null}
+      {saving ? <span className="inline-flex items-center gap-1 text-[11px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> กำลังบันทึก…</span> : null}
     </div>
   );
 }
@@ -530,7 +530,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
         </a>
       ) : <span className="text-xs text-muted">ไม่มีเบอร์</span>}
       {l.call_count > 0 ? (
-        <button type="button" onClick={() => { setHandoffOpenId(null); setCloseOpenId(null); setCallOpenId(l.id); }} className="text-left text-[10px] font-semibold text-primary-600 hover:underline">
+        <button type="button" onClick={() => { setHandoffOpenId(null); setCloseOpenId(null); setCallOpenId(l.id); }} className="text-left text-[11px] font-semibold text-primary-600 hover:underline">
           บันทึกผล · โทรแล้ว {l.call_count} ครั้ง{l.last_called_at ? ` · ${new Date(l.last_called_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
         </button>
       ) : null}
@@ -639,7 +639,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
         <div className="flex items-center gap-2">
           <UserPlus className="h-5 w-5 text-primary-600" />
           <h3 className="text-sm font-black text-foreground">{title}</h3>
-          {isAssign ? <span className="rounded-full bg-primary-600 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-white">Ultra</span> : null}
+          {isAssign ? <span className="rounded-full bg-primary-600 px-1.5 py-0.5 text-[11px] font-bold uppercase leading-none text-white">Ultra</span> : null}
         </div>
         {isAssign && assignView === "list" ? (
           <button type="button" onClick={() => { resetImport(); setImportOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-primary-700">
@@ -806,7 +806,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                     <td className="px-3 py-2.5 whitespace-nowrap">{l.source || <span className="text-muted">—</span>}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap text-xs">
                       {l.assigned_admin_id ? <span className="font-medium text-foreground">{repName(l.assigned_admin_id)}</span> : <span className="text-muted">ยังไม่มอบหมาย</span>}
-                      {l.call_status === "other_rep" && l.handoffFrom ? <span className="mt-0.5 block text-[10px] text-slate-500">↩ ย้ายมาจาก {repName(l.handoffFrom)}</span> : null}
+                      {l.call_status === "other_rep" && l.handoffFrom ? <span className="mt-0.5 block text-[11px] text-slate-500">↩ ย้ายมาจาก {repName(l.handoffFrom)}</span> : null}
                     </td>
                     <td className="px-3 py-2.5"><EditableCell key={`note-${l.id}-${l.note}`} value={l.note} saving={savingCell === `note:${l.id}`} onSave={(v) => doNote(l.id, v)} placeholder="เพิ่มหมายเหตุ…" ariaLabel={`หมายเหตุของ ${l.name || "ลูกค้า"}`} multiline /></td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{callActions(l)}</td>
@@ -853,7 +853,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
                       <MobileField label="Email"><EditableCell key={`memail-${l.id}-${l.email}`} value={l.email} saving={savingCell === `email:${l.id}`} onSave={(v) => doEmail(l.id, v)} placeholder="email…" ariaLabel={`Email ของ ${l.name || "ลูกค้า"}`} /></MobileField>
                       <MobileField label="บริการ">{serviceSelect(l)}</MobileField>
                       <MobileField label="source">{l.source || <span className="text-muted">—</span>}</MobileField>
-                      <MobileField label="เซลล์ผู้ดูแล">{l.assigned_admin_id ? repName(l.assigned_admin_id) : <span className="text-muted">ยังไม่มอบหมาย</span>}{l.call_status === "other_rep" && l.handoffFrom ? <span className="mt-0.5 block text-[10px] text-slate-500">↩ ย้ายมาจาก {repName(l.handoffFrom)}</span> : null}</MobileField>
+                      <MobileField label="เซลล์ผู้ดูแล">{l.assigned_admin_id ? repName(l.assigned_admin_id) : <span className="text-muted">ยังไม่มอบหมาย</span>}{l.call_status === "other_rep" && l.handoffFrom ? <span className="mt-0.5 block text-[11px] text-slate-500">↩ ย้ายมาจาก {repName(l.handoffFrom)}</span> : null}</MobileField>
                       <MobileField label="หมายเหตุ"><EditableCell key={`mnote-${l.id}-${l.note}`} value={l.note} saving={savingCell === `note:${l.id}`} onSave={(v) => doNote(l.id, v)} placeholder="เพิ่มหมายเหตุ…" ariaLabel={`หมายเหตุของ ${l.name || "ลูกค้า"}`} multiline /></MobileField>
                       <MobileField label={`ประวัติโทร (${l.call_count})`}>{callHistory(l)}</MobileField>
                     </dl>
