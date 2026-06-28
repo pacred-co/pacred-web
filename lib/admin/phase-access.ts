@@ -94,7 +94,9 @@ export const PHASE_2_PLUS_ROUTES = [
   // non-warehouse non-super clicking it gets a "no permission" inside the
   // page rather than a silent redirect.
   "/admin/withdrawal/freight-th",        // freight-th stub (placeholder per brief)
-  "/admin/learning",                     // Learning hub (all topics)
+  // 2026-06-29 (ปอน) — "/admin/learning" UN-GATED: Learning is part of the shared
+  // tail every position sees (its sidebar blocks are now phase 1). Removed from this
+  // block list so non-god roles can actually open it (was bouncing to notFound).
 
   // Phase 3 — deeper future
   "/admin/cnt-hs",                       // container payments (deleted)

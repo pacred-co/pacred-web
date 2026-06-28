@@ -754,24 +754,27 @@ const blockWithdrawalList: MenuItem = {
 // const blockAccFreight: MenuItem = { ... } // RETIRED — see blockAccounting
 
 // ── Learning section blocks — legacy OOP/Learning/* ──────────────
-// Phase 2 — Learning hub per 2026-05-20 owner brief (soon-to-launch).
+// Phase 1 — 2026-06-29 (ปอน): Learning is part of the SHARED tail EVERY position
+// sees (commonServicesTail · "ที่เหลือเหมือนกันทุกตำแหน่ง") → visible + accessible to
+// all admin staff, not super-only (was phase 2 "soon-to-launch"; owner re-scoped).
+// Route also un-gated in lib/admin/phase-access.ts (removed from PHASE_2_PLUS_ROUTES).
 const blockLearningRegulations: MenuItem = {
-  labelKey: "learning.regulations", href: "/admin/learning?topic=regulations", icon: "ScrollText", phase: 2,
+  labelKey: "learning.regulations", href: "/admin/learning?topic=regulations", icon: "ScrollText",
 };
 const blockLearningTraining: MenuItem = {
   labelKey: "learning.training",
   icon: "GraduationCap",
   children: [
-    { labelKey: "learning.businessPlan", href: "/admin/learning?topic=business-plan", icon: "FileText", phase: 2 },
-    { labelKey: "learning.culture",      href: "/admin/learning?topic=culture",       icon: "FileText", phase: 2 },
-    { labelKey: "learning.jobFlow",      href: "/admin/learning?topic=job-flow",      icon: "FileText", phase: 2 },
+    { labelKey: "learning.businessPlan", href: "/admin/learning?topic=business-plan", icon: "FileText" },
+    { labelKey: "learning.culture",      href: "/admin/learning?topic=culture",       icon: "FileText" },
+    { labelKey: "learning.jobFlow",      href: "/admin/learning?topic=job-flow",      icon: "FileText" },
   ],
 };
 const blockLearningNewsfeed: MenuItem = {
-  labelKey: "learning.newsfeed", href: "/admin/learning?topic=newsfeed", icon: "Newspaper", phase: 2,
+  labelKey: "learning.newsfeed", href: "/admin/learning?topic=newsfeed", icon: "Newspaper",
 };
 const blockLearningTos: MenuItem = {
-  labelKey: "learning.tos", href: "/admin/settings/tos-versions", icon: "FileText", phase: 2,
+  labelKey: "learning.tos", href: "/admin/settings/tos-versions", icon: "FileText",
 };
 
 // ── Extension section blocks — legacy OOP/Extension/* ────────────
@@ -877,7 +880,9 @@ const blockExtWorkboard: MenuItem = {
   labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
 };
 const blockExtInbox: MenuItem = {
-  labelKey: "extension.inbox", href: "/admin/board/inbox", icon: "Inbox", phase: 2,
+  // 2026-06-29 (ปอน) — "Inbox ของฉัน" = personal work queue every position gets
+  // right after Dashboard (part of the standard top block) → phase 1, not super-only.
+  labelKey: "extension.inbox", href: "/admin/board/inbox", icon: "Inbox",
 };
 const blockExtBroadcasts: MenuItem = {
   labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing", phase: 2,
@@ -1403,24 +1408,39 @@ const menuAccounting: MenuSection[] = [
 // tools surfaced flat ("เอาเครื่องมือใน Sales มากาง") and the "Services" section
 // kept 1:1 as super. Cockpit (แดชบอร์ดผู้บริหาร) stays exec-only (not here).
 // CS + Sales share this base for now ("Cs กับ เซลล์ประมาณนี้") — split later if needed.
-const menuSalesBase: MenuSection[] = [
-  { header: "", items: [itemDashboard, blockExtInbox] },
+// 2026-06-28 (ปอน "ที่เหลือเหมือนกันทุกตำแหน่ง") — every POSITION workspace = its own
+// TOP block + this SHARED tail (Services + Learning). Only the top (Dashboard →
+// ก่อน Services) ต่างกันต่อตำแหน่ง; from Services down is identical for all positions.
+const commonServicesTail: MenuSection[] = [
   {
-    // 2026-06-28 (ปอน "เอาออก") — dropped the nested Marketing group; keep only
-    // the surfaced Sales tools (เช็คนิติ · Leads · CRM).
-    header: "Marketing",
-    items: [
-      blockExtJuristic,
-      ...marketingCrmTools,
-    ],
-  },
-  {
-    // Services — เหมือนเดิม 1:1 กับเมนู super
     header: "Services",
     items: [itemCustomersAll, itemPurchasingAll, blockPayment, wrapServiceImport, wrapServiceFreight, wrapServiceCustoms],
   },
+  {
+    // Additional Services — 1:1 กับเมนู super ("ที่เหลือเหมือนก่อนหน้านี้" · ปอน).
+    header: "Additional Services",
+    items: [
+      {
+        labelKey: "additionalServices.title",
+        icon: "PackagePlus",
+        children: [
+          { labelKey: "additionalServices.taxInvoice", icon: "ReceiptText", comingSoon: true },
+          { labelKey: "additionalServices.domesticShipping", icon: "Truck", comingSoon: true },
+        ],
+      },
+    ],
+  },
   learningSection,
 ];
+/** Compose a position workspace: its TOP items + the shared Services/Learning tail. */
+function positionMenu(top: MenuItem[]): MenuSection[] {
+  return [{ header: "", items: top }, ...commonServicesTail];
+}
+
+// Sales/CS TOP block — Dashboard · Inbox · เช็คนิติ · Leads · CRM (share a base for now).
+const menuSalesBase: MenuSection[] = positionMenu([
+  itemDashboard, blockExtInbox, blockExtJuristic, ...marketingCrmTools,
+]);
 
 const menuSalesAdmin: MenuSection[] = menuSalesBase;
 
