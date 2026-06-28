@@ -235,6 +235,27 @@ export default async function AdminCustomsDeclarationDetailPage({
         >
           📄 ดาวน์โหลด PDF ใบขนฯ
         </a>
+        {!header.freight_shipment_id && (
+          // owner 2026-06-28 #1 — cargo Packing List (freight has its own).
+          <a
+            href={`/api/customs-declaration/${header.id}/packing-list`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
+          >
+            📦 Packing List
+          </a>
+        )}
+        {!header.freight_shipment_id && (
+          <a
+            href={`/api/customs-declaration/${header.id}/invoice`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+          >
+            🧾 Commercial Invoice
+          </a>
+        )}
         <Link
           href={`/admin/freight/shipments/${header.freight_shipment_id}`}
           className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
