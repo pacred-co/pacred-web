@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
@@ -131,14 +132,23 @@ export default async function AdminCustomsDeclarationDetailPage({
     .select(`
       id, position, hs_code, description, country_of_origin, qty, unit,
       gross_weight_kg, net_weight_kg, declared_value_thb,
-      duty_rate_pct, duty_thb, vat_thb, fta_applied, notes
+      duty_rate_pct, duty_thb, vat_thb, fta_applied, notes, declared_value_images
     `)
     .eq("declaration_id", id)
     .order("position", { ascending: true });
   if (linesRawErr) {
     console.error(`[customs_declaration_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
   }
-  const lines = (linesRaw ?? []) as DeclarationLineData[];
+  // Resolve declared-value evidence images → signed URLs (owner 2026-06-28 #2 · mig 0222).
+  const lines: DeclarationLineData[] = await Promise.all(
+    ((linesRaw ?? []) as Array<DeclarationLineData & { declared_value_images?: unknown }>).map(async (l) => {
+      const keys = Array.isArray(l.declared_value_images)
+        ? (l.declared_value_images as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      const evidence = await Promise.all(keys.map(async (key) => ({ key, url: await getSignedBucketUrl("forwarder-covers", key) })));
+      return { ...l, declared_value_images: keys, evidence };
+    }),
+  );
 
   // Audit timeline.
   const { data: auditRaw, error: auditRawErr } = await admin

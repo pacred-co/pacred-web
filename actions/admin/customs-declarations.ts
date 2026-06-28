@@ -32,6 +32,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   createDeclarationSchema,        type CreateDeclarationInput,
@@ -765,6 +766,74 @@ export async function adminCancelDeclaration(
     revalidatePath("/admin/freight/declarations");
     revalidatePath(`/admin/freight/declarations/${d.id}`);
     revalidatePath(`/admin/freight/shipments/${row.freight_shipment_id}`);
+    return { ok: true };
+  });
+}
+
+// ── declared-value justification images (owner 2026-06-28 #2 · mig 0222) ────────
+// "มูลค่าสำแดง แนบรูปได้หลายรูป" — supplier-invoice/packing evidence per line. The
+// หมายเหตุ uses the line's existing `notes`; these manage the multi-image store.
+// Draft-only (matches line edit). Mirrors adminAddForwarderImage's upload pattern.
+const DECL_IMG_CAP = 8;
+function parseLineImages(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v === "string") { try { const a = JSON.parse(v); return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []; } catch { return []; } }
+  return [];
+}
+
+type DraftLine = { id: string; declaration_id: string; declared_value_images: unknown };
+async function loadDraftLine(
+  admin: ReturnType<typeof createAdminClient>,
+  lineId: string,
+): Promise<{ ok: true; row: DraftLine } | { ok: false; error: string }> {
+  const { data: row, error: rowErr } = await admin
+    .from("customs_declaration_lines")
+    .select("id, declaration_id, declared_value_images")
+    .eq("id", lineId)
+    .maybeSingle<DraftLine>();
+  if (rowErr) { console.error("[decl-line-image read] failed", { code: rowErr.code, message: rowErr.message }); return { ok: false, error: `db_error:${rowErr.code ?? "?"}` }; }
+  if (!row) return { ok: false, error: "not_found" };
+  const { data: parent, error: pErr } = await admin.from("customs_declarations").select("status").eq("id", row.declaration_id).maybeSingle<{ status: string }>();
+  if (pErr) { console.error("[decl-line-image parent] failed", { code: pErr.code, message: pErr.message }); return { ok: false, error: `db_error:${pErr.code ?? "?"}` }; }
+  if (parent?.status !== "draft") return { ok: false, error: "not_draft" };
+  return { ok: true, row };
+}
+
+export async function adminAddDeclarationLineImage(formData: FormData): Promise<AdminActionResult> {
+  const lineId = String(formData.get("lineId") ?? "");
+  const file = formData.get("file");
+  if (!lineId) return { ok: false, error: "invalid_line" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์รูป" };
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const r = await loadDraftLine(admin, lineId);
+    if (!r.ok) return r;
+    const current = parseLineImages(r.row.declared_value_images);
+    if (current.length >= DECL_IMG_CAP) return { ok: false, error: `แนบรูปได้สูงสุด ${DECL_IMG_CAP} รูป/รายการ — ลบบางรูปก่อน` };
+    const up = await uploadToBucket(file, "forwarder-covers", `declaration/${r.row.declaration_id}/${lineId}`);
+    if (!up.ok) return { ok: false, error: up.error ?? "อัปโหลดรูปไม่สำเร็จ" };
+    const next = [...current, up.filename];
+    const { error: updErr } = await admin.from("customs_declaration_lines").update({ declared_value_images: JSON.stringify(next) }).eq("id", lineId);
+    if (updErr) return { ok: false, error: `update_failed:${updErr.message}` };
+    await logAdminAction(adminId, "customs_declaration.line_add_evidence", "customs_declaration", r.row.declaration_id, { line_id: lineId, count: next.length });
+    revalidatePath(`/admin/freight/declarations/${r.row.declaration_id}`);
+    return { ok: true };
+  });
+}
+
+export async function adminRemoveDeclarationLineImage(input: { lineId: string; imageKey: string }): Promise<AdminActionResult> {
+  const lineId = String(input?.lineId ?? "");
+  const imageKey = String(input?.imageKey ?? "");
+  if (!lineId || !imageKey) return { ok: false, error: "invalid_input" };
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const r = await loadDraftLine(admin, lineId);
+    if (!r.ok) return r;
+    const next = parseLineImages(r.row.declared_value_images).filter((k) => k !== imageKey);
+    const { error: updErr } = await admin.from("customs_declaration_lines").update({ declared_value_images: JSON.stringify(next) }).eq("id", lineId);
+    if (updErr) return { ok: false, error: `update_failed:${updErr.message}` };
+    await logAdminAction(adminId, "customs_declaration.line_remove_evidence", "customs_declaration", r.row.declaration_id, { line_id: lineId, removed: imageKey });
+    revalidatePath(`/admin/freight/declarations/${r.row.declaration_id}`);
     return { ok: true };
   });
 }

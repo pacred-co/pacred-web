@@ -17,6 +17,8 @@ import {
   adminMarkAccepted,
   adminMarkReleased,
   adminCancelDeclaration,
+  adminAddDeclarationLineImage,
+  adminRemoveDeclarationLineImage,
 } from "@/actions/admin/customs-declarations";
 import {
   CUSTOMS_OFFICES,
@@ -45,6 +47,9 @@ export type DeclarationLineData = {
   vat_thb:            number;
   fta_applied:        boolean;
   notes:              string | null;
+  /** declared-value justification images (mig 0222) — keys + resolved signed URLs. */
+  declared_value_images?: string[];
+  evidence?:          { key: string; url: string | null }[];
 };
 
 export type DeclarationDetailData = {
@@ -305,6 +310,8 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
   const [fta, setFta] = useState(item.fta_applied);
   const [err, setErr] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
+  const evidenceCount = (item.evidence?.length ?? item.declared_value_images?.length ?? 0);
 
   const previewTaxes = computeLineTaxes({ declared_value_thb: declared, duty_rate_pct: dutyPct });
 
@@ -366,6 +373,7 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
   }
 
   return (
+    <>
     <tr className="border-t border-border">
       <td className="px-2 py-2 text-xs">{item.position}</td>
       <td className="px-2 py-2 font-mono text-xs">{item.hs_code ?? "—"}</td>
@@ -393,10 +401,92 @@ function LineRow({ item, editable }: { item: DeclarationLineData; editable: bool
               <button type="button" onClick={() => setConfirmDelete(false)} disabled={pending} className="ml-0.5 text-[11px] text-muted hover:underline">×</button>
             </span>
           )}
+          <br />
+          <button type="button" onClick={() => setShowEvidence((v) => !v)} className="mt-1 text-[11px] text-indigo-600 hover:underline">📎 หลักฐานมูลค่า{evidenceCount > 0 ? ` (${evidenceCount})` : ""}</button>
           {err && <p className="mt-1 text-[11px] text-red-700">{err}</p>}
         </td>
       )}
     </tr>
+    {showEvidence && (
+      <tr className="border-t border-border bg-indigo-50/30">
+        <td colSpan={13} className="px-3 py-3">
+          <LineEvidence item={item} editable={editable} />
+        </td>
+      </tr>
+    )}
+    </>
+  );
+}
+
+/** Declared-value justification panel (owner 2026-06-28 #2): หมายเหตุ (basis · the
+ *  line's notes) + multi-image evidence. Editable while the declaration is draft. */
+function LineEvidence({ item, editable }: { item: DeclarationLineData; editable: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [basis, setBasis] = useState(item.notes ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const evidence = item.evidence ?? [];
+
+  function saveBasis() {
+    setErr(null);
+    startTransition(async () => {
+      const res = await adminUpdateDeclarationLine({ id: item.id, notes: basis.trim() || null });
+      if (res.ok) router.refresh(); else setErr(res.error);
+    });
+  }
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr(null);
+    const fd = new FormData();
+    fd.set("lineId", item.id);
+    fd.set("file", file);
+    startTransition(async () => {
+      const res = await adminAddDeclarationLineImage(fd);
+      if (res.ok) router.refresh(); else setErr(res.error);
+    });
+    e.target.value = "";
+  }
+  function removeImg(key: string) {
+    setErr(null);
+    startTransition(async () => {
+      const res = await adminRemoveDeclarationLineImage({ lineId: item.id, imageKey: key });
+      if (res.ok) router.refresh(); else setErr(res.error);
+    });
+  }
+
+  return (
+    <div className="space-y-2 text-xs">
+      <p className="font-semibold text-indigo-900">มูลค่าสำแดง — หมายเหตุ + หลักฐาน (รายการ #{item.position})</p>
+      <div className="flex flex-wrap items-start gap-2">
+        <textarea rows={2} value={basis} onChange={(e) => setBasis(e.target.value)} disabled={!editable || pending} maxLength={2000}
+          placeholder="หมายเหตุ/เหตุผลของมูลค่าสำแดง (เช่น อ้างอิงใบกำกับซัพพลายเออร์)"
+          className="min-w-[260px] flex-1 rounded border border-border bg-white px-2 py-1.5" />
+        {editable && <button type="button" onClick={saveBasis} disabled={pending} className="rounded bg-primary-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-primary-700 disabled:opacity-50">บันทึกหมายเหตุ</button>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {evidence.map((e) => (
+          <div key={e.key} className="relative">
+            {e.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <a href={e.url} target="_blank" rel="noopener noreferrer"><img src={e.url} alt="หลักฐาน" className="h-16 w-16 rounded border border-border object-cover" /></a>
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded border border-border bg-surface-alt text-[10px] text-muted">รูป</div>
+            )}
+            {editable && <button type="button" onClick={() => removeImg(e.key)} disabled={pending} className="absolute -right-1.5 -top-1.5 rounded-full bg-red-600 px-1 text-[10px] font-bold text-white hover:bg-red-700">×</button>}
+          </div>
+        ))}
+        {evidence.length === 0 && <span className="text-muted">ยังไม่มีรูปหลักฐาน</span>}
+        {editable && (
+          <label className="cursor-pointer rounded border border-dashed border-indigo-300 bg-white px-3 py-2 text-[11px] text-indigo-700 hover:bg-indigo-50">
+            + แนบรูป
+            <input type="file" accept="image/*" onChange={onFile} disabled={pending} className="hidden" />
+          </label>
+        )}
+      </div>
+      {!editable && <p className="text-muted">แก้ไข/แนบได้เฉพาะตอนเอกสารเป็นร่าง (draft)</p>}
+      {err && <p className="text-red-700">{err}</p>}
+    </div>
   );
 }
 
