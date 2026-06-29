@@ -18,6 +18,7 @@ import { ArticleContent } from "@/components/knowledge/article-content";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import { RelatedServices } from "@/components/knowledge/related-services";
+import { CategoryBanner } from "@/components/knowledge/category-banner";
 import {
   KNOWLEDGE_ARTICLES,
   getArticleBySlug,
@@ -126,6 +127,11 @@ export default async function ArticlePage({
           {/* lg:pr clears the floating right quick-nav rail (fixed to the viewport
               edge) so the sticky service sidebar never sits under it. */}
           <div className="mx-auto w-full max-w-[1240px] px-[10px] lg:pr-[84px] 2xl:pr-[10px]">
+            {/* Full-width category banner — big readable ad, matched to the article
+                (ปอน 2026-06-29 · uncropped · above the article · desktop + mobile). */}
+            <div className="mb-5 md:mb-7">
+              <CategoryBanner category={article.category} />
+            </div>
             <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-8 xl:gap-10">
               {/* ── Article column ── */}
               <div className="min-w-0">

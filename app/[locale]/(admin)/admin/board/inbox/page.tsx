@@ -5,7 +5,6 @@ import {
   WORK_STATUS_LABEL,
   WORK_ROLE_LABEL,
   WORK_PRIORITY_WEIGHT,
-  WORK_ENTITY_LABEL,
   workEntityHref,
   isWorkItemOverdue,
   type WorkStatus,
@@ -26,9 +25,6 @@ import { WorkItemCard } from "../work-item-card";
  * `?tab=waiting` (IC-1 §5.3) — รอฉันจัดการ
  *   - jobs blocked on my dept (blocked_on_role = my role)
  *   - jobs blocked on me personally (blocked_on_admin = my profile)
- *
- * `?tab=mentions` (IC-1 §5.3) — @mentions
- *   - unseen @mentions on me (work_item_message_mentions WHERE seen_at IS NULL)
  *
  * Only open / in_progress / blocked items appear — the inbox is a
  * "what needs me" queue, not a history. Done work drops off.
@@ -56,7 +52,7 @@ type WorkRow = {
 
 const ACTIVE: WorkStatus[] = ["open", "in_progress", "blocked"];
 
-type InboxTab = "mine" | "waiting" | "mentions";
+type InboxTab = "mine" | "waiting" | "mailbox";
 
 export default async function AdminBoardInboxPage({
   searchParams,
@@ -67,7 +63,7 @@ export default async function AdminBoardInboxPage({
   const sp = await searchParams;
   const tab: InboxTab =
     sp.tab === "waiting" ? "waiting" :
-    sp.tab === "mentions" ? "mentions" :
+    sp.tab === "mailbox" ? "mailbox" :
     "mine";
   const admin = createAdminClient();
 
@@ -137,81 +133,6 @@ export default async function AdminBoardInboxPage({
 
   const blockedDept = (blockedDeptRaw ?? []) as unknown as WorkRow[];
   const blockedMe   = (blockedMeRaw   ?? []) as unknown as WorkRow[];
-
-  // ── IC-1 §5.3 — @mentions tab data ────────────────────────────────
-  type MentionRaw = {
-    message_id:   string;
-    work_item_id: string;
-    created_at:   string;
-    seen_at:      string | null;
-    message: {
-      body:            string;
-      author_admin_id: string | null;
-      author: { first_name: string | null; last_name: string | null; member_code: string | null }
-            | { first_name: string | null; last_name: string | null; member_code: string | null }[]
-            | null;
-    } | { body: string; author_admin_id: string | null; author: unknown }[] | null;
-    work_item: {
-      title:       string;
-      entity_type: string;
-      entity_ref:  string;
-    } | { title: string; entity_type: string; entity_ref: string }[] | null;
-  };
-  const { data: mentionsRaw, error: mentionsRawErr } = await admin
-    .from("work_item_message_mentions")
-    .select(`
-      message_id, work_item_id, created_at, seen_at,
-      message:work_item_messages!message_id (
-        body, author_admin_id,
-        author:profiles!author_admin_id ( first_name, last_name, member_code )
-      ),
-      work_item:work_items!work_item_id ( title, entity_type, entity_ref )
-    `)
-    .eq("mentioned_admin_id", user.id)
-    .is("seen_at", null)
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (mentionsRawErr) {
-    console.error(`[work_item_message_mentions list] failed`, { code: mentionsRawErr.code, message: mentionsRawErr.message });
-  }
-  type MentionRow = {
-    messageId:   string;
-    workItemId:  string;
-    bodyExcerpt: string;
-    authorName:  string | null;
-    workItemTitle:  string;
-    workItemEntity: string;
-    workItemHref:   string;
-    createdAt:   string;
-  };
-  const mentions: MentionRow[] = ((mentionsRaw ?? []) as unknown as MentionRaw[]).map((m) => {
-    const msg = Array.isArray(m.message) ? m.message[0] ?? null : m.message;
-    const wi  = Array.isArray(m.work_item) ? m.work_item[0] ?? null : m.work_item;
-    let authorName: string | null = null;
-    if (msg && (msg as { author?: unknown }).author) {
-      const auth = (msg as { author: unknown }).author;
-      const a = Array.isArray(auth) ? auth[0] ?? null : auth;
-      if (a) {
-        const ap = a as { first_name: string | null; last_name: string | null; member_code: string | null };
-        authorName = [ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.member_code || null;
-      }
-    }
-    const body = (msg as { body?: string } | null)?.body ?? "";
-    const entityType = (wi as { entity_type?: string } | null)?.entity_type ?? "";
-    const entityRef  = (wi as { entity_ref?: string }  | null)?.entity_ref  ?? "";
-    return {
-      messageId:      m.message_id,
-      workItemId:     m.work_item_id,
-      bodyExcerpt:    body.length > 140 ? body.slice(0, 140) + "…" : body,
-      authorName,
-      workItemTitle:  (wi as { title?: string } | null)?.title ?? "(งาน)",
-      workItemEntity: WORK_ENTITY_LABEL[entityType as WorkEntityType] ?? entityType,
-      workItemHref:   entityType && entityRef
-        ? workEntityHref(entityType as WorkEntityType, entityRef)
-        : "/admin/board",
-      createdAt:      m.created_at,
-    };
-  });
 
   // ── Admin options for the assignee picker (claim → pin to a person) ─
   const { data: adminRows, error: adminRowsErr } = await admin
@@ -302,8 +223,8 @@ export default async function AdminBoardInboxPage({
         <TabLink active={tab === "waiting"}  href="/admin/board/inbox?tab=waiting" badge={totalWaiting}>
           🔴 รอฉันจัดการ
         </TabLink>
-        <TabLink active={tab === "mentions"} href="/admin/board/inbox?tab=mentions" badge={mentions.length}>
-          💬 @ฉัน
+        <TabLink active={tab === "mailbox"} href="/admin/board/inbox?tab=mailbox" badge={0}>
+          💌 กล่องจดหมาย
         </TabLink>
       </nav>
 
@@ -439,48 +360,15 @@ export default async function AdminBoardInboxPage({
         </>
       )}
 
-      {/* Tab: MENTIONS — IC-1 §5.3 — @ฉัน */}
-      {tab === "mentions" && (
+      {/* Tab: MAILBOX — กล่องจดหมาย (โครงไว้ก่อน · ปอนจะมาทำเนื้อหาเอง 2026-06-29) */}
+      {tab === "mailbox" && (
         <section className="space-y-3">
-          <h2 className="font-bold text-sm flex items-center gap-2">
-            💬 มีคน @ ฉัน
-            <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
-              {mentions.length}
-            </span>
-          </h2>
-          {mentions.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
-              <p className="text-sm text-muted">ยังไม่มี @ ที่ยังไม่อ่าน</p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border rounded-2xl border border-border bg-white dark:bg-surface">
-              {mentions.map((m) => (
-                <li key={m.messageId} className="p-4">
-                  <Link
-                    href={m.workItemHref}
-                    className="block hover:bg-surface-alt -m-4 p-4 rounded-2xl transition-colors min-h-[44px]"
-                  >
-                    <div className="flex items-baseline justify-between flex-wrap gap-2">
-                      <p className="text-sm font-semibold">{m.workItemTitle}</p>
-                      <p className="text-[11px] text-muted">
-                        {new Date(m.createdAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                      </p>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-muted">
-                      <span className="rounded bg-primary-50 dark:bg-primary-950/40 px-1.5 py-0.5 text-primary-700 dark:text-primary-300 mr-1">
-                        {m.workItemEntity}
-                      </span>
-                      {m.authorName && <span>โดย {m.authorName}</span>}
-                    </p>
-                    <p className="mt-2 text-sm text-foreground/80 italic">&ldquo;{m.bodyExcerpt}&rdquo;</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="text-[11px] text-muted">
-            กดเข้างาน → @ ที่ยังไม่อ่านจะถูก mark seen อัตโนมัติ.
-          </p>
+          <h2 className="font-bold text-sm flex items-center gap-2">💌 กล่องจดหมาย</h2>
+          <div className="rounded-2xl border border-dashed border-border bg-white dark:bg-surface p-10 text-center">
+            <p className="text-3xl">💌</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">กล่องจดหมาย — กำลังจัดทำ</p>
+            <p className="mt-1 text-xs text-muted">ขึ้นโครงไว้ก่อน · เดี๋ยวปอนมาเพิ่มเนื้อหาเอง</p>
+          </div>
         </section>
       )}
     </main>

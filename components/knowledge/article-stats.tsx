@@ -69,7 +69,7 @@ export function ArticleStats({ articleId }: { articleId: number }) {
         type="button"
         onClick={toggleLike}
         suppressHydrationWarning
-        aria-label={liked ? "Unlike" : "Like"}
+        aria-label={`${liked ? "เลิกถูกใจ" : "ถูกใจ"} ${mounted ? likes.toLocaleString() : "0"}`}
         className={[
           "inline-flex items-center gap-1 px-2 py-1 -mx-2 rounded-md transition-all cursor-pointer",
           liked
