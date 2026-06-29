@@ -901,6 +901,26 @@ const blockExtMarketingHub: MenuItem = {
 const blockExtWithdrawalsAll: MenuItem = {
   labelKey: "extension.withdrawalsAll", href: "/admin/withdrawals", icon: "Banknote", phase: 2,
 };
+// 2026-06-29 (gap-hunt §0d) — three TRUE ORPHAN admin pages that existed +
+// worked but had ZERO sidebar entry (reachable by URL only). Wired here so
+// the matching roles reach them in ≤3 clicks. Each page gates its own RBAC;
+// the placements below mirror those gates so we never show a role an entry
+// it can't open.
+//   • /admin/team-leaders — sales commission config (page gate:
+//     accounting + sales_admin, super/ultra implicit via god-role).
+//   • /admin/bookings — RFQ booking queue (page gate:
+//     super, ops, sales_admin, accounting).
+//   • /admin/refunds — customer refund money-queue (page gate:
+//     super, accounting, ops, sales_admin).
+const blockExtTeamLeaders: MenuItem = {
+  labelKey: "extension.teamLeaders", href: "/admin/team-leaders", icon: "Users2",
+};
+const blockExtBookings: MenuItem = {
+  labelKey: "extension.bookings", href: "/admin/bookings", icon: "CalendarCheck", badge: "bookingsPending",
+};
+const blockExtRefunds: MenuItem = {
+  labelKey: "extension.refunds", href: "/admin/refunds", icon: "Undo2", badge: "refundsPending",
+};
 
 // ── Dashboard — single leaf (Pacred-is-one-company per ภูม 2026-05-20 ค่ำ).
 //
@@ -978,6 +998,8 @@ const wrapClassAcc: MenuItem = {
     itemWalletAll,
     blockWithdrawalList,
     blockExtWithdrawalsAll,
+    // 2026-06-29 (gap-hunt §0d) — customer refund money-queue (was orphan).
+    blockExtRefunds,
   ],
 };
 
@@ -1021,7 +1043,9 @@ const wrapClassMarketing: MenuItem = {
     {
       labelKey: "marketingNav.sales",
       icon: "UserPlus",
-      children: [blockExtJuristic, ...marketingCrmTools],
+      // 2026-06-29 (gap-hunt §0d) — team-leaders (sales commission config) +
+      // bookings (RFQ queue) were orphan pages; surfaced in the Sales group.
+      children: [blockExtJuristic, blockExtTeamLeaders, blockExtBookings, ...marketingCrmTools],
     },
     {
       labelKey: "marketingNav.customerService",
@@ -1339,7 +1363,9 @@ const menuOps: MenuSection[] = [
     ],
   },
   learningSection,
-  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtThaiShippingTools, blockExtIncidents]),
+  // 2026-06-29 (gap-hunt §0d) — bookings (RFQ queue) + refunds (customer refund
+  // money-queue) were orphan; ops is in both pages' RBAC gates → surfaced here.
+  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtThaiShippingTools, blockExtBookings, blockExtRefunds, blockExtIncidents]),
 ];
 
 /**
@@ -1390,7 +1416,10 @@ const menuAccounting: MenuSection[] = [
   // 2026-06-28 (ปอน) — แดชบอร์ดผู้บริหาร (blockExtCockpit) เห็นแค่ผู้บริหาร →
   // ถอดออกจาก accounting (เหลือ lead-source/juristic/incidents). cockpit อยู่ใน
   // menuSuper (= workspace ผู้บริหาร + เจ้าของระบบ) เท่านั้น.
-  extensionSection([blockExtLeadSource, blockExtJuristic, blockExtIncidents]),
+  // 2026-06-29 (gap-hunt §0d) — team-leaders (commission config) + bookings (RFQ
+  // queue) + refunds (refund money-queue) were orphan; accounting is in all three
+  // pages' RBAC gates → surfaced here.
+  extensionSection([blockExtLeadSource, blockExtJuristic, blockExtTeamLeaders, blockExtBookings, blockExtRefunds, blockExtIncidents]),
 ];
 
 /**
@@ -1442,7 +1471,15 @@ const menuSalesBase: MenuSection[] = positionMenu([
   itemDashboard, blockExtInbox, blockExtJuristic, ...marketingCrmTools,
 ]);
 
-const menuSalesAdmin: MenuSection[] = menuSalesBase;
+// 2026-06-29 (gap-hunt §0d) — sales_admin (Cargo Sales MANAGER) is in the RBAC
+// gate of three orphan pages — team-leaders (commission config), bookings (RFQ
+// queue), refunds (refund money-queue) — while the plain `sales` STAFF role is
+// NOT. So sales_admin extends the shared base with a manager-tier Extension
+// section; `menuSales` keeps the plain base (don't show STAFF an entry it 404s).
+const menuSalesAdmin: MenuSection[] = [
+  ...menuSalesBase,
+  extensionSection([blockExtTeamLeaders, blockExtBookings, blockExtRefunds]),
+];
 
 /**
  * `warehouse` — Cargo Warehouse worker (legacy Cargo/Warehouse/Warehouse.php).

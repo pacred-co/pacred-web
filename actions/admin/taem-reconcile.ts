@@ -57,6 +57,12 @@ export type TaemReconcileRow = {
   taemCg: string | null;          // CG. (col T) — แต้ม HS / customs classification
   taemBoxMark: string | null;     // Remark Number (col S) — box marking
   taemProductType: string | null; // Type (col H) — raw product type string
+  taemNote: string | null;        // Note. (col U) — free-text (退税 etc. · usually blank)
+  taemServiceFee: number | null;  // Service fee. (col V) — empty in all real files
+  // MOMO-derived crate (ตีลังไม้) — read-only, for the cross-check below. crate
+  // header convention '1'=ตีลังไม้ · '2'=ไม่ตี; momoCrated = (crate==='1').
+  momoCrated: boolean;
+  momoCrateFee: number | null;    // tb_forwarder.pricecrate
   // pacred current
   matched: boolean;
   fid: number | null;
@@ -80,6 +86,14 @@ export type TaemReconcileRow = {
   boxMarkWillWrite: boolean;
   boxMarkConflict: boolean;
   productTypeMismatch: boolean; // แต้ม Type maps to a fproductstype ≠ the stored one (manual review)
+  /**
+   * crate (ตีลังไม้) cross-check — READ-ONLY, never auto-written. true when แต้ม's
+   * Service-fee column signals a crate/service charge but the MOMO-derived crate
+   * disagrees (แต้ม fee present + MOMO not crated, OR MOMO crated + แต้ม no fee).
+   * In all real files แต้ม Service-fee is empty → this is almost always false; it
+   * exists to catch a future แต้ม service/crate charge against the MOMO truth.
+   */
+  crateMismatch: boolean;
   isBilled: boolean;
   verdict: "update" | "billed" | "ok" | "no-match" | "note";
 };
@@ -98,6 +112,7 @@ export type TaemReconcilePreview = {
     classWillWrite: number;   // rows where ftaem_hs_code / fbox_mark will be filled
     classConflict: number;    // rows where แต้ม HS/box-mark differs from a stored value
     productTypeMismatch: number; // rows where แต้ม type ≠ the price-feeding fproductstype
+    crateMismatch: number;    // rows where แต้ม Service-fee ↔ MOMO-crate disagree (read-only)
   };
 };
 
@@ -113,6 +128,11 @@ type FwdRow = {
   fbox_mark: string | null;
   ftaem_hs_code: string | null;
   fproductstype: string | null;
+  // MOMO-derived crate (ตีลังไม้) header — set at commit by extractCrateFromMomoRaw
+  // ('1'=ตีลังไม้ · '2'=ไม่ตี · function.php L1691) + the candidate fee. Read-only
+  // here, for the แต้ม-Service-fee ↔ MOMO-crate cross-check (never written).
+  crate: string | null;
+  pricecrate: number | string | null;
 };
 
 const num = (v: number | string | null | undefined): number | null =>
@@ -153,7 +173,7 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
   if (trackings.length > 0) {
     const { data, error } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fcabinetnumber, userid, fbox_mark, ftaem_hs_code, fproductstype")
+      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fcabinetnumber, userid, fbox_mark, ftaem_hs_code, fproductstype, crate, pricecrate")
       .in("ftrackingchn", trackings);
     if (error) console.error("[taem-reconcile match] failed", { code: error.code, message: error.message });
     for (const r of (data ?? []) as FwdRow[]) {
@@ -174,10 +194,16 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
     const curProductType = f ? str(f.fproductstype) : null;
     const isBilled = !!f && BILLED.has(String(f.fstatus));
 
+    // MOMO-derived crate (read-only) — '1' = ตีลังไม้ in the header convention.
+    const momoCrated = !!f && String(f.crate ?? "").trim() === "1";
+    const momoCrateFee = f ? num(f.pricecrate) : null;
+
     // Classification capture (mig 0218 · reference only · never feeds price).
     const taemCg = t.cg;
     const taemBoxMark = t.boxMark;
     const taemProductType = t.type;
+    const taemNote = t.noteCol;
+    const taemServiceFee = t.serviceFee;
 
     let verdict: TaemReconcileRow["verdict"];
     let wtDiff = false, volDiff = false, cabDiff = false, amtDiff = false;
@@ -223,6 +249,19 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       }
     }
 
+    // ── crate (ตีลังไม้) cross-check — READ-ONLY · never auto-written. ──────────
+    // แต้ม's Service-fee column is empty in all real packing lists (แต้ม does NOT
+    // bill crate fees there; the crate fee lives on the MOMO supplier invoice via
+    // extractCrateFromMomoRaw → tb_forwarder.crate/pricecrate). This flags the case
+    // where a FUTURE แต้ม service/crate charge disagrees with the MOMO crate truth,
+    // so the admin can reconcile by hand: a positive แต้ม Service-fee on a row MOMO
+    // didn't crate, OR MOMO crated but แต้ม carries no service fee.
+    let crateMismatch = false;
+    if (matched) {
+      const taemHasFee = taemServiceFee != null && taemServiceFee > 0;
+      if (taemHasFee !== momoCrated) crateMismatch = true;
+    }
+
     return {
       tracking: t.tracking,
       isData: t.isData,
@@ -235,7 +274,8 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       taemVol: t.totalVol,
       taemEtd: t.etd,
       taemEta: t.eta,
-      taemCg, taemBoxMark, taemProductType,
+      taemCg, taemBoxMark, taemProductType, taemNote, taemServiceFee,
+      momoCrated, momoCrateFee,
       matched,
       fid: f?.id ?? null,
       userid: f?.userid ?? null,
@@ -244,6 +284,7 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       curBoxMark, curTaemHsCode, curProductType,
       wtDiff, volDiff, cabDiff, amtDiff,
       hsWillWrite, hsConflict, boxMarkWillWrite, boxMarkConflict, productTypeMismatch,
+      crateMismatch,
       isBilled,
       verdict,
     };
@@ -262,6 +303,7 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       classWillWrite: rows.filter((r) => r.hsWillWrite || r.boxMarkWillWrite).length,
       classConflict: rows.filter((r) => r.hsConflict || r.boxMarkConflict).length,
       productTypeMismatch: rows.filter((r) => r.productTypeMismatch).length,
+      crateMismatch: rows.filter((r) => r.crateMismatch).length,
     },
   };
 }

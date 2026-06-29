@@ -134,8 +134,8 @@ export default async function AdminLegacyRatesPage() {
             (ปกติเรทนี้สูงกว่า rpdefault เพราะรวม margin shop service)
           </li>
           <li>
-            <code className="rounded bg-white px-1 py-0.5 font-mono">rgdefault</code> = ไม่ได้ใช้ใน legacy PHP
-            (schema-only · เก็บไว้เพื่อ fidelity · admin dashboard แสดงเป็น &ldquo;เรทสั่งซื้อ&rdquo; reference เฉยๆ)
+            <code className="rounded bg-white px-1 py-0.5 font-mono">rgdefault</code> = ไม่ได้ใช้ (ช่องเก่า ·
+            ไม่มีหน้าไหนอ่าน) — ซ่อนช่องกรอกออกจากฟอร์มแล้ว (owner 2026-06-29) · เก็บคอลัมน์ไว้ใน DB เพื่อ fidelity
           </li>
           {hratecostdefault != null && (
             <li>

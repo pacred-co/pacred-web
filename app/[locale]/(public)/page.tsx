@@ -23,6 +23,7 @@ import { Footer } from "@/components/sections/footer";
 import { JsonLd } from "@/components/seo/json-ld";
 import { serviceSchema } from "@/components/seo/schemas";
 import { ogImageUrl } from "@/components/seo/site";
+import { getPublicYuanRate } from "@/lib/public/yuan-rate";
 
 export async function generateMetadata({
   params,
@@ -90,6 +91,9 @@ export default async function Home({
   const { locale } = await params;
   const localeTyped = (locale === "en" ? "en" : "th") as "th" | "en";
   const tc = await getTranslations({ locale, namespace: "customsClearancePage" });
+  // Live ฝากสั่ง rate (tb_settings.rsdefault) — the same value /cart charges.
+  // Passed to the stats strip so the homepage stays in sync with the daily rate.
+  const yuanRate = await getPublicYuanRate();
 
   const services = HOME_SERVICES.map((s) =>
     serviceSchema({
@@ -121,7 +125,7 @@ export default async function Home({
         {/* Stats strip — hidden on mobile (ปอน 2026-06-19), shown on desktop.
             Promotion stays visible on BOTH (ปอน asked to bring it back on mobile). */}
         <div className="hidden md:block">
-          <StatsBar />
+          <StatsBar yuanRate={yuanRate} />
         </div>
         <Promotion />
         <OurService />

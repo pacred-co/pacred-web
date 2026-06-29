@@ -162,3 +162,67 @@ export function nameShipBy(code: string | null | undefined): string {
   if (!code) return "ไม่พบข้อมูล";
   return SHIPPING_METHOD_INDEX.get(code)?.nameTh ?? "ไม่พบข้อมูล";
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// Shop-order (ฝากสั่งซื้อ) carrier dropdown — faithful port of legacy
+// `optionHShipBy()` (member/include/function.php L322-374), the carrier
+// <select> shown on the admin shop-order detail/update page
+// (pcs-admin/include/pages/shops/update.php L201).
+//
+// The legacy shop dropdown shows: PCS · PCSF · PCSE (conditional on
+// hFreeShipping!=3) · then the numeric carriers 2,3,21,5,6,7,9-46 — it
+// OMITS 1 (DHL), 4 (Kerry), 8 (SCG), 47 (the customer-cart list / forwarder
+// picker uses a slightly different subset). We derive faithfully from the
+// canonical SHIPPING_METHODS SOT so there is ONE carrier registry, with the
+// shop-specific include set encoded here.
+//
+// PCSF / PCSE / PCS are rebranded to PRF / PRE / Pacred at display time
+// (the nameTh in SHIPPING_METHODS already carries the rebrand).
+// ════════════════════════════════════════════════════════════════════════
+
+/** Numeric carrier codes the legacy shop dropdown offers (optionHShipBy). */
+const SHOP_NUMERIC_CARRIER_CODES: readonly string[] = [
+  "2", "3", "21", "5", "6", "7", "9", "10", "11", "12", "13", "14", "15",
+  "16", "17", "18", "19", "20", "22", "23", "24", "25", "26", "27", "28",
+  "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
+  "41", "42", "43", "44", "45", "46",
+];
+
+export type ShipByOption = { code: string; label: string };
+
+/**
+ * The carrier options for the admin shop-order carrier <select>, faithful to
+ * legacy `optionHShipBy($freeShipping)`:
+ *   - "PCS"  รับเองโกดัง Pacred (always)
+ *   - "PCSF" PRF เหมาๆ (always)
+ *   - "PCSE" PRE Express (only when hFreeShipping != '3')
+ *   - numeric 2..46 (the legacy shop set) with their Thai labels
+ *
+ * @param hFreeShipping the order's hfreeshipping flag (legacy gate for PCSE).
+ */
+export function getShopCarrierOptions(hFreeShipping?: string | null): ShipByOption[] {
+  const opts: ShipByOption[] = [
+    { code: "PCS",  label: "รับเองโกดัง Pacred" },
+    { code: "PCSF", label: nameShipBy("PCSF") }, // PRF เหมาๆ
+  ];
+  if ((hFreeShipping ?? "") !== "3") {
+    opts.push({ code: "PCSE", label: nameShipBy("PCSE") }); // PRE Express
+  }
+  for (const code of SHOP_NUMERIC_CARRIER_CODES) {
+    const m = SHIPPING_METHOD_INDEX.get(code);
+    if (m) opts.push({ code, label: m.nameTh });
+  }
+  return opts;
+}
+
+/** Valid shop-order carrier codes — the union the carrier <select> can submit
+ *  (faithful to optionHShipBy). Used by the server action to validate input
+ *  without an over-narrow 5-value enum. */
+export const SHOP_CARRIER_CODES: ReadonlySet<string> = new Set<string>([
+  "PCS", "PCSF", "PCSE", ...SHOP_NUMERIC_CARRIER_CODES,
+]);
+
+/** True if `code` is a carrier the shop-order carrier <select> may submit. */
+export function isValidShopCarrierCode(code: string): boolean {
+  return SHOP_CARRIER_CODES.has(code);
+}

@@ -2,7 +2,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
-export function StatsBar() {
+export function StatsBar({ yuanRate }: { yuanRate: number }) {
   const t = useTranslations("heroStats");
 
   const stats = [
@@ -22,7 +22,10 @@ export function StatsBar() {
     },
     {
       label: t("deposit"),
-      value: "4.88",
+      // LIVE ฝากสั่ง rate from tb_settings.rsdefault (the value /cart charges),
+      // fetched server-side and passed in — was hardcoded "4.88" which drifted
+      // from the daily-adjusted real rate (owner 2026-06-29 · DISPLAY-ONLY).
+      value: yuanRate.toFixed(2),
       unit: "฿/¥",
       icon: "/images/hero-section/icon/shop.png",
       alt: "เรทค่าฝากสั่งซื้อ-ฝากโอนเงินหยวนชำระสินค้าจีน Pacred Shipping",

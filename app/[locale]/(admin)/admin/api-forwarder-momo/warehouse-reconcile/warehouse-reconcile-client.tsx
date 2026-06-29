@@ -132,6 +132,7 @@ export function TaemReconcileClient() {
             {preview.summary.classWillWrite > 0 && <span className="rounded-full bg-sky-100 text-sky-800 px-2 py-0.5">บันทึก HS/มาร์ค {preview.summary.classWillWrite}</span>}
             {preview.summary.classConflict > 0 && <span className="rounded-full bg-rose-100 text-rose-700 px-2 py-0.5">⚠ HS/มาร์คต่าง {preview.summary.classConflict}</span>}
             {preview.summary.productTypeMismatch > 0 && <span className="rounded-full bg-fuchsia-100 text-fuchsia-700 px-2 py-0.5">⚠ ประเภทสินค้าต่าง {preview.summary.productTypeMismatch}</span>}
+            {preview.summary.crateMismatch > 0 && <span className="rounded-full bg-rose-100 text-rose-700 px-2 py-0.5">⚠ ตีลังไม้ไม่ตรง MOMO {preview.summary.crateMismatch}</span>}
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs">
@@ -144,6 +145,7 @@ export function TaemReconcileClient() {
                   <th className="px-2 py-2 text-right">คิว ระบบ→แต้ม</th>
                   <th className="px-2 py-2 text-right">กล่อง</th>
                   <th className="px-2 py-2 text-left">HS / มาร์ค / ประเภท (แต้ม)</th>
+                  <th className="px-2 py-2 text-left">ตีลังไม้ MOMO ↔ ค่าบริการแต้ม</th>
                   <th className="px-2 py-2 text-right">ETD/ETA (แต้ม)</th>
                   <th className="px-2 py-2 text-center">ผล</th>
                 </tr>
@@ -196,6 +198,28 @@ export function TaemReconcileClient() {
                           </div>
                         ) : "—"}
                       </td>
+                      {/* crate (ตีลังไม้) cross-check — READ-ONLY. Shows the MOMO-derived
+                          crate flag (tb_forwarder.crate · '1'=ตีลังไม้) + fee vs แต้ม's
+                          Service-fee column (empty in all real packing lists). A ⚠ flags
+                          a future disagreement for the admin to reconcile by hand — we
+                          never auto-write either side. */}
+                      <td className="px-2 py-1.5 text-left text-[11px] leading-snug">
+                        {r.matched ? (
+                          <div className="space-y-0.5">
+                            <div className={r.momoCrated ? "text-amber-700 font-medium" : "text-muted"}>
+                              MOMO: {r.momoCrated ? `ตีลังไม้${r.momoCrateFee ? ` ฿${n2(r.momoCrateFee)}` : ""}` : "ไม่ตี"}
+                            </div>
+                            <div className="text-muted">
+                              แต้ม: {r.taemServiceFee != null && r.taemServiceFee > 0 ? `฿${n2(r.taemServiceFee)}` : "—"}
+                            </div>
+                            {r.crateMismatch && (
+                              <div className="text-rose-700 font-semibold" title="ค่าบริการ/ตีลังไม้ฝั่งแต้มไม่ตรงกับสถานะตีลังไม้ที่ได้จาก MOMO — ตรวจ/แก้เอง (ไม่เขียนทับอัตโนมัติ)">
+                                ⚠ ไม่ตรงกัน
+                              </div>
+                            )}
+                          </div>
+                        ) : "—"}
+                      </td>
                       {/* ETD/ETA จากแต้ม — preview shows what will be stored per-container.
                           "—" when แต้ม's packing list has no date for this row. */}
                       <td className="px-2 py-1.5 text-right text-[11px] text-muted">
@@ -217,7 +241,10 @@ export function TaemReconcileClient() {
             ยังไม่มีข้อมูล = แต้มยังไม่ปิดตู้/กระสอบรวม/ซ้ำ → ข้าม ·
             HS(CG.)/มาร์คกล่อง = บันทึกเป็นข้อมูลอ้างอิง (ไม่กระทบราคา) เติมเฉพาะที่ยังว่าง ·
             ถ้าค่าเดิมต่าง (⚠) จะไม่ทับให้ — ตรวจเอง · ประเภทสินค้าที่ต่าง = แจ้งเตือนให้ตรวจ
-            (ไม่เปลี่ยน fproductstype ที่ใช้คิดราคาให้อัตโนมัติ)
+            (ไม่เปลี่ยน fproductstype ที่ใช้คิดราคาให้อัตโนมัติ) ·
+            ตีลังไม้ MOMO ↔ ค่าบริการแต้ม = เทียบสถานะตีลังไม้ (MOMO) กับช่อง Service fee (แต้ม) ·
+            ปกติช่องแต้มว่าง (แต้มไม่ได้เก็บค่าตีลังไม้ตรงนี้ — ค่าตีลังไม้อยู่ในใบแจ้งหนี้ MOMO) ·
+            ถ้าไม่ตรง (⚠) = ตรวจ/แก้เอง (ไม่เขียนทับอัตโนมัติ)
           </p>
         </section>
       )}

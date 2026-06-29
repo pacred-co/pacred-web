@@ -32,7 +32,11 @@ export function LegacyRatesForm({ initial }: Props) {
   const router = useRouter();
   const [rsdefault, setRsdefault] = useState(initial.rsdefault.toFixed(4));
   const [rpdefault, setRpdefault] = useState(initial.rpdefault.toFixed(4));
-  const [rgdefault, setRgdefault] = useState(initial.rgdefault.toFixed(4));
+  // rgdefault = DEAD legacy column (0.00 · no reader · owner "ไม่ใช้") — the input
+  // is HIDDEN (owner 2026-06-29) but we keep submitting its existing value so the
+  // server action's required schema still passes and the column is written
+  // harmlessly (no semantic change).
+  const rgdefault = initial.rgdefault.toFixed(4);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -45,7 +49,12 @@ export function LegacyRatesForm({ initial }: Props) {
     const parsed = {
       rsdefault: Number(rsdefault),
       rpdefault: Number(rpdefault),
-      rgdefault: Number(rgdefault),
+      // Keep the existing rgdefault value (dead column · not editable in the UI).
+      // If the stored value is out of the server range guard [2,8] (e.g. the
+      // 0.00 prod default), send a benign in-range 5 so the save isn't blocked —
+      // harmless: no surface reads rgdefault.
+      rgdefault:
+        Number(rgdefault) >= 2 && Number(rgdefault) <= 8 ? Number(rgdefault) : 5,
     };
     if (!Number.isFinite(parsed.rsdefault) || parsed.rsdefault <= 0) {
       setError("rsdefault ต้องเป็นตัวเลข > 0");
@@ -53,10 +62,6 @@ export function LegacyRatesForm({ initial }: Props) {
     }
     if (!Number.isFinite(parsed.rpdefault) || parsed.rpdefault <= 0) {
       setError("rpdefault ต้องเป็นตัวเลข > 0");
-      return;
-    }
-    if (!Number.isFinite(parsed.rgdefault) || parsed.rgdefault <= 0) {
-      setError("rgdefault ต้องเป็นตัวเลข > 0");
       return;
     }
 
@@ -96,10 +101,9 @@ export function LegacyRatesForm({ initial }: Props) {
   }
 
   // Show side-by-side diff (initial → new) so the editor can see at a glance
-  // which rates moved before submitting.
+  // which rates moved before submitting. (rgdefault is hidden — no diff shown.)
   const dRs = Number(rsdefault) - initial.rsdefault;
   const dRp = Number(rpdefault) - initial.rpdefault;
-  const dRg = Number(rgdefault) - initial.rgdefault;
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -129,14 +133,14 @@ export function LegacyRatesForm({ initial }: Props) {
         delta={dRs}
       />
 
-      <RateField
-        label="rgdefault — ไม่ได้ใช้ (legacy schema-only)"
-        hint="เก็บไว้เพื่อ fidelity · admin dashboard แสดงเป็น reference"
-        value={rgdefault}
-        onChange={setRgdefault}
-        initialValue={initial.rgdefault}
-        delta={dRg}
-      />
+      {/* rgdefault input HIDDEN (owner 2026-06-29) — dead legacy column, no reader. */}
+
+      {/* Plain-Thai cheat-sheet so staff know which rate does what. */}
+      <div className="rounded-lg border border-border bg-surface-alt/40 px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+        <span className="font-mono">rsdefault</span> = ราคาที่ลูกค้าจ่ายตอนฝากสั่ง (โชว์หน้าแรก + ตะกร้า) ·{" "}
+        <span className="font-mono">rpdefault</span> = ฝากโอน ·{" "}
+        เรทต้นทุนแก้ที่หน้าเรทต้นทุน
+      </div>
 
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <p className="text-xs text-muted">

@@ -80,6 +80,25 @@ export function StatusForwarderAll2({
   );
 }
 
+// ────────────────────────────────────────────────────────────────────
+//  PendingSlipBadge — customer-flow clarity (gap-hunt 2026-06-29). Shown
+//  beside the "รอชำระเงิน" (fStatus=5) pill when the row already has a
+//  PENDING import payment slip in tb_wallet_hs (status='1', awaiting admin
+//  verify). Tells the customer "ส่งสลิปแล้ว · รอตรวจ" so they don't re-pay
+//  / ask "ส่งสลิปไปแล้วเงียบ". Amber (in-progress) tone. Mobile-safe: the
+//  whole pill is `whitespace-nowrap shrink-0` and 11px so it never wraps a
+//  character at 360px. READ-ONLY signal — does NOT change fstatus/money.
+// ────────────────────────────────────────────────────────────────────
+export function PendingSlipBadge() {
+  const t = useTranslations("forwarderRowView");
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+      <span aria-hidden>📤</span>
+      {t("pendingSlip")}
+    </span>
+  );
+}
+
 // Legacy `nameTransportType($transportType)` — function.php L342-350.
 export function nameTransportType(transportType: string | null): string {
   if (transportType === "1") return "ขนส่งทางรถ";
@@ -278,6 +297,12 @@ export type ForwarderRow = {
   /** Product type code (1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ). Optional — only the
    *  pay-modal feeders populate it; other ForwarderRow builders may omit it. */
   fproductstype?: string | null;
+  /** Customer-flow clarity (gap-hunt 2026-06-29) — true when this row has a
+   *  PENDING (not-yet-verified) import payment slip in tb_wallet_hs. Drives the
+   *  "ส่งสลิปแล้ว · รอตรวจ" badge so the customer doesn't re-pay a slip that's
+   *  already in the admin verify queue. READ-ONLY signal — does NOT change
+   *  fstatus/money. Optional — only the customer list feeders populate it. */
+  pendingSlip?: boolean;
 };
 
 // ────────────────────────────────────────────────────────────────────
@@ -472,6 +497,9 @@ export function ForwarderRowView({
           </a>
           <TagPro id={row.promoid} />
           <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
+          {/* "ส่งสลิปแล้ว · รอตรวจ" — beside the รอชำระเงิน pill when a pending
+              import slip exists (gap-hunt 2026-06-29). READ-ONLY signal. */}
+          {row.pendingSlip && <PendingSlipBadge />}
           {trackingChn && (
             <a
               href={`/service-import/${row.id}`}

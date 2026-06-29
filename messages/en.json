@@ -3519,7 +3519,10 @@
       "taxInvoices": "Tax invoices",
       "workboard": "Work Board (team)",
       "inbox": "My inbox",
-      "withdrawalsAll": "Withdrawals (all)"
+      "withdrawalsAll": "Withdrawals (all)",
+      "teamLeaders": "Team leaders (commission)",
+      "bookings": "Booking queue (RFQ)",
+      "refunds": "Customer refunds"
     },
     "warehouse": {
       "containers": "Containers",
@@ -4649,6 +4652,7 @@
     "baht": "THB",
     "viewDetails": "View details",
     "pay": "Pay",
+    "pendingSlip": "Slip sent · under review",
     "creditDate": "Credit date",
     "dueDate": "Due date"
   },

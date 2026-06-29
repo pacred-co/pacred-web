@@ -43,6 +43,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { sendNotification } from "@/lib/notifications";
 import { logger, redactId } from "@/lib/logger";
+import { maybeCompleteShopOrder } from "@/lib/admin/maybe-complete-shop-order";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -95,7 +96,17 @@ const spawnSchema = z.object({
 });
 export type SpawnForwardersInput = z.infer<typeof spawnSchema>;
 
-type SpawnResult = { spawnedFNos: number[]; skipped: number; created: number };
+type SpawnResult = {
+  spawnedFNos: number[];
+  skipped: number;
+  created: number;
+  // 2026-06-29 (owner: per-shop incremental spawn) — the legacy all-shops-done
+  // completion gate ran AFTER this spawn. `statusCompleted` = this call flipped
+  // the shop order 4→5 (the LAST shop's tracking just landed). false = the order
+  // legitimately STAYS at 4 so the remaining shops can still get tracking +
+  // spawned (the fix for "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้").
+  statusCompleted: boolean;
+};
 
 // tb_header_order row shape — only the columns we copy into tb_forwarder.
 type HeaderRow = {
@@ -119,6 +130,12 @@ type HeaderRow = {
   haddressnote: string | null;
   haddresstel: string | null;
   haddresstel2: string | null;
+  // 2026-06-29 (fix #3) — crate flag + crate price carried into the spawned
+  // tb_forwarder (legacy saveTarcking copies crate from the header · shops.php
+  // L1403/L1433). pricecrate is a cost/charge field; on the forwarder it feeds
+  // the import cost/invoice line, not the shop-order sell total.
+  crate: string | null;
+  pricecrate: number | string | null;
 };
 
 export async function spawnForwardersFromShopOrder(
@@ -142,7 +159,7 @@ export async function spawnForwardersFromShopOrder(
       const { data: header, error: headerErr } = await admin
         .from("tb_header_order")
         .select(
-          "hno,userid,htitle,hcover,htransporttype,hshipby,hshippingservice,hfreeshipping,hpriceupdate,hrate,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddressnote,haddresstel,haddresstel2",
+          "hno,userid,htitle,hcover,htransporttype,hshipby,hshippingservice,hfreeshipping,hpriceupdate,hrate,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddressnote,haddresstel,haddresstel2,crate,pricecrate",
         )
         .eq("hno", d.hNo)
         .maybeSingle<HeaderRow>();
@@ -206,6 +223,11 @@ export async function spawnForwardersFromShopOrder(
         const fPriceUpdate = t.fPriceUpdate ?? 0;
         const fDetail      = (t.fDetail ?? header.htitle ?? "").slice(0, 500);
         const fCover       = (header.hcover ?? "").slice(0, 500);
+        // 2026-06-29 (fix #3) — carry the header's crate flag + price into the
+        // forwarder (legacy copies crate from the header on spawn). Default to
+        // the legacy not-crated flag '2' + price 0 when the order has none.
+        const fCrate       = (header.crate ?? "2").slice(0, 1) || "2";
+        const fPriceCrate  = Number(header.pricecrate ?? 0) || 0;
 
         const { data: row, error: insErr } = await admin
           .from("tb_forwarder")
@@ -286,8 +308,8 @@ export async function spawnForwardersFromShopOrder(
             fsendsms3day:          "0",
             fsendsms3eday:         "0",
             paymethod:             "1",
-            crate:                 "2",
-            pricecrate:            0,
+            crate:                 fCrate,        // carried from header (fix #3)
+            pricecrate:            fPriceCrate,   // carried from header (fix #3)
             fqc:                   "0",
             fqcprice:              0,
             ftransportpricechnthb: 0,
@@ -370,10 +392,32 @@ export async function spawnForwardersFromShopOrder(
         }
       }
 
+      // 5) Legacy all-shops-done completion gate (shops.php L1525-1580). The
+      //    spawned forwarders sit at fstatus='1', so the mig-0215/0216 DB
+      //    trigger does NOT auto-complete (it only fires at fstatus≥2 / เลขตู้).
+      //    THIS gate is the legacy "every shop sub-order now has a tracking"
+      //    milestone: flip 4→5 ONLY when count(slots)===count(trackings). When
+      //    it does not fire, the order STAYS at 4 so the remaining shops can
+      //    still get tracking entered + spawned (per-shop incremental loop).
+      //    Best-effort — never roll back the spawn on a gate failure.
+      let statusCompleted = false;
+      try {
+        const gate = await maybeCompleteShopOrder(admin, d.hNo, {
+          recomputeSell: true,
+          legacyAdminId,
+        });
+        statusCompleted = gate.completed;
+      } catch (err) {
+        logger.warn("service_order.spawn_forwarders", "completion gate failed (non-fatal)", {
+          h_no: d.hNo,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
       revalidatePath(`/admin/service-orders/${d.hNo}`);
       revalidatePath("/admin/service-orders");
       revalidatePath("/admin/forwarders");
-      return { ok: true, data: { spawnedFNos, created, skipped } };
+      return { ok: true, data: { spawnedFNos, created, skipped, statusCompleted } };
     },
   );
 }

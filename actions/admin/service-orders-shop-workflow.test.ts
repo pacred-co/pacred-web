@@ -459,6 +459,69 @@ assertEq("4→5 stamps hstatus + hdate5 + hdateupdate + adminidupdate",
 );
 
 // ────────────────────────────────────────────────────────────
+// J. All-shops-done completion gate (2026-06-29 · fix #1)
+// ────────────────────────────────────────────────────────────
+// Legacy shops.php L1525-1580: flip 4→5 ONLY when count(cShippingNumber
+// slots) === count(non-empty cTrackingNumber tokens). Mirrors the pure
+// counting in lib/admin/maybe-complete-shop-order.ts. THE bug fix: a
+// single-shop tracking entry must NOT complete a 10-shop order.
+
+function gateDecision(rows: { cshippingnumber: string | null; ctrackingnumber: string | null }[]): {
+  slotCount: number; trackingCount: number; completes: boolean;
+} {
+  const tok = (v: string | null | undefined) =>
+    (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  let slotCount = 0;
+  let trackingCount = 0;
+  for (const r of rows) {
+    slotCount += tok(r.cshippingnumber).length;
+    trackingCount += tok(r.ctrackingnumber).length;
+  }
+  return { slotCount, trackingCount, completes: slotCount > 0 && slotCount === trackingCount };
+}
+
+section("J. all-shops-done completion gate (fix #1)");
+assertEq("10 shops · only 1 has tracking → STAYS at 4 (the bug)",
+  gateDecision([
+    { cshippingnumber: "S1", ctrackingnumber: "T1" },
+    ...Array.from({ length: 9 }, (_, i) => ({ cshippingnumber: `S${i + 2}`, ctrackingnumber: "" })),
+  ]).completes,
+  false,
+);
+assertEq("10 shops · all have tracking → completes (4→5)",
+  gateDecision(
+    Array.from({ length: 10 }, (_, i) => ({ cshippingnumber: `S${i + 1}`, ctrackingnumber: `T${i + 1}` })),
+  ).completes,
+  true,
+);
+assertEq("single shop · tracking present → completes",
+  gateDecision([{ cshippingnumber: "S1", ctrackingnumber: "T1" }]).completes,
+  true,
+);
+assertEq("no slots at all → never completes (guard)",
+  gateDecision([{ cshippingnumber: "", ctrackingnumber: "" }]).completes,
+  false,
+);
+assertEq("multi-parcel shop · 3 ship slots, only 2 tracks → STAYS at 4",
+  gateDecision([{ cshippingnumber: "S1,S2,S3", ctrackingnumber: "T1,T2" }]).completes,
+  false,
+);
+assertEq("multi-parcel shop · 3 ship slots, 3 tracks → completes",
+  gateDecision([{ cshippingnumber: "S1,S2,S3", ctrackingnumber: "T1,T2,T3" }]).completes,
+  true,
+);
+assertEq("counts are reported (slots=10, tracks=1)",
+  (() => {
+    const g = gateDecision([
+      { cshippingnumber: "S1", ctrackingnumber: "T1" },
+      ...Array.from({ length: 9 }, (_, i) => ({ cshippingnumber: `S${i + 2}`, ctrackingnumber: "" })),
+    ]);
+    return [g.slotCount, g.trackingCount];
+  })(),
+  [10, 1],
+);
+
+// ────────────────────────────────────────────────────────────
 // Wrap-up
 // ────────────────────────────────────────────────────────────
 console.log(`\n${pass} pass · ${fail} fail`);

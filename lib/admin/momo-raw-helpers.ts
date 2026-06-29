@@ -578,3 +578,64 @@ export function extractMetricsFromMomoRaw(raw: unknown): MomoMetrics {
     qty:    Math.max(1, Math.round(num(r.quantity))),
   };
 }
+
+// ────────────────────────────────────────────────────────────
+// extractCrateFromMomoRaw — derive the wooden-crate (ตีลังไม้) flag + fee
+// from a MOMO raw blob (owner PR999: "crate on imports อิงตาม MOMO real data").
+// ────────────────────────────────────────────────────────────
+
+/**
+ * The crate (ตีลังไม้) derivation result, in the tb_forwarder.crate HEADER
+ * convention — legacy function.php L1691 nameCrate:
+ *   '1' = ตีลังไม้ (crated) · '2' = ไม่ตีลังไม้ (default, not crated).
+ *
+ * ⚠️ This is the HEADER column convention. It is the OPPOSITE of the per-ITEM
+ * column tb_forwarder_item.chinawoodencratefeetype ('1'=ไม่ตี · '2'=ตี). Every
+ * tb_forwarder.crate reader/writer uses 1=crate; do NOT mix the two.
+ */
+export type MomoCrate = {
+  /** tb_forwarder.crate header value: '1' = ตีลังไม้ · '2' = ไม่ตีลังไม้. */
+  crate: "1" | "2";
+  /** pricecrate (บาท) — the candidate crate fee MOMO sends as `extra_cost`. */
+  pricecrate: number;
+};
+
+/**
+ * Extract the crate flag + fee from a MOMO raw blob.
+ *
+ * MOMO carries an EXPLICIT crate signal in the raw it sends (the field exists
+ * but the commit path used to ignore it and hardcode "no crate"):
+ *   - `raw.wooden_create` (boolean · "ตีลังไม้แล้ว?") → the crate flag.
+ *   - `raw.extra_cost` (number · "ค่าใช้จ่ายเพิ่ม") → the candidate crate fee.
+ *     MOMO has NO dedicated `pricecrate` field; `extra_cost` is its only
+ *     extra-fee field, so it's the faithful source for the crate baht.
+ *
+ * DEFAULT-SAFE (forward-only · the admin editor always overrides):
+ *   - `wooden_create === true`  → crate "1" (ตีลังไม้).
+ *   - anything else (false / absent / non-boolean / null raw) → crate "2"
+ *     (ไม่ตีลังไม้) — we never INVENT a crate signal MOMO didn't send.
+ *   - pricecrate: only carried when crated AND extra_cost is a finite > 0
+ *     number; otherwise 0 (a non-crated row has no crate fee). We never
+ *     bill a fee on a row MOMO didn't mark crated.
+ *
+ * The owner can override both via adminUpdateForwarderCratePrice (editable in
+ * all statuses) — this derivation only sets the INITIAL value at commit time.
+ */
+export function extractCrateFromMomoRaw(raw: unknown): MomoCrate {
+  const notCrated: MomoCrate = { crate: "2", pricecrate: 0 };
+  if (!raw || typeof raw !== "object") return notCrated;
+  const r = raw as Record<string, unknown>;
+  if (r.wooden_create !== true) return notCrated;
+
+  // Crated. Carry the fee MOMO sent in extra_cost (its only extra-fee field).
+  const fee = (() => {
+    const v = r.extra_cost;
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    return 0;
+  })();
+  return { crate: "1", pricecrate: fee };
+}

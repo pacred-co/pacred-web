@@ -230,7 +230,12 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
         <Section title="ราคา">
           <Row label="ค่าขนส่ง" value={`฿${Number(f.transport_price).toFixed(2)}`} mono />
           <Row label="ค่าบริการ" value={`฿${Number(f.service_fee).toFixed(2)}`} mono />
-          {f.crate && <Row label="ค่าตีลังไม้" value={`฿${Number(f.crate_price).toFixed(2)}`} mono />}
+          {/* 2026-06-29: show the crate-fee line when there IS a fee, not just
+              when `f.crate` is truthy (truthy for BOTH "1" ตี and "2" ไม่ตี →
+              rendered "฿0.00" for every non-crated row). crate_price>0 keeps the
+              displayed line-items reconciling with the total (outstanding.ts sums
+              pricecrate unconditionally). */}
+          {Number(f.crate_price) > 0 && <Row label="ค่าตีลังไม้" value={`฿${Number(f.crate_price).toFixed(2)}`} mono />}
           {f.qc && <Row label="ค่า QC" value={`฿${Number(f.qc_price).toFixed(2)}`} mono />}
           <div className="flex justify-between pt-2 border-t border-border text-base font-bold">
             <span>รวม</span>

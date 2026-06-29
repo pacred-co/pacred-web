@@ -81,6 +81,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
+import { isValidShopCarrierCode } from "@/lib/freight/shipping-methods";
 
 // ────────────────────────────────────────────────────────────
 // Resolve current admin's legacy adminID (tb_header_order.adminidupdate
@@ -156,11 +157,21 @@ const HEADER_EDIT_ROLES = ["super", "accounting"] as const;
 
 const updateShipBySchema = z.object({
   h_no:    hnoSchema,
-  // Legacy accepts numeric carrier codes 1-22 + PCS-family codes. Per
-  // spawn brief we narrow to the Pacred-current PCS-family set; numeric
-  // courier rebind is out of this lane (handled by carrier-manual.ts
-  // flow). Empty / '3' rejected per legacy L1312.
-  ship_by: z.enum(["PCS", "PCSF", "TTP", "JMF", "PCSE"] as const),
+  // 2026-06-29 (owner: shop-order page must match the legacy 47-carrier
+  // dropdown) — legacy `optionHShipBy()` offers PCS/PCSF/PCSE + the numeric
+  // domestic carriers (2..46). The prior 5-value enum (PCS/PCSF/TTP/JMF/PCSE)
+  // dropped the entire numeric carrier set + included TTP/JMF that the shop
+  // dropdown never had. Validate against the faithful SHOP_CARRIER_CODES SOT
+  // (lib/freight/shipping-methods) — same approach as the forwarder
+  // adminUpdateForwarderShipBy (free string, validated). Empty / '3' rejected
+  // per legacy L1312.
+  ship_by: z
+    .string()
+    .trim()
+    .min(1, "กรุณาเลือกบริษัทขนส่ง")
+    .max(10)
+    .refine((v) => v !== "3", "รหัสผู้ขนส่งไม่ถูกต้อง (3 สงวนไว้)")
+    .refine(isValidShopCarrierCode, "รหัสผู้ขนส่งไม่ถูกต้อง"),
 });
 export type AdminUpdateOrderShipByInput = z.infer<typeof updateShipBySchema>;
 
@@ -416,6 +427,149 @@ export async function adminUpdateOrderRate(
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// 2b. adminUpdateOrderCost — แก้ต้นทุน (เรทต้นทุน + ราคาซื้อจริง)  ⚠️ COST/MARGIN
+//     Legacy: shops.php L1186-1224 (update_cost · available at status 4)
+//
+//     [[cost-editable-sell-locked]] — COST is editable at ANY status (even
+//     after the customer paid) because it only moves margin/accounting. SELL
+//     is locked. So this writes ONLY the cost trio:
+//        hratecost  (เรทต้นทุน · cost FX)
+//        hcostall   (ราคาซื้อจริง · ¥ actually paid)
+//        hcostallth = round_up(hcostall × hratecost, 2)  (legacy L1198)
+//
+//     ⚠️ SELL-LOCKED: unlike legacy update_cost (which re-derives
+//     hTotalPriceUser from the existing hRate, L1219-1222), we OMIT that
+//     rewrite so the customer-facing SELL total can NEVER move from a cost
+//     edit. The sell total is owned by the rate/items editors only. (This is
+//     the deliberate, owner-aligned divergence flagged in the audit's open
+//     question #3.)
+//
+//     Role gate: cost authority = accounting / pricing (+ ultra/super via
+//     isGodRole) — same set as actions/admin/cargo-cost.ts. NOT ops/warehouse
+//     (granting a cost change is an accounting/pricing call). Allowed at every
+//     status (incl. paid 3/4/5) per [[cost-editable-sell-locked]]; '6'
+//     cancelled is blocked (nothing to cost).
+// ════════════════════════════════════════════════════════════════════════
+
+const COST_EDIT_ROLES = ["accounting", "pricing"] as const;
+
+const updateCostSchema = z.object({
+  h_no:       hnoSchema,
+  // เรทต้นทุน — yuan→THB cost rate. decimal(10,2). Sanity-cap at 20 (real prod
+  // ~4.9-5.0). 0 allowed (clears). Non-finite/negative rejected.
+  h_rate_cost: z.coerce.number().nonnegative("เรทต้นทุนต้องไม่ติดลบ").max(20, "เรทต้นทุนเกินช่วงที่ยอมรับ (>20)"),
+  // ราคาซื้อจริงทั้งหมด (¥). numeric(10,2). 0 allowed.
+  h_cost_all:  z.coerce.number().nonnegative("ราคาซื้อจริงต้องไม่ติดลบ").max(99_999_999, "ราคาซื้อจริงเกินช่วงที่ยอมรับ"),
+});
+export type AdminUpdateOrderCostInput = z.infer<typeof updateCostSchema>;
+
+export async function adminUpdateOrderCost(
+  input: AdminUpdateOrderCostInput,
+): Promise<AdminActionResult<{
+  h_no:          string;
+  h_rate_cost:   number;
+  h_cost_all:    number;
+  h_cost_all_th: number;
+}>> {
+  const parsed = updateCostSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{
+    h_no:          string;
+    h_rate_cost:   number;
+    h_cost_all:    number;
+    h_cost_all_th: number;
+  }>(
+    [...COST_EDIT_ROLES],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+      const { data: before, error: readErr } = await admin
+        .from("tb_header_order")
+        .select("id, hno, hstatus, hratecost, hcostall, hcostallth")
+        .eq("hno", d.h_no)
+        .maybeSingle<{
+          id:         number;
+          hno:        string;
+          hstatus:    string | null;
+          hratecost:  number | string | null;
+          hcostall:   number | string | null;
+          hcostallth: number | string | null;
+        }>();
+      if (readErr) {
+        console.error(`[adminUpdateOrderCost read] failed`, {
+          code: readErr.code, message: readErr.message, hno: d.h_no,
+        });
+        return { ok: false, error: `อ่านออเดอร์ไม่สำเร็จ: ${readErr.message}` };
+      }
+      if (!before) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ" };
+
+      // COST is editable at any status EXCEPT cancelled (nothing to cost).
+      if ((before.hstatus ?? "").trim() === "6") {
+        return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — แก้ต้นทุนไม่ได้" };
+      }
+
+      // legacy L1198: hCostAllTH = round_up(hCostAll × hRateCost, 2). COST-only —
+      // no SELL driver is touched (hRate / htotalpriceuser stay as-is).
+      const hCostAllTh = roundUp(d.h_cost_all * d.h_rate_cost, 2);
+
+      const { error: updErr } = await admin
+        .from("tb_header_order")
+        .update({
+          hratecost:     d.h_rate_cost,
+          hcostall:      d.h_cost_all,
+          hcostallth:    hCostAllTh,
+          hdateupdate:   new Date().toISOString(),
+          adminidupdate: legacyAdminId,
+        })
+        .eq("id", before.id);
+      if (updErr) {
+        console.error(`[adminUpdateOrderCost update] failed`, {
+          code: updErr.code, message: updErr.message, hno: d.h_no,
+        });
+        return { ok: false, error: `บันทึกต้นทุนไม่สำเร็จ: ${updErr.message}` };
+      }
+
+      await logAdminAction(
+        adminId,
+        "tb_header_order.update_cost",
+        "tb_header_order",
+        before.hno,
+        {
+          hno:               before.hno,
+          before_rate_cost:  Number(before.hratecost ?? 0),
+          after_rate_cost:   d.h_rate_cost,
+          before_cost_all:   Number(before.hcostall ?? 0),
+          after_cost_all:    d.h_cost_all,
+          before_cost_allth: Number(before.hcostallth ?? 0),
+          after_cost_allth:  hCostAllTh,
+          status:            before.hstatus,
+          sell_locked:       true,
+          legacy_history_ref: "update_cost L1186-1224 (SELL rewrite omitted)",
+        },
+      );
+
+      revalidatePath("/admin/service-orders");
+      revalidatePath(`/admin/service-orders/${before.hno}`);
+      revalidatePath(`/admin/service-orders/${before.hno}/edit`);
+      return {
+        ok: true,
+        data: {
+          h_no:          before.hno,
+          h_rate_cost:   d.h_rate_cost,
+          h_cost_all:    d.h_cost_all,
+          h_cost_all_th: hCostAllTh,
+        },
+      };
+    },
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // 3. adminUpdateOrderPayMethod — เปลี่ยนวิธีเก็บเงินค่าขนส่งในไทย
 //    Legacy: shops.php L1341-1351 (update_payMethod)
 //
@@ -518,24 +672,32 @@ export async function adminUpdateOrderPayMethod(
 //    this writer's scope).
 // ════════════════════════════════════════════════════════════════════════
 
+// 2026-06-29 (fix #3) — schema now also accepts an optional crate PRICE
+// (ราคาค่าตีลังไม้ → tb_header_order.pricecrate · mig 0223). pricecrate is a
+// COST/charge field carried to tb_forwarder.pricecrate on spawn — it is NOT
+// part of the ฝากสั่งซื้อ SELL total (htotalpriceuser), so writing it never
+// moves the customer's charge. Optional → existing crate-only callers are
+// unaffected. No status gate (legacy update_crate had none) — crate +
+// crate-price are editable at any status.
 const updateCrateSchema = z.object({
   h_no:  hnoSchema,
   crate: z.enum(["1", "2"] as const, {
     message: "ค่าตีลังต้องเป็น 1=ตีลังไม้ หรือ 2=ไม่ตีลังไม้",
   }),
+  pricecrate: z.coerce.number().nonnegative("ราคาค่าตีลังไม้ต้องไม่ติดลบ").max(99_999_999).optional(),
 });
 export type AdminUpdateOrderCrateInput = z.infer<typeof updateCrateSchema>;
 
 export async function adminUpdateOrderCrate(
   input: AdminUpdateOrderCrateInput,
-): Promise<AdminActionResult<{ h_no: string; crate: "1" | "2" }>> {
+): Promise<AdminActionResult<{ h_no: string; crate: "1" | "2"; pricecrate: number | null }>> {
   const parsed = updateCrateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
 
-  return withAdmin<{ h_no: string; crate: "1" | "2" }>(
+  return withAdmin<{ h_no: string; crate: "1" | "2"; pricecrate: number | null }>(
     [...HEADER_EDIT_ROLES],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -543,13 +705,14 @@ export async function adminUpdateOrderCrate(
 
       const { data: before, error: readErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, crate, hstatus")
+        .select("id, hno, crate, pricecrate, hstatus")
         .eq("hno", d.h_no)
         .maybeSingle<{
-          id:      number;
-          hno:     string;
-          crate:   string | null;
-          hstatus: string | null;
+          id:         number;
+          hno:        string;
+          crate:      string | null;
+          pricecrate: number | string | null;
+          hstatus:    string | null;
         }>();
       if (readErr) {
         console.error(`[adminUpdateOrderCrate read] failed`, {
@@ -560,16 +723,25 @@ export async function adminUpdateOrderCrate(
       if (!before) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ" };
 
       const beforeCrate = (before.crate ?? "").trim();
-      if (beforeCrate === d.crate) {
-        return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลังเดิม)" };
+      const beforePrice = Number(before.pricecrate ?? 0);
+      const crateUnchanged = beforeCrate === d.crate;
+      const priceUnchanged =
+        d.pricecrate === undefined || Math.abs(beforePrice - d.pricecrate) < 0.005;
+      if (crateUnchanged && priceUnchanged) {
+        return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลัง/ราคาเดิม)" };
       }
+
+      const update: Record<string, unknown> = {
+        crate:         d.crate,
+        adminidupdate: legacyAdminId,
+      };
+      // Only write the price when the caller supplied it (keeps crate-only
+      // callers from zeroing an existing price).
+      if (d.pricecrate !== undefined) update.pricecrate = d.pricecrate;
 
       const { error: updErr } = await admin
         .from("tb_header_order")
-        .update({
-          crate:         d.crate,
-          adminidupdate: legacyAdminId,
-        })
+        .update(update)
         .eq("id", before.id);
       if (updErr) {
         console.error(`[adminUpdateOrderCrate update] failed`, {
@@ -585,16 +757,25 @@ export async function adminUpdateOrderCrate(
         "tb_header_order",
         before.hno,
         {
-          hno:    before.hno,
-          before: beforeCrate,
-          after:  d.crate,
+          hno:              before.hno,
+          before:           beforeCrate,
+          after:            d.crate,
+          before_pricecrate: beforePrice,
+          after_pricecrate:  d.pricecrate ?? beforePrice,
         },
       );
 
       revalidatePath("/admin/service-orders");
       revalidatePath(`/admin/service-orders/${before.hno}`);
       revalidatePath(`/service-order/${before.hno}`);
-      return { ok: true, data: { h_no: before.hno, crate: d.crate } };
+      return {
+        ok: true,
+        data: {
+          h_no: before.hno,
+          crate: d.crate,
+          pricecrate: d.pricecrate ?? beforePrice,
+        },
+      };
     },
   );
 }

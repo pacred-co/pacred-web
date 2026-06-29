@@ -390,14 +390,27 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
         />
       </section>
 
-      {/* ── Row 2: Rate strip (4 rates) ── */}
+      {/* ── Row 2: Rate strip (3 rates) ── */}
+      {/* owner 2026-06-29: chip labels were misleading — "เรทสั่งซื้อ" actually
+          reads hratecostdefault (the COST rate) and "เรท Sale" reads rsdefault
+          (the ฝากสั่ง SELL rate); relabeled to plain Thai. "ยอดรวม" (revenue, not
+          a rate) was moved OUT of this row into its own stat below. Columns each
+          chip reads are UNCHANGED — labels + placement only. */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        {/* 4-chip rate row — push 4-col to lg (≥1024) so 1500px viewport fits */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
-          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={rateShop.toFixed(2)} />
-          <RateChip color="red"     label="เรท Sale"   value={rateSale.toFixed(2)} />
-          <RateChip color="purple"  label="เรทโอน"     value={ratePayment.toFixed(2)} />
-          <RateChip color="amber"   label="ยอดรวม"     value={formatTHB(grandTotal, true)} />
+        {/* 3-chip rate row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+          <RateChip color="cyan"    label="เรทต้นทุน (ภายใน)" value={rateShop.toFixed(2)} />
+          <RateChip color="red"     label="เรทฝากสั่ง (ขาย)"  value={rateSale.toFixed(2)} />
+          <RateChip color="purple"  label="เรทโอน"            value={ratePayment.toFixed(2)} />
+        </div>
+        {/* Revenue total — relocated out of the rate row (it's revenue, not a rate). */}
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5">
+          <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            ยอดรวมรายได้ {monthLabel}
+          </span>
+          <span className="text-lg font-bold tabular-nums text-amber-900 dark:text-amber-100">
+            {formatTHB(grandTotal, true)}
+          </span>
         </div>
       </section>
 

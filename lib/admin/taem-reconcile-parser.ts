@@ -30,6 +30,25 @@ export type TaemRow = {
   cg: string | null;
   /** Remark Number (col S) — the box marking / shipping mark แต้ม wrote on the parcel. */
   boxMark: string | null;
+  /**
+   * Note. (col U) — free-text note from แต้ม on the parcel (e.g. 退税 = tax-refund).
+   * In all 6 real packing-list files this is almost always blank (1 hit across
+   * 1,453 rows); captured as reference. Distinct from `note` (the Container-Name
+   * note for non-data rows) — this is the dedicated U-column note.
+   */
+  noteCol: string | null;
+  /**
+   * Service fee. (col V) — แต้ม's reserved per-parcel service-fee column. In ALL
+   * 6 real packing-list files this column is present in the header but carries NO
+   * data (0 non-empty of 1,453 rows · confirmed 2026-06-26). แต้ม does NOT bill
+   * crate/service fees through this column — the crate fee (ค่าตีลังไม้) lives on
+   * the MOMO supplier invoice (บริษัท ฮุย ไท่ ต๋า · `extractCrateFromMomoRaw`), not
+   * here. Parsed as a number when present so a FUTURE non-empty value (a generic
+   * แต้ม service/crate charge) can be cross-checked against the MOMO-derived crate
+   * in the reconcile preview (read-only · never auto-written). null when blank
+   * (the normal case) or non-numeric.
+   */
+  serviceFee: number | null;
   parcel: number | null;      // Total Parcel
   totalWt: number | null;     // Total Wt. (kg)
   totalVol: number | null;    // Total Vol. (m³)
@@ -70,6 +89,8 @@ const CANON: Record<keyof Omit<TaemRow, "isData" | "note">, number> = {
   totalVol: 17,   // R Total Vol. (NOT P "Vol.")
   boxMark: 18,    // S Remark Number (box marking / shipping mark)
   cg: 19,         // T CG. (แต้ม's HS / customs classification)
+  noteCol: 20,    // U Note. (free-text note · e.g. 退税 = tax-refund · usually blank)
+  serviceFee: 21, // V Service fee. (reserved · empty in all real files · see TaemRow)
   etd: 24,        // Y etd (date-guarded by parseTaemDate)
   eta: 25,        // Z eta (date-guarded)
 };
@@ -93,6 +114,10 @@ const HEADER_MAP: Record<string, keyof typeof CANON> = {
   "remark": "boxMark",
   "cg.": "cg",                  // col T — HS / customs classification
   "cg": "cg",
+  "note.": "noteCol",           // col U — free-text note (退税 etc.)
+  "note": "noteCol",
+  "service fee.": "serviceFee", // col V — reserved service-fee (empty in real files)
+  "service fee": "serviceFee",
 };
 
 function toNum(v: string | undefined | null): number | null {
@@ -193,6 +218,12 @@ export function parseTaemReconcile(text: string): TaemParseResult {
       // cg may be blank on continuation rows / when แต้ม hasn't classified yet.
       cg: cellStr(cells[idx.cg]),
       boxMark: cellStr(cells[idx.boxMark]),
+      // Note. (col U) + Service fee. (col V) — reference-capture. serviceFee is a
+      // number when present (toNum tolerates commas) but is empty in all real
+      // files; it exists so a future แต้ม service/crate charge can be cross-checked
+      // against the MOMO-derived crate in the reconcile preview (read-only).
+      noteCol: cellStr(cells[idx.noteCol]),
+      serviceFee: toNum(cells[idx.serviceFee]),
       parcel: toNum(cells[idx.parcel]),
       totalWt,
       totalVol,

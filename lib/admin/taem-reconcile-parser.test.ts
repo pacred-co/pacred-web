@@ -14,8 +14,8 @@ const SR_HEADER = [
 ].join("\t");
 
 // Build a 26-col Shipment-Report data row from named fields at their REAL indices.
-type SF = "container"|"trans"|"smDate"|"type"|"code"|"tracking"|"parcel"|"totalWt"|"totalVol"|"boxMark"|"cg"|"etd"|"eta";
-const IDX: Record<SF, number> = { container:0, trans:1, smDate:2, type:7, code:8, tracking:9, parcel:13, totalWt:16, totalVol:17, boxMark:18, cg:19, etd:24, eta:25 };
+type SF = "container"|"trans"|"smDate"|"type"|"code"|"tracking"|"parcel"|"totalWt"|"totalVol"|"boxMark"|"cg"|"noteCol"|"serviceFee"|"etd"|"eta";
+const IDX: Record<SF, number> = { container:0, trans:1, smDate:2, type:7, code:8, tracking:9, parcel:13, totalWt:16, totalVol:17, boxMark:18, cg:19, noteCol:20, serviceFee:21, etd:24, eta:25 };
 function srow(f: Partial<Record<SF, string>>): string {
   const cols = new Array(26).fill("");
   for (const k of Object.keys(f) as SF[]) cols[IDX[k]] = f[k]!;
@@ -42,6 +42,41 @@ function srow(f: Partial<Record<SF, string>>): string {
   ok(rows[1].isData === true && rows[1].totalVol === 0.5025, "row2 data");
   ok(rows[1].cg === null && rows[1].boxMark === null, "row2 cg/boxMark blank → null");
   ok(rows[2].isData === false && rows[2].note === "กระสอบรวม", "note row flagged + note carried");
+  // Service fee. (col V) + Note. (col U) absent in these rows → null (the real-file
+  // case: ALL 6 packing lists have an empty Service-fee column).
+  ok(rows[0].serviceFee === null && rows[0].noteCol === null, "row1 serviceFee(V)+noteCol(U) blank → null");
+}
+
+// ── Note. (col U) + Service fee. (col V) — the REAL header, populated cases ──
+// Confirmed 2026-06-26 against all 6 TAM packing-list xlsx: Service fee (V) is
+// present in the header but EMPTY in every real row; Note. (U) carried only "退税"
+// (tax-refund) once in 1,453 rows. We still parse both so a future value (a แต้ม
+// service/crate charge) feeds the read-only crate cross-check.
+{
+  // 退税 note exactly as seen in PR-TISO-GZS260620-1.xlsx row 2.
+  const taxRefund = srow({ container:"GZS260620-1", trans:"SEA", type:"普通货物/ทั่วไป/A", code:"PR072", tracking:"1781577646", parcel:"1", totalWt:"457.5", totalVol:"0.317898", noteCol:"退税" });
+  // a hypothetical FUTURE service fee in col V (none exist in real files yet).
+  const withFee = srow({ container:"GZS260620-1", trans:"SEA", type:"A", code:"PR080", tracking:"1781577999", parcel:"2", totalWt:"50", totalVol:"0.2", serviceFee:"350" });
+  const withFeeComma = srow({ container:"GZS260620-1", trans:"SEA", type:"A", code:"PR081", tracking:"1781578000", parcel:"1", totalWt:"30", totalVol:"0.1", serviceFee:"1,250.50" });
+  const { rows, headerSeen } = parseTaemReconcile([SR_HEADER, taxRefund, withFee, withFeeComma].join("\n"));
+  ok(headerSeen, "header detected (U/V columns)");
+  ok(rows[0].noteCol === "退税", "Note. (col U) captured by header name");
+  ok(rows[0].serviceFee === null, "row1 Service fee blank → null (real-file case)");
+  ok(rows[1].serviceFee === 350, "Service fee. (col V) parsed as number by header name");
+  ok(rows[2].serviceFee === 1250.5, "Service fee. comma thousands stripped");
+  ok(rows[1].noteCol === null, "row2 Note. blank → null");
+}
+
+// ── back-compat: a paste WITHOUT the U/V columns (older 20-col shape) still parses,
+// and the new fields default to null (existing columns unaffected). ──
+{
+  // 20-col row (A..T): no Note./Service-fee/etd/eta tail — the pre-2026-06-26 shape.
+  const cols = new Array(20).fill("");
+  cols[0]="GZS260601-1"; cols[1]="SEA"; cols[7]="A"; cols[8]="PR010"; cols[9]="999111"; cols[13]="3"; cols[16]="120"; cols[17]="0.4"; cols[18]="MK"; cols[19]="3926.90.99";
+  const { rows } = parseTaemReconcile(cols.join("\t"));
+  ok(rows.length === 1, "20-col back-compat row parsed");
+  ok(rows[0].tracking === "999111" && rows[0].cg === "3926.90.99", "back-compat tracking+cg unaffected");
+  ok(rows[0].noteCol === null && rows[0].serviceFee === null, "missing U/V columns → null (no crash)");
 }
 
 // ── CG. + Remark Number mapped by header NAME (not just canonical index) ──

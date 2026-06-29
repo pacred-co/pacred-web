@@ -44,6 +44,7 @@ import {
   deriveTransportTypeFromCabinet,
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
+  extractCrateFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
@@ -380,6 +381,16 @@ export async function commitMomoRowCore(
   const cabinetForDisplay = srcRow.container_batch_no ?? srcRow.momo_container_no ?? "";
   const containerNo = srcRow.momo_container_no ?? "";
   const metrics     = extractMetricsFromMomoRaw(srcRow.raw);
+  // ── Crate (ตีลังไม้) — owner PR999: derive from MOMO real data ──────
+  // MOMO sends an explicit crate signal (raw.wooden_create boolean +
+  // raw.extra_cost fee); the old code IGNORED it and hardcoded "no crate".
+  // extractCrateFromMomoRaw maps it to the legacy tb_forwarder.crate HEADER
+  // convention ('1'=ตีลังไม้ · '2'=ไม่ตี · function.php L1691) and carries
+  // extra_cost as the candidate pricecrate. DEFAULT-SAFE: anything other than
+  // wooden_create===true → "2"/0 (we never invent a crate signal). The admin
+  // adminUpdateForwarderCratePrice editor (editable all statuses) overrides
+  // this initial value — propagate.ts never touches crate/pricecrate.
+  const momoCrate = extractCrateFromMomoRaw(srcRow.raw);
   // ── Transport type (รถ EK "1" / เรือ SEA "2") — พี่ป๊อป flag 2026-06-11 ──
   // Priority:
   //   1. d.fTransportType        — explicit admin override (review form) wins.
@@ -569,8 +580,11 @@ export async function commitMomoRowCore(
       fdiscount:             0,
 
       // ── cabinet + cost defaults ───────────────────────
-      crate:                 "2",
-      pricecrate:            0,
+      // crate/pricecrate DERIVED from MOMO raw (owner PR999) — legacy header
+      // convention '1'=ตีลังไม้ · '2'=ไม่ตี (function.php L1691). Default-safe
+      // to "2"/0 when MOMO sends no wooden_create=true. Admin editor overrides.
+      crate:                 momoCrate.crate,
+      pricecrate:            momoCrate.pricecrate,
       ftransportpricechnthb: 0,
       pricemore:             "0",
       customrate:            "0",
