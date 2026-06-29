@@ -17,6 +17,8 @@ import {
 } from "./delivery-feedback-card";
 import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
+import { PendingSlipBadge } from "../forwarder-row-view";
+import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — READ-ONLY "ยอดเก็บจริง"
 // breakdown so the customer sees the SAME amount admin will collect (freight +
 // เหมาๆ ฿100 − ส่วนลด − หัก ณ ที่จ่าย นิติ 1%), not the freight-only number.
@@ -835,6 +837,14 @@ export default async function ServiceImportDetailPage({
   const fStatusValue = row.fstatus ?? "";
   const fShipBy = row.fshipby ?? "";
 
+  // ── Customer-flow clarity (gap-hunt 2026-06-29) — pending-slip signal ──
+  // Does THIS row already have a PENDING (not-yet-verified) import payment slip
+  // in tb_wallet_hs? If so the "ส่งสลิปแล้ว · รอตรวจ" badge shows beside the
+  // "รอชำระเงิน" status so the customer doesn't re-pay. Fails-soft (false).
+  const hasPendingSlip = (
+    await resolvePendingSlipForwarderIds(admin, row.userid ?? "", [idNum])
+  ).has(idNum);
+
   // Self-pickup (fShipBy='PCS' = "รับเองที่โกดัง") always shows Pacred's TH
   // receiving warehouse (สมุทรสาคร — ADDRESSES.warehouseTh) from the SOT
   // constant, never the stored faddress* snapshot. The write paths already
@@ -1214,6 +1224,15 @@ export default async function ServiceImportDetailPage({
                     align="right"
                     def="สถานะปัจจุบันของสินค้าในเส้นทาง: รอเข้าโกดังจีน → ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย → รอชำระเงิน → เตรียมส่ง → ส่งแล้ว"
                   />
+                </p>
+              )}
+              {/* "ส่งสลิปแล้ว · รอตรวจ" — pending import slip (gap-hunt
+                  2026-06-29). Beside the "รอชำระเงิน" status so the customer
+                  doesn't re-pay a slip already in the admin verify queue.
+                  READ-ONLY signal — does NOT change fstatus/money. */}
+              {hasPendingSlip && (
+                <p className="mt-1.5 flex md:justify-end">
+                  <PendingSlipBadge />
                 </p>
               )}
               {/* Credit-before-arrival chip — a credit order is flipped to

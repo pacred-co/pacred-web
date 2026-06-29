@@ -36,7 +36,7 @@ import {
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
-  Rocket, PanelLeft,
+  Rocket, PanelLeft, Users2, Undo2,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -145,6 +145,11 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-12 (เดฟ · Go-Live Control Panel) — super-only owner switchboard
   // (settingsCargo.goLive · /admin/settings/go-live).
   Rocket,
+  // 2026-06-29 (gap-hunt §0d) — 2 orphan-page leaves wired into the sidebar:
+  // team-leaders (extension.teamLeaders) + refunds (extension.refunds). Icon
+  // names were referenced from sidebar-menu.ts but absent here → blank spacer.
+  Users2,          // blockExtTeamLeaders — /admin/team-leaders
+  Undo2,           // blockExtRefunds — /admin/refunds
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

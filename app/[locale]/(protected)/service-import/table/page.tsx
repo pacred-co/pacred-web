@@ -19,7 +19,8 @@ import {
   ExportToolbar,
   TableQuickSearch,
 } from "./table-interactive";
-import { type ForwarderRow as PayModalRow } from "../forwarder-row-view";
+import { type ForwarderRow as PayModalRow, PendingSlipBadge } from "../forwarder-row-view";
+import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -532,6 +533,17 @@ export default async function ForwarderTablePage({
   const page = parsePage(sp.page);
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = rows.slice(offset, offset + DEFAULT_PAGE_SIZE);
+
+  // ── Customer-flow clarity (gap-hunt 2026-06-29) — pending-slip set ──
+  // Which of the displayed rows already have a PENDING (not-yet-verified)
+  // import payment slip in tb_wallet_hs → render the "ส่งสลิปแล้ว · รอตรวจ"
+  // badge in the status cell so the customer doesn't re-pay. Scoped to the
+  // page window (the only rows that render). Fails-soft (empty set on error).
+  const pendingSlipIds = await resolvePendingSlipForwarderIds(
+    admin,
+    memberCode,
+    pageRows.map((r) => r.id),
+  );
 
   // ── Payable rows (legacy: fStatus=5 get a checkbox; `.d-none2` hides it on
   //    the rest) → the row-select checkboxes + live pay-bar total + pay modal.
@@ -1066,11 +1078,17 @@ export default async function ForwarderTablePage({
                                               </span>
                                             </td>
                                             <td className="px-2 py-1.5 text-center">
-                                              {statusForwarderAll4(
-                                                row.fstatus ?? "",
-                                                fStatusDriver,
-                                                t,
-                                              )}
+                                              <div className="flex flex-col items-center gap-1">
+                                                {statusForwarderAll4(
+                                                  row.fstatus ?? "",
+                                                  fStatusDriver,
+                                                  t,
+                                                )}
+                                                {/* "ส่งสลิปแล้ว · รอตรวจ" — pending
+                                                    import slip (gap-hunt 2026-06-29).
+                                                    READ-ONLY signal. */}
+                                                {pendingSlipIds.has(row.id) && <PendingSlipBadge />}
+                                              </div>
                                             </td>
                                           </tr>
                                         );

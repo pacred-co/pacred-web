@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActivePromoBanners } from "@/lib/promo/banners";
+import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { ImportViewTabs } from "./import-view-tabs";
 import { type ForwarderRow } from "./forwarder-row-view";
@@ -300,6 +301,17 @@ export default async function ServiceImportPage({
     }
   }
 
+  // ── Customer-flow clarity (gap-hunt 2026-06-29) — pending-slip set ──
+  // Which of the rows on screen already have a PENDING (not-yet-verified)
+  // import payment slip in tb_wallet_hs → render the "ส่งสลิปแล้ว · รอตรวจ"
+  // badge beside the "รอชำระเงิน" pill so the customer doesn't re-pay. The
+  // helper fails-soft (empty set on error) — supplementary signal only.
+  const pendingSlipIds = await resolvePendingSlipForwarderIds(
+    admin,
+    memberCode,
+    rowIds,
+  );
+
   // Normalise + apply the legacy q=6 / q=6.1 fdiStatus sub-filter
   // (L651/L652) — q=6 keeps rows NOT in the "out-for-delivery" set,
   // q=6.1 keeps only rows IN it.
@@ -339,6 +351,7 @@ export default async function ServiceImportPage({
       adminidcreator: (r.adminidcreator as string) ?? null,
       promoid: promoByFid.get(Number(r.id)) ?? null,
       fproductstype: (r.fproductstype as string) ?? null,
+      pendingSlip: pendingSlipIds.has(Number(r.id)),
     }),
   );
   if (q === "6") {

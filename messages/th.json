@@ -3519,7 +3519,10 @@
       "taxInvoices": "ใบกำกับภาษี",
       "workboard": "Work Board (งานทีม)",
       "inbox": "Inbox งานของฉัน",
-      "withdrawalsAll": "รายการเบิกเงิน (รวม)"
+      "withdrawalsAll": "รายการเบิกเงิน (รวม)",
+      "teamLeaders": "หัวหน้าทีมขาย (ค่าคอม)",
+      "bookings": "คิวการจอง (RFQ)",
+      "refunds": "คืนเงินลูกค้า"
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
@@ -4649,6 +4652,7 @@
     "baht": "บ.",
     "viewDetails": "ดูรายละเอียด",
     "pay": "ชำระเงิน",
+    "pendingSlip": "ส่งสลิปแล้ว · รอตรวจ",
     "creditDate": "วันที่ให้เครดิต",
     "dueDate": "วันที่ครบกำหนด"
   },
