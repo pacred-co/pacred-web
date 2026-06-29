@@ -24,7 +24,6 @@ import {
   Truck,
   Wand2,
   Database,
-  Search,
   BarChart3,
   CheckCircle2,
   Activity,
@@ -310,6 +309,99 @@ export default async function AdminApiForwarderMomoPage({
         subtitle="เชื่อมข้อมูลรายการ MOMO เข้าระบบ PR — Wave 17 รองรับเฉพาะ “อัปเดตด้วยมือ”"
       />
 
+      {/* §0d/§0g — compact nav strip (เลื่อนขึ้นบนสุด · 2026-06-29 ภูม):
+          เครื่องมือย่อยทั้งหมดของ MOMO รวมเป็นแถวปุ่มกระชับ ให้แอดมินกระโดด
+          ระหว่างเครื่องมือได้โดยไม่ต้องเลื่อนลงล่าง. แค่ navigation — ไม่แตะ
+          data/logic/money. */}
+      <nav
+        aria-label="เครื่องมือ MOMO"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        {/* อัปเดตด้วยมือ */}
+        <Link
+          href="/admin/api-forwarder-momo/manual"
+          className="group rounded-2xl border-2 border-primary-300 bg-white p-3 shadow-sm hover:border-primary-500 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
+              <Wand2 className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground">อัปเดตด้วยมือ</h3>
+              <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                กรอกรายการ MOMO ทีละตัว
+              </p>
+              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                ✓ พร้อมใช้
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        {/* Review & Commit */}
+        <Link
+          href="/admin/api-forwarder-momo/review"
+          className="group rounded-2xl border-2 border-emerald-400 bg-emerald-50/30 p-3 shadow-sm hover:border-emerald-600 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 group-hover:bg-emerald-200">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground">Review &amp; Commit</h3>
+              <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                ตรวจ row ที่ sync แล้ว → สร้างเข้า tb_forwarder
+              </p>
+              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                ✓ พร้อมใช้
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        {/* ดึงสถานะ MOMO (Status Sync) */}
+        <Link
+          href="/admin/api-forwarder-momo/sync"
+          className="group rounded-2xl border-2 border-primary-300 bg-white p-3 shadow-sm hover:border-primary-500 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
+              <Database className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground">ดึงสถานะ MOMO</h3>
+              <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                ดึง Import/Container/Sack จาก MOMO API
+              </p>
+              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                ✓ พร้อมใช้
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        {/* พัสดุที่ขาด — gap-finder · distinct amber accent */}
+        <Link
+          href="/admin/api-forwarder-momo/missing"
+          className="group rounded-2xl border-2 border-amber-300 bg-amber-50/40 p-3 shadow-sm hover:border-amber-500 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-amber-100 p-3 text-amber-700 group-hover:bg-amber-200">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground">พัสดุที่ขาด</h3>
+              <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                พัสดุในตู้ MOMO ที่ยังไม่เข้าระบบ — ตามเก็บ
+              </p>
+              <span className="mt-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                ⚠️ ตรวจ-เก็บ
+              </span>
+            </div>
+          </div>
+        </Link>
+      </nav>
+
       {/*
         2026-06-05 ภูม flag — ยอดรวมคิวสะสม (สำหรับพี่ป๊อปดู).
         Single big number — total CBM cumulative since MOMO sync started.
@@ -555,128 +647,6 @@ export default async function AdminApiForwarderMomoPage({
           </Link>
           )
         </p>
-      </section>
-
-      {/* Wave 17 banner */}
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">
-        <strong>ℹ️ Wave 17 · ขอบเขต:</strong>{" "}
-        เฟสนี้พอร์ตเฉพาะ <strong>&ldquo;อัปเดตด้วยมือ (Manual Update)&rdquo;</strong>{" "}
-        ซึ่งเป็นช่องที่แอดมินใช้ทุกวัน. ฟังก์ชั่นอัตโนมัติ (Dashboard · UpdateAPI ·
-        APICheckSM · ประวัติ) ต้องใช้ token + retry/backoff design — เลื่อนไป Phase C
-        (Wave 18+).
-      </div>
-
-      {/* Sub-page hub */}
-      <section className="grid gap-4 md:grid-cols-2">
-        {/* Live: Manual Update */}
-        <Link
-          href="/admin/api-forwarder-momo/manual"
-          className="group rounded-2xl border-2 border-primary-300 bg-white p-5 shadow-sm hover:border-primary-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
-              <Wand2 className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">อัปเดตด้วยมือ</h3>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                กรอกข้อมูลรายการนำเข้า MOMO ทีละรายการ — ใช้เมื่อระบบ API ไม่ได้
-                หรือมีรายการที่ต้องแก้ไขด้วยมือ. INSERT ลง <code className="rounded bg-surface-alt px-1">tb_forwarder</code> โดยตรง.
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                ✓ พร้อมใช้ใน Wave 17
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* Deferred: Dashboard */}
-        <div className="rounded-2xl border border-border bg-surface-alt/30 p-5 opacity-75">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-gray-100 p-3 text-gray-400">
-              <BarChart3 className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">แดชบอร์ดสรุป (Home)</h3>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                ภาพรวมรายการรอ-อัปเดต · ยอดส่งผ่าน API วันนี้ · กราฟ.
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                Phase C — เลื่อน
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Live (added 2026-05-28 ดึก · synthesis G1): Review & Commit grid.
-            Reads pending rows from momo_import_tracks → per-row form +
-            "สร้างใหม่" button → atomic INSERT into tb_forwarder. The missing
-            "feels automatic" piece per ภูม's 2026-05-28 flag. */}
-        <Link
-          href="/admin/api-forwarder-momo/review"
-          className="group rounded-2xl border-2 border-emerald-400 bg-emerald-50/30 p-5 shadow-sm hover:border-emerald-600 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 group-hover:bg-emerald-200">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">Review &amp; Commit</h3>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                ตรวจสอบ row ที่ sync มาแล้ว → กรอก userID + บริษัทขนส่ง
-                → คลิก &ldquo;สร้างใหม่&rdquo; → atomic INSERT ลง{" "}
-                <code className="rounded bg-surface-alt px-1">tb_forwarder</code>{" "}
-                · มีปุ่ม &ldquo;สร้างทั้งหมด&rdquo; bulk-commit ด้วย.
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                ✓ ใหม่ · synthesis G1 (P0)
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* Live (added 2026-05-28 per ปอน brief): MOMO Status Sync.
-            Isolated parallel path → writes to momo_* tables ONLY,
-            NEVER touches the legacy spine cargo_* / tb_*. */}
-        <Link
-          href="/admin/api-forwarder-momo/sync"
-          className="group rounded-2xl border-2 border-primary-300 bg-white p-5 shadow-sm hover:border-primary-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
-              <Database className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">ดึงสถานะ MOMO (Status Sync)</h3>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                เรียก MOMO Cargo API → ดึง Import Track / Container Closed / Sack Info ตามช่วงวัน
-                · normalize + upsert ลง <code className="rounded bg-surface-alt px-1">momo_*</code> tables (isolated).
-                ไม่กระทบ <code className="rounded bg-surface-alt px-1">tb_*</code> เดิม.
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                ✓ พร้อมใช้ (2026-05-28)
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* Deferred: APICheckSM */}
-        <div className="rounded-2xl border border-border bg-surface-alt/30 p-5 opacity-75">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-gray-100 p-3 text-gray-400">
-              <Search className="h-6 w-6" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-foreground">ตรวจสอบข้อมูล SM</h3>
-              <p className="mt-1 text-xs text-muted leading-relaxed">
-                ตรวจ SM Code ในระบบปลายทาง vs ใน PR — ใช้ debug รายการที่ตกหล่น.
-              </p>
-              <span className="mt-3 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                Phase C — เลื่อน
-              </span>
-            </div>
-          </div>
-        </div>
       </section>
 
       {/* Footer hint */}
