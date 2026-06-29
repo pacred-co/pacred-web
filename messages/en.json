@@ -3342,7 +3342,8 @@
       "cn": "CargoCenter",
       "jmf": "JMF",
       "ttp": "TTP",
-      "gogo": "GOGO (retired)"
+      "gogo": "GOGO (retired)",
+      "wechatOps": "WeChat ops archive (China)"
     },
     "apiSheets": {
       "adjustGroup": "Adjust sheet entries",

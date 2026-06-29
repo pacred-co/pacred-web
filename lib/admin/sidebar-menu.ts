@@ -485,6 +485,10 @@ const blockApiForwarderUpdate: MenuItem = {
     // messages files; we reference them here.
     { labelKey: "forwarder.momoLclSack",   href: "/admin/momo-lcl",  icon: "Barcode" },
     { labelKey: "forwarder.cargothaiSync", href: "/admin/cargothai", icon: "RefreshCw" },
+    // 2026-06-29 (owner "เอาข้อมูล wechat เข้า database") — searchable archive of
+    // the decrypted China-ops coordination chats (MOMO/PCS/AXELRA/HUAHAI/柏盛泰/
+    // Yiwu/แลกหยวน/退税/per-container). Read-only · mig 0228 wechat_ops_message.
+    { labelKey: "apiForwarderUpdate.wechatOps", href: "/admin/wechat-ops", icon: "MessageCircle" },
     {
       labelKey: "apiSheets.adjustGroup",
       icon: "SlidersHorizontal",
