@@ -23,6 +23,7 @@ import {
   deriveModeFromCid,
   deriveTransportTypeFromCabinet,
   buildTrackingCabinetMap,
+  aggregateTrackDetailMetrics,
   MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
@@ -313,6 +314,48 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("cabMap: multi-track container maps all", cabMap["1780629608"] === "GZS260606-1" && cabMap["1780555730"] === "GZS260606-1");
   check("cabMap: container without cid skipped", !("SKIP" in cabMap));
   check("cabMap: mode of 0004065 cabinet = เรือ (proves ship_by=รถ was wrong)", deriveModeFromCid(cabMap["0004065"]) === "เรือ");
+}
+
+{
+  // aggregateTrackDetailMetrics — track_details[] → {tracking → kg/cbm}
+  // The metric back-fill (2026-06-29 · ภูม): warehouse weight/cbm was 0 in
+  // tb_forwarder because the harvest dropped kg/cbm + missed split trackings.
+
+  // (a) bare tracking (single parcel) → one key = its own metric (the ภูม case)
+  const bare = aggregateTrackDetailMetrics([
+    { reTrack: "1781683835", kg: 515, cbm: 1.626768 },
+  ]);
+  check("metrics: bare tracking keeps its own kg", bare["1781683835"]?.kg === 515);
+  check("metrics: bare tracking keeps its own cbm", bare["1781683835"]?.cbm === 1.626768);
+  check("metrics: bare tracking emits ONE key (no phantom base)", Object.keys(bare).length === 1);
+
+  // (b) split "-i/n" → exact suffix keys (own metric) + BASE key (SUM)
+  const split = aggregateTrackDetailMetrics([
+    { reTrack: "1781515241-1/3", kg: 554, cbm: 2.036604 },
+    { reTrack: "1781515241-2/3", kg: 338, cbm: 2.085096 },
+    { reTrack: "1781515241-3/3", kg: 79, cbm: 0.221646 },
+  ]);
+  check("metrics: split exact key keeps per-parcel kg", split["1781515241-1/3"]?.kg === 554);
+  check("metrics: split BASE key = SUM of parcels", split["1781515241"]?.kg === 554 + 338 + 79);
+  check("metrics: split BASE cbm = SUM of parcels", Math.abs((split["1781515241"]?.cbm ?? 0) - (2.036604 + 2.085096 + 0.221646)) < 1e-9);
+
+  // (c) legit hyphenated tracking (NOT a split-suffix) is left intact
+  const legit = aggregateTrackDetailMetrics([
+    { reTrack: "CBX260620-SEA07", kg: 1.5, cbm: 0.021216 },
+  ]);
+  check("metrics: 'CBX...-SEA07' is NOT base-stripped", legit["CBX260620-SEA07"]?.kg === 1.5);
+  check("metrics: 'CBX...-SEA07' emits no phantom base", Object.keys(legit).length === 1);
+
+  // (d) missing/garbage kg/cbm → 0, empty/garbage rows skipped (no crash)
+  const messy = aggregateTrackDetailMetrics([
+    { reTrack: "AAA" },                          // no kg/cbm → 0/0
+    { reTrack: "", kg: 99 },                      // empty reTrack → skip
+    null, "x", { kg: 5 },                          // garbage → skip
+    { reTrack: "BBB", kg: "10" as unknown as number }, // non-number kg → 0
+  ]);
+  check("metrics: missing kg defaults 0", messy["AAA"]?.kg === 0);
+  check("metrics: empty/garbage rows skipped", !("" in messy) && Object.keys(messy).length === 2);
+  check("metrics: non-number kg → 0", messy["BBB"]?.kg === 0);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

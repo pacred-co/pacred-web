@@ -30,6 +30,7 @@ import {
   propagateMomoToForwarders,
   type PropagationResult,
 } from "./propagate";
+import { aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -219,45 +220,57 @@ export async function runMomoSync(
           const cabinetNo = typeof c.cid === "string" && c.cid.trim() ? c.cid.trim() : null;
           if (!cabinetNo) continue;
           const trackDetails = Array.isArray(c.track_details) ? (c.track_details as unknown[]) : [];
-          const reTracks: string[] = [];
-          for (const td of trackDetails) {
-            if (!td || typeof td !== "object") continue;
-            const rt = (td as Record<string, unknown>).reTrack;
-            if (typeof rt === "string" && rt.trim()) reTracks.push(rt.trim());
-          }
-          if (reTracks.length === 0) continue;
+          // ── HARVEST cabinet + per-parcel weight/cbm (2026-06-29 · ภูม) ──
+          // Each track_detail = {reTrack, kg, cbm}. aggregateTrackDetailMetrics
+          // emits a key for BOTH the exact reTrack (own metric) AND the base
+          // tracking (the SUM across "<base>-i/n" parcels), because the staging
+          // row is keyed by the BASE. The OLD code wrote ONLY the cabinet via a
+          // bulk `.in(reTracks)` over the SUFFIXED reTracks — so (a) a split
+          // tracking ("1781515241-1/3") never matched its base-keyed staging row
+          // ("1781515241") → it got NO cabinet AND no weight, and (b) kg/cbm were
+          // never copied at all → every committed tb_forwarder landed weight=0
+          // and the warehouse couldn't bill (ภูม PR012 #52105 · 1781683835).
+          // Now we update each tracking key with its own metric. weight/cbm are
+          // written only when MOMO actually carries them (>0), so a container
+          // MOMO hasn't measured yet never clobbers an existing value.
+          const metricsByTracking = aggregateTrackDetailMetrics(trackDetails);
+          if (Object.keys(metricsByTracking).length === 0) continue;
           // ── ARRIVAL STAMP (LANE A · owner 2026-06-16) ────────────────
           // When this container raw carries `is_arrival === true` (MOMO's
-          // "ของถึงไทยแล้ว" flag → AT_WAREHOUSE_TH in mapper.ts:286-289),
-          // stamp shipment_status onto the SAME matched import-track rows so
-          // the per-parcel propagator (propagateMomoToForwarders) can advance
-          // the matched tb_forwarder rows to fstatus='4' (ถึงไทยแล้ว · Option-B
-          // manual-review). Without this the arrival flag lived only on the
-          // container record (trackingNo:null → filtered out) and never
-          // reached a per-parcel propagatable row. `shipment_status` +
-          // `momo_updated_at` both exist on momo_import_tracks since 0116.
-          const arrivalUpdate: Record<string, unknown> = {
-            container_batch_no: cabinetNo,
-            updated_at:         new Date().toISOString(),
-          };
-          if (c.is_arrival === true) {
-            arrivalUpdate.shipment_status = "AT_WAREHOUSE_TH";
-            arrivalUpdate.momo_updated_at = new Date().toISOString();
-          }
-          const { error: upErr } = await admin
-            .from("momo_import_tracks")
-            .update(arrivalUpdate)
-            .in("momo_tracking_no", reTracks);
-          if (upErr) {
-            console.error(
-              `[runMomoSync] cabinet propagate failed cid=${cabinetNo}`,
-              { code: upErr.code, message: upErr.message, trackCount: reTracks.length },
-            );
-            errors.push({
-              scope:   "cabinet_propagate",
-              error:   "MOMO_DB_UPDATE_FAILED",
-              message: `cid=${cabinetNo}: ${upErr.message}`,
-            });
+          // "ของถึงไทยแล้ว" flag → AT_WAREHOUSE_TH in mapper.ts:286-289), stamp
+          // shipment_status onto the matched import-track rows so the per-parcel
+          // propagator (propagateMomoToForwarders) can advance the matched
+          // tb_forwarder rows to fstatus='4' (ถึงไทยแล้ว · Option-B manual-review).
+          // `shipment_status` + `momo_updated_at` exist on momo_import_tracks
+          // since 0116.
+          const isArrival = c.is_arrival === true;
+          const nowIso = new Date().toISOString();
+          for (const [tn, m] of Object.entries(metricsByTracking)) {
+            const upd: Record<string, unknown> = {
+              container_batch_no: cabinetNo,
+              updated_at:         nowIso,
+            };
+            if (m.kg > 0)  upd.weight_kg = Number(m.kg.toFixed(2));
+            if (m.cbm > 0) upd.cbm       = Number(m.cbm.toFixed(6));
+            if (isArrival) {
+              upd.shipment_status = "AT_WAREHOUSE_TH";
+              upd.momo_updated_at = nowIso;
+            }
+            const { error: upErr } = await admin
+              .from("momo_import_tracks")
+              .update(upd)
+              .eq("momo_tracking_no", tn);
+            if (upErr) {
+              console.error(
+                `[runMomoSync] cabinet/metrics propagate failed cid=${cabinetNo}`,
+                { code: upErr.code, message: upErr.message, tracking: tn },
+              );
+              errors.push({
+                scope:   "cabinet_propagate",
+                error:   "MOMO_DB_UPDATE_FAILED",
+                message: `cid=${cabinetNo} tracking=${tn}: ${upErr.message}`,
+              });
+            }
           }
         }
       } catch (e) {

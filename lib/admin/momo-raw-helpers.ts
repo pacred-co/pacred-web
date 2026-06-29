@@ -445,6 +445,51 @@ export function buildTrackingCabinetMap(containerRaws: unknown[]): Record<string
   return map;
 }
 
+/**
+ * Aggregate one Container-Closed record's `track_details[]` into a
+ * `tracking → {kg, cbm}` map for the metric back-fill (2026-06-29 · ภูม).
+ *
+ * Each `track_details[]` entry = `{reTrack, kg, cbm, ...}` — the FINAL warehouse
+ * weigh-in for that parcel. MOMO splits one tracking into "<base>-i/n" parcels,
+ * but the `momo_import_tracks` row is keyed by the BASE tracking (e.g.
+ * "1781515241", NOT "1781515241-1/3"). So we emit TWO keys per parcel:
+ *   - the EXACT reTrack ("1781515241-1/3") → that parcel's own kg/cbm
+ *   - the BASE tracking ("1781515241")     → the SUM across all its parcels
+ * A row keyed EITHER way then resolves to the right weight/cbm; a bare tracking
+ * (no "-i/n" suffix) yields a single key = its own metric.
+ *
+ * Why this exists: the old sync harvest walked track_details for the cabinet
+ * (cid) only and DROPPED kg/cbm — so a committed `tb_forwarder` landed
+ * weight_kg=0/cbm=0 and the warehouse couldn't bill. The "-i/n" rows also never
+ * matched (the harvest `.in()`-ed the suffixed reTrack against the base-keyed
+ * staging row), so split trackings lost BOTH cabinet and weight.
+ *
+ * The "-i/n" strip matches a numeric split-suffix ONLY (`-3` or `-1/3`); a
+ * legit hyphenated tracking like "CBX260620-SEA07" is left intact (SEA isn't
+ * digits) so it still resolves by its exact key.
+ */
+export function aggregateTrackDetailMetrics(
+  trackDetails: unknown[],
+): Record<string, { kg: number; cbm: number }> {
+  const map: Record<string, { kg: number; cbm: number }> = {};
+  const add = (key: string, kg: number, cbm: number) => {
+    const prev = map[key] ?? { kg: 0, cbm: 0 };
+    map[key] = { kg: prev.kg + kg, cbm: prev.cbm + cbm };
+  };
+  for (const t of Array.isArray(trackDetails) ? trackDetails : []) {
+    if (!t || typeof t !== "object") continue;
+    const o = t as Record<string, unknown>;
+    const re = typeof o.reTrack === "string" ? o.reTrack.trim() : "";
+    if (!re) continue;
+    const kg = typeof o.kg === "number" && Number.isFinite(o.kg) ? o.kg : 0;
+    const cbm = typeof o.cbm === "number" && Number.isFinite(o.cbm) ? o.cbm : 0;
+    add(re, kg, cbm);
+    const base = re.replace(/-\d+(\/\d+)?$/, "");
+    if (base !== re) add(base, kg, cbm);
+  }
+  return map;
+}
+
 /** Package metrics extracted from a MOMO raw blob. */
 export type MomoMetrics = {
   weight: number;
