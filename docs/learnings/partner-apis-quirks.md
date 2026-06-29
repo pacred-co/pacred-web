@@ -274,3 +274,23 @@ curl -s "https://opendata.dbd.go.th/api/3/action/datastore_search?resource_id=f0
 - [`app/api/cron/momo-sync/route.ts`](../../app/api/cron/momo-sync/route.ts) — manual reseed override
 - [`app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx`](../../app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx) — UI mask for legacy stuck rows (now mostly defensive; backfill removed today's known instances)
 - AGENTS.md §0c — verify-deep-flow rule (must trace propagation, not just observe symptom)
+
+## [2026-06-29] MOMO closed-container harvest DROPPED weight/cbm + missed split trackings (warehouse couldn't bill)
+
+**Context:** ภูม flag — ฝากนำเข้า MOMO sync มาแล้ว แต่ `tb_forwarder` ไม่มี **น้ำหนัก/คิว** (PR012 #52105 · tracking `1781683835`) ทั้งที่ MOMO ตู้ปิด `GZS260620-2` มี `515kg · 1.6267คิว` ครบ. พนักงานคิดราคา/วางบิลไม่ได้ (commit `64984394`).
+
+**Symptom / question:** MOMO sync เข้าแล้ว แต่ weight/cbm ใน tb_forwarder = 0. ภูม ตั้งสมมติฐานถูก: "sync มาตอน MOMO ยังไม่มีข้อมูล → commit สร้าง row weight=0 → MOMO อัพเดตทีหลัง แต่ระบบเราไม่ re-pull."
+
+**Root cause (TWO bugs in one harvest, `sync.ts` step 2.5):**
+1. **Dropped metrics.** Each closed-container `track_details[]` entry = `{reTrack, kg, cbm, width, height, length}`. The harvest walked it for the **cabinet (cid) only** — it `.update()`-ed `container_batch_no` + status and **never copied `kg`/`cbm`** → committed `tb_forwarder` inherited `weight_kg=0/cbm=0` from the staging row.
+2. **Split-tracking key mismatch.** MOMO splits one tracking into `"<base>-i/n"` parcels (`1781515241-1/3`, `-2/3`, `-3/3`), but the `momo_import_tracks` row is keyed by the **BASE** (`1781515241`). The harvest `.in("momo_tracking_no", reTracks)` matched the **suffixed** reTracks → never hit the base row → split trackings lost BOTH cabinet AND weight (`container_batch_no=null`, `weight_kg=0`).
+
+**Fix (commit `64984394` · 3 parts):**
+- **`aggregateTrackDetailMetrics`** (`lib/admin/momo-raw-helpers.ts` · pure · +11 test): `track_details[]` → `{tracking → {kg,cbm}}` emitting a key for BOTH the exact reTrack (own metric) AND the base (SUM across `-i/n` parcels). Strip suffix `/-\d+(\/\d+)?$/` so a legit hyphen like `CBX260620-SEA07` stays intact.
+- **`sync.ts` harvest:** write `weight_kg`/`cbm` per tracking (only when MOMO carries them `>0` — never clobber).
+- **`propagate.ts`:** fill `tb_forwarder.fweight/fvolume` from staging for ALREADY-committed rows — **fill-when-empty** (`!(fweight>0) && !(fvolume>0)`), so a staff edit / billed row is never overwritten (money-safe). New `metricWrites` counter.
+- **Backfill:** `scripts/backfill-momo-track-metrics-2026-06-29.mjs` (dry-run→`--apply`) re-derives + fills committed rows. DEV: fixed 7 forwarders (52105=515kg · 52095=971kg [split SUM 554+338+79] · …). **เดฟ runs the same on prod.**
+
+**Why this matters next time:** when a partner sends **aggregate-then-split** records (a closed container with per-parcel `track_details`), the join key on the parcel side is often the **base** tracking — match on the stripped base, and **SUM** the split parcels back to it. And when you harvest a field for one purpose (cabinet), check whether the SAME loop should also carry the adjacent money fields (weight/cbm) — a partial harvest is a silent zero downstream. The early-warning sign: a tb_forwarder row with a cabinet but `fweight=0`, or a split-tracking row with `container_batch_no=null`.
+
+**Cross-links:** the [2026-05-30] cabinet-propagation entry above (same harvest, the cabinet half) · `lib/integrations/momo-isolated/{sync,propagate}.ts` · AGENTS.md §0e (verify the consumer's table — a synced row ≠ a complete row)
