@@ -65,6 +65,8 @@ import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
 import { createClient } from "@/lib/supabase/server";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { HeartbeatLock } from "./heartbeat-lock";
+import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,33 @@ function roundUp2(v: number): number {
   const eps = 1e-9 * Math.max(1, Math.abs(v * 100));
   const r = Math.ceil(v * 100 - eps) / 100;
   return r === 0 ? 0 : r;
+}
+function thb(n: number): string {
+  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function cny(n: number): string {
+  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// 2026-06-29 (owner: "อยากให้ขึ้นรายละเอียด เหมือนหน้ารอชำระเงิน — มีราคาขายบอก
+// มีรายละเอียดบอก") — small label maps mirrored from legacy-view.tsx so the
+// order-context block on /edit reads the same as the read-only detail page.
+const TRANSPORT_LABEL: Record<string, string> = {
+  "1": "🚚 ขนส่งทางรถ",
+  "2": "🚢 ขนส่งทางเรือ",
+  "3": "✈️ ขนส่งทางเครื่องบิน",
+};
+const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
+const PAY_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
+
+// KV row — same shape as legacy-view.tsx (label left · value right · optional mono).
+function KV({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-muted shrink-0 text-xs">{label}</span>
+      <span className={`text-sm ${mono ? "font-mono tabular-nums text-right" : "text-right"}`}>{value}</span>
+    </div>
+  );
 }
 
 // Resolve the current admin's legacy adminID for the heartbeat-lock banner.
@@ -141,15 +170,20 @@ const STATUS_CLS: Record<string, string> = {
 
 type HRow = {
   id: number; hno: string; hstatus: string | null; htransporttype: string | null;
-  htotalpricechn: number | null;
+  htotalpricechn: number | null; htotalpriceuser: number | null; hpriceupdate: number | null;
   hshippingservice: number | null; hshippingchn: number | null; hrate: number | null;
   hratecost: number | null; hcostall: number | null;
   hshipby: string | null; hfreeshipping: string | null; userid: string;
   crate: string | null; pricecrate: number | null; paymethod: string | null;
-  hdatepayment: string | null;
+  hdatepayment: string | null; hdate: string | null;
+  haddressname: string | null; haddresslastname: string | null; haddressno: string | null;
+  haddresssubdistrict: string | null; haddressdistrict: string | null;
+  haddressprovince: string | null; haddresszipcode: string | null;
+  haddresstel: string | null; haddressnote: string | null;
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
+  userTel: string | null; userEmail: string | null;
 };
 type ORow = {
   id: number; cprovider: string | null; cnameshop: string | null; ctitle: string | null;
@@ -176,9 +210,11 @@ export default async function AdminServiceOrderEditPage({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_header_order")
     .select(
-      "id,hno,hstatus,htransporttype,htotalpricechn," +
+      "id,hno,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hpriceupdate," +
       "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,hfreeshipping,userid," +
-      "crate,pricecrate,paymethod,hdatepayment",
+      "crate,pricecrate,paymethod,hdatepayment,hdate," +
+      "haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict," +
+      "haddressprovince,haddresszipcode,haddresstel,haddressnote",
     )
     .eq("hno", hNo)
     .maybeSingle();
@@ -200,7 +236,7 @@ export default async function AdminServiceOrderEditPage({
 
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
-    .select("userID,userName,userLastName")
+    .select("userID,userName,userLastName,userTel,userEmail")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userErr) {
@@ -322,6 +358,58 @@ export default async function AdminServiceOrderEditPage({
   const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
     cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber, items: v.items,
   }));
+
+  // 2026-06-29 (owner: "เพิ่มแทรกกิ้งร้านที่เหลือยังไง") — per-tracking-token →
+  // spawned tb_forwarder lookup, so each shop card shows ✓ฝากนำเข้าแล้ว #fNo /
+  // ⌛รอ tracking + an overall "ครบ X/N ร้าน" progress. Mirrors legacy
+  // update4.php L126-131/L168-173 (SELECT ID FROM tb_forwarder WHERE
+  // refOrder=hNo AND fTrackingCHN=<token> → badge "ตรวจสอบสถานะนำเข้า #ID").
+  // Linked by reforder=hno OR forwarder.ftrackingchn = a recorded China tracking
+  // (MOMO-created rows have reforder=""). §0c — destructure error.
+  const trackingTokens = Array.from(new Set(
+    items
+      .flatMap((it) => (it.ctrackingnumber ?? "").split(","))
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0),
+  ));
+  const spawnedByTracking = new Map<string, { id: number; fstatus: string | null }>();
+  {
+    const orParts = [`reforder.eq.${r.hno}`];
+    if (trackingTokens.length > 0) orParts.push(`ftrackingchn.in.(${trackingTokens.join(",")})`);
+    const { data: imps, error: impErr } = await admin
+      .from("tb_forwarder")
+      .select("id,ftrackingchn,fstatus")
+      .eq("userid", r.userid)
+      .or(orParts.join(","))
+      .neq("fstatus", "99")
+      .order("id", { ascending: false })
+      .limit(500);
+    if (impErr) {
+      console.error(`[service-order edit linked imports] failed`, { code: impErr.code, message: impErr.message });
+    }
+    for (const f of (imps ?? []) as Array<{ id: number; ftrackingchn: string | null; fstatus: string | null }>) {
+      const key = (f.ftrackingchn ?? "").trim();
+      if (key && !spawnedByTracking.has(key)) spawnedByTracking.set(key, { id: f.id, fstatus: f.fstatus });
+    }
+  }
+  // Per-shop spawned summary — for each shop, which of its tracking tokens
+  // already have a tb_forwarder (with its fNo + status badge), and which are
+  // still waiting. A shop is "done" when it has ≥1 tracking AND every tracking
+  // token resolved to a forwarder.
+  const shopSpawnSummary = shopFields.map((s) => {
+    const toks = (s.ctrackingnumber ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    const resolved = toks.map((tok) => {
+      const f = spawnedByTracking.get(tok);
+      const badge = f ? fstatusBadge(f.fstatus ?? "") : null;
+      return { tracking: tok, fNo: f?.id ?? null, statusLabel: badge?.label ?? null, statusChip: badge?.chip ?? null };
+    });
+    const hasTracking = toks.length > 0;
+    const done = hasTracking && resolved.every((x) => x.fNo != null);
+    return { cnameshop: s.cnameshop, hasTracking, resolved, done };
+  });
+  const shopsDoneCount = shopSpawnSummary.filter((x) => x.done).length;
+  const shopsTotalCount = shopSpawnSummary.length;
+
   const refundableItems = items
     .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
     .map((it) => ({
@@ -347,6 +435,19 @@ export default async function AdminServiceOrderEditPage({
   const rateCost = Number(r.hratecost ?? 0);
   const costAll  = Number(r.hcostall ?? 0);
   const netThb   = roundUp2((chn + shipChn) * rate + svc);
+  // กำไรสุทธิ (legacy update.php L280) — cost-authority view only (§0e).
+  const profit   = (chn + shipChn) * rate - rateCost * costAll;
+  const priceUpdate = Number(r.hpriceupdate ?? 0);
+
+  // Customer-detail derivation (mirrors legacy-view.tsx) — for the order-context
+  // block shown at the tracking step so the admin sees "ของใคร / ที่อยู่ไหน".
+  const addr = [
+    r.haddressno,
+    r.haddresssubdistrict ? `ต.${r.haddresssubdistrict}` : "",
+    r.haddressdistrict ? `อ.${r.haddressdistrict}` : "",
+    r.haddressprovince ? `จ.${r.haddressprovince}` : "",
+    r.haddresszipcode,
+  ].filter(Boolean).join(" ");
 
   // Status workflow eligibility.
   const isEditable     = status === "1" || status === "2" || status === "6";
@@ -354,6 +455,11 @@ export default async function AdminServiceOrderEditPage({
   const showSpawn      = status === "4";
   const showCompleted  = status === "5";
   const showRefund     = status === "3" || status === "4" || status === "5";
+  // 2026-06-29 (owner: "อยากให้ขึ้นรายละเอียด เหมือนหน้ารอชำระเงิน") — render the
+  // rich order-context block (customer + price breakdown like the detail view)
+  // at the post-payment / tracking steps (3 / 4 / ถึงโกดังจีน 40 / สำเร็จ 5).
+  // At status 1/2/6 the editable ShopItemsEditor already shows the prices.
+  const showOrderContext = status === "3" || status === "4" || status === "40" || status === "5";
 
   const detailHref = `/admin/service-orders/${encodeURIComponent(r.hno)}`;
 
@@ -456,6 +562,89 @@ export default async function AdminServiceOrderEditPage({
         </div>
       )}
 
+      {/* ── 3a. ORDER CONTEXT (owner 2026-06-29 "อยากให้ขึ้นรายละเอียด เหมือนหน้า
+          รอชำระเงิน — มีราคาขายบอก มีรายละเอียดบอก") ──
+          At the post-payment / tracking steps the editable items table is gone,
+          so this block surfaces the SAME info the read-only detail (legacy-view)
+          shows: ลูกค้า + ที่อยู่จัดส่ง + ตัวเลือกขนส่ง (LEFT) · ราคาขาย breakdown
+          (RIGHT · ราคาสินค้า / ค่าขนส่งจีน / ราคารวมสุทธิ + กำไรถ้าเป็น cost-role).
+          Status 1/2/6 already see prices in the editable ShopItemsEditor. */}
+      {showOrderContext && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* LEFT — customer + delivery + transport options */}
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted">ลูกค้า</p>
+              <Link
+                href={`/admin/customers/${encodeURIComponent(r.userid)}`}
+                className="block truncate font-semibold text-primary-600 hover:underline"
+              >
+                {customerName}
+              </Link>
+              <p className="text-xs text-muted">รหัสสมาชิก: {r.userid}</p>
+              <div className="space-y-1 pt-1 text-sm">
+                {u?.userEmail && (
+                  <KV label="อีเมล" value={<a href={`mailto:${u.userEmail}`} className="text-primary-600 hover:underline">{u.userEmail}</a>} />
+                )}
+                {u?.userTel && (
+                  <KV label="โทร." value={<a href={`tel:${u.userTel}`} className="text-primary-600 hover:underline">{u.userTel}</a>} />
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3 space-y-2 text-sm">
+              <KV label="รูปแบบขนส่ง จีน-ไทย" value={TRANSPORT_LABEL[r.htransporttype ?? ""] ?? `mode ${r.htransporttype ?? "-"}`} />
+              <KV label="การตีลังไม้" value={CRATE_LABEL[r.crate ?? ""] ?? "—"} />
+              <KV label="บริษัทขนส่ง" value={r.hshipby ? `${nameShipBy(r.hshipby)} (${r.hshipby})` : "—"} />
+              <KV label="การเก็บเงินค่าขนส่งในไทย" value={PAY_LABEL[r.paymethod ?? ""] ?? "—"} />
+            </div>
+
+            <div className="border-t border-border pt-3 space-y-1 text-sm">
+              <p className="text-xs font-semibold text-muted">ที่อยู่จัดส่งสินค้า</p>
+              <p>{`${r.haddressname ?? ""} ${r.haddresslastname ?? ""}`.trim() || "—"}</p>
+              {r.haddresstel && <p className="text-xs text-muted">📞 {r.haddresstel}</p>}
+              <p className="text-sm">{addr || "—"}</p>
+              {r.haddressnote && <p className="text-xs text-muted">หมายเหตุ: {r.haddressnote}</p>}
+              {r.hfreeshipping === "1" && <p className="text-xs text-green-600">✓ ส่งฟรี (Pacred zone)</p>}
+            </div>
+          </div>
+
+          {/* RIGHT — price (sell) breakdown · legacy update.php L277-292 */}
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-2 text-sm">
+            <p className="text-xs font-semibold text-muted">ราคาขาย (สรุป)</p>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-muted text-xs" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
+              <span className="text-right text-sm">
+                <span className="font-mono tabular-nums">{rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                <span className="text-muted"> บาท/หยวน</span>
+              </span>
+            </div>
+            <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
+            <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
+            <KV label="ราคารวมหยวนจีน" value={`¥${cny(chn + shipChn)}`} mono />
+            {svc > 0 && <KV label="ค่าบริการฝากสั่ง" value={`฿${thb(svc)}`} mono />}
+            <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
+              <span>ราคารวมสุทธิ</span>
+              <span className="font-mono text-primary-600 tabular-nums">฿{thb(netThb)}</span>
+            </div>
+            <KV label="ชำระเงิน เพิ่ม/ลด" value={`¥${cny(priceUpdate)}`} mono />
+            {canSeeCost && (
+              <div className="border-t border-border pt-2 space-y-1">
+                <KV label="อัตราแลกเปลี่ยนจริง" value={`${cny(rateCost)} บาท/หยวน`} mono />
+                <KV label="ราคาซื้อจริงทั้งหมด" value={`¥${cny(costAll)}`} mono />
+                {costAll !== 0 && (
+                  <div className="flex justify-between font-semibold">
+                    <span>กำไรสุทธิ</span>
+                    <span className={`font-mono tabular-nums ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>฿{thb(profit)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <p className="text-[11px] text-muted">*ชำระเงิน เพิ่ม/ลด จะถูกคำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
+          </div>
+        </div>
+      )}
+
       {/* ── 3b. INLINE FIELD EDITS — order-header attributes (legacy update.php
           L156-265 left col + L268-276 rate). Each field shows current value
           with a [แก้ไข] toggle → save via existing server actions. ── */}
@@ -528,9 +717,20 @@ export default async function AdminServiceOrderEditPage({
       {/* 2026-06-04 (ภูม flag #4 · A-path) — per-shop status-aware board
           replaces the old single-input AdminMarkShopOrderOrderedForm.
           Active at status 3/4/5 · self-hides at status 1/2 (items-editor
-          handles those). Mirrors legacy update3.php + update4.php. */}
+          handles those). Mirrors legacy update3.php + update4.php.
+          2026-06-29 (owner: "เพิ่มแทรกกิ้งร้านที่เหลือยังไง") — pass the per-shop
+          spawned-forwarder summary so each shop card shows ✓ฝากนำเข้าแล้ว #fNo /
+          ⌛รอ tracking + an overall "ครบ X/N ร้าน" progress (legacy update4.php
+          per-shop "ตรวจสอบสถานะนำเข้า #fNo" badge). */}
       {(status === "3" || status === "4" || status === "5") && shopFields.length > 0 && (
-        <ShopFieldsBoard hNo={r.hno} status={status} shops={shopFields} />
+        <ShopFieldsBoard
+          hNo={r.hno}
+          status={status}
+          shops={shopFields}
+          spawnSummary={shopSpawnSummary}
+          doneCount={shopsDoneCount}
+          totalCount={shopsTotalCount}
+        />
       )}
 
       {/* owner 2026-06-25 (status-sync · PR018) — manual "ถึงโกดังจีน" escape for a

@@ -69,6 +69,22 @@ export type ShopFieldsRow = {
   items?: ShopFieldsItem[];   // per-line ¥ cPriceUpdate (legacy update3.php L85)
 };
 
+// 2026-06-29 (owner: "เพิ่มแทรกกิ้งร้านที่เหลือยังไง") — per-shop spawned-forwarder
+// summary resolved server-side (page.tsx). Each shop's tracking tokens map to a
+// tb_forwarder (✓ฝากนำเข้าแล้ว #fNo) or are still waiting (⌛รอ tracking).
+export type ShopSpawnResolved = {
+  tracking: string;
+  fNo: number | null;
+  statusLabel: string | null;
+  statusChip: string | null;
+};
+export type ShopSpawnSummaryRow = {
+  cnameshop: string;
+  hasTracking: boolean;
+  resolved: ShopSpawnResolved[];
+  done: boolean;
+};
+
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt disabled:text-muted";
 
@@ -76,10 +92,18 @@ export function ShopFieldsBoard({
   hNo,
   status,
   shops,
+  spawnSummary,
+  doneCount,
+  totalCount,
 }: {
   hNo: string;
   status: string;        // hstatus '1'..'5'
   shops: ShopFieldsRow[]; // grouped by cnameshop server-side
+  // 2026-06-29 — per-shop spawned-forwarder summary (page.tsx) for the progress
+  // badges. Optional so any other caller keeps working.
+  spawnSummary?: ShopSpawnSummaryRow[];
+  doneCount?: number;
+  totalCount?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -102,6 +126,11 @@ export function ShopFieldsBoard({
       return init;
     },
   );
+
+  // 2026-06-29 — per-shop spawned summary lookup (by cnameshop).
+  const summaryByShop = new Map<string, ShopSpawnSummaryRow>();
+  for (const s of spawnSummary ?? []) summaryByShop.set(s.cnameshop, s);
+  const showProgress = (totalCount ?? 0) > 0 && (status === "4" || status === "5");
 
   // ─── status 1/2 — items-editor handles · we render nothing ────────
   if (status === "1" || status === "2") return null;
@@ -200,6 +229,36 @@ export function ShopFieldsBoard({
           <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</div>
         )}
 
+        {/* 2026-06-29 (owner: "เพิ่มแทรกกิ้งร้านที่เหลือยังไง") — overall progress.
+            At status 4 the admin enters tracking + creates ฝากนำเข้า ร้านต่อร้าน;
+            this shows how many shops are done so they know what's left. */}
+        {showProgress && (
+          <div className={`rounded-lg border p-2.5 ${
+            (doneCount ?? 0) >= (totalCount ?? 0)
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-amber-200 bg-amber-50"
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-foreground">
+                ความคืบหน้าสร้างฝากนำเข้า: ครบ {doneCount ?? 0}/{totalCount ?? 0} ร้าน
+              </span>
+              <span className="text-[11px] text-muted">
+                {(doneCount ?? 0) >= (totalCount ?? 0)
+                  ? "ทุกร้านมีฝากนำเข้าแล้ว"
+                  : `เหลืออีก ${(totalCount ?? 0) - (doneCount ?? 0)} ร้าน · ออเดอร์จะ "สำเร็จ" เมื่อครบทุกร้าน`}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 w-full rounded-full bg-white/70 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  (doneCount ?? 0) >= (totalCount ?? 0) ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+                style={{ width: `${(totalCount ?? 0) > 0 ? Math.round(((doneCount ?? 0) / (totalCount ?? 1)) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <p className="text-[11px] text-muted leading-relaxed">
           {isStatus3 && "แต่ละร้านมี \"เลขออเดอร์ร้านจีน\" ของตัวเอง · กรอกครบทุกร้านแล้วกด \"ส่งเข้ารอร้านจีนจัดส่ง\" → ลูกค้าจะได้รับแจ้งเตือน"}
           {isStatus4 && "กรอกเลข Tracking ที่ร้านจีนส่งมาเป็นรายร้าน · กดปุ่ม \"ตรวจสอบรายการนำเข้า\" เพื่อดูสถานะ tb_forwarder ที่ระบบ spawn ให้แล้ว"}
@@ -221,6 +280,8 @@ export function ShopFieldsBoard({
               if (it.crewallet === "1") return sum;
               return sum + it.camount * it.cprice + Number(it.cshippingchn ?? 0);
             }, 0);
+            // 2026-06-29 — per-shop spawned summary (✓ฝากนำเข้าแล้ว / ⌛รอ tracking).
+            const summary = summaryByShop.get(sh.cnameshop);
             return (
               <div
                 key={sh.cnameshop}
@@ -233,6 +294,18 @@ export function ShopFieldsBoard({
                     ชื่อร้าน: <span className="font-normal">{sh.cnameshop}</span>
                   </span>
                   <span className="ml-auto inline-flex items-center gap-2 text-[11px]">
+                    {/* per-shop spawn status (legacy update4.php ตรวจสอบสถานะนำเข้า) */}
+                    {summary && (status === "4" || status === "5") && (
+                      summary.done ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 px-2 py-0.5 font-medium">
+                          <CheckCircle2 className="h-3 w-3" /> ฝากนำเข้าแล้ว
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 text-amber-700 px-2 py-0.5 font-medium">
+                          ⌛ {summary.hasTracking ? "รอสร้างฝากนำเข้า" : "รอ tracking"}
+                        </span>
+                      )
+                    )}
                     <span className="rounded bg-white/80 border border-border px-2 py-0.5 font-mono tabular-nums">
                       {shopItems.length} รายการ
                     </span>
@@ -241,6 +314,37 @@ export function ShopFieldsBoard({
                     </span>
                   </span>
                 </div>
+
+                {/* 2026-06-29 — per-tracking forwarder links (legacy update4.php
+                    L126-131/L168-173 "ตรวจสอบสถานะนำเข้า #fNo"). When a tracking
+                    token already spawned a tb_forwarder, link straight to it with
+                    its live status; otherwise show ⌛รอสร้าง. */}
+                {summary && summary.resolved.length > 0 && (status === "4" || status === "5") && (
+                  <div className="px-3 py-2 border-b border-border bg-surface-alt/30 space-y-1">
+                    {summary.resolved.map((rv) => (
+                      <div key={rv.tracking} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <span className="font-mono tabular-nums text-muted truncate max-w-[60%]" title={rv.tracking}>
+                          {rv.tracking}
+                        </span>
+                        {rv.fNo != null ? (
+                          <a
+                            href={`/admin/forwarders/${rv.fNo}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <ExternalLink className="h-3 w-3" /> ฝากนำเข้า #{rv.fNo}
+                            {rv.statusLabel && <span className="text-muted">· {rv.statusLabel}</span>}
+                          </a>
+                        ) : (
+                          <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+                            ⌛ รอสร้างฝากนำเข้า
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* ── Tracking inputs (top of the shop card) ──
                     Legacy `shops/update3.php` + `update4.php` put these
