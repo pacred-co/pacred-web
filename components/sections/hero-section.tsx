@@ -2,7 +2,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { HeroClient } from "@/components/ui/hero-client";
 
-export function HeroSection() {
+export function HeroSection({ yuanRate }: { yuanRate: number }) {
   const t = useTranslations("heroStats");
 
   const stats = [
@@ -20,7 +20,10 @@ export function HeroSection() {
     },
     {
       label: t("deposit"),
-      value: "4.88",
+      // LIVE ฝากสั่ง rate from tb_settings.rsdefault (the value /cart charges),
+      // fetched server-side and passed in — was hardcoded "4.88" (owner
+      // 2026-06-29 · DISPLAY-ONLY).
+      value: yuanRate.toFixed(2),
       unit: "฿/¥",
       icon: "/images/hero-section/icon/shop.png",
     },
