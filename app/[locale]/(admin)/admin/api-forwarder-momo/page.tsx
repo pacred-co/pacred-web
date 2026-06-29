@@ -401,6 +401,12 @@ export default async function AdminApiForwarderMomoPage({
           >
             🔄 เทียบข้อมูลกับแต้ม
           </Link>
+          <Link
+            href="/admin/api-forwarder-momo/drift"
+            className="rounded-md border border-rose-300 bg-white text-rose-700 px-3 py-1.5 text-xs font-medium hover:bg-rose-50 inline-flex items-center gap-1"
+          >
+            🚨 จุดบอด (แต้ม vs ระบบ)
+          </Link>
         </form>
 
         <div className="grid gap-4 sm:grid-cols-3 items-end">
