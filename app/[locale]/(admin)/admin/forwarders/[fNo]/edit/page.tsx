@@ -187,7 +187,10 @@ export default async function AdminForwarderEditPage({
   // `super` is redundant in the explicit list (require-admin.ts:142 always
   // lets super through) — keeping it for paper-trail visibility. Warehouse
   // staff need this to update cabinet number + status on rows they scan in.
-  await requireAdmin(["ops", "accounting", "super", "warehouse"]);
+  const { roles: editorRoles } = await requireAdmin(["ops", "accounting", "super", "warehouse"]);
+  // 2026-06-29 (ภูม · สิทธิ์ · B) — only Ultra Admin Z may hand-pick a new สถานะ
+  // in the action panel; non-ultra keep cabinet/tracking/note editing.
+  const isUltra = editorRoles.includes("ultra");
 
   const { fNo } = await params;
   const admin = createAdminClient();
@@ -887,6 +890,7 @@ export default async function AdminForwarderEditPage({
             currentTrackingTh={r.ftrackingth ?? ""}
             currentNote={r.fnote ?? ""}
             currentCabinetLocked={r.fcabinet_locked === true}
+            isUltra={isUltra}
           />
         </div>
       </section>

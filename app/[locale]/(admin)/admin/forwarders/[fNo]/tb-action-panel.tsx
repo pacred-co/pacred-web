@@ -51,6 +51,11 @@ type Props = {
   // manual cabinet correction stays. Defaults to false on the 47k+ existing
   // rows + every freshly-created row (DB column default).
   currentCabinetLocked: boolean;
+  // 2026-06-29 (ภูม · สิทธิ์ · B) — only Ultra Admin Z may hand-pick a new สถานะ
+  // here. Non-ultra keep cabinet/tracking/note editing (+ the cabinet→auto-advance
+  // feature); the status <select> is disabled for them and the save tags
+  // source="detail_manual" only when they actually changed the dropdown.
+  isUltra: boolean;
 };
 
 const INPUT_CLS =
@@ -138,6 +143,10 @@ export function TbForwarderActionPanel(p: Props) {
       const result = await adminBulkUpdateForwarderTbStatus({
         fids:    [p.fId],
         fstatus: status,
+        // 2026-06-29 (ภูม · สิทธิ์ · B) — tag as a manual status move ONLY when the
+        // dropdown actually changed, so the server gates it to Ultra Admin Z while
+        // cabinet/note-only edits by warehouse still save (+ cabinet→auto-advance).
+        ...(status !== p.currentStatus ? { source: "detail_manual" as const } : {}),
         // Only pass fields the admin actually touched — leaving them
         // undefined means "don't touch the column" (action treats
         // `undefined` as no-op and `""` as explicit clear).
@@ -184,13 +193,21 @@ export function TbForwarderActionPanel(p: Props) {
           id="tap_status"
           value={status}
           onChange={(e) => setStatus(e.target.value as Status)}
-          disabled={pending}
+          disabled={pending || !p.isUltra}
+          title={p.isUltra ? undefined : "เลื่อนสถานะได้เฉพาะ Ultra Admin Z"}
           className={INPUT_CLS}
         >
           {STATUS_OPTIONS.map((o) => (
             <option key={o.v} value={o.v}>{o.l}</option>
           ))}
         </select>
+        {/* 2026-06-29 (ภูม · สิทธิ์ · B) — non-ultra: status locked, but cabinet/
+            tracking/note below stay editable. */}
+        {!p.isUltra && (
+          <p className="mt-1 text-[11px] text-amber-700">
+            🔒 เลื่อนสถานะเฉพาะ <b>Ultra Admin Z</b> · ช่องเลขตู้/Tracking/หมายเหตุยังแก้ได้
+          </p>
+        )}
         {isRollback && (
           <p className="mt-1 text-[11px] text-amber-700">
             ⚠ กำลังย้อนสถานะ — confirm dialog จะถามอีกครั้ง

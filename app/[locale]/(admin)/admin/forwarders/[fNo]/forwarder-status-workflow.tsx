@@ -180,6 +180,9 @@ export function ForwarderStatusWorkflow(p: Props) {
       const res = await adminBulkUpdateForwarderTbStatus({
         fids: [p.fId],
         fstatus: selected as Status,
+        // 2026-06-29 (ภูม · สิทธิ์ · B) — manual detail status move → Ultra Admin Z
+        // only (server-enforced; the form above is already isUltra-gated).
+        source: "detail_manual",
       });
       if (!res.ok) {
         setError(res.error ?? "บันทึกสถานะไม่สำเร็จ");
@@ -258,7 +261,7 @@ export function ForwarderStatusWorkflow(p: Props) {
       ) : (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           🔒 การเปลี่ยนสถานะแบบ manual สงวนเฉพาะ <b>Ultra Admin Z</b> · สถานะปัจจุบัน:{" "}
-          <b>{STATUS_LABEL[p.currentStatus] ?? p.currentStatus}</b> — พนักงานเลื่อนสถานะผ่านงานปกติ (ยิงเข้าโกดัง · วางบิล · ปิดงานส่งแล้ว)
+          <b>{STATUS_LABEL[p.currentStatus] ?? p.currentStatus}</b> — พนักงานเลื่อนสถานะผ่านงานปกติ (ยิงบาร์โค้ดเข้าโกดัง/ถึงไทย · วางบิล · มอบหมายคนขับ)
         </p>
       )}
 
@@ -308,8 +311,10 @@ export function ForwarderStatusWorkflow(p: Props) {
       {/* ── ส่วนที่เหลือ (cost panel · ฯลฯ) ── */}
       {p.children}
 
-      {/* ── #form6 — เลขพัสดุไทย + ส่งแล้ว (เด้งเมื่อเลือกสถานะ ≥ 6) ── */}
-      {showTracking && (
+      {/* ── #form6 — เลขพัสดุไทย + ส่งแล้ว (เด้งเมื่อเลือกสถานะ ≥ 6) ──
+           2026-06-29 (ภูม · สิทธิ์ · B): close-job is a manual status move →
+           Ultra Admin Z only (matches the step form + server gate). */}
+      {p.isUltra && showTracking && (
         <TrackingShippedForm
           fId={p.fId}
           fNo={p.fNo}
@@ -352,6 +357,9 @@ function TrackingShippedForm({
       const res = await adminBulkUpdateForwarderTbStatus({
         fids: [fId],
         fstatus: "7",
+        // 2026-06-29 (ภูม · สิทธิ์ · B) — close-job (→ ส่งแล้ว) is a manual status
+        // move → Ultra Admin Z only (server-enforced; render is isUltra-gated too).
+        source: "detail_manual",
         ...(trk !== "" ? { tracking_th: trk } : {}),
       });
       if (!res.ok) { setError(res.error ?? "บันทึกไม่สำเร็จ"); return; }

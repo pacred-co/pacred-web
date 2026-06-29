@@ -808,6 +808,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         statusLabel={STATUS_LABEL}
         modeLabel={MODE_LABEL}
         currentStatus={sp.status}
+        isUltra={roles.includes("ultra")}
       />
 
       {/* Wave 7 — per-page money-sum footer (faithful: legacy admin lists

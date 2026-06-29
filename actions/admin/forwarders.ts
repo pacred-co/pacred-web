@@ -404,6 +404,18 @@ type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
 const bulkTbSchema = z.object({
   fids:    z.array(z.number().int().positive()).min(1).max(100),
   fstatus: z.enum(TB_FORWARDER_STATUSES),
+  // 2026-06-29 (ภูม · สิทธิ์) — marks a MANUAL status-move from an admin UI so the
+  // action can reserve it for Ultra Admin Z (role "ultra"):
+  //   • "bulk_manual"   — /admin/forwarders list bulk-bar "ติ๊กเลื่อนสถานะ"
+  //   • "detail_manual" — per-order detail step form · close-job form · /edit panel
+  //                       (the /edit panel sends it ONLY when the สถานะ dropdown
+  //                       actually changed, so cabinet/note-only edits by warehouse
+  //                       still work + the cabinet→auto-advance feature is untouched)
+  // Every NON-manual path (⭐ สถานะพิเศษ fstatus="99" · driver toolbar · internal
+  // callers · barcode scan via its own action) omits `source` → unaffected, keeps
+  // its existing per-row transition gate. UI also hides the controls for non-ultra
+  // (defence-in-depth — this server gate is the real enforcement).
+  source:  z.enum(["bulk_manual", "detail_manual"]).optional(),
   // Wave 23 (2026-05-27 ภูม flag · live walkthrough): bulk + detail share
   // this action — optional fields below let single-row callers (the detail
   // page action panel) set tracking/cabinet/note in one go, AND let the
@@ -447,7 +459,7 @@ export async function adminBulkUpdateForwarderTbStatus(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fids, fstatus, cabinet_number, tracking_th, fnote, cabinet_locked } = parsed.data;
+  const { fids, fstatus, cabinet_number, tracking_th, fnote, cabinet_locked, source } = parsed.data;
 
   return withAdmin<{ updated: number }>(
     // Wave 26 G5 (2026-05-28 ดึก): page-level union widened from ["ops","super"]
@@ -457,7 +469,21 @@ export async function adminBulkUpdateForwarderTbStatus(
     // for 3→4 / *→4 rows, Accounting only for *→5 / 5→6 etc. `super`
     // and `manager` retain the global override. See lib/auth/check-fstatus-transition.ts.
     ["ops", "super", "manager", "warehouse", "accounting", "driver"],
-    async ({ adminId }) => {
+    async ({ adminId, roles }) => {
+    // 2026-06-29 (ภูม · สิทธิ์ · option B) — every MANUAL status-move from an admin
+    // UI (list bulk-bar + per-order detail forms + /edit panel) is reserved for
+    // Ultra Admin Z. Each entry point tags itself with `source`; this is the single
+    // server-side enforcement point so the UI gate can't be bypassed via the API.
+    // Untouched: ⭐ สถานะพิเศษ (fstatus="99", no source), driver toolbar, internal
+    // callers, and the barcode-scan flow (its own action) — staff still advance
+    // status through normal work, just not by hand-picking it. super/normies are
+    // GOD-NAV but still NOT ultra → blocked here too ("ต้องมีแค่ role Ultra Admin Z").
+    if ((source === "bulk_manual" || source === "detail_manual") && !roles.includes("ultra")) {
+      return {
+        ok: false,
+        error: "เฉพาะ Ultra Admin Z เท่านั้นที่เลื่อนสถานะเองได้ (สิทธิ์ไม่พอ)",
+      };
+    }
     const admin = createAdminClient();
 
     // Snapshot before — for audit log + change detection + the cabinet-close

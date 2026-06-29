@@ -996,3 +996,23 @@ The worktree's OWN `pnpm-lock.yaml` (from its HEAD) **did** list all three — `
 **Why this matters next time:** when a freshly-generated **capability link** (HMAC `{id}-{hex}` token: receipts, quotations, any `/r//q/` style) 404s in dev, FIRST check the token's hex length against the `slice(0,N)` in the token module. Wrong length = **stale-compile artifact, not a bug** → restart the dev server + regenerate before touching code. Verify the real module logic by hand-replicating the HMAC (tsx can't import a `server-only` module). Don't "fix" correct code chasing a dev-HMR ghost.
 
 **Cross-links:** `lib/quote/quote-token.ts` (mirror of `lib/receipt/receipt-token.ts`) · the PEAK-print `.shop-peak-gutter` fullscreen fix same day (commit `7da3c989`) · session-continuity skill (the 404 was caught precisely because of "no เสร็จ without a live-surface render").
+
+## [2026-06-29] Big branch resync → pnpm virtual-store EMPTY dirs → dev "Cannot find module 'tslib' / '@alloc/quick-lru'" 500 (NOT a missing dep)
+
+**Context:** Home→work machine, local `Poom-pacred` was 1968 commits behind. After `git merge --ff-only origin/Poom-pacred` + `pnpm install`, `next dev` 500'd on `./app/globals.css` → `Cannot find module '@alloc/quick-lru'` (and earlier `tslib`), both transitive deps that ARE declared correctly upstream (`@supabase/auth-js` deps `tslib`, `@tailwindcss/postcss` deps `@alloc/quick-lru`).
+
+**Symptom:** `node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>/` existed as a dir but was **EMPTY** (no `package.json` inside) — extraction got truncated, yet pnpm's "Already up to date" check saw the dir + lockfile entry and refused to re-fetch. `pnpm install`, `pnpm install <pkg>`, and even `pnpm install --force` all said "Already up to date / added 0" and did NOT repair it. The symlink chain was intact (`auth-js/node_modules/tslib -> .pnpm/tslib@2.8.1/node_modules/tslib`) but the **target dir was empty** → Node module resolution fails → Turbopack PostCSS eval throws → every page 500s.
+
+**Root cause:** partial/corrupt extraction into the pnpm content-addressable store's virtual dirs during a large sync (likely a Windows file-lock / interrupted write). The store *content* was fine; only the per-package virtual-store dirs were hollow. This is a SILENT corruption pnpm's freshness check can't detect.
+
+**Fix / answer:** the reliable repair is a **clean reinstall + clear the Next cache**, NOT per-package install:
+```
+rm -rf node_modules && pnpm install      # rebuilds ALL virtual-store dirs from the (good) content store
+rm -rf .next                             # the prior 500 poisoned the dev build cache — stale module graph kept 500ing after the fix
+preview_stop + preview_start             # fresh compile
+```
+Verify with `test -e node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>/package.json` (the EMPTY-dir check), not just `ls` (the hollow dir lists fine). DON'T add the transitive dep to `package.json` as a "fix" — it's declared upstream; adding it masks the real corruption and pollutes the branch. After the first repair the `.next` cache still held the broken graph and kept 500ing → clearing `.next` was required to actually see green.
+
+**Why this matters next time:** on ANY machine switch / big `git merge` that jumps many commits, treat a dev `Cannot find module '<transitive-dep>'` 500 as **pnpm store corruption, not a code/dep bug**. Go straight to `rm -rf node_modules .next && pnpm install` instead of chasing individual packages with `pnpm add` (which won't repair an empty virtual-store dir). Pairs with the memory `dev_in_claude_worktree` (copy `.env.local` first) — this is its node_modules sibling.
+
+**Cross-links:** AGENTS.md §13 (worktree base is stale — resync before trusting it) · memory `dev_in_claude_worktree` · the dev-HMR stale-compile entry above (same family: the on-disk source was correct, the running artifact wasn't).
