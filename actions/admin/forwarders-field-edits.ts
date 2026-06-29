@@ -845,6 +845,83 @@ export async function adminUpdateForwarderCrate(
   });
 }
 
+// ── update_priceCrate — ค่าตีลังไม้ (บาท) header-level money edit ──────────────
+// Owner 2026-06-29 ("เพิ่มแก้ราคาได้เข้ามาเลย"): the detail-page crate row only
+// let admins flip the FLAG ('1' ตี · '2' ไม่ตี); the actual baht was read-only
+// (re-derived from the per-item crateFee at dimension re-pricing). This action
+// makes the crate PRICE directly editable on the forwarder header — faithful to
+// the legacy update.php `priceCrate` baht input (include/pages/forwarder/update.php
+// L1231-1235 · `<input name="priceCrate">`), which legacy writes via the
+// update_data path (forwarder.php L1762 `$priceCrate=$_POST['priceCrate']` →
+// L2065 `priceCrate='$priceCrate'`).
+//
+// MONEY model — collection_model = in_bill_total (legacy-verified · NOT "เก็บนอก").
+// Legacy folds priceCrate into the CUSTOMER-PAYABLE total in every composite:
+//   • calPriceForwarderMain (function.php L1868 — the detail/list ยอด)
+//   • the credit-grant $pricePay (forwarder.php L1425)
+//   • create-f-receipt.php $totalPrice + the priceOtherBillAll "ค่าใช้จ่ายอื่นๆ"
+//     bucket (L329/335/665/671)
+//   • shown as its own labelled line "ค่าตีลังไม้" on calPrice.php L259.
+// Pacred's calcForwarderOutstanding / calcForwarderGross (lib/forwarder/
+// outstanding.ts L77) ALREADY sums pricecrate → the existing grand-total is a
+// faithful port. Editing pricecrate here therefore moves the customer's payable
+// total — same as legacy. Column-only write (+crate flag + adminIDUpdate + audit);
+// editable in ALL statuses (legacy never gated the update.php money inputs).
+const cratePriceSchema = z.object({
+  fId:        z.number().int().positive(),
+  crate:      z.enum(["1", "2"] as const),       // '1' ตีลังไม้ · '2' ไม่ตีลังไม้
+  pricecrate: z.number().finite().min(0).max(99_999_999),
+});
+export type AdminUpdateForwarderCratePriceInput = z.infer<typeof cratePriceSchema>;
+
+export async function adminUpdateForwarderCratePrice(
+  rawInput: AdminUpdateForwarderCratePriceInput,
+): Promise<AdminActionResult> {
+  const parsed = cratePriceSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, crate, pricecrate")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; crate: string | null; pricecrate: number | string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderCratePrice read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const beforeCrate = (fwd.crate ?? "").trim();
+    const beforePrice = Number(fwd.pricecrate ?? 0);
+    if (beforeCrate === d.crate && beforePrice === d.pricecrate) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลังเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ crate: d.crate, pricecrate: d.pricecrate, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderCratePrice update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกค่าตีลังไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_crate_price", "tb_forwarder", String(d.fId), {
+      before: { crate: beforeCrate, pricecrate: beforePrice },
+      after:  { crate: d.crate, pricecrate: d.pricecrate },
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── update_paymethod — เก็บเงินค่าขนส่งในไทย (ต้นทาง/ปลายทาง) ────────────────
 // Faithful counterpart to adminUpdateOrderPayMethod (service-orders-header-edits.ts)
 // — the ฝากสั่งซื้อ side already had this; ฝากนำเข้า was missing the per-field

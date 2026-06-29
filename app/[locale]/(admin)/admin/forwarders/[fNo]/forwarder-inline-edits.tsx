@@ -48,6 +48,7 @@ import { Pencil, AlertTriangle, Camera, Trash2 } from "lucide-react";
 import {
   adminUpdateForwarderTransportType,
   adminUpdateForwarderCrate,
+  adminUpdateForwarderCratePrice,
   adminUpdateForwarderShipBy,
   adminUpdateForwarderPayMethod,
   adminUpdateForwarderAmountCount,
@@ -900,8 +901,33 @@ export function EditPalletField({ fId, fpallet }: { fId: number; fpallet: number
 export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate: string | null; pricecrate?: number | string | null }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const initialCrate = (crate === "2" ? "2" : "1") as "1" | "2";
+  // Legacy crate flag: '1' = ตีลังไม้ · '2'/empty = ไม่ตีลังไม้ (nameCrate · function.php L1691).
+  const initialCrate = (crate === "1" ? "1" : "2") as "1" | "2";
   const [crateVal, setCrateVal] = useState<"1" | "2">(initialCrate);
+  // Owner 2026-06-29 — ค่าตีลังไม้ (baht) now directly editable on the header.
+  const initialPrice = Number(pricecrate ?? 0);
+  const [priceVal, setPriceVal] = useState<string>(String(initialPrice));
+
+  async function onSave(close: () => void) {
+    const price = Number(priceVal);
+    if (!Number.isFinite(price) || price < 0) {
+      // surface via the shared editor error path by routing through run()
+      run(() => Promise.resolve({ ok: false, error: "กรอกค่าตีลัง (บาท) ที่ถูกต้อง (≥ 0)" }), () => {});
+      return;
+    }
+    if (crateVal === initialCrate && price === initialPrice) {
+      run(() => Promise.resolve({ ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลังเดิม)" }), () => {});
+      return;
+    }
+    if (!(await confirm(
+      `บันทึกค่าตีลังไม้ ?\n\n` +
+      `การตีลังไม้ : ${CRATE_LABEL[crateVal] ?? crateVal}\n` +
+      `ค่าตีลังไม้ : ฿${price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}\n\n` +
+      `(เป็นส่วนหนึ่งของยอดรวมที่ลูกค้าต้องชำระ — เก็บในบิล)`,
+    ))) return;
+    run(() => adminUpdateForwarderCratePrice({ fId, crate: crateVal, pricecrate: price }), close);
+  }
+
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -912,7 +938,7 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
         setEditing={setEditing}
         display={
           <>
-            {CRATE_LABEL[crate ?? ""] ?? "—"}
+            {CRATE_LABEL[crate === "1" ? "1" : "2"] ?? "—"}
             {Number(pricecrate ?? 0) > 0 && (
               <span className="text-muted text-xs ml-1.5">(฿{Number(pricecrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
             )}
@@ -921,16 +947,30 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
       >
         {(close) => (
           <>
-            <select className={selectCls} value={crateVal} onChange={(e) => setCrateVal(e.target.value as "1" | "2")}>
-              <option value="1">ตีลังไม้</option>
-              <option value="2">ไม่ตีลังไม้</option>
-            </select>
+            <div>
+              <label className="block text-[11px] text-muted mb-0.5">การตีลังไม้</label>
+              <select className={selectCls} value={crateVal} onChange={(e) => setCrateVal(e.target.value as "1" | "2")}>
+                <option value="1">ตีลังไม้</option>
+                <option value="2">ไม่ตีลังไม้</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted mb-0.5">ค่าตีลังไม้ (บาท)</label>
+              <input
+                type="number" min="0" step="0.01" inputMode="decimal"
+                className={`${inputCls} font-mono text-right`}
+                value={priceVal}
+                onChange={(e) => setPriceVal(e.target.value)}
+                placeholder="0.00"
+                disabled={pending}
+              />
+            </div>
             <p className="text-[11px] text-muted">
-              ค่าตีลังจริงคำนวณตอนแก้ไขขนาด/น้ำหนัก (ต่อ-รายการ) — รายการนี้เก็บแค่ flag header
+              ค่าตีลังไม้เป็นส่วนหนึ่งของยอดที่ลูกค้าต้องชำระ (รวมในบิล/ใบเสร็จ) — แก้ได้ทุกสถานะ
             </p>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave}
-                onClick={() => run(() => adminUpdateForwarderCrate({ fId, crate: crateVal }), close)}>บันทึก</button>
+                onClick={() => onSave(close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
             </div>
           </>
