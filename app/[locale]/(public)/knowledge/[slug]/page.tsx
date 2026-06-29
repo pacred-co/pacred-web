@@ -22,8 +22,8 @@ import { CategoryBanner } from "@/components/knowledge/category-banner";
 import {
   KNOWLEDGE_ARTICLES,
   getArticleBySlug,
-  getRelatedArticles,
 } from "@/lib/knowledge-articles";
+import { getPublishedArticleBySlug, getPublishedArticles } from "@/lib/cms/articles";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";
@@ -48,14 +48,23 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const article = getArticleBySlug(slug);
-  if (!article) return { title: "ไม่พบบทความ · Pacred Shipping" };
+  // CMS-first (back-office editable) → fall back to the static article.
+  const cms = await getPublishedArticleBySlug(slug);
+  const staticArticle = getArticleBySlug(slug);
+  if (!cms && !staticArticle) return { title: "ไม่พบบทความ · Pacred Shipping" };
+  const article = {
+    title: cms?.title || staticArticle!.title,
+    excerpt: cms?.excerpt || staticArticle?.excerpt || "",
+    image: cms?.coverUrl || staticArticle?.image || "",
+  };
+  const seoTitle = cms?.metaTitle?.trim() || article.title;
+  const seoDesc = cms?.metaDescription?.trim() || article.excerpt;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/knowledge/${slug}`;
   const imageUrl = `${SITE_URL}${article.image}`;
   return {
-    title: article.title,
-    description: article.excerpt,
+    title: seoTitle,
+    description: seoDesc,
     alternates: {
       canonical,
       languages: {
@@ -86,17 +95,57 @@ export default async function ArticlePage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const article = getArticleBySlug(slug);
-  if (!article) notFound();
+  // CMS-first (back-office editable · Ultra-approved) → fall back to the static article.
+  const cms = await getPublishedArticleBySlug(slug);
+  const staticArticle = getArticleBySlug(slug);
+  if (!cms && !staticArticle) notFound();
 
   const t = await getTranslations("knowledgeArticlePage");
 
-  const content = await fs.readFile(
-    path.join(process.cwd(), "public", "images", "knowledge", `${article.id}.txt`),
-    "utf-8",
-  );
+  const article = cms
+    ? {
+        id: cms.id,
+        slug: cms.slug,
+        title: cms.title,
+        excerpt: cms.excerpt,
+        category: cms.subCategory || staticArticle?.category || "นำเข้า",
+        image: cms.coverUrl || staticArticle?.image || "",
+      }
+    : {
+        id: staticArticle!.id,
+        slug: staticArticle!.slug,
+        title: staticArticle!.title,
+        excerpt: staticArticle!.excerpt,
+        category: staticArticle!.category as string,
+        image: staticArticle!.image,
+      };
 
-  const related = getRelatedArticles(article, 4);
+  // Body — the CMS body wins; fall back to the static .txt when the CMS body is
+  // empty (or for a static-only article that isn't in CMS yet).
+  let content = cms?.body?.trim() ?? "";
+  if (!content && staticArticle) {
+    try {
+      content = await fs.readFile(
+        path.join(process.cwd(), "public", "images", "knowledge", `${staticArticle.id}.txt`),
+        "utf-8",
+      );
+    } catch {
+      content = "";
+    }
+  }
+
+  // Related — from the merged knowledge set (CMS-preferred), same category first.
+  const dbKnowledge = await getPublishedArticles("knowledge");
+  const dbKnowledgeSlugs = new Set(dbKnowledge.map((a) => a.slug));
+  const merged = [
+    ...dbKnowledge.map((a) => ({ id: a.id, slug: a.slug, title: a.title, excerpt: a.excerpt, category: a.subCategory || "นำเข้า", image: a.coverUrl })),
+    ...KNOWLEDGE_ARTICLES.filter((a) => !dbKnowledgeSlugs.has(a.slug)).map((a) => ({ id: a.id, slug: a.slug, title: a.title, excerpt: a.excerpt, category: a.category as string, image: a.image })),
+  ];
+  const pool = merged.filter((a) => a.slug !== article.slug);
+  const related = [
+    ...pool.filter((a) => a.category === article.category),
+    ...pool.filter((a) => a.category !== article.category),
+  ].slice(0, 4);
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
 
   return (
@@ -177,7 +226,7 @@ export default async function ArticlePage({
                 <span className="text-muted/50">·</span>
                 <span>{t("readingTime")}</span>
                 <span className="text-muted/50">·</span>
-                <ArticleStats articleId={article.id} />
+                <ArticleStats statKey={`knowledge:${article.slug}`} countView />
                 <span className="text-muted/50">·</span>
                 <ShareButton title={article.title} text={article.excerpt} slug={article.slug} />
               </div>
@@ -186,15 +235,17 @@ export default async function ArticlePage({
             {/* Hero image — portrait poster (3:4 natural), unoptimized for max sharpness */}
             <div className="mx-auto w-full max-w-[920px] mb-6 md:mb-8">
               <div className="relative mx-auto w-full max-w-[480px] aspect-[3/4] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                <Image
-                  src={article.image}
-                  alt={article.title}
-                  fill
-                  sizes="(max-width: 640px) 100vw, 480px"
-                  className="object-cover"
-                  priority
-                  unoptimized
-                />
+                {article.image ? (
+                  <Image
+                    src={article.image}
+                    alt={article.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, 480px"
+                    className="object-cover"
+                    priority
+                    unoptimized
+                  />
+                ) : null}
               </div>
             </div>
 

@@ -45,8 +45,27 @@ export default async function KnowledgeListingPage({
   const { locale } = await params;
   const t = await getTranslations("knowledgeIndex");
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
-  // Owner 2026-06-23: published CMS articles append after the static cards.
+  // Owner 2026-06-29: all สาระน่ารู้ now live in cms_articles (back-office editable).
+  // CMS is the source; a static KNOWLEDGE_ARTICLES card only shows as a fallback
+  // when its slug isn't (yet) in CMS — so nothing ever disappears + no duplicates.
   const dbArticles = await getPublishedArticles("knowledge");
+  const dbSlugs = new Set(dbArticles.map((a) => a.slug));
+  const cards = [
+    ...dbArticles.map((a) => ({
+      key: `db-${a.id}`,
+      slug: a.slug,
+      title: a.title,
+      category: a.subCategory || "นำเข้า",
+      image: a.coverUrl,
+    })),
+    ...KNOWLEDGE_ARTICLES.filter((a) => !dbSlugs.has(a.slug)).map((a) => ({
+      key: `st-${a.id}`,
+      slug: a.slug,
+      title: a.title,
+      category: a.category as string,
+      image: a.image,
+    })),
+  ];
   const CATEGORY_LABELS: Record<string, string> = {
     นำเข้า: t("categoryImport"),
     เคลียร์: t("categoryCustoms"),
@@ -56,7 +75,7 @@ export default async function KnowledgeListingPage({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: typedLocale === "th" ? "สาระน่ารู้นำเข้า-ส่งออก เคลียร์ศุลกากร" : "Knowledge base — import, export, customs",
-    itemListElement: KNOWLEDGE_ARTICLES.map((a, i) => ({
+    itemListElement: cards.map((a, i) => ({
       "@type": "ListItem",
       position: i + 1,
       url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/knowledge/${a.slug}`,
@@ -108,7 +127,7 @@ export default async function KnowledgeListingPage({
               {/* Category overview */}
               <div className="mt-5 md:mt-6 flex flex-wrap gap-2 justify-center md:justify-start">
                 {CATEGORIES.map((c) => {
-                  const count = KNOWLEDGE_ARTICLES.filter((a) => a.category === c.id).length;
+                  const count = cards.filter((a) => a.category === c.id).length;
                   return (
                     <span
                       key={c.id}
@@ -126,68 +145,39 @@ export default async function KnowledgeListingPage({
             {/* Articles grid — same compact card style as the home page Blog carousel
                 (per ปอน 2026-05-15 — match home knowledge cards: badge + title only) */}
             <div className="mx-auto mt-6 md:mt-10 w-full max-w-[1120px] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 md:gap-3">
-              {KNOWLEDGE_ARTICLES.map((article) => (
+              {cards.map((article) => (
                 <Link
-                  key={article.id}
+                  key={article.key}
                   href={`/knowledge/${article.slug}`}
                   className="group relative bg-white dark:bg-surface rounded-2xl overflow-hidden border border-border shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] hover:border-primary-200 hover:-translate-y-1 transition-all duration-300"
                 >
                   <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                    <Image
-                      src={article.image}
-                      alt={article.title}
-                      fill
-                      sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 240px"
-                      quality={92}
-                      className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                    />
-                    <div className="absolute top-2.5 left-2.5">
-                      <span
-                        className={[
-                          "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
-                          CATEGORY_BADGE[article.category],
-                        ].join(" ")}
-                      >
-                        {article.category}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-3 md:p-3.5">
-                    <h3 className="text-[12.5px] md:text-[13px] font-black text-[#111827] dark:text-white leading-[1.3] line-clamp-2 group-hover:text-primary-700 transition-colors">
-                      {article.title}
-                    </h3>
-                  </div>
-                </Link>
-              ))}
-              {/* Published CMS articles — appended after the static cards (owner 2026-06-23) */}
-              {dbArticles.map((a) => (
-                <Link
-                  key={`db-${a.id}`}
-                  href={`/articles/${a.slug}`}
-                  className="group relative bg-white dark:bg-surface rounded-2xl overflow-hidden border border-border shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] hover:border-primary-200 hover:-translate-y-1 transition-all duration-300"
-                >
-                  <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                    {a.coverUrl ? (
+                    {article.image ? (
                       <Image
-                        src={a.coverUrl}
-                        alt={a.title}
+                        src={article.image}
+                        alt={article.title}
                         fill
                         sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 240px"
                         quality={92}
                         className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                       />
                     ) : null}
-                    {a.subCategory ? (
+                    {article.category ? (
                       <div className="absolute top-2.5 left-2.5">
-                        <span className={["inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]", CATEGORY_BADGE[a.subCategory] ?? CATEGORY_BADGE["นำเข้า"]].join(" ")}>
-                          {a.subCategory}
+                        <span
+                          className={[
+                            "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)]",
+                            CATEGORY_BADGE[article.category] ?? CATEGORY_BADGE["นำเข้า"],
+                          ].join(" ")}
+                        >
+                          {article.category}
                         </span>
                       </div>
                     ) : null}
                   </div>
                   <div className="p-3 md:p-3.5">
                     <h3 className="text-[12.5px] md:text-[13px] font-black text-[#111827] dark:text-white leading-[1.3] line-clamp-2 group-hover:text-primary-700 transition-colors">
-                      {a.title}
+                      {article.title}
                     </h3>
                   </div>
                 </Link>

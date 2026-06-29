@@ -36,6 +36,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { listCaseComments } from "@/actions/case-comments";
 import { getPublishedArticleBySlug } from "@/lib/cms/articles";
 import { ArticleContent } from "@/components/knowledge/article-content";
+import { ArticleStats } from "@/components/knowledge/article-stats";
 import { CaseGallery } from "./case-gallery";
 import { CaseComments } from "./case-comments";
 
@@ -339,6 +340,9 @@ export default async function ReviewLandingPage({
                           {cmsArticle.caseRoute}
                         </span>
                       ) : null}
+                    </div>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] font-bold text-muted">
+                      <ArticleStats statKey={`our_work:${cmsArticle.slug}`} countView />
                     </div>
                     {cmsArticle.excerpt ? (
                       <p className="mt-3 text-[14px] leading-relaxed text-muted">{cmsArticle.excerpt}</p>
@@ -672,6 +676,10 @@ export default async function ReviewLandingPage({
                       <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
                       {ui.verified}
                     </span>
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] font-bold text-muted">
+                    <ArticleStats statKey={`our_work:${reviewCanonicalSlug(review)}`} countView />
                   </div>
 
                   <p className="mt-3 text-[14px] leading-relaxed text-muted">{logisticsProse}</p>

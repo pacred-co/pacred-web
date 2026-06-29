@@ -8,13 +8,13 @@ import {
   Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search, Video, Plus, Star,
 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
-import { ArticleContent } from "@/components/knowledge/article-content";
+import { ArticlePreview } from "./article-preview";
 import {
   saveCmsArticle, submitCmsArticle, approveCmsArticle, rejectCmsArticle,
   unpublishCmsArticle, deleteCmsArticle, uploadCmsCover, uploadCmsVideo, type AdminArticle,
 } from "@/actions/admin/cms-articles";
 import {
-  CMS_CATEGORIES, CMS_CATEGORY_META, KNOWLEDGE_SUBCATS, CMS_STATUS_LABEL,
+  CMS_CATEGORIES, CMS_CATEGORY_META, KNOWLEDGE_SUBCATS, NEWS_SUBCATS, CMS_STATUS_LABEL,
   type CmsCategory, type CmsStatus,
 } from "@/lib/validators/cms-article";
 
@@ -84,7 +84,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       excerpt: excerpt.trim(),
       coverUrl: coverUrl.trim(),
       body: body.trim(),
-      subCategory: category === "knowledge" ? subCategory : "",
+      subCategory:
+        category === "knowledge"
+          ? subCategory
+          : category === "news"
+            ? ((NEWS_SUBCATS as readonly string[]).includes(subCategory) ? subCategory : "ข่าวด่วน")
+            : "",
       metaTitle: metaTitle.trim(),
       metaDescription: metaDescription.trim(),
       tags,
@@ -246,7 +251,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
           </span>
           {isPublished && initial?.slug ? (
             <a
-              href={category === "our_work" ? `/our-work/${initial.slug}` : `/articles/${initial.slug}`}
+              href={
+                category === "our_work" ? `/our-work/${initial.slug}`
+                : category === "knowledge" ? `/knowledge/${initial.slug}`
+                : category === "news" ? `/news/${initial.slug}`
+                : `/articles/${initial.slug}`
+              }
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline"
@@ -281,6 +291,18 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 <label className={labelCls}>ป้ายหมวด (สาระน่ารู้)</label>
                 <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className={inputCls} aria-label="ป้ายหมวดสาระน่ารู้">
                   {KNOWLEDGE_SUBCATS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            ) : category === "news" ? (
+              <div>
+                <label className={labelCls}>ป้ายหมวด (ข่าวสาร)</label>
+                <select
+                  value={(NEWS_SUBCATS as readonly string[]).includes(subCategory) ? subCategory : "ข่าวด่วน"}
+                  onChange={(e) => setSubCategory(e.target.value)}
+                  className={inputCls}
+                  aria-label="ป้ายหมวดข่าวสาร"
+                >
+                  {NEWS_SUBCATS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             ) : null}
@@ -565,16 +587,22 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
             </div>
           ) : null}
 
-          {/* Live preview */}
+          {/* Live preview — renders EXACTLY like the public detail page (per category) */}
           {preview ? (
-            <div className="rounded-2xl border border-border bg-white p-4 shadow-sm dark:bg-surface">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">ตัวอย่างหน้าเว็บ</p>
-              <h2 className="text-xl font-black text-foreground">{title || "หัวข้อบทความ"}</h2>
-              {excerpt ? <p className="mt-1 text-sm text-muted">{excerpt}</p> : null}
-              <div className="mt-3">
-                {body.trim() ? <ArticleContent text={body} title={title} /> : <p className="text-sm text-muted">— ยังไม่มีเนื้อหา —</p>}
-              </div>
-            </div>
+            <ArticlePreview
+              category={category}
+              title={title}
+              excerpt={excerpt}
+              coverUrl={coverUrl}
+              body={body}
+              subCategory={subCategory}
+              videoUrl={videoUrl}
+              galleryImages={galleryImages}
+              casePrice={casePrice}
+              caseRating={caseRating}
+              caseRoute={caseRoute}
+              caseFacts={caseFacts}
+            />
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-surface-alt/40 p-6 text-center text-sm text-muted">
               กด “ดูตัวอย่าง” ที่ช่องเนื้อหา เพื่อดูว่าบทความจะออกมาหน้าตาแบบไหนบนเว็บ

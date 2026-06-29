@@ -19,6 +19,14 @@ const STATUS_STYLE: Record<CmsStatus, string> = {
   rejected:  "border-rose-300 bg-rose-50 text-rose-700",
 };
 
+/** The public page a published article of this category lives on. */
+function publicArticlePath(category: string, slug: string): string {
+  if (category === "our_work") return `/our-work/${slug}`;
+  if (category === "knowledge") return `/knowledge/${slug}`;
+  if (category === "news") return `/news/${slug}`;
+  return `/articles/${slug}`;
+}
+
 function fmt(raw: string | null): string {
   if (!raw) return "—";
   const d = new Date(raw);
@@ -128,7 +136,7 @@ export default async function AdminArticlesPage({
                     <div className="flex items-center gap-1.5">
                       <Link href={`/admin/articles/${a.id}`} className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">แก้ไข</Link>
                       {a.status === "published" && a.slug ? (
-                        <a href={`/articles/${a.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-foreground hover:bg-surface-alt"><ExternalLink className="h-3 w-3" /> เว็บ</a>
+                        <a href={publicArticlePath(a.category, a.slug)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-foreground hover:bg-surface-alt"><ExternalLink className="h-3 w-3" /> เว็บ</a>
                       ) : null}
                     </div>
                   </td>
