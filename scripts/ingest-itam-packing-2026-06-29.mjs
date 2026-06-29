@@ -36,7 +36,8 @@ import pg from "pg";
 
 const APPLY = process.argv.includes("--apply");
 const { Client } = pg;
-const PROJECT_REF = "yzljakczhwrpbxflnmco";
+// Defaults to prod; override with PROJECT_REF env for dev-sync (DEV-SYNC rule).
+const PROJECT_REF = process.env.PROJECT_REF || "yzljakczhwrpbxflnmco";
 const PASSWORD = process.env.SUPABASE_DB_PASSWORD || process.env.PG_PASSWORD;
 
 const SRC_DIR = "C:\\Users\\Admin\\Desktop\\Packing List\\TAM - Packing List";
