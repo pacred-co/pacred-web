@@ -19,7 +19,6 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
-import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import {
   Truck,
@@ -264,11 +263,6 @@ function freshnessTone(min: number | null): {
   };
 }
 
-const CARRIER_MENUBAR: MenubarItem[] = [
-  { label: "MOMO", href: "/admin/api-forwarder-momo" },
-  { label: "CargoCenter", href: "/admin/api-forwarder-cn" },
-];
-
 export default async function AdminApiForwarderMomoPage({
   searchParams,
 }: {
@@ -308,9 +302,6 @@ export default async function AdminApiForwarderMomoPage({
         <span>›</span>
         <span className="text-foreground font-medium">MOMO</span>
       </nav>
-
-      {/* Top menubar (MOMO ↔ CargoCenter) */}
-      <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-momo" />
 
       {/* §0h — one consistent page-title hierarchy via <PageHeader>. */}
       <PageHeader
