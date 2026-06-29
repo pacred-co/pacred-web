@@ -797,8 +797,11 @@ export async function adminUpdateShopTracking(
       return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
     }
     if (!header) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ (hNo ไม่ตรง)" };
-    if (header.hstatus !== "4") {
-      return { ok: false, error: `กรอกเลข Tracking ได้เฉพาะออเดอร์สถานะ "รอร้านจีนจัดส่ง" (4) เท่านั้น · สถานะปัจจุบัน = ${header.hstatus}` };
+    // 2026-06-29 (owner P22328 · multi-shop): allow tracking entry at 4 AND 40
+    // (ถึงโกดังจีน). For a 10-shop order, the FIRST shop arriving flips the order
+    // 4→40, but the remaining shops still need their tracking entered later.
+    if (header.hstatus !== "4" && header.hstatus !== "40") {
+      return { ok: false, error: `กรอกเลข Tracking ได้เฉพาะออเดอร์สถานะ "รอร้านจีนจัดส่ง" (4) หรือ "ถึงโกดังจีน" (40) · สถานะปัจจุบัน = ${header.hstatus}` };
     }
 
     let rowsUpdated = 0;

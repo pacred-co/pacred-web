@@ -452,9 +452,15 @@ export default async function AdminServiceOrderEditPage({
   // Status workflow eligibility.
   const isEditable     = status === "1" || status === "2" || status === "6";
   const showMarkPaid   = status === "1" || status === "2";
-  const showSpawn      = status === "4";
+  // 2026-06-29 (owner P22328 bug "พอกดแก้ รายการและร้านหายหมด" · multi-shop 10
+  // ร้าน): status 40 (ถึงโกดังจีน) is reached as soon as the FIRST shop's
+  // forwarder hits the China warehouse — but the OTHER shops still need their
+  // tracking entered + ฝากนำเข้า spawned LATER (each shop ships separately). So
+  // the per-shop tracking-entry board + spawn must stay open at 40 too, not only
+  // 4 — otherwise the board vanishes the moment one shop arrives.
+  const showSpawn      = status === "4" || status === "40";
   const showCompleted  = status === "5";
-  const showRefund     = status === "3" || status === "4" || status === "5";
+  const showRefund     = status === "3" || status === "4" || status === "40" || status === "5";
   // 2026-06-29 (owner: "อยากให้ขึ้นรายละเอียด เหมือนหน้ารอชำระเงิน") — render the
   // rich order-context block (customer + price breakdown like the detail view)
   // at the post-payment / tracking steps (3 / 4 / ถึงโกดังจีน 40 / สำเร็จ 5).
@@ -722,7 +728,7 @@ export default async function AdminServiceOrderEditPage({
           spawned-forwarder summary so each shop card shows ✓ฝากนำเข้าแล้ว #fNo /
           ⌛รอ tracking + an overall "ครบ X/N ร้าน" progress (legacy update4.php
           per-shop "ตรวจสอบสถานะนำเข้า #fNo" badge). */}
-      {(status === "3" || status === "4" || status === "5") && shopFields.length > 0 && (
+      {(status === "3" || status === "4" || status === "40" || status === "5") && shopFields.length > 0 && (
         <ShopFieldsBoard
           hNo={r.hno}
           status={status}

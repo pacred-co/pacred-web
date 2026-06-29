@@ -121,7 +121,11 @@ export async function maybeCompleteShopOrder(
     .from("tb_header_order")
     .update(update)
     .eq("hno", hno)
-    .eq("hstatus", "4") // forward-only · idempotent (no-op once past 4)
+    // forward-only · idempotent. Complete from 4 (รอร้านจีนจัดส่ง) OR 40 (ถึงโกดังจีน):
+    // a multi-shop order flips 4→40 when the first shop's forwarder reaches the
+    // China warehouse, but it's only DONE when every shop is tracked+spawned —
+    // which can happen while it sits at 40. (2026-06-29 owner P22328.)
+    .in("hstatus", ["4", "40"])
     .select("hno");
   if (flipErr) {
     console.error("[maybeCompleteShopOrder] 4→5 flip failed", {

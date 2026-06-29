@@ -130,7 +130,7 @@ export function ShopFieldsBoard({
   // 2026-06-29 — per-shop spawned summary lookup (by cnameshop).
   const summaryByShop = new Map<string, ShopSpawnSummaryRow>();
   for (const s of spawnSummary ?? []) summaryByShop.set(s.cnameshop, s);
-  const showProgress = (totalCount ?? 0) > 0 && (status === "4" || status === "5");
+  const showProgress = (totalCount ?? 0) > 0 && (status === "4" || status === "40" || status === "5");
 
   // ─── status 1/2 — items-editor handles · we render nothing ────────
   if (status === "1" || status === "2") return null;
@@ -203,7 +203,11 @@ export function ShopFieldsBoard({
   }
 
   const isStatus3 = status === "3";
-  const isStatus4 = status === "4";
+  // 2026-06-29 (owner P22328 · multi-shop): status 40 (ถึงโกดังจีน) = some shops
+  // arrived, the rest still need tracking entered later → treat 40 like 4 (the
+  // tracking-entry phase) so the board + per-shop inputs stay usable.
+  const isArrived40 = status === "40";
+  const isStatus4 = status === "4" || isArrived40;
   const isStatus5 = status === "5";
   const showSubmit = isStatus3 || isStatus4;
 
@@ -213,7 +217,8 @@ export function ShopFieldsBoard({
         <Store className="h-4 w-4" />
         <span className="text-sm font-bold">
           {isStatus3 && "📝 บันทึกเลขออเดอร์ร้านจีน (สถานะ 3 → 4)"}
-          {isStatus4 && "🚛 บันทึกเลข Tracking ร้านจีน (สถานะ 4)"}
+          {isStatus4 && !isArrived40 && "🚛 บันทึกเลข Tracking ร้านจีน (สถานะ 4)"}
+          {isArrived40 && "🚛 บันทึกเลข Tracking ร้านจีน · ถึงโกดังจีนแล้วบางร้าน — ใส่ร้านที่เหลือต่อได้"}
           {isStatus5 && "✓ ข้อมูลร้านจีน (อ่านอย่างเดียว)"}
         </span>
         <span className="ml-auto text-[11px] bg-white/20 rounded px-1.5 py-0.5">
@@ -295,7 +300,7 @@ export function ShopFieldsBoard({
                   </span>
                   <span className="ml-auto inline-flex items-center gap-2 text-[11px]">
                     {/* per-shop spawn status (legacy update4.php ตรวจสอบสถานะนำเข้า) */}
-                    {summary && (status === "4" || status === "5") && (
+                    {summary && (status === "4" || status === "40" || status === "5") && (
                       summary.done ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 px-2 py-0.5 font-medium">
                           <CheckCircle2 className="h-3 w-3" /> ฝากนำเข้าแล้ว
@@ -319,7 +324,7 @@ export function ShopFieldsBoard({
                     L126-131/L168-173 "ตรวจสอบสถานะนำเข้า #fNo"). When a tracking
                     token already spawned a tb_forwarder, link straight to it with
                     its live status; otherwise show ⌛รอสร้าง. */}
-                {summary && summary.resolved.length > 0 && (status === "4" || status === "5") && (
+                {summary && summary.resolved.length > 0 && (status === "4" || status === "40" || status === "5") && (
                   <div className="px-3 py-2 border-b border-border bg-surface-alt/30 space-y-1">
                     {summary.resolved.map((rv) => (
                       <div key={rv.tracking} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
