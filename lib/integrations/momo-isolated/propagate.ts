@@ -132,6 +132,10 @@ export type PropagationResult = {
   noopFresh:            number;
   /** Of `updated`: how many had fcabinetnumber filled. */
   cabinetWrites:        number;
+  /** Of `updated`: how many had fweight/fvolume filled from the closed-container
+   *  weigh-in (2026-06-29 · ภูม). Fill-when-empty ONLY — never overwrites an
+   *  existing non-zero weight (protects staff edits + already-billed rows). */
+  metricWrites:         number;
   /** Of `updated`: how many had fdatetothai filled. */
   arrivedWrites:        number;
   /** Of `updated`: how many had fstatus advanced (gate-controlled). */
@@ -158,6 +162,7 @@ function emptyResult(): PropagationResult {
     updated: 0,
     noopFresh: 0,
     cabinetWrites: 0,
+    metricWrites: 0,
     arrivedWrites: 0,
     statusAdvanceWrites: 0,
     statusAdvanceSkippedByGate: 0,
@@ -195,7 +200,7 @@ export async function propagateMomoToForwarders(
   // has manually locked against partner-sync overwrites.
   const { data: matchedRows, error: lookupErr } = await admin
     .from("tb_forwarder")
-    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai, fcabinet_locked, reforder")
+    .select("id, ftrackingchn, fstatus, fcabinetnumber, fdatetothai, fcabinet_locked, reforder, fweight, fvolume")
     .in("ftrackingchn", trackings);
   if (lookupErr) {
     console.error("[propagateMomoToForwarders] tb_forwarder lookup failed", {
@@ -217,6 +222,8 @@ export async function propagateMomoToForwarders(
     fdatetothai:     string | null;
     fcabinet_locked: boolean | null;
     reforder:        string | null;
+    fweight:         number | null;
+    fvolume:         number | null;
   };
   const forwardersByTracking = new Map<string, ForwarderHit[]>();
   for (const row of (matchedRows ?? []) as unknown as ForwarderHit[]) {
@@ -260,6 +267,38 @@ export async function propagateMomoToForwarders(
     }
   }
 
+  // 2026-06-29 (ภูม) — pre-load the closed-container weigh-in (weight_kg/cbm)
+  // per tracking from momo_import_tracks (filled by the sync harvest's
+  // aggregateTrackDetailMetrics). The warehouse couldn't bill because a parcel's
+  // real weight arrives at MOMO AFTER we commit the tb_forwarder row, and nothing
+  // re-pulled it. We fill fweight/fvolume below — but ONLY when the forwarder's
+  // current value is empty/0, so a staff-entered or already-billed weight is
+  // never overwritten (money-safe · same fill-when-empty rule as the cabinet).
+  const { data: metricRows, error: metricErr } = await admin
+    .from("momo_import_tracks")
+    .select("momo_tracking_no, weight_kg, cbm")
+    .in("momo_tracking_no", trackings)
+    .gt("weight_kg", 0);
+  if (metricErr) {
+    console.error("[propagateMomoToForwarders] metric lookup failed", {
+      code: metricErr.code,
+      message: metricErr.message,
+    });
+  }
+  const realMetricsByTracking = new Map<string, { kg: number; cbm: number }>();
+  for (const r of (metricRows ?? []) as Array<{
+    momo_tracking_no: string | null;
+    weight_kg: number | null;
+    cbm: number | null;
+  }>) {
+    if (r.momo_tracking_no && (r.weight_kg ?? 0) > 0) {
+      realMetricsByTracking.set(r.momo_tracking_no, {
+        kg: r.weight_kg ?? 0,
+        cbm: r.cbm ?? 0,
+      });
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
 
   // Walk each MOMO record + apply forward-only updates to its matched rows.
@@ -273,9 +312,19 @@ export async function propagateMomoToForwarders(
     const isArrivalSignal = isArrivedInThailand(m.shipmentStatus);
 
     const realCabinet = realCabinetByTracking.get(tracking);
+    const realMetric = realMetricsByTracking.get(tracking);
 
     for (const f of hits) {
-      const updates: Record<string, string> = {};
+      // Typed (not Record<string, …>) so the shop-order block below can read
+      // updates.fstatus / .fcabinetnumber as string while fweight/fvolume stay
+      // numeric (2026-06-29 metric back-fill).
+      const updates: {
+        fcabinetnumber?: string;
+        fdatetothai?:    string;
+        fstatus?:        string;
+        fweight?:        number;
+        fvolume?:        number;
+      } = {};
 
       // 1. cabinet — write ONLY the real cid (e.g. "GZS260525-2"), NEVER
       //    the MOMO routing batch ID. Two cases trigger a write:
@@ -308,6 +357,23 @@ export async function propagateMomoToForwarders(
         } else {
           updates.fcabinetnumber = realCabinet;
           result.cabinetWrites += 1;
+        }
+      }
+
+      // 1b. fweight / fvolume — fill the closed-container weigh-in when the
+      //     forwarder has NO weight yet (2026-06-29 · ภูม). FILL-WHEN-EMPTY only:
+      //     a current fweight > 0 is authoritative (staff edit or already-billed)
+      //     and is never overwritten. A 0/empty fweight means the row was
+      //     committed before MOMO measured it — exactly the "synced early, weight
+      //     came later, we never re-pulled" gap the warehouse hit. fweight/fvolume
+      //     are numeric (fvolume numeric(14,6) since 0192); pass numbers.
+      if (realMetric && realMetric.kg > 0) {
+        const curW = Number(f.fweight ?? 0);
+        const curV = Number(f.fvolume ?? 0);
+        if (!(curW > 0) && !(curV > 0)) {
+          updates.fweight = Number(realMetric.kg.toFixed(2));
+          updates.fvolume = Number(realMetric.cbm.toFixed(6));
+          result.metricWrites += 1;
         }
       }
 
