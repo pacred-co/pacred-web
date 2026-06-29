@@ -110,9 +110,13 @@ export default function SpawnForwarderForm({
       return;
     }
 
-    const { spawnedFNos, created, skipped } = res.data!;
+    const { spawnedFNos, created, skipped, statusCompleted } = res.data!;
     setBulkMsg(
-      `สำเร็จ — สร้าง ${created} รายการ${skipped > 0 ? ` · ข้าม ${skipped} (มีอยู่แล้ว)` : ""}: ${spawnedFNos.map((id) => `#${id}`).join(", ")}`,
+      `สำเร็จ — สร้าง ${created} รายการ${skipped > 0 ? ` · ข้าม ${skipped} (มีอยู่แล้ว)` : ""}: ` +
+        `${spawnedFNos.map((id) => `#${id}`).join(", ")}` +
+        (statusCompleted
+          ? " · ครบทุกร้านแล้ว → ปิดออเดอร์เป็น “สำเร็จ”"
+          : " · ออเดอร์ยังอยู่ “รอร้านจีนจัดส่ง” (กรอก tracking ร้านที่เหลือต่อได้)"),
     );
     // Mark each input row done with assigned fNo (best-effort match by order).
     setState((s) =>

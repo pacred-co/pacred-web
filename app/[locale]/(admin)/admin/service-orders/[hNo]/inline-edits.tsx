@@ -107,6 +107,7 @@ export function OrderInlineEdits({
   hNo,
   htransporttype,
   crate,
+  pricecrate,
   hshipby,
   paymethod,
   hfreeshipping,
@@ -114,6 +115,9 @@ export function OrderInlineEdits({
   hNo:            string;
   htransporttype: string | null;
   crate:          string | null;
+  // 2026-06-29 (fix #3) — ราคาค่าตีลังไม้ (tb_header_order.pricecrate · mig 0223).
+  // COST/charge field carried to the forwarder on spawn · NOT in the sell total.
+  pricecrate?:    number;
   hshipby:        string | null;
   paymethod:      string | null;
   // hfreeshipping gates the "PCSE / PRE Express" option (legacy optionHShipBy
@@ -134,6 +138,7 @@ export function OrderInlineEdits({
 
   const [transportVal, setTransportVal] = useState(htransporttype === "3" ? "3" : htransporttype === "2" ? "2" : "1");
   const [crateVal, setCrateVal] = useState(crate === "2" ? "2" : "1");
+  const [cratePriceVal, setCratePriceVal] = useState(String(pricecrate ?? 0));
   const [shipByVal, setShipByVal] = useState<string>(
     hshipby && carrierCodes.includes(hshipby) ? hshipby : (hshipby || "PCS"),
   );
@@ -184,7 +189,16 @@ export function OrderInlineEdits({
         label="การตีลังไม้"
         editing={editCrate}
         setEditing={setEditCrate}
-        display={CRATE_LABEL[crate ?? ""] ?? "—"}
+        display={
+          <span>
+            {CRATE_LABEL[crate ?? ""] ?? "—"}
+            {crate === "1" && (
+              <span className="ml-2 text-muted">
+                · ราคา ฿{(pricecrate ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </span>
+        }
       >
         {(close) => (
           <>
@@ -192,12 +206,40 @@ export function OrderInlineEdits({
               <option value="1">ตีลังไม้</option>
               <option value="2">ไม่ตีลังไม้</option>
             </select>
+            {/* ราคาค่าตีลังไม้ (fix #3) — แสดงเมื่อเลือก "ตีลังไม้" · ต้นทุน/ค่าบริการ
+                ไม่กระทบราคาขาย · carried ไปยังใบฝากนำเข้าตอน spawn */}
+            {crateVal === "1" && (
+              <label className="block space-y-1">
+                <span className="text-[11px] text-muted">ราคาค่าตีลังไม้ (บาท) · ไม่กระทบยอดที่ลูกค้าจ่าย</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={cratePriceVal}
+                  onChange={(e) => setCratePriceVal(e.target.value)}
+                  className={`${selectCls} text-right tabular-nums`}
+                  placeholder="0.00"
+                />
+              </label>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
                 disabled={pending}
                 className={btnSave}
-                onClick={() => run(() => adminUpdateOrderCrate({ h_no: hNo, crate: crateVal as "1" | "2" }), close)}
+                onClick={() =>
+                  run(
+                    () =>
+                      adminUpdateOrderCrate({
+                        h_no: hNo,
+                        crate: crateVal as "1" | "2",
+                        // Only send a price when crating; not-crated keeps price irrelevant.
+                        pricecrate: crateVal === "1" ? (Number(cratePriceVal) || 0) : undefined,
+                      }),
+                    close,
+                  )
+                }
               >
                 บันทึก
               </button>

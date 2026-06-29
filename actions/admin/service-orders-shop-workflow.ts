@@ -956,8 +956,8 @@ export async function adminSpawnForwarderFromShopOrder(
     if (!spawnResult.ok) {
       return { ok: false, error: `spawn failed: ${spawnResult.error}` };
     }
-    const { spawnedFNos, created, skipped } = spawnResult.data ?? {
-      spawnedFNos: [], created: 0, skipped: 0,
+    const { spawnedFNos, created, skipped, statusCompleted } = spawnResult.data ?? {
+      spawnedFNos: [], created: 0, skipped: 0, statusCompleted: false,
     };
 
     // 4. tb_promotion carry — for every existing tb_promotion row pointing
@@ -1015,31 +1015,14 @@ export async function adminSpawnForwarderFromShopOrder(
       }
     }
 
-    // 5. Flip header status 4 → 5 + stamp hdate5.
-    const nowIso = new Date().toISOString();
-    let statusFlipped = false;
-    const { error: flipErr } = await admin
-      .from("tb_header_order")
-      .update({
-        hstatus:       "5",
-        hdate5:        nowIso,
-        hdateupdate:   nowIso,
-        adminidupdate: legacyAdminId,
-      })
-      .eq("id", header.id);
-    if (flipErr) {
-      // Non-fatal: spawn already succeeded. Surface in result for admin to
-      // re-click the action (idempotent — re-spawn returns 0 created + 0
-      // promo_rows_carried, then re-flips status).
-      console.error(`[tb_header_order 4→5 flip] failed`, {
-        code: flipErr.code, message: flipErr.message,
-      });
-      return {
-        ok: false,
-        error: `spawn สำเร็จ (${created} ใหม่ · ${skipped} ข้าม) แต่ flip status 4→5 ล้มเหลว: ${flipErr.message}`,
-      };
-    }
-    statusFlipped = true;
+    // 5. Status flip is decided by the legacy all-shops-done completion gate,
+    //    which already ran INSIDE spawnForwardersFromShopOrder (shops.php
+    //    L1525-1580): it flips 4 → 5 ONLY when every shop sub-order slot now
+    //    has a tracking (count(slots)===count(trackings)). If not all shops are
+    //    done, the order legitimately STAYS at 4 so the remaining shops can
+    //    still get tracking entered + spawned — the fix for the owner's
+    //    "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้". So we DO NOT flip here.
+    const statusFlipped = statusCompleted;
 
     // 6. Audit.
     await logAdminAction(
@@ -1055,15 +1038,17 @@ export async function adminSpawnForwarderFromShopOrder(
         skipped,
         promo_rows_carried:  promoRowsCarried,
         before_status:       header.hstatus,
-        after_status:        "5",
+        after_status:        statusFlipped ? "5" : "4",
+        status_completed:    statusFlipped,
       },
     );
 
-    // 7. Notify (legacy fires email + LINE Notify; Pacred fires in-app +
-    //    LINE OA + email via sendNotification — 2 wired channels, SMS+legacy
-    //    LINE Notify skipped per AGENTS.md 2026-05-30 night #2: LINE Notify
-    //    EOL · SMS not required by legacy at this transition).
-    void notifyShopOrderCompleted(admin, header.userid, header.hno, spawnedFNos);
+    // 7. Notify ONLY when the order actually completed (legacy fires the
+    //    "สำเร็จ" customer notify at the gate, not on every per-shop spawn).
+    //    Pacred fires in-app + LINE OA + email via sendNotification.
+    if (statusFlipped) {
+      void notifyShopOrderCompleted(admin, header.userid, header.hno, spawnedFNos);
+    }
 
     revalidatePath("/admin/service-orders");
     revalidatePath(`/admin/service-orders/${header.hno}`);

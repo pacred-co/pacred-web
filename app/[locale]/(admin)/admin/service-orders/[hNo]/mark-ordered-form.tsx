@@ -174,7 +174,10 @@ export function AdminSpawnToCompletedButton({ hNo }: { hNo: string }) {
         const fnos = (res.data?.spawned_fnos ?? []).map((id) => `#${id}`).join(", ");
         setMsg(
           `✅ เปิดใบฝากนำเข้าเรียบร้อย — สร้าง ${created} ใหม่ · ข้าม ${skipped} (มีอยู่แล้ว) · ` +
-            `ถ่ายโอนโปรโม ${promo} แถว · ${flipped ? "ปิดออเดอร์ → สำเร็จ" : "เปลี่ยนสถานะค้าง"}` +
+            `ถ่ายโอนโปรโม ${promo} แถว · ` +
+            (flipped
+              ? "ครบทุกร้านแล้ว → ปิดออเดอร์ → สำเร็จ"
+              : "ยังไม่ครบทุกร้าน → ออเดอร์ยังอยู่สถานะ “รอร้านจีนจัดส่ง” (กรอก tracking ร้านที่เหลือแล้วกดอีกครั้ง)") +
             (fnos ? ` · ${fnos}` : ""),
         );
         router.refresh();
@@ -190,7 +193,9 @@ export function AdminSpawnToCompletedButton({ hNo }: { hNo: string }) {
       <div>
         <h3 className="font-bold text-sm">ส่งเข้าโกดังจีน + สร้างใบฝากนำเข้า (Tab 5 · 4→5)</h3>
         <p className="text-xs text-muted mt-0.5">
-          เมื่อสินค้าถึงโกดังจีนทุกรายการ — กดเพื่อเปิดใบฝากนำเข้า + ปิดออเดอร์ฝากสั่ง
+          สร้างใบฝากนำเข้าจากเลข tracking ที่กรอกไว้ — ออเดอร์จะปิดเป็น &ldquo;สำเร็จ&rdquo;
+          ก็ต่อเมื่อ <b>ทุกร้านมีเลข tracking ครบ</b> · ถ้ายังไม่ครบ ออเดอร์ยังอยู่สถานะ
+          &ldquo;รอร้านจีนจัดส่ง&rdquo; ให้กรอก tracking ร้านที่เหลือต่อได้
         </p>
       </div>
 

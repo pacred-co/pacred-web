@@ -58,6 +58,8 @@ import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { MarkArrivedChinaButton } from "@/components/admin/mark-arrived-china-button";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
+import { CostInlineEdit } from "../cost-inline-edit";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
 import { createClient } from "@/lib/supabase/server";
@@ -143,7 +145,7 @@ type HRow = {
   hshippingservice: number | null; hshippingchn: number | null; hrate: number | null;
   hratecost: number | null; hcostall: number | null;
   hshipby: string | null; hfreeshipping: string | null; userid: string;
-  crate: string | null; paymethod: string | null;
+  crate: string | null; pricecrate: number | null; paymethod: string | null;
   hdatepayment: string | null;
 };
 type URow = {
@@ -165,6 +167,10 @@ export default async function AdminServiceOrderEditPage({
   const { hNo } = await params;
   const { roles } = await requireAdmin();
   const superAdmin = isGodRole(roles);
+  // COST visibility (ต้นทุน / margin) — strict cost-role gate (ultra/accounting/
+  // pricing · §0e data-layer gate). super sees profit but NOT cost, so the
+  // always-status cost editor is mounted only for cost-authority roles.
+  const canSeeCost = canViewCost(roles);
   const admin = createAdminClient();
 
   const { data: rowRaw, error: rowErr } = await admin
@@ -172,7 +178,7 @@ export default async function AdminServiceOrderEditPage({
     .select(
       "id,hno,hstatus,htransporttype,htotalpricechn," +
       "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,hfreeshipping,userid," +
-      "crate,paymethod,hdatepayment",
+      "crate,pricecrate,paymethod,hdatepayment",
     )
     .eq("hno", hNo)
     .maybeSingle();
@@ -459,6 +465,7 @@ export default async function AdminServiceOrderEditPage({
           hNo={r.hno}
           htransporttype={r.htransporttype}
           crate={r.crate}
+          pricecrate={Number(r.pricecrate ?? 0)}
           hshipby={r.hshipby}
           paymethod={r.paymethod}
           hfreeshipping={r.hfreeshipping}
@@ -474,6 +481,21 @@ export default async function AdminServiceOrderEditPage({
           Hidden once the order is closed (status 5/6). ── */}
       {status !== "5" && status !== "6" && (
         <OrderAddressPanel hNo={r.hno} hShipBy={r.hshipby} addresses={savedAddresses} />
+      )}
+
+      {/* ── 3d. COST editor (เรทต้นทุน + ราคาซื้อจริง) — [[cost-editable-sell-locked]]
+          แก้ได้ทุกสถานะแม้ลูกค้าจ่ายแล้ว (กระทบเฉพาะกำไร/บัญชี · ราคาขายล็อก).
+          §0e data-layer gate: rendered ONLY for cost-authority roles, so cost
+          numbers are never sent to a role that can't see them. The status-1/2/6
+          ShopItemsEditor below also has a cost editor (for the quote flow); this
+          card extends cost-editing to status 3/4/5/40. ── */}
+      {canSeeCost && !isEditable && (
+        <CostInlineEdit
+          hNo={r.hno}
+          hRateCost={rateCost}
+          hCostAll={costAll}
+          hRateCostDefault={hRateCostDefault}
+        />
       )}
 
       {/* ── 4. PRIMARY — รายการสินค้า ──
