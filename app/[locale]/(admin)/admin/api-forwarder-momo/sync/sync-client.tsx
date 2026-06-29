@@ -11,7 +11,7 @@
  *    momo_* tables. NO direct DB access from this client.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { confirm } from "@/components/ui/confirm";
 // IMPORTANT: import from "./types" directly — the barrel index.ts re-exports
 // client.ts which is `"server-only"`. Client Components can pull types +
@@ -37,6 +37,15 @@ import {
   MOMO_FIELD_TH,
   type MomoRawDisplay,
 } from "@/lib/admin/momo-raw-helpers";
+
+/** 2026-06-29 (ภูม) — completeness lookup result keyed by BASE tracking. */
+type CompletenessHit = { inFwd: boolean; fid: number; fweight: number; fstatus: string | null };
+type CompletenessMap = Record<string, CompletenessHit>;
+
+/** Strip a MOMO "-i/n" split suffix → base tracking (matches the API route). */
+function baseTrackingOf(re: string): string {
+  return re.trim().replace(/-\d+(\/\d+)?$/, "");
+}
 
 type DbRow = {
   momo_tracking_no?: string | null;
@@ -111,6 +120,50 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
   // Phase D debug — tracking lookup state
   const [debugTracking, setDebugTracking] = useState("");
   const [debugResult, setDebugResult] = useState<Record<string, unknown> | null>(null);
+
+  // 2026-06-29 (ภูม) — per-container completeness. Keyed by BASE tracking:
+  // which MOMO track_details reTracks already exist in tb_forwarder (= เข้าระบบ)
+  // vs missing. Read-only; fetched when a Container-Closed preview loads so the
+  // table can show "MOMO N · เข้าระบบ M · ⚠️ ขาด K" per ตู้.
+  const [completeness, setCompleteness] = useState<CompletenessMap>({});
+
+  useEffect(() => {
+    // Extract every Container-Closed reTrack synchronously (pure read), then
+    // resolve completeness asynchronously. All setCompleteness calls are
+    // deferred (after a fetch / setTimeout) so none fires synchronously in the
+    // effect body — Next 16's react-hooks "cascading render" rule.
+    const ccRows = result && "preview" in result ? result.preview?.containerClosed : undefined;
+    const reTracks: string[] = [];
+    for (const r of ccRows ?? []) {
+      const td = (r.raw as Record<string, unknown>)?.track_details;
+      if (Array.isArray(td)) {
+        for (const t of td) {
+          const re = t && typeof t === "object" ? (t as Record<string, unknown>).reTrack : null;
+          if (typeof re === "string" && re.trim()) reTracks.push(re.trim());
+        }
+      }
+    }
+    let cancelled = false;
+    if (reTracks.length === 0) {
+      const id = setTimeout(() => { if (!cancelled) setCompleteness({}); }, 0);
+      return () => { cancelled = true; clearTimeout(id); };
+    }
+    (async () => {
+      try {
+        const r = await fetch("/api/admin/momo/track-completeness", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trackings: reTracks }),
+          cache: "no-store",
+        });
+        const j = (await r.json().catch(() => ({ map: {} }))) as { map?: CompletenessMap };
+        if (!cancelled) setCompleteness(j?.map ?? {});
+      } catch {
+        if (!cancelled) setCompleteness({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [result]);
 
   async function callApi(path: string, init?: RequestInit, label?: string) {
     setBusy(label ?? path);
@@ -367,7 +420,7 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
                   return (
                     <>
                       <RawSpreadTable title="Import Track" rows={result.preview.importTrack} cabinetMap={cabinetMap} />
-                      <RawSpreadTable title="Container Closed" rows={result.preview.containerClosed} />
+                      <RawSpreadTable title="Container Closed" rows={result.preview.containerClosed} completeness={completeness} />
                       <RawSpreadTable title="Sack Info" rows={result.preview.sackInfo} />
                     </>
                   );
@@ -682,10 +735,12 @@ function RawSpreadTable({
   title,
   rows,
   cabinetMap,
+  completeness,
 }: {
   title: string;
   rows: MomoInternalAdminRecord[];
   cabinetMap?: Record<string, string>;
+  completeness?: CompletenessMap;
 }) {
   const [lightbox, setLightbox] = useState<string[] | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -793,17 +848,41 @@ function RawSpreadTable({
                         );
                       }
                       // track_details → "ดูพัสดุ (N)" expandable (พี่ป๊อป #5)
+                      // + completeness badge (ภูม 2026-06-29): how many parcels in
+                      // this ตู้ are NOT yet in tb_forwarder = "ขาด K".
                       if (c === "track_details") {
+                        const distinctBases = new Set(
+                          trackDetails
+                            .map((t) => baseTrackingOf(String((t as Record<string, unknown>)?.reTrack ?? "")))
+                            .filter(Boolean),
+                        );
+                        const missingBases = completeness
+                          ? new Set([...distinctBases].filter((b) => !completeness[b]))
+                          : null;
                         return (
-                          <td key={c} className="px-2 py-1">
+                          <td key={c} className="px-2 py-1 whitespace-nowrap">
                             {trackDetails.length === 0 ? (
                               <span className="text-slate-300">·</span>
                             ) : (
-                              <button type="button"
-                                onClick={() => setExpanded((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                                className="rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">
-                                {expanded.has(i) ? "ซ่อนพัสดุ ▲" : `ดูพัสดุ (${trackDetails.length}) ▼`}
-                              </button>
+                              <span className="inline-flex items-center gap-1">
+                                <button type="button"
+                                  onClick={() => setExpanded((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                                  className="rounded border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100">
+                                  {expanded.has(i) ? "ซ่อนพัสดุ ▲" : `ดูพัสดุ (${trackDetails.length}) ▼`}
+                                </button>
+                                {missingBases && missingBases.size > 0 && (
+                                  <span className="rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"
+                                    title={`ตู้นี้ MOMO มี ${distinctBases.size} พัสดุ · ยังไม่เข้าระบบ ${missingBases.size} (ตามเก็บที่หน้า MOMO)`}>
+                                    ⚠️ ขาด {missingBases.size}
+                                  </span>
+                                )}
+                                {missingBases && missingBases.size === 0 && distinctBases.size > 0 && (
+                                  <span className="rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"
+                                    title="ทุกพัสดุในตู้เข้าระบบแล้ว">
+                                    ✓ ครบ
+                                  </span>
+                                )}
+                              </span>
                             )}
                           </td>
                         );
@@ -853,10 +932,18 @@ function RawSpreadTable({
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
                           {trackDetails.map((t, ti) => {
                             const tt = (t && typeof t === "object" ? t : {}) as Record<string, unknown>;
+                            const base = baseTrackingOf(String(tt.reTrack ?? ""));
+                            const hit = completeness ? completeness[base] : undefined;
                             return (
-                              <span key={ti} className="text-[11px] font-mono">
+                              <span key={ti}
+                                className={`text-[11px] font-mono inline-flex items-center gap-1 rounded px-1 py-0.5 ${completeness ? (hit ? "bg-emerald-50" : "bg-red-50 ring-1 ring-red-200") : ""}`}>
                                 {String(tt.reTrack ?? "?")}
                                 <span className="text-muted"> · {Number(tt.kg ?? 0)}kg · {Number(tt.cbm ?? 0)}คิว</span>
+                                {completeness && (hit ? (
+                                  <span className="font-semibold text-emerald-700" title={`เข้าระบบแล้ว · ฝากนำเข้า #${hit.fid}`}>✓ #{hit.fid}</span>
+                                ) : (
+                                  <span className="font-semibold text-red-700" title="ยังไม่เข้าระบบ — MOMO ไม่ได้ส่งมาทาง import_track · ตามเก็บที่หน้า MOMO (เห็นรหัสลูกค้า)">⚠️ ยังไม่เข้า</span>
+                                ))}
                               </span>
                             );
                           })}
