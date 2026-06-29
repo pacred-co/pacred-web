@@ -413,12 +413,22 @@ export async function adminApiForwarderManualInsert(
       }
 
       // ── Cost-CHN split (legacy lines 207-215) ────────────────
+      // crate uses the tb_forwarder HEADER convention: '1' = ตีลังไม้ (crated) ·
+      // '2' = ไม่ตีลังไม้ (function.php L1691 nameCrate · 0081 schema comment
+      // '1=ตีลัง'). 🐛 2026-06-29 FIX: this used to write crate="2" when the
+      // admin CHOSE to crate (productCostCHNType==="1") — that's the per-ITEM
+      // convention (chinawoodencratefeetype '2'=ตี) applied to the HEADER column
+      // by mistake → it INVERTED the crate status (staff/customer saw "ไม่ตี" for
+      // a crated row, and corrupted the round-trip of the adminUpdateForwarderCrate
+      // editor which uses the correct 1=ตี). The customer was still charged
+      // correctly (outstanding.ts sums pricecrate unconditionally) — this only
+      // fixes the displayed STATUS. Correct value for a crated row = "1".
       let priceCrate = 0;
       let crate = "";  // legacy default is '' (no crate)
       let fTransportPriceCHNTHB = 0;
       if (d.productCostCHNType === "1") {
         priceCrate = d.productCostCHN;
-        crate = "2";  // legacy marker for "ตีลังไม้"
+        crate = "1";  // ตีลังไม้ (header convention · function.php L1691)
       } else if (d.productCostCHNType === "2") {
         fTransportPriceCHNTHB = d.productCostCHN;
       }

@@ -14,6 +14,7 @@ import {
   deriveTransportTypeFromMomoRaw,
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
+  extractCrateFromMomoRaw,
   momoRawDisplay,
   flattenMomoRaw,
   collectMomoRawColumns,
@@ -313,6 +314,44 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("cabMap: multi-track container maps all", cabMap["1780629608"] === "GZS260606-1" && cabMap["1780555730"] === "GZS260606-1");
   check("cabMap: container without cid skipped", !("SKIP" in cabMap));
   check("cabMap: mode of 0004065 cabinet = เรือ (proves ship_by=รถ was wrong)", deriveModeFromCid(cabMap["0004065"]) === "เรือ");
+}
+
+// ── extractCrateFromMomoRaw (owner PR999 · derive crate from MOMO raw) ──────
+// Legacy tb_forwarder.crate HEADER convention: '1'=ตีลังไม้ · '2'=ไม่ตี (L1691).
+// DEFAULT-SAFE: only wooden_create===true → crated; never invent a signal.
+{
+  // null / non-object / empty → not crated (default-safe)
+  check("crate: null → {crate:'2', pricecrate:0}", (() => { const c = extractCrateFromMomoRaw(null); return c.crate === "2" && c.pricecrate === 0; })());
+  check("crate: undefined → not crated", (() => { const c = extractCrateFromMomoRaw(undefined); return c.crate === "2" && c.pricecrate === 0; })());
+  check("crate: string raw → not crated", (() => { const c = extractCrateFromMomoRaw("x"); return c.crate === "2" && c.pricecrate === 0; })());
+  check("crate: number raw → not crated", (() => { const c = extractCrateFromMomoRaw(42); return c.crate === "2"; })());
+  check("crate: empty object → not crated", (() => { const c = extractCrateFromMomoRaw({}); return c.crate === "2" && c.pricecrate === 0; })());
+  check("crate: no wooden_create key → not crated", (() => { const c = extractCrateFromMomoRaw({ kg: 5 }); return c.crate === "2"; })());
+
+  // wooden_create must be strictly boolean true (never invent from truthy)
+  check("crate: wooden_create false → '2'", (() => { const c = extractCrateFromMomoRaw({ wooden_create: false }); return c.crate === "2" && c.pricecrate === 0; })());
+  check('crate: wooden_create "true" string → "2" (strict bool only)', (() => { const c = extractCrateFromMomoRaw({ wooden_create: "true" }); return c.crate === "2"; })());
+  check("crate: wooden_create 1 number → '2' (strict bool only)", (() => { const c = extractCrateFromMomoRaw({ wooden_create: 1 }); return c.crate === "2"; })());
+  check("crate: wooden_create null → '2'", (() => { const c = extractCrateFromMomoRaw({ wooden_create: null }); return c.crate === "2"; })());
+
+  // wooden_create true → crated '1', fee from extra_cost
+  check("crate: wooden_create true → '1'", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true }); return c.crate === "1"; })());
+  check("crate: crated + extra_cost 350 → pricecrate 350", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: 350 }); return c.crate === "1" && c.pricecrate === 350; })());
+  check('crate: crated + extra_cost "250" string → 250', (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: "250" }); return c.crate === "1" && c.pricecrate === 250; })());
+  check("crate: crated + no extra_cost → pricecrate 0", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true }); return c.crate === "1" && c.pricecrate === 0; })());
+  check("crate: crated + extra_cost 0 → pricecrate 0", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: 0 }); return c.pricecrate === 0; })());
+  check("crate: crated + extra_cost -50 → pricecrate 0 (no negative fee)", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: -50 }); return c.pricecrate === 0; })());
+  check('crate: crated + extra_cost "abc" → pricecrate 0', (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: "abc" }); return c.pricecrate === 0; })());
+  check("crate: crated + extra_cost NaN → pricecrate 0", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: NaN }); return c.pricecrate === 0; })());
+  check("crate: crated + extra_cost Infinity → pricecrate 0", (() => { const c = extractCrateFromMomoRaw({ wooden_create: true, extra_cost: Infinity }); return c.pricecrate === 0; })());
+  // NOT crated but extra_cost present → no crate fee carried (fee gated on crated)
+  check("crate: not crated + extra_cost 99 → pricecrate 0 (fee only when crated)", (() => { const c = extractCrateFromMomoRaw({ wooden_create: false, extra_cost: 99 }); return c.crate === "2" && c.pricecrate === 0; })());
+
+  // the ภูม display example (wooden_create false) → not crated
+  check("crate: ภูม example (status 7, ship, wooden_create false) → not crated", (() => {
+    const c = extractCrateFromMomoRaw({ wooden_create: false, wooden_info: null, extra_cost: 0, kg: 100, ship_by: "ship" });
+    return c.crate === "2" && c.pricecrate === 0;
+  })());
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

@@ -327,7 +327,7 @@ export async function adminCarrierManualInsert(
           fsendsms3day:          "0",
           fsendsms3eday:         "0",
           paymethod:             "1",
-          crate:                 "2",
+          crate:                 "2",      // default = ไม่ตีลังไม้ (header convention · function.php L1691 · admin edits later)
           pricecrate:            0,
           fqc:                   "0",
           fqcprice:              0,
