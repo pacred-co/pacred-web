@@ -40,6 +40,7 @@ import {
   MOMO_SHIP_BY_TH,
 } from "@/lib/admin/momo-raw-helpers";
 import { addMissingMomoParcel } from "@/actions/admin/momo-add-missing";
+import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 
 /** Strip a MOMO "-i/n" (or "-i") split suffix → base tracking (matches the API + action). */
 function baseTrackingOf(re: string): string {
@@ -127,6 +128,58 @@ function unwrapArray(payload: unknown): unknown[] {
     return (payload as { data: unknown[] }).data;
   }
   return [];
+}
+
+// ── Export / copy: ONE column set shared by the clipboard-TSV + the Excel CSV ──
+// keys map 1:1 to MissingParcel-derived cells (see rowCells); order = on-screen.
+const EXPORT_COLS: CsvCol[] = [
+  { key: "member",  label: "รหัสลูกค้า" },
+  { key: "base",    label: "เลขพัสดุจีน" },
+  { key: "weight",  label: "น้ำหนัก(กก.)" },
+  { key: "cbm",     label: "คิว(ลบ.ม.)" },
+  { key: "dims",    label: "ขนาด(กxยxส)" },
+  { key: "type",    label: "ประเภท" },
+  { key: "ship",    label: "ขนส่ง" },
+  { key: "status",  label: "สถานะ" },
+  { key: "cabinet", label: "ตู้" },
+  { key: "sack",    label: "กระสอบ" },
+];
+
+/**
+ * One MissingParcel → a flat CsvRow keyed by EXPORT_COLS. SET B columns that
+ * only exist for SET A (dims/type/status/sack) are blank, exactly like the
+ * table. `memberOverride` is the staff-typed code for a SET B row at the moment
+ * of copy/export (SET A always uses the auto-resolved p.member).
+ */
+function rowCells(p: MissingParcel, memberOverride: string): CsvRow {
+  const dims =
+    p.kind === "A" && (p.width || p.length || p.height)
+      ? `${p.width || 0}×${p.length || 0}×${p.height || 0}`
+      : "";
+  return {
+    member:  p.kind === "A" ? p.member : memberOverride.trim().toUpperCase(),
+    base:    p.base,
+    weight:  p.weightKg || "",
+    cbm:     p.cbm || "",
+    dims,
+    type:    p.kind === "A" ? p.productType : "",
+    ship:    shipByTh(p.shipBy) === "—" ? "" : shipByTh(p.shipBy),
+    status:  p.kind === "A" ? p.statusText : "",
+    cabinet: p.cabinet,
+    sack:    p.kind === "A" ? p.sackNo : "",
+  };
+}
+
+/**
+ * One TSV cell — formula-injection-safe (Excel runs `= + - @` and leading
+ * TAB/CR as formulas on paste, same as a .csv import) + tab/newline stripped
+ * so a value can't break the row/column grid. No RFC-4180 quoting: a pasted
+ * TSV is tab-delimited plain text, not a quoted CSV.
+ */
+function tsvCell(value: string | number | null | undefined): string {
+  let s = String(value ?? "").replace(/[\t\r\n]+/g, " ");
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  return s;
 }
 
 export function MomoMissingClient() {
@@ -393,6 +446,40 @@ export function MomoMissingClient() {
     }
   }
 
+  // ── Copy + Export: the on-screen rows as data (member read live for SET B) ──
+  const [copied, setCopied] = useState(false);
+  const exportRows: CsvRow[] = missing.map((p) => rowCells(p, members[p.base] ?? ""));
+
+  async function onCopy() {
+    // header + every row as tab-separated text (BOTH sets, in display order)
+    const header = EXPORT_COLS.map((c) => c.label).join("\t");
+    const body = exportRows
+      .map((row) => EXPORT_COLS.map((c) => tsvCell(row[c.key])).join("\t"))
+      .join("\n");
+    const text = `${header}\n${body}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // fallback for non-secure-context / older browsers
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (!ok) throw new Error("execCommand copy failed");
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("คัดลอกไม่สำเร็จ — เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ");
+    }
+  }
+
   const countA = missing.filter((m) => m.kind === "A").length;
   const countB = missing.filter((m) => m.kind === "B").length;
   const cabinetCount = new Set(missing.map((m) => m.cabinet).filter(Boolean)).size;
@@ -453,17 +540,34 @@ export function MomoMissingClient() {
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
-                  พบ {missing.length} พัสดุที่ขาด
-                </span>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                  แบบ A (มีรหัส) {countA}
-                </span>
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                  แบบ B (กรอกเอง) {countB}
-                </span>
-                <span className="text-muted">ใน {cabinetCount} ตู้</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
+                    พบ {missing.length} พัสดุที่ขาด
+                  </span>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                    แบบ A (มีรหัส) {countA}
+                  </span>
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                    แบบ B (กรอกเอง) {countB}
+                  </span>
+                  <span className="text-muted">ใน {cabinetCount} ตู้</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onCopy}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt shrink-0"
+                    title="คัดลอกตารางนี้ (ทั้งแบบ A และ B) เป็นข้อความ วางลง Excel/แชทได้"
+                  >
+                    {copied ? "✓ คัดลอกแล้ว" : "📋 คัดลอกเป็นข้อความ"}
+                  </button>
+                  <CsvButton
+                    rows={exportRows}
+                    cols={EXPORT_COLS}
+                    filename={`momo-missing-${start}-${end}.csv`}
+                  />
+                </div>
               </div>
 
               <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
@@ -546,7 +650,18 @@ export function MomoMissingClient() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-2 py-2 text-right tabular-nums">{p.weightKg || "—"}</td>
+                            <td className="px-2 py-2 text-right tabular-nums">
+                              {p.weightKg ? (
+                                p.weightKg
+                              ) : (
+                                <span
+                                  className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500"
+                                  title="ของยังไม่ถึงโกดัง MOMO · ยังไม่ได้ชั่ง/วัด — ข้อมูลจะมาเมื่อถึงโกดัง"
+                                >
+                                  ⏳ รอ MOMO ชั่ง
+                                </span>
+                              )}
+                            </td>
                             <td className="px-2 py-2 text-right tabular-nums">{p.cbm || "—"}</td>
                             <td className="px-2 py-2 font-mono text-[11px] text-muted">{p.kind === "A" ? dims : "–"}</td>
                             <td className="px-2 py-2">
@@ -610,9 +725,12 @@ export function MomoMissingClient() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-muted">
+              <p className="text-[11px] text-muted leading-relaxed">
                 ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · พัสดุที่มีเลขย่อย (-i/n) รวมน้ำหนัก/คิวให้แล้ว (×N = จำนวนพัสดุย่อย) ·
                 แบบ A ดึงข้อมูลครบจาก MOMO Import Track · แบบ B มีเฉพาะที่ตู้ปิดส่งมา (กรอกรหัสลูกค้าเอง)
+                <br />
+                พัสดุที่ขึ้น <span className="font-medium text-slate-600">⏳ รอ MOMO ชั่ง</span> = ยังไม่ถึงโกดังจีน MOMO เลยยังไม่มีน้ำหนัก/ขนาด
+                (ไม่ใช่บัค) — เพิ่มเข้าระบบได้ แต่ต้องตั้งน้ำหนัก/เรทเองภายหลัง
               </p>
             </>
           )}
