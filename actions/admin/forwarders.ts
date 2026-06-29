@@ -404,6 +404,14 @@ type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
 const bulkTbSchema = z.object({
   fids:    z.array(z.number().int().positive()).min(1).max(100),
   fstatus: z.enum(TB_FORWARDER_STATUSES),
+  // 2026-06-29 (ภูม · สิทธิ์) — discriminates the LIST bulk-bar manual status
+  // move from every other caller. When source="bulk_manual" (the /admin/forwarders
+  // "ติ๊กเลื่อนสถานะ" bar), the action below requires the caller to be Ultra Admin Z
+  // (role "ultra") — only that role may hand-advance status from the list. Every
+  // other caller (⭐ สถานะพิเศษ · detail-page action panel · driver toolbar ·
+  // internal callers) omits `source` and keeps its existing per-row transition
+  // gate unchanged. UI also hides the controls for non-ultra (defence-in-depth).
+  source:  z.enum(["bulk_manual"]).optional(),
   // Wave 23 (2026-05-27 ภูม flag · live walkthrough): bulk + detail share
   // this action — optional fields below let single-row callers (the detail
   // page action panel) set tracking/cabinet/note in one go, AND let the
@@ -447,7 +455,7 @@ export async function adminBulkUpdateForwarderTbStatus(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fids, fstatus, cabinet_number, tracking_th, fnote, cabinet_locked } = parsed.data;
+  const { fids, fstatus, cabinet_number, tracking_th, fnote, cabinet_locked, source } = parsed.data;
 
   return withAdmin<{ updated: number }>(
     // Wave 26 G5 (2026-05-28 ดึก): page-level union widened from ["ops","super"]
@@ -457,7 +465,20 @@ export async function adminBulkUpdateForwarderTbStatus(
     // for 3→4 / *→4 rows, Accounting only for *→5 / 5→6 etc. `super`
     // and `manager` retain the global override. See lib/auth/check-fstatus-transition.ts.
     ["ops", "super", "manager", "warehouse", "accounting", "driver"],
-    async ({ adminId }) => {
+    async ({ adminId, roles }) => {
+    // 2026-06-29 (ภูม · สิทธิ์) — the /admin/forwarders LIST bulk-bar manual
+    // status move (source="bulk_manual") is reserved for Ultra Admin Z. Every
+    // other path into this action is untouched: ⭐ สถานะพิเศษ (fstatus="99", no
+    // source), the per-order detail action panel, the driver toolbar, and the
+    // internal callers all keep the legacy per-row transition gate below. Note
+    // super/normies are GOD-NAV but still NOT ultra — they are blocked here too,
+    // exactly as ภูม asked ("ต้องมีแค่ role Ultra Admin Z").
+    if (source === "bulk_manual" && !roles.includes("ultra")) {
+      return {
+        ok: false,
+        error: "เฉพาะ Ultra Admin Z เท่านั้นที่เลื่อนสถานะจากหน้ารายการได้ (สิทธิ์ไม่พอ)",
+      };
+    }
     const admin = createAdminClient();
 
     // Snapshot before — for audit log + change detection + the cabinet-close

@@ -525,6 +525,7 @@ export function ForwardersTable({
   statusLabel,
   modeLabel,
   currentStatus,
+  isUltra = false,
 }: {
   rows: Row[];
   statusLabel: Record<string, string>;
@@ -536,6 +537,13 @@ export function ForwardersTable({
    * to normal". Undefined = the default mixed list.
    */
   currentStatus?: string;
+  /**
+   * 2026-06-29 (ภูม · สิทธิ์) — true only for Ultra Admin Z (role "ultra").
+   * Gates the LIST bulk-bar manual status-move controls (สถานะ dropdown +
+   * เลขตู้ + "อัพเดต N รายการ"). Print labels / สถานะพิเศษ / driver / cancel
+   * stay available to every role. Server-enforced too (source="bulk_manual").
+   */
+  isUltra?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -633,6 +641,10 @@ export function ForwardersTable({
       const result = await adminBulkUpdateForwarderTbStatus({
         fids,
         fstatus: bulkStatus,
+        // 2026-06-29 (ภูม · สิทธิ์) — tag this as the LIST bulk-bar manual move
+        // so the action gates it to Ultra Admin Z (server-side enforcement; the
+        // UI also hides these controls for non-ultra below).
+        source: "bulk_manual",
         // Only pass cabinet_number when admin actually typed something —
         // leaving the input blank should NOT clobber existing cabinet
         // numbers on the selected rows.
@@ -1552,29 +1564,43 @@ export function ForwardersTable({
               เลือก <b className="text-primary-600">{selected.size}</b>
               <Explain def="เปลี่ยนสถานะหลายรายการพร้อมกัน — เลือกสถานะปลายทาง (+เลขตู้ถ้ามี) แล้วกด “อัพเดต” ระบบจะเปลี่ยนทุกรายการที่ติ๊กไว้" />
             </span>
-            <select
-              value={bulkStatus}
-              onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
-              disabled={pending}
-              aria-label="เปลี่ยนสถานะเป็น"
-              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs"
-            >
-              {BULK_STATUS_OPTIONS.map((o) => (
-                <option key={o.v} value={o.v}>{o.l}</option>
-              ))}
-            </select>
-            {/* Cabinet input — Wave 23 ภูม flag: assign เลขตู้ (GZE/GZS) to
-                the selected batch in one shot. Blank = don't touch. */}
-            <input
-              type="text"
-              value={bulkCabinet}
-              onChange={(e) => setBulkCabinet(e.target.value)}
-              disabled={pending}
-              maxLength={300}
-              placeholder="เลขตู้ (เว้นว่าง = ไม่เปลี่ยน)"
-              title="กำหนดเลขตู้ GZE/GZS ให้รายการที่เลือก — เว้นว่างถ้าไม่ต้องการเปลี่ยน"
-              className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono w-44"
-            />
+            {/* 2026-06-29 (ภูม · สิทธิ์) — สถานะ dropdown + เลขตู้ visible only
+                to Ultra Admin Z. Non-ultra see the print / สถานะพิเศษ / คนขับ /
+                ยกเลิก actions only (rendered below). */}
+            {isUltra ? (
+              <>
+                <select
+                  value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value as BulkStatusValue)}
+                  disabled={pending}
+                  aria-label="เปลี่ยนสถานะเป็น"
+                  className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs"
+                >
+                  {BULK_STATUS_OPTIONS.map((o) => (
+                    <option key={o.v} value={o.v}>{o.l}</option>
+                  ))}
+                </select>
+                {/* Cabinet input — Wave 23 ภูม flag: assign เลขตู้ (GZE/GZS) to
+                    the selected batch in one shot. Blank = don't touch. */}
+                <input
+                  type="text"
+                  value={bulkCabinet}
+                  onChange={(e) => setBulkCabinet(e.target.value)}
+                  disabled={pending}
+                  maxLength={300}
+                  placeholder="เลขตู้ (เว้นว่าง = ไม่เปลี่ยน)"
+                  title="กำหนดเลขตู้ GZE/GZS ให้รายการที่เลือก — เว้นว่างถ้าไม่ต้องการเปลี่ยน"
+                  className="shrink-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono w-44"
+                />
+              </>
+            ) : (
+              <span
+                className="shrink-0 text-xs text-muted whitespace-nowrap"
+                title="เฉพาะ Ultra Admin Z เท่านั้นที่เลื่อนสถานะจากหน้ารายการได้"
+              >
+                🔒 เลื่อนสถานะ: เฉพาะ Ultra Admin Z
+              </span>
+            )}
             <div className="ml-auto flex flex-nowrap items-center gap-1.5">
               {/* Faithful port of legacy printAll.php bottom-left trio.
                   Print buttons open the 100×75mm label sheet in a new tab and
@@ -1631,14 +1657,19 @@ export function ForwardersTable({
               >
                 ยกเลิก
               </button>
-              <button
-                type="button"
-                onClick={onBulkSubmit}
-                disabled={pending}
-                className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {pending ? "กำลังอัพเดต..." : `อัพเดต ${selected.size} รายการ`}
-              </button>
+              {/* 2026-06-29 (ภูม · สิทธิ์) — the status-move submit is Ultra
+                  Admin Z only (matches the hidden dropdown above + server gate
+                  source="bulk_manual"). */}
+              {isUltra && (
+                <button
+                  type="button"
+                  onClick={onBulkSubmit}
+                  disabled={pending}
+                  className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {pending ? "กำลังอัพเดต..." : `อัพเดต ${selected.size} รายการ`}
+                </button>
+              )}
             </div>
             {/* V-G1 — driver-assign + cancel bulk actions (faithful
                 forwarder-action.php multi-row · backend actions/admin/
