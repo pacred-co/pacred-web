@@ -3,20 +3,29 @@
 /**
  * /admin/api-forwarder-momo/missing — Client UI.
  *
- * 2026-06-29 (ภูม). Lists the closed-container parcels MOMO has but our
- * tb_forwarder is missing (the import/track feed dropped them after they
- * advanced past the first status), and lets staff fill the member code +
- * create the forwarder row.
+ * 2026-06-29 (ภูม). Lists the MOMO parcels our tb_forwarder is still MISSING and
+ * lets staff create the forwarder row in 1 click. There are TWO kinds of missing
+ * parcel and this page shows BOTH (ภูม):
+ *
+ *   • SET A — "พร้อมเพิ่ม" (member KNOWN): parcels in the RICH `import_track`
+ *     feed whose tracking is NOT yet in tb_forwarder. import_track returns the
+ *     member (user_group+user_code), the real China tracking, weight/cbm/dims,
+ *     type, status, container, sack — everything → auto-fill the member, just
+ *     confirm + add (NO manual member input).
+ *
+ *   • SET B — "ต้องกรอกรหัสเอง" (member UNKNOWN): real parcels in the closed-
+ *     container `track_details` whose base tracking is NOT in import_track AND
+ *     NOT in tb_forwarder. MOMO genuinely sends no member for these → staff
+ *     reads the member off the MOMO web UI + types it.
  *
  * Flow:
- *   1. pick a date range (default ~14 days) → "ค้นหาตู้ปิด"
- *   2. GET /api/admin/momo/container-closed → every track_details parcel
- *      (+ its cabinet cid, kg, cbm, ship_by)
- *   3. POST /api/admin/momo/track-completeness → keep ONLY parcels whose base
- *      tracking is NOT already in tb_forwarder
- *   4. aggregate split "-i/n" → base (sum kg/cbm), so each base shows once
- *   5. group by cabinet → table with a member input + add button per parcel
- *   6. confirm → addMissingMomoParcel(...) → mark ✓ / show error inline
+ *   1. pick a date range (default ~14 days) → "ค้นหา"
+ *   2. fetch import_track + container_closed + track-completeness (3 feeds)
+ *   3. Set A = import_track bases not in tb_forwarder
+ *      Set B = container_closed track_details bases not in import_track AND not
+ *              in tb_forwarder, with SACK-style reTracks filtered out
+ *   4. render ONE table grouped Set A first, then Set B (rich columns)
+ *   5. confirm → addMissingMomoParcel(...) → mark ✓ / show error inline
  *
  * Money-UX: never auto-submit; one explicit confirmed click per parcel.
  * Writes go ONLY through the addMissingMomoParcel server action; the MOMO reads
@@ -25,7 +34,11 @@
 
 import { Fragment, useState } from "react";
 import { confirm } from "@/components/ui/confirm";
-import { deriveModeFromCid } from "@/lib/admin/momo-raw-helpers";
+import {
+  deriveModeFromCid,
+  momoRawDisplay,
+  MOMO_SHIP_BY_TH,
+} from "@/lib/admin/momo-raw-helpers";
 import { addMissingMomoParcel } from "@/actions/admin/momo-add-missing";
 
 /** Strip a MOMO "-i/n" (or "-i") split suffix → base tracking (matches the API + action). */
@@ -33,14 +46,41 @@ function baseTrackingOf(re: string): string {
   return re.trim().replace(/-\d+(\/\d+)?$/, "");
 }
 
-/** A missing parcel, one row per BASE tracking (split "-i/n" merged). */
+/**
+ * SACK / container codes leak into container_closed.track_details[].reTrack
+ * (e.g. "CBX260621-EK06", "CBX260616-SEA01", "GZS260626-1") — those are sack /
+ * cabinet identifiers, NOT real parcels. Drop them from Set B; keep only real
+ * China trackings. Matches `<2-4 LETTERS><6+ digits>-<EK|SEA|GZ|AIR><opt digits>`.
+ */
+const SACK_RE = /^[A-Z]{2,4}\d{6,}-(EK|SEA|GZ|AIR)\d*/i;
+function isSackCode(re: string): boolean {
+  return SACK_RE.test(re.trim());
+}
+
+/**
+ * A missing parcel, one row per BASE tracking (split "-i/n" merged).
+ *
+ * `kind` distinguishes the two sets:
+ *   "A" = member KNOWN (from import_track) — show the auto-resolved member chip
+ *   "B" = member UNKNOWN (from container_closed orphan) — show a member input
+ */
 type MissingParcel = {
-  base:      string;        // base tracking (the tb_forwarder.ftrackingchn key)
-  cabinet:   string;        // container cid (e.g. "GZS260626-1")
-  shipBy:    string;        // raw MOMO ship_by ("car"/"ship"/"air") | ""
-  weightKg:  number;        // summed across this base's "-i/n" parcels
-  cbm:       number;        // summed across this base's "-i/n" parcels
-  pieces:    number;        // how many track_details rows folded into this base
+  kind:       "A" | "B";
+  base:       string;        // base tracking (the tb_forwarder.ftrackingchn key)
+  cabinet:    string;        // container cid / container_no (passed to the action)
+  member:     string;        // SET A: auto-resolved "PR###"; SET B: ""
+  shipBy:     string;        // raw MOMO ship_by ("car"/"ship"/"air") | ""
+  weightKg:   number;        // summed across this base's "-i/n" parcels
+  cbm:        number;        // summed across this base's "-i/n" parcels
+  pieces:     number;        // how many source rows folded into this base
+  // ── rich (SET A only — from import_track via momoRawDisplay) ──
+  width:      number;        // 0 when unknown
+  length:     number;
+  height:     number;
+  productType:string;        // raw `type` — e.g. "fda"
+  statusText: string;        // readable MOMO status (last reached phase label)
+  containerNo:string;        // import_track routing batch (display only)
+  sackNo:     string;        // import_track sack
 };
 
 /** Per-row submit state. */
@@ -66,13 +106,27 @@ function normalizeShipBy(raw: string): "car" | "ship" | "air" | undefined {
   return s === "car" || s === "ship" || s === "air" ? s : undefined;
 }
 
-const SHIP_BY_TH: Record<string, string> = { ship: "เรือ", car: "รถ", air: "เครื่องบิน" };
+/** raw ship_by → Thai label (falls back to the raw string, then "—"). */
+function shipByTh(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  if (!s) return "—";
+  return MOMO_SHIP_BY_TH[s] ?? raw;
+}
 
 /** N days ago as YYYY-MM-DD. */
 function daysAgoIso(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
+}
+
+/** Same unwrap the container-closed handling uses: bare array OR { data: [...] }. */
+function unwrapArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: unknown[] }).data;
+  }
+  return [];
 }
 
 export function MomoMissingClient() {
@@ -83,13 +137,13 @@ export function MomoMissingClient() {
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  // Missing parcels, sorted by cabinet then base.
+  // Missing parcels, Set A first then Set B, grouped by cabinet within each set.
   const [missing, setMissing] = useState<MissingParcel[]>([]);
-  // Per-base member-code input + submit state.
+  // SET B only: per-base member-code input.
   const [members, setMembers] = useState<Record<string, string>>({});
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
 
-  // ── Search: container-closed → completeness → keep the missing ──────────
+  // ── Search: import_track + container_closed → completeness → keep the missing ──
   async function onSearch() {
     setBusy(true);
     setError(null);
@@ -97,35 +151,91 @@ export function MomoMissingClient() {
     setMissing([]);
     setRowStates({});
     try {
-      // 1. fetch container_closed for the range
-      const ccRes = await fetch(
-        `/api/admin/momo/container-closed?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
-        { cache: "no-store" },
-      );
+      const qs = `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+
+      // 1. fetch import_track + container_closed in parallel
+      const [itRes, ccRes] = await Promise.all([
+        fetch(`/api/admin/momo/import-track?${qs}`, { cache: "no-store" }),
+        fetch(`/api/admin/momo/container-closed?${qs}`, { cache: "no-store" }),
+      ]);
+
+      const itJson = (await itRes.json().catch(() => null)) as
+        | { ok?: boolean; data?: unknown; error?: string; message?: string } | null;
       const ccJson = (await ccRes.json().catch(() => null)) as
-        | { ok?: boolean; data?: unknown; error?: string; message?: string }
-        | null;
+        | { ok?: boolean; data?: unknown; error?: string; message?: string } | null;
+
+      if (!itRes.ok || !itJson?.ok) {
+        setError(itJson?.message || itJson?.error || `ดึง Import Track ไม่สำเร็จ (HTTP ${itRes.status})`);
+        setSearched(true);
+        return;
+      }
       if (!ccRes.ok || !ccJson?.ok) {
         setError(ccJson?.message || ccJson?.error || `ดึงตู้ปิดไม่สำเร็จ (HTTP ${ccRes.status})`);
         setSearched(true);
         return;
       }
 
-      // The route returns res.data which is the raw MOMO payload — either a
-      // bare array OR a { data: [...] } envelope (sync.ts handles both).
-      const payload = ccJson.data;
-      const containers: unknown[] =
-        payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)
-          ? (payload as { data: unknown[] }).data
-          : Array.isArray(payload)
-            ? (payload as unknown[])
-            : [];
+      const importRecords = unwrapArray(itJson.data);
+      const containers     = unwrapArray(ccJson.data);
 
-      // 2. walk every track_details parcel → aggregate by base tracking.
-      //    Keep the cabinet (cid) + ship_by from the container the base lives in.
-      type Acc = { cabinet: string; shipBy: string; weightKg: number; cbm: number; pieces: number };
-      const byBase = new Map<string, Acc>();
-      const allReTracks: string[] = [];
+      // 2. SET A source — import_track parcels by base tracking (rich).
+      //    Use momoRawDisplay for member/dims/type/status; sum split "-i/n".
+      type AccA = {
+        cabinet: string; member: string; shipBy: string; weightKg: number; cbm: number;
+        pieces: number; width: number; length: number; height: number;
+        productType: string; statusText: string; containerNo: string; sackNo: string;
+      };
+      const byBaseA = new Map<string, AccA>();
+      // every base seen in import_track (so Set B can exclude these)
+      const importBases = new Set<string>();
+      const allTrackings: string[] = [];
+
+      for (const rec of importRecords) {
+        if (!rec || typeof rec !== "object") continue;
+        const d = momoRawDisplay(rec);
+        const tracking = (d.tracking || "").trim();
+        if (!tracking) continue;
+        const base = baseTrackingOf(tracking);
+        importBases.add(base);
+        allTrackings.push(tracking);
+
+        // last reached phase = current MOMO status (readable Thai)
+        const reached = d.phases.filter((p) => p.at);
+        const statusText = reached.length > 0 ? reached[reached.length - 1].label : "รอตรวจสอบสถานะ";
+        const cabinet = (d.cabinet || d.containerNo || "").trim();
+
+        const prev = byBaseA.get(base);
+        if (prev) {
+          prev.weightKg += d.weight;
+          prev.cbm      += d.cbm;
+          prev.pieces   += 1;
+          if (!prev.member && d.memberCode) prev.member = d.memberCode;
+          if (!prev.cabinet && cabinet) prev.cabinet = cabinet;
+          if (!prev.shipBy && d.shipBy) prev.shipBy = d.shipBy;
+        } else {
+          byBaseA.set(base, {
+            cabinet,
+            member:      d.memberCode,
+            shipBy:      d.shipBy,
+            weightKg:    d.weight,
+            cbm:         d.cbm,
+            pieces:      1,
+            width:       d.width,
+            length:      d.length,
+            height:      d.height,
+            productType: d.productType,
+            statusText,
+            containerNo: d.containerNo,
+            sackNo:      d.sackNo,
+          });
+        }
+      }
+
+      // 3. SET B source — container_closed track_details by base tracking.
+      //    Keep ONLY real parcel trackings (drop sack/container codes), and
+      //    exclude any base already seen in import_track.
+      type AccB = { cabinet: string; shipBy: string; weightKg: number; cbm: number; pieces: number };
+      const byBaseB = new Map<string, AccB>();
 
       for (const c of containers) {
         if (!c || typeof c !== "object") continue;
@@ -139,57 +249,98 @@ export function MomoMissingClient() {
           const o = t as Record<string, unknown>;
           const re = typeof o.reTrack === "string" ? o.reTrack.trim() : "";
           if (!re) continue;
-          allReTracks.push(re);
+          if (isSackCode(re)) continue;          // sack / cabinet code → not a parcel
           const base = baseTrackingOf(re);
+          if (importBases.has(base)) continue;   // already covered by Set A (rich)
+          allTrackings.push(re);
           const kg = numOr0(o.kg);
           const cbm = numOr0(o.cbm);
-          const prev = byBase.get(base);
+          const prev = byBaseB.get(base);
           if (prev) {
             prev.weightKg += kg;
             prev.cbm += cbm;
             prev.pieces += 1;
-            // keep the first non-empty cabinet/shipBy (a base shouldn't span ตู้)
             if (!prev.cabinet && cabinet) prev.cabinet = cabinet;
             if (!prev.shipBy && shipBy) prev.shipBy = shipBy;
           } else {
-            byBase.set(base, { cabinet, shipBy, weightKg: kg, cbm, pieces: 1 });
+            byBaseB.set(base, { cabinet, shipBy, weightKg: kg, cbm, pieces: 1 });
           }
         }
       }
 
-      if (allReTracks.length === 0) {
+      if (byBaseA.size === 0 && byBaseB.size === 0) {
         setMissing([]);
         setSearched(true);
         return;
       }
 
-      // 3. completeness → which bases are already in tb_forwarder
-      const compRes = await fetch("/api/admin/momo/track-completeness", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackings: allReTracks }),
-        cache: "no-store",
-      });
-      const compJson = (await compRes.json().catch(() => ({ map: {} }))) as { map?: CompletenessMap };
-      const completeness = compJson?.map ?? {};
+      // 4. completeness → which bases are already in tb_forwarder (exclude BOTH sets)
+      let completeness: CompletenessMap = {};
+      if (allTrackings.length > 0) {
+        const compRes = await fetch("/api/admin/momo/track-completeness", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trackings: allTrackings }),
+          cache: "no-store",
+        });
+        const compJson = (await compRes.json().catch(() => ({ map: {} }))) as { map?: CompletenessMap };
+        completeness = compJson?.map ?? {};
+      }
 
-      // 4. keep ONLY the bases NOT already in tb_forwarder
-      const rows: MissingParcel[] = [];
-      for (const [base, acc] of byBase) {
-        if (completeness[base]) continue; // already in the import flow → skip
-        rows.push({
+      const round6 = (n: number) => Math.round((n + Number.EPSILON) * 1e6) / 1e6;
+
+      // 5. build the rows — Set A (member known) first, then Set B (member unknown).
+      const setA: MissingParcel[] = [];
+      for (const [base, a] of byBaseA) {
+        if (completeness[base]) continue; // already in tb_forwarder → skip
+        setA.push({
+          kind:        "A",
           base,
-          cabinet:  acc.cabinet,
-          shipBy:   acc.shipBy,
-          weightKg: Math.round((acc.weightKg + Number.EPSILON) * 1e6) / 1e6,
-          cbm:      Math.round((acc.cbm + Number.EPSILON) * 1e6) / 1e6,
-          pieces:   acc.pieces,
+          cabinet:     a.cabinet,
+          member:      a.member,
+          shipBy:      a.shipBy,
+          weightKg:    round6(a.weightKg),
+          cbm:         round6(a.cbm),
+          pieces:      a.pieces,
+          width:       a.width,
+          length:      a.length,
+          height:      a.height,
+          productType: a.productType,
+          statusText:  a.statusText,
+          containerNo: a.containerNo,
+          sackNo:      a.sackNo,
         });
       }
-      // sort by cabinet, then base, so missing parcels of the same ตู้ group together
-      rows.sort((a, b) => (a.cabinet === b.cabinet ? a.base.localeCompare(b.base) : a.cabinet.localeCompare(b.cabinet)));
 
-      setMissing(rows);
+      const setB: MissingParcel[] = [];
+      for (const [base, b] of byBaseB) {
+        if (completeness[base]) continue; // already in tb_forwarder → skip
+        setB.push({
+          kind:        "B",
+          base,
+          cabinet:     b.cabinet,
+          member:      "",
+          shipBy:      b.shipBy,
+          weightKg:    round6(b.weightKg),
+          cbm:         round6(b.cbm),
+          pieces:      b.pieces,
+          width:       0,
+          length:      0,
+          height:      0,
+          productType: "",
+          statusText:  "",
+          containerNo: "",
+          sackNo:      "",
+        });
+      }
+
+      // group by cabinet within each set so same-ตู้ rows sit together
+      const byCabinet = (a: MissingParcel, b: MissingParcel) =>
+        a.cabinet === b.cabinet ? a.base.localeCompare(b.base) : a.cabinet.localeCompare(b.cabinet);
+      setA.sort(byCabinet);
+      setB.sort(byCabinet);
+
+      setMissing([...setA, ...setB]);
       setSearched(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาดในการค้นหา");
@@ -201,7 +352,8 @@ export function MomoMissingClient() {
 
   // ── Add one parcel ──────────────────────────────────────────────────────
   async function onAdd(p: MissingParcel) {
-    const member = (members[p.base] ?? "").trim();
+    // SET A → member is auto-resolved; SET B → member is typed.
+    const member = (p.kind === "A" ? p.member : members[p.base] ?? "").trim();
     if (!member) {
       setRowStates((s) => ({ ...s, [p.base]: { kind: "error", message: "กรอกรหัสลูกค้าก่อน (PR…)" } }));
       return;
@@ -214,9 +366,9 @@ export function MomoMissingClient() {
     const ok = await confirm(
       `ยืนยันเพิ่มพัสดุเข้าระบบ?\n\n` +
         `เลขแทรกกิ้ง: ${p.base}\n` +
-        `ตู้: ${p.cabinet}\n` +
-        `ลูกค้า: ${member.toUpperCase()}\n` +
-        `น้ำหนัก: ${p.weightKg} กก. · ${p.cbm} คิว`,
+        `ตู้: ${p.cabinet || "—"}\n` +
+        `ลูกค้า: ${member.toUpperCase()}${p.kind === "A" ? " (จาก MOMO)" : " (กรอกเอง)"}\n` +
+        `น้ำหนัก: ${p.weightKg || "—"} กก. · ${p.cbm || "—"} คิว`,
       { title: "เพิ่มพัสดุที่ขาด", confirmLabel: "เพิ่มเข้าระบบ" },
     );
     if (!ok) return;
@@ -241,7 +393,9 @@ export function MomoMissingClient() {
     }
   }
 
-  const cabinetCount = new Set(missing.map((m) => m.cabinet)).size;
+  const countA = missing.filter((m) => m.kind === "A").length;
+  const countB = missing.filter((m) => m.kind === "B").length;
+  const cabinetCount = new Set(missing.map((m) => m.cabinet).filter(Boolean)).size;
 
   return (
     <div className="space-y-5">
@@ -272,13 +426,14 @@ export function MomoMissingClient() {
             disabled={busy}
             className="rounded-lg border border-sky-500 bg-sky-600 px-3 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50"
           >
-            {busy ? "กำลังค้นหา..." : "ค้นหาตู้ปิด"}
+            {busy ? "กำลังค้นหา..." : "ค้นหา"}
           </button>
         </div>
         <p className="text-[11px] text-muted leading-relaxed">
-          ระบบจะดึง “ตู้ปิด” ของ MOMO ในช่วงวันที่ → เทียบกับ tb_forwarder → แสดงเฉพาะพัสดุที่ MOMO มีแต่ยัง
-          <strong className="text-red-600"> ไม่เข้าระบบ</strong> (พัสดุที่หลุดจาก import/track เพราะเลื่อนสถานะไปแล้ว).
-          กรอกรหัสลูกค้า (ดูได้จากหน้าเว็บ MOMO) แล้วกด “เพิ่มเข้าระบบ”.
+          ระบบจะดึงพัสดุจาก MOMO (Import Track + ตู้ปิด) ในช่วงวันที่ → เทียบกับ tb_forwarder → แสดงเฉพาะพัสดุที่ MOMO มีแต่ยัง
+          <strong className="text-red-600"> ไม่เข้าระบบ</strong> เป็น 2 แบบ:{" "}
+          <strong className="text-emerald-700">แบบ A</strong> = MOMO ส่งรหัสลูกค้ามาครบ (กดเพิ่มได้เลย) ·{" "}
+          <strong className="text-amber-700">แบบ B</strong> = MOMO ส่งไม่ครบ ต้องกรอกรหัสลูกค้าเอง (ดูจากหน้าเว็บ MOMO).
         </p>
       </section>
 
@@ -294,13 +449,19 @@ export function MomoMissingClient() {
         <section className="rounded-2xl border border-border bg-white p-4 shadow-sm space-y-3">
           {missing.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              ✓ ไม่พบพัสดุที่ขาด — ทุกพัสดุในตู้ปิดช่วงนี้เข้าระบบครบแล้ว
+              ✓ ไม่พบพัสดุที่ขาด — ทุกพัสดุของ MOMO ช่วงนี้เข้าระบบครบแล้ว
             </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-bold text-red-700">
                   พบ {missing.length} พัสดุที่ขาด
+                </span>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+                  แบบ A (มีรหัส) {countA}
+                </span>
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
+                  แบบ B (กรอกเอง) {countB}
                 </span>
                 <span className="text-muted">ใน {cabinetCount} ตู้</span>
               </div>
@@ -309,42 +470,74 @@ export function MomoMissingClient() {
                 <table className="w-full text-[12px] border-collapse">
                   <thead className="bg-surface-alt">
                     <tr className="whitespace-nowrap">
-                      <th className="text-left px-2 py-2 border-b font-semibold">ตู้</th>
-                      <th className="text-left px-2 py-2 border-b font-semibold">เลขแทรกกิ้ง</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">รหัสลูกค้า</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">เลขพัสดุจีน</th>
                       <th className="text-right px-2 py-2 border-b font-semibold">น้ำหนัก (กก.)</th>
                       <th className="text-right px-2 py-2 border-b font-semibold">คิว</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">ก×ย×ส</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">ประเภท</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">ขนส่ง</th>
-                      <th className="text-left px-2 py-2 border-b font-semibold">รหัสลูกค้า</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">สถานะ</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">ตู้</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">กระสอบ</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">เพิ่มเข้าระบบ</th>
                     </tr>
                   </thead>
                   <tbody>
                     {missing.map((p, i) => {
+                      const prev = missing[i - 1];
+                      // group header when the SET changes (A → B)
+                      const isNewSet = i === 0 || prev.kind !== p.kind;
+                      // sub-divider when the cabinet changes within the same set
+                      const isNewCabinet = !isNewSet && prev.cabinet !== p.cabinet;
+
                       const st = rowStates[p.base] ?? { kind: "idle" as const };
                       const isAdded = st.kind === "added";
                       const isSaving = st.kind === "saving";
                       const mode = deriveModeFromCid(p.cabinet);
-                      // group divider: show a subtle top border when the cabinet changes
-                      const isNewCabinet = i === 0 || missing[i - 1].cabinet !== p.cabinet;
+                      const dims =
+                        p.width || p.length || p.height ? `${p.width || 0}×${p.length || 0}×${p.height || 0}` : "–";
+
                       return (
                         <Fragment key={p.base}>
+                          {isNewSet && (
+                            <tr>
+                              <td
+                                colSpan={11}
+                                className={`px-3 py-1.5 text-[12px] font-bold ${
+                                  p.kind === "A"
+                                    ? "bg-emerald-50 text-emerald-800 border-y border-emerald-200"
+                                    : "bg-amber-50 text-amber-800 border-y border-amber-200"
+                                }`}
+                              >
+                                {p.kind === "A"
+                                  ? "✅ พร้อมเพิ่ม — MOMO ส่งรหัสลูกค้าครบ"
+                                  : "⚠️ ต้องกรอกรหัสลูกค้าเอง — MOMO ส่งไม่ครบ"}
+                              </td>
+                            </tr>
+                          )}
                           <tr
                             className={`border-b align-top whitespace-nowrap hover:bg-sky-50/50 ${isAdded ? "bg-emerald-50/60" : ""} ${isNewCabinet ? "border-t-2 border-t-slate-200" : ""}`}
                           >
-                            <td className="px-2 py-2 font-mono">
-                              {isNewCabinet ? (
-                                <span className="inline-flex items-center gap-1">
-                                  {p.cabinet}
-                                  {mode && (
-                                    <span className={`rounded px-1 text-[11px] font-semibold ${mode === "เรือ" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
-                                      {mode}
-                                    </span>
-                                  )}
+                            {/* รหัสลูกค้า — A: green chip (no input) · B: text input */}
+                            <td className="px-2 py-2">
+                              {p.kind === "A" ? (
+                                <span className="inline-flex items-center rounded bg-emerald-100 px-2 py-1 text-[12px] font-bold text-emerald-700">
+                                  {p.member || "—"}
                                 </span>
                               ) : (
-                                <span className="text-slate-300">″</span>
+                                <input
+                                  type="text"
+                                  value={members[p.base] ?? ""}
+                                  onChange={(e) => setMembers((m) => ({ ...m, [p.base]: e.target.value }))}
+                                  placeholder="PR…"
+                                  disabled={isAdded || isSaving}
+                                  className="w-24 rounded-lg border border-border px-2 py-1 text-[12px] font-mono uppercase disabled:bg-slate-100"
+                                  onKeyDown={(e) => { if (e.key === "Enter" && !isAdded && !isSaving) onAdd(p); }}
+                                />
                               )}
                             </td>
+                            {/* เลขพัสดุจีน */}
                             <td className="px-2 py-2 font-mono">
                               {p.base}
                               {p.pieces > 1 && (
@@ -355,18 +548,38 @@ export function MomoMissingClient() {
                             </td>
                             <td className="px-2 py-2 text-right tabular-nums">{p.weightKg || "—"}</td>
                             <td className="px-2 py-2 text-right tabular-nums">{p.cbm || "—"}</td>
-                            <td className="px-2 py-2">{p.shipBy ? (SHIP_BY_TH[p.shipBy.toLowerCase()] ?? p.shipBy) : "—"}</td>
+                            <td className="px-2 py-2 font-mono text-[11px] text-muted">{p.kind === "A" ? dims : "–"}</td>
                             <td className="px-2 py-2">
-                              <input
-                                type="text"
-                                value={members[p.base] ?? ""}
-                                onChange={(e) => setMembers((m) => ({ ...m, [p.base]: e.target.value }))}
-                                placeholder="PR…"
-                                disabled={isAdded || isSaving}
-                                className="w-28 rounded-lg border border-border px-2 py-1 text-[12px] font-mono uppercase disabled:bg-slate-100"
-                                onKeyDown={(e) => { if (e.key === "Enter" && !isAdded && !isSaving) onAdd(p); }}
-                              />
+                              {p.kind === "A" && p.productType ? (
+                                <span>
+                                  {p.productType}
+                                  {p.productType === "fda" && (
+                                    <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>
+                                  )}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
                             </td>
+                            <td className="px-2 py-2">{shipByTh(p.shipBy)}</td>
+                            <td className="px-2 py-2 text-[11px]">{p.kind === "A" ? (p.statusText || "—") : "—"}</td>
+                            {/* ตู้ */}
+                            <td className="px-2 py-2 font-mono">
+                              {p.cabinet ? (
+                                <span className="inline-flex items-center gap-1">
+                                  {p.cabinet}
+                                  {mode && (
+                                    <span className={`rounded px-1 text-[11px] font-semibold ${mode === "เรือ" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
+                                      {mode}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="px-2 py-2 font-mono text-[11px] text-muted">{p.kind === "A" ? (p.sackNo || "—") : "—"}</td>
+                            {/* เพิ่มเข้าระบบ */}
                             <td className="px-2 py-2">
                               {isAdded ? (
                                 <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">
@@ -386,7 +599,7 @@ export function MomoMissingClient() {
                           </tr>
                           {st.kind === "error" && (
                             <tr className="border-b bg-red-50/70">
-                              <td colSpan={7} className="px-3 py-1.5 text-[11px] text-red-700">
+                              <td colSpan={11} className="px-3 py-1.5 text-[11px] text-red-700">
                                 ⚠️ {st.message}
                               </td>
                             </tr>
@@ -398,7 +611,8 @@ export function MomoMissingClient() {
                 </table>
               </div>
               <p className="text-[11px] text-muted">
-                ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · พัสดุที่มีเลขย่อย (-i/n) รวมน้ำหนัก/คิวให้แล้ว (×N = จำนวนพัสดุย่อย)
+                ⇆ เลื่อนซ้าย-ขวาเพื่อดูทุกคอลัมน์ · พัสดุที่มีเลขย่อย (-i/n) รวมน้ำหนัก/คิวให้แล้ว (×N = จำนวนพัสดุย่อย) ·
+                แบบ A ดึงข้อมูลครบจาก MOMO Import Track · แบบ B มีเฉพาะที่ตู้ปิดส่งมา (กรอกรหัสลูกค้าเอง)
               </p>
             </>
           )}
