@@ -36,7 +36,7 @@ import {
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
-  Rocket, PanelLeft, Users2, Undo2,
+  Rocket, PanelLeft, Users2, Undo2, MessagesSquare,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -150,6 +150,9 @@ const ICONS: Record<string, LucideIcon> = {
   // names were referenced from sidebar-menu.ts but absent here → blank spacer.
   Users2,          // blockExtTeamLeaders — /admin/team-leaders
   Undo2,           // blockExtRefunds — /admin/refunds
+  // 2026-06-29 (G1 · pre-order HS consult) — itemHsConsult leaf
+  // (accFreight.hsConsult · /admin/accounting/hs-consult).
+  MessagesSquare,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

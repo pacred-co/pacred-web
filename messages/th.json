@@ -3409,7 +3409,8 @@
       "costRates": "ต้นทุนเฟรทจีน (Cost Rates)",
       "cargoDeclarations": "ใบขนรวม (CARGO)",
       "hsLibrary": "คลัง HS (อากร)",
-      "hsTriage": "คิว HS (CS กรอกก่อน)"
+      "hsTriage": "คิว HS (CS กรอกก่อน)",
+      "hsConsult": "ปรึกษาพิกัด HS (ก่อนออเดอร์)"
     },
     "freightOps": {
       "title": "Freight Operations (AX JOB)"

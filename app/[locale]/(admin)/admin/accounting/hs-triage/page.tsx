@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { listHsTriage } from "@/actions/admin/hs-triage";
 import { HsTriageClient } from "./hs-triage-client";
 import { Link } from "@/i18n/navigation";
-import { BookMarked } from "lucide-react";
+import { BookMarked, MessagesSquare } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +30,20 @@ export default async function HsTriagePage() {
             พิมพ์เลข HS แล้วระบบดึงอากร + รหัสสถิติปกติจาก <b>คลัง HS</b> ให้.
           </p>
         </div>
-        <Link
-          href="/admin/accounting/hs-library"
-          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
-        >
-          <BookMarked className="h-3.5 w-3.5" /> คลัง HS (อากร)
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/accounting/hs-consult"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            <MessagesSquare className="h-3.5 w-3.5" /> ปรึกษาพิกัด (ก่อนออเดอร์)
+          </Link>
+          <Link
+            href="/admin/accounting/hs-library"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            <BookMarked className="h-3.5 w-3.5" /> คลัง HS (อากร)
+          </Link>
+        </div>
       </header>
 
       {!res.ok && (

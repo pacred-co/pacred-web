@@ -385,6 +385,18 @@ const itemHsTriage: MenuItem = {
   icon: "ClipboardList",
 };
 
+/** G1 (2026-06-29 · owner operational-flow §8) — ad-hoc PRE-ORDER HS/พิกัด consult.
+ *  Sale/CS posts a product photo + Thai name → Doc answers HS/อากร/ฟอร์มอี/stat/
+ *  ใบกำกับ + เลี่ยงพิกัด, BEFORE an order exists (distinct from the order-bound
+ *  itemHsTriage). Reuse-searches + can grow the คลัง HS dictionary. Reference/
+ *  consult only (§0e). The page + actions gate RBAC themselves (submit = sales/ops ·
+ *  answer = doc/pricing/accounting · audit = manager · ultra/super god). */
+const itemHsConsult: MenuItem = {
+  labelKey: "accFreight.hsConsult",
+  href: "/admin/accounting/hs-consult",
+  icon: "MessagesSquare",
+};
+
 /** 2026-06-09 (W4 · freight ops cockpit) — the AX-JOB unified
  *  PRICING→SALES→DOC→ACC Kanban board (/admin/freight/operations). A
  *  read-mostly layer over the existing freight spine (freight_shipments);
@@ -1175,6 +1187,9 @@ const wrapServiceCustoms: MenuItem = {
   children: [
     itemCargoDeclarations,
     itemTaxdocWorkspace,
+    // G1 — pre-order HS consult sits ABOVE the order-bound triage (natural
+    // reading order: ปรึกษาก่อน → กรอกในออเดอร์).
+    itemHsConsult,
     itemHsTriage,
     itemHsLibrary,
     itemCustomsDocKit,
