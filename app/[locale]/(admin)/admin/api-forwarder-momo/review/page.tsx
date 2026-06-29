@@ -97,6 +97,11 @@ export default async function AdminMomoReviewPage() {
     const guessedUserId =
       userGroupRaw && userCodeRaw ? `${userGroupRaw}${userCodeRaw}` : null;
 
+    // 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก raw → ให้ตาราง review ตรวจง่ายขึ้น.
+    // (raw มี kg/cbm/width/length/height เป็นตัวเลข · 0 = MOMO ยังไม่ได้ชั่ง.)
+    const numFromRaw = (k: string): number =>
+      raw && typeof raw === "object" && typeof raw[k] === "number" ? (raw[k] as number) : 0;
+
     return {
       id:                row.id as string,
       momoTrackingNo:    row.momo_tracking_no ?? null,
@@ -109,6 +114,11 @@ export default async function AdminMomoReviewPage() {
       guessedUserId,
       guessedShipBy:     shipByRaw ?? null,
       qty:               qtyRaw,
+      weightKg:          numFromRaw("kg"),
+      cbm:               numFromRaw("cbm"),
+      width:             numFromRaw("width"),
+      length:            numFromRaw("length"),
+      height:            numFromRaw("height"),
       lastSyncedAt:      row.last_synced_at ?? null,
       momoUpdatedAt:     row.momo_updated_at ?? null,
       imageUrls,

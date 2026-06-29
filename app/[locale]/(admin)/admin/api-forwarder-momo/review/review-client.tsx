@@ -67,6 +67,12 @@ export type PendingRow = {
   userIdValid:        boolean | null;
   guessedShipBy:      string | null;
   qty:                number | null;
+  /** 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก MOMO raw → ตรวจก่อน commit. 0 = ยังไม่ชั่ง. */
+  weightKg:           number;
+  cbm:                number;
+  width:              number;
+  length:             number;
+  height:             number;
   lastSyncedAt:       string | null;
   momoUpdatedAt:      string | null;
   /**
@@ -514,6 +520,9 @@ export function ReviewGridClient({
                   </th>
                   <th className="text-left px-3 py-3 border-b border-border">Phase</th>
                   <th className="text-left px-3 py-3 border-b border-border">Qty</th>
+                  <th className="text-right px-3 py-3 border-b border-border">น้ำหนัก<div className="text-[11px] font-normal normal-case tracking-normal text-muted">(กก.)</div></th>
+                  <th className="text-right px-3 py-3 border-b border-border">คิว<div className="text-[11px] font-normal normal-case tracking-normal text-muted">(ลบ.ม.)</div></th>
+                  <th className="text-left px-3 py-3 border-b border-border">ขนาด<div className="text-[11px] font-normal normal-case tracking-normal text-muted">(ก×ย×ส)</div></th>
                   <th className="text-left px-3 py-3 border-b border-border w-32">userID *</th>
                   <th className="text-left px-3 py-3 border-b border-border w-44">บริษัทขนส่ง *</th>
                   <th className="text-left px-3 py-3 border-b border-border w-32">ประเภท</th>
@@ -610,6 +619,32 @@ export function ReviewGridClient({
                         <span className="inline-flex min-w-[1.75rem] justify-center rounded-md bg-surface-alt px-2 py-0.5 font-semibold tabular-nums text-foreground">
                           {r.qty ?? 1}
                         </span>
+                      </td>
+
+                      {/* 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก MOMO raw · ตรวจก่อน commit */}
+                      <td className="px-3 py-3 text-right tabular-nums">
+                        {r.weightKg > 0 ? (
+                          <span className="font-mono text-foreground">{r.weightKg}</span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700"
+                            title="ของยังไม่ถึงโกดัง MOMO · ยังไม่ได้ชั่ง/วัด — ข้อมูลจะมาเมื่อถึงโกดัง"
+                          >
+                            ⏳ รอ MOMO ชั่ง
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">
+                        {r.cbm > 0 ? (
+                          <span className="font-mono text-foreground">{r.cbm}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-[11px] text-muted">
+                        {r.width > 0 || r.length > 0 || r.height > 0
+                          ? `${r.width}×${r.length}×${r.height}`
+                          : "—"}
                       </td>
 
                       {/* userID input */}
