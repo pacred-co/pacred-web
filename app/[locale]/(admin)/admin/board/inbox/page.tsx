@@ -13,6 +13,8 @@ import {
 } from "@/lib/validators/work-item";
 import { type WaitingReason } from "@/types/work-item-chat";
 import { WorkItemCard } from "../work-item-card";
+import { DevCockpitPanel } from "@/components/admin/dev-cockpit-panel";
+import { isDevCockpitAdmin, loadDevCockpit, type DevCockpit } from "@/lib/admin/dev-cockpit";
 
 /**
  * 0080 + IC-1 — per-role inbox with two tabs.
@@ -66,6 +68,25 @@ export default async function AdminBoardInboxPage({
     sp.tab === "mailbox" ? "mailbox" :
     "mine";
   const admin = createAdminClient();
+
+  // ── Dev cockpit — ภูม only (2026-06-29) · hi-tech mission-control hero ──
+  // Gated by allowlist (member_code/login_id), NOT a role. Others see the
+  // normal inbox unchanged.
+  const { data: meProfile, error: meProfileErr } = await admin
+    .from("profiles")
+    .select("member_code, admin_login_id, first_name, last_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (meProfileErr) {
+    console.error(`[dev-cockpit profile probe] failed`, { code: meProfileErr.code, message: meProfileErr.message });
+  }
+  const showCockpit = isDevCockpitAdmin(meProfile?.member_code, meProfile?.admin_login_id);
+  let cockpit: DevCockpit | null = null;
+  if (showCockpit) {
+    cockpit = await loadDevCockpit(admin);
+  }
+  const cockpitName = [meProfile?.first_name, meProfile?.last_name].filter(Boolean).join(" ") || "ภูม";
+  const cockpitCode = meProfile?.member_code ?? "AD008";
 
   const selectCols = `
     id, entity_type, entity_ref, type, title, note, status, priority,
@@ -214,6 +235,11 @@ export default async function AdminBoardInboxPage({
           ← กระดานรวม
         </Link>
       </div>
+
+      {/* Dev cockpit — ภูม only · hi-tech mission-control hero */}
+      {showCockpit && cockpit && (
+        <DevCockpitPanel cockpit={cockpit} adminName={cockpitName} adminCode={cockpitCode} />
+      )}
 
       {/* Tab bar — URL state via ?tab= */}
       <nav className="flex gap-1 border-b border-border" aria-label="inbox tabs">
