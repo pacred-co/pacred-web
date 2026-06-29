@@ -1,66 +1,69 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, ThumbsUp } from "lucide-react";
+import { getArticleStats, registerArticleView, likeArticle } from "@/actions/article-stats";
 
-export function ArticleStats({ articleId }: { articleId: number }) {
-  const [views, setViews] = useState<number>(0);
-  const [likes, setLikes] = useState<number>(0);
+/**
+ * Real, shared view + like counter (owner 2026-06-29). Backed by `article_stats`
+ * via server actions — NOT localStorage, so the number is the same for everyone
+ * and climbs forever.
+ *
+ *   statKey   "<category>:<slug>" — same key on the listing card + detail page.
+ *   countView pass on a DETAIL page → +1 view on open. Omit on listing cards
+ *             (they only DISPLAY the count, so the list never inflates views).
+ *
+ * Like is anonymous (no login). localStorage remembers THIS browser's like so the
+ * heart stays filled + the same browser can't inflate the count; the total itself
+ * lives in the DB and persists.
+ */
+export function ArticleStats({ statKey, countView = false }: { statKey: string; countView?: boolean }) {
+  const [views, setViews] = useState(0);
+  const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ran = useRef(false);
+  const likedKey = `lk:${statKey}`;
 
-  // sync state from localStorage on mount — เป็น external state จึงต้อง setState ใน effect
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    const sessionKey = `vk-${articleId}`;
-    const likedKey = `lk-${articleId}`;
-    const viewCntKey = `vc-${articleId}`;
-    const likeCntKey = `lc-${articleId}`;
-
-    const wasLiked = localStorage.getItem(likedKey) === "1";
-    const savedViews = parseInt(localStorage.getItem(viewCntKey) || "0", 10);
-    const savedLikes = parseInt(localStorage.getItem(likeCntKey) || "0", 10);
-
-    let newViews = savedViews;
-    if (!sessionStorage.getItem(sessionKey)) {
-      newViews = savedViews + 1;
-      localStorage.setItem(viewCntKey, String(newViews));
-      sessionStorage.setItem(sessionKey, "1");
+    if (ran.current) return; // once per mount (also guards React strict double-invoke)
+    ran.current = true;
+    try {
+      setLiked(localStorage.getItem(likedKey) === "1");
+    } catch {
+      /* private mode */
     }
-
-    setMounted(true);
-    setLiked(wasLiked);
-    setViews(newViews);
-    setLikes(savedLikes);
-  }, [articleId]);
+    (countView ? registerArticleView(statKey) : getArticleStats(statKey)).then((s) => {
+      setViews(s.views);
+      setLikes(s.likes);
+    });
+  }, [statKey, countView, likedKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const toggleLike = () => {
-    const likedKey = `lk-${articleId}`;
-    const likeCntKey = `lc-${articleId}`;
-    const stored = parseInt(localStorage.getItem(likeCntKey) || "0", 10);
-
-    if (!liked) {
-      // like
-      localStorage.setItem(likedKey, "1");
-      localStorage.setItem(likeCntKey, String(stored + 1));
-      setLiked(true);
-      setLikes((l) => l + 1);
-    } else {
-      // unlike
-      localStorage.removeItem(likedKey);
-      localStorage.setItem(likeCntKey, String(Math.max(0, stored - 1)));
-      setLiked(false);
-      setLikes((l) => Math.max(0, l - 1));
+  async function toggleLike() {
+    if (busy) return;
+    const delta: 1 | -1 = liked ? -1 : 1;
+    // optimistic — feels instant ("กดแล้วขึ้นเลย")
+    setLiked(!liked);
+    setLikes((l) => Math.max(0, l + delta));
+    try {
+      localStorage.setItem(likedKey, delta === 1 ? "1" : "0");
+    } catch {
+      /* private mode */
     }
-  };
+    setBusy(true);
+    const s = await likeArticle(statKey, delta);
+    setBusy(false);
+    if (s.views || s.likes) setLikes(s.likes); // reconcile with the true server total
+  }
 
   return (
     <>
       {/* View count */}
-      <span className="inline-flex items-center gap-1" suppressHydrationWarning>
+      <span className="inline-flex items-center gap-1">
         <Eye className="w-3.5 h-3.5" strokeWidth={2.5} />
-        {mounted ? views.toLocaleString() : "0"} วิว
+        {views.toLocaleString()} วิว
       </span>
       <span className="text-muted/50">·</span>
 
@@ -68,8 +71,7 @@ export function ArticleStats({ articleId }: { articleId: number }) {
       <button
         type="button"
         onClick={toggleLike}
-        suppressHydrationWarning
-        aria-label={`${liked ? "เลิกถูกใจ" : "ถูกใจ"} ${mounted ? likes.toLocaleString() : "0"}`}
+        aria-label={`${liked ? "เลิกถูกใจ" : "ถูกใจ"} ${likes.toLocaleString()}`}
         className={[
           "inline-flex items-center gap-1 px-2 py-1 -mx-2 rounded-md transition-all cursor-pointer",
           liked
@@ -78,15 +80,10 @@ export function ArticleStats({ articleId }: { articleId: number }) {
         ].join(" ")}
       >
         <ThumbsUp
-          className={[
-            "w-3.5 h-3.5 transition-all duration-300",
-            liked ? "fill-primary-600 scale-110" : "",
-          ].join(" ")}
+          className={["w-3.5 h-3.5 transition-all duration-300", liked ? "fill-primary-600 scale-110" : ""].join(" ")}
           strokeWidth={2.5}
         />
-        <span suppressHydrationWarning>
-          {mounted ? likes.toLocaleString() : "0"}
-        </span>
+        <span>{likes.toLocaleString()}</span>
       </button>
     </>
   );

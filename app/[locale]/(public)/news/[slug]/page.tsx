@@ -20,8 +20,8 @@ import { ArticleStats } from "@/components/knowledge/article-stats";
 import {
   ALL_NEWS as PACRED_NEWS,
   getNewsBySlug as getPacredNewsBySlug,
-  getRelatedNews,
 } from "@/lib/news/all";
+import { getPublishedArticleBySlug, getPublishedArticles } from "@/lib/cms/articles";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";
@@ -56,14 +56,24 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale, slug } = await params;
   const t = await getTranslations("newsArticlePage");
-  const news = getPacredNewsBySlug(slug);
-  if (!news) return { title: t("notFoundTitle") };
+  // CMS-first (back-office editable) → fall back to the static news item.
+  const cms = await getPublishedArticleBySlug(slug);
+  const staticNews = getPacredNewsBySlug(slug);
+  if (!cms && !staticNews) return { title: t("notFoundTitle") };
+  const news = {
+    title: cms?.title || staticNews!.title,
+    excerpt: cms?.excerpt || staticNews?.excerpt || "",
+    image: cms?.coverUrl || staticNews?.image || "",
+    publishedAt: cms ? (cms.publishedAt ? cms.publishedAt.slice(0, 10) : "") : staticNews!.publishedAt,
+  };
+  const seoTitle = cms?.metaTitle?.trim() || news.title;
+  const seoDesc = cms?.metaDescription?.trim() || news.excerpt;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/news/${slug}`;
   const imageUrl = `${SITE_URL}${news.image}`;
   return {
-    title: news.title,
-    description: news.excerpt,
+    title: seoTitle,
+    description: seoDesc,
     alternates: {
       canonical,
       languages: {
@@ -96,11 +106,47 @@ export default async function NewsArticlePage({
 }) {
   const { locale, slug } = await params;
   const t = await getTranslations("newsArticlePage");
-  const news = getPacredNewsBySlug(slug);
-  if (!news) notFound();
+  // CMS-first (back-office editable · Ultra-approved) → fall back to the static item.
+  const cms = await getPublishedArticleBySlug(slug);
+  const staticNews = getPacredNewsBySlug(slug);
+  if (!cms && !staticNews) notFound();
+
+  const news = cms
+    ? {
+        id: cms.id,
+        slug: cms.slug,
+        title: cms.title,
+        excerpt: cms.excerpt,
+        category: cms.subCategory || staticNews?.category || "ข่าวด่วน",
+        image: cms.coverUrl || staticNews?.image || "",
+        heroImage: cms.coverUrl || staticNews?.heroImage || staticNews?.image || "",
+        content: cms.body || staticNews?.content || "",
+        publishedAt: cms.publishedAt ? cms.publishedAt.slice(0, 10) : (staticNews?.publishedAt ?? ""),
+        statsId: 2000 + cms.id,
+      }
+    : {
+        id: staticNews!.id,
+        slug: staticNews!.slug,
+        title: staticNews!.title,
+        excerpt: staticNews!.excerpt,
+        category: staticNews!.category as string,
+        image: staticNews!.image,
+        heroImage: staticNews!.heroImage ?? staticNews!.image,
+        content: staticNews!.content,
+        publishedAt: staticNews!.publishedAt,
+        statsId: 1000 + staticNews!.id,
+      };
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
-  const related = getRelatedNews(news.slug, 4);
+
+  // Related — from the merged news set (CMS-preferred), newest-ish, exclude current.
+  const dbNews = await getPublishedArticles("news");
+  const dbNewsSlugs = new Set(dbNews.map((a) => a.slug));
+  const mergedNews = [
+    ...dbNews.map((a) => ({ id: a.id, slug: a.slug, title: a.title, category: a.subCategory || "ข่าวด่วน", image: a.coverUrl })),
+    ...PACRED_NEWS.filter((n) => !dbNewsSlugs.has(n.slug)).map((n) => ({ id: n.id, slug: n.slug, title: n.title, category: n.category as string, image: n.image })),
+  ];
+  const related = mergedNews.filter((n) => n.slug !== news.slug).slice(0, 4);
 
   return (
     <>
@@ -158,10 +204,12 @@ export default async function NewsArticlePage({
                 >
                   {news.category}
                 </span>
-                <span className="inline-flex items-center gap-1 text-[11px] md:text-[12px] text-muted font-bold">
-                  <Calendar className="w-3 h-3" strokeWidth={2.8} />
-                  {formatThaiDate(news.publishedAt)}
-                </span>
+                {news.publishedAt ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] md:text-[12px] text-muted font-bold">
+                    <Calendar className="w-3 h-3" strokeWidth={2.8} />
+                    {formatThaiDate(news.publishedAt)}
+                  </span>
+                ) : null}
               </div>
               <h1 className="text-[24px] md:text-[36px] leading-[1.22] md:leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
                 {news.title}
@@ -179,8 +227,8 @@ export default async function NewsArticlePage({
                 <span className="text-muted/50">·</span>
                 <span>{t("readingTime")}</span>
                 <span className="text-muted/50">·</span>
-                {/* Offset newsIds into 1000+ so they don't collide with knowledge ids in localStorage */}
-                <ArticleStats articleId={1000 + news.id} />
+                {/* Offset newsIds (static 1000+ · cms 2000+) so they don't collide with knowledge ids in localStorage */}
+                <ArticleStats statKey={`news:${news.slug}`} countView />
                 <span className="text-muted/50">·</span>
                 <ShareButton title={news.title} text={news.excerpt} slug={`news/${news.slug}`} />
               </div>
@@ -190,15 +238,17 @@ export default async function NewsArticlePage({
                 full image shows without edge-cropping (this detail page only). */}
             <figure className="mx-auto w-full max-w-[760px] mb-6 md:mb-8">
               <div className="relative aspect-[1280/580] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                <Image
-                  src={news.heroImage ?? news.image}
-                  alt={news.title}
-                  fill
-                  sizes="(max-width: 760px) 100vw, 760px"
-                  quality={92}
-                  className="object-cover"
-                  priority
-                />
+                {news.heroImage ? (
+                  <Image
+                    src={news.heroImage}
+                    alt={news.title}
+                    fill
+                    sizes="(max-width: 760px) 100vw, 760px"
+                    quality={92}
+                    className="object-cover"
+                    priority
+                  />
+                ) : null}
               </div>
             </figure>
 

@@ -52,8 +52,33 @@ export default async function NewsListingPage({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
-  // Owner 2026-06-23: published CMS news articles append after the static cards.
+  // Owner 2026-06-29: all ข่าวสาร now live in cms_articles (back-office editable).
+  // CMS is the source; a static ALL_NEWS card only shows as a fallback when its
+  // slug isn't (yet) in CMS — so nothing ever disappears + no duplicates.
   const dbArticles = await getPublishedArticles("news");
+  const dbSlugs = new Set(dbArticles.map((a) => a.slug));
+  const cards = [
+    ...dbArticles.map((a) => ({
+      key: `db-${a.id}`,
+      slug: a.slug,
+      title: a.title,
+      excerpt: a.excerpt,
+      category: a.subCategory || "ข่าวด่วน",
+      image: a.coverUrl,
+      date: a.publishedAt ? a.publishedAt.slice(0, 10) : "",
+      statsId: 2000 + a.id,
+    })),
+    ...PACRED_NEWS.filter((n) => !dbSlugs.has(n.slug)).map((n) => ({
+      key: `st-${n.id}`,
+      slug: n.slug,
+      title: n.title,
+      excerpt: n.excerpt,
+      category: n.category as string,
+      image: n.image,
+      date: n.publishedAt,
+      statsId: 1000 + n.id,
+    })),
+  ];
 
   const itemList = {
     "@context": "https://schema.org",
@@ -62,7 +87,7 @@ export default async function NewsListingPage({
       typedLocale === "th"
         ? "ข่าวสาร Pacred — ประกาศ + อัปเดตบริการ"
         : "Pacred News — announcements + service updates",
-    itemListElement: PACRED_NEWS.map((n, i) => ({
+    itemListElement: cards.map((n, i) => ({
       "@type": "ListItem",
       position: i + 1,
       url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/news/${n.slug}`,
@@ -114,21 +139,23 @@ export default async function NewsListingPage({
 
             {/* News grid */}
             <div className="mx-auto mt-6 md:mt-10 w-full max-w-[1120px] grid grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-4">
-              {PACRED_NEWS.map((news) => (
+              {cards.map((news) => (
                 <Link
-                  key={news.id}
+                  key={news.key}
                   href={`/news/${news.slug}`}
                   className="group relative flex flex-col bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border overflow-hidden shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_20px_40px_rgba(179,0,0,0.12)] hover:border-primary-200 dark:hover:border-primary-900 hover:-translate-y-1 transition-all duration-400"
                 >
                   <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                    <Image
-                      src={news.image}
-                      alt={news.title}
-                      fill
-                      sizes="(max-width: 1024px) 50vw, 360px"
-                      quality={92}
-                      className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                    />
+                    {news.image ? (
+                      <Image
+                        src={news.image}
+                        alt={news.title}
+                        fill
+                        sizes="(max-width: 1024px) 50vw, 360px"
+                        quality={92}
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                      />
+                    ) : null}
                     {/* Category badge */}
                     <div className="absolute top-2 left-2 md:top-3 md:left-3">
                       <span
@@ -141,67 +168,32 @@ export default async function NewsListingPage({
                       </span>
                     </div>
                     {/* Date stamp */}
-                    <div className="absolute top-2 right-2 md:top-3 md:right-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] md:text-[10.5px] font-bold tracking-wide">
-                        <Calendar className="w-2.5 h-2.5" strokeWidth={3} />
-                        {formatThaiDate(news.publishedAt)}
-                      </span>
-                    </div>
+                    {news.date ? (
+                      <div className="absolute top-2 right-2 md:top-3 md:right-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] md:text-[10.5px] font-bold tracking-wide">
+                          <Calendar className="w-2.5 h-2.5" strokeWidth={3} />
+                          {formatThaiDate(news.date)}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-col p-3 md:p-5 gap-1.5 md:gap-2 flex-1">
                     <h3 className="text-[12.5px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-[1.3] tracking-tight line-clamp-2 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
                       {news.title}
                     </h3>
-                    <p className="text-[11px] md:text-[13px] text-muted leading-[1.5] md:leading-[1.55] line-clamp-2 md:line-clamp-3">
-                      {news.excerpt}
-                    </p>
+                    {news.excerpt ? (
+                      <p className="text-[11px] md:text-[13px] text-muted leading-[1.5] md:leading-[1.55] line-clamp-2 md:line-clamp-3">
+                        {news.excerpt}
+                      </p>
+                    ) : null}
 
                     {/* Stats row */}
                     <div className="mt-1.5 md:mt-2 flex items-center gap-1.5 text-[10.5px] md:text-[11.5px] text-muted font-bold">
-                      <ArticleStats articleId={1000 + news.id} />
+                      <ArticleStats statKey={`news:${news.slug}`} />
                     </div>
 
                     {/* Read more */}
-                    <div className="mt-auto pt-1.5 md:pt-2 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[12px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
-                      อ่านข่าวด่วน
-                      <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />
-                    </div>
-                  </div>
-                </Link>
-              ))}
-              {/* Published CMS news — appended after the static cards (owner 2026-06-23) */}
-              {dbArticles.map((a) => (
-                <Link
-                  key={`db-${a.id}`}
-                  href={`/articles/${a.slug}`}
-                  className="group relative flex flex-col bg-white dark:bg-surface rounded-xl md:rounded-2xl border border-border overflow-hidden shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_20px_40px_rgba(179,0,0,0.12)] hover:border-primary-200 dark:hover:border-primary-900 hover:-translate-y-1 transition-all duration-400"
-                >
-                  <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
-                    {a.coverUrl ? (
-                      <Image src={a.coverUrl} alt={a.title} fill sizes="(max-width: 1024px) 50vw, 360px" quality={92} className="object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
-                    ) : null}
-                    <div className="absolute top-2 left-2 md:top-3 md:left-3">
-                      <span className="inline-flex items-center gap-1 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[11px] md:text-[10.5px] font-black tracking-wider border shadow-[0_2px_6px_rgba(0,0,0,0.10)] bg-primary-50 text-primary-700 border-primary-200">
-                        ข่าวสาร
-                      </span>
-                    </div>
-                    {a.publishedAt ? (
-                      <div className="absolute top-2 right-2 md:top-3 md:right-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] md:text-[10.5px] font-bold tracking-wide">
-                          <Calendar className="w-2.5 h-2.5" strokeWidth={3} />
-                          {formatThaiDate(a.publishedAt.slice(0, 10))}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col p-3 md:p-5 gap-1.5 md:gap-2 flex-1">
-                    <h3 className="text-[12.5px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-[1.3] tracking-tight line-clamp-2 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors">
-                      {a.title}
-                    </h3>
-                    {a.excerpt ? (
-                      <p className="text-[11px] md:text-[13px] text-muted leading-[1.5] md:leading-[1.55] line-clamp-2 md:line-clamp-3">{a.excerpt}</p>
-                    ) : null}
                     <div className="mt-auto pt-1.5 md:pt-2 flex items-center gap-1 text-primary-600 text-[10.5px] md:text-[12px] font-black opacity-80 group-hover:opacity-100 transition-opacity">
                       อ่านต่อ
                       <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={3} />

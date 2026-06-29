@@ -18,6 +18,9 @@ export const CMS_CATEGORY_META: Record<CmsCategory, { label: string; path: strin
 /** Knowledge badge options — mirror the public /knowledge CATEGORIES. */
 export const KNOWLEDGE_SUBCATS = ["นำเข้า", "เคลียร์", "ส่งออก"] as const;
 
+/** News badge options — mirror the public /news category badges. */
+export const NEWS_SUBCATS = ["ข่าวด่วน", "อัปเดตบริการ", "กิจกรรม"] as const;
+
 export const CMS_STATUSES = ["draft", "pending", "published", "rejected"] as const;
 export type CmsStatus = (typeof CMS_STATUSES)[number];
 
