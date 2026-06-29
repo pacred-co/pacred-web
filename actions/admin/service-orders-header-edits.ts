@@ -81,6 +81,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
+import { isValidShopCarrierCode } from "@/lib/freight/shipping-methods";
 
 // ────────────────────────────────────────────────────────────
 // Resolve current admin's legacy adminID (tb_header_order.adminidupdate
@@ -156,11 +157,21 @@ const HEADER_EDIT_ROLES = ["super", "accounting"] as const;
 
 const updateShipBySchema = z.object({
   h_no:    hnoSchema,
-  // Legacy accepts numeric carrier codes 1-22 + PCS-family codes. Per
-  // spawn brief we narrow to the Pacred-current PCS-family set; numeric
-  // courier rebind is out of this lane (handled by carrier-manual.ts
-  // flow). Empty / '3' rejected per legacy L1312.
-  ship_by: z.enum(["PCS", "PCSF", "TTP", "JMF", "PCSE"] as const),
+  // 2026-06-29 (owner: shop-order page must match the legacy 47-carrier
+  // dropdown) — legacy `optionHShipBy()` offers PCS/PCSF/PCSE + the numeric
+  // domestic carriers (2..46). The prior 5-value enum (PCS/PCSF/TTP/JMF/PCSE)
+  // dropped the entire numeric carrier set + included TTP/JMF that the shop
+  // dropdown never had. Validate against the faithful SHOP_CARRIER_CODES SOT
+  // (lib/freight/shipping-methods) — same approach as the forwarder
+  // adminUpdateForwarderShipBy (free string, validated). Empty / '3' rejected
+  // per legacy L1312.
+  ship_by: z
+    .string()
+    .trim()
+    .min(1, "กรุณาเลือกบริษัทขนส่ง")
+    .max(10)
+    .refine((v) => v !== "3", "รหัสผู้ขนส่งไม่ถูกต้อง (3 สงวนไว้)")
+    .refine(isValidShopCarrierCode, "รหัสผู้ขนส่งไม่ถูกต้อง"),
 });
 export type AdminUpdateOrderShipByInput = z.infer<typeof updateShipBySchema>;
 

@@ -28,6 +28,11 @@ import {
   adminUpdateOrderPayMethod,
   adminUpdateOrderRate,
 } from "@/actions/admin/service-orders-header-edits";
+// 2026-06-29 (owner: shop page must match the legacy 47-carrier dropdown) —
+// the carrier <select> is built from the faithful SHOP carrier SOT
+// (PCS/PCSF/PCSE + numeric 2..46), not a hardcoded 5-value list. nameShipBy
+// gives the read-only display label for the current code.
+import { getShopCarrierOptions, nameShipBy } from "@/lib/freight/shipping-methods";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error: string };
 
@@ -97,7 +102,6 @@ const TRANSPORT_LABEL: Record<string, string> = {
 };
 const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
 const PAY_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
-const SHIPBY_OPTS = ["PCS", "PCSF", "TTP", "JMF", "PCSE"] as const;
 
 export function OrderInlineEdits({
   hNo,
@@ -105,12 +109,16 @@ export function OrderInlineEdits({
   crate,
   hshipby,
   paymethod,
+  hfreeshipping,
 }: {
   hNo:            string;
   htransporttype: string | null;
   crate:          string | null;
   hshipby:        string | null;
   paymethod:      string | null;
+  // hfreeshipping gates the "PCSE / PRE Express" option (legacy optionHShipBy
+  // hides PCSE when hFreeShipping == '3').
+  hfreeshipping?: string | null;
 }) {
   const { pending, err, run } = useEditor();
   const [editTransport, setEditTransport] = useState(false);
@@ -118,10 +126,16 @@ export function OrderInlineEdits({
   const [editShipBy, setEditShipBy] = useState(false);
   const [editPay, setEditPay] = useState(false);
 
+  // Faithful 47-carrier set (legacy optionHShipBy). If the current code isn't
+  // in the offered set (e.g. a legacy carrier no longer listed), keep it as a
+  // selectable option so saving doesn't silently drop the current carrier.
+  const carrierOptions = getShopCarrierOptions(hfreeshipping);
+  const carrierCodes = carrierOptions.map((o) => o.code);
+
   const [transportVal, setTransportVal] = useState(htransporttype === "3" ? "3" : htransporttype === "2" ? "2" : "1");
   const [crateVal, setCrateVal] = useState(crate === "2" ? "2" : "1");
-  const [shipByVal, setShipByVal] = useState<(typeof SHIPBY_OPTS)[number]>(
-    (SHIPBY_OPTS.includes((hshipby ?? "") as (typeof SHIPBY_OPTS)[number]) ? hshipby : "PCS") as (typeof SHIPBY_OPTS)[number],
+  const [shipByVal, setShipByVal] = useState<string>(
+    hshipby && carrierCodes.includes(hshipby) ? hshipby : (hshipby || "PCS"),
   );
   const [payVal, setPayVal] = useState(paymethod === "2" ? "2" : "1");
 
@@ -199,18 +213,25 @@ export function OrderInlineEdits({
         label="บริษัทขนส่ง"
         editing={editShipBy}
         setEditing={setEditShipBy}
-        display={hshipby || "—"}
+        display={hshipby ? `${nameShipBy(hshipby)} (${hshipby})` : "—"}
       >
         {(close) => (
           <>
             <select
               className={selectCls}
               value={shipByVal}
-              onChange={(e) => setShipByVal(e.target.value as (typeof SHIPBY_OPTS)[number])}
+              onChange={(e) => setShipByVal(e.target.value)}
             >
-              {SHIPBY_OPTS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
+              {/* Keep the current code selectable even if it's no longer in the
+                  offered set, so saving never silently drops it. */}
+              {hshipby && !carrierCodes.includes(hshipby) && (
+                <option value={hshipby}>
+                  {nameShipBy(hshipby) !== "ไม่พบข้อมูล" ? `${nameShipBy(hshipby)} (${hshipby})` : `(${hshipby})`}
+                </option>
+              )}
+              {carrierOptions.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label} ({o.code})
                 </option>
               ))}
             </select>

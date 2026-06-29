@@ -142,7 +142,7 @@ type HRow = {
   htotalpricechn: number | null;
   hshippingservice: number | null; hshippingchn: number | null; hrate: number | null;
   hratecost: number | null; hcostall: number | null;
-  hshipby: string | null; userid: string;
+  hshipby: string | null; hfreeshipping: string | null; userid: string;
   crate: string | null; paymethod: string | null;
   hdatepayment: string | null;
 };
@@ -171,7 +171,7 @@ export default async function AdminServiceOrderEditPage({
     .from("tb_header_order")
     .select(
       "id,hno,hstatus,htransporttype,htotalpricechn," +
-      "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,userid," +
+      "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,hfreeshipping,userid," +
       "crate,paymethod,hdatepayment",
     )
     .eq("hno", hNo)
@@ -461,6 +461,7 @@ export default async function AdminServiceOrderEditPage({
           crate={r.crate}
           hshipby={r.hshipby}
           paymethod={r.paymethod}
+          hfreeshipping={r.hfreeshipping}
         />
         <div className="border-t border-border pt-3 flex items-baseline justify-between gap-3 text-sm">
           <span className="text-xs font-medium text-muted" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>

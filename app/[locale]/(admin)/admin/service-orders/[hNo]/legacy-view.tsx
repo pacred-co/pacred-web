@@ -41,6 +41,9 @@ import {
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+// Carrier label SOT — show the Thai carrier name (legacy nameShipBy) not the
+// raw code on the read-only detail (owner 2026-06-29: faithful display).
+import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { getShopOrderDocuments } from "@/lib/admin/order-documents";
 import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -465,7 +468,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
             />
             <KV
               label="บริษัทขนส่ง"
-              value={r.hshipby || "—"}
+              value={r.hshipby ? `${nameShipBy(r.hshipby)} (${r.hshipby})` : "—"}
             />
             <KV
               label="การเก็บเงินค่าขนส่งในไทย"
