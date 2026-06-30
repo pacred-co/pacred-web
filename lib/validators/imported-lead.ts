@@ -22,6 +22,25 @@ export const FREIGHT_LEAD_SOURCE = "freight" as const;
 export const FREIGHT_NO_PHONE_LEAD_SOURCE = "freight_no_phone" as const;
 export const LEAD_SOURCE_TABS = ["all", "pcs", "freight", "freight_no_phone"] as const;
 export type LeadSourceTab = (typeof LEAD_SOURCE_TABS)[number];
+
+/**
+ * Source-tab bucket for a raw `imported_leads.source` value — the SINGLE SOT for
+ * how the page-level "ที่มา (source)" tabs partition the pool, so the badge
+ * counts (getImportedLeadSourceCounts) and the list filter (lead-assign-bar)
+ * can never drift. PCS = every NON-freight source (the existing CRM lists).
+ */
+export function bucketLeadSource(
+  source: string | null | undefined,
+): "freight" | "freight_no_phone" | "pcs" {
+  const src = source || "";
+  if (src === FREIGHT_NO_PHONE_LEAD_SOURCE) return "freight_no_phone";
+  if (src === FREIGHT_LEAD_SOURCE) return "freight";
+  return "pcs";
+}
+/** True iff the lead belongs to the PCS tab (every NON-freight source). */
+export function isPcsLeadSource(source: string | null | undefined): boolean {
+  return bucketLeadSource(source) === "pcs";
+}
 export const IMPORTED_LEAD_SERVICES = ["FCL", "CARGO", "เคลียร์ศุลกากร", "ฝากสั่ง", "ฝากโอนชำระ"] as const;
 // Mirrors LEAD_CALL_STATUSES (actions/admin/leads-types.ts). ปอน 2026-06-22:
 // added 'callback' = "รอติดต่อกลับ". 2026-06-23: 'other_rep' = "ลูกค้าเซลล์อื่น"

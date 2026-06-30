@@ -16,8 +16,8 @@ import { CargoCommercialInvoicePdf, type CargoCommercialInvoiceData } from "@/co
 
 export const dynamic = "force-dynamic";
 
-type InvoiceDecl = { id: string; declaration_no: string | null; status: CargoCommercialInvoiceData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null; total_declared_value_thb: number | null };
-const INVOICE_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id, total_declared_value_thb";
+type InvoiceDecl = { id: string; declaration_no: string | null; status: CargoCommercialInvoiceData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null; total_declared_value_thb: number | null; issue_in_customer_name: boolean | null };
+const INVOICE_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id, total_declared_value_thb, issue_in_customer_name";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

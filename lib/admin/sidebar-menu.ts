@@ -1187,6 +1187,10 @@ const wrapClassWarehouse: MenuItem = {
         // Warehouse group) had only the flat intake shortcut above. Add the
         // nested block so super reaches every barcode screen here (§0d).
         blockBarcode,
+        // 2026-07-01 — report-cnt (ตู้คอนเทนเนอร์ · the new ใบกำกับ/ใบขน feature
+        // surface) was only in the warehouse-role sidebar; super/CEO org-IA had
+        // to reach it by URL. Mirror the warehouse-role entry (§0d reachability).
+        { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
         // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
         // (faithful port of legacy `printAll.php`).
         { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },

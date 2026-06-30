@@ -146,6 +146,21 @@ export async function createCargoDeclaration(
       .select("id")
       .single<{ id: string }>();
     if (insErr || !inserted) {
+      // The SELECT-then-INSERT races; a concurrent create wins the partial-
+      // unique index (mig 0162) → 23505. Map it to the same friendly
+      // existing_declaration the SELECT path returns (no corruption — the index
+      // held — UX only).
+      if (insErr?.code === "23505") {
+        const { data: dup } = await admin
+          .from("customs_declarations")
+          .select("id, status")
+          .eq("cargo_forwarder_id", forwarderId)
+          .neq("status", "cancelled")
+          .limit(1)
+          .maybeSingle<{ id: string; status: string }>();
+        if (dup) return { ok: false, error: `existing_declaration:${dup.status}:${dup.id}` };
+        return { ok: false, error: "existing_declaration:draft:" };
+      }
       return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
     }
 
@@ -502,15 +517,20 @@ export async function adminSendCustomsDraftToCustomer(
     // Mint the token (reuse if a prior 'sent'/'rejected' draft already has one).
     const token = decl.confirm_token ?? randomUUID();
 
-    const { error: updErr } = await admin
+    const { data: claimed, error: updErr } = await admin
       .from("customs_declarations")
       .update({ customer_confirm_status: "sent", confirm_token: token })
       .eq("id", declarationId)
-      .eq("status", "draft");              // guard: only a draft can be sent
+      .eq("status", "draft")               // guard: only a draft can be sent
+      .select("id")
+      .maybeSingle<{ id: string }>();
     if (updErr) {
       console.error("[cargo-declarations sendDraft update]", { id: declarationId, code: updErr.code, message: updErr.message });
       return { ok: false, error: `ส่งไม่สำเร็จ: ${updErr.message}` };
     }
+    // 0 rows matched (a concurrent change moved it off 'draft') → don't mint a
+    // token / notify the customer for a draft that wasn't actually sent.
+    if (!claimed) return { ok: false, error: "ไม่ใช่ฉบับร่าง (อาจถูกส่งหรือเปลี่ยนสถานะแล้ว)" };
 
     const collectable = roundThb(
       Number(decl.service_fee_thb ?? 0) + Number(decl.total_duty_thb ?? 0) + Number(decl.total_vat_thb ?? 0),

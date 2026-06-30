@@ -96,15 +96,20 @@ export async function customerRejectCustomsDraft(rawToken: string): Promise<Conf
   if (decl.customer_confirm_status === "confirmed") return { ok: false, error: "already_confirmed" };
   if (decl.customer_confirm_status !== "sent") return { ok: false, error: "not_pending" };
 
-  const { error: updErr } = await admin
+  // Atomic flip — guard on 'sent' + verify a row matched so a concurrent
+  // confirm/resend can't make this a silent false-success (mirror confirm path).
+  const { data: claimed, error: updErr } = await admin
     .from("customs_declarations")
     .update({ customer_confirm_status: "rejected" })
     .eq("confirm_token", token)
-    .eq("customer_confirm_status", "sent");
+    .eq("customer_confirm_status", "sent")
+    .select("id")
+    .maybeSingle<{ id: string }>();
   if (updErr) {
     console.error("[customs-confirm reject update]", { code: updErr.code, message: updErr.message });
     return { ok: false, error: "reject_failed" };
   }
+  if (!claimed) return { ok: false, error: "not_pending" };
 
   revalidatePath(`/customs-confirm/${token}`);
   return { ok: true };

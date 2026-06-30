@@ -177,7 +177,11 @@ export async function spendCashbackAtCheckout(
   if (cbReadErr) {
     console.error(`[tb_cash_back read] failed`, { code: cbReadErr.code, message: cbReadErr.message, userid });
   }
-  const cbTotalBefore = Number(cbRow?.cbtotal ?? 0);
+  let cbTotalBefore = Number(cbRow?.cbtotal ?? 0);
+  // NaN/negative guard: a non-numeric cbtotal → NaN → Math.min(req,NaN)=NaN, and
+  // NaN<=0 is false so it escapes the `applied<=0` guard → NaN persists to
+  // tb_cash_back. Coerce to 0 (treat balance as empty).
+  if (!Number.isFinite(cbTotalBefore) || cbTotalBefore < 0) cbTotalBefore = 0;
 
   // Clamp the requested amount to [0, cbTotalBefore]; round to 2dp (money).
   const requested = Math.max(0, Number(args.requested) || 0);

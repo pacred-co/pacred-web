@@ -35,6 +35,7 @@ import {
   importedLeadReportDetailSchema,
   importedLeadAssignmentDetailSchema,
   IMPORTED_LEAD_CALL_STATUSES,
+  bucketLeadSource,
 } from "@/lib/validators/imported-lead";
 
 const TABLE = "imported_leads";
@@ -294,12 +295,12 @@ export async function getImportedLeadSourceCounts(): Promise<AdminActionResult<I
     const freight = new Set<string>();
     let freightNoPhone = 0;
     for (const r of (data ?? []) as { phone: string; source: string }[]) {
-      const src = r.source || "";
-      if (src === "freight_no_phone") { freightNoPhone++; continue; } // counted by row (no phone)
+      const bucket = bucketLeadSource(r.source); // SOT — shared with the list filter
+      if (bucket === "freight_no_phone") { freightNoPhone++; continue; } // counted by row (no phone)
       const ph = digits(r.phone);
       if (!ph) continue; // no callable number → hidden in the phone-list tabs too
       all.add(ph);
-      if (src === "freight") freight.add(ph);
+      if (bucket === "freight") freight.add(ph);
       else pcs.add(ph);
     }
     return { ok: true, data: { all: all.size, pcs: pcs.size, freight: freight.size, freightNoPhone } };

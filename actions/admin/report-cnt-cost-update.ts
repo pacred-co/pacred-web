@@ -244,6 +244,7 @@ export async function adminApplyContainerCostFromSheet(
           errors.push({ fid: u.fid, error: "รายการไม่อยู่ในตู้นี้" });
           continue;
         }
+        if (Number(prior.fcosttotalprice) === u.sheetCost) continue; // no-op skip (don't churn fprofittotal · matches LANE C)
         const { error: updErr } = await admin
           .from("tb_forwarder")
           .update({

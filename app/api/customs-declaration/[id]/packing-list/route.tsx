@@ -19,8 +19,8 @@ import { CargoPackingListPdf, type CargoPackingListData } from "@/components/pdf
 
 export const dynamic = "force-dynamic";
 
-type PlDecl = { id: string; declaration_no: string | null; status: CargoPackingListData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null };
-const PL_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id";
+type PlDecl = { id: string; declaration_no: string | null; status: CargoPackingListData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null; issue_in_customer_name: boolean | null };
+const PL_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id, issue_in_customer_name";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

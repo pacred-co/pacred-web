@@ -26,6 +26,7 @@ import {
   IMPORTED_LEAD_SOURCES,
   IMPORTED_LEAD_SERVICES,
   IMPORTED_LEAD_CALL_STATUSES,
+  bucketLeadSource,
   type ImportedLeadSource,
 } from "@/lib/validators/imported-lead";
 
@@ -315,11 +316,9 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
     .filter((l) => isNoPhoneTab || phoneDigits(l.phone) !== "")
     // Page-level "ที่มา (source)" tab (owner 2026-07-01): freight / freight_no_phone =
     // exact source match; pcs = every NON-freight source (the existing CRM lists).
+    // bucketLeadSource = the shared SOT so this filter + the badge counts agree.
     .filter((l) =>
-      sourceTab === "freight" ? l.source === "freight"
-        : sourceTab === "freight_no_phone" ? l.source === "freight_no_phone"
-        : sourceTab === "pcs" ? (l.source !== "freight" && l.source !== "freight_no_phone")
-        : true,
+      sourceTab === "all" ? true : bucketLeadSource(l.source) === sourceTab,
     )
     .filter((l) => !sourceFilter || l.source === sourceFilter)
     .filter((l) => (!repFilter ? true : repFilter === "__none__" ? !l.assigned_admin_id : l.assigned_admin_id === repFilter))
@@ -812,7 +811,9 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
                   const open = expandedIds.has(l.id);
                   return (
                   <Fragment key={l.id}>
-                  <tr className={`border-t border-border align-top hover:bg-surface-alt/40 ${selected.has(l.id) ? "bg-primary-50/40 dark:bg-primary-950/10" : ""}`}>
+                  {/* §0g self-explaining: a left-border tint flags "มอบหมายแล้ว"
+                      so assignment state is scannable without reading the rep column. */}
+                  <tr className={`border-t border-border align-top hover:bg-surface-alt/40 ${l.assigned_admin_id ? "border-l-2 border-l-primary-400" : ""} ${selected.has(l.id) ? "bg-primary-50/40 dark:bg-primary-950/10" : ""}`}>
                     <td className="px-2 py-2.5 align-top">
                       <button type="button" onClick={() => toggleExpand(l.id)} aria-expanded={open} aria-label={open ? "ย่อ" : "ดูประวัติการโทร"} className="rounded p-1 text-muted transition hover:bg-surface-alt hover:text-foreground">
                         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -855,12 +856,15 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
           <div className="md:hidden space-y-2">
             {pagedLeads.map((l) => {
               const open = expandedIds.has(l.id);
+              // §0g self-explaining: left-border tint + a "มอบหมายแล้ว" badge so
+              // assignment state shows in the collapsed card (no need to expand).
               return (
-                <div key={l.id} className={`rounded-xl border ${selected.has(l.id) ? "border-primary-300 bg-primary-50/40 dark:bg-primary-950/10" : "border-border bg-white dark:bg-surface"}`}>
+                <div key={l.id} className={`rounded-xl border ${l.assigned_admin_id ? "border-l-[3px] border-l-primary-400" : ""} ${selected.has(l.id) ? "border-primary-300 bg-primary-50/40 dark:bg-primary-950/10" : "border-border bg-white dark:bg-surface"}`}>
                   <div className="flex items-start gap-2 p-3">
                     {isAssign ? <input type="checkbox" className="mt-1 shrink-0" checked={selected.has(l.id)} onChange={() => toggleOne(l.id)} aria-label={`เลือก ${l.name}`} /> : null}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground break-words">{l.name || <span className="text-muted">— ไม่มีชื่อ —</span>}</p>
+                      {l.assigned_admin_id ? <span className="mt-0.5 inline-block rounded bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-950/30 dark:text-primary-300">มอบหมายแล้ว · {repName(l.assigned_admin_id)}</span> : null}
                       <div className="mt-1">{statusBadge(l)}</div>
                       <div className="mt-2">{callActions(l)}</div>
                     </div>

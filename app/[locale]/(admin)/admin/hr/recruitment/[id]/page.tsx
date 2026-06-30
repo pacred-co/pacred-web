@@ -14,6 +14,10 @@ import {
   DeletePostingButton, AddApplicantInline, ApplicantActions,
 } from "./posting-actions";
 
+// requireAdmin() reads cookies → without this the page hits DYNAMIC_SERVER_USAGE
+// (500) at request time in production. Mirror customers/[id].
+export const dynamic = "force-dynamic";
+
 /**
  * D1 faithful port of post-job-hs.php detail — reads the migrated legacy
  * `tb_post_job` row. The applicant pipeline below is a Pacred enhancement
