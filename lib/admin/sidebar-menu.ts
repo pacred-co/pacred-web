@@ -953,6 +953,10 @@ const blockExtWriteArticle: MenuItem = {
 const blockExtMarketingHub: MenuItem = {
   labelKey: "extension.marketingHub", href: "/admin/marketing", icon: "BadgePercent",
 };
+// ปอน 2026-06-30 — หน้าวางแผนการตลาด (แคมเปญ/กิจกรรม/ปฏิทิน) คู่กับ marketing hub.
+const blockExtMarketingPlan: MenuItem = {
+  labelKey: "extension.marketingPlan", href: "/admin/marketing/plan", icon: "ClipboardList",
+};
 const blockExtWithdrawalsAll: MenuItem = {
   labelKey: "extension.withdrawalsAll", href: "/admin/withdrawals", icon: "Banknote", phase: 2,
 };
@@ -1134,6 +1138,7 @@ const wrapClassMarketing: MenuItem = {
       icon: "Megaphone",
       children: [
         blockExtMarketingHub,
+        blockExtMarketingPlan,
         blockExtBroadcasts,
         blockExtWriteArticle,
         blockExtLeadSource,
@@ -1386,6 +1391,7 @@ const menuManager: MenuSection[] = [
     blockExtBroadcasts,
     blockExtWriteArticle,
     blockExtMarketingHub,
+    blockExtMarketingPlan,
     // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices removed from
     // the sidebar Extension section. PEAK structure places ใบกำกับภาษีขาย
     // under "รายรับ" headmenu (CARGO_MENUBAR · accounting-menubar.ts) — the
