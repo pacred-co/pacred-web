@@ -303,6 +303,13 @@ export type ForwarderRow = {
    *  already in the admin verify queue. READ-ONLY signal — does NOT change
    *  fstatus/money. Optional — only the customer list feeders populate it. */
   pendingSlip?: boolean;
+  /** tb_forwarder.tax_doc_pref (mig 0127) — the customer's ใบกำกับ/ใบขน/ไม่รับ
+   *  เอกสาร choice. DISPLAY-ONLY: routes the pay-modal destination
+   *  (lib/payment/bank-accounts.ts) — 'tax_invoice' → TRADING (+VAT 7%) wins over
+   *  the domestic-delivery leg. Optional — only the customer detail feeder
+   *  populates it; when undefined the modal safely defaults to LOGISTICS
+   *  (the ฝากนำเข้า "ชำระก่อนจัดส่ง / ค่าส่งในไทย" leg). */
+  tax_doc_pref?: string | null;
 };
 
 // ────────────────────────────────────────────────────────────────────

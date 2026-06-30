@@ -21,6 +21,9 @@ import {
   uploadShopOrderSlip,
   submitShopOrderSlipPayment,
 } from "@/actions/service-order";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { PayDestination } from "@/components/payment/pay-destination";
 
 const fmt = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,13 +31,23 @@ const fmt = (n: number) =>
 export function ShopOrderPayButton({
   hNo,
   totalThb,
+  taxDocPref,
 }: {
   hNo: string;
   totalThb: number;
+  /** tb_header_order.tax_doc_pref — 'tax_invoice' → TRADING (+VAT 7%); else
+   *  SERVICE (ฝากสั่งซื้อ is goods value, not a domestic-delivery leg). DISPLAY
+   *  ONLY: routes the shown destination, never the slip/record path. */
+  taxDocPref?: string | null;
   /** @deprecated wallet removed 2026-06-21 — kept optional so call-sites don't break. */
   walletBalance?: number | null;
 }) {
   const t = useTranslations("shopOrderPayModal");
+  // 3-account SOT routing (lib/payment/bank-accounts.ts). ฝากสั่งซื้อ → not a
+  // domestic-delivery leg; only a ใบกำกับ choice diverts to TRADING.
+  const account = resolvePaymentAccount({
+    issuesTaxInvoice: modeFromPref(taxDocPref) === "tax_invoice",
+  });
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [qr, setQr] = useState<{ dataUrl: string; promptPayId: string } | null>(null);
@@ -146,25 +159,26 @@ export function ShopOrderPayButton({
                   <p className="text-[24px] font-bold text-primary-700 dark:text-primary-400">฿{fmt(totalThb)}</p>
                 </div>
 
-                {/* Company QR — customer scans + types the amount themselves. Swap
-                    point for an amount-encoded QR is centralized in lib/promptpay.ts. */}
+                {/* Company QR + the doc-mode-correct destination account. The
+                    `getForwarderPaymentQr` QR is the SERVICE PromptPay QR, so it's
+                    only passed into <PayDestination> for the SERVICE lane; the
+                    LOGISTICS/TRADING lanes render their own static K-Shop PNG. The
+                    account is resolved via the 3-account SOT (resolvePaymentAccount).
+                    DISPLAY-ONLY — slip/record path unchanged. */}
                 <div className="mt-4 flex flex-col items-center">
                   <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(totalThb) })}</p>
-                  {qr ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={qr.dataUrl} alt="QR ชำระเงิน" className="h-48 w-48 rounded-xl border border-gray-200" />
-                      <p className="mt-2 text-[13px] text-gray-500">บัญชี: <span className="font-semibold text-gray-700 dark:text-gray-200">{qr.promptPayId}</span></p>
-                    </>
-                  ) : qrErr ? (
-                    <p className="text-[13px] text-amber-600">{qrErr}</p>
-                  ) : (
+                  {!qr && !qrErr && account.channel === "promptpay" && (
                     <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
                   )}
-                  <div className="mt-3 w-full rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 text-center">
-                    <p className="text-[14px] font-semibold text-gray-800 dark:text-gray-100">บัญชี: 225-2-91144-0</p>
-                    <p className="mt-0.5 text-[13px] text-gray-600 dark:text-gray-300">บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย</p>
-                  </div>
+                  {qrErr && account.channel === "promptpay" && (
+                    <p className="text-[13px] text-amber-600">{qrErr}</p>
+                  )}
+                  <PayDestination
+                    account={account}
+                    amountThb={totalThb}
+                    serviceQrDataUrl={account.channel === "promptpay" ? qr?.dataUrl ?? null : null}
+                    className="mt-2 w-full"
+                  />
                   <p className="mt-2 text-[12.5px] leading-relaxed text-gray-500 text-center">
                     สแกน QR แล้วกรอกจำนวนเงินที่ต้องชำระเอง → โอนแล้วแนบสลิป (ทีมงานตรวจสอบ)
                   </p>

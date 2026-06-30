@@ -11,6 +11,9 @@ import {
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import type { ForwarderRow } from "./forwarder-row-view";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { PayDestination } from "@/components/payment/pay-destination";
 
 /**
  * `#list-payment2` — the multi-bill forwarder payment modal. Tailwind
@@ -42,21 +45,6 @@ function numberFormat2(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-// Company bank account (Kasikornbank — บจก. แพคเรด (ประเทศไทย)).
-// The QR is now the STATIC company QR served by lib/promptpay.ts; the value
-// returned as `promptPayId` is this bank account number (no dynamic/amount QR).
-const BANK_ACCOUNT_NO = "225-2-91144-0";
-
-// Kasikorn 10-digit account grouping: XXX-X-XXXXX-X.
-function formatBankAccount(id: string): string {
-  const d = id.replace(/\D/g, "");
-  if (d.length === 10) {
-    return `${d.slice(0, 3)}-${d[3]}-${d.slice(4, 9)}-${d[9]}`;
-  }
-  // Already-formatted (e.g. "225-2-91144-0") or unknown shape — show as-is.
-  return id;
 }
 
 // getListPayForwarder.php L116 — per-row total (before bill-level adjust).
@@ -137,10 +125,24 @@ export function ForwarderPayModal({
     return { totalPriceAll, sumPricePCSF, totalNiTi, payAmount };
   }, [rows, isJuristic]);
 
-  // ── PromptPay QR ──
+  // ── pay-destination routing (lib/payment/bank-accounts.ts — 3-account SOT) ──
+  // ฝากนำเข้า "ชำระก่อนจัดส่ง / ค่าส่งในไทย" = the DOMESTIC-DELIVERY leg → LOGISTICS
+  // by default. A ใบกำกับ choice on ANY selected row overrides → TRADING (+VAT 7%).
+  // tax_doc_pref is OPTIONAL on ForwarderRow — feeders that omit it (most list
+  // surfaces) safely keep LOGISTICS (the current/correct destination for this leg).
+  // DISPLAY-ONLY — the slip-upload + submitForwarderPayment path is untouched.
+  const payAccount = useMemo(() => {
+    const anyTaxInvoice = rows.some((r) => modeFromPref(r.tax_doc_pref) === "tax_invoice");
+    return resolvePaymentAccount({
+      issuesTaxInvoice: anyTaxInvoice,
+      isDomesticDeliveryLeg: true,
+    });
+  }, [rows]);
+
+  // ── PromptPay QR (SERVICE lane only — the account number now comes from the
+  //    3-account SOT resolved in `payAccount`, not from the QR response). ──
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
-  const [promptPayId, setPromptPayId] = useState<string | null>(null);
 
   useEffect(() => {
     if (bill.payAmount <= 0) return;
@@ -149,11 +151,9 @@ export function ForwarderPayModal({
       if (cancelled) return;
       if (res.ok && res.data) {
         setQrDataUrl(res.data.dataUrl);
-        setPromptPayId(res.data.promptPayId);
         setQrError(null);
       } else {
         setQrDataUrl(null);
-        setPromptPayId(null);
         const code = res.ok ? null : res.error;
         setQrError(
           code === "promptpay_not_configured"
@@ -214,10 +214,6 @@ export function ForwarderPayModal({
         setError(res.error);
       }
     });
-  }
-
-  function copyText(value: string) {
-    if (navigator.clipboard) void navigator.clipboard.writeText(value);
   }
 
   // ESC key close
@@ -473,30 +469,36 @@ export function ForwarderPayModal({
                   </div>
                 </div>
 
-                {/* QR + PromptPay — moved BELOW the red total bar so the flow
-                    reads items → total → scan-to-pay → attach slip (ปอน
-                    2026-06-08: "เอาก้อน QR ย้ายลงมาต่อแถบแดง"). */}
+                {/* QR + destination account — routed by the 3-account SOT
+                    (lib/payment/bank-accounts.ts). The fetched `qrDataUrl` is the
+                    SERVICE PromptPay QR, so it's only shown when the resolved
+                    destination IS the SERVICE lane; the LOGISTICS/TRADING lanes
+                    render their own static K-Shop PNG inside <PayDestination>.
+                    DISPLAY-ONLY — slip/record path unchanged. (ปอน 2026-06-08:
+                    "เอาก้อน QR ย้ายลงมาต่อแถบแดง".) */}
                 <div className="rounded-xl bg-white border border-border px-4 py-4 text-center">
-                  <div
-                    id="qrcode"
-                    className="mx-auto"
-                    style={{ width: 250, height: 250 }}
-                  >
-                    {qrDataUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={qrDataUrl}
-                        width={250}
-                        height={250}
-                        alt="PromptPay QR"
-                        className="rounded-lg"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted px-4 text-center">
-                        {qrError ?? t("qrGenerating")}
-                      </div>
-                    )}
-                  </div>
+                  {payAccount.channel === "promptpay" && (
+                    <div
+                      id="qrcode"
+                      className="mx-auto"
+                      style={{ width: 250, height: 250 }}
+                    >
+                      {qrDataUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={qrDataUrl}
+                          width={250}
+                          height={250}
+                          alt="PromptPay QR"
+                          className="rounded-lg"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-muted px-4 text-center">
+                          {qrError ?? t("qrGenerating")}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-2 text-base font-bold text-red-600">
                     {t("amountLabel")}{" "}
                     <span id="amount-show" className="tabular-nums">
@@ -504,28 +506,15 @@ export function ForwarderPayModal({
                     </span>
                   </div>
 
-                  {/* Bank-account block — the QR is the STATIC company QR;
-                      customers scan it then TYPE the amount themselves and
-                      attach a slip (staff verify). The account number is also
-                      shown for manual transfer (owner 2026-06-08). */}
-                  <div className="mt-3 rounded-lg bg-surface-alt/60 border border-border px-3 py-3 text-left space-y-1">
-                    <div className="text-xs font-bold text-muted">{t("bankBlockTitle")}</div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm text-muted">{t("accountNoLabel")}</span>
-                      <span id="text-pp" className="font-mono text-lg font-bold text-foreground tabular-nums">
-                        {promptPayId ? formatBankAccount(promptPayId) : BANK_ACCOUNT_NO}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyText(promptPayId ?? BANK_ACCOUNT_NO)}
-                        className="inline-flex items-center rounded-full bg-surface-alt hover:bg-border text-foreground text-xs font-bold px-2.5 py-1 transition-colors"
-                      >
-                        📋 {t("copy")}
-                      </button>
-                    </div>
-                    <div className="text-sm font-semibold text-foreground">{t("accountName")}</div>
-                    <div className="text-sm text-muted">{t("bankName")}</div>
-                  </div>
+                  {/* Destination account block — resolved by doc-mode (SOT). For
+                      the SERVICE lane the fetched PromptPay QR is passed in; the
+                      account number is always shown for manual transfer. */}
+                  <PayDestination
+                    account={payAccount}
+                    amountThb={bill.payAmount}
+                    serviceQrDataUrl={payAccount.channel === "promptpay" ? qrDataUrl : null}
+                    className="mt-3"
+                  />
 
                   {/* One-line instruction — scan, type amount, attach slip */}
                   <p className="mt-2 text-xs leading-relaxed text-muted">

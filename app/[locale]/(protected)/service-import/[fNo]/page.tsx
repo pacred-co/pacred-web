@@ -487,7 +487,10 @@ export default async function ServiceImportDetailPage({
       "fpriceupdate, customrate, customratekg, customratecbm, " +
       // per-order ค่าเทียบ override (mig 0187) — DISPLAY-ONLY: drives the
       // customer price-breakdown "หาค่าเทียบ …" line (no money recompute).
-      "custom_comparison, custom_comparison_value",
+      "custom_comparison, custom_comparison_value, " +
+      // tax-doc choice (mig 0127) — DISPLAY-ONLY: routes the pay-modal
+      // destination ('tax_invoice' → TRADING). Never drives money/issuance.
+      "tax_doc_pref",
     )
     .eq("id", idNum)
     .maybeSingle<{
@@ -554,6 +557,7 @@ export default async function ServiceImportDetailPage({
       customratecbm: number | string;
       custom_comparison: string | null;
       custom_comparison_value: number | string | null;
+      tax_doc_pref: string | null;
     }>();
 
   // forwarder.php L1669: if ($result->num_rows > 0) { … } else { 404 }
@@ -969,6 +973,7 @@ export default async function ServiceImportDetailPage({
     adminidcreator:         null,
     promoid:                promoIdStr,
     fproductstype:          row.fproductstype,
+    tax_doc_pref:           row.tax_doc_pref ?? null,
   };
 
   // forwarder.php L1678 — total price with WHT adjustment for tax-exempt customers.

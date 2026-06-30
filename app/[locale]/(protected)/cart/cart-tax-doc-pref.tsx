@@ -21,7 +21,7 @@
  * billing snapshot; 'receipt' needs nothing.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { FileText, Receipt, FileCheck2 } from "lucide-react";
 import {
@@ -48,6 +48,7 @@ const MODE_ICON: Record<TaxDocMode, ReactNode> = {
 export function CartTaxDocPref({
   defaults,
   defaultMode,
+  onModeChange,
 }: {
   defaults: TaxDocDefaults;
   /** 2026-06-09 (create-order fix) — force the initial doc mode. The ฝากนำเข้า
@@ -56,11 +57,21 @@ export function CartTaxDocPref({
    *  tb_corporate could not submit); the customer opts INTO ใบกำกับ/ใบขน. The
    *  cart omits this → keeps the juristic auto-default. */
   defaultMode?: TaxDocMode;
+  /** 2026-06-30 — optional notifier so a parent (e.g. the ฝากโอน yuan form) can
+   *  react to the live doc-mode choice and show the correct pay-destination
+   *  account (lib/payment/bank-accounts.ts). DISPLAY-ONLY; does not change the
+   *  persisted `taxDocPref` hidden input or any record path. */
+  onModeChange?: (mode: TaxDocMode) => void;
 }) {
   const t = useTranslations("cartPage");
   const [mode, setMode] = useState<TaxDocMode>(
     defaultMode ?? (defaults.isJuristic && defaults.taxId ? "tax_invoice" : "none"),
   );
+
+  // Notify the parent of the current mode (initial + every change).
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, [mode, onModeChange]);
 
   // The persisted column value ('tax_invoice' | 'customs' | 'receipt').
   const pref = prefFromMode(mode);

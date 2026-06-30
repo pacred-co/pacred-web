@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useCallback, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createYuanPayment } from "@/actions/payment";
@@ -10,6 +10,9 @@ import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { Explain } from "@/components/ui/tooltip";
 import { trackPlaceOrder } from "@/lib/analytics";
 import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { type TaxDocMode } from "@/lib/tax/tax-doc-mode";
+import { PayDestination } from "@/components/payment/pay-destination";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -36,6 +39,18 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ id: number; thb: number } | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // ── pay-destination routing (lib/payment/bank-accounts.ts — 3-account SOT) ──
+  // ฝากโอนหยวน = NOT a domestic-delivery leg. Only a ใบกำกับ choice diverts to
+  // TRADING (+VAT 7%); everything else (none/customs) → SERVICE. The mode is the
+  // live <CartTaxDocPref> selection (defaults to 'none' = SERVICE). DISPLAY-ONLY
+  // — createYuanPayment + the slip path are untouched.
+  const [taxMode, setTaxMode] = useState<TaxDocMode>("none");
+  const onTaxModeChange = useCallback((m: TaxDocMode) => setTaxMode(m), []);
+  const payAccount = useMemo(
+    () => resolvePaymentAccount({ issuesTaxInvoice: taxMode === "tax_invoice" }),
+    [taxMode],
+  );
 
   const thb = useMemo(() => {
     const y = Number(yuan);
@@ -253,36 +268,27 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           / ไม่รับเอกสาร). Reuses <CartTaxDocPref> (same input names) → persists to
           tb_payment.tax_doc_* on submit. defaultMode="none" so a juristic customer
           is never hard-blocked from paying by incomplete billing (opt-in). */}
-      {taxDocDefaults && <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />}
+      {taxDocDefaults && (
+        <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" onModeChange={onTaxModeChange} />
+      )}
 
       {/* Payment — slip only (2026-06-19 owner: ฝากโอนหยวน = DIRECT-CUT, no
           wallet. The customer transfers to the company account + attaches the
           slip; accounting verifies (2 layers) → ตัดจ่าย). */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-foreground">{t("paymentSection")}</h2>
-        {/* Bank-account + QR block. Owner 2026-06-21: show the SAME company QR on
-            every pay surface (ฝากโอนหยวนเคยไม่มี → เพิ่มให้เหมือนกัน). The QR is the
-            static company QR (`STATIC_PAYMENT_QR_PATH` in lib/promptpay.ts) — the ONE
-            swap point: when the real company PromptPay ID is set, lib/promptpay.ts
-            flips to an amount-encoded QR and every surface (shop/forwarder/yuan)
-            switches at once. Customer scans/transfers + attaches slip (staff verify). */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="space-y-1 flex-1">
-            <p className="text-sm font-bold text-foreground">สแกน QR หรือโอนเข้าบัญชีบริษัท</p>
-            <p className="text-sm text-foreground">
-              บัญชี: <b className="font-mono">225-2-91144-0</b> · บจก. แพคเรด (ประเทศไทย) · ธนาคารกสิกรไทย
-            </p>
-            <p className="text-xs text-muted">
-              โอนยอด <b>฿{thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b> แล้วแนบสลิป (ทีมงานตรวจสอบ)
-            </p>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/payment/pacred-qr.png"
-            alt="QR ชำระเงิน บริษัท แพคเรด"
-            className="w-36 h-36 rounded-lg border border-amber-300 bg-white object-contain shrink-0 mx-auto sm:mx-0"
-          />
-        </div>
+        {/* Bank-account + QR block — routed by the 3-account SOT
+            (resolvePaymentAccount). ฝากโอนหยวน → SERVICE (PromptPay นิติ) by
+            default; a ใบกำกับ choice diverts to TRADING (+VAT 7%). The static
+            `pacred-qr.png` is bound to the K-Shop merchant account and does NOT
+            match either SERVICE or TRADING here, so no QR image is passed — the
+            account-number block carries the destination (the TRADING lane shows
+            its own static PNG when present). DISPLAY-ONLY — createYuanPayment +
+            slip path unchanged. */}
+        <PayDestination account={payAccount} amountThb={thb} serviceQrDataUrl={null} />
+        {/* TODO(pay-qr) — once a per-account amount-QR exists (lib/promptpay.ts
+            dynamic flag + the real SERVICE/TRADING K-Shop PNGs), pass the matching
+            QR data-url here so the SERVICE/ฝากโอน lane shows a scannable QR again. */}
         <div className="space-y-1">
           <span className="text-sm font-medium">
             <Explain

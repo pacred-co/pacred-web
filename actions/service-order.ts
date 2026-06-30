@@ -66,6 +66,10 @@ export type ServiceOrderDetail = ServiceOrderSummary & {
   ship_postal_code: string | null;
   ship_note: string | null;
   note_user: string | null;
+  /** tb_header_order.tax_doc_pref (mig 0127) — the customer's ใบกำกับ/ใบขน/
+   *  ไม่รับเอกสาร choice. Drives the pay-destination routing (lib/payment/
+   *  bank-accounts.ts): 'tax_invoice' → TRADING, else SERVICE. */
+  tax_doc_pref: string | null;
   items: Array<{
     id: string;
     provider: Provider;
@@ -262,7 +266,7 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
       `${LEGACY_HEADER_COLS}, hshippingchn, hshippingservice, paymethod, crate, hfreeshipping,
        haddressname, haddresslastname, haddresstel, haddresstel2, haddressno,
        haddresssubdistrict, haddressdistrict, haddressprovince, haddresszipcode, haddressnote,
-       hnote`,
+       hnote, tax_doc_pref`,
     )
     .eq("hno", hNo)
     .eq("userid", memberCode)            // ownership gate
@@ -288,6 +292,7 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
     haddresszipcode: string | null;
     haddressnote: string | null;
     hnote: string | null;
+    tax_doc_pref: string | null;
   };
 
   const { data: items, error: itemsErr } = await admin
@@ -319,6 +324,7 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
     ship_postal_code: h.haddresszipcode && h.haddresszipcode.trim() ? h.haddresszipcode : null,
     ship_note: h.haddressnote && h.haddressnote.trim() ? h.haddressnote : null,
     note_user: h.hnote && h.hnote.trim() ? h.hnote : null,
+    tax_doc_pref: h.tax_doc_pref ?? null,
     items: ((items ?? []) as unknown as LegacyOrderItemRow[]).map(orderItemRow),
   };
 

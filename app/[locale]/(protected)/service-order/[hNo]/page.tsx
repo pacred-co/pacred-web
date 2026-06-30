@@ -256,6 +256,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               <ShopOrderPayButton
                 hNo={o.h_no}
                 totalThb={Number(o.total_thb)}
+                taxDocPref={o.tax_doc_pref}
                 walletBalance={walletBalance}
               />
             )}
