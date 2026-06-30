@@ -48,7 +48,10 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
-import { deriveTransportTypeFromCabinet } from "@/lib/admin/momo-raw-helpers";
+import {
+  deriveTransportTypeFromCabinet,
+  baseTrackingOf,
+} from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 
@@ -78,9 +81,9 @@ const addMissingMomoParcelSchema = z.object({
 
 export type AddMissingMomoParcelInput = z.input<typeof addMissingMomoParcelSchema>;
 
-/** Strip a MOMO "-i/n" (or "-i") split suffix → base tracking (matches the API route). */
-function baseTrackingOf(re: string): string {
-  return re.trim().replace(/-\d+(\/\d+)?$/, "");
+/** Escape PostgREST `like` wildcards in a literal base so it can't widen the match. */
+function escapeLike(base: string): string {
+  return base.replace(/[%_,\\]/g, "\\$&");
 }
 
 /**
@@ -136,19 +139,31 @@ export async function addMissingMomoParcel(
       const userID  = d.memberCode.toUpperCase();
 
       // ── GUARD 1 — dedup (read-then-insert, base-tracking keyed) ──────────
-      // tb_forwarder.ftrackingchn holds the BASE tracking (e.g. "KY982669997",
-      // not "KY982669997-1/2"). If a billable row already exists for this base,
-      // abort — never create a 2nd billable row for one parcel.
-      const { data: dup, error: dupErr } = await admin
+      // tb_forwarder.ftrackingchn stores the BARE base ("KY982669997") for some
+      // rows but the SUFFIXED form ("302098539663-1/7") for split trackings.
+      // So a bare `eq(base)` MISSES already-committed split parcels (confirmed
+      // prod: 302098539663 shipped at fstatus 7 but read as "missing") → clicking
+      // เพิ่ม would create a DUPLICATE billable row over shipped goods. Match the
+      // base as either the exact bare base OR `base-%` (the split children), then
+      // re-verify in JS via baseTrackingOf so a prefix can't false-positive
+      // ("123" vs "1234-1/2"). Fail CLOSED — if any matching row resolves to this
+      // base, abort. (tb_forwarder has no UNIQUE on ftrackingchn → this stays a
+      // read-then-insert; a concurrent double-submit can still slip past, the page
+      // re-load surfaces the dup for the lead to reconcile — same posture as the
+      // manual-add path.)
+      const escBase = escapeLike(base);
+      const { data: dupRows, error: dupErr } = await admin
         .from("tb_forwarder")
-        .select("id")
-        .eq("ftrackingchn", base)
-        .limit(1)
-        .maybeSingle<{ id: number }>();
+        .select("id, ftrackingchn")
+        .or(`ftrackingchn.eq.${base},ftrackingchn.like.${escBase}-%`)
+        .limit(50);
       if (dupErr) {
         console.error(`[momo-add-missing dup-check] failed`, { code: dupErr.code, message: dupErr.message });
         return { ok: false, error: `ตรวจสอบรายการซ้ำไม่สำเร็จ: ${dupErr.message}` };
       }
+      const dup = (dupRows ?? []).find(
+        (r) => baseTrackingOf((r as { ftrackingchn: string | null }).ftrackingchn ?? "") === base,
+      ) as { id: number } | undefined;
       if (dup) {
         return { ok: false, error: `พัสดุนี้มีในระบบแล้ว (#${dup.id})` };
       }

@@ -22,6 +22,26 @@
  */
 
 /**
+ * Strip a MOMO "-i/n" (or "-i") split-suffix → the BASE tracking.
+ *
+ * MOMO splits one tracking into "<base>-i/n" parcels (e.g. "302098539663-1/7"),
+ * but tb_forwarder.ftrackingchn and momo_import_tracks.momo_tracking_no are NOT
+ * consistent about whether they store the base or the suffixed form — so any
+ * "is this tracking already in the system?" comparison MUST normalise BOTH
+ * sides through this helper, never compare a bare base to a suffixed value.
+ *
+ * Strips a NUMERIC split-suffix ONLY (`-3` or `-1/3`); a legit hyphenated
+ * tracking like "CBX260620-SEA07" is left intact (SEA isn't digits).
+ *
+ * @see app/[locale]/(admin)/admin/api-forwarder-momo/missing — Set A / dedup
+ * @see app/api/admin/momo/track-completeness/route.ts — completeness verdict
+ * @see actions/admin/momo-add-missing.ts — GUARD 1 dedup
+ */
+export function baseTrackingOf(re: string): string {
+  return re.trim().replace(/-\d+(\/\d+)?$/, "");
+}
+
+/**
  * Derive tb_forwarder.ftransporttype ("1"|"2") from MOMO's raw `ship_by`.
  *
  * MOMO ships use "car"/"ship"/"air" — legacy tb_forwarder.ftransporttype
