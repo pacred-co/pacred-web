@@ -83,6 +83,8 @@ function buildForwarderMenubar(c: { s5: number; s6: number }): MenubarItem[] {
       // page exists at /admin/forwarders/notes but was unreachable from
       // here; wired into งาน menu group beside the other ops surfaces.
       { label: "หมายเหตุนำเข้า",         href: "/admin/forwarders/notes" },
+      // 2026-06-30 (gap G7) — คิวพัสดุมีปัญหา (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/ติดด่าน/PR สลับ).
+      { label: "⚠️ พัสดุมีปัญหา",          href: "/admin/forwarders/exceptions" },
       { label: "มอบงานคนขับ",            href: "/admin/drivers" },
       // Wave 7.3 (2026-05-22): wired 2 orphan container-cost pages per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.

@@ -3282,7 +3282,8 @@
         "transitOverdue": "กำลังมาไทยเกินกำหนด",
         "ownerlessGoods": "สินค้าไม่มีเจ้าของ",
         "prepareOverdue": "เตรียมส่งเกินกำหนด",
-        "newClientNoContact": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน"
+        "newClientNoContact": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",
+        "parcelExceptions": "พัสดุมีปัญหา"
       }
     },
     "purchasing": {

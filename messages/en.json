@@ -3282,7 +3282,8 @@
         "transitOverdue": "In transit overdue",
         "ownerlessGoods": "Ownerless goods",
         "prepareOverdue": "Prep-to-ship overdue",
-        "newClientNoContact": "New client no contact 2 days"
+        "newClientNoContact": "New client no contact 2 days",
+        "parcelExceptions": "Parcel exceptions"
       }
     },
     "purchasing": {
