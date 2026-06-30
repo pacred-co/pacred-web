@@ -7,25 +7,28 @@
  * `import/track` feed (which drops parcels once they advance). Staff use this
  * page to eyeball / cross-check what MOMO actually has, per status board.
  *
- * 🔒 No cost/price/rate is ever fetched — `fetchMomoLiveList` normalises every
- * parcel to the SAFE `MomoLiveParcel` shape (operational fields only). Nothing
- * sensitive crosses the boundary, so this page just renders what it gets.
+ * 🔓 PASSWORDLESS LOGIN BUTTON (2026-06-30 · ภูม). MOMO's web is single-session —
+ * a login elsewhere kicks our cached token. So this page does NOT auto-fetch on
+ * load; it renders a "เข้าสู่ระบบ MOMO" landing. Staff click the button (no
+ * password field — creds are server-side in env) → the action logs in fresh +
+ * returns the board. Re-login on demand handles a kicked session.
  *
- * Server-side: auth gate + ONE live fetch of the selected status board (default
- * "sending_thai"). If MOMO isn't configured → a friendly amber notice. If the
- * fetch throws (login/network) → a red notice. Never 500.
+ * 🔒 No cost/price/rate is ever fetched — the action normalises every parcel to
+ * the SAFE `MomoLiveParcel` shape (operational fields only).
+ *
+ * Server-side: auth gate + read ?status only (no fetch). If MOMO isn't
+ * configured → a friendly amber notice. Otherwise → the client in its
+ * not-logged-in state. Never 500.
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageHeader } from "@/components/admin/page-header";
 import {
-  fetchMomoLiveList,
-  isMomoWebConfigured,
   MOMO_LIVE_STATUSES,
-  type MomoLiveParcel,
   type MomoLiveStatus,
-} from "@/lib/integrations/momo-web/client";
+} from "@/lib/integrations/momo-web/types";
+import { isMomoWebConfigured } from "@/lib/integrations/momo-web/client";
 import { MomoLiveClient } from "./live-client";
 
 export const dynamic = "force-dynamic";
@@ -47,18 +50,7 @@ export default async function AdminMomoLivePage({
 
   const sp = (await searchParams) ?? {};
   const status = parseStatus(sp.status);
-
   const configured = isMomoWebConfigured();
-  let parcels: MomoLiveParcel[] = [];
-  let fetchError: string | null = null;
-
-  if (configured) {
-    try {
-      parcels = await fetchMomoLiveList(status, 500);
-    } catch (e) {
-      fetchError = e instanceof Error ? e.message : "ดึงข้อมูล MOMO ไม่สำเร็จ";
-    }
-  }
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
@@ -90,17 +82,8 @@ export default async function AdminMomoLivePage({
             <code className="rounded bg-white/70 px-1">.env.local</code> (และบน Vercel ตอน prod) ก่อน
           </p>
         </div>
-      ) : fetchError ? (
-        // Fetch failed (login/network) → red notice with the message (NOT a 500)
-        <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
-          <p className="font-semibold">ดึงข้อมูลจาก MOMO ไม่สำเร็จ</p>
-          <p className="mt-1 text-[12px] font-mono break-words">{fetchError}</p>
-          <p className="mt-2 text-[12px] text-red-800">
-            ลองรีเฟรชอีกครั้ง — ถ้ายังไม่ได้ ให้เช็ก user/pass ของ MOMO หรือ MOMO อาจเปลี่ยนวิธี login
-          </p>
-        </div>
       ) : (
-        <MomoLiveClient parcels={parcels} status={status} />
+        <MomoLiveClient status={status} />
       )}
     </main>
   );

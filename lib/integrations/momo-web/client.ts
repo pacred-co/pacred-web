@@ -217,6 +217,25 @@ export async function fetchMomoLiveList(
 }
 
 /**
+ * Fetch one status board AFTER forcing a FRESH MOMO login (the "เข้าสู่ระบบ MOMO"
+ * button). MOMO's web is single-session — a login elsewhere kicks OUR cached
+ * token (200 + auth:false). When staff click the login button on /live we want
+ * to GRAB the session back for Pacred, so we log in fresh (`getToken(true)` →
+ * `login()`) BEFORE the fetch instead of riding the possibly-stale cache. The
+ * fetch then proceeds via the same cost-free path (`fetchMomoLiveList`), and the
+ * authedGet auto-retry still covers an immediate re-kick.
+ *
+ * 🔒 Cost is NEVER fetched — same SAFE `MomoLiveParcel` shape.
+ */
+export async function fetchMomoLiveListFresh(
+  status: MomoLiveStatus = "sending_thai",
+  size = 500,
+): Promise<MomoLiveParcel[]> {
+  await getToken(true); // force a fresh login → reclaim the MOMO session for Pacred
+  return fetchMomoLiveList(status, size);
+}
+
+/**
  * Fetch parcels across MANY statuses (for a full mirror). Best-effort per
  * status (a failing/empty status is skipped, not fatal). Deduped by tracking.
  */
