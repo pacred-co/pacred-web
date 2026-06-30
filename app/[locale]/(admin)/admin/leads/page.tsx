@@ -18,7 +18,7 @@ import { TagChips } from "@/components/admin/tag-chips";
 import { CallStatusBadge, LeadCallAction } from "./lead-call-action";
 import { LeadKanban } from "./lead-kanban";
 import { LeadAssignPanel } from "./lead-assign-bar";
-import { LeadCallReport } from "./lead-call-report";
+import { LeadReportPanel, LeadAssignmentSummary } from "./lead-assignment-summary";
 
 // Reads PII (customer phones) via createAdminClient (RLS-bypass) on every
 // request — must be dynamic + cannot be statically rendered.
@@ -44,6 +44,8 @@ const SEGMENTS: { key: string; label: string; hint: string }[] = [
   { key: "callback", label: "นัดโทรกลับ", hint: "ถึงคิวโทรกลับ" },
   { key: "pending", label: "ลูกค้าที่ยังไม่ได้ดำเนินการ", hint: "ยังไม่มีการกระทำ" },
   { key: "closed", label: "ปิดการขายได้", hint: "ดีลที่ปิดได้ (มีรหัส PR)" },
+  // owner 2026-06-30: เซลล์เห็น "สรุป/ประวัติงานที่ได้รับมอบหมาย" ของตัวเอง (self-scoped).
+  { key: "summary", label: "ประวัติ + สรุป", hint: "สรุปงานที่ได้รับมอบหมายของฉัน" },
 ];
 
 // ปอน 2026-06-22: ซ่อน "ข้อมูลรายชื่อลูกค้า" ออกจากหน้านี้ทั้งหมด (ตาราง list +
@@ -87,7 +89,7 @@ export default async function AdminLeadsPage({
   const isReportTab = isSenior && rawSegment === "report";
   const workSegment =
     // owner 2026-06-23: the stat cards link to no_answer/not_interested/called_today too.
-    ["mine", "callback", "pending", "closed", "all", "no_answer", "not_interested", "called_today"].includes(rawSegment)
+    ["mine", "callback", "pending", "closed", "all", "no_answer", "not_interested", "called_today", "summary"].includes(rawSegment)
       ? rawSegment
       : "pending"; // default + the "ยังไม่ได้ดำเนินการ" tab
   const uiSegment = isAssignTab ? "assign" : workSegment;
@@ -339,8 +341,13 @@ export default async function AdminLeadsPage({
           // them in the normal tabs (mode="work" · NO assign control). Import +
           // assign-to-rep live ONLY in the ultra "มอบหมายโทรเซลล์" tab (mode="assign").
           isReportTab ? (
-            // รายงานการโทร (audit · read-only) — HR/หัวหน้า ดูผลงานเซลทุกคน · owner 2026-06-26
-            <LeadCallReport reps={assignableAdmins} />
+            // รายงานการโทร (audit · read-only) — HR/หัวหน้า ดูผลงานเซลทุกคน · owner 2026-06-26.
+            // owner 2026-06-30: + "งานที่มอบหมาย (ภาพรวม)" toggle → ดูสรุปงานที่แบ่งให้แต่ละเซลล์.
+            <LeadReportPanel reps={assignableAdmins} />
+          ) : !isAssignTab && workSegment === "summary" ? (
+            // owner 2026-06-30: เซลล์เห็น "ประวัติ + สรุป" งานที่ได้รับมอบหมายของตัวเอง
+            // (self-scoped · ทุก role ที่ทำงาน lead เห็นของตัวเอง).
+            <LeadAssignmentSummary reps={assignableAdmins} mine />
           ) : (
             <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
           )
