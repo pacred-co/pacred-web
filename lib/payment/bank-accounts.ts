@@ -78,9 +78,9 @@ export const PACRED_BANK_ACCOUNTS: Record<PacredAccountKey, PacredBankAccount> =
     accountNo: "225-2-91144-0",
     accountName: "บจก. แพคเรด (ประเทศไทย)",
     channel: "qr",
-    // ⚠️ owner to confirm which QR PNG maps here (ref KPS004KB000002308515 OR …2318217).
-    qrImagePath: "/images/payment/qr-logistics.png",
-    qrRef: "",
+    // owner-confirmed 2026-06-30 (file named by account no) — K-Shop QR for 225-2-91144-0.
+    qrImagePath: "/images/payment/qr-logistics.jpg",
+    qrRef: "KPS004KB",
     issuesTaxInvoice: false,
     note: "ค่าขนส่งในไทย · ฝากนำเข้าอย่างเดียว (ของถึงไทยแล้ว ชำระก่อนจัดส่ง) — ไม่ออกใบกำกับภาษี",
   },
@@ -93,9 +93,9 @@ export const PACRED_BANK_ACCOUNTS: Record<PacredAccountKey, PacredBankAccount> =
     accountNo: "232-1-07669-9",
     accountName: "บจก. แพคเรด (ประเทศไทย)",
     channel: "qr",
-    // ⚠️ owner to confirm which QR PNG maps here.
-    qrImagePath: "/images/payment/qr-trading.png",
-    qrRef: "",
+    // owner-confirmed 2026-06-30 (file named by account no) — K-Shop QR for 232-1-07669-9.
+    qrImagePath: "/images/payment/qr-trading.jpg",
+    qrRef: "KPS004KB",
     issuesTaxInvoice: true,
     note: "ทุกงานที่ออกใบกำกับภาษี → เข้านี้ + เก็บ VAT 7%",
   },
