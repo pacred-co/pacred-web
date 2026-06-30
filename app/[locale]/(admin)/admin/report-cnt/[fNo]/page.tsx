@@ -51,6 +51,10 @@ import {
   type SheetParcel,
 } from "@/lib/integrations/google-sheets/container-cost-sheet-adapter";
 import { getContainerCompleteness } from "@/lib/warehouse/container-completeness";
+import { resolveMomoContainerInfo } from "@/lib/admin/momo-container-resolve";
+import { buildContainerJourney, type JourneyForwarderRow } from "@/lib/admin/container-journey";
+import { loadWechatContainerContext } from "@/lib/admin/wechat-forwarder-context";
+import { ContainerJourneyPanel } from "./container-journey-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +147,7 @@ export default async function AdminReportCntDetailPage({
   const { data: cntRows, error: cntErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice",
+      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice, fdatecontainerclose, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7",
     )
     .eq("fcabinetnumber", fCabinetNumber)
     .order("id", { ascending: true })
@@ -541,6 +545,35 @@ export default async function AdminReportCntDetailPage({
   // page so warehouse staff can see "ของยิงเข้าโกดังครบมั้ย" at a glance.
   const completeness = await getContainerCompleteness(admin, fCabinetNumber);
 
+  // ── G4 — container JOURNEY timeline (read-only · "ตู้นี้ถึงไหนแล้ว") ──
+  // Resolve ETD/ETA (แต้ม-primary · MOMO-fallback) for this single cabinet, fold
+  // the rows' date stamps into the ordered stage strip, and pull the China-ops
+  // WeChat messages that mention this container for the mini-feed. All read-only.
+  const momoInfo = (await resolveMomoContainerInfo(admin, [fCabinetNumber]))[fCabinetNumber];
+  const journeyEtd = momoInfo?.etd ?? null;
+  const journeyEta = momoInfo?.eta ?? null;
+  const journey = buildContainerJourney(
+    fCabinetNumber,
+    String(firstRow.ftransporttype ?? ""),
+    cntRows as JourneyForwarderRow[],
+    journeyEtd,
+    journeyEta,
+  );
+  // Box (CTNS) / CBM / weight totals for the journey strip — reuse completeness
+  // for the expected box count; sum volume/weight across the container's rows.
+  const journeyVolumeCbm = cntRows.reduce((s, r) => s + Number(r.fvolume ?? 0), 0);
+  const journeyWeightKg = cntRows.reduce((s, r) => s + Number(r.fweight ?? 0), 0);
+  const journeyTotals = {
+    trackCount: detailRows.length,
+    boxes: completeness.expected,
+    volumeCbm: journeyVolumeCbm,
+    weightKg: journeyWeightKg,
+  };
+  const wechatContext = await loadWechatContainerContext({
+    container: fCabinetNumber,
+    carrierContainerNo,
+  });
+
   // ── LANE A — fetch แสง's Google Sheet parcels for the cost-update diff ──
   // Only when on the cost-update tab + money-tier. Cache-first (kept fresh
   // by /api/cron/sync-container-cost-sheet), live fallback. Degrades to a
@@ -694,6 +727,19 @@ export default async function AdminReportCntDetailPage({
             </div>
           </div>
         </section>
+
+        {/* G4 — container JOURNEY timeline (read-only · "ตู้นี้ถึงไหนแล้ว").
+            Shows the ordered stage strip (ปิดตู้→กำลังมา→ถึงท่า→ตรวจปล่อย→โกดัง→
+            เตรียมส่ง→ส่งลูกค้า) with real dates, a stuck-container cue, and the
+            China-ops WeChat mini-feed for this container. Visible to every role
+            that reaches this page (no money fields). */}
+        <ContainerJourneyPanel
+          journey={journey}
+          totals={journeyTotals}
+          etd={journeyEtd}
+          eta={journeyEta}
+          wechat={wechatContext}
+        />
 
         {/* View tabs */}
         <div className="flex gap-1 border-b border-border">
