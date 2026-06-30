@@ -3227,6 +3227,9 @@
       "freight": "Dashboard Freight",
       "cargo": "Dashboard Cargo"
     },
+    "workspace": {
+      "title": "My Workspace"
+    },
     "hrGroup": {
       "title": "Human Resources"
     },

@@ -40,7 +40,7 @@ import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
-import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
+import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -360,6 +360,25 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
+      {/* ── My Workspace entry (G1 · 2026-06-30 · owner W3) — every staffer's focused
+          "งานของฉันตอนนี้" landing is ≤1 click from the dashboard (§0d). Additive — the
+          default /admin landing is unchanged; this is the door to the per-position view. */}
+      <Link
+        href="/admin/workspace"
+        className="group flex items-center gap-3 rounded-2xl border border-primary-200 bg-gradient-to-r from-primary-50 to-white dark:from-primary-950/20 dark:to-surface px-4 py-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+      >
+        <div className="shrink-0 w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 text-primary-600">
+          <LayoutGrid />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-foreground">พื้นที่งานของฉัน (My Workspace)</p>
+          <p className="text-xs text-muted">เปิดคิวงานเฉพาะตำแหน่งของคุณ — ดูว่ามีอะไรรอคุณทำตอนนี้</p>
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-primary-600 group-hover:gap-2 transition-all">
+          เปิด <ArrowRight className="w-3.5 h-3.5" />
+        </span>
+      </Link>
+
       {/* ── Row 1: 4 revenue stat cards (PCS style: number + icon + progress bar) ── */}
       {/* Layout fix 2026-05-25: 4-col only at xl (≥1280) — was lg (≥1024) which
           overflowed on common 1366-1500px laptop viewports because the big

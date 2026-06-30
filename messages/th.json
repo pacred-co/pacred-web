@@ -3227,6 +3227,9 @@
       "freight": "Dashboard Freight",
       "cargo": "Dashboard Cargo"
     },
+    "workspace": {
+      "title": "พื้นที่งานของฉัน"
+    },
     "hrGroup": {
       "title": "ฝ่ายทรัพยากรบุคคล"
     },

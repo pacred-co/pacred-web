@@ -963,6 +963,17 @@ const itemDashboard: MenuItem = {
   icon: "LayoutDashboard",
 };
 
+/** 2026-06-30 (G1 · owner W3 "role and workspaces ต้องเริ่มทำได้แล้ว") — "พื้นที่งานของฉัน".
+ *  The per-position WORKSPACE landing (/admin/workspace): the focused "here is YOUR work
+ *  right now" page that resolves the staffer's position → its owned queues. Prepended to
+ *  EVERY menu (see `withWorkspaceLanding` below) so it's the natural ≤1-click landing for
+ *  every position. The page itself reuses the live badge SOT (read-only · additive). */
+export const itemWorkspace: MenuItem = {
+  labelKey: "workspace.title",
+  href: "/admin/workspace",
+  icon: "LayoutGrid",
+};
+
 // ════════════════════════════════════════════════════════════════
 // SHARED SECTION ASSEMBLERS — legacy fixed section headers.
 // ════════════════════════════════════════════════════════════════
@@ -2169,9 +2180,23 @@ export function menuForStaffer(
   roles: AdminRole[],
   workspaceRole: AdminRole | null,
 ): MenuSection[] {
-  if (roles.includes("ultra") || roles.includes("super")) return ROLE_MENUS.super;
-  if (workspaceRole && ROLE_MENUS[workspaceRole]) return ROLE_MENUS[workspaceRole];
-  return menuForRoles(roles);
+  if (roles.includes("ultra") || roles.includes("super")) return withWorkspaceLanding(ROLE_MENUS.super);
+  if (workspaceRole && ROLE_MENUS[workspaceRole]) return withWorkspaceLanding(ROLE_MENUS[workspaceRole]);
+  return withWorkspaceLanding(menuForRoles(roles));
+}
+
+/**
+ * G1 (2026-06-30) — prepend "พื้นที่งานของฉัน" (itemWorkspace) to the FIRST section of a
+ * menu so every position has the workspace landing as a ≤1-click entry (§0d). Idempotent
+ * (skips if already present) + non-mutating (returns a fresh sections array). If the menu
+ * has no sections, returns one carrying just the workspace item.
+ */
+function withWorkspaceLanding(sections: MenuSection[]): MenuSection[] {
+  const already = sections.some((s) => s.items.some((it) => it.href === itemWorkspace.href));
+  if (already) return sections;
+  if (sections.length === 0) return [{ header: "", items: [itemWorkspace] }];
+  const [first, ...rest] = sections;
+  return [{ ...first, items: [itemWorkspace, ...first.items] }, ...rest];
 }
 
 /** The role whose menu is being shown — for the sidebar role badge. */
@@ -2231,9 +2256,10 @@ export function menuForRolesUnion(roles: AdminRole[]): MenuSection[] {
 }
 
 /** Returns `menuSuper` (the CEO toolbox) — used by the super-only
- *  "show all" toggle in the sidebar component to escape role-filtering. */
+ *  "show all" toggle in the sidebar component to escape role-filtering.
+ *  Carries the workspace landing too (G1 · §0d) so it's never lost on the toggle. */
 export function menuShowAll(): MenuSection[] {
-  return ROLE_MENUS.super;
+  return withWorkspaceLanding(ROLE_MENUS.super);
 }
 
 /** Every badge key referenced anywhere in the menus — used to size the
