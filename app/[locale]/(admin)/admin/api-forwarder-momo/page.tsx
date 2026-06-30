@@ -29,6 +29,7 @@ import {
   Activity,
   AlertTriangle,
   XCircle,
+  Search,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -315,7 +316,7 @@ export default async function AdminApiForwarderMomoPage({
           data/logic/money. */}
       <nav
         aria-label="เครื่องมือ MOMO"
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
       >
         {/* อัปเดตด้วยมือ */}
         <Link
@@ -396,6 +397,27 @@ export default async function AdminApiForwarderMomoPage({
               </p>
               <span className="mt-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                 ⚠️ ตรวจ-เก็บ
+              </span>
+            </div>
+          </div>
+        </Link>
+
+        {/* ดูข้อมูล MOMO (Live) — read-only mirror · sky/cyan accent */}
+        <Link
+          href="/admin/api-forwarder-momo/live"
+          className="group rounded-2xl border-2 border-sky-300 bg-sky-50/40 p-3 shadow-sm hover:border-sky-500 hover:shadow-md transition"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-sky-100 p-3 text-sky-700 group-hover:bg-sky-200">
+              <Search className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-foreground">🔍 ดูข้อมูล MOMO (Live)</h3>
+              <p className="mt-0.5 text-[11px] text-muted leading-snug">
+                กระจกรายการนำเข้าจากเว็บ MOMO — ดูอย่างเดียว
+              </p>
+              <span className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                👁️ อ่านอย่างเดียว
               </span>
             </div>
           </div>

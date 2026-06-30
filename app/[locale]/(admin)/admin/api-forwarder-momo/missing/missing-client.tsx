@@ -41,6 +41,7 @@ import {
   MOMO_SHIP_BY_TH,
 } from "@/lib/admin/momo-raw-helpers";
 import { addMissingMomoParcel } from "@/actions/admin/momo-add-missing";
+import { fetchMissingMembersFromMomo } from "@/actions/admin/momo-fetch-members";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 
 /**
@@ -191,6 +192,9 @@ export function MomoMissingClient() {
   // SET B only: per-base member-code input.
   const [members, setMembers] = useState<Record<string, string>>({});
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
+  // SET B auto-fill from the MOMO web (login-replication).
+  const [autofillBusy, setAutofillBusy] = useState(false);
+  const [autofillMsg, setAutofillMsg] = useState<string | null>(null);
 
   // ── Search: import_track + container_closed → completeness → keep the missing ──
   async function onSearch() {
@@ -476,6 +480,43 @@ export function MomoMissingClient() {
     }
   }
 
+  // ── Auto-fill SET B member codes from the MOMO web (login-replication) ──────
+  // Pulls every SET B base tracking, asks MOMO (master account, server-side) for
+  // its cn_usercode, and fills the empty member inputs. Fill-when-empty: never
+  // overwrites a code the staff already typed. Read-only — staff still confirms +
+  // clicks "เพิ่มเข้าระบบ" per parcel.
+  async function onAutofillMembers() {
+    const setBBases = missing.filter((m) => m.kind === "B").map((m) => m.base);
+    if (setBBases.length === 0) return;
+    setAutofillBusy(true);
+    setAutofillMsg(null);
+    try {
+      const res = await fetchMissingMembersFromMomo({ trackings: setBBases });
+      if (res.ok) {
+        const map = res.data?.map ?? {};
+        setMembers((prev) => {
+          const next = { ...prev };
+          for (const [base, member] of Object.entries(map)) {
+            if (member && !next[base]?.trim()) next[base] = member; // fill-when-empty
+          }
+          return next;
+        });
+        const got = res.data?.resolved ?? 0;
+        setAutofillMsg(
+          got > 0
+            ? `✓ ดึงรหัสลูกค้าจาก MOMO ได้ ${got}/${setBBases.length} รายการ`
+            : `MOMO ไม่มีรหัสลูกค้าของแบบ B เหล่านี้ (กรอกเองได้)`,
+        );
+      } else {
+        setAutofillMsg(`⚠️ ${res.error}`);
+      }
+    } catch (e) {
+      setAutofillMsg(`⚠️ ${e instanceof Error ? e.message : "ดึงไม่สำเร็จ"}`);
+    } finally {
+      setAutofillBusy(false);
+    }
+  }
+
   const countA = missing.filter((m) => m.kind === "A").length;
   const countB = missing.filter((m) => m.kind === "B").length;
   const cabinetCount = new Set(missing.map((m) => m.cabinet).filter(Boolean)).size;
@@ -550,6 +591,17 @@ export function MomoMissingClient() {
                   <span className="text-muted">ใน {cabinetCount} ตู้</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                  {countB > 0 && (
+                    <button
+                      type="button"
+                      onClick={onAutofillMembers}
+                      disabled={autofillBusy}
+                      className="flex items-center gap-1.5 rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 shrink-0"
+                      title="ดึงรหัสลูกค้าของแบบ B จากเว็บ MOMO อัตโนมัติ (ไม่ต้องเปิดเว็บ MOMO เอง)"
+                    >
+                      {autofillBusy ? "กำลังดึง..." : `🔄 ดึงรหัสจาก MOMO (${countB})`}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onCopy}
@@ -565,6 +617,12 @@ export function MomoMissingClient() {
                   />
                 </div>
               </div>
+
+              {autofillMsg && (
+                <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] text-violet-800">
+                  {autofillMsg}
+                </div>
+              )}
 
               <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
                 <table className="w-full text-[12px] border-collapse">
