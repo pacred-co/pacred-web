@@ -36,7 +36,7 @@ import {
   Banknote, KanbanSquare, Smartphone, Save,
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
-  Rocket, PanelLeft, Users2, Undo2, MessagesSquare,
+  Rocket, PanelLeft, Users2, Undo2, MessagesSquare, LayoutGrid,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -153,6 +153,10 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-06-29 (G1 · pre-order HS consult) — itemHsConsult leaf
   // (accFreight.hsConsult · /admin/accounting/hs-consult).
   MessagesSquare,
+  // 2026-06-30 (owner W2) — cross-platform service cockpit leaf
+  // (extension.serviceDashboard · /admin/dashboard/services). Icon name
+  // referenced from sidebar-menu.ts → must be in this map or it'd blank-spacer.
+  LayoutGrid,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

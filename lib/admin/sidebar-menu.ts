@@ -836,6 +836,15 @@ const blockExtIncidents: MenuItem = {
 const blockExtKpi: MenuItem = {
   labelKey: "extension.kpi", href: "/admin/kpi", icon: "BarChart3", phase: 2,
 };
+// 2026-06-30 (owner W2 "ทำ dashboard ให้หมด") — the cross-platform SERVICE cockpit.
+// Now that every order is tagged with a service_key (mig 0232), pivot the whole
+// platform BY SERVICE here: per-service volume + status + money + คาร์โก้/เฟรท/บริการ
+// rollup + the 3-account money strip. Read-only. Lives next to the KPI/exec
+// dashboards (same exec-analytics family). The page gates RBAC itself
+// (super/ultra/accounting/manager).
+const blockExtServiceDash: MenuItem = {
+  labelKey: "extension.serviceDashboard", href: "/admin/dashboard/services", icon: "LayoutGrid", phase: 2,
+};
 // 2026-06-01 (เดฟ · Wave C BI) — the exec cockpit (แดชบอร์ดผู้บริหาร · MTD
 // revenue/profit · orders funnel · wallet total · AR · cold-leads · top
 // carriers/warehouses — all reading LIVE tb_*). A leadership at-a-glance
@@ -1219,7 +1228,7 @@ const wrapServiceCustoms: MenuItem = {
 const menuSuper: MenuSection[] = [
   // 2026-06-10 (ปอน) — "แดชบอร์ดผู้บริหาร" + "Inbox งานของฉัน" promoted to
   // top-level next to Dashboard (cockpit above inbox).
-  { header: "", items: [itemDashboard, blockExtCockpit, blockExtInbox] },
+  { header: "", items: [itemDashboard, blockExtServiceDash, blockExtCockpit, blockExtInbox] },
   {
     header: "Holding",
     items: [
@@ -1320,6 +1329,7 @@ const menuManager: MenuSection[] = [
   // rates / billing / role grants. Use super for those.
   learningSection,
   extensionSection([
+    blockExtServiceDash,
     blockExtKpi,
     // 2026-06-28 (ปอน) — แดชบอร์ดผู้บริหาร (blockExtCockpit) เห็นแค่ผู้บริหาร →
     // ถอดออกจาก manager (อยู่ใน menuSuper = ผู้บริหาร/เจ้าของ เท่านั้น).
@@ -1440,7 +1450,7 @@ const menuAccounting: MenuSection[] = [
   // 2026-06-29 (gap-hunt §0d) — team-leaders (commission config) + bookings (RFQ
   // queue) + refunds (refund money-queue) were orphan; accounting is in all three
   // pages' RBAC gates → surfaced here.
-  extensionSection([blockExtLeadSource, blockExtJuristic, blockExtTeamLeaders, blockExtBookings, blockExtRefunds, blockExtIncidents]),
+  extensionSection([blockExtServiceDash, blockExtLeadSource, blockExtJuristic, blockExtTeamLeaders, blockExtBookings, blockExtRefunds, blockExtIncidents]),
 ];
 
 /**

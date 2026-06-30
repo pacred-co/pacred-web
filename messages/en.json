@@ -3513,6 +3513,7 @@
       "history": "Admin action log",
       "incidents": "System incidents",
       "kpi": "KPI Dashboard",
+      "serviceDashboard": "All-services dashboard",
       "crm": "CRM (Customer relations)",
       "cockpit": "Exec cockpit",
       "leadSource": "Lead source",
