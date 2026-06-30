@@ -1,4 +1,4 @@
--- 0230_billing_run_slip_multi_2round.sql
+-- 0231_billing_run_slip_multi_2round.sql
 -- ภูม 2026-06-30 — วางบิล slip: หลายรูป + ตรวจ 2 รอบ (ให้เหมือนหน้า wallet)
 --
 -- 0229 added a SINGLE slip_path. ภูม wants (1) attach MANY slip images, and
