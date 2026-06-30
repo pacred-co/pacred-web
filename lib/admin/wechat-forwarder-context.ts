@@ -155,6 +155,84 @@ function buildProbes(input: {
 }
 
 /**
+ * Build the probes for a CONTAINER (not a single order): the container code +
+ * its base (the per-batch suffix stripped) + an optional carrier B/L number.
+ * Same boundary discipline as buildProbes so "GZS260628" ≠ "GZS2606281".
+ */
+function buildContainerProbes(input: {
+  container: string | null;
+  carrierContainerNo?: string | null;
+}): TokenProbe[] {
+  const probes: TokenProbe[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string | null | undefined, re: RegExp, label: string) => {
+    const token = (raw ?? "").trim();
+    if (token.length < 3) return;
+    if (/[,()"]/.test(token)) return;
+    const key = token.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    probes.push({ ilike: escapeIlike(token), re, label });
+  };
+
+  const cabinet = (input.container ?? "").trim();
+  if (cabinet) {
+    add(cabinet, codeRegex(cabinet), cabinet);
+    const base = cabinet.replace(/[-/].*$/, ""); // strip the per-batch suffix
+    if (base && base !== cabinet) add(base, codeRegex(base), base);
+  }
+  const carrier = (input.carrierContainerNo ?? "").trim();
+  if (carrier) add(carrier, codeRegex(carrier), carrier);
+
+  return probes;
+}
+
+/**
+ * Fetch the WeChat ops messages that mention THIS container — for the G4 journey
+ * timeline mini-feed ("💬 จีนว่าไงเรื่องตู้นี้ล่าสุด"). READ-ONLY, best-effort.
+ * Same two-stage match (ILIKE prefilter → JS boundary post-filter) as the
+ * forwarder-scoped fetch, but scoped to the container/base/carrier tokens.
+ */
+export async function loadWechatContainerContext(input: {
+  container: string | null;
+  carrierContainerNo?: string | null;
+}): Promise<WechatForwarderContext> {
+  const probes = buildContainerProbes(input);
+  const searchedTokens = probes.map((p) => p.label);
+  if (probes.length === 0) {
+    return { messages: [], searchedTokens, truncated: false };
+  }
+
+  const admin = createAdminClient();
+  const orFilter = probes.map((p) => `content.ilike.%${p.ilike}%`).join(",");
+
+  const { data, error } = await admin
+    .from("wechat_ops_message")
+    .select("chat_name, sender, sent_at, content")
+    .or(orFilter)
+    .order("sent_at", { ascending: false })
+    .limit(PREFILTER_LIMIT);
+
+  if (error) {
+    console.error("[wechat-container-context] query failed", {
+      code: error.code,
+      message: error.message,
+    });
+    return { messages: [], searchedTokens, truncated: false };
+  }
+
+  const matched = (data ?? []).filter((m) =>
+    probes.some((p) => p.re.test(m.content)),
+  );
+
+  return {
+    messages: matched.slice(0, RESULT_LIMIT),
+    searchedTokens,
+    truncated: matched.length > RESULT_LIMIT,
+  };
+}
+
+/**
  * Fetch WeChat ops messages relevant to a forwarder order. READ-ONLY, best-effort
  * (any DB error → empty result so the host page still renders).
  */
