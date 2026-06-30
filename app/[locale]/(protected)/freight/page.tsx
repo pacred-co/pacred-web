@@ -10,7 +10,6 @@ import {
   type TransportMode,
 } from "@/lib/validators/freight-quote";
 import {
-  FREIGHT_SHIPMENT_STATUS_LABEL,
   FREIGHT_TRANSPORT_MODE_LABEL,
   type FreightShipmentStatus,
   type FreightTransportMode,
@@ -19,6 +18,7 @@ import {
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+import { customerJobStatusLabel } from "@/lib/freight/journey-status";
 
 /**
  * V-E1.2 — /freight customer hub.
@@ -72,6 +72,7 @@ type ShipmentRow = {
   id:             string;
   job_no:         string | null;
   status:         FreightShipmentStatus;
+  journey_status: string | null;
   transport_mode: FreightTransportMode;
   bl_no:          string | null;
   container_code: string | null;
@@ -107,7 +108,7 @@ export default async function CustomerFreightHubPage() {
   // Recent shipments (any status owned by customer).
   const { data: shipmentsRaw, error: shipmentsRawErr } = await sb
     .from("freight_shipments")
-    .select("id, job_no, status, transport_mode, bl_no, container_code, created_at")
+    .select("id, job_no, status, journey_status, transport_mode, bl_no, container_code, created_at")
     .order("created_at", { ascending: false })
     .limit(20)
     .returns<ShipmentRow[]>();
@@ -285,8 +286,10 @@ export default async function CustomerFreightHubPage() {
                         {!s.container_code && !s.bl_no && "—"}
                       </td>
                       <td className="px-3 py-2">
+                        {/* Job-status chip — label derives from journey_status
+                            (the SOT) when set, colour keys on the 6-state. */}
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] ${SHIPMENT_STATUS_BADGE[s.status]}`}>
-                          {FREIGHT_SHIPMENT_STATUS_LABEL[s.status]}
+                          {customerJobStatusLabel(s.status, s.journey_status)}
                         </span>
                       </td>
                       <td className="px-3 py-2">

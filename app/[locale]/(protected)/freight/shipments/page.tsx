@@ -13,6 +13,7 @@ import {
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+import { customerJobStatusLabel } from "@/lib/freight/journey-status";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -46,6 +47,7 @@ type ShipmentRow = {
   id:                  string;
   job_no:              string | null;
   status:              FreightShipmentStatus;
+  journey_status:      string | null;
   transport_mode:      FreightTransportMode;
   bl_no:               string | null;
   container_code:      string | null;
@@ -82,7 +84,7 @@ export default async function CustomerFreightShipmentsPage({
   let query = sb
     .from("freight_shipments")
     .select(
-      "id, job_no, status, transport_mode, bl_no, container_code, port_loading, port_discharge, created_at",
+      "id, job_no, status, journey_status, transport_mode, bl_no, container_code, port_loading, port_discharge, created_at",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -254,8 +256,11 @@ export default async function CustomerFreightShipmentsPage({
                         {!s.port_loading && !s.port_discharge && "—"}
                       </td>
                       <td className="px-3 py-2">
+                        {/* Job-status chip — label derives from journey_status
+                            (the SOT) when set, colour keys on the always-present
+                            6-state for a stable palette. */}
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_BADGE[s.status]}`}>
-                          {FREIGHT_SHIPMENT_STATUS_LABEL[s.status]}
+                          {customerJobStatusLabel(s.status, s.journey_status)}
                         </span>
                       </td>
                       <td className="px-3 py-2">

@@ -85,6 +85,15 @@ type ShipmentHeader = {
   created_at:                  string;
   confirmed_at:                string | null;
   delivered_at:                string | null;
+  // Rich journey axis (mig 0233) — the customer journey derives from these.
+  journey_status:              string | null;
+  issue_flag:                  string | null;
+  atd_at:                      string | null;
+  etd_at:                      string | null;
+  departed_at:                 string | null;
+  th_cleared_at:               string | null;
+  ata_at:                      string | null;
+  arrived_th_warehouse_at:     string | null;
 };
 
 type PartyRow = {
@@ -146,7 +155,9 @@ export default async function CustomerFreightShipmentDetailPage({
       bl_no, vessel_voyage, port_loading, port_discharge, place_delivery, incoterm,
       payment_term, origin_country, commercial_value_thb, duty_thb, vat_thb,
       vat_plan_label, form_e_applied, notes, cancelled_reason, created_at,
-      confirmed_at, delivered_at
+      confirmed_at, delivered_at,
+      journey_status, issue_flag, atd_at, etd_at, departed_at,
+      th_cleared_at, ata_at, arrived_th_warehouse_at
     `)
     .eq("id", id)
     .maybeSingle<ShipmentHeader>();
@@ -274,16 +285,26 @@ export default async function CustomerFreightShipmentDetailPage({
           </div>
         </div>
 
-        {/* Customer journey stepper (customer-visible stages only; a held job
-            shows a friendly note, never the raw 'cancelled' label). The raw
-            cancelled_reason is kept admin-internal — not surfaced to the
-            customer here. */}
+        {/* Customer journey stepper — DERIVES from the rich journey_status (mig
+            0233, the SOT the admin drives), falling back to the 6-state status
+            when unset. Customer-visible stages only; a held job (issue_flag) or
+            cancelled shows a friendly note, never the raw 'cancelled' label nor
+            an internal-step label. The raw cancelled_reason / issue_note stay
+            admin-internal — not surfaced to the customer here. */}
         <FreightJourney
           status={header.status}
+          journeyStatus={header.journey_status}
+          issueFlag={header.issue_flag}
           timestamps={{
-            created_at:   header.created_at,
-            confirmed_at: header.confirmed_at,
-            delivered_at: header.delivered_at,
+            created_at:              header.created_at,
+            confirmed_at:            header.confirmed_at,
+            atd_at:                  header.atd_at,
+            etd_at:                  header.etd_at,
+            departed_at:             header.departed_at,
+            th_cleared_at:           header.th_cleared_at,
+            ata_at:                  header.ata_at,
+            arrived_th_warehouse_at: header.arrived_th_warehouse_at,
+            delivered_at:            header.delivered_at,
           }}
         />
 

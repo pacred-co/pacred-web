@@ -12,8 +12,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  resolveJourney,
-  type JourneyTimestamps,
+  resolveCustomerJourney,
+  type RichJourneyTimestamps,
   type ResolvedJourneyStage,
 } from "@/lib/freight/journey-status";
 import type { FreightShipmentStatus } from "@/lib/validators/freight-shipment";
@@ -21,12 +21,19 @@ import type { FreightShipmentStatus } from "@/lib/validators/freight-shipment";
 /**
  * <FreightJourney> — the CUSTOMER-VISIBLE shipment journey stepper.
  *
- * Renders ONLY the customer journey stages (lib/freight/journey-status SOT) —
- * never the internal `draft` raw status, never the scary "cancelled" word. A
- * held/cancelled job freezes the ladder at its last real stage + shows a
+ * DERIVES FROM the rich `journey_status` code (lib/freight/journey-catalog SOT,
+ * mig 0233) when one is set — projecting the 38-step admin journey down onto the
+ * familiar 5-stage customer ladder — and FALLS BACK to the legacy 6-state
+ * `status` when `journey_status` is null (legacy / unset rows). Either way it
+ * renders ONLY the customer journey stages — never the 38 internal step labels,
+ * never the internal `draft` raw status, never the scary "cancelled" word.
+ *
+ * A held job (RED `issue_flag`) or a cancelled job freezes the ladder + shows a
  * friendly "ล่าช้า/รอเคลียร์ — ติดต่อเซล" note; the in-transit step shows a
- * gentle clearance-ahead note. Milestone dates are only the ones the schema
- * actually stamps (created/confirmed/delivered) — no invented ETD/ETA.
+ * gentle clearance-ahead note. When derived from journey_status, the current
+ * step's friendly `customerLabelTh` (e.g. "ถึงด่านชายแดน") is surfaced as a
+ * detail under the current ladder stage. Milestone dates are only the ones the
+ * row actually stamps — no invented ETD/ETA.
  *
  * Mobile-first: a vertical timeline that reads top-to-bottom on phones and
  * stays a clean column on desktop (customers are on phones · AGENTS §6).
@@ -49,13 +56,19 @@ function thDate(iso: string | null): string | null {
 
 export async function FreightJourney({
   status,
+  journeyStatus,
+  issueFlag,
   timestamps,
 }: {
   status: FreightShipmentStatus;
-  timestamps: JourneyTimestamps;
+  /** Rich journey code (freight_shipments.journey_status, mig 0233) — the SOT. */
+  journeyStatus?: string | null;
+  /** RED overlay (freight_shipments.issue_flag) — surfaced as a friendly note. */
+  issueFlag?: string | null;
+  timestamps: RichJourneyTimestamps;
 }) {
   const t = await getTranslations("customerFreight");
-  const journey = resolveJourney(status, timestamps);
+  const journey = resolveCustomerJourney({ status, journeyStatus, issueFlag, timestamps });
 
   // Internal draft — the customer sees a neutral "being prepared" placeholder
   // rather than any internal label.
@@ -132,6 +145,14 @@ export async function FreightJourney({
                     </span>
                   )}
                 </div>
+                {/* Rich current-step detail (the journey_status projection) — only
+                    on the current stage, only when derived from journey_status.
+                    Never an internal-step label (the SOT gates it). */}
+                {stage.state === "current" && journey.currentJourneyLabelTh && (
+                  <p className="mt-0.5 text-[11px] font-medium text-primary-700">
+                    {journey.currentJourneyLabelTh}
+                  </p>
+                )}
                 {date && (
                   <p className="mt-0.5 text-[11px] text-muted">
                     {t("journeyMilestoneOn", { date })}
