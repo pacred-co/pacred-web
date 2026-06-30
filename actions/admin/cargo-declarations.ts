@@ -563,14 +563,14 @@ export async function adminCollectConfirmedCustomsDraft(
       .from("customs_declarations")
       .select(
         "id, declaration_no, cargo_forwarder_id, issue_in_customer_name, customer_confirm_status, " +
-          "service_fee_thb, total_duty_thb, total_vat_thb, paid_through_promptpay, notes",
+          "service_fee_thb, total_duty_thb, total_vat_thb, service_collected_at, notes",
       )
       .eq("id", declarationId)
       .maybeSingle<{
         id: string; declaration_no: string | null; cargo_forwarder_id: number | null;
         issue_in_customer_name: boolean; customer_confirm_status: string | null;
         service_fee_thb: number | string | null; total_duty_thb: number | string | null;
-        total_vat_thb: number | string | null; paid_through_promptpay: boolean; notes: string | null;
+        total_vat_thb: number | string | null; service_collected_at: string | null; notes: string | null;
       }>();
     if (declErr) {
       console.error("[cargo-declarations collect lookup]", { id: declarationId, code: declErr.code, message: declErr.message });
@@ -583,8 +583,9 @@ export async function adminCollectConfirmedCustomsDraft(
     if (decl.customer_confirm_status !== "confirmed") {
       return { ok: false, error: "not_confirmed" };
     }
-    // IDEMPOTENT on declaration_id — paid_through_promptpay = the collected flag.
-    if (decl.paid_through_promptpay) {
+    // IDEMPOTENT on declaration_id — service_collected_at = the dedicated #17 collected
+    // latch (mig 0237 · NOT the unrelated admin-editable paid_through_promptpay attribute).
+    if (decl.service_collected_at) {
       return { ok: false, error: "already_collected" };
     }
 
@@ -598,8 +599,8 @@ export async function adminCollectConfirmedCustomsDraft(
     // Persist the routing fact READABLY (§0e) — customs_declarations has no
     // bank_account_key column (mig 0236 added it only to the tax-invoice stores),
     // so record it on the declaration's notes as a structured, displayed line +
-    // flip paid_through_promptpay (the collected/idempotency flag). The detail
-    // page reads + shows both, and the audit log carries the full fact.
+    // stamp service_collected_at (the dedicated #17 collected/idempotency latch).
+    // The detail page reads + shows both, and the audit log carries the full fact.
     const stamp = new Date().toISOString();
     const routeLine =
       `[เก็บค่าบริการ+อากร+VAT ฿${collectable.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ` +
@@ -608,10 +609,10 @@ export async function adminCollectConfirmedCustomsDraft(
 
     const { data: claimed, error: updErr } = await admin
       .from("customs_declarations")
-      .update({ paid_through_promptpay: true, notes: newNotes })
+      .update({ service_collected_at: stamp, notes: newNotes })
       .eq("id", declarationId)
       .eq("customer_confirm_status", "confirmed")
-      .eq("paid_through_promptpay", false)        // TOCTOU guard — atomic claim
+      .is("service_collected_at", null)           // TOCTOU guard — atomic claim
       .select("id")
       .maybeSingle<{ id: string }>();
     if (updErr) {

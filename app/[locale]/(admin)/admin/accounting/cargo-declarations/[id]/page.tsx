@@ -66,7 +66,7 @@ type Header = {
   service_fee_thb:          number | string | null;
   customer_confirm_status:  string | null;
   customer_confirmed_at:    string | null;
-  paid_through_promptpay:   boolean | null;
+  service_collected_at:     string | null;
 };
 
 type Line = {
@@ -120,7 +120,7 @@ export default async function CargoDeclarationDetailPage({
       "id, declaration_no, status, cargo_forwarder_id, cargo_cabinet_no, declared_at, " +
         "total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb, notes, created_at, " +
         "issue_in_customer_name, consignee_name, consignee_tax_id, consignee_address, service_fee_thb, " +
-        "customer_confirm_status, customer_confirmed_at, paid_through_promptpay",
+        "customer_confirm_status, customer_confirmed_at, service_collected_at",
     )
     .eq("id", id)
     .maybeSingle<Header>();
@@ -419,7 +419,7 @@ export default async function CargoDeclarationDetailPage({
               serviceFeeThb:       header.service_fee_thb != null ? Number(header.service_fee_thb) : null,
               confirmStatus:       (header.customer_confirm_status ?? "none") as "none" | "sent" | "confirmed" | "rejected",
               confirmedAt:         header.customer_confirmed_at,
-              collected:           header.paid_through_promptpay ?? false,
+              collected:           header.service_collected_at != null,
             }}
           />
         </>
