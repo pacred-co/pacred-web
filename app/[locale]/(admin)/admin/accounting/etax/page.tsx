@@ -51,6 +51,17 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+// Destination account at issuance (mig 0236 · 3-account SOT). null = legacy row
+// issued before the column existed.
+const BANK_ACCT_LABEL: Record<"service" | "logistics" | "trading", string> = {
+  service: "Service 204-1-55856-6",
+  logistics: "Logistics 225-2-91144-0",
+  trading: "Trading 232-1-07669-9",
+};
+function bankAcctLabel(key: "service" | "logistics" | "trading" | null): string {
+  return key ? BANK_ACCT_LABEL[key] : "—";
+}
+
 export default async function AdminEtaxPage({
   searchParams,
 }: {
@@ -94,6 +105,7 @@ export default async function AdminEtaxPage({
     "WHT รวม":              r.wht_total,
     "Gross ก่อน WHT":       r.gross_before_wht,
     "รับสุทธิ":              r.net_payable,
+    "บัญชีรับเงิน":          bankAcctLabel(r.bank_account_key),
     "อ้างอิงใบเสร็จ rid":    r.rid ?? "",
     "ออกโดย":                r.issued_by,
   }));
@@ -189,6 +201,7 @@ export default async function AdminEtaxPage({
                     <th className="px-3 py-2 text-right">VAT</th>
                     <th className="px-3 py-2 text-right">WHT</th>
                     <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2">บัญชีรับเงิน</th>
                     <th className="px-3 py-2 text-center">สถานะ</th>
                     <th className="px-3 py-2 text-right">ดาวน์โหลด</th>
                   </tr>
@@ -208,6 +221,15 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.vat_amount)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.wht_total)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.net_payable)}</td>
+                      <td className="px-3 py-2 text-[11px] whitespace-nowrap">
+                        {r.bank_account_key ? (
+                          <span className={`rounded px-1.5 py-0.5 ${r.bank_account_key === "trading" ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-700"}`}>
+                            {bankAcctLabel(r.bank_account_key)}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] border ${
                           r.status === "issued"
@@ -278,6 +300,7 @@ export default async function AdminEtaxPage({
                     <th className="px-3 py-2 text-right">ฐานรวม</th>
                     <th className="px-3 py-2 text-right">VAT</th>
                     <th className="px-3 py-2 text-right">รับสุทธิ</th>
+                    <th className="px-3 py-2">บัญชี</th>
                     <th className="px-3 py-2 text-center">สถานะ</th>
                   </tr>
                 </thead>
@@ -298,6 +321,7 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.base_total)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.vat_amount)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.net_payable)}</td>
+                      <td className="px-3 py-2 text-[11px] whitespace-nowrap">{bankAcctLabel(r.bank_account_key)}</td>
                       <td className="px-3 py-2 text-center">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] border ${
                           r.status === "issued"

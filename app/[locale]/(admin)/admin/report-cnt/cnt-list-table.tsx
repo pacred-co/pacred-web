@@ -854,6 +854,27 @@ export function CntListTable({
               >
                 🧾 รวมบิลพิมพ์
               </Link>
+              {/* ใบกำกับ/ใบขน จากตู้ (task #16 · 2026-07-01) — เลือกสินค้าในตู้ →
+                  สร้างใบขน/ใบกำกับ (ร่าง) ผ่าน item-picker เดิม. picker เป็นราย
+                  forwarder/ราย ตู้ → รับ 1 ตู้เท่านั้น (เลือก >1 = disabled). */}
+              {selected.size === 1 ? (
+                <Link
+                  href={`/admin/report-cnt/customs-doc?cabinet=${encodeURIComponent(Array.from(selected)[0]!)}`}
+                  className="rounded-full bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5"
+                  title="เลือกสินค้าในตู้นี้ → จัดลงอินวอยซ์ / แพคกิ้งลิสต์ / ใบขน (ร่าง)"
+                >
+                  📦 จัดลงอินวอยซ์/แพคกิ้ง/ใบขน
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-full bg-gray-300 text-white px-4 py-2 text-xs font-semibold shadow-lg inline-flex items-center gap-1.5 cursor-not-allowed"
+                  title={selected.size === 0 ? "เลือกตู้ก่อน 1 ตู้" : "เลือกได้ครั้งละ 1 ตู้ (เอกสารเป็นรายตู้)"}
+                >
+                  📦 จัดลงอินวอยซ์/แพคกิ้ง/ใบขน
+                </button>
+              )}
             </>
           )}
         </div>

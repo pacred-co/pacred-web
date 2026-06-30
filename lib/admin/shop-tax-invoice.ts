@@ -38,6 +38,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import type { TaxableParts } from "@/lib/tax/wht";
 import { computeTaxForMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { getTaxRates } from "@/lib/tax/rates";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
 import { mintTaxInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { logger } from "@/lib/logger";
 
@@ -198,6 +199,7 @@ export async function issueShopTaxInvoice(
     receipt_id:          opts.receiptId ?? null,
     rid:                 opts.rid ?? null,
     doc_mode:            mode,
+    bank_account_key:    resolvePaymentAccount({ issuesTaxInvoice: mode === "tax_invoice" }).key,
     buyer_name:          buyerName,
     buyer_tax_id:        buyerTaxId,
     buyer_address:       buyerAddress,
