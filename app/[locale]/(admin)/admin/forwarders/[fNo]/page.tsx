@@ -75,6 +75,12 @@ import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 import { previewForwarderRateMissing } from "@/lib/forwarder/live-rate";
 import { ForwarderRateMissingFallback } from "./forwarder-inline-rate-fallback";
 import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings";
+// 2026-06-30 (owner carryover "WeChat follow-up · จีนว่าไงเรื่องตู้นี้") — a
+// READ-ONLY panel surfacing the decrypted China-ops WeChat messages (mig 0228)
+// that mention THIS order's container / China tracking / customer PR, so staff
+// see "what did China say about this container?" without leaving the page. Gated
+// by this page's requireAdmin; the panel never widens access or writes anything.
+import { WechatContextPanel } from "./wechat-context-panel";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
 // breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
 // (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + เหมาๆ 100).
@@ -1170,6 +1176,18 @@ async function tryRenderTbForwarder(
             </div>
           );
         })()}
+
+        {/* ── จีนว่าไงเรื่องตู้/แทรคนี้ — READ-ONLY WeChat ops context (owner
+           carryover 2026-06-30 · mig 0228). Matches THIS order's container code /
+           China tracking / customer PR against the decrypted China-ops chats. Pure
+           read; gated by this page's requireAdmin (no widening). ── */}
+        <div className="mt-4">
+          <WechatContextPanel
+            fcabinetnumber={r.fcabinetnumber}
+            ftrackingchn={r.ftrackingchn}
+            userid={r.userid}
+          />
+        </div>
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}
