@@ -1,0 +1,68 @@
+# Data-update 2026-06-29 (เดฟ folder · owner drop) — analysis + plan
+
+Owner dropped `/Users/dev/Desktop/เดฟ` as a "data update" + the Google Sheet
+`ลงข้อมูลฝากจ่าย_ต้นทุนกำไร` on Desktop. Owner: "ตรวจ PR คู่ชื่อลูกค้าก่อน apply (PR เพี้ยน) ·
+dry-run · ห้ามไหลทำมั่ว". Resync done (HEAD = 836dff74 = main). Env fixed (.env.local DB pw
+stale Jirayus40x → DqOzfEZVXfMHIryz).
+
+## Already ingested by the Windows agent (verified on prod, read-only)
+HS codes **133** (mig 0224) · WeChat ops **24,428** (mig 0228) · iTAM/แต้ม packing **127 lines/10 ตู้**
+(mig 0226) · MOMO cost **65** forwarders · MOMO weight **111** forwarders. ✅ done.
+
+## 🚨 Yuan-transfer (ฝากจ่ายหยวน · the Google Sheet) — NOT done · money-critical
+Two sheets: `PR ฝากจ่าย 05-69` (May · 611 rows · **name+shipment-ID format, no PR col**) +
+`PR ฝากจ่าย 06-69` (June · 580 rows · explicit PR col). Per row = full cost→sell→profit
+(หยวน × rate = THB cost [col22] · ราคาขาย [col29] · กำไรสุทธิ [col37]).
+
+- **tb_payment yuan May+June 2026 = 0 rows** → this data is **OFF-SYSTEM** (done manually,
+  recorded only in the sheet) → must **IMPORT** (create records), not backfill.
+- 06-69: **31 transactions · Σ cost ฿5,084,366 · Σ sell ฿5,111,436 · Σ profit ฿25,299** ·
+  23 distinct (PR,name). 05-69 not yet parsed (name-only format).
+
+### 🔴 PR codes UNRELIABLE — name-based reconciliation (06-69 · 23 distinct → 14 ✓ / 9 ⚠️)
+The sheet's PR ≠ the real customer. Proven: sheet `PR008 = บริษัท ซุปเปอร์ซิป` (the ฿655k row)
+but **tb_users PR008 = สุวรรณา อูเอดะ** → name suggests **PR8289**. Mismatches to resolve:
+
+| sheet PR | sheet name | tb_users[PR] = | name→suggests | verdict |
+|---|---|---|---|---|
+| PR008 | บริษัท ซุปเปอร์ซิป | สุวรรณา อูเอดะ | **PR8289** | ⚠️ wrong PR |
+| PR017 | บริษัท แลนด์ ออฟ ลีฟ | สหัสชัย ทรัพย์สิน | — | ❓ (PR017 reused for 2 customers) |
+| PR10392 | คุณมิ้น | มัณยาภา ณ น่าน | PR6595/PR8396 | ⚠️ wrong PR |
+| PR022 | คุณนวรัตน์ | J NAC Thailand | PR2714/PR4965 | ⚠️ wrong PR |
+| PR166 | Kenny S | นราธิป สิทธิศุข | — | ❓ manual |
+| PR130 | "P22319" | ชวันรัตน์ | — | ❓ (order# in name col) |
+| PR 143 | คุณ ดวงเดือน | (no "PR 143") | PR143 | ⚠️ space typo → PR143 |
+| PR038 | เทสระบบ Pacred | จิรายุส | — | test row (9.9 หยวน · skip) |
+| PR017(2) | คุณสหัสชัย | สหัสชัย | PR017 | ✓ (this one's right) |
+
+14 matched ✓ (PR039/PR121/PR152/PR158/PR9820/PR075/PR095/PR043/PR067/PR191/PR025/PR207/PR073/PR017-สหัสชัย).
+→ **Rule: resolve customer by NAME, not the sheet PR. Flag unmatchable for owner.**
+
+### Import target (proposed · TBD owner): `tb_payment` (yuan) — paythb(sell)/paythbcost(cost)/
+payprofitthb/payyuan/payrate/payratecost/paydate, userid = the **name-resolved** PR,
+paystatus='2' (โอนแล้ว). dry-run → owner review → apply. ⚠️ also feeds VAT/ใบกำกับ (the sheet
+has VAT receipt no.) → check the doc-mode.
+
+## ✅ APPLIED 2026-06-30 — yuan-transfer June import (owner rules: ยึด PR DB · name-resolve · June · Pacred PR only · skip-rest)
+`scripts/import-yuan-fakjai-0669-2026-06-30.mjs --apply` → **24 records → tb_payment** (session `import-fj-0669` · paystatus='2' · NO wallet · idempotent). Σ ขาย ฿3,493,829.47 · ต้นทุน ฿3,478,097.14 · กำไร ฿15,732.33. PR resolved by NAME (PR008→**PR8289** บริษัทซุปเปอร์ซิป · PR143 · 14 sheet-PR verified-by-name). Verified on prod.
+
+### 🔴 SKIPPED → ถามทีหลัง (owner "อันไหนไม่ตรงเอามาถามทีหลัง") — 7 rows
+- **บริษัท แลนด์ ออฟ ลีฟวิ่ง** (sheet PR017) — ไม่เจอชื่อใน tb_users → PR อะไร?
+- **"P22319"** (sheet PR130 · เลขออเดอร์ในช่องชื่อ) → ลูกค้าคนไหน?
+- **"Kenny S"** (sheet PR166) → PR อะไร?
+- **คุณมิ้น** (sheet PR10392) — กำกวม 2 ราย PR6595/PR8396 → อันไหน?
+- **คุณนวรัตน์** (sheet PR022 · 2 rows) — กำกวม 2 ราย PR2714/PR4965 → อันไหน?
+- เทสระบบ (PR038) = test, ทิ้ง.
+- 05-69 (พ.ค.) ทั้งหมด = ไม่เอา (owner: เดือน 6 เท่านั้น).
+
+## Other เดฟ sources (owner picked all · DEFERRED → next session / owner input)
+- **MOMO - Packing List (17 xlsx)** → fill the ฿294k drift (MOMO API dropped 30-40% · 110 trackings).
+  re-derive SELL = money → dry-run + owner เคาะตู้.
+- **เรทนำเข้า (3 rate images)** → read → set import rates (pricing). owner confirm before set.
+- **Apirat ([LINE] chat อภิรัตน์ฯ)** → CRM backlog (customer conversation).
+- **Feature**: edit/add tracking for goods already ถึงโกดัง (multi-shop · some shops arrive later).
+- Show THB cost summary at top (owner "มีเงินบาทต้นทุน สรุปให้ดูข้างบน").
+
+## Money-safety protocol (every apply)
+name-resolve → dry-run (print what WOULD write) → backup → owner OK → `--apply`. Never trust the
+sheet PR. [[cost-editable-sell-locked]] [[audit-discipline]].
