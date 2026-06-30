@@ -55,6 +55,15 @@ has VAT receipt no.) → check the doc-mode.
 - เทสระบบ (PR038) = test, ทิ้ง.
 - 05-69 (พ.ค.) ทั้งหมด = ไม่เอา (owner: เดือน 6 เท่านั้น).
 
+## 🚚 FREIGHT MERGE epic (owner 2026-06-30/07-01 · AXELRA+NNB+PACRED booking sheets · ฝั่งเฟรท)
+Owner rules: resolve by PHONE not the sheet PR (มั่ว) · phone-in-DB→LINK · not→CREATE-NEW (pw **123456** · login=phone · PR lowest-vacant via trigger · userActive=1) · no-phone→chase · sales Mayjang/MAY→admin_may·Pupu→admin_pupu·Pee→admin_pee·else(ออกแล้ว)→admin_center · CS→admin_ploy · June only · **ห้ามเก็บเงินซ้ำ**. Sheets: PACRED/AXELRA `1.MEMBER SALE` (customer) · `2.SALE BOOKING` (shipment 2059+1526) · ACC `เบิกเงินทำงาน SEA/AIR/TRUCK/Cargo` (cost).
+
+### ✅ Phase 1 — CUSTOMERS APPLIED to prod (`scripts/import-freight-customers-2026-06-30.mjs`)
+478 rows → 370 distinct phones → **LINK 118** (existing PR · incl. 25 my phone-map missed but auth-collision caught → resolved via auth→profile) · **CREATE 251** (new PR225+ · pw 123456 · sales: center 190/may 57/pee 2/pupu 2) · **NO-PHONE 86** (chase · 56 have TAX, 48 email) · **ORPHAN 1** (คชาธร ทองศรี 0922750655 · tb_users dup-key · manual). Summary CSV → `/Users/dev/Desktop/freight-customer-summary-2026-07-01.csv` (สำหรับเซลไล่ตามเบอร์). ⚠️ LESSON: supabase-js `.select()` caps 1000 rows → MUST paginate (the dry-run caught a 60-dup risk). tb_users has NO userTax col → tax-id kept in userNote.
+
+### ⏭️ Phase 2 — SHIPMENTS (June) + Phase 3 — COST/เบิกเงิน (no double-charge) = NEXT
+shipment → freight_shipments + journey · cost → match shipment + dedup (the money-risk phase). Each dry-run→owner→apply.
+
 ## Other เดฟ sources (owner picked all · DEFERRED → next session / owner input)
 - **MOMO - Packing List (17 xlsx)** → fill the ฿294k drift (MOMO API dropped 30-40% · 110 trackings).
   re-derive SELL = money → dry-run + owner เคาะตู้.
