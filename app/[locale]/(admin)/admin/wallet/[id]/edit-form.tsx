@@ -24,6 +24,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
+import { DateTime24Field } from "@/components/admin/datetime-24-field";
 import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
 import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 // ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
@@ -95,12 +96,12 @@ export function EditDateSlipForm({
           <p className="text-[11px] font-semibold text-amber-900">
             กรอกวันที่ให้ตรงกับสลิป (รูปแบบ ปี ค.ศ./เดือน/วัน · มิฉะนั้นระบบจะไม่จับรายการใกล้เคียง)
           </p>
-          <input
-            type="datetime-local"
+          {/* ภูม 2026-06-30 — 24 ชม. (เลิก AM/PM ที่พนักงานงง). Chrome ไม่ honor lang
+              บน datetime-local → ใช้ DateTime24Field (date + เลือก ชม./นาที 00–23). */}
+          <DateTime24Field
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            max={toLocalInput(new Date().toISOString())}
-            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+            onChange={setValue}
+            max={toLocalInput(new Date().toISOString()).split("T")[0]}
             required
           />
           {error && (
