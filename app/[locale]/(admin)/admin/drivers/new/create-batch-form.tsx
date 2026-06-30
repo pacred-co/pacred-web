@@ -30,9 +30,16 @@ type StopItem = {
 };
 
 type Stop = {
-  key:          string;
-  fshipby:      string | null;
-  shipByLabel:  string;
+  key:           string;
+  fshipby:       string | null;
+  shipByLabel:   string;
+  userid:        string;
+  customerName:  string;
+  /** Recipient display name — real address name, else customer name (never the
+   *  bare "รับที่โกดัง Pacred" warehouse placeholder). */
+  recipientName: string;
+  /** No real delivery address yet (warehouse placeholder / empty). */
+  addressMissing: boolean;
   address: {
     name:        string;
     lastName:    string;
@@ -305,7 +312,10 @@ export function CreateBatchForm({
                     isSelected ? "border-primary-400 ring-1 ring-primary-200 bg-primary-50/10" : "border-border bg-white"
                   }`}
                 >
-                  {/* Header bar — click anywhere to toggle the whole stop */}
+                  {/* Header bar — click anywhere to toggle the whole stop. Leads
+                      with the CUSTOMER (ชื่อ + รหัส), legacy columns จำนวน · ขนส่ง
+                      live in the badges; the ที่อยู่ moves to the RIGHT panel below
+                      (legacy keeps ที่อยู่ as the rightmost column). */}
                   <label className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 cursor-pointer select-none border-b border-border ${
                     isSelected ? "bg-primary-50/50" : "bg-surface-alt/40 hover:bg-surface-alt/70"
                   }`}>
@@ -314,7 +324,7 @@ export function CreateBatchForm({
                       checked={isSelected}
                       onChange={() => toggleStop(g.key)}
                       className="h-5 w-5 rounded border-border text-primary-500 focus:ring-primary-500 flex-shrink-0"
-                      aria-label={`เลือกจุดส่งคุณ ${g.address.name}`}
+                      aria-label={`เลือกจุดส่งของ ${g.recipientName}`}
                     />
                     {/* ลำดับส่ง — district route order (legacy $arrPositF index · sorted) */}
                     <span
@@ -326,93 +336,117 @@ export function CreateBatchForm({
                     </span>
                     <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <span className="font-semibold text-sm text-foreground">
-                        คุณ{g.address.name} {g.address.lastName}
+                        คุณ{g.recipientName}
                       </span>
-                      <span className="text-xs text-foreground/80">
-                        <MapPin className="inline h-3 w-3 mr-0.5 text-rose-500" />
-                        {g.address.no} ต.{g.address.subDistrict}{" "}
-                        อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}
-                        จ.{g.address.province} {g.address.zipCode}
+                      <span className="inline-flex items-center rounded-md bg-primary-50 border border-primary-100 text-primary-700 px-1.5 py-0.5 text-[11px] font-mono font-semibold">
+                        {g.userid}
                       </span>
-                      {g.address.tel && g.address.tel !== "-" && (
-                        <span className="text-xs text-muted">
-                          <Phone className="inline h-3 w-3 mr-0.5" />
-                          {g.address.tel}
-                        </span>
-                      )}
                     </div>
+                    {/* บริษัทขนส่ง — legacy column */}
                     <span className="inline-flex items-center rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[11px] font-medium flex-shrink-0">
                       {g.shipByLabel}
                     </span>
+                    {/* จำนวน — legacy column */}
                     <span className="text-xs text-muted whitespace-nowrap flex-shrink-0">
                       {g.items.length} แทรคกิ้ง · {g.totalBoxes} กล่อง
                     </span>
                   </label>
 
-                  {/* Tracking table — gang'd out, full-width, fixed proportions */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm table-fixed min-w-[640px]">
-                      <colgroup>
-                        <col className="w-[14%]" />
-                        <col className="w-[32%]" />
-                        <col className="w-[13%]" />
-                        <col className="w-[11%]" />
-                        <col className="w-[14%]" />
-                        <col className="w-[16%]" />
-                      </colgroup>
-                      <thead className="text-left text-[11px] uppercase tracking-wide text-muted bg-surface-alt/30">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">F-no</th>
-                          <th className="px-3 py-2 font-medium">แทรคกิ้ง</th>
-                          <th className="px-3 py-2 font-medium">ลูกค้า</th>
-                          <th className="px-3 py-2 font-medium text-right">กล่อง</th>
-                          <th className="px-3 py-2 font-medium text-right">นน. (kg)</th>
-                          <th className="px-3 py-2 font-medium text-right">ปริมาตร (m³)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.items.map((it) => (
-                          <tr key={it.id} className="border-t border-border/60 odd:bg-white even:bg-surface-alt/20 hover:bg-primary-50/30">
-                            <td className="px-3 py-2 align-top">
-                              <Link
-                                href={`/admin/forwarders/${it.id}`}
-                                className="font-mono text-primary-600 hover:underline"
-                                target="_blank"
-                              >
-                                {it.fidorco}
-                              </Link>
-                            </td>
-                            <td className="px-3 py-2 align-top">
-                              <div className="font-medium break-all">{it.ftrackingchn}</div>
-                              {it.fpallet && (
-                                <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 align-top font-mono text-xs">{it.userid}</td>
-                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.famount}</td>
-                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.fweight.toFixed(2)}</td>
-                            <td className="px-3 py-2 align-top text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
-                          </tr>
-                        ))}
-                        {g.items.some((i) => i.fnote) && (
+                  {/* Body — legacy lays the per-stop card LEFT→RIGHT as
+                      [tracking table] … [ที่อยู่]. We mirror that: tracking on the
+                      LEFT (main), the ที่อยู่ panel on the RIGHT (stacks on mobile). */}
+                  <div className="flex flex-col lg:flex-row">
+                    {/* LEFT — tracking table (เลขแทรคกิ้ง column = the inner table) */}
+                    <div className="flex-1 min-w-0 overflow-x-auto lg:border-r border-border">
+                      <table className="w-full text-sm table-fixed min-w-[640px]">
+                        <colgroup>
+                          <col className="w-[14%]" />
+                          <col className="w-[32%]" />
+                          <col className="w-[13%]" />
+                          <col className="w-[11%]" />
+                          <col className="w-[14%]" />
+                          <col className="w-[16%]" />
+                        </colgroup>
+                        <thead className="text-left text-[11px] uppercase tracking-wide text-muted bg-surface-alt/30">
                           <tr>
-                            <td colSpan={6} className="px-3 py-1.5">
-                              {g.items.filter((i) => i.fnote).map((i) => (
-                                <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
-                                  📝 {i.fidorco}: {i.fnote}
-                                </div>
-                              ))}
-                            </td>
+                            <th className="px-3 py-2 font-medium">F-no</th>
+                            <th className="px-3 py-2 font-medium">แทรคกิ้ง</th>
+                            <th className="px-3 py-2 font-medium">ลูกค้า</th>
+                            <th className="px-3 py-2 font-medium text-right">กล่อง</th>
+                            <th className="px-3 py-2 font-medium text-right">นน. (kg)</th>
+                            <th className="px-3 py-2 font-medium text-right">ปริมาตร (m³)</th>
                           </tr>
-                        )}
-                        <tr className="border-t-2 border-primary-400 bg-primary-100 text-primary-900 font-bold">
-                          <td colSpan={3} className="px-3 py-2 text-right">รวม</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{g.totalBoxes}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {g.items.map((it) => (
+                            <tr key={it.id} className="border-t border-border/60 odd:bg-white even:bg-surface-alt/20 hover:bg-primary-50/30">
+                              <td className="px-3 py-2 align-top">
+                                <Link
+                                  href={`/admin/forwarders/${it.id}`}
+                                  className="font-mono text-primary-600 hover:underline"
+                                  target="_blank"
+                                >
+                                  {it.fidorco}
+                                </Link>
+                              </td>
+                              <td className="px-3 py-2 align-top">
+                                <div className="font-medium break-all">{it.ftrackingchn}</div>
+                                {it.fpallet && (
+                                  <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 align-top font-mono text-xs">{it.userid}</td>
+                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.famount}</td>
+                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.fweight.toFixed(2)}</td>
+                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
+                            </tr>
+                          ))}
+                          {g.items.some((i) => i.fnote) && (
+                            <tr>
+                              <td colSpan={6} className="px-3 py-1.5">
+                                {g.items.filter((i) => i.fnote).map((i) => (
+                                  <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
+                                    📝 {i.fidorco}: {i.fnote}
+                                  </div>
+                                ))}
+                              </td>
+                            </tr>
+                          )}
+                          <tr className="border-t-2 border-primary-400 bg-primary-100 text-primary-900 font-bold">
+                            <td colSpan={3} className="px-3 py-2 text-right">รวม</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{g.totalBoxes}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* RIGHT — ที่อยู่จัดส่ง (legacy's rightmost column) */}
+                    <aside className="lg:w-72 xl:w-80 flex-shrink-0 p-3 sm:p-4 bg-surface-alt/20">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                        ที่อยู่จัดส่ง
+                      </p>
+                      <p className="font-semibold text-sm text-foreground">คุณ{g.recipientName}</p>
+                      {g.addressMissing ? (
+                        <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                          ⚠️ ยังไม่มีที่อยู่จัดส่ง — เซลกรอกเพิ่มที่หน้ารายการนำเข้า
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-foreground/80 leading-relaxed">
+                          {g.address.no} ต.{g.address.subDistrict}{" "}
+                          อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}
+                          จ.{g.address.province} {g.address.zipCode}
+                        </p>
+                      )}
+                      {g.address.tel && g.address.tel !== "-" && (
+                        <p className="mt-1.5 text-xs text-muted">
+                          <Phone className="inline h-3 w-3 mr-0.5" />
+                          {g.address.tel}
+                        </p>
+                      )}
+                    </aside>
                   </div>
                 </li>
               );
