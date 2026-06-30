@@ -61,8 +61,11 @@ Owner rules: resolve by PHONE not the sheet PR (มั่ว) · phone-in-DB→L
 ### ✅ Phase 1 — CUSTOMERS APPLIED to prod (`scripts/import-freight-customers-2026-06-30.mjs`)
 478 rows → 370 distinct phones → **LINK 118** (existing PR · incl. 25 my phone-map missed but auth-collision caught → resolved via auth→profile) · **CREATE 251** (new PR225+ · pw 123456 · sales: center 190/may 57/pee 2/pupu 2) · **NO-PHONE 86** (chase · 56 have TAX, 48 email) · **ORPHAN 1** (คชาธร ทองศรี 0922750655 · tb_users dup-key · manual). Summary CSV → `/Users/dev/Desktop/freight-customer-summary-2026-07-01.csv` (สำหรับเซลไล่ตามเบอร์). ⚠️ LESSON: supabase-js `.select()` caps 1000 rows → MUST paginate (the dry-run caught a 60-dup risk). tb_users has NO userTax col → tax-id kept in userNote.
 
-### ⏭️ Phase 2 — SHIPMENTS (June) + Phase 3 — COST/เบิกเงิน (no double-charge) = NEXT
-shipment → freight_shipments + journey · cost → match shipment + dedup (the money-risk phase). Each dry-run→owner→apply.
+### ✅ Phase 2 — SHIPMENTS APPLIED (`scripts/import-freight-shipments-2026-07-01.mjs`)
+PACRED June(107)+May(38) → **139 freight_shipments** (83 customers · AXELRA has NO June/May · its data Nov25-Mar26 · skipped). resolve customer→profile_id (member→PR else name→PR · 6 TTW no-match skipped). transport_mode sea_lcl 69/truck 45/sea_fcl 17/air 8 · status delivered 40/draft 73/in_progress 21/cancelled 5 (DB-check-compliant) · service_key freight_import/export/import_cargo · idempotent by job_no · records+status only (no charge). ⚠️ LESSONS: freight_shipments status enum = draft|confirmed|in_progress|cleared|delivered|cancelled (not in_transit) · cancelled needs reason+at · service_key valid set is the 14 catalog keys.
+
+### ⏭️ Phase 3 — COST/เบิกเงิน (ACC sheet · 16 sheets SEA/AIR/TRUCK/Cargo/STATEMENT) = NEXT (money-riskiest · ห้ามเก็บเงินซ้ำ)
+match เบิกเงิน → the imported shipment (job_no) + dedup (skip already-paid/billed) → freight_shipments cost_* fields. dry-run→owner→apply. The double-charge guard lives here.
 
 ## Other เดฟ sources (owner picked all · DEFERRED → next session / owner input)
 - **MOMO - Packing List (17 xlsx)** → fill the ฿294k drift (MOMO API dropped 30-40% · 110 trackings).
