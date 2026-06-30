@@ -58,7 +58,10 @@ has VAT receipt no.) → check the doc-mode.
 ## Other เดฟ sources (owner picked all · DEFERRED → next session / owner input)
 - **MOMO - Packing List (17 xlsx)** → fill the ฿294k drift (MOMO API dropped 30-40% · 110 trackings).
   re-derive SELL = money → dry-run + owner เคาะตู้.
-- **เรทนำเข้า (3 rate images)** → read → set import rates (pricing). owner confirm before set.
+- **เรทนำเข้า (3 rate images) — DECODED 2026-06-30 · รอ owner เคาะก่อน set (money):**
+  - **รูป 3 (PCS) = import freight matrix · อี้อู+กวางโจว** (บาท/CBM /KgM): รถ ทั่วไป **5,500/20** · อย./มอก. 6,000/30 · พิเศษ 7,500/50 — เรือ ทั่วไป **3,500/15** · อย./มอก. 4,000/20 · พิเศษ 6,500/35. ⚠️ CONFLICT vs existing per-warehouse SELL floor (กวางโจว รถ4900/เรือ2900 · อี้อู รถ5500/เรือ2900 · [[sell-floor-rate-model]]) — รูป รถ5,500/เรือ3,500 ≠ floor.
+  - **รูป 1+2 = ใบขน service fees** (ปลีก/ขาประจำ): พิธีการใบขน 3,500/2,500 · Form E 2,500/1,500 · ลงทะเบียน 1,500 · ค่าธรรมเนียมศุล 200 · EDI 150 · รวม 7,850/5,850 → feeds customs-doc-kit/ใบขน fees.
+  - **NOT set** — money · differs from existing · รอ owner เคาะค่า+map ก่อน apply.
 - **Apirat ([LINE] chat อภิรัตน์ฯ)** → CRM backlog (customer conversation).
 - **Feature**: edit/add tracking for goods already ถึงโกดัง (multi-shop · some shops arrive later).
 - Show THB cost summary at top (owner "มีเงินบาทต้นทุน สรุปให้ดูข้างบน").

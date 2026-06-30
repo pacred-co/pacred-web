@@ -9,6 +9,7 @@ import {
 } from "@/lib/validators/customs-declaration";
 import { CargoDeclarationLineEditor } from "./cargo-declaration-line-editor";
 import { CargoDeclaredValueImages } from "./cargo-declared-value-images";
+import { DeclarationFeePanel } from "@/components/admin/declaration-fee-panel";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 
@@ -324,6 +325,11 @@ export default async function CargoDeclarationDetailPage({
           <p className="text-muted">ถึงไทย: {new Date(fwd.fdatetothai).toLocaleDateString("th-TH")}</p>
         )}
       </section>
+
+      {/* ค่าบริการออกใบขน (owner-confirmed AXELRA card · 2026-06-30) — service-fee
+         quote (ขาประจำ default · ราคาแรก for new customer · Form E toggle). Display
+         only · not cost-gated (it's the customer-facing ใบขน fee, not ต้นทุน). */}
+      <DeclarationFeePanel defaultFormE={formEByHs.size > 0} />
 
       {/* Totals — MONEY-internal (มูลค่าสำแดง). Hidden for non-cost roles. */}
       {canViewMoney ? (
