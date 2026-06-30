@@ -65,6 +65,11 @@ type DeclarationRow = {
   total_duty_thb:             number | null;
   total_vat_thb:              number | null;
   total_other_taxes_thb:      number | null;
+  // ใบขนพ่วง (#17 · mig 0236) — own-name consignee override.
+  issue_in_customer_name:     boolean | null;
+  consignee_name:             string | null;
+  consignee_tax_id:           string | null;
+  consignee_address:          string | null;
 };
 
 type ShipmentRow = {
@@ -127,7 +132,8 @@ export async function GET(
       customs_office, customs_control_no, broker_name, broker_license_no,
       ship_or_truck_arrival_date, port_of_entry, paid_through_promptpay,
       notes, freight_shipment_id, cargo_forwarder_id, cargo_cabinet_no,
-      total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb
+      total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb,
+      issue_in_customer_name, consignee_name, consignee_tax_id, consignee_address
     `)
     .eq("id", id)
     .maybeSingle<DeclarationRow>();
@@ -227,6 +233,22 @@ export async function GET(
         };
       }
     }
+  }
+
+  // ใบขนพ่วง (#17 · mig 0236) — when the ใบขน is issued in the customer's own name,
+  // the explicit consignee snapshot the admin entered (if any) overrides the
+  // customer-record-derived consignee. The customer IS the importer of record.
+  if (
+    declaration.issue_in_customer_name &&
+    (declaration.consignee_name?.trim() || declaration.consignee_tax_id?.trim() || declaration.consignee_address?.trim())
+  ) {
+    consignee = {
+      role:    "consignee",
+      name:    declaration.consignee_name?.trim() || consignee?.name || "",
+      address: declaration.consignee_address?.trim() || consignee?.address || "",
+      tax_id:  declaration.consignee_tax_id?.trim() || consignee?.tax_id || null,
+      branch:  null,
+    };
   }
 
   const { data: linesRaw, error: linesRawErr } = await admin

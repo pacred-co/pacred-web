@@ -26,11 +26,14 @@
 // declared value; pricing/accounting/super can review + adjust.
 // ════════════════════════════════════════════════════════════════════
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { computeLineTaxes, roundThb } from "@/lib/validators/customs-declaration";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { sendNotification } from "@/lib/notifications";
 
 // Docs + cost roles own the cargo ใบขน. (super wildcards via is_admin / requireAdmin.)
 const ROLES = ["super", "accounting", "freight_import_doc", "pricing"] as const;
@@ -327,5 +330,306 @@ export async function setCargoDeclarationLine(
 
     revalidatePath(`/admin/accounting/cargo-declarations/${line.declaration_id}`);
     return { ok: true };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ใบขนพ่วง (#17) — ออกใบขนเป็น "ชื่อลูกค้าเอง" (customer's own name).
+//
+// FLOW: admin toggles own-name + fills the customer's consignee snapshot →
+// sets the ค่าบริการ (service_fee_thb) → sends the draft (invoice + packing +
+// ใบขน PDFs) to the customer via a tokenized LINE link → customer confirms the
+// total → only THEN may accounting collect: service-fee + (duty + VAT in the
+// ใบขน) into the SERVICE account (3-account SOT · pass-through · §0e key persisted
+// + read on the detail page · §0f confirm · idempotent on declaration_id).
+//
+// The duty + VAT here are the CUSTOMER's customs liability that WE collect and
+// remit (pass-through) — NOT a Pacred VAT line. Computed only from the header's
+// existing total_duty_thb + total_vat_thb (set by the line editor via
+// computeLineTaxes). This file NEVER computes money inline.
+// ════════════════════════════════════════════════════════════════════
+
+const optStr = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? null : v),
+  z.string().trim().max(500).nullable(),
+);
+
+// ── 1) own-name + service-fee on the draft (draft only · §0f confirm in UI) ──
+const setOwnNameSchema = z.object({
+  declarationId:       z.string().uuid(),
+  issueInCustomerName: z.coerce.boolean(),
+  consigneeName:       optStr,
+  consigneeTaxId:      optStr,
+  consigneeAddress:    z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? null : v),
+    z.string().trim().max(2000).nullable(),
+  ),
+  // service_fee_thb — our brokerage fee (computeDeclarationFee total · ≥0). The
+  // collectable is service_fee + header duty + header VAT (never recomputed here).
+  serviceFeeThb: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? undefined : v),
+    z.coerce.number().min(0).max(9_999_999).optional(),
+  ),
+});
+
+export async function adminSetCustomsOwnName(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<AdminActionResult> {
+  const parsed = setOwnNameSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: decl, error: declErr } = await admin
+      .from("customs_declarations")
+      .select("id, status, cargo_forwarder_id, customer_confirm_status")
+      .eq("id", d.declarationId)
+      .maybeSingle<{ id: string; status: string; cargo_forwarder_id: number | null; customer_confirm_status: string | null }>();
+    if (declErr) {
+      console.error("[cargo-declarations setOwnName lookup]", { id: d.declarationId, code: declErr.code, message: declErr.message });
+      return { ok: false, error: `db_error:${declErr.code}` };
+    }
+    if (!decl) return { ok: false, error: "not_found" };
+    if (decl.cargo_forwarder_id == null) return { ok: false, error: "not_cargo_declaration" };
+    if (decl.status !== "draft") return { ok: false, error: "not_draft" };
+    // Editing the own-name fields after a draft is already sent/confirmed would
+    // desync what the customer agreed to — block it.
+    if (decl.customer_confirm_status !== "none") {
+      return { ok: false, error: "already_sent_to_customer" };
+    }
+
+    const patch: Record<string, unknown> = {
+      issue_in_customer_name: d.issueInCustomerName,
+      consignee_name:         d.consigneeName,
+      consignee_tax_id:       d.consigneeTaxId,
+      consignee_address:      d.consigneeAddress,
+    };
+    if (d.serviceFeeThb !== undefined) patch.service_fee_thb = roundThb(d.serviceFeeThb);
+
+    const { error: updErr } = await admin
+      .from("customs_declarations")
+      .update(patch)
+      .eq("id", d.declarationId);
+    if (updErr) {
+      console.error("[cargo-declarations setOwnName update]", { id: d.declarationId, code: updErr.code, message: updErr.message });
+      return { ok: false, error: `บันทึกไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "cargo_declaration.set_own_name", "customs_declaration", d.declarationId, {
+      issue_in_customer_name: d.issueInCustomerName,
+      consignee_name:         d.consigneeName,
+      consignee_tax_id:       d.consigneeTaxId,
+      service_fee_thb:        d.serviceFeeThb !== undefined ? roundThb(d.serviceFeeThb) : undefined,
+    });
+
+    revalidatePath(`/admin/accounting/cargo-declarations/${d.declarationId}`);
+    return { ok: true };
+  });
+}
+
+// ── 2) send the draft to the customer (mint confirm_token + LINE notify) ──
+const sendDraftSchema = z.object({ declarationId: z.string().uuid() });
+
+export async function adminSendCustomsDraftToCustomer(
+  raw: { declarationId: string },
+): Promise<AdminActionResult<{ token: string }>> {
+  const parsed = sendDraftSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { declarationId } = parsed.data;
+
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: decl, error: declErr } = await admin
+      .from("customs_declarations")
+      .select(
+        "id, declaration_no, status, cargo_forwarder_id, issue_in_customer_name, " +
+          "service_fee_thb, total_duty_thb, total_vat_thb, customer_confirm_status, confirm_token",
+      )
+      .eq("id", declarationId)
+      .maybeSingle<{
+        id: string; declaration_no: string | null; status: string; cargo_forwarder_id: number | null;
+        issue_in_customer_name: boolean; service_fee_thb: number | string | null;
+        total_duty_thb: number | string | null; total_vat_thb: number | string | null;
+        customer_confirm_status: string | null; confirm_token: string | null;
+      }>();
+    if (declErr) {
+      console.error("[cargo-declarations sendDraft lookup]", { id: declarationId, code: declErr.code, message: declErr.message });
+      return { ok: false, error: `db_error:${declErr.code}` };
+    }
+    if (!decl) return { ok: false, error: "not_found" };
+    if (decl.cargo_forwarder_id == null) return { ok: false, error: "not_cargo_declaration" };
+    if (!decl.issue_in_customer_name) return { ok: false, error: "not_own_name_declaration" };
+    if (decl.status !== "draft") return { ok: false, error: "not_draft" };
+    if (decl.customer_confirm_status === "confirmed") {
+      return { ok: false, error: "already_confirmed" };
+    }
+
+    // Resolve the customer profile from the forwarder (member_code = userid).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid")
+      .eq("id", decl.cargo_forwarder_id)
+      .maybeSingle<{ id: number; userid: string | null }>();
+    if (fwdErr) {
+      console.error("[cargo-declarations sendDraft fwd]", { fid: decl.cargo_forwarder_id, code: fwdErr.code, message: fwdErr.message });
+      return { ok: false, error: `db_error:${fwdErr.code}` };
+    }
+    const userid = fwd?.userid?.trim();
+    if (!userid) return { ok: false, error: "forwarder_has_no_customer" };
+
+    let profileId: string | null = null;
+    const { data: userRow, error: userErr } = await admin
+      .from("tb_users").select("profile_id").eq("userID", userid).maybeSingle<{ profile_id: string | null }>();
+    if (userErr) console.error("[cargo-declarations sendDraft tb_users]", { userid, code: userErr.code, message: userErr.message });
+    if (userRow?.profile_id) profileId = userRow.profile_id;
+    if (!profileId) {
+      const { data: profileRow, error: profileErr } = await admin
+        .from("profiles").select("id").eq("member_code", userid).maybeSingle<{ id: string }>();
+      if (profileErr) console.error("[cargo-declarations sendDraft profiles]", { userid, code: profileErr.code, message: profileErr.message });
+      if (profileRow?.id) profileId = profileRow.id;
+    }
+    if (!profileId) {
+      return { ok: false, error: `ไม่พบ profile ของลูกค้า ${userid} — ส่งลิงก์ยืนยันทาง LINE ไม่ได้` };
+    }
+
+    // Mint the token (reuse if a prior 'sent'/'rejected' draft already has one).
+    const token = decl.confirm_token ?? randomUUID();
+
+    const { error: updErr } = await admin
+      .from("customs_declarations")
+      .update({ customer_confirm_status: "sent", confirm_token: token })
+      .eq("id", declarationId)
+      .eq("status", "draft");              // guard: only a draft can be sent
+    if (updErr) {
+      console.error("[cargo-declarations sendDraft update]", { id: declarationId, code: updErr.code, message: updErr.message });
+      return { ok: false, error: `ส่งไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    const collectable = roundThb(
+      Number(decl.service_fee_thb ?? 0) + Number(decl.total_duty_thb ?? 0) + Number(decl.total_vat_thb ?? 0),
+    );
+    const docTag = decl.declaration_no ?? declarationId.slice(0, 8);
+
+    // Notify the customer — sendNotification logs the row + pushes via LINE OA
+    // (link_href becomes the full https URL). The draft = the existing PDF links
+    // surfaced on the confirm page.
+    const notif = await sendNotification(profileId, {
+      category:  "payment",
+      severity:  "info",
+      title:     `📄 ใบขน (ในชื่อท่าน) ${docTag} — โปรดตรวจสอบและยืนยันยอด`,
+      body:      `บริษัทจัดทำใบขน อินวอยซ์ และแพคกิ้งลิสต์ในชื่อของท่านแล้ว ยอดที่ต้องชำระ ฿${collectable.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (ค่าบริการ + อากร + VAT) กดลิงก์เพื่อดูเอกสารและยืนยันยอด`,
+      link_href: `/customs-confirm/${token}`,
+    });
+
+    await logAdminAction(adminId, "cargo_declaration.send_draft_to_customer", "customs_declaration", declarationId, {
+      userid,
+      collectable_thb:   collectable,
+      service_fee_thb:   Number(decl.service_fee_thb ?? 0),
+      total_duty_thb:    Number(decl.total_duty_thb ?? 0),
+      total_vat_thb:     Number(decl.total_vat_thb ?? 0),
+      delivered_line:    notif.deliveredLine,
+      delivered_email:   notif.deliveredEmail,
+      notification_id:   notif.id,
+    });
+
+    revalidatePath(`/admin/accounting/cargo-declarations/${declarationId}`);
+    return { ok: true, data: { token } };
+  });
+}
+
+// ── 3) collect (confirmed-gated · idempotent on declaration_id · → SERVICE) ──
+const collectSchema = z.object({ declarationId: z.string().uuid() });
+
+export async function adminCollectConfirmedCustomsDraft(
+  raw: { declarationId: string },
+): Promise<AdminActionResult<{ accountKey: string; collectableThb: number }>> {
+  const parsed = collectSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { declarationId } = parsed.data;
+
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: decl, error: declErr } = await admin
+      .from("customs_declarations")
+      .select(
+        "id, declaration_no, cargo_forwarder_id, issue_in_customer_name, customer_confirm_status, " +
+          "service_fee_thb, total_duty_thb, total_vat_thb, paid_through_promptpay, notes",
+      )
+      .eq("id", declarationId)
+      .maybeSingle<{
+        id: string; declaration_no: string | null; cargo_forwarder_id: number | null;
+        issue_in_customer_name: boolean; customer_confirm_status: string | null;
+        service_fee_thb: number | string | null; total_duty_thb: number | string | null;
+        total_vat_thb: number | string | null; paid_through_promptpay: boolean; notes: string | null;
+      }>();
+    if (declErr) {
+      console.error("[cargo-declarations collect lookup]", { id: declarationId, code: declErr.code, message: declErr.message });
+      return { ok: false, error: `db_error:${declErr.code}` };
+    }
+    if (!decl) return { ok: false, error: "not_found" };
+    if (decl.cargo_forwarder_id == null) return { ok: false, error: "not_cargo_declaration" };
+    if (!decl.issue_in_customer_name) return { ok: false, error: "not_own_name_declaration" };
+    // GATE: collect only after the customer confirmed the amount.
+    if (decl.customer_confirm_status !== "confirmed") {
+      return { ok: false, error: "not_confirmed" };
+    }
+    // IDEMPOTENT on declaration_id — paid_through_promptpay = the collected flag.
+    if (decl.paid_through_promptpay) {
+      return { ok: false, error: "already_collected" };
+    }
+
+    // Route via the 3-account SOT — own-name ใบขน issues NO ใบกำกับ → SERVICE
+    // (pass-through: we collect the customer's duty + VAT and remit). Never hardcoded.
+    const account = resolvePaymentAccount({ issuesTaxInvoice: false });
+    const collectable = roundThb(
+      Number(decl.service_fee_thb ?? 0) + Number(decl.total_duty_thb ?? 0) + Number(decl.total_vat_thb ?? 0),
+    );
+
+    // Persist the routing fact READABLY (§0e) — customs_declarations has no
+    // bank_account_key column (mig 0236 added it only to the tax-invoice stores),
+    // so record it on the declaration's notes as a structured, displayed line +
+    // flip paid_through_promptpay (the collected/idempotency flag). The detail
+    // page reads + shows both, and the audit log carries the full fact.
+    const stamp = new Date().toISOString();
+    const routeLine =
+      `[เก็บค่าบริการ+อากร+VAT ฿${collectable.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ` +
+      `→ บัญชี ${account.label} key=${account.key} (${account.accountNo}) · ${stamp}]`;
+    const newNotes = decl.notes ? `${decl.notes}\n${routeLine}` : routeLine;
+
+    const { data: claimed, error: updErr } = await admin
+      .from("customs_declarations")
+      .update({ paid_through_promptpay: true, notes: newNotes })
+      .eq("id", declarationId)
+      .eq("customer_confirm_status", "confirmed")
+      .eq("paid_through_promptpay", false)        // TOCTOU guard — atomic claim
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    if (updErr) {
+      console.error("[cargo-declarations collect update]", { id: declarationId, code: updErr.code, message: updErr.message });
+      return { ok: false, error: `บันทึกการเก็บเงินไม่สำเร็จ: ${updErr.message}` };
+    }
+    if (!claimed) return { ok: false, error: "already_collected" };   // lost the race
+
+    await logAdminAction(adminId, "cargo_declaration.collect_service_account", "customs_declaration", declarationId, {
+      bank_account_key: account.key,
+      account_no:       account.accountNo,
+      collectable_thb:  collectable,
+      service_fee_thb:  Number(decl.service_fee_thb ?? 0),
+      total_duty_thb:   Number(decl.total_duty_thb ?? 0),
+      total_vat_thb:    Number(decl.total_vat_thb ?? 0),
+    });
+
+    revalidatePath(`/admin/accounting/cargo-declarations/${declarationId}`);
+    return { ok: true, data: { accountKey: account.key, collectableThb: collectable } };
   });
 }

@@ -10,7 +10,10 @@ import {
 import { CargoDeclarationLineEditor } from "./cargo-declaration-line-editor";
 import { CargoDeclaredValueImages } from "./cargo-declared-value-images";
 import { CargoDocModeChooser } from "./cargo-doc-mode-chooser";
+import { CustomsOwnNamePanel } from "./customs-own-name-panel";
+import { CustomsHsCheckPanel, type HsCheckLine } from "./customs-hs-check-panel";
 import { DeclarationFeePanel } from "@/components/admin/declaration-fee-panel";
+import { computeDeclarationFee } from "@/lib/customs/declaration-fees";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 
@@ -55,6 +58,15 @@ type Header = {
   total_other_taxes_thb:    number | null;
   notes:                    string | null;
   created_at:               string;
+  // ใบขนพ่วง (#17 · mig 0236)
+  issue_in_customer_name:   boolean | null;
+  consignee_name:           string | null;
+  consignee_tax_id:         string | null;
+  consignee_address:        string | null;
+  service_fee_thb:          number | string | null;
+  customer_confirm_status:  string | null;
+  customer_confirmed_at:    string | null;
+  paid_through_promptpay:   boolean | null;
 };
 
 type Line = {
@@ -106,7 +118,9 @@ export default async function CargoDeclarationDetailPage({
     .from("customs_declarations")
     .select(
       "id, declaration_no, status, cargo_forwarder_id, cargo_cabinet_no, declared_at, " +
-        "total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb, notes, created_at",
+        "total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb, notes, created_at, " +
+        "issue_in_customer_name, consignee_name, consignee_tax_id, consignee_address, service_fee_thb, " +
+        "customer_confirm_status, customer_confirmed_at, paid_through_promptpay",
     )
     .eq("id", id)
     .maybeSingle<Header>();
@@ -177,17 +191,50 @@ export default async function CargoDeclarationDetailPage({
   // form_e_duty_pct in the คลัง HS qualifies for the ACFTA preferential rate. Surface
   // it as a hint + a one-tap apply in the line editor (Docs confirms → save). The
   // duty rate is money-internal so the hint is shown only to cost roles.
+  // ── Same lookup also feeds the ใบขนพ่วง (#17) HS-check panel (full field set:
+  //    default_duty_pct / form_e_duty_pct / hs_note / other_forms) — read-only,
+  //    never blocks. Gated to canViewMoney (duty %/Form-E rate are money-internal).
   const formEByHs = new Map<string, number>();
+  const hsInfoByCode = new Map<string, { defaultDutyPct: number | null; formEDutyPct: number | null; hsNote: string | null; hasOtherForms: boolean }>();
   if (canViewMoney) {
     const lineHsCodes = Array.from(new Set(lines.map((l) => l.hs_code?.trim()).filter((c): c is string => !!c)));
     if (lineHsCodes.length > 0) {
-      const { data: feRows, error: feErr } = await admin.from("hs_codes").select("code, form_e_duty_pct").in("code", lineHsCodes);
-      if (feErr) console.error("[cargo-decl form-e lookup]", { code: feErr.code, message: feErr.message });
-      for (const r of (feRows ?? []) as Array<{ code: string; form_e_duty_pct: number | null }>) {
+      const { data: feRows, error: feErr } = await admin
+        .from("hs_codes")
+        .select("code, default_duty_pct, form_e_duty_pct, hs_note, other_forms")
+        .in("code", lineHsCodes);
+      if (feErr) console.error("[cargo-decl hs lookup]", { code: feErr.code, message: feErr.message });
+      for (const r of (feRows ?? []) as Array<{ code: string; default_duty_pct: number | null; form_e_duty_pct: number | null; hs_note: string | null; other_forms: unknown }>) {
         if (r.form_e_duty_pct != null) formEByHs.set(r.code, Number(r.form_e_duty_pct));
+        const of = r.other_forms;
+        const hasOtherForms = of != null && typeof of === "object" && Object.keys(of as Record<string, unknown>).length > 0;
+        hsInfoByCode.set(r.code, {
+          defaultDutyPct: r.default_duty_pct != null ? Number(r.default_duty_pct) : null,
+          formEDutyPct:   r.form_e_duty_pct  != null ? Number(r.form_e_duty_pct)  : null,
+          hsNote:         r.hs_note?.trim() || null,
+          hasOtherForms,
+        });
       }
     }
   }
+
+  // Build the HS-check rows (one per line · the dictionary fields where present).
+  const hsCheckLines: HsCheckLine[] = canViewMoney
+    ? lines.map((l) => {
+        const code = l.hs_code?.trim();
+        const info = code ? hsInfoByCode.get(code) : undefined;
+        return {
+          position:       l.position,
+          description:    l.description,
+          hsCode:         l.hs_code,
+          defaultDutyPct: info?.defaultDutyPct ?? null,
+          formEDutyPct:   info?.formEDutyPct ?? null,
+          hsNote:         info?.hsNote ?? null,
+          hasOtherForms:  info?.hasOtherForms ?? false,
+          inDictionary:   !!code && hsInfoByCode.has(code),
+        };
+      })
+    : [];
 
   // Declared-value evidence images (owner 2026-06-28 #2 "แนบรูป" · mig 0222) — resolve
   // signed URLs per line for cost roles (the evidence justifies the money-internal
@@ -350,6 +397,33 @@ export default async function CargoDeclarationDetailPage({
          quote (ขาประจำ default · ราคาแรก for new customer · Form E toggle). Display
          only · not cost-gated (it's the customer-facing ใบขน fee, not ต้นทุน). */}
       <DeclarationFeePanel defaultFormE={formEByHs.size > 0} />
+
+      {/* ใบขนพ่วง (#17 · 2026-07-01) — ออกใบขนในชื่อลูกค้าเอง: own-name consignee +
+         service-fee → ส่ง draft ให้ลูกค้ายืนยัน (LINE) → เก็บเงินเข้าบัญชี Service.
+         Money figures (duty/VAT/fee) are cost-gated. */}
+      {canViewMoney && (
+        <>
+          <CustomsHsCheckPanel lines={hsCheckLines} />
+          <CustomsOwnNamePanel
+            declarationId={header.id}
+            isDraft={isDraft}
+            canEdit={canEdit}
+            totalDutyThb={Number(header.total_duty_thb ?? 0)}
+            totalVatThb={Number(header.total_vat_thb ?? 0)}
+            defaultServiceFee={computeDeclarationFee("regular", { withFormE: formEByHs.size > 0, withRegistration: true }).total}
+            initial={{
+              issueInCustomerName: header.issue_in_customer_name ?? false,
+              consigneeName:       header.consignee_name,
+              consigneeTaxId:      header.consignee_tax_id,
+              consigneeAddress:    header.consignee_address,
+              serviceFeeThb:       header.service_fee_thb != null ? Number(header.service_fee_thb) : null,
+              confirmStatus:       (header.customer_confirm_status ?? "none") as "none" | "sent" | "confirmed" | "rejected",
+              confirmedAt:         header.customer_confirmed_at,
+              collected:           header.paid_through_promptpay ?? false,
+            }}
+          />
+        </>
+      )}
 
       {/* Totals — MONEY-internal (มูลค่าสำแดง). Hidden for non-cost roles. */}
       {canViewMoney ? (
