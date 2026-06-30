@@ -8,10 +8,11 @@
  * invoices show an info banner instead so staff don't see a "บันทึก" button
  * that no-ops.
  *
- * ภูม 2026-06-29 — slip flow: SALES (or any role on the page) แนบสลิป →
- * slip_status='pending' → appears in the accounting slip-verify queue. The
- * settle/confirm (บันทึกการรับชำระ · ตัดจ่าย) stays ACCOUNTING-only (canSettle),
- * gated both here and in markBillingRunPaid; confirming flips the slip→verified.
+ * ภูม 2026-06-30 — slip flow รวมเป็นแบบเดียวกับหน้า wallet (A4 ตรวจ 2 รอบ):
+ *   • SALES (หรือทุก role บนหน้านี้) แนบสลิป (ได้หลายรูป) → slip_status='pending'
+ *     → โผล่ในคิว "ชำระเงิน" (dashboard) ให้บัญชี.
+ *   • บัญชี (canSettle) "ตรวจสลิป รอบ 1" → "อนุมัติ + ตัดจ่าย (รอบ 2)" / "ปฏิเสธสลิป".
+ *     markBillingRunPaid บังคับว่าต้องตรวจรอบ 1 ก่อนถึงจะตัดจ่ายได้.
  */
 
 import { useRef, useState, useTransition } from "react";
@@ -21,6 +22,8 @@ import {
   cancelBillingRunInvoice,
   sendBillingRunNotification,
   uploadBillingRunSlip,
+  reviewBillingRunSlipRound1,
+  rejectBillingRunSlip,
 } from "@/actions/admin/billing-run";
 import { uploadSlip } from "@/lib/storage-upload";
 import { SlipImage } from "@/components/admin/slip-image";
@@ -33,10 +36,12 @@ type Props = {
   customerId: string;
   /** true = viewer is accounting/super → may settle (ตัดจ่าย). Sales = false. */
   canSettle: boolean;
-  /** Signed URL of the attached slip (service-role signed so any admin can view). */
-  slipSignedUrl: string | null;
-  /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=บัญชียืนยันแล้ว */
+  /** Signed URLs of ALL attached slips (multi · service-role signed so any admin can view). */
+  slipSignedUrls: string[];
+  /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=ยืนยันแล้ว · rejected=ถูกปฏิเสธ */
   slipStatus: string | null;
+  /** A4 2-round: round-1 review stamp (null = ยังไม่ตรวจรอบ 1). */
+  slipReviewedAt: string | null;
   slipUploadedBy: string | null;
   slipUploadedAt: string | null;
 };
@@ -66,7 +71,7 @@ function fmtDateTime(iso: string | null): string {
 
 export function BillingRunActions({
   invoiceId, docNo, status, totalThb, customerId,
-  canSettle, slipSignedUrl, slipStatus, slipUploadedBy, slipUploadedAt,
+  canSettle, slipSignedUrls, slipStatus, slipReviewedAt, slipUploadedBy, slipUploadedAt,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -80,9 +85,15 @@ export function BillingRunActions({
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  // Slip upload
+  // Slip upload (multi) + reject
   const fileRef = useRef<HTMLInputElement>(null);
   const [slipBusy, setSlipBusy] = useState(false);
+  const [rejectMode, setRejectMode] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const hasPendingSlip = slipStatus === "pending";
+  const round1Done = !!slipReviewedAt;
+  const round1Pending = hasPendingSlip && !round1Done; // ต้องตรวจรอบ 1 ก่อนตัดจ่าย
 
   async function onSlipPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -97,7 +108,7 @@ export function BillingRunActions({
       }
       const res = await uploadBillingRunSlip({ invoiceId, slipPath: up.path });
       if (res.ok) {
-        setMsg({ kind: "ok", text: "✓ แนบสลิปแล้ว — รอบัญชีตรวจสลิป + ตัดจ่าย" });
+        setMsg({ kind: "ok", text: "✓ แนบสลิปแล้ว — รอบัญชีตรวจสลิป รอบ 1 + ตัดจ่าย" });
         router.refresh();
       } else {
         setMsg({ kind: "err", text: res.error });
@@ -108,16 +119,20 @@ export function BillingRunActions({
     }
   }
 
-  // Reusable slip display (thumbnail → opens full slip on click).
-  const slipBlock = slipSignedUrl ? (
-    <a href={slipSignedUrl} target="_blank" rel="noopener noreferrer" className="block w-fit">
-      <SlipImage
-        src={slipSignedUrl}
-        alt={`สลิป ${docNo}`}
-        pdfMode="tile"
-        className="h-24 w-24 rounded-lg border border-border object-cover"
-      />
-    </a>
+  // Multi-slip gallery (each thumbnail opens the full slip on click).
+  const slipGallery = slipSignedUrls.length > 0 ? (
+    <div className="flex flex-wrap gap-2">
+      {slipSignedUrls.map((url, i) => (
+        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+          <SlipImage
+            src={url}
+            alt={`สลิป ${docNo} #${i + 1}`}
+            pdfMode="tile"
+            className="h-24 w-24 rounded-lg border border-border object-cover"
+          />
+        </a>
+      ))}
+    </div>
   ) : null;
 
   if (status === "paid") {
@@ -126,11 +141,11 @@ export function BillingRunActions({
         <p className="text-sm text-emerald-800 font-medium">
           ✓ ใบวางบิลนี้ได้รับชำระแล้ว · ดูประวัติด้านบน
         </p>
-        {slipSignedUrl && (
-          <div className="flex items-center gap-3">
-            {slipBlock}
+        {slipSignedUrls.length > 0 && (
+          <div className="space-y-2">
+            {slipGallery}
             <div className="text-[12px] text-emerald-700">
-              <div className="font-semibold">สลิปที่ยืนยันแล้ว</div>
+              <div className="font-semibold">สลิปที่ยืนยันแล้ว ({slipSignedUrls.length} รูป)</div>
               <div>แนบโดย {slipUploadedBy ?? "—"} · {fmtDateTime(slipUploadedAt)}</div>
             </div>
           </div>
@@ -151,7 +166,7 @@ export function BillingRunActions({
   function onMarkPaid(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    const verb = slipStatus === "pending" ? "ยืนยันสลิป + บันทึกการรับชำระ" : "บันทึกการรับชำระ";
+    const verb = hasPendingSlip ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "บันทึกการรับชำระ";
     if (!confirm(`${verb} ${docNo} จำนวน ฿${thbFmt(totalThb)}?`)) return;
 
     startTransition(async () => {
@@ -163,6 +178,37 @@ export function BillingRunActions({
       });
       if (res.ok) {
         setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
+        router.refresh();
+      } else {
+        setMsg({ kind: "err", text: res.error });
+      }
+    });
+  }
+
+  function reviewRound1() {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await reviewBillingRunSlipRound1({ invoiceId });
+      if (res.ok) {
+        setMsg({ kind: "ok", text: "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" });
+        router.refresh();
+      } else {
+        setMsg({ kind: "err", text: res.error });
+      }
+    });
+  }
+
+  function rejectSlip() {
+    if (rejectReason.trim().length < 3) {
+      setMsg({ kind: "err", text: "เหตุผลปฏิเสธต้องอย่างน้อย 3 ตัวอักษร" });
+      return;
+    }
+    startTransition(async () => {
+      const res = await rejectBillingRunSlip({ invoiceId, reason: rejectReason.trim() });
+      if (res.ok) {
+        setMsg({ kind: "ok", text: "✕ ปฏิเสธสลิปแล้ว — เซลแนบสลิปใหม่ได้" });
+        setRejectMode(false);
+        setRejectReason("");
         router.refresh();
       } else {
         setMsg({ kind: "err", text: res.error });
@@ -210,6 +256,18 @@ export function BillingRunActions({
     });
   }
 
+  // Slip status pill (pending / rejected / none)
+  const slipPill =
+    slipStatus === "pending" ? (
+      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+        ⏳ รอบัญชีตรวจสลิป
+      </span>
+    ) : slipStatus === "rejected" ? (
+      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+        ✕ สลิปถูกปฏิเสธ — แนบใหม่
+      </span>
+    ) : null;
+
   // status === "issued"
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4">
@@ -221,105 +279,161 @@ export function BillingRunActions({
         </div>
       )}
 
-      {/* SLIP — เซลแนบ → บัญชีตรวจ */}
+      {/* SLIP — เซลแนบ (หลายรูปได้) → บัญชีตรวจ */}
       <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4 space-y-3">
-        <h4 className="font-medium text-sm text-violet-900">📎 สลิปการชำระเงิน</h4>
-        {slipStatus === "pending" && slipSignedUrl ? (
-          <div className="flex flex-wrap items-start gap-3">
-            {slipBlock}
-            <div className="text-[12px] text-violet-800 space-y-0.5">
-              <div className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
-                ⏳ รอบัญชีตรวจสลิป
-              </div>
-              <div>แนบโดย {slipUploadedBy ?? "—"} · {fmtDateTime(slipUploadedAt)}</div>
-              <label className="inline-flex items-center gap-1 text-violet-700 hover:underline cursor-pointer">
-                <span>{slipBusy ? "กำลังอัปโหลด…" : "🔁 เปลี่ยนสลิป"}</span>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={onSlipPicked}
-                  disabled={slipBusy}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-[12px] text-violet-800">
-              เซลแนบสลิปที่ลูกค้าโอนมา → จะเข้าคิวให้บัญชีตรวจสลิป + ตัดจ่าย (รูปภาพ หรือ PDF · ไม่เกิน 5 MB)
-            </p>
-            <label className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 cursor-pointer disabled:opacity-50">
-              <span>{slipBusy ? "กำลังอัปโหลด…" : "📎 แนบสลิป"}</span>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={onSlipPicked}
-                disabled={slipBusy}
-                className="hidden"
-              />
-            </label>
-          </div>
-        )}
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-medium text-sm text-violet-900">📎 สลิปการชำระเงิน</h4>
+          {slipPill}
+        </div>
+
+        {slipGallery}
+
+        <div className="space-y-1">
+          <p className="text-[11px] text-violet-800">
+            เซลแนบสลิปที่ลูกค้าโอนมา (แนบได้หลายรูป · รูปภาพ หรือ PDF · ไม่เกิน 5 MB) → เข้าคิวให้บัญชีตรวจสลิป + ตัดจ่าย
+            {slipUploadedAt ? <> · ล่าสุด {fmtDateTime(slipUploadedAt)} โดย {slipUploadedBy ?? "—"}</> : null}
+          </p>
+          <label className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 cursor-pointer disabled:opacity-50">
+            <span>{slipBusy ? "กำลังอัปโหลด…" : slipSignedUrls.length > 0 ? "📎 แนบสลิปเพิ่ม" : "📎 แนบสลิป"}</span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={onSlipPicked}
+              disabled={slipBusy}
+              className="hidden"
+            />
+          </label>
+        </div>
       </div>
 
-      {/* Mark paid — ACCOUNTING only (canSettle) */}
+      {/* ตรวจ 2 รอบ + ตัดจ่าย — ACCOUNTING only (canSettle) */}
       {canSettle ? (
-        <form onSubmit={onMarkPaid} className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
-          <h4 className="font-medium text-sm text-emerald-800">
-            ✓ บันทึกการรับชำระ {slipStatus === "pending" ? "(ตรวจสลิป + ตัดจ่าย)" : ""}
-          </h4>
-          {slipStatus === "pending" && (
-            <p className="text-[12px] text-emerald-700">
-              ตรวจสลิปด้านบนแล้ว → กดบันทึกเพื่อยืนยันสลิป + ตัดจ่ายในขั้นตอนเดียว
-            </p>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
+          {/* 2-round note (เฉพาะตอนมีสลิปรอตรวจ) */}
+          {hasPendingSlip && (
+            <div className={`rounded-lg border px-3 py-1.5 text-[11px] ${round1Done ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+              {round1Done
+                ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย"
+                : "ขั้นที่ 1: ตรวจสลิป (รอบ 1) ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+            </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <label>
-              <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-                className={inputCls}
+
+          {round1Pending ? (
+            /* รอบ 1: ตรวจสลิป / ปฏิเสธ (ยังตัดจ่ายไม่ได้) */
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={reviewRound1}
+                disabled={pending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
-                <option value="cheque">เช็ค</option>
-                <option value="wallet">หักจาก wallet</option>
-                <option value="other">อื่นๆ</option>
-              </select>
-            </label>
-            <label>
-              <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
-              <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
-            </label>
-            <label>
-              <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>
-              <input
-                type="text"
-                value={paymentRef}
-                onChange={(e) => setPaymentRef(e.target.value)}
-                placeholder="เลขอ้างอิงการโอน / เช็ค"
+                {pending ? "กำลังบันทึก…" : "✓ ตรวจสลิป รอบ 1"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRejectMode(true); setMsg(null); }}
+                disabled={pending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                ✕ ปฏิเสธสลิป
+              </button>
+            </div>
+          ) : (
+            /* รอบ 2 (หรือไม่มีสลิป): บันทึกการรับชำระ + ตัดจ่าย */
+            <form onSubmit={onMarkPaid} className="space-y-3">
+              <h4 className="font-medium text-sm text-emerald-800">
+                ✓ บันทึกการรับชำระ {hasPendingSlip ? "(อนุมัติ + ตัดจ่าย · รอบ 2)" : ""}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label>
+                  <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                    className={inputCls}
+                  >
+                    <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
+                    <option value="cheque">เช็ค</option>
+                    <option value="wallet">หักจาก wallet</option>
+                    <option value="other">อื่นๆ</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
+                  <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
+                </label>
+                <label>
+                  <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>
+                  <input
+                    type="text"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    placeholder="เลขอ้างอิงการโอน / เช็ค"
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {pending ? "กำลังบันทึก..." : `${hasPendingSlip ? "อนุมัติ + ตัดจ่าย" : "บันทึกการรับชำระ"} ฿${thbFmt(totalThb)}`}
+                </button>
+                {hasPendingSlip && (
+                  <button
+                    type="button"
+                    onClick={() => { setRejectMode(true); setMsg(null); }}
+                    disabled={pending}
+                    className="rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    ✕ ปฏิเสธสลิป
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* ปฏิเสธสลิป — เหตุผล */}
+          {rejectMode && (
+            <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3">
+              <span className="block text-xs font-medium text-red-800">เหตุผลที่ปฏิเสธสลิป <span className="text-red-500">*</span></span>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={2}
                 className={inputCls}
+                placeholder="เช่น 'สลิปไม่ชัด', 'ยอดไม่ตรง', 'โอนผิดบัญชี'"
               />
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {pending ? "กำลังบันทึก..." : `บันทึกการรับชำระ ฿${thbFmt(totalThb)}`}
-          </button>
-        </form>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={rejectSlip}
+                  disabled={pending || rejectReason.trim().length < 3}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {pending ? "กำลังบันทึก..." : "ยืนยันปฏิเสธ"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRejectMode(false); setRejectReason(""); }}
+                  className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm hover:bg-surface-alt"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-          <h4 className="font-medium text-sm text-amber-800">🔒 รอบัญชียืนยัน + ตัดจ่าย</h4>
+          <h4 className="font-medium text-sm text-amber-800">🔒 รอบัญชีตรวจสลิป + ตัดจ่าย</h4>
           <p className="text-[12px] text-amber-700 mt-1">
-            การยืนยันสลิป + บันทึกการรับชำระ (ตัดจ่าย) เป็นหน้าที่ของฝ่ายบัญชี ·
-            {slipStatus === "pending"
-              ? " สลิปที่แนบแล้วเข้าคิวให้บัญชีตรวจเรียบร้อย"
+            การตรวจสลิป (รอบ 1) + อนุมัติ ตัดจ่าย (รอบ 2) เป็นหน้าที่ของฝ่ายบัญชี ·
+            {hasPendingSlip
+              ? " สลิปที่แนบแล้วเข้าคิว ‘ชำระเงิน’ ให้บัญชีตรวจเรียบร้อย"
               : " แนบสลิปด้านบนก่อน แล้วบัญชีจะตรวจ + ตัดจ่าย"}
           </p>
         </div>
