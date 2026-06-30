@@ -181,25 +181,23 @@ type SearchParams = {
   userid?: string;
 };
 
-type TabKey = "recent" | "all" | "issued" | "overdue" | "slip_pending" | "paid" | "cancelled";
+type TabKey = "recent" | "all" | "issued" | "overdue" | "paid" | "cancelled";
 
 type TabDef = {
   key: TabKey;
   label: string;
-  tone: "neutral" | "amber" | "red" | "emerald" | "stone" | "violet";
+  tone: "neutral" | "amber" | "red" | "emerald" | "stone";
   /** Implicit date range when tab is "recent" — default tab. */
   defaultDays?: number;
 };
 
 const TABS: TabDef[] = [
-  { key: "recent",       label: "ล่าสุด",          tone: "neutral", defaultDays: 30 },
-  { key: "all",          label: "ทั้งหมด",         tone: "neutral" },
-  { key: "issued",       label: "รอรับชำระ",      tone: "amber" },
-  { key: "overdue",      label: "เกินเวลารับชำระ", tone: "red" },
-  // ภูม 2026-06-29 — เซลแนบสลิปแล้ว รอบัญชีตรวจ + ตัดจ่าย (คิวตรวจสลิปวางบิล).
-  { key: "slip_pending", label: "📎 รอตรวจสลิป",  tone: "violet" },
-  { key: "paid",         label: "รับชำระแล้ว",    tone: "emerald" },
-  { key: "cancelled",    label: "ยกเลิก",          tone: "stone" },
+  { key: "recent",    label: "ล่าสุด",          tone: "neutral", defaultDays: 30 },
+  { key: "all",       label: "ทั้งหมด",         tone: "neutral" },
+  { key: "issued",    label: "รอรับชำระ",      tone: "amber" },
+  { key: "overdue",   label: "เกินเวลารับชำระ", tone: "red" },
+  { key: "paid",      label: "รับชำระแล้ว",    tone: "emerald" },
+  { key: "cancelled", label: "ยกเลิก",          tone: "stone" },
 ];
 
 function isoDaysAgo(days: number): string {
@@ -227,7 +225,6 @@ function tabToneCls(tone: TabDef["tone"], active: boolean): string {
       red:     "bg-red-600 text-white border-red-600",
       emerald: "bg-emerald-600 text-white border-emerald-600",
       stone:   "bg-stone-600 text-white border-stone-600",
-      violet:  "bg-violet-600 text-white border-violet-600",
     };
     return map[tone];
   }
@@ -280,13 +277,12 @@ export default async function BillingRunListPage({
   const dateTo   = sp.to   || (tabDef.defaultDays ? today : undefined);
 
   // Map tab → status filter for the action
-  type StatusFilter = "all" | "issued" | "paid" | "cancelled" | "overdue" | "slip_pending";
+  type StatusFilter = "all" | "issued" | "paid" | "cancelled" | "overdue";
   let statusFilter: StatusFilter = "all";
-  if (tab === "issued")       statusFilter = "issued";
-  if (tab === "overdue")      statusFilter = "overdue";
-  if (tab === "slip_pending") statusFilter = "slip_pending";
-  if (tab === "paid")         statusFilter = "paid";
-  if (tab === "cancelled")    statusFilter = "cancelled";
+  if (tab === "issued")    statusFilter = "issued";
+  if (tab === "overdue")   statusFilter = "overdue";
+  if (tab === "paid")      statusFilter = "paid";
+  if (tab === "cancelled") statusFilter = "cancelled";
   // recent + all → all statuses
 
   const res = await getInvoiceList({
@@ -300,23 +296,21 @@ export default async function BillingRunListPage({
   // Always fetch the per-tab counts for the tab strip (independent of the
   // active tab's filter so badges show the true bucket size, not the
   // post-filter remainder).
-  const [recentRes, allRes, issuedRes, overdueRes, slipPendingRes, paidRes, cancelledRes] = await Promise.all([
+  const [recentRes, allRes, issuedRes, overdueRes, paidRes, cancelledRes] = await Promise.all([
     getInvoiceList({ dateFrom: isoDaysAgo(30), dateTo: today, status: "all", limit: 1 }),
     getInvoiceList({ status: "all", limit: 1 }),
     getInvoiceList({ status: "issued", limit: 1 }),
     getInvoiceList({ status: "overdue", limit: 1 }),
-    getInvoiceList({ status: "slip_pending", limit: 1 }),
     getInvoiceList({ status: "paid", limit: 1 }),
     getInvoiceList({ status: "cancelled", limit: 1 }),
   ]);
   const counts: Record<TabKey, number> = {
-    recent:       recentRes.ok      ? recentRes.data!.totalCount      : 0,
-    all:          allRes.ok         ? allRes.data!.totalCount         : 0,
-    issued:       issuedRes.ok      ? issuedRes.data!.totalCount      : 0,
-    overdue:      overdueRes.ok     ? overdueRes.data!.totalCount     : 0,
-    slip_pending: slipPendingRes.ok ? slipPendingRes.data!.totalCount : 0,
-    paid:         paidRes.ok        ? paidRes.data!.totalCount        : 0,
-    cancelled:    cancelledRes.ok   ? cancelledRes.data!.totalCount   : 0,
+    recent:    recentRes.ok    ? recentRes.data!.totalCount    : 0,
+    all:       allRes.ok       ? allRes.data!.totalCount       : 0,
+    issued:    issuedRes.ok    ? issuedRes.data!.totalCount    : 0,
+    overdue:   overdueRes.ok   ? overdueRes.data!.totalCount   : 0,
+    paid:      paidRes.ok      ? paidRes.data!.totalCount      : 0,
+    cancelled: cancelledRes.ok ? cancelledRes.data!.totalCount : 0,
   };
 
   if (!res.ok) {

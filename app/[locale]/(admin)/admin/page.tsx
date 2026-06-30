@@ -34,6 +34,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { unstable_cache } from "next/cache";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
@@ -61,7 +62,6 @@ type TabKey =
   | "forwarder6"          // tb_forwarder fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
   | "forwarder62"         // tb_forwarder fstatus='6' (เตรียมส่ง / กำลังจัดส่ง)
   | "payment"             // tb_payment paystatus='1' (รอตรวจสอบ)
-  | "billRunSlip"         // tb_forwarder_invoice status='issued' slip_status='pending' (เซลแนบสลิป รอบัญชีตรวจ · href→/admin/billing-run)
   | "inactiveCustomers";  // tb_users useractive='0'
 
 // next-action hint per queue (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ" so a
@@ -80,7 +80,6 @@ const TAB_NEXT: Record<TabKey, string> = {
   forwarder6:        "ตรวจ/แจ้งเก็บเงิน",
   forwarder62:       "มอบงานคนขับ/จัดรถ",
   payment:           "ตรวจสลิป → อนุมัติ/ตัดจ่าย",
-  billRunSlip:       "ตรวจสลิปวางบิล → ตัดจ่าย",
   inactiveCustomers: "ติดตามลูกค้า",
 };
 
@@ -304,19 +303,18 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const activePct     = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
   const inactivePct   = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
 
-  // ภูม 2026-06-29 — bill-slip verify queue count. A single head-count (cheap ·
-  // hits the partial index idx_tb_forwarder_invoice_slip_pending) kept OUT of the
-  // 60s metrics fan-out so it's always fresh + doesn't risk that block's alignment.
-  const billRunSlipRes = await createAdminClient()
+  // ภูม 2026-06-30 — สลิป "ใบวางบิล" รอบัญชีตรวจ ถูกรวมเข้าคิว "ชำระเงิน" (topup) แล้ว
+  // → นับเข้า badge ด้วยให้ตรงกับ list (§0f badge ตรง). cheap head-count (partial index).
+  const billSlipPendingRes = await createAdminClient()
     .from("tb_forwarder_invoice")
     .select("id", { count: "exact", head: true })
     .eq("status", "issued")
     .eq("slip_status", "pending");
-  const billRunSlipCount = billRunSlipRes.count ?? 0;
+  const billSlipPending = billSlipPendingRes.count ?? 0;
 
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
-    topup:              walletDepositsPending.count ?? 0,
+    topup:              (walletDepositsPending.count ?? 0) + billSlipPending,
     withdraw:           walletWithdrawsPending.count ?? 0,
     payShop:            salesPayoutsPending.count ?? 0,
     shop1:              shop1Count.count ?? 0,
@@ -329,7 +327,6 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwarder6:         forwarder6Count.count ?? 0,
     forwarder62:        forwarder62Count.count ?? 0,
     payment:            yuanPending.count ?? 0,
-    billRunSlip:        billRunSlipCount,
     inactiveCustomers:  inactiveUsers,
   };
 
@@ -356,9 +353,6 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "forwarder6",        label: "เตรียมส่ง" },
     { key: "forwarder62",       label: "กำลังจัดส่ง" },
     { key: "payment",           label: "ฝากโอนรอดำเนินการ" },
-    // ภูม 2026-06-29 — เซลแนบสลิปบนใบวางบิล รอบัญชีตรวจ. href → the วางบิล list's
-    // "📎 รอตรวจสลิป" tab (the real verify+ตัดจ่าย workflow · not a dashboard mini-row).
-    { key: "billRunSlip",       label: "📎 วางบิลรอตรวจสลิป", href: "/admin/billing-run?tab=slip_pending" },
   ];
 
   const activeTab = (sp.tab && tabDefs.some((t) => t.key === sp.tab)) ? (sp.tab as TabKey) : "topup";
@@ -586,6 +580,46 @@ function nameOf(u: RawUserRow | undefined): string {
   return n || "—";
 }
 
+/**
+ * ภูม 2026-06-30 — bill-slip rows for the "ชำระเงิน" queue. ใบวางบิล (tb_forwarder_invoice)
+ * ที่เซลแนบสลิปแล้ว รอบัญชีตรวจ (status='issued' · slip_status='pending') → โผล่ในคิว
+ * เดียวกับสลิปต่อออเดอร์ (กดเข้าหน้า /admin/billing-run/[id] ตรวจ+ตัดจ่าย). Append-only —
+ * ไม่แตะ logic tb_wallet_hs เดิม.
+ */
+async function fetchBillingRunSlipRows(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<RowShape[]> {
+  const { data, error } = await admin
+    .from("tb_forwarder_invoice")
+    .select("id, doc_no, userid, buyer_name, total_thb, slip_path, slip_uploaded_at")
+    .eq("status", "issued")
+    .eq("slip_status", "pending")
+    .order("slip_uploaded_at", { ascending: false, nullsFirst: false })
+    .limit(50);
+  if (error) {
+    console.warn(`[billing-run slip queue] failed (soft-fail · returning empty rows)`, error);
+    return [];
+  }
+  const list = (data ?? []) as Array<{
+    id: number; doc_no: string; userid: string | null; buyer_name: string | null;
+    total_thb: number | string | null; slip_path: string | null; slip_uploaded_at: string | null;
+  }>;
+  return await Promise.all(list.map(async (r) => {
+    const slipUrl = r.slip_path ? await getSignedBucketUrl("slips", r.slip_path) : null;
+    return {
+      id: `bill-${r.id}`,
+      created_at: r.slip_uploaded_at ?? "",
+      member_code: r.userid ?? "",
+      customer_name: r.buyer_name ?? "",
+      amount: Number(r.total_thb ?? 0),
+      detail: `🧾 ใบวางบิล ${escapeHtmlInline(r.doc_no)} · <span class="text-emerald-600">📎 แนบสลิปแล้ว (รอบัญชีตรวจ)</span>`,
+      link: `/admin/billing-run/${r.id}`,
+      status: "1",
+      slipUrl,
+    };
+  }));
+}
+
 async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
   const admin = createAdminClient();
   switch (tab) {
@@ -625,7 +659,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = rawRows.filter((r) => !(r.type === "4" && r.reforder2));
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
-      return await Promise.all(rows.map(async (r) => {
+      const walletRows = await Promise.all(rows.map(async (r) => {
         const u = users.get(r.userid);
         const slipUrl = await resolveLegacyUrl(r.imagesslip, "slip");
         // "what it's paying" — for a collapsed import-pay pair use the paired
@@ -651,6 +685,12 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           slipUrl,
         };
       }));
+      // ภูม 2026-06-30 — รวมสลิป "ใบวางบิล" (เซลแนบ · รอบัญชีตรวจ) เข้าคิว "ชำระเงิน"
+      // เดียวกัน (เลิก tab แยก "วางบิลรอตรวจสลิป"). เฉพาะ topup (ขาเข้า) · withdraw ไม่แตะ.
+      if (tab === "topup") {
+        return [...walletRows, ...(await fetchBillingRunSlipRows(admin))];
+      }
+      return walletRows;
     }
 
     // ── ฝากสั่งซื้อ (tb_header_order) ──────────────────────────────────────
