@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countShopArrivals } from "./shop-order-arrivals";
 
 /**
  * Legacy "all-shops-done" completion gate for ฝากสั่งซื้อ (shops.php
@@ -76,6 +77,17 @@ export async function maybeCompleteShopOrder(
 
   // 2. The legacy gate — flip only when every slot has a tracking.
   if (slotCount === 0 || slotCount !== trackingCount) {
+    return { completed: false, slotCount, trackingCount };
+  }
+
+  // 2b. ภูม 2026-06-30 — multi-shop ARRIVAL gate (mirrors mig-0232 trigger). An
+  //     order is สำเร็จ(5) only when ทุกร้าน reached the China warehouse + handed to
+  //     import (done) — NOT merely when every shop has a tracking entered. (owner:
+  //     "3 ร้าน 2 ร้านมาถึงแล้ว อีกร้านยังไม่ถึง แต่สถานะไปสำเร็จ".) If all-tracked but
+  //     not-all-arrived → don't complete here; the forwarder-arrival trigger flips
+  //     it to 5 when the last shop's goods land.
+  const arrivals = await countShopArrivals(admin, hno);
+  if (!arrivals.allDone) {
     return { completed: false, slotCount, trackingCount };
   }
 

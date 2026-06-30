@@ -469,6 +469,9 @@ const blockApiForwarderUpdate: MenuItem = {
   icon: "Wand2",
   children: [
     { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
+    // ภูม 2026-06-30 — ทางลัด "MOMO (Live)" ใต้ MOMO เพื่อกดเข้าหน้าค้นข้อมูลสด
+    // ได้เลย ไม่ต้องเข้า MOMO → กดการ์ดอีกที. (การ์ดในหน้า dashboard ยังอยู่.)
+    { labelKey: "apiForwarderUpdate.momoLive", href: "/admin/api-forwarder-momo/live", icon: "Search" },
     { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
     // 2026-06-14 (W6 · carrier-fidelity) — port the 3 remaining legacy
     // carrier API pages: JMF (read-only history viewer over tb_forwarder_jmf_tmp) ·
