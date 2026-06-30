@@ -42,13 +42,20 @@ export function DateTime24Field({
   const [datePart = "", timePart = ""] = (value || "").split("T");
   const [hh = "", mm = ""] = timePart.split(":");
 
+  // "today" YYYY-MM-DD (local) — used when a time is picked BEFORE a date so the
+  // ชม./นาที dropdowns are usable right away (the value stays valid).
+  const todayLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
   const emit = (d: string, h: string, m: string) => {
-    if (!d) {
+    // if the user picks a time first, fill the date with today (don't drop it)
+    const date = d || (h || m ? todayLocal() : "");
+    if (!date) {
       onChange("");
       return;
     }
-    // default the time to 00:00 once a date is picked so the value is valid
-    onChange(`${d}T${h || "00"}:${m || "00"}`);
+    onChange(`${date}T${h || "00"}:${m || "00"}`);
   };
 
   return (
@@ -67,7 +74,7 @@ export function DateTime24Field({
           aria-label="ชั่วโมง (24 ชม.)"
           value={hh}
           onChange={(e) => emit(datePart, e.target.value, mm || "00")}
-          disabled={disabled || !datePart}
+          disabled={disabled}
           className={selCls}
         >
           <option value="">ชม.</option>
@@ -80,7 +87,7 @@ export function DateTime24Field({
           aria-label="นาที"
           value={mm}
           onChange={(e) => emit(datePart, hh || "00", e.target.value)}
-          disabled={disabled || !datePart}
+          disabled={disabled}
           className={selCls}
         >
           <option value="">นาที</option>
