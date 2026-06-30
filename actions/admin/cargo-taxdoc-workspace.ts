@@ -451,6 +451,49 @@ export async function adminSetCargoTaxdocMode(
 }
 
 // ════════════════════════════════════════════════════════════════════
+// 3b) Set doc-mode for a CARGO forwarder (task #16) — the cargo-declarations
+//     detail page works from a customs_declarations row keyed by
+//     cargo_forwarder_id, not a jobId. This ensures the job exists for the
+//     forwarder (idempotent · materialises from tb_forwarder), then sets the
+//     doc-mode on it. The doc-mode decides ใบกำกับ(tax_invoice)/ใบขน(customs)/
+//     ไม่รับฯ(none|receipt) → which destination account at issuance
+//     (resolvePaymentAccount). DISPLAY/ROUTE-CHOICE only · NEVER issues.
+// ════════════════════════════════════════════════════════════════════
+const setDocModeByFwdSchema = z.object({
+  fid: z.coerce.number().int().positive(),
+  docMode: z.enum(["none", "receipt", "tax_invoice", "customs"]),
+});
+
+export async function adminSetCargoTaxdocModeByForwarder(
+  input: { fid: number | string; docMode: string },
+): Promise<AdminActionResult<{ jobId: string; docMode: string }>> {
+  const parsed = setDocModeByFwdSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin([...ROLES_CS, ...ROLES_ACCOUNT], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await ensureJobRow(admin, { fid: d.fid }, adminId);
+    if (!res.ok) return res;
+    const jobId = res.row.id;
+
+    const { error: updErr } = await admin
+      .from("tb_cargo_taxdoc_job")
+      .update({ doc_mode: d.docMode, updated_by_admin_id: adminId })
+      .eq("id", jobId);
+    if (updErr) {
+      console.error("[taxdoc-workspace setDocModeByFwd update]", { fid: d.fid, jobId, code: updErr.code, message: updErr.message });
+      return { ok: false, error: `update_failed:${updErr.message}` };
+    }
+    await logAdminAction(adminId, "cargo_taxdoc.set_doc_mode", "tb_cargo_taxdoc_job", jobId, { fid: d.fid, doc_mode: d.docMode });
+    revalidatePath("/admin/pricing/taxdoc-workspace");
+    revalidatePath(`/admin/pricing/taxdoc-workspace/${jobId}`);
+    revalidatePath(`/admin/forwarders/${d.fid}`);
+    return { ok: true, data: { jobId, docMode: d.docMode } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
 // 4) READ — list jobs (the workspace table). Existing tb_cargo_taxdoc_job
 //    rows + arrived import-forwarders that have a doc-mode preference set
 //    but no job yet (the "needs a workspace" candidates).

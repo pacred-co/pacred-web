@@ -65,6 +65,8 @@ export type EtaxInvoiceRow = {
   issued_by:           string;
   rid:                 string | null;
   receipt_id:          number | null;
+  /** Destination Pacred account at issuance (3-account SOT · mig 0236). */
+  bank_account_key:    "service" | "logistics" | "trading" | null;
 };
 
 export type EtaxBundle = {
@@ -96,6 +98,7 @@ export type ShopEtaxRow = {
   issued_by:    string;
   hno:          string | null;
   payment_id:   number | null;
+  bank_account_key: "service" | "logistics" | "trading" | null;
 };
 
 export type ShopEtaxBundle = {
@@ -140,6 +143,7 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
     issued_by: string;
     rid: string | null;
     receipt_id: number | null;
+    bank_account_key: "service" | "logistics" | "trading" | null;
   };
   const { data: rawRows, error } = await admin
     .from("tb_forwarder_tax_invoice")
@@ -147,7 +151,7 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
       "id, serial_no, userid, buyer_name, buyer_tax_id, buyer_address, buyer_branch, is_juristic, " +
       "base_transport, base_transport_intl, base_service, base_rental, base_goods, base_total, " +
       "vatable_base, vat_amount, wht_total, gross_before_wht, net_payable, vat_pct, status, " +
-      "issued_at, issued_by, rid, receipt_id",
+      "issued_at, issued_by, rid, receipt_id, bank_account_key",
     )
     .gte("issued_at", gte)
     .lte("issued_at", lte)
@@ -187,6 +191,7 @@ export async function getEtaxBundle(range: EtaxRange): Promise<EtaxBundle> {
     issued_by:           r.issued_by,
     rid:                 r.rid,
     receipt_id:          r.receipt_id,
+    bank_account_key:    r.bank_account_key ?? null,
   }));
 
   const { count: totalCount, error: countErr } = await admin
@@ -239,12 +244,13 @@ export async function getShopEtaxBundle(range: EtaxRange): Promise<ShopEtaxBundl
     wht_total: number | string | null; net_payable: number | string | null;
     status: "issued" | "cancelled"; issued_at: string; issued_by: string;
     hno: string | null; payment_id: number | null;
+    bank_account_key: "service" | "logistics" | "trading" | null;
   };
   const { data: raw, error } = await admin
     .from("tb_shop_tax_invoice")
     .select(
       "id, service_type, serial_no, userid, buyer_name, buyer_tax_id, is_juristic, doc_mode, " +
-      "base_total, vat_amount, wht_total, net_payable, status, issued_at, issued_by, hno, payment_id",
+      "base_total, vat_amount, wht_total, net_payable, status, issued_at, issued_by, hno, payment_id, bank_account_key",
     )
     .gte("issued_at", gte)
     .lte("issued_at", lte)
@@ -271,6 +277,7 @@ export async function getShopEtaxBundle(range: EtaxRange): Promise<ShopEtaxBundl
     issued_by:    r.issued_by,
     hno:          r.hno,
     payment_id:   r.payment_id,
+    bank_account_key: r.bank_account_key ?? null,
   }));
 
   const issued = rows.filter((r) => r.status === "issued");

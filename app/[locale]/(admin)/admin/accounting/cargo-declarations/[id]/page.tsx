@@ -9,6 +9,7 @@ import {
 } from "@/lib/validators/customs-declaration";
 import { CargoDeclarationLineEditor } from "./cargo-declaration-line-editor";
 import { CargoDeclaredValueImages } from "./cargo-declared-value-images";
+import { CargoDocModeChooser } from "./cargo-doc-mode-chooser";
 import { DeclarationFeePanel } from "@/components/admin/declaration-fee-panel";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
@@ -129,6 +130,18 @@ export default async function CargoDeclarationDetailPage({
     }>();
   if (fwdErr) {
     console.error("[cargo-declaration detail fwd]", { fid: header.cargo_forwarder_id, code: fwdErr.code, message: fwdErr.message });
+  }
+
+  // Linked tax-doc job's current doc_mode (task #16) — the ใบกำกับ/ใบขน/ไม่รับฯ
+  // choice that decides the destination account at issuance. NULL = no job yet
+  // (the chooser materialises one on first set). Read-only here.
+  const { data: taxdocJob, error: taxdocJobErr } = await admin
+    .from("tb_cargo_taxdoc_job")
+    .select("doc_mode")
+    .eq("fid", header.cargo_forwarder_id)
+    .maybeSingle<{ doc_mode: string | null }>();
+  if (taxdocJobErr) {
+    console.error("[cargo-declaration detail taxdoc-job]", { fid: header.cargo_forwarder_id, code: taxdocJobErr.code, message: taxdocJobErr.message });
   }
 
   const { data: linesRaw, error: linesErr } = await admin
@@ -325,6 +338,13 @@ export default async function CargoDeclarationDetailPage({
           <p className="text-muted">ถึงไทย: {new Date(fwd.fdatetothai).toLocaleDateString("th-TH")}</p>
         )}
       </section>
+
+      {/* โหมดเอกสาร + บัญชีรับเงิน (task #16 · 2026-07-01) — ใบกำกับ→Trading+VAT7% ·
+         ใบขน/ไม่รับฯ→Service. The choice routes the customer's payment via the
+         3-account SOT. Mode set on the linked tb_cargo_taxdoc_job (RBAC re-checked). */}
+      {header.cargo_forwarder_id != null && (
+        <CargoDocModeChooser fid={header.cargo_forwarder_id} initialDocMode={taxdocJob?.doc_mode ?? null} />
+      )}
 
       {/* ค่าบริการออกใบขน (owner-confirmed AXELRA card · 2026-06-30) — service-fee
          quote (ขาประจำ default · ราคาแรก for new customer · Form E toggle). Display
