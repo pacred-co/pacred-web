@@ -84,3 +84,54 @@ freight data: `docs/research/data-update-2026-06-29.md` · `/Users/dev/Desktop/f
 2. **task #13 — surface customs_clearance/freight-air services** (mostly §0d reachability + verify import mapping · low risk).
 3. **task #16 — report-cnt → cargo-doc-picker entry → invoice/packing/ใบขน + VAT7%→TRADING** (reuse the existing picker + tax-doc-mode SOT).
 4. **task #17 — ใบขนพ่วง** (ใบขนชื่อลูกค้า · HS-check · draft→customer-confirm→charge service+tax→SERVICE acct) — biggest · last.
+
+---
+
+# 🏗 BUILD PLAN #16/#17 (Plan agent · 2026-07-01 · grounded path:line)
+
+## What already exists (REUSE — don't rebuild)
+- **item-picker → DRAFT ใบขน**: `app/.../forwarders/[fNo]/customs-doc/cargo-doc-picker.tsx` + `actions/admin/cargo-declaration-from-items.ts:26` (tick `tb_forwarder_item` → `customs_declarations` keyed cargo_forwarder_id · seeds HS/declared/duty/VAT · §0f confirm · dup-guard :50)
+- **invoice/packing/ใบขน PDF**: API `/api/customs-declaration/[id]` + `/invoice` + `/packing-list` (wired on `cargo-declarations/[id]/page.tsx:277,287,296`)
+- **3-account routing SOT**: `lib/payment/bank-accounts.ts:115` `resolvePaymentAccount({issuesTaxInvoice,isDomesticDeliveryLeg})` → trading/logistics/service — ⚠️ **display-only today, never PERSISTED** (the real gap)
+- **VAT-mode SOT**: `lib/tax/tax-doc-mode.ts:196` `computeTaxForMode` — tax_invoice=VAT on full base · **customs=Non (NO customer VAT line · margin-VAT internal :238)**
+- **ใบกำกับ issuance**: `actions/tax-invoices.ts`→`lib/admin/forwarder-tax-invoice.ts` (writes tb_forwarder_tax_invoice · VAT computed · idempotent on fid :148 · no account recorded)
+- **HS lookup**: `actions/admin/hs-codes.ts:283` listHsCodes (form_e_duty_pct·other_forms·hs_note)
+- **report-cnt multi-select bar**: `cnt-list-table.tsx:286` (selected:Set<cabinet>) · bar :793 already passes `?cabinet=` to /admin/billing-run/add (the pattern to copy)
+- **4-role taxdoc workflow**: `actions/admin/cargo-taxdoc-workspace.ts` + `tb_cargo_taxdoc_job` (mig 0161 · doc_mode + declaration_id)
+
+## OWNER-INFERRED answers to the 4 Qs (don't re-ask)
+1. ใบกำกับ grain = **per forwarder/ลูกค้า** (picker is per-fid · lowest risk)
+2. ค่าขนส่งไทย→LOGISTICS = **separate isDomesticDeliveryLeg collection** (owner "คนละเรื่อง") — NOT a field on the ใบกำกับ
+3. #17 draft channel = **tokenized confirm_token link sent via LINE OA** (customers may lack portal login)
+4. #17 tax = **WE collect service-fee + duty+VAT-in-ใบขน → SERVICE** (owner said so · pass-through · record bank_account_key='service')
+
+## mig 0236 (NEXT FREE · additive only) `0236_customs_decl_own_name_confirm.sql`
+- `tb_forwarder_tax_invoice` + `tb_shop_tax_invoice`: `bank_account_key text check in('service','logistics','trading')` — set from resolvePaymentAccount().key at issue (turns display-only routing into an audited fact · §0e must be READ by etax/reconcile, not cosmetic)
+- `customs_declarations`: `issue_in_customer_name bool default false` · `consignee_name/tax_id/address text` · `service_fee_thb numeric(14,2)` · `customer_confirm_status text check in('none','sent','confirmed','rejected') default 'none'` · `customer_confirmed_at timestamptz` · `confirm_token uuid`. (REUSE customs_declarations — no new พ่วง table.)
+
+## #16 build (after mig) — ใบกำกับ+ใบขน from report-cnt
+1. `cnt-list-table.tsx:858` — add button `📦 จัดลงอินวอยซ์/แพคกิ้ง/ใบขน` in the `{!isWaiting}` block · 1 cabinet→link `/admin/report-cnt/customs-doc?cabinet=<code>` · >1 disabled (picker is per-cabinet) — copies the `📄 ทำใบวางบิล` cabinet-param pattern
+2. NEW `app/.../report-cnt/customs-doc/page.tsx` — reads cabinet→tb_forwarder→items · renders existing `<CargoDocPicker fid=>` per forwarder (copy `forwarders/[fNo]/customs-doc/page.tsx` template · ZERO picker change)
+3. doc-mode chooser on `cargo-declarations/[id]/page.tsx` → `adminSetCargoTaxdocMode` (cargo-taxdoc-workspace.ts:429) · VAT base already mode-correct · account via resolvePaymentAccount({issuesTaxInvoice: mode==='tax_invoice'})→TRADING
+4. persist account: `forwarder-tax-invoice.ts` record `bank_account_key` at issue
+5. reuse `<PayDestination account=>` (shop-order-pay-modal.tsx:176) → TRADING K-Shop QR auto when mode=tax_invoice
+- files: create report-cnt/customs-doc/page.tsx · edit cnt-list-table.tsx + cargo-declarations/[id]/page.tsx + forwarder-tax-invoice.ts · reuse picker/bank-accounts/tax-doc-mode unchanged
+
+## #17 build (after mig + #16) — ใบขนพ่วง (customer's own name)
+1. own-name fields on draft (mig cols above)
+2. HS-check panel: per line listHsCodes → flag default_duty_pct>0 / form_e_duty_pct>0 (Form-E C/O) / hs_note license — mirror the `⚠️ ยังไม่มีพิกัด HS` panel (cargo-doc-picker.tsx:110) + Form-E badge (cargo-declarations/[id]:398) · read-only never blocks
+3. service-fee: `computeDeclarationFee` (declaration-fees.ts:43) via `<DeclarationFeePanel>` → persist service_fee_thb · collectable = service_fee + (total_duty_thb+total_vat_thb on header)
+4. admin `adminSendCustomsDraftToCustomer(id)` → status='sent' + mint confirm_token + LINE notify (draft = existing invoice/packing/ใบขน PDFs)
+5. NEW customer page `app/.../(protected)/customs-confirm/[token]/page.tsx` (mirror shop-order-pay-modal UX) → `customerConfirmCustomsDraft(token)` sets confirmed+at
+6. confirmed-gated charge → resolvePaymentAccount({issuesTaxInvoice:false})→SERVICE · `<PayDestination>` SERVICE QR · record bank_account_key='service' · idempotent on declaration_id
+- files: mig 0236 · NEW (protected)/customs-confirm/[token]/page.tsx + actions/customs-confirm.ts + adminSendCustomsDraftToCustomer in cargo-declarations.ts · reuse declaration-fees/hs-codes/bank-accounts/PayDestination/DeclarationFeePanel
+
+## Money-safety (§0e/§0f)
+- route ONLY via resolvePaymentAccount (never hardcode acct) + PERSIST .key at issue/collect (reconcile-auditable)
+- VAT base ONLY via computeTaxForMode · #17 customs-mode = NO customer VAT line (7% internal margin-VAT) · #16 ใบกำกับ VAT-on-full-base valid ONLY when goods imported in OUR name (TRADING)
+- double-charge: ใบกำกับ idempotent on fid · picker refuses dup decl · #17 gate collect on confirm_status='confirmed' + idempotent on declaration_id
+- declared-value = Docs-edited DOWN only (ADR-0016) · never auto from selling
+- §0e: new bank_account_key/confirm cols must be WRITTEN **and READ** (etax/reconcile) or they're dead
+
+## sequence
+parallel-safe: mig 0236 cols · bank_account_key persist · HS-check panel. #16 chain first (reuses most · lowest risk). #17 chain last (depends on confirm-status cols + #16 doc-mode chooser).
