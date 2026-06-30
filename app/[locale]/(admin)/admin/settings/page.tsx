@@ -91,6 +91,26 @@ export default async function AdminSettingsPage() {
         </Link>
       )}
 
+      {/* Service Catalog — read-only registry of the 8 services (คาร์โก้/เฟรท ×
+          รถ/เรือ/แอร์ × FCL/LCL) + live order counts. ≤2 clicks from the hub. */}
+      <Link
+        href="/admin/settings/service-catalog"
+        className="block rounded-2xl border border-border bg-white dark:bg-surface p-5 hover:border-primary-300 transition-colors"
+      >
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-bold text-foreground">🧭 บริการของ Pacred (Service Catalog)</h2>
+            <p className="text-[11px] text-muted mt-0.5">
+              ทะเบียนบริการทั้งหมด — คาร์โก้/เฟรท/บริการ × รถ/เรือ/แอร์ × FCL/LCL + บัญชีรับเงิน + จำนวนออเดอร์สด
+              (อ่านอย่างเดียว).
+            </p>
+          </div>
+          <span className="inline-flex items-center rounded-lg bg-foreground/5 px-4 py-2 text-sm font-bold text-foreground">
+            ดูบริการทั้งหมด →
+          </span>
+        </div>
+      </Link>
+
       {/* Live daily yuan rates (legacy tb_settings) — READ-ONLY here; edited at
           /admin/settings/legacy-rates. The old editable settings.yuan_rate field
           below was a dead-write (no consumer read it) and was removed. */}
