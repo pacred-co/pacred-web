@@ -153,6 +153,12 @@ export type BillingRunInvoiceDetail = {
     wht_amount: number;
     /** ยอดชำระสุทธิ = total_thb − wht_amount (what the customer remits). */
     net_payable: number;
+    /** สลิปแนบ (ภูม 2026-06-29) — เซลแนบ → บัญชีตรวจ+ตัดจ่าย. */
+    slip_path: string | null;
+    /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=บัญชียืนยันแล้ว */
+    slip_status: string | null;
+    slip_uploaded_by: string | null;
+    slip_uploaded_at: string | null;
   };
   items: Array<{
     id: number;
@@ -634,7 +640,7 @@ export async function resolveCabinetBillingTarget(
 export type BillingRunListFilters = {
   dateFrom?: string;
   dateTo?: string;
-  status?: "all" | "issued" | "paid" | "cancelled" | "overdue";
+  status?: "all" | "issued" | "paid" | "cancelled" | "overdue" | "slip_pending";
   userid?: string;
   limit?: number;
 };
@@ -682,6 +688,11 @@ export async function getInvoiceList(
       else if (filters.status === "cancelled") q = q.eq("status", "cancelled");
       else if (filters.status === "overdue") {
         q = q.eq("status", "issued").lt("date_due", today);
+      }
+      // ภูม 2026-06-29 — "รอตรวจสลิป": issued bills whose slip is attached + pending
+      // accounting verify (the slip-verify queue · linked from the dashboard).
+      else if (filters.status === "slip_pending") {
+        q = q.eq("status", "issued").eq("slip_status", "pending");
       }
 
       const { data, error, count } = await q;
@@ -787,6 +798,10 @@ export async function getInvoiceDetail(
         issued_by: string;
         created_at: string;
         updated_at: string;
+        slip_path: string | null;
+        slip_status: string | null;
+        slip_uploaded_by: string | null;
+        slip_uploaded_at: string | null;
       };
       const { data: hdrRaw, error: hdrErr } = await admin
         .from("tb_forwarder_invoice")
@@ -882,6 +897,10 @@ export async function getInvoiceDetail(
             issued_by:          hdrRaw.issued_by,
             created_at:         hdrRaw.created_at,
             updated_at:         hdrRaw.updated_at,
+            slip_path:          hdrRaw.slip_path,
+            slip_status:        hdrRaw.slip_status,
+            slip_uploaded_by:   hdrRaw.slip_uploaded_by,
+            slip_uploaded_at:   hdrRaw.slip_uploaded_at,
             is_overdue:         isOverdue(hdrRaw.date_due, hdrRaw.status),
             ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
           },
@@ -1332,9 +1351,9 @@ export async function markBillingRunPaid(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, is_juristic, userid")
+        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1354,6 +1373,9 @@ export async function markBillingRunPaid(
           paid_by:           legacyAdminId,
           payment_method:    v.paymentMethod,
           payment_reference: v.paymentReference,
+          // ภูม 2026-06-29 — บัญชีตัดจ่าย = ยืนยันสลิปที่เซลแนบ. แนบ pending → verified.
+          // ไม่มีสลิป (null) → คงไว้ null (จ่ายนอกระบบ/ไม่ผ่านสลิป).
+          slip_status:       cur.slip_status === "pending" ? "verified" : cur.slip_status,
         })
         .eq("id", v.invoiceId)
         .eq("status", "issued"); // race guard: re-check we're flipping from issued
@@ -1801,4 +1823,117 @@ export async function createForwarderOrderBill(
   }
 
   return res;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLIP attach + verify queue (ภูม 2026-06-29) — เซลแนบสลิป → บัญชีตรวจ+ตัดจ่าย.
+// uploadBillingRunSlip stores the slip path + flips slip_status='pending'; it does
+// NOT settle (settle = markBillingRunPaid, gated super/accounting, flips pending→
+// verified). listBillingRunPendingSlips powers the accounting slip-verify queue.
+// Money-safety: writes ONLY the slip_* columns — never total/status/wallet.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function uploadBillingRunSlip(input: {
+  invoiceId: number;
+  slipPath: string;
+}): Promise<AdminActionResult<{ invoiceId: number }>> {
+  const invoiceId = Number(input?.invoiceId);
+  const slipPath = String(input?.slipPath ?? "").trim();
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+  if (!slipPath || slipPath.length > 500) {
+    return { ok: false, error: "ไฟล์สลิปไม่ถูกต้อง" };
+  }
+
+  return withAdmin<{ invoiceId: number }>(
+    // เซล/Doc/บัญชี แนบสลิปได้ — การยืนยัน+ตัดจ่าย (markBillingRunPaid) ยังเป็น
+    // super/accounting เท่านั้น (เซลกดยืนยันไม่ได้).
+    ["super", "accounting", "sales", "sales_admin", "ops", "freight_export_doc", "freight_import_doc"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const uploader = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
+
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; doc_no: string; status: string }>();
+      if (curErr) {
+        console.error("[uploadBillingRunSlip current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.status !== "issued") {
+        return { ok: false, error: `ใบวางบิล ${cur.doc_no} อยู่ในสถานะ ${cur.status} แล้ว — แนบสลิปไม่ได้` };
+      }
+
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({
+          slip_path:        slipPath,
+          slip_uploaded_by: uploader,
+          slip_uploaded_at: new Date().toISOString(),
+          slip_status:      "pending",
+        })
+        .eq("id", invoiceId)
+        .eq("status", "issued");
+      if (updErr) {
+        console.error("[uploadBillingRunSlip update] failed", { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+
+      await logAdminAction(adminId, "billing_run.slip_upload", "forwarder_invoice", String(invoiceId), {
+        doc_no: cur.doc_no, slip_path: slipPath, uploaded_by: uploader,
+      });
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      return { ok: true, data: { invoiceId } };
+    },
+  );
+}
+
+export type BillingRunPendingSlipRow = {
+  invoiceId: number;
+  docNo: string;
+  userid: string;
+  buyerName: string;
+  totalThb: number;
+  uploadedBy: string | null;
+  uploadedAt: string | null;
+};
+
+export async function listBillingRunPendingSlips(): Promise<
+  AdminActionResult<{ rows: BillingRunPendingSlipRow[] }>
+> {
+  return withAdmin<{ rows: BillingRunPendingSlipRow[] }>(
+    ["super", "accounting", "ops"],
+    async () => {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, userid, buyer_name, total_thb, slip_uploaded_by, slip_uploaded_at")
+        .eq("status", "issued")
+        .eq("slip_status", "pending")
+        .order("slip_uploaded_at", { ascending: true })
+        .limit(200);
+      if (error) {
+        console.error("[listBillingRunPendingSlips] failed", { code: error.code, message: error.message });
+        return { ok: false, error: error.message };
+      }
+      const rows: BillingRunPendingSlipRow[] = (
+        (data ?? []) as Array<{
+          id: number; doc_no: string; userid: string | null; buyer_name: string | null;
+          total_thb: number | string | null; slip_uploaded_by: string | null; slip_uploaded_at: string | null;
+        }>
+      ).map((r) => ({
+        invoiceId:  r.id,
+        docNo:      r.doc_no,
+        userid:     r.userid ?? "",
+        buyerName:  r.buyer_name ?? "",
+        totalThb:   Number(r.total_thb ?? 0),
+        uploadedBy: r.slip_uploaded_by,
+        uploadedAt: r.slip_uploaded_at,
+      }));
+      return { ok: true, data: { rows } };
+    },
+  );
 }

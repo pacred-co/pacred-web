@@ -61,6 +61,7 @@ type TabKey =
   | "forwarder6"          // tb_forwarder fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
   | "forwarder62"         // tb_forwarder fstatus='6' (เตรียมส่ง / กำลังจัดส่ง)
   | "payment"             // tb_payment paystatus='1' (รอตรวจสอบ)
+  | "billRunSlip"         // tb_forwarder_invoice status='issued' slip_status='pending' (เซลแนบสลิป รอบัญชีตรวจ · href→/admin/billing-run)
   | "inactiveCustomers";  // tb_users useractive='0'
 
 // next-action hint per queue (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ" so a
@@ -79,6 +80,7 @@ const TAB_NEXT: Record<TabKey, string> = {
   forwarder6:        "ตรวจ/แจ้งเก็บเงิน",
   forwarder62:       "มอบงานคนขับ/จัดรถ",
   payment:           "ตรวจสลิป → อนุมัติ/ตัดจ่าย",
+  billRunSlip:       "ตรวจสลิปวางบิล → ตัดจ่าย",
   inactiveCustomers: "ติดตามลูกค้า",
 };
 
@@ -302,6 +304,16 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const activePct     = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
   const inactivePct   = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
 
+  // ภูม 2026-06-29 — bill-slip verify queue count. A single head-count (cheap ·
+  // hits the partial index idx_tb_forwarder_invoice_slip_pending) kept OUT of the
+  // 60s metrics fan-out so it's always fresh + doesn't risk that block's alignment.
+  const billRunSlipRes = await createAdminClient()
+    .from("tb_forwarder_invoice")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "issued")
+    .eq("slip_status", "pending");
+  const billRunSlipCount = billRunSlipRes.count ?? 0;
+
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
     topup:              walletDepositsPending.count ?? 0,
@@ -317,6 +329,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwarder6:         forwarder6Count.count ?? 0,
     forwarder62:        forwarder62Count.count ?? 0,
     payment:            yuanPending.count ?? 0,
+    billRunSlip:        billRunSlipCount,
     inactiveCustomers:  inactiveUsers,
   };
 
@@ -343,6 +356,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "forwarder6",        label: "เตรียมส่ง" },
     { key: "forwarder62",       label: "กำลังจัดส่ง" },
     { key: "payment",           label: "ฝากโอนรอดำเนินการ" },
+    // ภูม 2026-06-29 — เซลแนบสลิปบนใบวางบิล รอบัญชีตรวจ. href → the วางบิล list's
+    // "📎 รอตรวจสลิป" tab (the real verify+ตัดจ่าย workflow · not a dashboard mini-row).
+    { key: "billRunSlip",       label: "📎 วางบิลรอตรวจสลิป", href: "/admin/billing-run?tab=slip_pending" },
   ];
 
   const activeTab = (sp.tab && tabDefs.some((t) => t.key === sp.tab)) ? (sp.tab as TabKey) : "topup";

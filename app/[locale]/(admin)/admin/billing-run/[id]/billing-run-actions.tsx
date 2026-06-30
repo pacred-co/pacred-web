@@ -1,21 +1,29 @@
 "use client";
 
 /**
- * Mark-paid + cancel client island for /admin/billing-run/[id].
+ * Mark-paid + cancel + SLIP client island for /admin/billing-run/[id].
  *
  * Per AGENTS.md §0e — only renders the action panels when the underlying
  * server action can actually do something (status='issued'). Paid/cancelled
  * invoices show an info banner instead so staff don't see a "บันทึก" button
  * that no-ops.
+ *
+ * ภูม 2026-06-29 — slip flow: SALES (or any role on the page) แนบสลิป →
+ * slip_status='pending' → appears in the accounting slip-verify queue. The
+ * settle/confirm (บันทึกการรับชำระ · ตัดจ่าย) stays ACCOUNTING-only (canSettle),
+ * gated both here and in markBillingRunPaid; confirming flips the slip→verified.
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   markBillingRunPaid,
   cancelBillingRunInvoice,
   sendBillingRunNotification,
+  uploadBillingRunSlip,
 } from "@/actions/admin/billing-run";
+import { uploadSlip } from "@/lib/storage-upload";
+import { SlipImage } from "@/components/admin/slip-image";
 
 type Props = {
   invoiceId: number;
@@ -23,6 +31,14 @@ type Props = {
   status: "issued" | "paid" | "cancelled";
   totalThb: number;
   customerId: string;
+  /** true = viewer is accounting/super → may settle (ตัดจ่าย). Sales = false. */
+  canSettle: boolean;
+  /** Signed URL of the attached slip (service-role signed so any admin can view). */
+  slipSignedUrl: string | null;
+  /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=บัญชียืนยันแล้ว */
+  slipStatus: string | null;
+  slipUploadedBy: string | null;
+  slipUploadedAt: string | null;
 };
 
 const inputCls =
@@ -40,7 +56,18 @@ function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function BillingRunActions({ invoiceId, docNo, status, totalThb, customerId }: Props) {
+/** Pure given the iso string (deterministic) — safe in render. */
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+}
+
+export function BillingRunActions({
+  invoiceId, docNo, status, totalThb, customerId,
+  canSettle, slipSignedUrl, slipStatus, slipUploadedBy, slipUploadedAt,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -53,12 +80,61 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
+  // Slip upload
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [slipBusy, setSlipBusy] = useState(false);
+
+  async function onSlipPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMsg(null);
+    setSlipBusy(true);
+    try {
+      const up = await uploadSlip(file, "billing_run");
+      if (!up.ok) {
+        setMsg({ kind: "err", text: up.error });
+        return;
+      }
+      const res = await uploadBillingRunSlip({ invoiceId, slipPath: up.path });
+      if (res.ok) {
+        setMsg({ kind: "ok", text: "✓ แนบสลิปแล้ว — รอบัญชีตรวจสลิป + ตัดจ่าย" });
+        router.refresh();
+      } else {
+        setMsg({ kind: "err", text: res.error });
+      }
+    } finally {
+      setSlipBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  // Reusable slip display (thumbnail → opens full slip on click).
+  const slipBlock = slipSignedUrl ? (
+    <a href={slipSignedUrl} target="_blank" rel="noopener noreferrer" className="block w-fit">
+      <SlipImage
+        src={slipSignedUrl}
+        alt={`สลิป ${docNo}`}
+        pdfMode="tile"
+        className="h-24 w-24 rounded-lg border border-border object-cover"
+      />
+    </a>
+  ) : null;
+
   if (status === "paid") {
     return (
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
         <p className="text-sm text-emerald-800 font-medium">
           ✓ ใบวางบิลนี้ได้รับชำระแล้ว · ดูประวัติด้านบน
         </p>
+        {slipSignedUrl && (
+          <div className="flex items-center gap-3">
+            {slipBlock}
+            <div className="text-[12px] text-emerald-700">
+              <div className="font-semibold">สลิปที่ยืนยันแล้ว</div>
+              <div>แนบโดย {slipUploadedBy ?? "—"} · {fmtDateTime(slipUploadedAt)}</div>
+            </div>
+          </div>
+        )}
       </section>
     );
   }
@@ -75,7 +151,8 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
   function onMarkPaid(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (!confirm(`ยืนยันบันทึกการรับชำระ ${docNo} จำนวน ฿${thbFmt(totalThb)}?`)) return;
+    const verb = slipStatus === "pending" ? "ยืนยันสลิป + บันทึกการรับชำระ" : "บันทึกการรับชำระ";
+    if (!confirm(`${verb} ${docNo} จำนวน ฿${thbFmt(totalThb)}?`)) return;
 
     startTransition(async () => {
       const res = await markBillingRunPaid({
@@ -144,46 +221,109 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
         </div>
       )}
 
-      {/* Mark paid */}
-      <form onSubmit={onMarkPaid} className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
-        <h4 className="font-medium text-sm text-emerald-800">✓ บันทึกการรับชำระ</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label>
-            <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-              className={inputCls}
-            >
-              <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
-              <option value="cheque">เช็ค</option>
-              <option value="wallet">หักจาก wallet</option>
-              <option value="other">อื่นๆ</option>
-            </select>
-          </label>
-          <label>
-            <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
-            <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
-          </label>
-          <label>
-            <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>
-            <input
-              type="text"
-              value={paymentRef}
-              onChange={(e) => setPaymentRef(e.target.value)}
-              placeholder="เลขอ้างอิงการโอน / เช็ค"
-              className={inputCls}
-            />
-          </label>
+      {/* SLIP — เซลแนบ → บัญชีตรวจ */}
+      <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-4 space-y-3">
+        <h4 className="font-medium text-sm text-violet-900">📎 สลิปการชำระเงิน</h4>
+        {slipStatus === "pending" && slipSignedUrl ? (
+          <div className="flex flex-wrap items-start gap-3">
+            {slipBlock}
+            <div className="text-[12px] text-violet-800 space-y-0.5">
+              <div className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
+                ⏳ รอบัญชีตรวจสลิป
+              </div>
+              <div>แนบโดย {slipUploadedBy ?? "—"} · {fmtDateTime(slipUploadedAt)}</div>
+              <label className="inline-flex items-center gap-1 text-violet-700 hover:underline cursor-pointer">
+                <span>{slipBusy ? "กำลังอัปโหลด…" : "🔁 เปลี่ยนสลิป"}</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={onSlipPicked}
+                  disabled={slipBusy}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[12px] text-violet-800">
+              เซลแนบสลิปที่ลูกค้าโอนมา → จะเข้าคิวให้บัญชีตรวจสลิป + ตัดจ่าย (รูปภาพ หรือ PDF · ไม่เกิน 5 MB)
+            </p>
+            <label className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 cursor-pointer disabled:opacity-50">
+              <span>{slipBusy ? "กำลังอัปโหลด…" : "📎 แนบสลิป"}</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={onSlipPicked}
+                disabled={slipBusy}
+                className="hidden"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Mark paid — ACCOUNTING only (canSettle) */}
+      {canSettle ? (
+        <form onSubmit={onMarkPaid} className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
+          <h4 className="font-medium text-sm text-emerald-800">
+            ✓ บันทึกการรับชำระ {slipStatus === "pending" ? "(ตรวจสลิป + ตัดจ่าย)" : ""}
+          </h4>
+          {slipStatus === "pending" && (
+            <p className="text-[12px] text-emerald-700">
+              ตรวจสลิปด้านบนแล้ว → กดบันทึกเพื่อยืนยันสลิป + ตัดจ่ายในขั้นตอนเดียว
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label>
+              <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                className={inputCls}
+              >
+                <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
+                <option value="cheque">เช็ค</option>
+                <option value="wallet">หักจาก wallet</option>
+                <option value="other">อื่นๆ</option>
+              </select>
+            </label>
+            <label>
+              <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
+              <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
+            </label>
+            <label>
+              <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>
+              <input
+                type="text"
+                value={paymentRef}
+                onChange={(e) => setPaymentRef(e.target.value)}
+                placeholder="เลขอ้างอิงการโอน / เช็ค"
+                className={inputCls}
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {pending ? "กำลังบันทึก..." : `บันทึกการรับชำระ ฿${thbFmt(totalThb)}`}
+          </button>
+        </form>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+          <h4 className="font-medium text-sm text-amber-800">🔒 รอบัญชียืนยัน + ตัดจ่าย</h4>
+          <p className="text-[12px] text-amber-700 mt-1">
+            การยืนยันสลิป + บันทึกการรับชำระ (ตัดจ่าย) เป็นหน้าที่ของฝ่ายบัญชี ·
+            {slipStatus === "pending"
+              ? " สลิปที่แนบแล้วเข้าคิวให้บัญชีตรวจเรียบร้อย"
+              : " แนบสลิปด้านบนก่อน แล้วบัญชีจะตรวจ + ตัดจ่าย"}
+          </p>
         </div>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {pending ? "กำลังบันทึก..." : `บันทึกการรับชำระ ฿${thbFmt(totalThb)}`}
-        </button>
-      </form>
+      )}
 
       {/* Send notification to customer (LINE/email) */}
       <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4 space-y-2">
@@ -201,8 +341,8 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
         </button>
       </div>
 
-      {/* Cancel */}
-      {!showCancelDialog ? (
+      {/* Cancel — accounting/super only (matches the settle gate) */}
+      {canSettle && (!showCancelDialog ? (
         <button
           type="button"
           onClick={() => setShowCancelDialog(true)}
@@ -245,7 +385,7 @@ export function BillingRunActions({ invoiceId, docNo, status, totalThb, customer
             </button>
           </div>
         </div>
-      )}
+      ))}
     </section>
   );
 }

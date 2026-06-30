@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { getInvoiceDetail } from "@/actions/admin/billing-run";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
 
@@ -29,7 +30,13 @@ export default async function BillingRunDetailPage({
   // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles can view +
   // create billing-run invoices (doc issuance); mark-paid + cancel stay
   // accounting-only (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
-  await requireAdmin(["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"]);
+  // ภูม 2026-06-29 — sales/sales_admin can reach the page to UPLOAD a payment
+  // slip; the settle/confirm (ตัดจ่าย) stays accounting-only — gated both in
+  // BillingRunActions (canSettle) AND in the markBillingRunPaid action itself.
+  const { roles } = await requireAdmin([
+    "super", "accounting", "sales", "sales_admin", "ops", "freight_export_doc", "freight_import_doc",
+  ]);
+  const canSettle = roles.some((r) => r === "super" || r === "accounting");
   const { id } = await params;
   const invoiceId = Number(id);
   if (!Number.isInteger(invoiceId) || invoiceId <= 0) notFound();
@@ -48,6 +55,13 @@ export default async function BillingRunDetailPage({
   }
 
   const { header, items } = res.data!;
+
+  // Sign the slip via the service-role client so ANY admin (accounting) can view
+  // a slip uploaded by sales (it lives under the uploader's uid in the private
+  // "slips" bucket — an anon client could only sign its own uid's files).
+  const slipSignedUrl = header.slip_path
+    ? await getSignedBucketUrl("slips", header.slip_path)
+    : null;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -232,6 +246,11 @@ export default async function BillingRunDetailPage({
         status={header.status}
         totalThb={header.total_thb}
         customerId={header.userid}
+        canSettle={canSettle}
+        slipSignedUrl={slipSignedUrl}
+        slipStatus={header.slip_status}
+        slipUploadedBy={header.slip_uploaded_by}
+        slipUploadedAt={header.slip_uploaded_at}
       />
     </main>
   );

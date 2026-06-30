@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export async function uploadSlip(
   file: File,
-  kind: "deposit" | "withdraw" | "yuan_payment" | "id_doc",
+  kind: "deposit" | "withdraw" | "yuan_payment" | "id_doc" | "billing_run",
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   const supabase = createClient();
   const { data: { user }, error: dataErr } = await supabase.auth.getUser();
