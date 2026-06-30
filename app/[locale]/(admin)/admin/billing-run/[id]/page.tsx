@@ -60,12 +60,15 @@ export default async function BillingRunDetailPage({
 
   const { header, items } = res.data!;
 
-  // Sign the slip via the service-role client so ANY admin (accounting) can view
-  // a slip uploaded by sales (it lives under the uploader's uid in the private
-  // "slips" bucket — an anon client could only sign its own uid's files).
-  const slipSignedUrl = header.slip_path
-    ? await getSignedBucketUrl("slips", header.slip_path)
-    : null;
+  // Sign EVERY slip (multi · ภูม 2026-06-30) via the service-role client so any
+  // accounting admin can view slips the SALES uploaded (private "slips" bucket,
+  // stored under the uploader's uid — an anon client could only sign its own).
+  const slipPaths = header.slip_paths.length > 0
+    ? header.slip_paths
+    : header.slip_path ? [header.slip_path] : []; // legacy single-path fallback
+  const slipSignedUrls = (
+    await Promise.all(slipPaths.map((p) => getSignedBucketUrl("slips", p)))
+  ).filter((u): u is string => !!u);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -251,8 +254,9 @@ export default async function BillingRunDetailPage({
         totalThb={header.total_thb}
         customerId={header.userid}
         canSettle={canSettle}
-        slipSignedUrl={slipSignedUrl}
+        slipSignedUrls={slipSignedUrls}
         slipStatus={header.slip_status}
+        slipReviewedAt={header.slip_reviewed_at}
         slipUploadedBy={header.slip_uploaded_by}
         slipUploadedAt={header.slip_uploaded_at}
       />

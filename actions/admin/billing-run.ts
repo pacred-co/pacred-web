@@ -155,10 +155,13 @@ export type BillingRunInvoiceDetail = {
     net_payable: number;
     /** สลิปแนบ (ภูม 2026-06-29) — เซลแนบ → บัญชีตรวจ+ตัดจ่าย. */
     slip_path: string | null;
-    /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=บัญชียืนยันแล้ว */
+    /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=ยืนยันแล้ว · rejected=ถูกปฏิเสธ */
     slip_status: string | null;
     slip_uploaded_by: string | null;
     slip_uploaded_at: string | null;
+    /** ภูม 2026-06-30 — สลิปหลายรูป (array path) + ตรวจรอบ 1 (2-round เหมือน wallet). */
+    slip_paths: string[];
+    slip_reviewed_at: string | null;
   };
   items: Array<{
     id: number;
@@ -802,6 +805,9 @@ export async function getInvoiceDetail(
         slip_status: string | null;
         slip_uploaded_by: string | null;
         slip_uploaded_at: string | null;
+        slip_paths: unknown;
+        slip_reviewed_at: string | null;
+        slip_reviewed_by: string | null;
       };
       const { data: hdrRaw, error: hdrErr } = await admin
         .from("tb_forwarder_invoice")
@@ -901,6 +907,10 @@ export async function getInvoiceDetail(
             slip_status:        hdrRaw.slip_status,
             slip_uploaded_by:   hdrRaw.slip_uploaded_by,
             slip_uploaded_at:   hdrRaw.slip_uploaded_at,
+            slip_paths:         Array.isArray(hdrRaw.slip_paths)
+                                  ? hdrRaw.slip_paths.filter((p): p is string => typeof p === "string")
+                                  : [],
+            slip_reviewed_at:   hdrRaw.slip_reviewed_at,
             is_overdue:         isOverdue(hdrRaw.date_due, hdrRaw.status),
             ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
           },
@@ -1351,9 +1361,9 @@ export async function markBillingRunPaid(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status")
+        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1363,6 +1373,11 @@ export async function markBillingRunPaid(
       if (!cur) return { ok: false, error: "not_found" };
       if (cur.status !== "issued") {
         return { ok: false, error: `ใบวางบิล ${cur.doc_no} อยู่ในสถานะ ${cur.status} แล้ว` };
+      }
+      // ภูม 2026-06-30 — ตรวจ 2 รอบ (เหมือนหน้า wallet): ถ้ามีสลิปรอตรวจ (pending)
+      // ต้องกด "ตรวจสลิป รอบ 1" (slip_reviewed_at) ก่อน ถึงจะอนุมัติ+ตัดจ่าย (รอบ 2) ได้.
+      if (cur.slip_status === "pending" && !cur.slip_reviewed_at) {
+        return { ok: false, error: 'กรุณากด "ตรวจสลิป รอบ 1" ก่อนอนุมัติ + ตัดจ่าย (รอบ 2)' };
       }
 
       const { error: updErr } = await admin
@@ -1855,9 +1870,9 @@ export async function uploadBillingRunSlip(input: {
 
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status")
+        .select("id, doc_no, status, slip_paths")
         .eq("id", invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; slip_paths: unknown }>();
       if (curErr) {
         console.error("[uploadBillingRunSlip current] failed", { code: curErr.code, message: curErr.message });
         return { ok: false, error: curErr.message };
@@ -1867,13 +1882,20 @@ export async function uploadBillingRunSlip(input: {
         return { ok: false, error: `ใบวางบิล ${cur.doc_no} อยู่ในสถานะ ${cur.status} แล้ว — แนบสลิปไม่ได้` };
       }
 
+      // ภูม 2026-06-30 — แนบได้หลายรูป: append เข้า slip_paths (เก็บล่าสุด 10).
+      const prevPaths = Array.isArray(cur.slip_paths)
+        ? cur.slip_paths.filter((p): p is string => typeof p === "string")
+        : [];
+      const nextPaths = [...prevPaths, slipPath].slice(-10);
       const { error: updErr } = await admin
         .from("tb_forwarder_invoice")
         .update({
-          slip_path:        slipPath,
+          slip_paths:       nextPaths,
+          slip_path:        slipPath,        // ล่าสุด = รูปหลัก (thumb ในคิว)
           slip_uploaded_by: uploader,
           slip_uploaded_at: new Date().toISOString(),
           slip_status:      "pending",
+          slip_reviewed_at: null,            // แนบรูปใหม่ → ล้างตรวจรอบ1 (บัญชีต้องตรวจใหม่)
         })
         .eq("id", invoiceId)
         .eq("status", "issued");
@@ -1884,6 +1906,120 @@ export async function uploadBillingRunSlip(input: {
 
       await logAdminAction(adminId, "billing_run.slip_upload", "forwarder_invoice", String(invoiceId), {
         doc_no: cur.doc_no, slip_path: slipPath, uploaded_by: uploader,
+      });
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      return { ok: true, data: { invoiceId } };
+    },
+  );
+}
+
+/**
+ * ภูม 2026-06-30 — ตรวจสลิป รอบ 1 (เหมือนหน้า wallet · A4 2-round). บัญชีกดตรวจ
+ * สลิปที่เซลแนบ → stamp slip_reviewed_at. ตัดจ่าย (รอบ 2 · markBillingRunPaid)
+ * ทำไม่ได้จนกว่ารอบ 1 ผ่าน. ไม่แตะเงิน/สถานะบิล — แค่ stamp การตรวจ.
+ */
+export async function reviewBillingRunSlipRound1(input: {
+  invoiceId: number;
+}): Promise<AdminActionResult<{ invoiceId: number }>> {
+  const invoiceId = Number(input?.invoiceId);
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+  return withAdmin<{ invoiceId: number }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const reviewer = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
+
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, slip_status, slip_reviewed_at")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; doc_no: string; status: string; slip_status: string | null; slip_reviewed_at: string | null }>();
+      if (curErr) {
+        console.error("[reviewBillingRunSlipRound1 current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.status !== "issued") {
+        return { ok: false, error: `ใบวางบิล ${cur.doc_no} อยู่ในสถานะ ${cur.status} แล้ว` };
+      }
+      if (cur.slip_status !== "pending") {
+        return { ok: false, error: "ยังไม่มีสลิปรอตรวจ" };
+      }
+      if (cur.slip_reviewed_at) {
+        return { ok: true, data: { invoiceId } }; // idempotent: ตรวจรอบ 1 แล้ว
+      }
+
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({ slip_reviewed_at: new Date().toISOString(), slip_reviewed_by: reviewer })
+        .eq("id", invoiceId)
+        .eq("status", "issued")
+        .eq("slip_status", "pending")
+        .is("slip_reviewed_at", null); // race guard
+      if (updErr) {
+        console.error("[reviewBillingRunSlipRound1 update] failed", { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+      await logAdminAction(adminId, "billing_run.slip_review_round1", "forwarder_invoice", String(invoiceId), {
+        doc_no: cur.doc_no, reviewed_by: reviewer,
+      });
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      return { ok: true, data: { invoiceId } };
+    },
+  );
+}
+
+/**
+ * ภูม 2026-06-30 — ปฏิเสธสลิป (เหมือนหน้า wallet "ปฏิเสธรายการ"). บัญชีตรวจแล้ว
+ * สลิปไม่ถูกต้อง → slip_status='rejected' + ล้างตรวจรอบ 1 → ออกจากคิว "ชำระเงิน"
+ * (คิวกรอง slip_status='pending'). บิลคงสถานะ issued (ยังไม่จ่าย) — เซลแนบสลิปใหม่ได้.
+ * เก็บ slip_paths ไว้เป็นหลักฐาน. ไม่แตะเงิน.
+ */
+export async function rejectBillingRunSlip(input: {
+  invoiceId: number;
+  reason: string;
+}): Promise<AdminActionResult<{ invoiceId: number }>> {
+  const invoiceId = Number(input?.invoiceId);
+  const reason = String(input?.reason ?? "").trim();
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+  if (reason.length < 3) {
+    return { ok: false, error: "กรุณาระบุเหตุผลที่ปฏิเสธ" };
+  }
+  return withAdmin<{ invoiceId: number }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const reviewer = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
+
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, slip_status")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; doc_no: string; status: string; slip_status: string | null }>();
+      if (curErr) {
+        console.error("[rejectBillingRunSlip current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.slip_status !== "pending") {
+        return { ok: false, error: "ไม่มีสลิปรอตรวจให้ปฏิเสธ" };
+      }
+
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({ slip_status: "rejected", slip_reviewed_at: null, slip_reviewed_by: reviewer })
+        .eq("id", invoiceId)
+        .eq("slip_status", "pending"); // race guard
+      if (updErr) {
+        console.error("[rejectBillingRunSlip update] failed", { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+      await logAdminAction(adminId, "billing_run.slip_reject", "forwarder_invoice", String(invoiceId), {
+        doc_no: cur.doc_no, reason, reviewed_by: reviewer,
       });
       revalidatePath(`/admin/billing-run/${invoiceId}`);
       return { ok: true, data: { invoiceId } };

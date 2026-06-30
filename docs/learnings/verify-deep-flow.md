@@ -306,3 +306,21 @@ Also useful when the client gate hides a server-rendered child: a server compone
 **Why this matters next time:** don't burn 30+ minutes trying to make the automation "click" a React handler. To verify an interactive client-state toggle: (a) verify both render states by forcing the state in the memo (force-open, reload, assert, revert), (b) confirm the handler is the standard pattern, (c) if a live click is truly required, hand it to the user (they're in a real foreground browser — a 2-second click). The harness CAN drive trusted CDP **keys** on a focused element (see the dropdown entry above) but NOT mouse clicks into React here.
 
 **Cross-links:** `container-detail-client.tsx` · AGENTS.md §0c · the trusted-CDP-key entry above.
+
+## [2026-06-30] Chrome-MCP screenshot coords ≠ DOM coords — coordinate clicks silently miss
+
+**Context:** verifying the billing-run 2-round slip flow (§0c · click "ตรวจสลิป รอบ 1" → assert DB stamp). Branch Poom-pacred · `e8904b05`.
+
+**Symptom:** `computer left_click` at the button's *screenshot* coordinates (e.g. (535,467)) did NOTHING — twice — no UI change, no DB write, no console error. Looked exactly like a dead button (the §0c failure we're trying to catch). Easy to wrongly conclude "the button is broken".
+
+**Root cause:** the Chrome-MCP screenshot is **scaled** (returned 1568px-wide) but the page DOM/viewport is wider. `el.getBoundingClientRect()` reported the real button at **y=847**, while it appeared at y≈467 in the screenshot. So clicking the screenshot pixel landed on empty space *above* the button. The render was fine; the click target was just at different real coords.
+
+**Fix / reliable pattern:**
+1. Don't trust screenshot pixels for clicking. Use `javascript_tool` to find the element and click it directly:
+   `const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('LABEL')); b.getBoundingClientRect(); b.click();` — `b.click()` fires the real React handler regardless of scaling.
+2. **Confirm the EFFECT, not the click** — query the DB (or the page state) after, e.g. `select slip_reviewed_at ... where id=14`. The stamp appearing (`by: admin_poom`) is the proof the action ran; a screenshot can lie, the DB can't.
+3. If you must use coordinate clicks, read the element's real rect first and scale, or just use `b.click()`.
+
+**Why this matters next time:** any §0c "button does nothing" finding in Chrome-MCP must rule out the coord-scaling miss FIRST (click via JS + check DB) before reporting a dead button. I nearly logged a working 2-round button as broken.
+
+**Cross-links:** AGENTS.md §0c · billing-run-actions.tsx · `reviewBillingRunSlipRound1`
