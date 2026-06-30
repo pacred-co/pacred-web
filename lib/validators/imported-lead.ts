@@ -6,6 +6,22 @@ import { z } from "zod";
  */
 
 export const IMPORTED_LEAD_SOURCES = ["Axelra", "TT", "Pcs", "Pacred"] as const;
+
+// The page-level "ที่มา (source) tab" keys on /admin/leads (owner 2026-07-01:
+// "เพิ่ม source tab — เดิมมีแค่ pcs → เพิ่ม freight"). NOT the import-form sources
+// above (those are the human-typed labels for a CSV batch); these partition the
+// whole list for the sales call-queue:
+//   all    — every lead (no source filter).
+//   pcs    — the existing CRM prospect lists (every source NOT a freight one).
+//   freight— the imported freight customers WITH a phone (source='freight').
+//   freight_no_phone — the 86 freight prospects with no callable phone (a
+//            dedicated chase tab · owner: "งานฝั่ง freight รอตามลูกค้า (ไม่มีเบอร์)").
+// The two freight VALUES below are the literal imported_leads.source strings the
+// task-#15 data script writes — kept here as the SOT so UI + script agree.
+export const FREIGHT_LEAD_SOURCE = "freight" as const;
+export const FREIGHT_NO_PHONE_LEAD_SOURCE = "freight_no_phone" as const;
+export const LEAD_SOURCE_TABS = ["all", "pcs", "freight", "freight_no_phone"] as const;
+export type LeadSourceTab = (typeof LEAD_SOURCE_TABS)[number];
 export const IMPORTED_LEAD_SERVICES = ["FCL", "CARGO", "เคลียร์ศุลกากร", "ฝากสั่ง", "ฝากโอนชำระ"] as const;
 // Mirrors LEAD_CALL_STATUSES (actions/admin/leads-types.ts). ปอน 2026-06-22:
 // added 'callback' = "รอติดต่อกลับ". 2026-06-23: 'other_rep' = "ลูกค้าเซลล์อื่น"

@@ -1,10 +1,11 @@
 import { Link } from "@/i18n/navigation";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Filter } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getLeadQueue, exportLeadsAll, getMyLeadSlaToday } from "@/actions/admin/leads";
-import { getImportedLeadStats } from "@/actions/admin/imported-leads";
+import { getImportedLeadStats, getImportedLeadSourceCounts } from "@/actions/admin/imported-leads";
+import { LEAD_SOURCE_TABS, type LeadSourceTab } from "@/lib/validators/imported-lead";
 import { getCrmReps, getCrmCsReps, getAssignableAdmins } from "@/actions/admin/crm";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { getTagsBulk } from "@/actions/admin/customer-tags";
@@ -48,6 +49,16 @@ const SEGMENTS: { key: string; label: string; hint: string }[] = [
   { key: "summary", label: "ประวัติ + สรุป", hint: "สรุปงานที่ได้รับมอบหมายของฉัน" },
 ];
 
+// owner 2026-07-01: page-level "ที่มา (source)" tab strip — แยกแหล่งลูกค้า. เดิมมีแค่
+// ลูกค้านำเข้าทั่วไป (PCS) → เพิ่มฝั่ง freight (369 ที่นำเข้ามา) + แท็บแยก "ไม่มีเบอร์" (86
+// ราย รอตามเบอร์). reuse แพทเทิร์น chip เดียวกับ SEGMENTS (DESIGN RULE · ไม่ทำ layout ใหม่).
+const SOURCE_TABS: { key: LeadSourceTab; label: string; hint: string }[] = [
+  { key: "all", label: "ทุกที่มา", hint: "ลูกค้าทุกแหล่ง" },
+  { key: "pcs", label: "ลูกค้าทั่วไป (PCS)", hint: "รายชื่อลูกค้านำเข้าเดิม" },
+  { key: "freight", label: "ฝั่ง Freight", hint: "ลูกค้าเฟรทที่นำเข้ามา (มีเบอร์)" },
+  { key: "freight_no_phone", label: "Freight รอตามลูกค้า (ไม่มีเบอร์)", hint: "ยังไม่มีเบอร์ — ต้องตามเบอร์ก่อน" },
+];
+
 // ปอน 2026-06-22: ซ่อน "ข้อมูลรายชื่อลูกค้า" ออกจากหน้านี้ทั้งหมด (ตาราง list +
 // บอร์ด kanban + CSV export + pagination) — display-only · ไม่แตะ DB · ไม่ให้ใคร
 // เห็น/ดึงออก. ดาต้ายัง fetch ปกติแต่ไม่ render. flip เป็น false เพื่อคืนค่าตอนเซ็ทระบบใหม่.
@@ -67,7 +78,7 @@ function isStatusFilter(v: unknown): v is LeadCallStatus {
 export default async function AdminLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ segment?: string; status?: string; q?: string; page?: string; view?: string }>;
+  searchParams: Promise<{ segment?: string; status?: string; q?: string; page?: string; view?: string; source?: string }>;
 }) {
   // The staff who actually call: super + sales + CS/ops.
   const { user, roles } = await requireAdmin(["super", "sales_admin", "sales", "ops"]);
@@ -104,14 +115,20 @@ export default async function AdminLeadsPage({
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   // CRM depth (2026-06-08) — list (default) vs pipeline-kanban view.
   const view: "list" | "board" = sp.view === "board" ? "board" : "list";
+  // owner 2026-07-01: page-level source tab (pcs / freight / freight_no_phone).
+  const sourceTab: LeadSourceTab = (LEAD_SOURCE_TABS as readonly string[]).includes(sp.source ?? "")
+    ? (sp.source as LeadSourceTab)
+    : "all";
 
-  const [statsRes, queueRes] = await Promise.all([
+  const [statsRes, queueRes, sourceCountsRes] = await Promise.all([
     // ปอน 2026-06-23: การ์ดสรุปดึงจาก imported_leads (สัมพันธ์กับตารางด้านล่าง) แทนระบบ lead เก่า
     getImportedLeadStats(),
     getLeadQueue({ segment, status: statusFilter, q, page }),
+    getImportedLeadSourceCounts(),
   ]);
 
   const stats = statsRes.ok ? statsRes.data : undefined;
+  const sourceCounts = sourceCountsRes.ok ? sourceCountsRes.data : undefined;
   const rows = queueRes.ok ? (queueRes.data?.rows ?? []) : [];
   const hasMore = queueRes.ok ? Boolean(queueRes.data?.hasMore) : false;
   const queueErr = queueRes.ok ? null : queueRes.error;
@@ -146,6 +163,7 @@ export default async function AdminLeadsPage({
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (q) params.set("q", q);
     if (view !== "list") params.set("view", view);
+    if (sourceTab !== "all") params.set("source", sourceTab);
     for (const [k, v] of Object.entries(over)) params.set(k, String(v));
     return `/admin/leads?${params.toString()}`;
   };
@@ -260,6 +278,49 @@ export default async function AdminLeadsPage({
               อยู่ใน dead branch). `view` var คงไว้ (carry preserve · default list). */}
         </div>
 
+        {/* Source tabs (owner 2026-07-01) — แยกตาม "ที่มา (source)" ของลูกค้า: ทั่วไป(PCS)
+            vs ฝั่ง Freight vs Freight ที่ไม่มีเบอร์ (รอตามลูกค้า). คนละแกนกับ segment ด้านบน
+            — วางเป็นแถบแยก + ป้าย "ที่มา:" ให้ชัด. count badge = ยอดจริงจาก imported_leads. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-alt/40 px-3 py-2">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <Filter className="h-3.5 w-3.5" /> ที่มา
+          </span>
+          {SOURCE_TABS.map((s) => {
+            const active = s.key === sourceTab;
+            const count =
+              s.key === "all" ? sourceCounts?.all
+                : s.key === "pcs" ? sourceCounts?.pcs
+                : s.key === "freight" ? sourceCounts?.freight
+                : sourceCounts?.freightNoPhone;
+            const isChase = s.key === "freight_no_phone";
+            return (
+              <Link
+                key={s.key}
+                href={carry({ source: s.key, page: 1 })}
+                title={s.hint}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? isChase
+                      ? "border-amber-400 bg-amber-100 text-amber-900"
+                      : "border-primary-400 bg-primary-100 text-primary-800"
+                    : "border-border bg-white dark:bg-surface hover:bg-surface-alt"
+                }`}
+              >
+                {s.label}
+                {count !== undefined ? (
+                  <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-none ${
+                    active
+                      ? isChase ? "bg-amber-600 text-white" : "bg-primary-600 text-white"
+                      : isChase ? "bg-amber-100 text-amber-700" : "bg-primary-100 text-primary-700"
+                  }`}>
+                    {count > 9999 ? "9999+" : count.toLocaleString("th-TH")}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
+
         {/* Search + active filters + CSV export — sales hands the cold list to
             external callers / VAs as a spreadsheet. Includes tel, name, code,
             order count, current rep, last-call note. */}
@@ -349,7 +410,7 @@ export default async function AdminLeadsPage({
             // (self-scoped · ทุก role ที่ทำงาน lead เห็นของตัวเอง).
             <LeadAssignmentSummary reps={assignableAdmins} mine />
           ) : (
-            <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} />
+            <LeadAssignPanel reps={assignableAdmins} segment={isAssignTab ? "all" : workSegment} mode={isAssignTab ? "assign" : "work"} q={q} sourceTab={sourceTab} />
           )
         ) : queueErr ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">

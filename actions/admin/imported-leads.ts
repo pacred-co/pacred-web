@@ -263,6 +263,49 @@ export async function getImportedLeadStats(): Promise<AdminActionResult<Imported
   });
 }
 
+// ── Source-tab counts (owner 2026-07-01 · the page-level "ที่มา (source)" tabs) ──
+// Exact badge counts for the pcs / freight / freight_no_phone tabs on /admin/leads.
+// Same dedupe semantics as the list so each badge == what staff see:
+//   freight / pcs        → DISTINCT callable phones (the list hides dup + no-phone).
+//   freight_no_phone     → ROW count (these rows have NO phone, so the no-phone tab
+//                          shows them all; distinct-by-phone would zero them out).
+// Role-scoped like every other read (a rep sees only their own; senior sees all).
+export type ImportedLeadSourceCounts = {
+  all: number; // distinct callable phones across the whole pool (= ImportedLeadStats.total)
+  pcs: number; // distinct callable phones with a NON-freight source
+  freight: number; // distinct callable phones, source='freight'
+  freightNoPhone: number; // ROWS with source='freight_no_phone' (no phone → row count)
+};
+
+export async function getImportedLeadSourceCounts(): Promise<AdminActionResult<ImportedLeadSourceCounts>> {
+  return withAdmin<ImportedLeadSourceCounts>([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    const senior = isSenior(roles);
+    let q = admin.from(TABLE).select("phone, source, assigned_admin_id").limit(50000);
+    if (!senior) q = q.eq("assigned_admin_id", adminId);
+    const { data, error } = await q;
+    if (error) {
+      console.error("[imported_leads:source-counts] failed", { code: error.code, message: error.message });
+      return { ok: false, error: `query_failed: ${error.message}` };
+    }
+    const digits = (p: string) => (p ?? "").replace(/\D/g, "");
+    const all = new Set<string>();
+    const pcs = new Set<string>();
+    const freight = new Set<string>();
+    let freightNoPhone = 0;
+    for (const r of (data ?? []) as { phone: string; source: string }[]) {
+      const src = r.source || "";
+      if (src === "freight_no_phone") { freightNoPhone++; continue; } // counted by row (no phone)
+      const ph = digits(r.phone);
+      if (!ph) continue; // no callable number → hidden in the phone-list tabs too
+      all.add(ph);
+      if (src === "freight") freight.add(ph);
+      else pcs.add(ph);
+    }
+    return { ok: true, data: { all: all.size, pcs: pcs.size, freight: freight.size, freightNoPhone } };
+  });
+}
+
 export type ImportedLeadReportRow = {
   legacyId: string;
   name: string;
