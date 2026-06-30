@@ -54,6 +54,14 @@ export type BoxDimGroup = {
    * several when multiple parcels share the exact same box size.
    */
   trackings: string[];
+  /**
+   * ภูม 2026-06-30 — the distinct customer codes (PR · userid) of the forwarder
+   * rows folded into this group, in first-seen order. The breakdown panel shows
+   * these as the first column ("รหัสลูกค้า") so staff can tell whose boxes these
+   * are at a glance. Usually 1 customer per group (= 1 tracking); a group spans
+   * several only when different customers happen to ship the exact same box size.
+   */
+  userids: string[];
 };
 
 /**
@@ -89,14 +97,24 @@ export function groupBoxesByDimension(rows: FwForBreakdown[]): BoxDimGroup[] {
     const boxes = Number(r.famount ?? 0) || 0;
     const cbm = rowCbm(r.fvolume, r.famount, r.famountcount);
     const tracking = (r.ftrackingchn ?? "").trim();
+    const userid = (r.userid ?? "").trim();
     const key = `${width}|${length}|${height}`;
     const g = map.get(key);
     if (g) {
       g.boxes += boxes;
       g.cbm += cbm;
       if (tracking && !g.trackings.includes(tracking)) g.trackings.push(tracking);
+      if (userid && !g.userids.includes(userid)) g.userids.push(userid);
     } else {
-      map.set(key, { width, length, height, boxes, cbm, trackings: tracking ? [tracking] : [] });
+      map.set(key, {
+        width,
+        length,
+        height,
+        boxes,
+        cbm,
+        trackings: tracking ? [tracking] : [],
+        userids: userid ? [userid] : [],
+      });
     }
   }
   return [...map.values()].sort((a, b) => b.boxes - a.boxes || b.cbm - a.cbm);
