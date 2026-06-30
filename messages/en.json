@@ -3343,6 +3343,7 @@
     "apiForwarderUpdate": {
       "title": "Update import entries",
       "momo": "MOMO",
+      "momoLive": "MOMO (Live)",
       "cn": "CargoCenter",
       "jmf": "JMF",
       "ttp": "TTP",

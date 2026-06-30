@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countShopArrivals } from "./shop-order-arrivals";
 
 /**
  * Complete the ฝากสั่งซื้อ shop order whose goods have become a ฝากนำเข้า import.
@@ -59,13 +60,15 @@ export async function advanceLinkedShopOrder(
   }
   if (!hno) return null;
 
-  // 2. Two-stage forward-only advance (owner 2026-06-26):
-  //    - ได้เลขตู้ (fcabinetnumber) OR fstatus≥3 (ออกจากจีน/ถึงไทย/…) → '5' สำเร็จ (from 4/40)
-  //    - ถึงโกดังจีน เฉยๆ (fstatus=2, ไม่มีเลขตู้)                     → '40' ถึงโกดังจีน (from 4 only)
-  //    Idempotent (.in/.eq guard → 0-row no-op once past). Matches the mig-0216 trigger.
-  const hasContainer = (forwarder.fcabinetnumber ?? "").trim() !== "";
-  const fs = (forwarder.fstatus ?? "").trim();
-  const toFive = hasContainer || ["3", "4", "5", "6", "7"].includes(fs);
+  // 2. Multi-shop gate (ภูม 2026-06-30 · mirrors mig-0232 trigger). Don't flip on
+  //    the SINGLE triggering forwarder — roll up EVERY shop of the order:
+  //    - ทุกร้าน done (เลขตู้/fstatus≥3) → '5' สำเร็จ (from 4/40)
+  //    - ทุกร้าน arrived China (fstatus≥2) แต่ยังไม่ done → '40' ถึงโกดังจีน (from 4)
+  //    - ยังมีร้านที่ขาด → ไม่ flip (คง รอร้านจีนจัดส่ง) — กันสถานะ "สำเร็จ" ก่อนของถึงครบ.
+  //    Idempotent (.in/.eq guard → 0-row no-op once past).
+  const summary = await countShopArrivals(admin, hno);
+  if (!summary.allArrived && !summary.allDone) return null; // a shop still missing
+  const toFive = summary.allDone;
 
   const q = admin.from("tb_header_order").update(
     toFive ? { hstatus: "5", hdateupdate: nowIso } : { hstatus: "40", hdateupdate: nowIso },

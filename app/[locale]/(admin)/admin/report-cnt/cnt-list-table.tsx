@@ -599,9 +599,11 @@ export function CntListTable({
               // legible in the colored สถานะตู้ / สถานะจ่าย pills on each row, so
               // no info is lost. Only the selection highlight remains (it's
               // interaction feedback for the checkbox + floating action bar).
+              // Subtle zebra on the un-selected rows (ภูม 2026-06-30 · ไม่ลายตา ·
+              // legacy PCS has this). The selection highlight wins when ticked.
               const rowTint = isOn
                 ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
-                : "hover:bg-surface-alt/40";
+                : "even:bg-surface-alt/20 hover:bg-surface-alt/40";
               const isExpanded = expanded.has(r.fcabinetnumber);
               // report-cnt #4 (C) — for a MOMO "SEA0x" placeholder cabinet, the
               // real container / sack number MOMO carries (resolved server-side).
@@ -907,6 +909,10 @@ function BoxBreakdownPanel({
       <table className="w-full text-[11px]">
         <thead className="text-muted bg-surface-alt/40">
           <tr className="border-b border-border">
+            {/* ภูม 2026-06-30: รหัสลูกค้า (PR) first — "มองบางทีไม่รู้ว่าของลูกค้าคนไหน".
+                One group usually = one customer; several only when different
+                customers ship the exact same box size. */}
+            <th className="px-3 py-1.5 text-left font-medium">รหัสลูกค้า</th>
             {/* report-cnt #4 (B): show the tracking number(s) instead of a ลำดับ #
                 (owner: the sequence is hard to read). One group usually = one
                 tracking; a few when parcels share an exact box size. */}
@@ -924,7 +930,20 @@ function BoxBreakdownPanel({
             const hasDims = g.width > 0 || g.length > 0 || g.height > 0;
             const perBox = g.boxes > 0 ? g.cbm / g.boxes : 0;
             return (
-              <tr key={i} className="border-b border-border/40 last:border-0">
+              <tr key={i} className="border-b border-border/40 last:border-0 even:bg-surface-alt/30">
+                {/* รหัสลูกค้า (ภูม 2026-06-30) — PR code(s) for this box-size group.
+                    Usually one; multiple shown line-separated. */}
+                <td className="px-3 py-1.5 font-mono text-[11px] text-foreground">
+                  {g.userids.length > 0 ? (
+                    <span className="flex flex-col leading-tight" title={g.userids.join(", ")}>
+                      {g.userids.map((u) => (
+                        <span key={u}>{u}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-1.5 font-mono text-[11px] text-foreground">
                   {g.trackings.length > 0 ? (
                     <span className="break-all" title={g.trackings.join(", ")}>
@@ -946,7 +965,8 @@ function BoxBreakdownPanel({
         </tbody>
         <tfoot>
           <tr className="border-t border-border font-semibold bg-surface-alt/30">
-            <td className="px-3 py-1.5" colSpan={5}>รวม</td>
+            {/* colSpan 6 = รหัสลูกค้า + แทรคกิ้ง + กว้าง + ยาว + สูง + CBM/กล่อง */}
+            <td className="px-3 py-1.5" colSpan={6}>รวม</td>
             <td className="px-3 py-1.5 text-right tabular-nums">{totalBoxes.toLocaleString()}</td>
             <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(totalCbm, 6)}</td>
           </tr>

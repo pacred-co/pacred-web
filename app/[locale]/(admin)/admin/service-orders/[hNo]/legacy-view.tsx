@@ -45,6 +45,7 @@ import { fstatusBadge } from "@/lib/admin/forwarder-status";
 // raw code on the read-only detail (owner 2026-06-29: faithful display).
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { getShopOrderDocuments } from "@/lib/admin/order-documents";
+import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
 import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
@@ -257,6 +258,11 @@ export async function renderLegacyServiceOrderView(hno: string) {
     linkedImports = ((imports ?? []) as AdminLinkedImport[]).filter((x) => !seen.has(x.id) && seen.add(x.id));
   }
 
+  // ภูม 2026-06-30 — per-shop arrival breakdown (ร้านมาถึงโกดังจีนกี่ร้าน · แทรคกิ้ง
+  // ที่มี/ที่ขาด) so staff see it WITHOUT opening อัพเดต/แก้ไข, and so a multi-shop
+  // order shows "X/Y ร้าน" instead of jumping to สำเร็จ when only one shop arrives.
+  const shopArrivals = await countShopArrivals(admin, r.hno);
+
   // B3 (2026-06-22) — per-order document registry (read-only · tax invoices +
   // receipts issued for this hno). Empty until tax-doc issuance is enabled.
   const orderDocs = await getShopOrderDocuments(r.hno);
@@ -416,6 +422,49 @@ export async function renderLegacyServiceOrderView(hno: string) {
                       {b.label}
                     </span>
                   </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* ── ร้านที่สั่ง · สถานะการมาถึงโกดังจีน (ภูม 2026-06-30) — โชว์แทรคกิ้งที่มี/
+          ที่ขาด + "X/Y ร้าน" ตรงนี้เลย ไม่ต้องกดอัพเดต/แก้ไข. สถานะออเดอร์จะขึ้น
+          สำเร็จ ก็ต่อเมื่อ "ทุกร้าน" ถึงครบ (กันเคส 1 ร้านถึงแล้วเด้งสำเร็จทั้งออเดอร์). ── */}
+      {shopArrivals.totalShops >= 1 && (
+        <section className={`rounded-2xl border p-4 sm:p-5 shadow-sm space-y-3 ${shopArrivals.allDone ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="font-bold text-sm">🏪 ร้านที่สั่ง ({shopArrivals.totalShops} ร้าน)</h2>
+            <span className={`rounded-full text-[11px] px-2.5 py-0.5 font-semibold border ${shopArrivals.allDone ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-amber-100 text-amber-800 border-amber-300"}`}>
+              {shopArrivals.allDone
+                ? `✓ ครบทุกร้านแล้ว (${shopArrivals.doneShops}/${shopArrivals.totalShops})`
+                : `มาถึงโกดังจีน ${shopArrivals.arrivedShops}/${shopArrivals.totalShops} · เหลืออีก ${shopArrivals.totalShops - shopArrivals.arrivedShops} ร้าน`}
+            </span>
+          </div>
+          {!shopArrivals.allDone && (
+            <p className="text-[11px] text-amber-800">
+              ยังมีร้านที่ของยังไม่เข้าโกดังจีน — สถานะจะคงไว้ที่ “รอร้านจีนจัดส่ง” จนกว่าจะครบทุกร้าน
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {shopArrivals.shops.map((s) => {
+              const pill = s.done
+                ? { t: "✓ ออกจากจีน/ได้ตู้", c: "bg-emerald-100 text-emerald-700 border-emerald-300" }
+                : s.arrived
+                  ? { t: "📦 ถึงโกดังจีนแล้ว", c: "bg-sky-100 text-sky-700 border-sky-300" }
+                  : s.tracking
+                    ? { t: "🚚 รอเข้าโกดังจีน", c: "bg-stone-100 text-stone-600 border-stone-300" }
+                    : { t: "⏳ ร้านยังไม่ส่ง", c: "bg-stone-100 text-stone-500 border-stone-300" };
+              return (
+                <li key={s.orderRowId} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground truncate">{s.shopName || s.productTitle || `รายการ #${s.orderRowId}`}</div>
+                    <div className="font-mono text-[11px] text-muted truncate">
+                      {s.tracking ? s.tracking : <span className="italic">ยังไม่มีแทรคกิ้ง</span>}
+                    </div>
+                  </div>
+                  <span className={`shrink-0 rounded-full border text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${pill.c}`}>{pill.t}</span>
                 </li>
               );
             })}

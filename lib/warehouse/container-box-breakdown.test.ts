@@ -41,7 +41,9 @@ function fw(p: Partial<FwForBreakdown>): FwForBreakdown {
     fheight: p.fheight ?? 0,
     ftrackingchn: p.ftrackingchn ?? null,
     fweight: p.fweight ?? 0,
-    userid: p.userid ?? "PR1",
+    // Keep an explicitly-passed null (so the null-skip case is testable); only
+    // default to "PR1" when userid is omitted entirely from the partial.
+    userid: "userid" in p ? (p.userid ?? null) : "PR1",
   };
 }
 
@@ -114,6 +116,21 @@ it("collects distinct trackings per dimension group (report-cnt #4 · B)", () =>
   const small = groups.find((g) => g.width === 20)!;
   assert.deepEqual(big.trackings, ["TRK-A", "TRK-B"]); // both, first-seen order
   assert.deepEqual(small.trackings, ["TRK-C"]);         // deduped · null dropped
+});
+
+it("collects distinct customer codes per dimension group (รหัสลูกค้า · ภูม 2026-06-30)", () => {
+  const rows = [
+    fw({ id: 1, famount: 6, famountcount: "2", fvolume: 0.06, fwidth: 50, flength: 40, fheight: 30, userid: "PR10" }),
+    fw({ id: 2, famount: 3, famountcount: "2", fvolume: 0.024, fwidth: 50, flength: 40, fheight: 30, userid: "PR20" }), // same size, diff customer
+    fw({ id: 3, famount: 2, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, userid: "PR30" }), // diff size
+    fw({ id: 4, famount: 1, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, userid: "PR30" }), // dup customer → dedup
+    fw({ id: 5, famount: 1, famountcount: "2", fvolume: 0.01, fwidth: 20, flength: 20, fheight: 20, userid: null }),   // null → skipped
+  ];
+  const groups = groupBoxesByDimension(rows);
+  const big = groups.find((g) => g.width === 50)!;
+  const small = groups.find((g) => g.width === 20)!;
+  assert.deepEqual(big.userids, ["PR10", "PR20"]); // both, first-seen order
+  assert.deepEqual(small.userids, ["PR30"]);        // deduped · null dropped
 });
 
 it("no-dimension rows (MOMO total CBM) collapse to the (0,0,0) group", () => {

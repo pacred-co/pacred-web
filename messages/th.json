@@ -3343,6 +3343,7 @@
     "apiForwarderUpdate": {
       "title": "อัปเดตฝากนำเข้า",
       "momo": "MOMO",
+      "momoLive": "MOMO (Live) — ค้นสด",
       "cn": "CargoCenter",
       "jmf": "JMF",
       "ttp": "TTP",
