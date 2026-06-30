@@ -11,8 +11,8 @@
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { PlannerData } from "@/lib/marketing-planner/types";
-import { buildSeed } from "@/lib/marketing-planner/seed";
+import type { PlannerData, ProductionTargets } from "@/lib/marketing-planner/types";
+import { buildSeed, DEFAULT_TARGETS } from "@/lib/marketing-planner/seed";
 
 const ROLES = ["super", "ultra", "manager", "sales_admin", "sales", "ops"] as const;
 
@@ -50,19 +50,26 @@ export async function loadMarketing(): Promise<PlannerData> {
     admin.from("mkt_keywords").select("data"),
   ]);
 
+  // Surface a real DB error instead of silently returning an empty planner (which
+  // would render every dropdown/setting blank + look like data loss). A transient
+  // error → the page shows an error boundary; reload recovers.
+  if (s.error) throw new Error(`[marketing] load settings failed: ${s.error.message}`);
   const settings = (s.data ?? []).map((r) => r.data);
-  if (settings.length === 0 && !s.error) {
+  if (settings.length === 0) {
     const seed = buildSeed();
     await writeAll(admin, seed);
     return seed;
   }
 
   const seed = buildSeed();
+  const loaded: ProductionTargets = (t.data?.data as ProductionTargets | null) ?? DEFAULT_TARGETS;
   return {
     version: seed.version,
     settings,
     contents: (c.data ?? []).map((r) => r.data),
-    targets: (t.data?.data as PlannerData["targets"]) ?? seed.targets,
+    // Normalize: บทความ/โพสต์ ยืนพื้น 3/วัน even if an older targets row predates them
+    // (a stale client can save the row back without these fields — self-heal on load).
+    targets: { ...loaded, articlePerDay: loaded.articlePerDay ?? 3, postPerDay: loaded.postPerDay ?? 3 },
     jobs: (j.data ?? []).map((r) => r.data),
     keywords: (k.data ?? []).map((r) => r.data),
   };

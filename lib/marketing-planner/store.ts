@@ -11,7 +11,7 @@
  * (and seeds on first run). First client render matches the server (empty),
  * so there's no hydration mismatch — the app shows a skeleton until `ready`.
  */
-import { createContext, createElement, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, KeywordItem, PlannerData, PlannerUser, ProductionTargets, SettingGroup, SettingItem } from "./types";
 import { PLANNER_SCHEMA_VERSION } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
@@ -111,14 +111,23 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   // optimistically and fire-and-forget persist to the DB (saveMarketing, upsert-only).
   const [data, setData] = useState<PlannerData>(initial ?? EMPTY);
   const ready = true;
+  const skipFirstSave = useRef(true);
 
   const apply = useCallback((fn: (d: PlannerData) => PlannerData) => {
-    setData((prev) => {
-      const next = fn(prev);
-      void saveMarketing(next);
-      return next;
-    });
+    setData((prev) => fn(prev));
   }, []);
+
+  // Persist to the DB AFTER each change. MUST be an effect (runs post-commit) — calling
+  // the saveMarketing server action inside the setData updater fired a Router update
+  // DURING render ("Cannot update Router while rendering PlannerProvider"), corrupting
+  // the render. Skips the first run: initial data already came from the server/DB.
+  useEffect(() => {
+    if (skipFirstSave.current) {
+      skipFirstSave.current = false;
+      return;
+    }
+    void saveMarketing(data);
+  }, [data]);
 
   const byGroup = useCallback(
     (g: SettingGroup) => data.settings.filter((s) => s.group === g && s.isActive).sort((a, b) => a.order - b.order),
