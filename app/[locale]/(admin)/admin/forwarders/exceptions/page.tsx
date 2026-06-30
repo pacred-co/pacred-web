@@ -23,7 +23,7 @@ import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { PageHeader } from "@/components/admin/page-header";
-import { EXCEPTION_TYPE_LABEL, type ExceptionType } from "@/actions/admin/forwarder-exception";
+import { EXCEPTION_TYPE_LABEL, type ExceptionType } from "@/lib/admin/forwarder-exception-types";
 import { AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";

@@ -14,7 +14,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { ForwarderExceptionPanelClient } from "./forwarder-exception-panel-client";
-import { EXCEPTION_TYPES, type ExceptionType } from "@/actions/admin/forwarder-exception";
+import { EXCEPTION_TYPES, type ExceptionType } from "@/lib/admin/forwarder-exception-types";
 
 function asExceptionType(v: string | null): ExceptionType | null {
   if (v && (EXCEPTION_TYPES as readonly string[]).includes(v)) return v as ExceptionType;

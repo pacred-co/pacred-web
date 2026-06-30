@@ -20,10 +20,12 @@ import { confirm } from "@/components/ui/confirm";
 import {
   flagForwarderException,
   resolveForwarderException,
+} from "@/actions/admin/forwarder-exception";
+import {
   EXCEPTION_TYPES,
   EXCEPTION_TYPE_LABEL,
   type ExceptionType,
-} from "@/actions/admin/forwarder-exception";
+} from "@/lib/admin/forwarder-exception-types";
 
 type Props = {
   fNo: number;

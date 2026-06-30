@@ -27,30 +27,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { EXCEPTION_TYPES, type ExceptionType } from "@/lib/admin/forwarder-exception-types";
 
 // ops/warehouse/super (+ god roles inherit super via requireAdmin's isGodRole).
 const ROLES = ["ops", "warehouse", "super"] as const;
 
-// The exception kinds the ops chats actually show. Kept in sync with the
-// migration's documented enum + the client labels below.
-export const EXCEPTION_TYPES = [
-  "not_mine",
-  "damaged",
-  "container_returned",
-  "customs_held",
-  "wrong_pr",
-  "other",
-] as const;
-export type ExceptionType = (typeof EXCEPTION_TYPES)[number];
-
-export const EXCEPTION_TYPE_LABEL: Record<ExceptionType, string> = {
-  not_mine:           "พัสดุไม่ใช่ของลูกค้ารายนี้",
-  damaged:            "ของแตก/ชำรุด",
-  container_returned: "ตู้ตีกลับ",
-  customs_held:       "ของติดด่าน/ศุลกากร",
-  wrong_pr:           "PR สลับ/ทักผิดราย",
-  other:              "อื่นๆ",
-};
+// EXCEPTION_TYPES / ExceptionType / EXCEPTION_TYPE_LABEL moved to a plain module
+// (a "use server" file can only export async functions — see that file's note).
 
 // ────────────────────────────────────────────────────────────
 // Resolve the caller's legacy admin id (tb_forwarder.fexception_by is
