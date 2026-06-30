@@ -145,6 +145,17 @@ type Stop = {
   key:          string;
   fshipby:      string | null;
   shipByLabel:  string;
+  /** The customer this stop belongs to (userid + resolved name from tb_users) —
+   *  the IDENTITY shown on the card. For a MOMO/commit row the delivery address
+   *  is still the warehouse placeholder, so we lead with WHO the parcel is for. */
+  userid:        string;
+  customerName:  string;
+  /** Display name for the recipient: the real address name when set, else the
+   *  customer's name (never the bare "รับที่โกดัง Pacred" placeholder). */
+  recipientName: string;
+  /** True when faddressname is empty / the warehouse self-pickup placeholder —
+   *  i.e. no real delivery address yet (เซล must fill it in). */
+  addressMissing: boolean;
   address: {
     name: string; lastName: string; no: string; subDistrict: string;
     district: string; province: string; zipCode: string; tel: string;
@@ -158,6 +169,15 @@ type Stop = {
   totalWeight:  number;
   totalVolume:  number;
 };
+
+/** A delivery row still on the warehouse self-pickup placeholder ("รับที่โกดัง
+ *  Pacred" — the legacy MOMO/commit default) has no REAL recipient/address. Same
+ *  rule as the `/admin/drivers/[id]` detail page (`isWarehousePlaceholder`) so
+ *  the create + detail screens read identically. */
+function isWarehousePlaceholderName(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim();
+  return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+}
 
 type PickupItem = {
   id: number; fidorco: string; ftrackingchn: string;
@@ -227,12 +247,26 @@ function buildPickupGroups(
   );
 }
 
-/** Group eligible rows by (carrier · recipient address) into form-ready stops. */
-function buildStops(eligible: ForwarderRow[]): Stop[] {
+/** Group eligible rows by (carrier · recipient address) into form-ready stops.
+ *  `customerById` maps userid → { name, tel } from tb_users so each card leads
+ *  with the CUSTOMER's real name even when the row carries the warehouse
+ *  placeholder address (MOMO/commit default "รับที่โกดัง Pacred"). */
+function buildStops(
+  eligible: ForwarderRow[],
+  customerById: Map<string, { name: string; tel: string }>,
+): Stop[] {
   const groupMap = new Map<string, Stop>();
   for (const f of eligible) {
+    const userid = (f.userid ?? "").trim() || "—";
+    // Placeholder-address rows share an identical fAddress* across different
+    // customers, so fold the userid into the key — else two customers' parcels
+    // would merge into ONE card under a single (wrong) name. Real addresses
+    // still group as legacy does (one card per physical destination).
+    const placeholder = isWarehousePlaceholderName(f.faddressname);
     const key = [
-      f.fshipby ?? "", f.faddressname ?? "", f.faddresslastname ?? "",
+      f.fshipby ?? "",
+      placeholder ? `__wh__${userid}` : "",
+      f.faddressname ?? "", f.faddresslastname ?? "",
       f.faddressno ?? "", f.faddresssubdistrict ?? "",
       f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",
     ].join("|");
@@ -248,10 +282,21 @@ function buildStops(eligible: ForwarderRow[]): Stop[] {
       existing.totalWeight += Number(f.fweight ?? 0);
       existing.totalVolume += Number(f.fvolume ?? 0);
     } else {
+      const cust = customerById.get(userid);
+      const customerName = cust?.name || "";
+      // Recipient = the real address name when present, else the customer name,
+      // else the userid (never the bare warehouse placeholder).
+      const recipientName = placeholder
+        ? (customerName || userid)
+        : `${(f.faddressname ?? "").trim()} ${(f.faddresslastname ?? "").trim()}`.trim();
       groupMap.set(key, {
         key,
-        fshipby:     f.fshipby,
-        shipByLabel: nameShipBy(f.fshipby),
+        fshipby:        f.fshipby,
+        shipByLabel:    nameShipBy(f.fshipby),
+        userid,
+        customerName:   customerName || userid,
+        recipientName:  recipientName || userid,
+        addressMissing: placeholder,
         items: [{
           id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
           userid: f.userid ?? "—", famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
@@ -262,20 +307,22 @@ function buildStops(eligible: ForwarderRow[]): Stop[] {
         totalWeight: Number(f.fweight ?? 0),
         totalVolume: Number(f.fvolume ?? 0),
         address: {
-          name:        f.faddressname ?? "",
-          lastName:    f.faddresslastname ?? "",
-          no:          f.faddressno ?? "",
-          subDistrict: f.faddresssubdistrict ?? "",
+          // Blank out the placeholder name so the card never prints
+          // "รับที่โกดัง Pacred" as a person; keep tel from the row if any.
+          name:        placeholder ? "" : (f.faddressname ?? ""),
+          lastName:    placeholder ? "" : (f.faddresslastname ?? ""),
+          no:          placeholder ? "" : (f.faddressno ?? ""),
+          subDistrict: placeholder ? "" : (f.faddresssubdistrict ?? ""),
           district:    f.faddressdistrict ?? "",
-          province:    f.faddressprovince ?? "",
-          zipCode:     f.faddresszipcode ?? "",
-          tel:         f.faddresstel ?? "",
+          province:    placeholder ? "" : (f.faddressprovince ?? ""),
+          zipCode:     placeholder ? "" : (f.faddresszipcode ?? ""),
+          tel:         f.faddresstel ?? cust?.tel ?? "",
         },
       });
     }
   }
   return Array.from(groupMap.values()).sort((a, b) =>
-    (a.address.name + a.address.no).localeCompare(b.address.name + b.address.no, "th"),
+    (a.recipientName + a.address.no).localeCompare(b.recipientName + b.address.no, "th"),
   );
 }
 
@@ -343,36 +390,40 @@ export default async function CreateDriverBatchPage({
     activeTab === "express" ? expressEligible :
     driverEligible;
 
-  // 3a. Pickup tab → group BY CUSTOMER (userid). Look up each customer's name +
-  //     phone from tb_users so the card leads with ชื่อลูกค้า + รหัสลูกค้า (the
-  //     self-pickup person), instead of the warehouse delivery address.
-  let pickupGroups: PickupGroup[] = [];
-  if (activeTab === "pickup") {
-    const custIds = [...new Set(pickupEligible.map((r) => (r.userid ?? "").trim()).filter(Boolean))];
-    const customerById = new Map<string, { name: string; tel: string }>();
-    if (custIds.length > 0) {
-      const { data: custRows, error: custErr } = await admin
-        .from("tb_users")
-        .select("userID, userName, userLastName, userTel")
-        .in("userID", custIds);
-      if (custErr) {
-        console.error("/admin/drivers/new: pickup customer name lookup failed", {
-          code: custErr.code, message: custErr.message,
-        });
-      }
-      for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null }[]) {
-        customerById.set(u.userID, {
-          name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(),
-          tel:  (u.userTel ?? "").trim(),
-        });
-      }
+  // 3a. Look up each customer's name + phone from tb_users (camelCase cols ·
+  //     CLAUDE.md exception) so EVERY tab's card leads with ชื่อลูกค้า + รหัสลูกค้า.
+  //     The driver/express cards need it too: a MOMO/commit row carries the
+  //     warehouse placeholder ("รับที่โกดัง Pacred") as the address name, so
+  //     without this the card showed "คุณรับที่โกดัง Pacred" instead of who the
+  //     parcel is for. Resolve once for whichever rows the active tab shows.
+  const custIds = [...new Set(eligible.map((r) => (r.userid ?? "").trim()).filter(Boolean))];
+  const customerById = new Map<string, { name: string; tel: string }>();
+  if (custIds.length > 0) {
+    const { data: custRows, error: custErr } = await admin
+      .from("tb_users")
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", custIds);
+    if (custErr) {
+      console.error("/admin/drivers/new: customer name lookup failed", {
+        code: custErr.code, message: custErr.message,
+      });
     }
-    pickupGroups = buildPickupGroups(pickupEligible, customerById);
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null }[]) {
+      customerById.set(u.userID, {
+        name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(),
+        tel:  (u.userTel ?? "").trim(),
+      });
+    }
   }
 
+  // Pickup tab → group BY CUSTOMER (userid) into per-customer cards.
+  const pickupGroups: PickupGroup[] =
+    activeTab === "pickup" ? buildPickupGroups(pickupEligible, customerById) : [];
+
   // Stop groups for the driver/express tabs (address-based — a driver delivers
-  // to a physical address). The pickup tab uses pickupGroups above instead.
-  const groups = activeTab === "pickup" ? [] : buildStops(eligible);
+  // to a physical address; for placeholder rows we fold in the customer so each
+  // card stays one customer). The pickup tab uses pickupGroups above instead.
+  const groups = activeTab === "pickup" ? [] : buildStops(eligible, customerById);
 
   // 4. Driver picker — the มอบคนขับ + Express tabs both assign a Pacred driver.
   let drivers: DriverOption[] = [];
