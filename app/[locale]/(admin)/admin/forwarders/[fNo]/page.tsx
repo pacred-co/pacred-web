@@ -81,6 +81,11 @@ import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings"
 // see "what did China say about this container?" without leaving the page. Gated
 // by this page's requireAdmin; the panel never widens access or writes anything.
 import { WechatContextPanel } from "./wechat-context-panel";
+// 2026-06-30 (gap G7 · owner "อุดจุดบอด") — parcel-exception handling (mig 0230).
+// Staff flag a ฝากนำเข้า row as an exception (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/
+// ติดด่าน/PR สลับ), record a note + photo, and resolve it. RECORD-ONLY — the
+// panel/actions write ONLY fexception_* (never money/status/ownership · §0e).
+import { ForwarderExceptionPanel } from "./forwarder-exception-panel";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
 // breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
 // (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + เหมาๆ 100).
@@ -518,6 +523,23 @@ async function tryRenderTbForwarder(
   }
   const customerAvatar = await resolveLegacyUrl(u?.userPicture ?? null, "profile-thumb");
 
+  // 2026-06-30 (gap G7) — best-effort read of the open-exception flag for the
+  // header badge (separate query so a pre-mig-0230 env degrades to no-badge
+  // instead of 500'ing the page · same pattern as the fimages read above).
+  let exceptionOpen = false;
+  {
+    const { data: exRow, error: exErr } = await admin
+      .from("tb_forwarder").select("fexception_status").eq("id", r.id)
+      .maybeSingle<{ fexception_status: string | null }>();
+    if (exErr) {
+      if (exErr.code !== "42703" && !/fexception/i.test(exErr.message ?? "")) {
+        console.error(`[tb_forwarder fexception_status] failed`, { code: exErr.code, message: exErr.message, fId: r.id });
+      }
+    } else if ((exRow?.fexception_status ?? "") === "open") {
+      exceptionOpen = true;
+    }
+  }
+
   const STATUS_LABEL: Record<string, string> = {
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
     "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
@@ -788,6 +810,13 @@ async function tryRenderTbForwarder(
               {rateMissing && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-0.5 text-xs font-medium">
                   <AlertTriangle className="h-3 w-3" /> {tRate("missingBadge")}
+                </span>
+              )}
+              {/* 2026-06-30 (gap G7) — open parcel-exception flag, surfaced at the
+                  order header so staff see "พัสดุนี้มีปัญหา" at a glance. */}
+              {exceptionOpen && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 text-red-700 px-2.5 py-0.5 text-xs font-semibold">
+                  <AlertTriangle className="h-3 w-3" /> พัสดุมีปัญหา
                 </span>
               )}
             </div>
@@ -1176,6 +1205,15 @@ async function tryRenderTbForwarder(
             </div>
           );
         })()}
+
+        {/* ── แจ้งปัญหาพัสดุ — parcel-exception flag/record/resolve (gap G7 ·
+           owner "อุดจุดบอด" · mig 0230). RECORD-ONLY: flag a row as ของแตก/ไม่ใช่
+           ของลูกค้า/ตู้ตีกลับ/ติดด่าน/PR สลับ with a note + photo · resolve when
+           handled. The action writes ONLY fexception_* — money/status/ownership
+           stay on the existing audited paths (แก้ไขลูกค้า · สร้างใบวางบิล). ── */}
+        <div className="mt-4">
+          <ForwarderExceptionPanel fNo={r.id} />
+        </div>
 
         {/* ── จีนว่าไงเรื่องตู้/แทรคนี้ — READ-ONLY WeChat ops context (owner
            carryover 2026-06-30 · mig 0228). Matches THIS order's container code /

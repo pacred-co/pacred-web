@@ -696,6 +696,8 @@ const blockQAQueues: MenuItem = {
     { labelKey: "qa.queues.chnWhOver2d",        href: "/admin/qa/chn-wh-over-2d",        icon: "AlertCircle" },
     { labelKey: "qa.queues.transitOverdue",     href: "/admin/qa/transit-overdue",       icon: "AlertCircle" },
     { labelKey: "qa.queues.ownerlessGoods",     href: "/admin/qa/ownerless-goods",       icon: "AlertCircle" },
+    // 2026-06-30 (gap G7) — คิวพัสดุมีปัญหา (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/ติดด่าน/PR สลับ).
+    { labelKey: "qa.queues.parcelExceptions",   href: "/admin/forwarders/exceptions",    icon: "AlertTriangle" },
     { labelKey: "qa.queues.prepareOverdue",     href: "/admin/qa/prepare-overdue",       icon: "AlertCircle" },
     { labelKey: "qa.queues.newClientNoContact", href: "/admin/qa/new-client-no-contact", icon: "AlertCircle" },
   ],
