@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { getInvoiceDetail } from "@/actions/admin/billing-run";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { isGodRole } from "@/lib/admin/god-role";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
 
@@ -36,7 +37,10 @@ export default async function BillingRunDetailPage({
   const { roles } = await requireAdmin([
     "super", "accounting", "sales", "sales_admin", "ops", "freight_export_doc", "freight_import_doc",
   ]);
-  const canSettle = roles.some((r) => r === "super" || r === "accounting");
+  // canSettle MUST match the markBillingRunPaid gate: withAdmin(["super","accounting"])
+  // passes the god-nav tiers (ultra/super/normies via isGodRole) + accounting. A raw
+  // super-only check hid the settle form from ultra (caught on browser-verify).
+  const canSettle = isGodRole(roles) || roles.includes("accounting");
   const { id } = await params;
   const invoiceId = Number(id);
   if (!Number.isInteger(invoiceId) || invoiceId <= 0) notFound();
