@@ -1,38 +1,42 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { countShopArrivals } from "./shop-order-arrivals";
+import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
 
 /**
- * Complete the ฝากสั่งซื้อ shop order whose goods have become a ฝากนำเข้า import.
+ * RE-DERIVE the ฝากสั่งซื้อ shop order whose linked forwarder just changed state.
  *
- * Owner 2026-06-22 (the recurring "มี Tracking ฝากนำเข้าแล้ว แต่งานฝากสั่งยังค้าง"
- * complaint): once a shop order's goods reach Pacred's China warehouse AND a
- * linked forwarder import exists (the caller fires this only when the forwarder
- * is at fstatus ≥ 2 = ถึงโกดังจีนแล้ว / beyond), the ฝากสั่งซื้อ has done its job —
- * order from China + reach the China warehouse + hand off to import. So it
- * COMPLETES to tb_header_order.hstatus '5' (สำเร็จ); the import (tb_forwarder)
- * fstatus then carries the tracking forward (ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย →
- * ส่งแล้ว), which the customer follows via the "ฝากนำเข้าที่เชื่อมโยง" card on the
- * shop-order detail. Advancing from BOTH '4' (รอร้านจีนจัดส่ง) and '40'
- * (ถึงโกดังจีน · the old intermediate that left orders looking stuck) → '5'.
+ * Owner 2026-06-22 (the recurring "มี Tracking ฝากนำเข้าแล้ว แต่งานฝากสั่งยังค้าง")
+ * + 2026-06-30 (the 3-stage rule · P22328): the shop order's status is a PURE
+ * FUNCTION of its shops' arrivals — รอร้านจีนจัดส่ง '4' → ถึงโกดังจีน '40' → สำเร็จ
+ * '5' — recomputed on EVERY forwarder write, two-way inside {4,40} (so a
+ * wrongly-'40' order drops back to '4' when not-all-arrived), forward-only out of
+ * '5'. The import (tb_forwarder) fstatus then carries the tracking forward, which
+ * the customer follows via the "ฝากนำเข้าที่เชื่อมโยง" card on the shop-order detail.
  *
  * The link is resolved two ways (a MOMO-created forwarder has reforder=""):
  *   1. reforder = hno   — set by the spawn-from-order path (service-orders-spawn).
  *   2. tb_order.ctrackingnumber = the forwarder ftrackingchn → that order's hno
  *      — for forwarders MOMO created from the tracking the shop order recorded.
  *
- * FORWARD-ONLY + idempotent (.in("hstatus",["4","40"]) → 0-row no-op once at
- * 5/6) and status-only (no money). Returns the completed hno, or null (no link /
- * already completed / cancelled / error). Best-effort: a caller must NOT let its
- * failure roll back the forwarder write.
+ * Re-derive (status-only · no money):
+ *   - current ∈ {4,40} → write deriveShopStatus(summary) if it differs (4→40,
+ *     40→4 down-correct, 4→5, 40→5).
+ *   - current == '3'   → forward-pull ONLY (write if target ∈ {40,5}); never demote 3.
+ *   - current == '5'/'6'/'99' → never touched (forward-only out of completion · cancelled).
+ *   - .in() WHERE guard on the read value → idempotent + TOCTOU-safe.
+ *
+ * This TS mirror keeps the in-action result + audit consistent; the DB trigger
+ * (mig 0234/0235) is the systemic SOT that corrects any stale read. Returns the
+ * hno when this call wrote a new status, else null. Best-effort: a caller must
+ * NOT let its failure roll back the forwarder write.
  */
 export async function advanceLinkedShopOrder(
   admin: SupabaseClient,
   forwarder: {
     reforder: string | null | undefined;
     ftrackingchn: string | null | undefined;
-    // owner 2026-06-26 — two-stage: ถึงโกดังจีน(fstatus=2, ไม่มีเลขตู้)→40 ·
-    // ได้เลขตู้/fstatus≥3→5. The DB trigger (mig 0216) is the systemic SOT that
+    // owner 2026-06-26 — 3-stage: ถึงโกดังจีน(fstatus=2, ไม่มีเลขตู้)→40 ·
+    // เลขตู้/fstatus≥4→5. The DB trigger (mig 0234/0235) is the systemic SOT that
     // fires from EVERY path; these are passed best-effort so the in-action
     // result + audit match (the trigger corrects any stale-data drift).
     fcabinetnumber?: string | null;
@@ -60,25 +64,41 @@ export async function advanceLinkedShopOrder(
   }
   if (!hno) return null;
 
-  // 2. Multi-shop gate (ภูม 2026-06-30 · mirrors mig-0232 trigger). Don't flip on
-  //    the SINGLE triggering forwarder — roll up EVERY shop of the order:
-  //    - ทุกร้าน done (เลขตู้/fstatus≥3) → '5' สำเร็จ (from 4/40)
-  //    - ทุกร้าน arrived China (fstatus≥2) แต่ยังไม่ done → '40' ถึงโกดังจีน (from 4)
-  //    - ยังมีร้านที่ขาด → ไม่ flip (คง รอร้านจีนจัดส่ง) — กันสถานะ "สำเร็จ" ก่อนของถึงครบ.
-  //    Idempotent (.in/.eq guard → 0-row no-op once past).
+  // 2. Re-derive the 3-stage status as a PURE FUNCTION of EVERY shop of the order
+  //    (deriveShopStatus → '4' | '40' | '5'). Don't flip on the SINGLE triggering
+  //    forwarder. (owner: "อีกร้านยังไม่ถึง แต่สถานะออเดอร์ไปสำเร็จ/ถึงโกดังจีนแล้ว".)
   const summary = await countShopArrivals(admin, hno);
-  if (!summary.allArrived && !summary.allDone) return null; // a shop still missing
-  const toFive = summary.allDone;
+  const target = deriveShopStatus(summary);
 
-  const q = admin.from("tb_header_order").update(
-    toFive ? { hstatus: "5", hdateupdate: nowIso } : { hstatus: "40", hdateupdate: nowIso },
-  ).eq("hno", hno);
-  const { data: advRows, error } = await (toFive
-    ? q.in("hstatus", ["4", "40"])
-    : q.eq("hstatus", "4")
-  ).select("hno");
+  // 3. Read current status — forward-only out of 5/6/99; '3' only forward-pulled.
+  const { data: hdr, error: hdrErr } = await admin
+    .from("tb_header_order")
+    .select("hstatus")
+    .eq("hno", hno)
+    .maybeSingle<{ hstatus: string | null }>();
+  if (hdrErr) {
+    console.error("[advanceLinkedShopOrder] header status read failed", { hno, code: hdrErr.code, message: hdrErr.message });
+    return null;
+  }
+  const cur = (hdr?.hstatus ?? "").trim();
+  if (cur === "5" || cur === "6" || cur === "99") return null; // forward-only / cancelled
+  const writable =
+    cur === "4" || cur === "40" // {4,40} → any of 4/40/5 (incl. 40→4 down-correct)
+    || (cur === "3" && (target === "40" || target === "5")); // 3 → forward pull only
+  if (!writable || cur === target) return null;
+
+  // 4. Re-derive write — idempotent + TOCTOU-safe via the .in() WHERE on the read value.
+  const guard = cur === "3" ? ["3"] : ["4", "40"];
+  const update: Record<string, unknown> = { hstatus: target, hdateupdate: nowIso };
+  if (target === "5") update.hdate5 = nowIso;
+  const { data: advRows, error } = await admin
+    .from("tb_header_order")
+    .update(update)
+    .eq("hno", hno)
+    .in("hstatus", guard)
+    .select("hno");
   if (error) {
-    console.error("[advanceLinkedShopOrder] header advance failed", { hno, toFive, code: error.code, message: error.message });
+    console.error("[advanceLinkedShopOrder] header re-derive failed", { hno, from: cur, to: target, code: error.code, message: error.message });
     return null;
   }
   return advRows && advRows.length > 0 ? hno : null;

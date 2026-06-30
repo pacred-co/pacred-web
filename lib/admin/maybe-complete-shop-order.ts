@@ -1,45 +1,49 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { countShopArrivals } from "./shop-order-arrivals";
+import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
 
 /**
- * Legacy "all-shops-done" completion gate for ฝากสั่งซื้อ (shops.php
- * L1525-1580 / L1733-1789 · the END of BOTH saveTarcking + arrSaveTarcking
- * handlers).
+ * 3-stage RE-DERIVE gate for ฝากสั่งซื้อ multi-shop orders (2026-06-30 · the
+ * owner's "สถานะ = pure function ของร้านที่มาถึง" rule, replacing the legacy
+ * "flip → 5 once every shop is tracked" one-way latch · shops.php L1525-1580 /
+ * L1733-1789).
  *
- * THE bug this fixes (owner: "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้"):
- * Pacred replaced legacy's per-shop incremental "spawn-then-conditionally-
- * complete" with a single all-at-once button that flipped the WHOLE order to
- * status 5 on the FIRST press. Once status≠4 the tracking inputs + spawn UI
- * disappear → the remaining shops can never get tracking entered or spawned.
+ * THE bugs this closes:
+ *   1. "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้" — Pacred flipped the WHOLE
+ *      order to '5' on the first tracking; once status≠4 the per-shop inputs
+ *      disappeared → the rest of the shops could never be tracked/spawned.
+ *   2. P22328 "อีกร้านยังไม่ถึง แต่สถานะออเดอร์ไปสำเร็จ/ถึงโกดังจีนแล้ว" — the
+ *      status only ever advanced (4→40→5), never dropped back, so a wrongly-'40'
+ *      order stayed '40' even when not all shops had arrived.
  *
- * Legacy NEVER flips to 5 until the LAST shop's tracking lands. The gate it
- * uses (faithfully reproduced here):
- *   arrID  = every non-empty cShippingNumber token (comma-split) across all
- *            tb_order rows of hNo  — the count of shop sub-order SLOTS.
- *   arrID2 = every non-empty cTrackingNumber token (comma-split) across all
- *            tb_order rows of hNo  — the count of trackings ENTERED.
- *   flip → '5' ONLY if  count(arrID) === count(arrID2)  &&  count > 0.
- * Otherwise the order STAYS at 4 and the per-shop forms re-render.
+ * THE 3-stage rule (a PURE FUNCTION of the per-shop arrival roll-up · STATUS-ONLY):
+ *   '4'  รอร้านจีนจัดส่ง   ← otherwise (a shop not shipped / not arrived)
+ *   '40' ถึงโกดังจีน        ← ทุกร้านถึงโกดังจีน (fstatus≥2) แต่ยังมีร้านไม่ได้เลขตู้
+ *   '5'  สำเร็จ            ← ทุกร้านได้เลขตู้ (fcabinetnumber) / ถึงไทย (fstatus≥4)
+ * `deriveShopStatus(summary)` is the SOT (see shop-order-arrivals.ts).
  *
- * On Pacred's normalized one-slot-per-shop data this degrades exactly to
- * "every shop has a tracking" (one cShippingNumber token + one cTrackingNumber
- * token per shop) — identical end-state to legacy, no behaviour change.
+ * RE-DERIVE (two-way inside {4,40}) instead of advance-only:
+ *   - current ∈ {4,40} → write deriveShopStatus(summary) if it differs (incl.
+ *     40→4 down-correction · 4→40 · 4→5 · 40→5).
+ *   - current == '3'   → forward-pull ONLY: write if target ∈ {40,5}; never demote 3.
+ *   - current == '5'/'6'/'99' → never touched (forward-only out of completion · cancelled).
+ *   - .in("hstatus", …) WHERE guard → idempotent + TOCTOU-safe.
  *
- * STATUS-ONLY · no money is touched here. When the gate fires, the legacy
- * re-stamps hTotalPriceUser from the SAME sell formula (no driver change) —
- * the caller passes recomputeSell:true to do that (shops.php L1562-1565). The
- * DB trigger (mig 0215/0216) is a SEPARATE milestone (goods physically reached
- * the China warehouse) and is unaffected — a spawned forwarder sits at
- * fstatus='1' so the trigger does not auto-complete; this gate is the
- * "all shops have tracking + spawned" milestone.
+ * Legacy tracking-complete pre-check kept: the order can only settle to '5' once
+ * every shop SLOT has a tracking (slotCount===trackingCount) AND every shop is
+ * done. If all-tracked but not-all-done it settles to '40' (or stays '4'); if not
+ * all-tracked it can still advance to '40' (arrival) but never to '5'.
  *
- * FORWARD-ONLY + idempotent: the UPDATE is gated `.eq("hstatus","4")` so it is
- * a no-op once the order is past 4 (40 / 5 / 6). Best-effort: a caller must NOT
- * let its failure roll back the forwarder spawn.
+ * STATUS-ONLY · no money. On the '→5' branch ONLY, the legacy re-stamps
+ * hTotalPriceUser from the SAME sell formula (no driver change · shops.php
+ * L1562-1565) when recomputeSell:true. The DB trigger (mig 0234/0235) is the
+ * systemic SOT that fires from EVERY forwarder write; this TS mirror keeps the
+ * in-action result + audit consistent (the trigger corrects any stale read).
+ *
+ * Best-effort: a caller must NOT let its failure roll back the forwarder spawn.
  *
  * Returns `{ completed, slotCount, trackingCount }` — `completed` is true only
- * when this call flipped 4 → 5.
+ * when this call wrote hstatus '5' (settled the order).
  */
 export async function maybeCompleteShopOrder(
   admin: SupabaseClient,
@@ -75,33 +79,57 @@ export async function maybeCompleteShopOrder(
     trackingCount += splitTokens(r.ctrackingnumber).length;
   }
 
-  // 2. The legacy gate — flip only when every slot has a tracking.
-  if (slotCount === 0 || slotCount !== trackingCount) {
+  // 2. Re-derive the order's status as a PURE FUNCTION of the per-shop arrival
+  //    roll-up (deriveShopStatus → '4' | '40' | '5'). STATUS-ONLY.
+  const summary = await countShopArrivals(admin, hno);
+  let target: "4" | "40" | "5" = deriveShopStatus(summary);
+
+  // 2b. Legacy tracking-complete pre-check for SETTLEMENT only: never settle to '5'
+  //     unless every shop SLOT has a tracking entered (slotCount===trackingCount,
+  //     count>0 · shops.php L1525-1580). If derived '5' but tracking bags aren't
+  //     fully entered → downgrade to the arrival level '40' (don't complete prematurely;
+  //     the trigger re-derives to '5' once the last shop's tracking + goods land).
+  if (target === "5" && (slotCount === 0 || slotCount !== trackingCount)) {
+    target = "40";
+  }
+
+  // 3. Read the current status — forward-only OUT of completion / cancelled, and a
+  //    '3' (สั่งสินค้า·ชำระแล้ว) is only forward-PULLED to {40,5}, never demoted.
+  const { data: hdr, error: hdrErr } = await admin
+    .from("tb_header_order")
+    .select("hstatus")
+    .eq("hno", hno)
+    .maybeSingle<{ hstatus: string | null }>();
+  if (hdrErr) {
+    console.error("[maybeCompleteShopOrder] header status read failed", {
+      hno, code: hdrErr.code, message: hdrErr.message,
+    });
+    return { completed: false, slotCount, trackingCount };
+  }
+  const cur = (hdr?.hstatus ?? "").trim();
+  if (cur === "5" || cur === "6" || cur === "99") {
+    // already complete / cancelled — never auto-demoted live.
+    return { completed: false, slotCount, trackingCount };
+  }
+  const writable =
+    cur === "4" || cur === "40" // {4,40} → any of 4/40/5 (incl. 40→4 down-correct)
+    || (cur === "3" && (target === "40" || target === "5")); // 3 → forward pull only
+  if (!writable || cur === target) {
     return { completed: false, slotCount, trackingCount };
   }
 
-  // 2b. ภูม 2026-06-30 — multi-shop ARRIVAL gate (mirrors mig-0232 trigger). An
-  //     order is สำเร็จ(5) only when ทุกร้าน reached the China warehouse + handed to
-  //     import (done) — NOT merely when every shop has a tracking entered. (owner:
-  //     "3 ร้าน 2 ร้านมาถึงแล้ว อีกร้านยังไม่ถึง แต่สถานะไปสำเร็จ".) If all-tracked but
-  //     not-all-arrived → don't complete here; the forwarder-arrival trigger flips
-  //     it to 5 when the last shop's goods land.
-  const arrivals = await countShopArrivals(admin, hno);
-  if (!arrivals.allDone) {
-    return { completed: false, slotCount, trackingCount };
-  }
-
-  // 3. Build the (forward-only) flip. When recomputeSell, re-stamp
+  // 4. Build the (status-only) re-derive write. On the '→5' branch ONLY, re-stamp
   //    hTotalPriceUser from the SAME sell formula legacy uses on completion
-  //    (shops.php L1562-1565). NO sell driver (hRate/htotalpricechn/
-  //    hshippingchn/hshippingservice) is touched — this is a pure re-derive,
-  //    so a sell-locked order's total is unchanged. Best-effort: if the header
-  //    read fails we still attempt the status-only flip.
+  //    (shops.php L1562-1565). NO sell driver (hRate/htotalpricechn/hshippingchn/
+  //    hshippingservice) is touched — a pure re-derive, so a sell-locked order's
+  //    total is unchanged. Best-effort: if the header read fails we still attempt
+  //    the status-only write.
   const nowIso = new Date().toISOString();
-  const update: Record<string, unknown> = { hstatus: "5", hdate5: nowIso, hdateupdate: nowIso };
+  const update: Record<string, unknown> = { hstatus: target, hdateupdate: nowIso };
+  if (target === "5") update.hdate5 = nowIso;
   if (opts.legacyAdminId) update.adminidupdate = opts.legacyAdminId;
 
-  if (opts.recomputeSell) {
+  if (target === "5" && opts.recomputeSell) {
     const { data: header, error: hErr } = await admin
       .from("tb_header_order")
       .select("htotalpricechn, hshippingchn, hrate, hshippingservice")
@@ -129,22 +157,23 @@ export async function maybeCompleteShopOrder(
     }
   }
 
-  const { data: flipped, error: flipErr } = await admin
+  // 5. Re-derive write — idempotent + TOCTOU-safe via the .in() WHERE on the value
+  //    we read. A '3' order is only forward-pulled (guarded `.in(["3"])`); a {4,40}
+  //    order accepts any of 4/40/5 (incl. the 40→4 down-correction). Never 5/6/99.
+  const guard = cur === "3" ? ["3"] : ["4", "40"];
+  const { data: written, error: wErr } = await admin
     .from("tb_header_order")
     .update(update)
     .eq("hno", hno)
-    // forward-only · idempotent. Complete from 4 (รอร้านจีนจัดส่ง) OR 40 (ถึงโกดังจีน):
-    // a multi-shop order flips 4→40 when the first shop's forwarder reaches the
-    // China warehouse, but it's only DONE when every shop is tracked+spawned —
-    // which can happen while it sits at 40. (2026-06-29 owner P22328.)
-    .in("hstatus", ["4", "40"])
+    .in("hstatus", guard)
     .select("hno");
-  if (flipErr) {
-    console.error("[maybeCompleteShopOrder] 4→5 flip failed", {
-      hno, code: flipErr.code, message: flipErr.message,
+  if (wErr) {
+    console.error("[maybeCompleteShopOrder] status re-derive write failed", {
+      hno, from: cur, to: target, code: wErr.code, message: wErr.message,
     });
     return { completed: false, slotCount, trackingCount };
   }
 
-  return { completed: (flipped?.length ?? 0) > 0, slotCount, trackingCount };
+  const wrote = (written?.length ?? 0) > 0;
+  return { completed: wrote && target === "5", slotCount, trackingCount };
 }

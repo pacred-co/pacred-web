@@ -34,8 +34,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Store, Save, ExternalLink, CheckCircle2, Truck, Coins, Pencil } from "lucide-react";
+import {
+  Store, Save, ExternalLink, CheckCircle2, Truck, Coins, Pencil,
+  ChevronDown, ChevronRight, Package,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import {
   adminMarkShopOrderOrdered,
   adminUpdateShopTracking,
@@ -85,6 +89,38 @@ export type ShopSpawnSummaryRow = {
   done: boolean;
 };
 
+// 2026-06-30 (owner · spec §5 GROUPING) — items that share the SAME
+// `ctrackingnumber` collapse into ONE dropdown whose HEADER summarises that
+// tracking (mirrors the report-cnt box-breakdown dropdown). The arrival fields
+// (fstatus/hasContainer/arrived/done) come from the SAME `countShopArrivals`
+// data the 3-stage gate uses, so the SUMMARY agrees with the status to the
+// satang. Built server-side in edit/page.tsx · display-only (no new mutation).
+export type TrackingGroupItem = {
+  id: number;
+  ctitle: string;
+  camount: number;
+  cprice: number;
+  cshippingchn: number;
+  crewallet: string | null;
+  coverUrl: string | null;
+  curl: string | null;
+  ccolor: string | null;
+  csize: string | null;
+};
+export type TrackingGroup = {
+  tracking: string;       // ctrackingnumber ("" = ยังไม่ส่ง → its own group)
+  itemCount: number;      // จำนวนรายการ
+  totalQty: number;       // จำนวนรวม (Σ camount · skip refunded)
+  subtotalCny: number;    // ¥รวม (Σ camount×cprice + cshippingchn · skip refunded)
+  fstatus: string;        // linked forwarder status ("" = no forwarder)
+  hasContainer: boolean;  // เลขตู้ assigned
+  arrived: boolean;       // fstatus ≥ 2 (ถึงโกดังจีน)
+  done: boolean;          // hasContainer || fstatus ≥ 3
+  fNo: number | null;     // linked tb_forwarder id (deep link #fNo)
+  shops: string[];        // distinct ร้าน (cnameshop) folded into this tracking
+  items: TrackingGroupItem[];
+};
+
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt disabled:text-muted";
 
@@ -95,6 +131,8 @@ export function ShopFieldsBoard({
   spawnSummary,
   doneCount,
   totalCount,
+  trackingGroups,
+  hRate,
 }: {
   hNo: string;
   status: string;        // hstatus '1'..'5'
@@ -104,6 +142,12 @@ export function ShopFieldsBoard({
   spawnSummary?: ShopSpawnSummaryRow[];
   doneCount?: number;
   totalCount?: number;
+  // 2026-06-30 (spec §5) — items grouped by ctrackingnumber for the at-a-glance
+  // SUMMARY view (collapsible dropdowns). Optional · when ≥1 group the
+  // "จัดกลุ่มตามแทรคกิ้ง" view sits above the per-shop edit cards.
+  trackingGroups?: TrackingGroup[];
+  /** ฝากสั่ง rate (hrate · บาท/หยวน) — for the display-only THB est in the header. */
+  hRate?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -131,6 +175,28 @@ export function ShopFieldsBoard({
   const summaryByShop = new Map<string, ShopSpawnSummaryRow>();
   for (const s of spawnSummary ?? []) summaryByShop.set(s.cnameshop, s);
   const showProgress = (totalCount ?? 0) > 0 && (status === "4" || status === "40" || status === "5");
+
+  // 2026-06-30 (spec §5) — tracking-grouped SUMMARY dropdowns.
+  // P22328 = 16 shops / 150 items → grouping the items by ctrackingnumber lets
+  // staff scan "this tracking = N รายการ · ¥รวม · arrival pill" at a glance.
+  const groups = trackingGroups ?? [];
+  const totalGroupItems = groups.reduce((s, g) => s + g.itemCount, 0);
+  // Default the grouped SUMMARY view ON when there are many items (the owner's
+  // P22328 pain point); a toggle lets staff hide it.
+  const [showGrouped, setShowGrouped] = useState<boolean>(totalGroupItems >= 12);
+  // Per-group expand state. Collapsed by default when many groups/items (the
+  // header IS the at-a-glance summary · §0g); auto-open a single group.
+  const [expandedTracking, setExpandedTracking] = useState<Set<string>>(
+    () => (groups.length <= 1 ? new Set(groups.map((g) => g.tracking)) : new Set()),
+  );
+  function toggleTracking(tr: string) {
+    setExpandedTracking((prev) => {
+      const next = new Set(prev);
+      if (next.has(tr)) next.delete(tr);
+      else next.add(tr);
+      return next;
+    });
+  }
 
   // ─── status 1/2 — items-editor handles · we render nothing ────────
   if (status === "1" || status === "2") return null;
@@ -269,6 +335,42 @@ export function ShopFieldsBoard({
           {isStatus4 && "กรอกเลข Tracking ที่ร้านจีนส่งมาเป็นรายร้าน · กดปุ่ม \"ตรวจสอบรายการนำเข้า\" เพื่อดูสถานะ tb_forwarder ที่ระบบ spawn ให้แล้ว"}
           {isStatus5 && "ออเดอร์สำเร็จแล้ว · ระบบเปิดใบฝากนำเข้าให้ครบแล้ว"}
         </p>
+
+        {/* 2026-06-30 (spec §5 GROUPING) — collapse items by ctrackingnumber.
+            P22328 has 16 ร้าน / 150 รายการ → this at-a-glance SUMMARY (one
+            collapsible dropdown per tracking · header = จำนวนรายการ · ¥รวม ·
+            arrival pill · #fNo) sits ABOVE the per-shop edit cards. Read-only.
+            §0g self-explaining · §0h ≥11px. */}
+        {groups.length > 0 && (
+          <div className="rounded-xl border border-border bg-surface-alt/20 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowGrouped((v) => !v)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-alt/40 transition-colors"
+              aria-expanded={showGrouped}
+            >
+              {showGrouped ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              <Package className="h-3.5 w-3.5 text-primary-600" />
+              <span>จัดกลุ่มตามแทรคกิ้ง ({groups.length} แทรคกิ้ง · {totalGroupItems.toLocaleString()} รายการ)</span>
+              <span className="ml-auto text-[11px] font-normal text-muted">
+                {showGrouped ? "ซ่อน" : "แสดง"}สรุปแบบกลุ่ม
+              </span>
+            </button>
+            {showGrouped && (
+              <div className="border-t border-border px-2 pb-2 pt-1.5 space-y-1.5">
+                {groups.map((g) => (
+                  <TrackingGroupRow
+                    key={g.tracking || "__none__"}
+                    group={g}
+                    expanded={expandedTracking.has(g.tracking)}
+                    onToggle={() => toggleTracking(g.tracking)}
+                    hRate={hRate}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3">
           {shops.map((sh) => {
@@ -566,6 +668,188 @@ export function ShopFieldsBoard({
         )}
       </div>
     </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// TrackingGroupRow — ONE collapsible dropdown per ctrackingnumber (spec §5).
+// Mirrors the report-cnt box-breakdown dropdown (cnt-list-table.tsx): a header
+// row that summarises the group at a glance (แทรคกิ้ง · arrival pill · จำนวนรวม ·
+// ¥รวม · #fNo) + a chevron that expands the items table. Read-only · display
+// only (no mutation — the per-shop edit cards below the summary stay the edit
+// surface). §0g self-explaining · §0h ≥11px.
+// ────────────────────────────────────────────────────────────
+function fmtCny(n: number): string {
+  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function TrackingGroupRow({
+  group: g,
+  expanded,
+  onToggle,
+  hRate,
+}: {
+  group: TrackingGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  hRate?: number;
+}) {
+  // arrival pill — derive from the linked forwarder's fstatus via the SOT
+  // (owner's 3-stage shows here per-tracking). fstatusBadge returns the
+  // canonical label + soft chip; "" (no forwarder yet) → a "ยังไม่ส่ง" pill.
+  const hasForwarder = g.fstatus !== "";
+  const badge = hasForwarder ? fstatusBadge(g.fstatus) : null;
+  // Display-only THB est (spec §5 #5) — only when a rate is available.
+  const rate = Number(hRate ?? 0);
+  const thbEst = rate > 0 ? g.subtotalCny * rate : null;
+  const colCount = 5; // ข้อมูลสินค้า · จำนวน · ¥/ชิ้น · ค่าส่งจีน · รวม ¥
+
+  return (
+    <div className="rounded-lg border border-border bg-white dark:bg-surface overflow-hidden">
+      {/* ── Header (the at-a-glance summary · clickable to expand) ── */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex flex-wrap items-center gap-2 px-3 py-2 text-left hover:bg-surface-alt/40 transition-colors"
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" />
+        )}
+        {/* 1. แทรคกิ้ง */}
+        <span className="font-mono tabular-nums text-xs text-foreground break-all" title={g.tracking || "ยังไม่ส่ง"}>
+          {g.tracking ? g.tracking : <span className="italic text-muted">— ยังไม่ส่ง</span>}
+        </span>
+        {/* 2. arrival pill (3-stage per-tracking · SOT) */}
+        {badge ? (
+          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.chip}`}>
+            {badge.label}
+          </span>
+        ) : (
+          <span className="inline-block rounded-full border border-gray-300 bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+            ยังไม่ส่ง
+          </span>
+        )}
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5 text-[11px]">
+          {/* 3. จำนวนรวม */}
+          <span className="rounded bg-surface-alt/60 border border-border px-2 py-0.5 font-mono tabular-nums">
+            {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
+          </span>
+          {/* 4. ¥รวม (+ 5. THB est · display-only) */}
+          <span className="rounded bg-surface-alt/60 border border-border px-2 py-0.5 font-mono tabular-nums font-semibold">
+            ¥ {fmtCny(g.subtotalCny)}
+            {thbEst != null && (
+              <span className="ml-1 font-normal text-muted">≈ ฿{fmtCny(thbEst)}</span>
+            )}
+          </span>
+          {/* 6. #fNo link (deep link to ฝากนำเข้า) */}
+          {g.fNo != null && (
+            <a
+              href={`/admin/forwarders/${g.fNo}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 hover:bg-emerald-100"
+              title="เปิดรายการฝากนำเข้าของแทรคกิ้งนี้"
+            >
+              <ExternalLink className="h-3 w-3" /> ฝากนำเข้า #{g.fNo}
+            </a>
+          )}
+        </span>
+      </button>
+
+      {/* ── Sub-line: ร้านในกลุ่มนี้ (always visible · helps identify the group) ── */}
+      {g.shops.length > 0 && (
+        <div className="px-3 pb-1 -mt-1 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1">
+            <Store className="h-3 w-3" />
+            {g.shops.join(" · ")}
+          </span>
+        </div>
+      )}
+
+      {/* ── Expanded: items table (same columns as the per-shop items table) ── */}
+      {expanded && (
+        <div className="border-t border-border overflow-x-auto scrollbar-x-visible">
+          {g.items.length === 0 ? (
+            <p className="px-3 py-3 text-[11px] text-muted">— ไม่มีรายการในแทรคกิ้งนี้</p>
+          ) : (
+            <table className="w-full min-w-[560px] text-xs">
+              <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
+                  <th className="px-2 py-2 text-right w-14">จำนวน</th>
+                  <th className="px-2 py-2 text-right w-20">¥/ชิ้น</th>
+                  <th className="px-2 py-2 text-right w-20">ค่าส่งจีน</th>
+                  <th className="px-2 py-2 text-right w-24">รวม ¥</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.items.map((it) => {
+                  const refunded = it.crewallet === "1";
+                  const shipping = Number(it.cshippingchn ?? 0);
+                  const line = refunded ? 0 : it.camount * it.cprice + shipping;
+                  return (
+                    <tr key={it.id} className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}>
+                      <td className="px-2 py-2 align-top">
+                        <div className="flex gap-2">
+                          {it.coverUrl ? (
+                            <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
+                            </a>
+                          ) : null}
+                          <div className="min-w-0">
+                            {it.curl ? (
+                              <a
+                                href={it.curl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate max-w-[280px] text-primary-600 hover:underline"
+                                title={it.ctitle ?? ""}
+                              >
+                                {it.ctitle || it.curl}
+                              </a>
+                            ) : (
+                              <span className="block truncate max-w-[280px]" title={it.ctitle ?? ""}>
+                                {it.ctitle || "—"}
+                              </span>
+                            )}
+                            {(it.ccolor || it.csize) && (
+                              <p className="text-[11px] text-muted">
+                                {it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                        {refunded ? 0 : it.camount}
+                      </td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">{fmtCny(it.cprice)}</td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">{fmtCny(shipping)}</td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums font-semibold">
+                        {fmtCny(line)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-border font-semibold bg-surface-alt/30 text-[11px]">
+                  <td className="px-2 py-1.5" colSpan={colCount - 1}>
+                    รวม {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">¥ {fmtCny(g.subtotalCny)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

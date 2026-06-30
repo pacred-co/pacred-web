@@ -13,8 +13,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * Model: one tb_order row = one shop (ร้าน · cnameshop) with one ctrackingnumber.
  * A shop's goods are "arrived" when ANY forwarder for its tracking is at
- * fstatus ≥ 2 (ถึงโกดังจีน); "done" when that forwarder has a container OR
- * fstatus ≥ 3 (ออกจากจีน/ถึงไทย/…). A shop with no tracking yet = not shipped.
+ * fstatus ≥ 2 (ถึงโกดังจีน); "done" when that forwarder has a เลขตู้
+ * (fcabinetnumber non-empty · loaded into a closed container) OR fstatus ≥ 4
+ * (ถึงไทย/…). A shop with no tracking yet = not shipped.
+ *
+ * The 3-stage owner rule (รอร้านจีนจัดส่ง '4' → ถึงโกดังจีน '40' → สำเร็จ '5') is
+ * the PURE FUNCTION `deriveShopStatus` below — the order's status is a function
+ * of this per-shop roll-up, two-way inside {4,40} (so a wrongly-'40' order drops
+ * back to '4' when not-all-arrived · the P22328 bug) and forward-only out of '5'.
  *
  * READ-ONLY — never writes. Safe to call from a page render.
  */
@@ -26,9 +32,9 @@ export type ShopArrival = {
   image: string | null;    // cimages (first) · for a thumbnail
   tracking: string;        // ctrackingnumber · "" = ยังไม่ส่ง
   fstatus: string;         // linked forwarder status · "" = no forwarder
-  hasContainer: boolean;
+  hasContainer: boolean;   // เลขตู้ (fcabinetnumber) assigned
   arrived: boolean;        // forwarder fstatus ≥ 2 (ถึงโกดังจีน)
-  done: boolean;           // container OR fstatus ≥ 3
+  done: boolean;           // เลขตู้ (container) OR fstatus ≥ 4 (ถึงไทย/…)
 };
 
 export type ShopArrivalSummary = {
@@ -38,13 +44,17 @@ export type ShopArrivalSummary = {
   doneShops: number;       // container / ≥ 3
   /** every shop shipped AND arrived China (≥2) */
   allArrived: boolean;
-  /** every shop shipped AND done (container/≥3) — the gate for hstatus '5' */
+  /** every shop shipped AND done (เลขตู้/≥4) — the gate for hstatus '5' */
   allDone: boolean;
   shops: ShopArrival[];
 };
 
 const ARRIVED = new Set(["2", "3", "4", "5", "6", "7"]);
-const DONE_FS = new Set(["3", "4", "5", "6", "7"]);
+// done = เลขตู้ (fcabinetnumber non-empty) OR fstatus ≥ 4 (ถึงไทย/รอชำระ/เตรียมส่ง/ส่งแล้ว).
+// fstatus '3' (กำลังส่งมาไทย) alone is NOT done unless a เลขตู้ is stamped — the
+// container assignment (fcabinetnumber) is the authoritative "loaded + left China"
+// signal that completes a shop.
+const DONE_FS = new Set(["4", "5", "6", "7"]);
 
 export async function countShopArrivals(
   admin: SupabaseClient,
@@ -137,4 +147,29 @@ export async function countShopArrivals(
   const allDone = totalShops > 0 && doneShops === totalShops;
 
   return { totalShops, shippedShops, arrivedShops, doneShops, allArrived, allDone, shops };
+}
+
+/**
+ * The OWNER's 3-stage rule as a PURE FUNCTION of the per-shop arrival roll-up
+ * (2026-06-30). STATUS-ONLY · no money. Maps a ShopArrivalSummary → the status
+ * the order SHOULD be at, within the active set the gate governs ({4,40,5}):
+ *
+ *   allDone     → '5'  สำเร็จ            (ทุกร้านได้เลขตู้ / ถึงไทยแล้ว)
+ *   allArrived  → '40' ถึงโกดังจีน        (ทุกร้านถึงโกดังจีน แต่ยังมีร้านไม่ได้เลขตู้)
+ *   otherwise   → '4'  รอร้านจีนจัดส่ง    (ยังมีร้านที่ยังไม่ถึง / ยังไม่ส่ง)
+ *
+ * allDone ⇒ allArrived (done is a superset of arrived), so the order (allDone
+ * first) is correct. totalShops === 0 → '4' (no real shop yet → never auto-'5').
+ *
+ * This is two-way inside {4,40}: callers apply it to orders currently in {4,40}
+ * and write whatever it returns (so a wrongly-'40' order drops back to '4' when
+ * not-all-arrived — the P22328 down-correction). It is forward-only OUT of '5':
+ * callers exclude '5'/'6'/'99' from the live re-derive (a wrongly-'5' order is
+ * surfaced for manual owner review, never auto-demoted).
+ */
+export function deriveShopStatus(s: ShopArrivalSummary): "4" | "40" | "5" {
+  if (s.totalShops === 0) return "4"; // no real shop yet → stay at 4 (never auto-5)
+  if (s.allDone) return "5"; // ทุกร้านได้เลขตู้/ถึงไทย
+  if (s.allArrived) return "40"; // ทุกร้านถึงโกดังจีน
+  return "4"; // ยังมีร้านไม่ถึง/ยังไม่ส่ง
 }

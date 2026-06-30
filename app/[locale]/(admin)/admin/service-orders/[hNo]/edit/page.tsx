@@ -52,7 +52,8 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { buildSpawnRows } from "../spawn-utils";
 import SpawnForwarderForm from "../spawn-form";
 import { ShopItemsEditor, type EditorItem } from "../items-editor";
-import { ShopFieldsBoard } from "../shop-fields-board";
+import { ShopFieldsBoard, type TrackingGroup, type TrackingGroupItem } from "../shop-fields-board";
+import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
 import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
@@ -410,6 +411,113 @@ export default async function AdminServiceOrderEditPage({
   const shopsDoneCount = shopSpawnSummary.filter((x) => x.done).length;
   const shopsTotalCount = shopSpawnSummary.length;
 
+  // 2026-06-30 (spec §5 GROUPING) — collapse items by `ctrackingnumber` into the
+  // at-a-glance SUMMARY view (collapsible dropdowns). P22328 = 16 ร้าน / 150
+  // รายการ → grouping by tracking lets staff scan "this tracking = N รายการ ·
+  // ¥รวม · arrival pill · #fNo" instead of 150 flat rows. Read/display-only:
+  // resolves arrival per tracking from the SAME `countShopArrivals` data the
+  // 3-stage gate uses (so SUMMARY ⇄ gate agree to the satang) + reuses the
+  // `spawnedByTracking` map for the #fNo deep link. The per-shop EDIT cards
+  // (ShopFieldsBoard) stay the edit surface; this is a SUMMARY only. §0c — every
+  // read destructures error (countShopArrivals logs + returns empty on error).
+  const trackingGroups: TrackingGroup[] = await (async () => {
+    // Only meaningful once the order is past payment (3/4/40/5) — the same
+    // statuses the board renders. Skip the extra DB round-trip otherwise.
+    const st = autoExpired ? "6" : (r.hstatus ?? "1");
+    if (!(st === "3" || st === "4" || st === "40" || st === "5")) return [];
+    const summary = await countShopArrivals(admin, r.hno);
+    // tracking → arrival roll-up (best/most-advanced forwarder per tracking).
+    const arrivalByTracking = new Map<
+      string,
+      { fstatus: string; hasContainer: boolean; arrived: boolean; done: boolean }
+    >();
+    for (const s of summary.shops) {
+      const tr = (s.tracking ?? "").trim();
+      if (!tr) continue;
+      const cur = arrivalByTracking.get(tr);
+      // keep the strongest signal (container > higher fstatus) — matches
+      // countShopArrivals' own per-tracking dedupe.
+      if (
+        !cur ||
+        (s.hasContainer && !cur.hasContainer) ||
+        Number(s.fstatus || 0) > Number(cur.fstatus || 0)
+      ) {
+        arrivalByTracking.set(tr, {
+          fstatus: s.fstatus,
+          hasContainer: s.hasContainer,
+          arrived: s.arrived,
+          done: s.done,
+        });
+      }
+    }
+    // Reduce normalized items into a Map keyed by ctrackingnumber.
+    const groupMap = new Map<
+      string,
+      {
+        totalQty: number;
+        subtotalCny: number;
+        shops: Set<string>;
+        items: TrackingGroupItem[];
+      }
+    >();
+    for (const it of items) {
+      const tracking = (it.ctrackingnumber ?? "").trim();
+      let g = groupMap.get(tracking);
+      if (!g) {
+        g = { totalQty: 0, subtotalCny: 0, shops: new Set<string>(), items: [] };
+        groupMap.set(tracking, g);
+      }
+      const refunded = it.crewallet === "1";
+      const qty = Number(it.camount ?? 0);
+      const price = Number(it.cprice ?? 0);
+      const shipChn = Number(it.cshippingchn ?? 0);
+      if (!refunded) {
+        g.totalQty += qty;
+        g.subtotalCny += qty * price + shipChn;
+      }
+      const shop = (it.cnameshop ?? "").trim();
+      if (shop) g.shops.add(shop);
+      g.items.push({
+        id: it.id,
+        ctitle: it.ctitle ?? "",
+        camount: qty,
+        cprice: price,
+        cshippingchn: shipChn,
+        crewallet: it.crewallet,
+        coverUrl: coverUrlById.get(it.id) ?? null,
+        curl: it.curl ?? null,
+        ccolor: it.ccolor ?? null,
+        csize: it.csize ?? null,
+      });
+    }
+    const out: TrackingGroup[] = [];
+    for (const [tracking, g] of groupMap.entries()) {
+      const arr = tracking ? arrivalByTracking.get(tracking) : undefined;
+      const spawned = tracking ? spawnedByTracking.get(tracking) : undefined;
+      out.push({
+        tracking,
+        itemCount: g.items.length,
+        totalQty: g.totalQty,
+        subtotalCny: g.subtotalCny,
+        fstatus: arr?.fstatus ?? spawned?.fstatus ?? "",
+        hasContainer: arr?.hasContainer ?? false,
+        arrived: arr?.arrived ?? false,
+        done: arr?.done ?? false,
+        fNo: spawned?.id ?? null,
+        shops: Array.from(g.shops),
+        items: g.items,
+      });
+    }
+    // Sort: shipped (has tracking) first, then by item count desc; the
+    // "— ยังไม่ส่ง" group (empty tracking) sinks to the bottom.
+    out.sort((a, b) => {
+      if (!a.tracking && b.tracking) return 1;
+      if (a.tracking && !b.tracking) return -1;
+      return b.itemCount - a.itemCount;
+    });
+    return out;
+  })();
+
   const refundableItems = items
     .filter((it) => Number(it.camount ?? 0) > 0 && it.crewallet !== "1")
     .map((it) => ({
@@ -736,6 +844,8 @@ export default async function AdminServiceOrderEditPage({
           spawnSummary={shopSpawnSummary}
           doneCount={shopsDoneCount}
           totalCount={shopsTotalCount}
+          trackingGroups={trackingGroups}
+          hRate={rate}
         />
       )}
 
