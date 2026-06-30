@@ -156,6 +156,8 @@ export default async function CustomsConfirmPage({
         {/* Confirm / reject + pay destination (client) */}
         <CustomsConfirmClient
           token={token}
+          declarationId={decl.id}
+          isCargo={decl.cargo_forwarder_id != null}
           status={status}
           confirmedAt={decl.customer_confirmed_at}
           account={account}

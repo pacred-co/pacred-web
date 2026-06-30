@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { resolveDeclarationByConfirmToken } from "@/lib/customs/confirm-token-access";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
 import {
   CustomsDeclarationPdf,
@@ -109,24 +110,18 @@ type LineRow = {
 };
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
-  // Auth + RLS-scoped read.
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) {
-    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
-  }
+  const admin = createAdminClient();
 
-  const { data: declaration, error: declarationErr } = await supabase
-    .from("customs_declarations")
-    .select(`
+  // ── ใบขนพ่วง (#17) — token-scoped PUBLIC access. A logged-out customer reaching
+  // via the LINE link supplies ?token=<confirm_token>; it bypasses the login
+  // requirement ONLY when it proves token-scoped access to THIS exact declaration
+  // (own-name, sent/confirmed). Any other path keeps the login-required RLS read.
+  const declColumns = `
       id, declaration_no, status, declaration_type,
       declared_at, submitted_at, accepted_at, released_at,
       customs_office, customs_control_no, broker_name, broker_license_no,
@@ -134,11 +129,42 @@ export async function GET(
       notes, freight_shipment_id, cargo_forwarder_id, cargo_cabinet_no,
       total_declared_value_thb, total_duty_thb, total_vat_thb, total_other_taxes_thb,
       issue_in_customer_name, consignee_name, consignee_tax_id, consignee_address
-    `)
-    .eq("id", id)
-    .maybeSingle<DeclarationRow>();
-  if (declarationErr) {
-    console.error(`[customs_declarations list] failed`, { code: declarationErr.code, message: declarationErr.message });
+    `;
+  const token = new URL(req.url).searchParams.get("token");
+  const tokenGrant = await resolveDeclarationByConfirmToken(admin, id, token);
+
+  let declaration: DeclarationRow | null = null;
+  if (tokenGrant) {
+    // Token proved access → read via admin client (RLS bypassed, token IS the auth).
+    const { data, error } = await admin
+      .from("customs_declarations")
+      .select(declColumns)
+      .eq("id", tokenGrant.id)
+      .maybeSingle<DeclarationRow>();
+    if (error) {
+      console.error(`[customs_declarations token read] failed`, { code: error.code, message: error.message });
+    }
+    declaration = data ?? null;
+  } else {
+    // Standard auth + RLS-scoped read.
+    const supabase = await createClient();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
+    if (!user) {
+      return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+    }
+
+    const { data, error: declarationErr } = await supabase
+      .from("customs_declarations")
+      .select(declColumns)
+      .eq("id", id)
+      .maybeSingle<DeclarationRow>();
+    if (declarationErr) {
+      console.error(`[customs_declarations list] failed`, { code: declarationErr.code, message: declarationErr.message });
+    }
+    declaration = data ?? null;
   }
 
   if (!declaration) {
@@ -153,11 +179,11 @@ export async function GET(
   const viewerRoles = await getAdminRoles();
   const adminMustHideMoney = viewerRoles != null && !canViewCostProfit(viewerRoles);
 
-  // Pull shipment + parties + lines via admin client (we've already
-  // proven the caller is entitled to the declaration row). The customs schema
-  // serves BOTH freight + cargo (mig 0162): resolve the shipment-equivalent +
-  // the parties from whichever source this declaration is keyed to.
-  const admin = createAdminClient();
+  // Pull shipment + parties + lines via the admin client (created above — we've
+  // already proven the caller is entitled to the declaration row, by RLS read or
+  // by a matching confirm_token). The customs schema serves BOTH freight + cargo
+  // (mig 0162): resolve the shipment-equivalent + the parties from whichever
+  // source this declaration is keyed to.
   let shipment: ShipmentRow | null = null;
   let shipper: PartyRow | undefined;
   let consignee: PartyRow | undefined;

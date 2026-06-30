@@ -10,31 +10,52 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveDeclarationByConfirmToken } from "@/lib/customs/confirm-token-access";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
 import { CargoCommercialInvoicePdf, type CargoCommercialInvoiceData } from "@/components/pdf/cargo-commercial-invoice";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+type InvoiceDecl = { id: string; declaration_no: string | null; status: CargoCommercialInvoiceData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null; total_declared_value_thb: number | null };
+const INVOICE_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id, total_declared_value_thb";
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) console.error(`[cargo-invoice auth] failed`, { code: authErr.code, message: authErr.message });
-  if (!user) return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+  const admin = createAdminClient();
 
-  const { data: decl, error: declErr } = await supabase
-    .from("customs_declarations")
-    .select("id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id, total_declared_value_thb")
-    .eq("id", id)
-    .maybeSingle<{ id: string; declaration_no: string | null; status: CargoCommercialInvoiceData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null; total_declared_value_thb: number | null }>();
-  if (declErr) console.error(`[cargo-invoice declaration] failed`, { code: declErr.code, message: declErr.message });
+  // ใบขนพ่วง (#17) — token-scoped PUBLIC access (logged-out customer via LINE link).
+  const token = new URL(req.url).searchParams.get("token");
+  const tokenGrant = await resolveDeclarationByConfirmToken(admin, id, token);
+
+  let decl: InvoiceDecl | null = null;
+  if (tokenGrant) {
+    const { data, error } = await admin
+      .from("customs_declarations")
+      .select(INVOICE_DECL_COLS)
+      .eq("id", tokenGrant.id)
+      .maybeSingle<InvoiceDecl>();
+    if (error) console.error(`[cargo-invoice token read] failed`, { code: error.code, message: error.message });
+    decl = data ?? null;
+  } else {
+    const supabase = await createClient();
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error(`[cargo-invoice auth] failed`, { code: authErr.code, message: authErr.message });
+    if (!user) return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+
+    const { data, error: declErr } = await supabase
+      .from("customs_declarations")
+      .select(INVOICE_DECL_COLS)
+      .eq("id", id)
+      .maybeSingle<InvoiceDecl>();
+    if (declErr) console.error(`[cargo-invoice declaration] failed`, { code: declErr.code, message: declErr.message });
+    decl = data ?? null;
+  }
+
   if (!decl) return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
   if (decl.freight_shipment_id) {
     return NextResponse.json({ error: "use_freight_invoice" }, { status: 400 });
   }
-
-  const admin = createAdminClient();
   let jobNo: string | null = null;
   let transportMode: string | null = null;
   let consigneeName: string | null = null;

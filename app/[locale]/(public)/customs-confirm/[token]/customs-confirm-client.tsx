@@ -14,7 +14,7 @@
  */
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, XCircle } from "lucide-react";
 import type { PacredBankAccount } from "@/lib/payment/bank-accounts";
 import { PayDestination } from "@/components/payment/pay-destination";
 import {
@@ -24,6 +24,8 @@ import {
 
 export function CustomsConfirmClient({
   token,
+  declarationId,
+  isCargo,
   status,
   confirmedAt,
   account,
@@ -31,6 +33,8 @@ export function CustomsConfirmClient({
   serviceQrDataUrl,
 }: {
   token: string;
+  declarationId: string;
+  isCargo: boolean;
   status: "sent" | "confirmed" | "rejected";
   confirmedAt: string | null;
   account: PacredBankAccount;
@@ -40,6 +44,20 @@ export function CustomsConfirmClient({
   const [state, setState] = useState<"sent" | "confirmed" | "rejected">(status);
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+
+  // Token-scoped PUBLIC PDF links (#17) — the logged-out customer opens the
+  // prepared docs to review before เฟิมยอด. Each route validates token↔id↔status
+  // server-side; a wrong/absent token 404s.
+  const enc = encodeURIComponent(token);
+  const docLinks: { href: string; label: string }[] = [
+    { href: `/api/customs-declaration/${declarationId}?token=${enc}`, label: "ดูใบขนสินค้า" },
+    ...(isCargo
+      ? [
+          { href: `/api/customs-declaration/${declarationId}/invoice?token=${enc}`, label: "ดูใบแจ้งหนี้ (Invoice)" },
+          { href: `/api/customs-declaration/${declarationId}/packing-list?token=${enc}`, label: "ดู Packing List" },
+        ]
+      : []),
+  ];
 
   function onConfirm() {
     if (pending) return;
@@ -63,6 +81,26 @@ export function CustomsConfirmClient({
     });
   }
 
+  const docButtons = (
+    <section className="space-y-1.5">
+      <p className="text-xs font-semibold text-foreground">เอกสารที่เตรียมไว้</p>
+      <div className="flex flex-col gap-1.5">
+        {docLinks.map((d) => (
+          <a
+            key={d.href}
+            href={d.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-xl border border-border bg-white dark:bg-surface px-3 py-2.5 text-[14px] font-medium text-foreground hover:bg-surface-alt"
+          >
+            <FileText className="h-4 w-4 text-primary-600" />
+            <span>📄 {d.label}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+
   if (state === "confirmed") {
     return (
       <div className="space-y-3">
@@ -74,6 +112,7 @@ export function CustomsConfirmClient({
             {confirmedAt && ` · ยืนยันเมื่อ ${new Date(confirmedAt).toLocaleString("th-TH")}`}
           </p>
         </div>
+        {docButtons}
         {/* SERVICE destination — pay here after confirming */}
         <PayDestination account={account} amountThb={collectable} serviceQrDataUrl={serviceQrDataUrl} />
       </div>
@@ -81,6 +120,8 @@ export function CustomsConfirmClient({
   }
 
   if (state === "rejected") {
+    // No doc links: a rejected draft is no longer 'sent'/'confirmed' so the
+    // token routes 404 it (server-side). The team will re-send after revising.
     return (
       <div className="flex flex-col items-center rounded-xl border border-rose-200 bg-rose-50 py-5 text-center">
         <XCircle className="h-10 w-10 text-rose-500" />
@@ -93,6 +134,9 @@ export function CustomsConfirmClient({
   // status === "sent" → awaiting the customer's decision.
   return (
     <div className="space-y-3">
+      {/* Prepared docs — open to review before confirming */}
+      {docButtons}
+
       {/* Destination preview (shown before confirm so the customer sees where to pay) */}
       <PayDestination account={account} amountThb={collectable} serviceQrDataUrl={serviceQrDataUrl} />
 

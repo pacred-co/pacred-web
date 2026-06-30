@@ -13,32 +13,53 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveDeclarationByConfirmToken } from "@/lib/customs/confirm-token-access";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
 import { CargoPackingListPdf, type CargoPackingListData } from "@/components/pdf/cargo-packing-list";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+type PlDecl = { id: string; declaration_no: string | null; status: CargoPackingListData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null };
+const PL_DECL_COLS = "id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id";
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr) console.error(`[packing-list auth] failed`, { code: authErr.code, message: authErr.message });
-  if (!user) return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+  const admin = createAdminClient();
 
-  // RLS-scoped read — proves the caller is entitled to this declaration.
-  const { data: decl, error: declErr } = await supabase
-    .from("customs_declarations")
-    .select("id, declaration_no, status, declared_at, cargo_forwarder_id, cargo_cabinet_no, freight_shipment_id")
-    .eq("id", id)
-    .maybeSingle<{ id: string; declaration_no: string | null; status: CargoPackingListData["status"]; declared_at: string | null; cargo_forwarder_id: number | null; cargo_cabinet_no: string | null; freight_shipment_id: string | null }>();
-  if (declErr) console.error(`[packing-list declaration] failed`, { code: declErr.code, message: declErr.message });
+  // ใบขนพ่วง (#17) — token-scoped PUBLIC access (logged-out customer via LINE link).
+  const token = new URL(req.url).searchParams.get("token");
+  const tokenGrant = await resolveDeclarationByConfirmToken(admin, id, token);
+
+  let decl: PlDecl | null = null;
+  if (tokenGrant) {
+    const { data, error } = await admin
+      .from("customs_declarations")
+      .select(PL_DECL_COLS)
+      .eq("id", tokenGrant.id)
+      .maybeSingle<PlDecl>();
+    if (error) console.error(`[packing-list token read] failed`, { code: error.code, message: error.message });
+    decl = data ?? null;
+  } else {
+    const supabase = await createClient();
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error(`[packing-list auth] failed`, { code: authErr.code, message: authErr.message });
+    if (!user) return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+
+    // RLS-scoped read — proves the caller is entitled to this declaration.
+    const { data, error: declErr } = await supabase
+      .from("customs_declarations")
+      .select(PL_DECL_COLS)
+      .eq("id", id)
+      .maybeSingle<PlDecl>();
+    if (declErr) console.error(`[packing-list declaration] failed`, { code: declErr.code, message: declErr.message });
+    decl = data ?? null;
+  }
+
   if (!decl) return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
   if (decl.freight_shipment_id) {
     return NextResponse.json({ error: "use_freight_packing_list", hint: `/api/freight-invoice/.../packing-list` }, { status: 400 });
   }
-
-  const admin = createAdminClient();
   let jobNo: string | null = null;
   let transportMode: string | null = null;
   let consigneeName: string | null = null;
