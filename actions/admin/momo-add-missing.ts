@@ -119,18 +119,22 @@ function roundTo(value: number, decimals: number): number {
   return Math.round((value + Number.EPSILON) * f) / f;
 }
 
-export async function addMissingMomoParcel(
-  rawInput: unknown,
+/**
+ * The GUARDED single-row create — the canonical money-write body shared by BOTH
+ * the single action (addMissingMomoParcel) and the bulk action
+ * (addMissingMomoParcelsBulk). It runs the EXACT same money-safety chain:
+ *   GUARD 1 (dedup by base-tracking) → GUARD 2 (member-validate) → INSERT
+ *   (the 51-col commit-momo-row-core mirror) → best-effort auto-rate → audit.
+ * The bulk path calls this once per parcel inside its own per-row try/catch, so
+ * a manually-added parcel is byte-identical no matter which button created it,
+ * and an already-committed parcel is skipped gracefully by GUARD 1 (returns the
+ * "พัสดุนี้มีในระบบแล้ว" error, surfaced as "ข้าม" by the caller — never a double
+ * write). `adminId` is the withAdmin ctx adminId (for the audit row).
+ */
+async function createMissingMomoForwarderRow(
+  d: z.infer<typeof addMissingMomoParcelSchema>,
+  adminId: string,
 ): Promise<AdminActionResult<{ fid: number; fIDorCO: string }>> {
-  return withAdmin<{ fid: number; fIDorCO: string }>(
-    ["super", "ops", "warehouse", "accounting"],
-    async ({ adminId }) => {
-      const parsed = addMissingMomoParcelSchema.safeParse(rawInput);
-      if (!parsed.success) {
-        return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-      }
-      const d = parsed.data;
-
       const admin         = createAdminClient();
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
@@ -383,6 +387,103 @@ export async function addMissingMomoParcel(
       }
 
       return { ok: true, data: { fid: row.id, fIDorCO } };
+}
+
+export async function addMissingMomoParcel(
+  rawInput: unknown,
+): Promise<AdminActionResult<{ fid: number; fIDorCO: string }>> {
+  return withAdmin<{ fid: number; fIDorCO: string }>(
+    ["super", "ops", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const parsed = addMissingMomoParcelSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+      }
+      return createMissingMomoForwarderRow(parsed.data, adminId);
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// BULK — add EVERY Set B parcel (member-code already filled) in one click.
+// (2026-06-30 · ภูม — "เพิ่มทั้งหมด แบบ B".)
+//
+// Reuses the SAME guarded single-row body (createMissingMomoForwarderRow) per
+// parcel, so the writes are byte-identical to clicking each row's "เพิ่มเข้าระบบ".
+// Per-row try/catch + per-row safeParse → one bad/already-committed row NEVER
+// aborts the batch or double-writes (GUARD 1 dedup surfaces an already-in-system
+// row as `skipped`, not a hard failure). Only Set B rows that carry a member code
+// are sent by the client; nothing here special-cases Set A.
+// ────────────────────────────────────────────────────────────
+const addMissingMomoParcelsBulkSchema = z
+  .array(addMissingMomoParcelSchema)
+  .min(1, "ไม่มีรายการให้เพิ่ม")
+  .max(500, "เพิ่มได้สูงสุด 500 รายการต่อครั้ง");
+
+export type BulkAddRowResult = {
+  tracking: string;
+  base: string;
+  ok: boolean;
+  /** present when !ok — the reason (a GUARD-1 "มีในระบบแล้ว" counts as skipped). */
+  error?: string;
+  /** true when this row was skipped because it already exists (GUARD 1). */
+  skipped?: boolean;
+  fid?: number;
+};
+
+export type BulkAddSummary = {
+  results: BulkAddRowResult[];
+  added: number;
+  skipped: number;
+  failed: number;
+};
+
+/** A GUARD-1 dedup abort returns this exact prefix → treat as "ข้าม", not a failure. */
+const ALREADY_EXISTS_PREFIX = "พัสดุนี้มีในระบบแล้ว";
+
+export async function addMissingMomoParcelsBulk(
+  rawInput: unknown,
+): Promise<AdminActionResult<BulkAddSummary>> {
+  return withAdmin<BulkAddSummary>(
+    ["super", "ops", "warehouse", "accounting"],
+    async ({ adminId }) => {
+      const parsed = addMissingMomoParcelsBulkSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+      }
+
+      const results: BulkAddRowResult[] = [];
+      let added = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      // Serial (not Promise.all) on purpose — the createAdminClient writes share
+      // the read-then-insert dedup posture; running them serially keeps the
+      // GUARD-1 check meaningful within this batch and avoids hammering the DB.
+      for (const d of parsed.data) {
+        const base = baseTrackingOf(d.tracking);
+        try {
+          const res = await createMissingMomoForwarderRow(d, adminId);
+          if (res.ok) {
+            added += 1;
+            results.push({ tracking: d.tracking, base, ok: true, fid: res.data?.fid });
+          } else if (res.error.startsWith(ALREADY_EXISTS_PREFIX)) {
+            skipped += 1;
+            results.push({ tracking: d.tracking, base, ok: false, skipped: true, error: res.error });
+          } else {
+            failed += 1;
+            results.push({ tracking: d.tracking, base, ok: false, error: res.error });
+          }
+        } catch (e) {
+          // One row throwing must NOT abort the batch.
+          failed += 1;
+          const message = e instanceof Error ? e.message : "เพิ่มไม่สำเร็จ";
+          console.error(`[momo-add-missing bulk] row threw (base=${base})`, e);
+          results.push({ tracking: d.tracking, base, ok: false, error: message });
+        }
+      }
+
+      return { ok: true, data: { results, added, skipped, failed } };
     },
   );
 }
