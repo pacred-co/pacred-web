@@ -177,8 +177,9 @@ export default async function ServicesIndexPage({
       icon: Globe2,
       title: t("svcExportTitle"),
       sub: t("svcExportSub"),
+      href: "/services/export-worldwide",
       group: "freight",
-      status: "soon",
+      status: "live",
     },
     {
       icon: FileCheck2,
