@@ -37,15 +37,11 @@ import { confirm } from "@/components/ui/confirm";
 import {
   deriveModeFromCid,
   momoRawDisplay,
+  baseTrackingOf,
   MOMO_SHIP_BY_TH,
 } from "@/lib/admin/momo-raw-helpers";
 import { addMissingMomoParcel } from "@/actions/admin/momo-add-missing";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
-
-/** Strip a MOMO "-i/n" (or "-i") split suffix → base tracking (matches the API + action). */
-function baseTrackingOf(re: string): string {
-  return re.trim().replace(/-\d+(\/\d+)?$/, "");
-}
 
 /**
  * SACK / container codes leak into container_closed.track_details[].reTrack
