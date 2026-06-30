@@ -394,7 +394,8 @@ export default async function AdminReportCntDetailPage({
     const rate = pType === "1" ? p1 : pType === "2" ? p2 : pType === "3" ? p3 : pType === "4" ? p4 : 0;
 
     // Derived totals — match legacy formulas in L1797 + L1803
-    const fTotalPrice           = Number(r.ftotalprice ?? 0);
+    const storedSell            = Number(r.ftotalprice ?? 0);
+    const sellRate              = Number(r.frefrate ?? 0); // เรทขาย/CBM(KG) ที่ resolve ไว้
     const fTransportPrice       = Number(r.ftransportprice ?? 0);
     const fPriceUpdate          = Number(r.fpriceupdate ?? 0);
     const fShippingService      = Number(r.fshippingservice ?? 0);
@@ -416,6 +417,17 @@ export default async function AdminReportCntDetailPage({
     const costDim               = costBasisIsWeight ? Number(r.fweight ?? 0) : Number(r.fvolume ?? 0);
     const liveCost              = Math.round(rate * costDim * 100) / 100;
     const fCostTotalPrice       = (!cabinetIsPaid && rate > 0) ? liveCost : storedCost;
+
+    // SELL (ราคาขาย) self-heal — mirror the live-COST above (ภูม 2026-06-30). A
+    // MOMO/auto-imported row carries the resolved SELL rate (frefrate) but its
+    // ftotalprice (sell TOTAL) was never computed (=0) → the row showed ฿0 ขาย +
+    // a bogus NEGATIVE profit แม้ลูกค้าจะมีเรทตั้งไว้แล้ว. When the container ISN'T
+    // paid and the sell isn't priced yet, derive live sell = sellRate × (the SAME
+    // basis as cost) so profit reflects the real margin (= (เรทขาย−เรทต้นทุน)×dim).
+    // Paid / already-priced rows keep their stored ftotalprice (locked / billed) ·
+    // self-heals when the rate is next saved. Display-only — never writes the DB.
+    const liveSell              = Math.round(sellRate * costDim * 100) / 100;
+    const fTotalPrice           = (!cabinetIsPaid && storedSell === 0 && sellRate > 0) ? liveSell : storedSell;
 
     const priceGetUserItem =
       fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
