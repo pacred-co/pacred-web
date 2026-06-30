@@ -177,8 +177,12 @@ function MobileField({ label, children }: { label: string; children: ReactNode }
  * The workspace. `mode` decides assign (ultra import/assign tab) vs work (the
  * normal everyone-tab). `segment` is the work-mode filter (mine vs all).
  */
-export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignRep[]; segment: string; mode: "assign" | "work"; q?: string }) {
+export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all" }: { reps: AssignRep[]; segment: string; mode: "assign" | "work"; q?: string; sourceTab?: string }) {
   const isAssign = mode === "assign";
+  // Page-level "ที่มา (source)" tab (owner 2026-07-01): pcs / freight / freight_no_phone.
+  // The freight_no_phone tab shows the 86 phoneless chase prospects — so it must NOT
+  // apply the usual no-phone-hiding filter (that's the whole point of the tab).
+  const isNoPhoneTab = sourceTab === "freight_no_phone";
   // assign → see EVERY lead (to distribute). work → mine vs all (backend scopes reps).
   const filter: "all" | "mine" = isAssign ? "all" : segment === "mine" ? "mine" : "all";
 
@@ -246,7 +250,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   // Back to page 1 whenever a filter (segment/search/source) changes.
   useEffect(() => {
     queueMicrotask(() => setCurrentPage(1));
-  }, [segment, q, sourceFilter, repFilter]);
+  }, [segment, q, sourceFilter, repFilter, sourceTab]);
 
   // ── import popup handlers ──
   function handleFile(file: File) {
@@ -306,7 +310,17 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
   // distinct ที่มา (source) ที่มีจริงในข้อมูล → ตัวเลือกตัวกรอง (ปอน 2026-06-23)
   const sources = [...new Set(leads.map((l) => l.source).filter(Boolean))].sort();
   const filteredLeads = leads
-    .filter((l) => phoneDigits(l.phone) !== "")
+    // Hide phoneless rows in every tab EXCEPT the dedicated "ไม่มีเบอร์" freight tab,
+    // which exists specifically to surface the 86 chase prospects (owner 2026-07-01).
+    .filter((l) => isNoPhoneTab || phoneDigits(l.phone) !== "")
+    // Page-level "ที่มา (source)" tab (owner 2026-07-01): freight / freight_no_phone =
+    // exact source match; pcs = every NON-freight source (the existing CRM lists).
+    .filter((l) =>
+      sourceTab === "freight" ? l.source === "freight"
+        : sourceTab === "freight_no_phone" ? l.source === "freight_no_phone"
+        : sourceTab === "pcs" ? (l.source !== "freight" && l.source !== "freight_no_phone")
+        : true,
+    )
     .filter((l) => !sourceFilter || l.source === sourceFilter)
     .filter((l) => (!repFilter ? true : repFilter === "__none__" ? !l.assigned_admin_id : l.assigned_admin_id === repFilter))
     .filter((l) =>
@@ -329,7 +343,8 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
       return false;
     });
   // owner 2026-06-23: ซ่อนเบอร์ซ้ำ (ลูกค้าคนเดียวกัน) — กันเซลล์ได้ลูกค้าซ้ำตอนสุ่มแบ่ง.
-  const displayLeads = dedupeByPhone(filteredLeads);
+  // The no-phone freight tab can't dedupe-by-phone (no phone) → show every row.
+  const displayLeads = isNoPhoneTab ? filteredLeads : dedupeByPhone(filteredLeads);
 
   // ── client-side pagination (ปอน 2026-06-23 · ทุกแถบ) ──
   const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(displayLeads.length / pageSize));
@@ -614,7 +629,11 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
     );
   };
 
-  const title = isAssign
+  const title = isNoPhoneTab
+    ? "งานฝั่ง freight รอตามลูกค้า (ไม่มีเบอร์)"
+    : sourceTab === "freight"
+      ? "ลูกค้าฝั่ง freight — โทรตามลูกค้า"
+    : isAssign
     ? "มอบหมายโทรเซลล์ — รายชื่อลูกค้านำเข้า"
     : segment === "mine"
       ? "ลูกค้าของฉัน — รายชื่อที่ได้รับมอบหมาย"
@@ -724,8 +743,9 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
             {repFilter ? <span className="text-[11px] text-muted">— ติ๊กเลือกแล้วใช้ “มอบหมายทั้งหมดให้” ด้านบนเพื่อย้ายไปเซลล์อื่น</span> : null}
           </div>
         ) : null}
-        {/* ตัวกรอง "ที่มาของลูกค้า" (source · ปอน 2026-06-23) — list view เท่านั้น */}
-        {!(isAssign && assignView === "report") && sources.length > 0 ? (
+        {/* ตัวกรอง "ที่มาของลูกค้า" (source · ปอน 2026-06-23) — list view เท่านั้น.
+            ซ่อนเมื่อเลือกแท็บ source ระดับหน้าแล้ว (owner 2026-07-01 · กันกรองซ้ำซ้อน). */}
+        {sourceTab === "all" && !(isAssign && assignView === "report") && sources.length > 0 ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted">ที่มาของลูกค้า:</span>
             <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="rounded-lg border border-border bg-white px-2 py-1 text-xs dark:bg-surface">
@@ -741,6 +761,10 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
           <div className="rounded-2xl border border-dashed border-border bg-surface-alt/40 px-4 py-12 text-center text-sm text-muted">
             {loading
               ? "กำลังโหลด…"
+              : isNoPhoneTab
+                ? "ยังไม่มีลูกค้าฝั่ง freight ที่ไม่มีเบอร์ในรายการนี้"
+                : sourceTab === "freight"
+                  ? "ยังไม่มีลูกค้าฝั่ง freight ในรายการนี้"
               : isAssign
                 ? <>ยังไม่มีรายชื่อ — กด <b className="text-foreground">“นำเข้า CSV”</b> เพื่อเริ่ม</>
                 : segment === "callback"
