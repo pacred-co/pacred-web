@@ -83,8 +83,10 @@ export type PlannerContextValue = {
   targets: ProductionTargets;
   setLongTarget: (pillarId: string, n: number) => void;
   setShortTarget: (n: number) => void;
+  setArticlePerDay: (n: number) => void;
+  setPostPerDay: (n: number) => void;
   /** Generate idea slots for a month from the quota; returns how many were created. */
-  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean }) => number;
+  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }) => number;
   // ── Job board ──
   currentUserId: string;
   jobs: JobOrder[];
@@ -283,6 +285,20 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     }),
     [apply],
   );
+  const setArticlePerDay = useCallback<PlannerContextValue["setArticlePerDay"]>(
+    (n) => apply((d) => {
+      const cur = d.targets ?? DEFAULT_TARGETS;
+      return { ...d, targets: { ...cur, articlePerDay: Math.max(0, Math.round(n)) } };
+    }),
+    [apply],
+  );
+  const setPostPerDay = useCallback<PlannerContextValue["setPostPerDay"]>(
+    (n) => apply((d) => {
+      const cur = d.targets ?? DEFAULT_TARGETS;
+      return { ...d, targets: { ...cur, postPerDay: Math.max(0, Math.round(n)) } };
+    }),
+    [apply],
+  );
   const generateFromPlan = useCallback<PlannerContextValue["generateFromPlan"]>(
     (year, month, opts) => {
       const t = data.targets ?? DEFAULT_TARGETS;
@@ -302,6 +318,16 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
         if (opts.short) {
           for (let k = 0; k < slot.short; k += 1) {
             items.push({ id: uid("content"), title: "คลิปสั้น / Reels", statusId: ideaStatus, contentTypeId: "contentType-short", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+          }
+        }
+        if (opts.article) {
+          for (let k = 0; k < slot.article; k += 1) {
+            items.push({ id: uid("content"), title: "บทความ", statusId: ideaStatus, contentTypeId: "contentType-article", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+          }
+        }
+        if (opts.post) {
+          for (let k = 0; k < slot.post; k += 1) {
+            items.push({ id: uid("content"), title: "โพสต์", statusId: ideaStatus, contentTypeId: "contentType-post", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
           }
         }
       }
@@ -373,7 +399,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       addSetting, updateSetting, toggleSetting, deleteSetting,
       addContent, updateContent, deleteContent, duplicateContent, archiveContent, restoreContent,
       setResult, setContentDate, setContentStatus, resetAll,
-      targets, setLongTarget, setShortTarget, generateFromPlan,
+      targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
       keywords, addKeyword, updateKeyword, deleteKeyword, loadSampleKeywords,
     }),
@@ -381,7 +407,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
       addSetting, updateSetting, toggleSetting, deleteSetting, addContent, updateContent, deleteContent,
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
-      targets, setLongTarget, setShortTarget, generateFromPlan,
+      targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
       keywords, addKeyword, updateKeyword, deleteKeyword, loadSampleKeywords,
     ],

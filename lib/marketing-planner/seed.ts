@@ -20,6 +20,8 @@ export const DEFAULT_TARGETS: ProductionTargets = {
     "contentPillar-promo": 4,
   },
   shortTotal: 280,
+  articlePerDay: 3,
+  postPerDay: 3,
 };
 
 const PALETTE = [
@@ -78,6 +80,7 @@ function buildSettings(ts: string): SettingItem[] {
       { key: "short", name: "Short Video" }, { key: "long", name: "Long Video" },
       { key: "reel", name: "Reel" }, { key: "tiktok", name: "TikTok" },
       { key: "yt-shorts", name: "YouTube Shorts" }, { key: "yt-long", name: "YouTube Long" },
+      { key: "article", name: "บทความ" }, { key: "post", name: "โพสต์" },
       { key: "blog", name: "Blog" }, { key: "seo", name: "SEO Article" },
       { key: "ads", name: "Ads Creative" }, { key: "case", name: "Case Study" },
       { key: "review", name: "Review" }, { key: "info", name: "Infographic" },

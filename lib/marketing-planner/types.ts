@@ -180,10 +180,12 @@ export type ContentItem = {
 // ── The whole persisted blob ──
 export const PLANNER_SCHEMA_VERSION = 2;
 
-/** Monthly production quota (ปอน 2026-07-01): long clips per pillar + short total. */
+/** Monthly production quota (ปอน 2026-07-01): clips per pillar/total + daily baseline for บทความ/โพสต์. */
 export type ProductionTargets = {
   longByPillar: Record<string, number>; // pillarId → จำนวนคลิปยาว/เดือน
   shortTotal: number; // จำนวนคลิปสั้น/เดือน (รวม)
+  articlePerDay?: number; // บทความ ยืนพื้น/วัน (default 3 · แก้ได้)
+  postPerDay?: number; // โพสต์ ยืนพื้น/วัน (default 3 · แก้ได้)
 };
 
 // ── Job board (สั่งงาน/รับงาน · ปอน 2026-07-01) ──
