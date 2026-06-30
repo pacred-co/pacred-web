@@ -334,6 +334,31 @@ const itemFreightLeads: MenuItem = {
   icon: "Inbox",
 };
 
+/** 2026-06-30 (G1 freight lane · workspace+nav alignment) — the FREIGHT
+ *  QUOTATIONS list (/admin/freight/quotes). The quote lifecycle
+ *  (draft → pending_approval → approved → sent → accepted) is the freight
+ *  SALES/PRICING work surface — but no freight sidebar reached it (only the
+ *  leads inbox + ops cockpit were wired), so a freight sales/CS/manager seat
+ *  couldn't navigate to "รอประเมินราคา". Single leaf · the page + actions gate
+ *  RBAC themselves (super/ops/sales_admin/accounting create; approve = super). */
+const itemFreightQuotes: MenuItem = {
+  labelKey: "accFreight.quotes",
+  href: "/admin/freight/quotes",
+  icon: "FileText",
+};
+
+/** 2026-06-30 (G1 freight lane · workspace+nav alignment) — the FREIGHT
+ *  SHIPMENTS list (/admin/freight/shipments · the AX JOB spine). Reached only
+ *  by the two Doc roles before; the manager / clearance / messenger seats own
+ *  shipment journey-stage queues (confirmed → in_progress → cleared →
+ *  delivered) but couldn't navigate to the shipments list. Single leaf · the
+ *  page + actions gate RBAC themselves (super/ops/sales_admin/accounting). */
+const itemFreightShipments: MenuItem = {
+  labelKey: "accFreight.shipments",
+  href: "/admin/freight/shipments",
+  icon: "Truck",
+};
+
 /** 2026-06-09 (เดฟ · freight net-margin unlock) — the China-side freight COST
  *  table maintenance (/admin/freight/rates → migration 0145 `tb_freight_rate`).
  *  The rate engine (lib/freight/rate-engine.ts + lib/freight/rate-lookup.ts)
@@ -1736,7 +1761,11 @@ const menuFreightSalesManager: MenuSection[] = [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox is
       // the freight sales team's primary acquisition surface.
       itemFreightLeads,
+      // 2026-06-30 (G1 freight lane) — the quote lifecycle + shipments list, so
+      // the sales manager reaches "รอประเมินราคา" + the AX-JOB spine ≤1-click.
+      itemFreightQuotes,
       itemFreightOperations,
+      itemFreightShipments,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
       { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
       { ...itemReportsAll, labelKey: "report.titleSales" },
@@ -1756,6 +1785,9 @@ const menuFreightSales: MenuSection[] = [
     items: [
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound RFQ leads inbox.
       itemFreightLeads,
+      // 2026-06-30 (G1 freight lane) — quotes + ops cockpit so a freight sales
+      // staffer reaches the quote follow-up + AX-JOB board ≤1-click.
+      itemFreightQuotes,
       itemFreightOperations,
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
     ],
@@ -1773,7 +1805,11 @@ const menuFreightExportManager: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // 2026-06-30 (G1 freight lane) — the manager owns the whole export
+      // pipeline → quotes + ops + shipments list ≤1-click.
+      itemFreightQuotes,
       itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Full Export Operations Access]
       { labelKey: "freightExportOps.placeholder", href: "/admin/forwarders?segment=freight-export", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1792,7 +1828,12 @@ const menuFreightExportCs: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // 2026-06-30 (G1 freight lane) — CS owns leads follow-up + doc prep stage →
+      // leads + quotes + ops + shipments ≤1-click.
+      itemFreightLeads,
+      itemFreightQuotes,
       itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Export CS Operations]
       { labelKey: "freightExportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-export&role=cs", icon: "Truck" },
     ],
@@ -1850,6 +1891,10 @@ const menuFreightExportClearance: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // 2026-06-30 (G1 freight lane) — clearance owns the in-transit/พิธีการ →
+      // cleared stage → ops cockpit + shipments list ≤1-click.
+      itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Export Clearance Operations]
       { labelKey: "freightExportOps.clearancePlaceholder", href: "/admin/forwarders?segment=freight-export&role=clearance", icon: "ClipboardCheck" },
     ],
@@ -1868,6 +1913,9 @@ const menuFreightClearanceBoth: MenuSection[] = [
     header: "Freight",
     items: [
       itemFreightOperations,
+      // 2026-06-30 (G1 freight lane) — shared clearance owns in-transit → cleared
+      // for BOTH depts → shipments list ≤1-click.
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Both Import & Export Clearance Access]
       { labelKey: "freightClearance.bothPlaceholder", href: "/admin/forwarders?segment=freight", icon: "ClipboardCheck" },
     ],
@@ -1884,6 +1932,9 @@ const menuFreightExportMessenger: MenuSection[] = [
   {
     header: "Freight - Export",
     items: [
+      // 2026-06-30 (G1 freight lane) — messenger owns cleared → delivered
+      // (ส่งมอบ) → shipments list ≤1-click for the hand-off queue.
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Messenger/Delivery Operations]
       { labelKey: "freightMessenger.exportPlaceholder", href: "/admin/forwarders?segment=freight-export&role=messenger", icon: "Truck" },
     ],
@@ -1901,7 +1952,11 @@ const menuFreightImportManager: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // 2026-06-30 (G1 freight lane) — the manager owns the whole import
+      // pipeline → quotes + ops + shipments list ≤1-click.
+      itemFreightQuotes,
       itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Full Import Operations Access]
       { labelKey: "freightImportOps.placeholder", href: "/admin/forwarders?segment=freight-import", icon: "Truck" },
       { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
@@ -1920,7 +1975,12 @@ const menuFreightImportCs: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // 2026-06-30 (G1 freight lane) — CS owns leads follow-up + doc prep stage →
+      // leads + quotes + ops + shipments ≤1-click.
+      itemFreightLeads,
+      itemFreightQuotes,
       itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Import CS Operations]
       { labelKey: "freightImportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-import&role=cs", icon: "Truck" },
     ],
@@ -1983,6 +2043,10 @@ const menuFreightImportClearance: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // 2026-06-30 (G1 freight lane) — clearance owns the in-transit/พิธีการ →
+      // cleared stage → ops cockpit + shipments list ≤1-click.
+      itemFreightOperations,
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Import Clearance Operations]
       { labelKey: "freightImportOps.clearancePlaceholder", href: "/admin/forwarders?segment=freight-import&role=clearance", icon: "ClipboardCheck" },
     ],
@@ -1999,6 +2063,9 @@ const menuFreightImportMessenger: MenuSection[] = [
   {
     header: "Freight - Import",
     items: [
+      // 2026-06-30 (G1 freight lane) — messenger owns cleared → delivered
+      // (ส่งมอบ) → shipments list ≤1-click for the hand-off queue.
+      itemFreightShipments,
       // TODO: needs menu enumeration · doc says [Messenger/Delivery Operations]
       { labelKey: "freightMessenger.importPlaceholder", href: "/admin/forwarders?segment=freight-import&role=messenger", icon: "Truck" },
     ],

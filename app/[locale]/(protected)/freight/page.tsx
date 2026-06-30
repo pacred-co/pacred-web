@@ -164,14 +164,22 @@ export default async function CustomerFreightHubPage() {
                 </p>
               </div>
             </div>
-            <a
-              href={LINE_OA.addFriendUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-green-500 text-white px-3 py-2 text-xs sm:text-sm font-bold hover:bg-green-600 inline-flex items-center gap-1.5 shadow-sm"
-            >
-              <MessageCircle className="w-4 h-4" /> {t("requestNewQuote")}
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/freight/booking"
+                className="rounded-lg bg-primary-600 text-white px-3 py-2 text-xs sm:text-sm font-bold hover:bg-primary-700 inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <Ship className="w-4 h-4" /> {t("bookNow")}
+              </Link>
+              <a
+                href={LINE_OA.addFriendUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-green-500 text-white px-3 py-2 text-xs sm:text-sm font-bold hover:bg-green-600 inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <MessageCircle className="w-4 h-4" /> {t("requestNewQuote")}
+              </a>
+            </div>
           </div>
         </div>
 

@@ -20,6 +20,9 @@ import {
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { FreightJourney } from "../../_components/freight-journey";
+import { FreightPayNotify } from "../../_components/freight-pay-notify";
 
 /**
  * V-E1.2 — /freight/shipments/[id] customer detail view.
@@ -80,6 +83,8 @@ type ShipmentHeader = {
   notes:                       string | null;
   cancelled_reason:            string | null;
   created_at:                  string;
+  confirmed_at:                string | null;
+  delivered_at:                string | null;
 };
 
 type PartyRow = {
@@ -140,7 +145,8 @@ export default async function CustomerFreightShipmentDetailPage({
       id, job_no, status, transport_mode, container_code, carrier_container_no,
       bl_no, vessel_voyage, port_loading, port_discharge, place_delivery, incoterm,
       payment_term, origin_country, commercial_value_thb, duty_thb, vat_thb,
-      vat_plan_label, form_e_applied, notes, cancelled_reason, created_at
+      vat_plan_label, form_e_applied, notes, cancelled_reason, created_at,
+      confirmed_at, delivered_at
     `)
     .eq("id", id)
     .maybeSingle<ShipmentHeader>();
@@ -268,12 +274,18 @@ export default async function CustomerFreightShipmentDetailPage({
           </div>
         </div>
 
-        {/* Cancelled reason */}
-        {header.status === "cancelled" && header.cancelled_reason && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <strong>{t("cancelledLabel")}</strong> {header.cancelled_reason}
-          </div>
-        )}
+        {/* Customer journey stepper (customer-visible stages only; a held job
+            shows a friendly note, never the raw 'cancelled' label). The raw
+            cancelled_reason is kept admin-internal — not surfaced to the
+            customer here. */}
+        <FreightJourney
+          status={header.status}
+          timestamps={{
+            created_at:   header.created_at,
+            confirmed_at: header.confirmed_at,
+            delivered_at: header.delivered_at,
+          }}
+        />
 
         {/* Logistics block */}
         <section className="rounded-2xl border border-border bg-surface-alt/30 p-5 space-y-1 text-xs">
@@ -463,8 +475,17 @@ export default async function CustomerFreightShipmentDetailPage({
                     </div>
                   </div>
                   {outstandingThb > 0 && (
-                    <div className="px-5 py-3 border-t border-border text-xs text-muted">
-                      💬 {t("contactToPay", { phone: CONTACT.phoneCompanyDisplay })}
+                    <div className="border-t border-border p-5">
+                      {/* แจ้งชำระเงิน — destination resolved by the bank-accounts
+                          SOT. Freight (no customer ใบกำกับ) → SERVICE account
+                          (PromptPay นิติ, ไม่ออกใบกำกับ) per resolvePaymentAccount
+                          rule (c); a ใบกำกับ job would route to TRADING + VAT 7%. */}
+                      <FreightPayNotify
+                        account={resolvePaymentAccount({ issuesTaxInvoice: false })}
+                        outstandingThb={outstandingThb}
+                        jobNo={header.job_no ?? "—"}
+                        lineOaUrl={LINE_OA.addFriendUrl}
+                      />
                     </div>
                   )}
                 </>

@@ -191,6 +191,14 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/shipments">{t("shipmentTracking")}</CardSubLink>
           </MenuRow>
 
+          {/* Freight — FCL/LCL นำเข้า-ส่งออก (expandable · §0d reachability for
+              the customer freight lane: hub / จองงานขนส่ง / ติดตามสถานะ). */}
+          <MenuRow iconKey="ship" label={t("freightService")}>
+            <CardSubLink href="/freight">{t("freightHub")}</CardSubLink>
+            <CardSubLink href="/freight/booking">{t("freightBook")}</CardSubLink>
+            <CardSubLink href="/freight/shipments">{t("freightShipments")}</CardSubLink>
+          </MenuRow>
+
           {/* ส่งออก — clickable → coming-soon page (owner 2026-06-09 ·
               "เร็วๆนี้" badge removed) */}
           <MenuRow

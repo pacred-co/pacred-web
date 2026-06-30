@@ -28,6 +28,7 @@
  */
 import type { AdminRole } from "@/lib/auth/require-admin";
 import type { BadgeKey, BadgeCounts } from "@/lib/admin/sidebar-menu";
+import type { FreightQueueKey, FreightQueueCounts } from "@/lib/freight/freight-queue-keys";
 import { isGodRole } from "@/lib/admin/god-role";
 
 /**
@@ -40,8 +41,15 @@ export type WorkspaceQueue = {
   key: string;
   /** Thai label — "what is in MY stage" (e.g. "ของถึงไทย รอดำเนินการ"). */
   label: string;
-  /** the live-count badge key from the sidebar SOT — count resolved by the page. */
-  badge: BadgeKey;
+  /**
+   * the live-count source. A CARGO queue carries a `badge` (BadgeKey from the
+   * sidebar SOT). A FREIGHT queue carries a `freightBadge` (FreightQueueKey
+   * from lib/freight/freight-queue-counts). Exactly one is set — the count is
+   * resolved by `queueCount()` from whichever counts map is supplied.
+   */
+  badge?: BadgeKey;
+  /** the live-count key for a FREIGHT queue (freight spine has no BadgeKey). */
+  freightBadge?: FreightQueueKey;
   /** ≤1-click deep-link to the existing filtered list/queue surface. */
   href: string;
   /** the next action a staffer takes on this queue ("ให้พนักงานทำอะไร" · §0g). */
@@ -106,6 +114,29 @@ const Q = {
   incidents:    { key: "incidents",    label: "Incident รอจัดการ",            badge: "incidents"    as BadgeKey, href: "/admin/incidents",         nextAction: "รับเรื่อง → แก้ไข",          icon: "AlertTriangle" },
 } as const satisfies Record<string, WorkspaceQueue>;
 
+// ── FREIGHT queue definitions (count from the freight spine SOT) ──────────────────────
+// Each href targets an EXISTING freight surface; each freightBadge is a FreightQueueKey.
+// Count source = lib/freight/freight-queue-counts.ts (freight_quote / freight_quotes /
+// freight_shipments) — the freight spine has no cargo BadgeKey, so these carry
+// `freightBadge` instead of `badge` (the workspace page resolves it via queueCount).
+// NOTE — icons are constrained to the workspace page's ICONS map
+// (app/(admin)/admin/workspace/page.tsx · Inbox · BadgePercent · Truck ·
+// ClipboardCheck · PackageCheck · Banknote · …); unknown names fall back to
+// Inbox, so we reuse the page's existing set to avoid a generic-fallback icon.
+const FQ = {
+  // ── Freight SALES funnel (freight_quote leads → freight_quotes lifecycle) ───
+  fLeads:     { key: "fLeads",     label: "ใบขอราคา Freight (RFQ) รอติดต่อ",  freightBadge: "freightLeads"        as FreightQueueKey, href: "/admin/freight/leads",       nextAction: "ติดต่อ → เปิดใบเสนอราคา",     icon: "Inbox" },
+  fQuotePrice:{ key: "fQuotePrice",label: "ใบเสนอราคา รอประเมินราคา/อนุมัติ", freightBadge: "freightQuoteToPrice" as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ลงราคา → ส่งอนุมัติ",        icon: "BadgePercent" },
+  fQuoteSend: { key: "fQuoteSend", label: "ใบเสนอราคา อนุมัติแล้ว รอส่ง",     freightBadge: "freightQuoteToSend"  as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ส่งใบเสนอราคาให้ลูกค้า",     icon: "Inbox" },
+  fQuoteSent: { key: "fQuoteSent", label: "ใบเสนอราคา ส่งแล้ว รอลูกค้าตอบ",   freightBadge: "freightQuoteSent"    as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ติดตาม → ตอบรับ/แปลงเป็นงาน",  icon: "ClipboardCheck" },
+
+  // ── Freight OPERATION / DOC / CLEARANCE (freight_shipments lifecycle) ───────
+  fShipPrep:     { key: "fShipPrep",     label: "งาน Freight ยืนยันแล้ว รอเตรียมเอกสาร/ใบขน", freightBadge: "freightShipPrep"      as FreightQueueKey, href: "/admin/freight/operations", nextAction: "เตรียมเอกสาร / ออกใบขน",   icon: "ClipboardCheck" },
+  fShipTransit:  { key: "fShipTransit",  label: "งาน Freight กำลังขนส่ง / พิธีการ",          freightBadge: "freightShipInTransit" as FreightQueueKey, href: "/admin/freight/operations", nextAction: "ติดตามขนส่ง → ผ่านพิธีการ", icon: "Truck" },
+  fShipCleared:  { key: "fShipCleared",  label: "ผ่านศุลกากรแล้ว รอส่งมอบ",                 freightBadge: "freightShipCleared"   as FreightQueueKey, href: "/admin/freight/shipments",  nextAction: "นัดส่งมอบ / ปิดงานขนส่ง",  icon: "PackageCheck" },
+  fShipDelivered:{ key: "fShipDelivered",label: "งาน Freight ส่งมอบแล้ว รอวางบิล",          freightBadge: "freightShipDelivered" as FreightQueueKey, href: "/admin/freight/shipments",  nextAction: "วางบิล / ออกใบแจ้งหนี้",   icon: "Banknote" },
+} as const satisfies Record<string, WorkspaceQueue>;
+
 // ── workspace_role → the queues that position owns ────────────────────────────────────
 // Keyed by every AdminRole that a POSITION can map to (admin_positions.workspace_role).
 // Order = the order the seat works the queues. Heading = the seat's plain-Thai name.
@@ -145,10 +176,74 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
     queues: [Q.shopPending, Q.shopNote, Q.contactMsg, Q.bookings, Q.custPending, Q.corpPending, Q.refunds],
   },
 
-  // ── Document / CS-Import (logistics · เอกสาร) ─────────────────────────────
+  // ── FREIGHT — per-role workspaces over the freight spine (G1 freight lane) ──
+  // Each freight position lands on ITS freight queues (count from the freight
+  // SOT · lib/freight/freight-queue-counts) instead of the cargo oversight
+  // DEFAULT. Mapped to the journey-status the role owns (the freight_quote /
+  // freight_quotes / freight_shipments lifecycle).
+
+  // Freight SALES — leads → pricing → send → follow-up (the whole funnel · oversight).
+  freight_sales_manager: {
+    headingTh: "พื้นที่งานหัวหน้าเซลล์ Freight",
+    isOversight: true,
+    queues: [FQ.fLeads, FQ.fQuotePrice, FQ.fQuoteSend, FQ.fQuoteSent, FQ.fShipDelivered],
+  },
+  freight_sales: {
+    headingTh: "พื้นที่งานเซลล์ Freight",
+    queues: [FQ.fLeads, FQ.fQuoteSent],
+  },
+
+  // Freight EXPORT — manager (oversight) · CS · Doc · Clearance · Messenger.
+  freight_export_manager: {
+    headingTh: "พื้นที่งานผู้จัดการ Freight (Export)",
+    isOversight: true,
+    queues: [FQ.fQuotePrice, FQ.fShipPrep, FQ.fShipTransit, FQ.fShipCleared, FQ.fShipDelivered],
+  },
+  freight_export_cs: {
+    headingTh: "พื้นที่งาน CS / เอกสาร Freight (Export)",
+    queues: [FQ.fLeads, FQ.fQuoteSent, FQ.fShipPrep],
+  },
+  freight_export_doc: {
+    headingTh: "พื้นที่งานเอกสาร Freight (Export)",
+    queues: [FQ.fShipPrep, FQ.fShipCleared],
+  },
+  freight_export_clearance: {
+    headingTh: "พื้นที่งานพิธีการ Freight (Export)",
+    queues: [FQ.fShipTransit, FQ.fShipCleared],
+  },
+  freight_export_messenger: {
+    headingTh: "พื้นที่งานแมสเซนเจอร์ Freight (Export)",
+    queues: [FQ.fShipCleared, FQ.fShipDelivered],
+  },
+
+  // Shared Import & Export clearance (one role, both dept's พิธีการ).
+  freight_clearance_both: {
+    headingTh: "พื้นที่งานพิธีการ Freight (นำเข้า/ส่งออก)",
+    queues: [FQ.fShipTransit, FQ.fShipCleared],
+  },
+
+  // Freight IMPORT — manager (oversight) · CS · Doc · Clearance · Messenger.
+  freight_import_manager: {
+    headingTh: "พื้นที่งานผู้จัดการ Freight (Import)",
+    isOversight: true,
+    queues: [FQ.fQuotePrice, FQ.fShipPrep, FQ.fShipTransit, FQ.fShipCleared, FQ.fShipDelivered],
+  },
+  freight_import_cs: {
+    headingTh: "พื้นที่งาน CS / เอกสาร Freight (Import)",
+    queues: [FQ.fLeads, FQ.fQuoteSent, FQ.fShipPrep],
+  },
+  // Document / CS-Import (logistics · เอกสาร) — owns the DOC prep + clearance stages.
   freight_import_doc: {
-    headingTh: "พื้นที่งานเอกสาร (Document / CS)",
-    queues: [Q.fwdArrived, Q.fwdAwaitPay, Q.corpPending],
+    headingTh: "พื้นที่งานเอกสาร Freight (Import)",
+    queues: [FQ.fShipPrep, FQ.fShipCleared, Q.corpPending],
+  },
+  freight_import_clearance: {
+    headingTh: "พื้นที่งานพิธีการ Freight (Import)",
+    queues: [FQ.fShipTransit, FQ.fShipCleared],
+  },
+  freight_import_messenger: {
+    headingTh: "พื้นที่งานแมสเซนเจอร์ Freight (Import)",
+    queues: [FQ.fShipCleared, FQ.fShipDelivered],
   },
 
   // ── QA / Ops ──────────────────────────────────────────────────────────────
@@ -175,9 +270,11 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
 
 /**
  * The DEFAULT workspace — for god-nav tiers (ultra/super/normies) + any
- * workspace_role with no dedicated spec yet (e.g. the freight_* stubs). Surfaces the
- * cross-department "what needs someone" set so a no-position oversight user still gets
- * a useful landing instead of an empty one. isOversight → also link the full dashboard.
+ * workspace_role with no dedicated spec yet. Surfaces the cross-department
+ * "what needs someone" set so a no-position oversight user still gets a useful
+ * landing instead of an empty one. isOversight → also link the full dashboard.
+ * (The freight_* roles no longer fall here — they each carry a dedicated
+ * freight workspace spec above · G1 freight lane.)
  */
 const DEFAULT_WORKSPACE: WorkspaceSpec = {
   headingTh: "พื้นที่งานของฉัน (ภาพรวม)",
@@ -239,23 +336,42 @@ function materialize(role: AdminRole, spec: WorkspaceSpec): Workspace {
   };
 }
 
-/** A queue's live count, read from the BadgeCounts SOT (absent key → 0 · §0f exact). */
-export function queueCount(counts: BadgeCounts, q: WorkspaceQueue): number {
-  return counts[q.badge] ?? 0;
+/**
+ * A queue's live count (absent key → 0 · §0f exact).
+ *  - CARGO queue (`badge`) → read from the BadgeCounts SOT.
+ *  - FREIGHT queue (`freightBadge`) → read from the optional FreightQueueCounts
+ *    (lib/freight/freight-queue-counts). Backward-compatible: callers that pass
+ *    only `counts` (the cargo SOT) still resolve cargo queues; a freight queue
+ *    resolves to 0 until `freightCounts` is supplied (the page wires it in).
+ */
+export function queueCount(
+  counts: BadgeCounts,
+  q: WorkspaceQueue,
+  freightCounts?: FreightQueueCounts,
+): number {
+  if (q.freightBadge) return freightCounts?.[q.freightBadge] ?? 0;
+  if (q.badge) return counts[q.badge] ?? 0;
+  return 0;
 }
 
 /**
  * Sum of all queue counts in a workspace — the "today" total ("งานรอ X รายการ").
- * De-dupes by BadgeKey so a queue shown twice (e.g. fwdArrived reused for two stages)
- * isn't double-counted.
+ * De-dupes by the queue's count-key (BadgeKey or FreightQueueKey) so a queue
+ * shown twice isn't double-counted. `freightCounts` optional — absent → freight
+ * queues contribute 0 (back-compat with cargo-only callers).
  */
-export function workspaceTotal(counts: BadgeCounts, ws: Workspace): number {
-  const seen = new Set<BadgeKey>();
+export function workspaceTotal(
+  counts: BadgeCounts,
+  ws: Workspace,
+  freightCounts?: FreightQueueCounts,
+): number {
+  const seen = new Set<string>();
   let total = 0;
   for (const q of ws.queues) {
-    if (seen.has(q.badge)) continue;
-    seen.add(q.badge);
-    total += counts[q.badge] ?? 0;
+    const key = q.freightBadge ? `f:${q.freightBadge}` : q.badge ? `c:${q.badge}` : null;
+    if (key === null || seen.has(key)) continue;
+    seen.add(key);
+    total += queueCount(counts, q, freightCounts);
   }
   return total;
 }

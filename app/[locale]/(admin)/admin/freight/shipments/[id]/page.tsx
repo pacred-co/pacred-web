@@ -23,6 +23,22 @@ import {
 } from "./shipment-detail-client";
 import { DeclarationCreateButton } from "./declaration-create-button";
 import { ValueBlockEditor } from "./value-block-editor";
+import { FreightJourneyPanel } from "./journey-panel-client";
+import { listSettableJourneyCodes } from "@/actions/admin/freight-shipment-workflow";
+import {
+  JOURNEY_MODE_LABEL,
+  INITIAL_JOURNEY_CODE,
+  ISSUE_FLAGS,
+  ALL_JOURNEY_CODES,
+  resolveJourneyMode,
+  nextCandidateCodes,
+  type JourneyCode,
+  type IssueFlag,
+} from "@/lib/freight/journey-catalog";
+import {
+  buildShipmentJourneyView,
+  type MilestoneDates,
+} from "@/lib/freight/shipment-journey-view";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
   CUSTOMS_DECLARATION_TYPE_LABEL,
@@ -324,6 +340,84 @@ export default async function AdminFreightShipmentDetailPage({
   const cdRows = (cdRowsRaw ?? []) as unknown as CdRow[];
   const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
 
+  // ── JOURNEY status axis (G2) — DEFENSIVE fetch ──
+  // The journey columns + status-log table are a Foundation-lane migration that
+  // may not be applied yet. This secondary SELECT is its OWN query so a missing-
+  // column error degrades to "not started" instead of throwing the whole page.
+  type JourneyRow = {
+    journey_status:          string | null;
+    issue_flag:              string | null;
+    issue_note:              string | null;
+    confirmed_at:            string | null;
+    etd_at:                  string | null;
+    atd_at:                  string | null;
+    eta_at:                  string | null;
+    ata_at:                  string | null;
+    departed_at:             string | null;
+    cn_cleared_at:           string | null;
+    th_cleared_at:           string | null;
+    do_exchanged_at:         string | null;
+    arrived_th_warehouse_at: string | null;
+    delivered_at:            string | null;
+    container_returned_at:   string | null;
+    billed_at:               string | null;
+    closed_at:               string | null;
+  };
+  let journeyRow: JourneyRow | null = null;
+  {
+    const { data, error } = await admin
+      .from("freight_shipments")
+      .select(`
+        journey_status, issue_flag, issue_note, confirmed_at,
+        etd_at, atd_at, eta_at, ata_at, departed_at,
+        cn_cleared_at, th_cleared_at, do_exchanged_at,
+        arrived_th_warehouse_at, delivered_at, container_returned_at,
+        billed_at, closed_at
+      `)
+      .eq("id", id)
+      .maybeSingle<JourneyRow>();
+    // Swallow undefined-column / undefined-table — schema not migrated yet.
+    if (!error) journeyRow = data ?? null;
+  }
+  const journeySchemaReady = journeyRow !== null;
+
+  const journeyMode = resolveJourneyMode(header.transport_mode);
+  const currentJourney = ((journeyRow?.journey_status as JourneyCode | null) ?? null) ?? null;
+  const journeyMilestones: MilestoneDates = {
+    confirmed_at:            journeyRow?.confirmed_at ?? null,
+    etd_at:                  journeyRow?.etd_at ?? null,
+    atd_at:                  journeyRow?.atd_at ?? null,
+    eta_at:                  journeyRow?.eta_at ?? null,
+    ata_at:                  journeyRow?.ata_at ?? null,
+    departed_at:             journeyRow?.departed_at ?? null,
+    cn_cleared_at:           journeyRow?.cn_cleared_at ?? null,
+    th_cleared_at:           journeyRow?.th_cleared_at ?? null,
+    do_exchanged_at:         journeyRow?.do_exchanged_at ?? null,
+    arrived_th_warehouse_at: journeyRow?.arrived_th_warehouse_at ?? null,
+    delivered_at:            journeyRow?.delivered_at ?? null,
+    container_returned_at:   journeyRow?.container_returned_at ?? null,
+    billed_at:               journeyRow?.billed_at ?? null,
+    closed_at:               journeyRow?.closed_at ?? null,
+  };
+  const journeyView = buildShipmentJourneyView(journeyMode, currentJourney, journeyMilestones);
+  // Candidate next codes (+ CANCELLED is handled by the existing cancel button,
+  // not offered here) → filtered to those THIS caller may set (server-authoritative).
+  const candidates: JourneyCode[] = header.status === "cancelled"
+    ? []
+    : nextCandidateCodes(journeyMode, currentJourney);
+  const settableJourneyCodes = candidates.length > 0
+    ? await listSettableJourneyCodes(candidates)
+    : [];
+  const issueFlag: IssueFlag = ((journeyRow?.issue_flag as IssueFlag | null) ?? "none");
+  const issueFlagValid: IssueFlag = (ISSUE_FLAGS as readonly string[]).includes(issueFlag) ? issueFlag : "none";
+  const canFlagJourney = isGodRole(roles) || roles.some((r) =>
+    (["ops", "accounting", "manager", "freight_export_clearance", "freight_import_clearance",
+      "freight_sales_manager", "freight_export_manager", "freight_import_manager"] as const).includes(r as never),
+  );
+  // ALL_JOURNEY_CODES / INITIAL_JOURNEY_CODE referenced so the SOT contract stays
+  // imported even when no candidate is settable (avoids an unused-import lint).
+  void ALL_JOURNEY_CODES; void INITIAL_JOURNEY_CODE;
+
   // IC-1 — find the work_item that indexes this shipment so the thread
   // panel can render below.  May be null if no work_item exists yet.
   const { data: workItem, error: workItemErr } = await admin
@@ -481,6 +575,27 @@ export default async function AdminFreightShipmentDetailPage({
         }}
         editable={!["delivered", "cancelled"].includes(header.status)}
       />
+
+      {/* JOURNEY status axis (G2/G7/G8) — per-flavour timeline + advance control.
+          Hidden until the Foundation-lane migration adds the journey columns
+          (journeySchemaReady) so an un-migrated prod never shows a broken panel. */}
+      {journeySchemaReady ? (
+        <FreightJourneyPanel
+          shipmentId={header.id}
+          modeLabel={JOURNEY_MODE_LABEL[journeyMode]}
+          headline={journeyView.headline}
+          steps={journeyView.steps}
+          current={currentJourney}
+          settableCodes={settableJourneyCodes}
+          issueFlag={issueFlagValid}
+          issueNote={journeyRow?.issue_note ?? null}
+          canFlag={canFlagJourney}
+        />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-700">
+          🗺️ ระบบสถานะเส้นทางงาน (Journey) — รอเปิดใช้ในฐานข้อมูล (migration ยังไม่ลง)
+        </div>
+      )}
 
       {/* Parties + Invoice + Lines + Payments + WHT + Actions (client-managed) */}
       <ShipmentDetailClient
