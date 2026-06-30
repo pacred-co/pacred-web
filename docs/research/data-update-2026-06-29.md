@@ -64,8 +64,11 @@ Owner rules: resolve by PHONE not the sheet PR (มั่ว) · phone-in-DB→L
 ### ✅ Phase 2 — SHIPMENTS APPLIED (`scripts/import-freight-shipments-2026-07-01.mjs`)
 PACRED June(107)+May(38) → **139 freight_shipments** (83 customers · AXELRA has NO June/May · its data Nov25-Mar26 · skipped). resolve customer→profile_id (member→PR else name→PR · 6 TTW no-match skipped). transport_mode sea_lcl 69/truck 45/sea_fcl 17/air 8 · status delivered 40/draft 73/in_progress 21/cancelled 5 (DB-check-compliant) · service_key freight_import/export/import_cargo · idempotent by job_no · records+status only (no charge). ⚠️ LESSONS: freight_shipments status enum = draft|confirmed|in_progress|cleared|delivered|cancelled (not in_transit) · cancelled needs reason+at · service_key valid set is the 14 catalog keys.
 
-### ⏭️ Phase 3 — COST/เบิกเงิน (ACC sheet · 16 sheets SEA/AIR/TRUCK/Cargo/STATEMENT) = NEXT (money-riskiest · ห้ามเก็บเงินซ้ำ)
-match เบิกเงิน → the imported shipment (job_no) + dedup (skip already-paid/billed) → freight_shipments cost_* fields. dry-run→owner→apply. The double-charge guard lives here.
+### ✅ Phase 3 — COST APPLIED (`scripts/import-freight-cost-2026-07-01.mjs`)
+ACC เบิกเงิน SEA/AIR/TRUCK + PACRED variants = 361 cost rows · 60 jobs · Σ ยอดเบิก ฿3.7M. Aggregated per SHIPMENT (job_no) · EXCLUDE customer-paid (ลค.ชำระเอง/ลูกค้าจ่ายเอง · not our cost) · ยอดเบิก−ยอดคืน · split จีน-freight/local. **17 matched the imported June+May shipments → cost set (Σ ฿369,188 · cost_china/local/total)**. 43 cost-jobs unmatched (April/AXELRA · outside June scope · skipped). **profit_margin LEFT NULL** — freight SELL is under-captured for these recent jobs (sell ฿3,500 vs cost ฿19,981 = a fabricated −16k = the cockpit-margin-bug) → accounting completes the sell at billing → profit then computes. Cost = AP (internal · no customer charge · no double-charge) · idempotent (SET).
+
+## 🏁 FREIGHT↔CARGO MERGE DONE (3 phases · all prod · all idempotent · money-safe)
+Customers 369 (+86 chase) · Shipments 139 (freight_shipments) · Cost 17 (Σ ฿369k). cargo (tb_forwarder) + freight (freight_shipments) now both in DB → dashboards/cockpit see both. Report: `docs/research/freight-customer-import-report-2026-07-01.md` + 2 CSVs on Desktop. 🔴 follow-up (owner): 86 no-phone (chase) · freight SELL completion at billing (→ profit) · the AXELRA/April history (pre-June · not imported · owner said June only).
 
 ## Other เดฟ sources (owner picked all · DEFERRED → next session / owner input)
 - **MOMO - Packing List (17 xlsx)** → fill the ฿294k drift (MOMO API dropped 30-40% · 110 trackings).
