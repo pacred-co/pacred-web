@@ -35,13 +35,26 @@ export async function WechatContextPanel({
   // than an empty box that would just clutter every brand-new order.
   if (searchedTokens.length === 0) return null;
 
+  // Collapsed by default (owner 2026-06-30: "ข้อความยาวเกินไป → ย่อซ่อนไว้"). Native
+  // <details> keeps this server-rendered (no client JS) — the summary shows the count,
+  // staff expand only when they need "จีนว่าไงเรื่องตู้นี้".
   return (
-    <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 dark:bg-surface p-4 md:p-5 shadow-sm space-y-3">
+    <details className="group rounded-2xl border border-emerald-200 bg-emerald-50/40 dark:bg-surface shadow-sm">
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 p-3.5 md:p-4 list-none">
+        <span className="min-w-0 flex items-center gap-2 text-sm md:text-base font-bold text-emerald-800 dark:text-emerald-300">
+          <span className="text-muted transition-transform group-open:rotate-90">▶</span>
+          💬 จีนว่าไงเรื่องตู้/แทรคนี้
+          <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+            {messages.length} ข้อความ
+          </span>
+          <span className="text-muted font-normal text-[11px]">(WeChat · กดดู)</span>
+        </span>
+        <span className="shrink-0 text-[11px] text-muted group-open:hidden">แตะเพื่ออ่าน</span>
+      </summary>
+
+      <div className="px-3.5 md:px-4 pb-4 space-y-3">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="min-w-0">
-          <h4 className="text-base md:text-lg font-bold text-emerald-800 dark:text-emerald-300">
-            💬 จีนว่าไงเรื่องตู้/แทรคนี้ <span className="text-muted font-normal">(จาก WeChat ops)</span>
-          </h4>
           <p className="mt-0.5 text-[11px] text-muted">
             ค้นจาก:{" "}
             {searchedTokens.map((t, i) => (
@@ -101,6 +114,7 @@ export async function WechatContextPanel({
           )}
         </>
       )}
-    </section>
+      </div>
+    </details>
   );
 }

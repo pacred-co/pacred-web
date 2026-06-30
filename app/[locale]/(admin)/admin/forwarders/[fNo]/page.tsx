@@ -1140,6 +1140,19 @@ async function tryRenderTbForwarder(
           <div className="mt-4">
             <ForwarderDocTierConfirm fId={r.id} />
           </div>
+
+          {/* ── จีนว่าไงเรื่องตู้/แทรคนี้ — READ-ONLY WeChat ops context (owner
+             carryover 2026-06-30 · mig 0228). Grouped here WITH the PIN-gated ต้นทุน
+             section + collapsed by default (owner 2026-06-30 "ข้อความยาวเกินไป →
+             ย่อซ่อน รวมกับต้นทุนที่ต้องใส่รหัสอ่าน"). Matches THIS order's container/
+             tracking/PR against the decrypted China-ops chats · pure read. ── */}
+          <div className="mt-4">
+            <WechatContextPanel
+              fcabinetnumber={r.fcabinetnumber}
+              ftrackingchn={r.ftrackingchn}
+              userid={r.userid}
+            />
+          </div>
         </ForwarderStatusWorkflow>
 
         {/* ── status-step control (owner 2026-06-19): ถอย/ดัน สถานะทีละขั้น ·
@@ -1213,18 +1226,6 @@ async function tryRenderTbForwarder(
            stay on the existing audited paths (แก้ไขลูกค้า · สร้างใบวางบิล). ── */}
         <div className="mt-4">
           <ForwarderExceptionPanel fNo={r.id} />
-        </div>
-
-        {/* ── จีนว่าไงเรื่องตู้/แทรคนี้ — READ-ONLY WeChat ops context (owner
-           carryover 2026-06-30 · mig 0228). Matches THIS order's container code /
-           China tracking / customer PR against the decrypted China-ops chats. Pure
-           read; gated by this page's requireAdmin (no widening). ── */}
-        <div className="mt-4">
-          <WechatContextPanel
-            fcabinetnumber={r.fcabinetnumber}
-            ftrackingchn={r.ftrackingchn}
-            userid={r.userid}
-          />
         </div>
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
