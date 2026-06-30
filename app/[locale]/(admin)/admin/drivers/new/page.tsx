@@ -159,6 +159,74 @@ type Stop = {
   totalVolume:  number;
 };
 
+type PickupItem = {
+  id: number; fidorco: string; ftrackingchn: string;
+  famount: number; fweight: number; fvolume: number; fpallet: string; fnote: string;
+};
+
+/** A self-pickup group — ONE customer (รหัสลูกค้า / userid), their own parcels,
+ *  their own checkbox + their own submit. (Self-pickup is collected AT the
+ *  warehouse, so the legacy address-grouping lumps different customers together;
+ *  here we key on the customer instead so staff close one customer at a time.) */
+type PickupGroup = {
+  key:          string;   // = userid
+  userid:       string;
+  customerName: string;   // looked up from tb_users (fallback to address name)
+  customerTel:  string;
+  shipByLabel:  string;
+  items:        PickupItem[];
+  forwarderIds: number[];
+  totalBoxes:   number;
+  totalWeight:  number;
+  totalVolume:  number;
+};
+
+/** Group eligible self-pickup rows BY CUSTOMER (userid) into per-customer cards.
+ *  `customerById` maps userid → { name, tel } from tb_users (the customer's own
+ *  identity — not the delivery address, which for รับเอง is the warehouse). */
+function buildPickupGroups(
+  eligible: ForwarderRow[],
+  customerById: Map<string, { name: string; tel: string }>,
+): PickupGroup[] {
+  const groupMap = new Map<string, PickupGroup>();
+  for (const f of eligible) {
+    const userid = (f.userid ?? "").trim() || "—";
+    const item: PickupItem = {
+      id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
+      famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
+      fvolume: Number(f.fvolume ?? 0), fpallet: f.fpallet ?? "", fnote: f.fnote ?? "",
+    };
+    const existing = groupMap.get(userid);
+    if (existing) {
+      existing.items.push(item);
+      existing.forwarderIds.push(f.id);
+      existing.totalBoxes  += item.famount;
+      existing.totalWeight += item.fweight;
+      existing.totalVolume += item.fvolume;
+    } else {
+      const cust = customerById.get(userid);
+      // Fallback name: the address name on the row, else the userid itself.
+      const fallbackName = `${f.faddressname ?? ""} ${f.faddresslastname ?? ""}`.trim();
+      groupMap.set(userid, {
+        key:          userid,
+        userid,
+        customerName: cust?.name || fallbackName || userid,
+        customerTel:  cust?.tel || f.faddresstel || "",
+        shipByLabel:  nameShipBy(f.fshipby),
+        items:        [item],
+        forwarderIds: [f.id],
+        totalBoxes:   item.famount,
+        totalWeight:  item.fweight,
+        totalVolume:  item.fvolume,
+      });
+    }
+  }
+  // Sort by customer code so the same customer is easy to find on repeat visits.
+  return Array.from(groupMap.values()).sort((a, b) =>
+    a.userid.localeCompare(b.userid, "th"),
+  );
+}
+
 /** Group eligible rows by (carrier · recipient address) into form-ready stops. */
 function buildStops(eligible: ForwarderRow[]): Stop[] {
   const groupMap = new Map<string, Stop>();
@@ -274,7 +342,37 @@ export default async function CreateDriverBatchPage({
     activeTab === "pickup"  ? pickupEligible  :
     activeTab === "express" ? expressEligible :
     driverEligible;
-  const groups = buildStops(eligible);
+
+  // 3a. Pickup tab → group BY CUSTOMER (userid). Look up each customer's name +
+  //     phone from tb_users so the card leads with ชื่อลูกค้า + รหัสลูกค้า (the
+  //     self-pickup person), instead of the warehouse delivery address.
+  let pickupGroups: PickupGroup[] = [];
+  if (activeTab === "pickup") {
+    const custIds = [...new Set(pickupEligible.map((r) => (r.userid ?? "").trim()).filter(Boolean))];
+    const customerById = new Map<string, { name: string; tel: string }>();
+    if (custIds.length > 0) {
+      const { data: custRows, error: custErr } = await admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userTel")
+        .in("userID", custIds);
+      if (custErr) {
+        console.error("/admin/drivers/new: pickup customer name lookup failed", {
+          code: custErr.code, message: custErr.message,
+        });
+      }
+      for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null }[]) {
+        customerById.set(u.userID, {
+          name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(),
+          tel:  (u.userTel ?? "").trim(),
+        });
+      }
+    }
+    pickupGroups = buildPickupGroups(pickupEligible, customerById);
+  }
+
+  // Stop groups for the driver/express tabs (address-based — a driver delivers
+  // to a physical address). The pickup tab uses pickupGroups above instead.
+  const groups = activeTab === "pickup" ? [] : buildStops(eligible);
 
   // 4. Driver picker — the มอบคนขับ + Express tabs both assign a Pacred driver.
   let drivers: DriverOption[] = [];
@@ -331,7 +429,7 @@ export default async function CreateDriverBatchPage({
         </h1>
         <p className="mt-1 text-sm text-muted">
           {activeTab === "pickup"
-            ? "ของที่ลูกค้ามารับเองที่โกดัง — ติ๊กที่ส่ง/รับแล้ว แนบรูป (ถ้ามี) → ปิดงานเป็น \"ส่งแล้ว\" โดยไม่ต้องมอบคนขับ"
+            ? "ของที่ลูกค้ามารับเองที่โกดัง — แยกการ์ดตามลูกค้า (รหัสลูกค้า) · ติ๊กพัสดุที่รับแล้วของลูกค้าคนนั้น แนบรูป (ถ้ามี) → กด \"บันทึกส่งสำเร็จ\" ปิดงานทีละลูกค้าได้ โดยไม่ต้องมอบคนขับ"
             : activeTab === "express"
             ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Flash · Kerry · J&T · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
             : "ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง · เลือกคนขับ · กำหนดเวลา · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
@@ -398,7 +496,7 @@ export default async function CreateDriverBatchPage({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <Stat icon={<Package className="h-4 w-4" />} label="แทรคกิ้งรอปิดงาน" value={eligible.length} />
-          <Stat icon={<Home className="h-4 w-4" />} label="รายการจัดกลุ่มแล้ว" value={groups.length} />
+          <Stat icon={<Home className="h-4 w-4" />} label="ลูกค้า (จัดกลุ่มแล้ว)" value={pickupGroups.length} />
         </div>
       )}
 
@@ -413,7 +511,7 @@ export default async function CreateDriverBatchPage({
       {/* Form per tab — pickup = hand-off close; driver/express = driver batch
           (Express adds the ขนส่ง carrier filter, มอบคนขับ doesn't) */}
       {activeTab === "pickup" ? (
-        <SelfPickupForm groups={groups} />
+        <SelfPickupForm groups={pickupGroups} />
       ) : (
         <CreateBatchForm groups={groups} drivers={drivers} showCarrierFilter={activeTab === "express"} />
       )}
