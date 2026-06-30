@@ -97,19 +97,31 @@ async function getToken(force = false): Promise<string> {
 }
 
 async function authedGet(path: string): Promise<unknown> {
-  let tok = await getToken();
-  let r = await fetch(`${BASE}${path}`, {
-    headers: { ...COMMON_HEADERS, Authorization: `Bearer ${tok}` },
-  });
-  if (r.status === 401 || r.status === 403) {
-    // token expired mid-flight → refresh once and retry
-    tok = await getToken(true);
-    r = await fetch(`${BASE}${path}`, {
+  // MOMO signals an expired/invalid token TWO ways: HTTP 401/403, OR — the
+  // sneaky one — HTTP 200 with a body `{ status:false, auth:false, ... }`. The
+  // MOMO session also behaves single-use-ish: a fresh login elsewhere (another
+  // tab, a cron, a dev probe) can invalidate OUR cached token, so the server
+  // would otherwise silently get `auth:false` → an empty list → "พบ 0 พัสดุ".
+  // On EITHER signal: drop the cache, re-login, retry once. Persistent failure
+  // THROWS (so the page shows a real error, never a silent empty).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tok = await getToken(attempt > 0);
+    const r = await fetch(`${BASE}${path}`, {
       headers: { ...COMMON_HEADERS, Authorization: `Bearer ${tok}` },
     });
+    if (r.status === 401 || r.status === 403) {
+      cachedToken = null;
+      continue;
+    }
+    if (!r.ok) throw new MomoWebError(`MOMO GET ${path} → ${r.status}`);
+    const body = (await r.json().catch(() => null)) as { auth?: unknown } | null;
+    if (body && typeof body === "object" && body.auth === false) {
+      cachedToken = null; // 200 + auth:false → token rejected → refresh + retry
+      continue;
+    }
+    return body;
   }
-  if (!r.ok) throw new MomoWebError(`MOMO GET ${path} → ${r.status}`);
-  return r.json();
+  throw new MomoWebError(`MOMO GET ${path} — auth ถูกปฏิเสธหลัง refresh (MOMO อาจ rotate session)`);
 }
 
 type RawVendorTrack = {
