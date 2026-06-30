@@ -32,7 +32,7 @@
  * go through the existing admin-gated API routes.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { confirm } from "@/components/ui/confirm";
 import {
   deriveModeFromCid,
@@ -40,7 +40,7 @@ import {
   baseTrackingOf,
   MOMO_SHIP_BY_TH,
 } from "@/lib/admin/momo-raw-helpers";
-import { addMissingMomoParcel } from "@/actions/admin/momo-add-missing";
+import { addMissingMomoParcel, addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
 import { fetchMissingMembersFromMomo } from "@/actions/admin/momo-fetch-members";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 
@@ -195,6 +195,9 @@ export function MomoMissingClient() {
   // SET B auto-fill from the MOMO web (login-replication).
   const [autofillBusy, setAutofillBusy] = useState(false);
   const [autofillMsg, setAutofillMsg] = useState<string | null>(null);
+  // SET B "เพิ่มทั้งหมด" bulk-add.
+  const [bulkAdding, startBulkAdd] = useTransition();
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   // ── Search: import_track + container_closed → completeness → keep the missing ──
   async function onSearch() {
@@ -517,9 +520,99 @@ export function MomoMissingClient() {
     }
   }
 
+  // ── SET B bulk-add: every Set B row whose member code is filled + valid ─────
+  // Only Set B rows that already carry a PR#### member code are eligible. Rows
+  // without a code are excluded from the batch (not sent). Already-added rows
+  // (rowStates "added") are also skipped — they have no parcel left to create.
+  function eligibleSetBRows(): MissingParcel[] {
+    return missing.filter((p) => {
+      if (p.kind !== "B") return false;
+      if ((rowStates[p.base] ?? { kind: "idle" }).kind === "added") return false;
+      const code = (members[p.base] ?? "").trim();
+      return /^PR\d+$/i.test(code);
+    });
+  }
+
+  async function onBulkAddSetB() {
+    const rows = eligibleSetBRows();
+    if (rows.length === 0) return;
+
+    const ok = await confirm(
+      `เพิ่มพัสดุแบบ B เข้าระบบทั้งหมด ${rows.length} รายการ?\n\n` +
+        `(เฉพาะรายการที่กรอกรหัสลูกค้า PR#### แล้ว · รายการที่ยังไม่กรอกจะถูกข้าม · ` +
+        `รายการที่มีในระบบอยู่แล้วจะถูกข้ามให้อัตโนมัติ ไม่เพิ่มซ้ำ)`,
+      { title: "เพิ่มทั้งหมด (แบบ B)", confirmLabel: `เพิ่ม ${rows.length} รายการ` },
+    );
+    if (!ok) return;
+
+    setBulkMsg(null);
+    // mark every targeted row "saving" so the per-row buttons reflect progress
+    setRowStates((s) => {
+      const next = { ...s };
+      for (const p of rows) next[p.base] = { kind: "saving" };
+      return next;
+    });
+
+    startBulkAdd(async () => {
+      try {
+        const res = await addMissingMomoParcelsBulk(
+          rows.map((p) => ({
+            tracking:   p.base,
+            cabinet:    p.cabinet,
+            memberCode: (members[p.base] ?? "").trim(),
+            weightKg:   p.weightKg,
+            cbm:        p.cbm,
+            shipBy:     normalizeShipBy(p.shipBy),
+          })),
+        );
+
+        if (!res.ok) {
+          // whole-batch reject (auth/validation) — revert the rows to idle
+          setRowStates((s) => {
+            const next = { ...s };
+            for (const p of rows) next[p.base] = { kind: "idle" };
+            return next;
+          });
+          setBulkMsg(`⚠️ เพิ่มไม่สำเร็จ: ${res.error}`);
+          return;
+        }
+
+        const summary = res.data!;
+        // fold each per-row result back into rowStates so each row shows ✓ / ⚠️
+        setRowStates((s) => {
+          const next = { ...s };
+          for (const r of summary.results) {
+            if (r.ok) {
+              next[r.base] = { kind: "added", fid: r.fid ?? 0 };
+            } else if (r.skipped) {
+              // already in system → mark added too (it exists; nothing to do)
+              next[r.base] = { kind: "added", fid: 0 };
+            } else {
+              next[r.base] = { kind: "error", message: r.error ?? "เพิ่มไม่สำเร็จ" };
+            }
+          }
+          return next;
+        });
+        setBulkMsg(
+          `✓ เพิ่มสำเร็จ ${summary.added} · ข้าม ${summary.skipped} · ผิดพลาด ${summary.failed}` +
+            (summary.failed > 0 ? " (ดูแถวที่ขึ้น ⚠️ ด้านล่าง)" : ""),
+        );
+      } catch (e) {
+        setRowStates((s) => {
+          const next = { ...s };
+          for (const p of rows) next[p.base] = { kind: "idle" };
+          return next;
+        });
+        setBulkMsg(`⚠️ ${e instanceof Error ? e.message : "เพิ่มไม่สำเร็จ"}`);
+      }
+    });
+  }
+
   const countA = missing.filter((m) => m.kind === "A").length;
   const countB = missing.filter((m) => m.kind === "B").length;
   const cabinetCount = new Set(missing.map((m) => m.cabinet).filter(Boolean)).size;
+  // how many Set B rows are ready to bulk-add right now (member code filled)
+  const eligibleSetBCount = eligibleSetBRows().length;
 
   return (
     <div className="space-y-5">
@@ -595,11 +688,26 @@ export function MomoMissingClient() {
                     <button
                       type="button"
                       onClick={onAutofillMembers}
-                      disabled={autofillBusy}
+                      disabled={autofillBusy || bulkAdding}
                       className="flex items-center gap-1.5 rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 shrink-0"
                       title="ดึงรหัสลูกค้าของแบบ B จากเว็บ MOMO อัตโนมัติ (ไม่ต้องเปิดเว็บ MOMO เอง)"
                     >
                       {autofillBusy ? "กำลังดึง..." : `🔄 ดึงรหัสจาก MOMO (${countB})`}
+                    </button>
+                  )}
+                  {countB > 0 && (
+                    <button
+                      type="button"
+                      onClick={onBulkAddSetB}
+                      disabled={bulkAdding || autofillBusy || eligibleSetBCount === 0}
+                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500 bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 shrink-0"
+                      title={
+                        eligibleSetBCount === 0
+                          ? "กรอกรหัสลูกค้า (PR…) ของแบบ B ก่อน หรือกด 🔄 ดึงรหัสจาก MOMO"
+                          : `เพิ่มแบบ B ที่กรอกรหัสแล้วทั้งหมด ${eligibleSetBCount} รายการเข้าระบบในครั้งเดียว`
+                      }
+                    >
+                      {bulkAdding ? "กำลังเพิ่ม..." : `➕ เพิ่มทั้งหมด (แบบ B · ${eligibleSetBCount})`}
                     </button>
                   )}
                   <button
@@ -621,6 +729,12 @@ export function MomoMissingClient() {
               {autofillMsg && (
                 <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] text-violet-800">
                   {autofillMsg}
+                </div>
+              )}
+
+              {bulkMsg && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] text-emerald-800">
+                  {bulkMsg}
                 </div>
               )}
 

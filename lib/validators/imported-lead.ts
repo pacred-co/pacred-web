@@ -121,3 +121,18 @@ export const handoffImportedLeadSchema = z.object({
   id: z.number().int().positive(),
   legacyId: z.string().trim().min(1).max(50),
 });
+
+// "งานที่มอบหมาย" assignment-summary drill-down (owner 2026-06-30 "เอาประวัติสรุปที่
+// ได้รับมอบหมายมาขึ้นด้วยสำหรับเซลล์ที่แบ่งงานไปให้") — the leads CURRENTLY assigned
+// to a rep (standing workload · NOT date-ranged, unlike the call report). `rep` =
+// EXACT assigned_admin_id ('' = ยังไม่มอบหมาย) · `bucket` filters by progress/outcome.
+export const importedLeadAssignmentDetailSchema = z.object({
+  rep: z.string().trim().max(50),
+  bucket: z
+    .enum(["all", "untouched", "called", "callback", "closed", "no_answer", "not_interested", "other_rep"])
+    .default("all"),
+  // mine=true forces self-scope (a เซลล์ viewing their OWN assigned summary) — the
+  // server ignores `rep` and uses the caller's id. Non-senior callers are always
+  // self-scoped regardless of this flag.
+  mine: z.boolean().optional(),
+});

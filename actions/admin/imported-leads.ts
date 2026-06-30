@@ -33,6 +33,7 @@ import {
   handoffImportedLeadSchema,
   importedLeadReportSchema,
   importedLeadReportDetailSchema,
+  importedLeadAssignmentDetailSchema,
   IMPORTED_LEAD_CALL_STATUSES,
 } from "@/lib/validators/imported-lead";
 
@@ -375,6 +376,183 @@ export async function getImportedLeadReportDetail(
     }
     const rows = ((data ?? []) as { id: number; name: string | null; phone: string | null; call_status: string | null; last_called_at: string | null; call_count: number | null }[])
       .map((r) => ({ id: r.id, name: r.name ?? "", phone: r.phone ?? "", callStatus: r.call_status ?? "", lastCalledAt: r.last_called_at, callCount: r.call_count ?? 0 }));
+    return { ok: true, data: { rows } };
+  });
+}
+
+// ── "งานที่มอบหมาย" — standing assignment workload per rep (owner 2026-06-30) ────
+// Distinct from getImportedLeadCallReport (a date-ranged CALL-activity report): this
+// is the CURRENT assignment state — how many leads each rep was distributed + their
+// progress (ยังไม่โทร vs ติดตามแล้ว vs ปิดได้). NOT date-bounded — a rep handed 200
+// leads who hasn't dialed yet shows 200 มอบหมาย / 200 ยังไม่โทร (the call report
+// would show 0). Counts DISTINCT callable customers via the SAME global dedupe-by-
+// phone as the client list, so the per-rep totals reconcile with the table.
+
+export type ImportedLeadAssignmentRow = {
+  legacyId: string;
+  name: string;
+  total: number; // distinct assigned customers (callable phone)
+  untouched: number; // never dialed + no outcome — the "ยังไม่ได้เริ่ม" backlog
+  byStatus: Record<string, number>; // closed/callback/no_answer/not_interested/other_rep/called
+};
+
+/**
+ * Single-bucket partition for an assigned lead so `total = untouched + Σ byStatus`
+ * exactly (no double counting): a known outcome wins; else a dialed-but-no-outcome
+ * lead is "called"; else it's untouched.
+ */
+function assignmentBucket(status: string, callCount: number): string {
+  if ((IMPORTED_LEAD_CALL_STATUSES as readonly string[]).includes(status) && status !== "called") return status;
+  if (status === "called" || callCount > 0) return "called";
+  return "untouched";
+}
+
+/**
+ * Global dedupe-by-phone identical to the client list's `dedupeByPhone` (best-scored
+ * row per callable phone wins · assigned > has-calls) so the per-rep assignment
+ * counts == what staff see in the table. Rows must arrive id-desc (list order).
+ */
+function dedupeAssignRows<T extends { assigned_admin_id: string; phone: string; call_count: number }>(rows: T[]): T[] {
+  const digits = (p: string) => (p ?? "").replace(/\D/g, "");
+  const score = (l: T) => (l.assigned_admin_id ? 2 : 0) + ((l.call_count ?? 0) > 0 ? 1 : 0);
+  const best = new Map<string, T>();
+  for (const l of rows) {
+    const key = digits(l.phone);
+    if (!key) continue; // no callable number → hidden in the list too
+    const cur = best.get(key);
+    if (!cur || score(l) > score(cur)) best.set(key, l);
+  }
+  return [...best.values()];
+}
+
+/** Cross-rep "sees ALL assignments" = the distributors (ultra/super/manager/sales_admin).
+ *  A plain เซลล์/ops sees ONLY their own assigned summary (self-scoped). */
+function canSeeAllAssignments(roles: AdminRole[]): boolean {
+  return isSenior(roles) || roles.some((r) => (IMPORT_ROLES as readonly string[]).includes(r));
+}
+
+/**
+ * Per-rep standing assignment summary. Distributors (ultra/super/manager/sales_admin)
+ * see EVERY rep + the "(ยังไม่มอบหมาย)" pool. A plain เซลล์/ops — or anyone passing
+ * `{ mine: true }` (their own "ประวัติ + สรุป" tab) — is force-scoped to their OWN
+ * assigned leads (one row · owner 2026-06-30 "เซลล์ที่ได้รับมอบหมายต้องเห็นสรุปของตัวเอง").
+ */
+export async function getImportedLeadAssignmentSummary(
+  input?: { mine?: boolean } | unknown,
+): Promise<AdminActionResult<{ rows: ImportedLeadAssignmentRow[]; total: ImportedLeadAssignmentRow }>> {
+  const mine = Boolean((input as { mine?: boolean } | undefined)?.mine);
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    // Self-scope (and dedupe within self) so the count == the rep's own "ลูกค้าของฉัน"
+    // list (which scopes at the query level then dedupes within).
+    const scopeToSelf = mine || !canSeeAllAssignments(roles);
+    let query = admin
+      .from(TABLE)
+      .select("assigned_admin_id, phone, call_status, call_count")
+      .order("id", { ascending: false })
+      .limit(50000);
+    if (scopeToSelf) query = query.eq("assigned_admin_id", adminId);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[imported_leads:assign-summary] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "query_failed" };
+    }
+
+    const repsRes = await getAssignableAdmins();
+    const nameOf = new Map((repsRes.ok ? repsRes.data?.reps ?? [] : []).map((r) => [r.legacyId, r.name]));
+    const blank = (): Record<string, number> => Object.fromEntries(IMPORTED_LEAD_CALL_STATUSES.map((s) => [s, 0]));
+
+    type Raw = { assigned_admin_id: string; phone: string; call_status: string; call_count: number };
+    const survivors = dedupeAssignRows((data ?? []) as Raw[]);
+    const byRep = new Map<string, ImportedLeadAssignmentRow>();
+    const total: ImportedLeadAssignmentRow = { legacyId: "", name: "รวมทั้งหมด", total: 0, untouched: 0, byStatus: blank() };
+    for (const l of survivors) {
+      const id = l.assigned_admin_id || "";
+      if (!byRep.has(id)) {
+        byRep.set(id, { legacyId: id, name: id ? nameOf.get(id) ?? id : "(ยังไม่มอบหมาย)", total: 0, untouched: 0, byStatus: blank() });
+      }
+      const r = byRep.get(id)!;
+      r.total++; total.total++;
+      const b = assignmentBucket(l.call_status, l.call_count ?? 0);
+      if (b === "untouched") { r.untouched++; total.untouched++; }
+      else { r.byStatus[b] = (r.byStatus[b] ?? 0) + 1; total.byStatus[b] = (total.byStatus[b] ?? 0) + 1; }
+    }
+
+    // Resolve names for any assigned admin OUTSIDE the active-assignable pool
+    // (deactivated / reassigned-role staff) from `profiles` so the rep column never
+    // shows a raw UUID (owner §0f: labels readable). nameOf already covered actives.
+    const unresolved = [...byRep.values()].filter((r) => r.legacyId && r.name === r.legacyId).map((r) => r.legacyId);
+    if (unresolved.length) {
+      const { data: profs, error: profErr } = await admin
+        .from("profiles")
+        .select("id, first_name, last_name, admin_login_id")
+        .in("id", unresolved);
+      if (profErr) {
+        console.error("[imported_leads:assign-summary names] failed", { code: profErr.code, message: profErr.message });
+      } else {
+        const nm = new Map(
+          ((profs ?? []) as { id: string; first_name: string | null; last_name: string | null; admin_login_id: string | null }[]).map((p) => [
+            p.id,
+            [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.admin_login_id || p.id,
+          ]),
+        );
+        for (const r of byRep.values()) {
+          if (r.legacyId && r.name === r.legacyId && nm.has(r.legacyId)) r.name = nm.get(r.legacyId)!;
+        }
+      }
+    }
+
+    // Assigned reps first (heaviest load on top), the unassigned pool always last.
+    const rows = [...byRep.values()].sort((a, b) => {
+      if (!a.legacyId) return 1;
+      if (!b.legacyId) return -1;
+      return b.total - a.total;
+    });
+    return { ok: true, data: { rows, total } };
+  });
+}
+
+/**
+ * Drill-down behind an assignment-summary row — the actual leads CURRENTLY assigned
+ * to a rep (NOT date-ranged), optionally filtered to one progress bucket. A plain
+ * เซลล์/ops (or `{ mine: true }`) is force-scoped to their OWN leads, ignoring `rep`;
+ * distributors may pass any `rep`. Dedupe scope matches the read scope so the list
+ * length reconciles with the summary's count.
+ */
+export async function getImportedLeadAssignmentDetail(
+  input: unknown,
+): Promise<AdminActionResult<{ rows: ImportedLeadReportDetailRow[] }>> {
+  const parsed = importedLeadAssignmentDetailSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { rep, bucket, mine } = parsed.data;
+
+  return withAdmin([...WORK_ROLES], async ({ adminId, roles }) => {
+    const admin = createAdminClient();
+    // Non-distributors (or an explicit `mine`) can ONLY see their own leads.
+    const selfScope = mine || !canSeeAllAssignments(roles);
+    const targetRep = selfScope ? adminId : rep;
+    let query = admin
+      .from(TABLE)
+      .select("id, name, phone, call_status, last_called_at, call_count, assigned_admin_id")
+      .order("id", { ascending: false })
+      .limit(50000);
+    // Narrow the read ONLY when self-scoped — so dedupe stays within the rep's own
+    // set (matches their "ลูกค้าของฉัน" list AND the self summary). A distributor reads
+    // ALL + dedupes globally + filters to `targetRep`, matching the cross-rep summary.
+    if (selfScope) query = query.eq("assigned_admin_id", adminId);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[imported_leads:assign-detail] failed", { code: error.code, message: error.message });
+      return { ok: false, error: "query_failed" };
+    }
+    type Raw = { id: number; name: string | null; phone: string; call_status: string; last_called_at: string | null; call_count: number; assigned_admin_id: string };
+    const rows = dedupeAssignRows((data ?? []) as Raw[])
+      .filter((l) => (l.assigned_admin_id || "") === targetRep)
+      .filter((l) => bucket === "all" || assignmentBucket(l.call_status, l.call_count ?? 0) === bucket)
+      .map((l) => ({
+        id: l.id, name: l.name ?? "", phone: l.phone ?? "", callStatus: l.call_status ?? "",
+        lastCalledAt: l.last_called_at, callCount: l.call_count ?? 0,
+      }));
     return { ok: true, data: { rows } };
   });
 }
