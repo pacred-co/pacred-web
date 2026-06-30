@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { UserPlus, X, Upload, FileSpreadsheet, Phone, Check, Loader2, Users, ChevronDown, BarChart3, ListChecks, Shuffle } from "lucide-react";
-import { LeadCallReport } from "./lead-call-report";
+import { LeadReportPanel } from "./lead-assignment-summary";
 import {
   getImportedLeads,
   saveImportedLeads,
@@ -736,7 +736,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "" }: { reps: AssignR
           </div>
         ) : null}
         {isAssign && assignView === "report" ? (
-          <LeadCallReport reps={reps} />
+          <LeadReportPanel reps={reps} />
         ) : displayLeads.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-surface-alt/40 px-4 py-12 text-center text-sm text-muted">
             {loading
