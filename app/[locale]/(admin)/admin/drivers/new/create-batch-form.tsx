@@ -422,8 +422,9 @@ export function CreateBatchForm({
                       </table>
                     </div>
 
-                    {/* RIGHT — ที่อยู่จัดส่ง (legacy's rightmost column) */}
-                    <aside className="lg:w-72 xl:w-80 flex-shrink-0 p-3 sm:p-4 bg-surface-alt/20">
+                    {/* RIGHT — ที่อยู่จัดส่ง (legacy's rightmost column · ภูม 2026-06-30
+                        ขยายช่อง + ตัวใหญ่ขึ้น ให้เหมือน PCS อ่านง่ายตอนคนขับใช้). */}
+                    <aside className="lg:w-80 xl:w-96 2xl:w-[26rem] flex-shrink-0 p-3 sm:p-4 bg-surface-alt/20">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1">
                         <MapPin className="h-3.5 w-3.5 text-rose-500" />
                         ที่อยู่จัดส่ง
@@ -434,10 +435,11 @@ export function CreateBatchForm({
                           ⚠️ ยังไม่มีที่อยู่จัดส่ง — เซลกรอกเพิ่มที่หน้ารายการนำเข้า
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs text-foreground/80 leading-relaxed">
-                          {g.address.no} ต.{g.address.subDistrict}{" "}
-                          อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}
-                          จ.{g.address.province} {g.address.zipCode}
+                        <p className="mt-1 text-sm text-foreground/90 leading-relaxed">
+                          {g.address.no}
+                          {g.address.subDistrict ? <> ต.{g.address.subDistrict}</> : null}{" "}
+                          {g.address.district ? <>อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}</> : null}
+                          {g.address.province ? <>จ.{g.address.province} </> : null}{g.address.zipCode}
                         </p>
                       )}
                       {g.address.tel && g.address.tel !== "-" && (

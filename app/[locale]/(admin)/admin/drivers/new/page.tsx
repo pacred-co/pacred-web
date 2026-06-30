@@ -262,10 +262,18 @@ function buildStops(
     // customers, so fold the userid into the key — else two customers' parcels
     // would merge into ONE card under a single (wrong) name. Real addresses
     // still group as legacy does (one card per physical destination).
-    const placeholder = isWarehousePlaceholderName(f.faddressname);
+    // ภูม 2026-06-30 — a placeholder NAME ("รับที่โกดัง Pacred") does NOT mean there's
+    // no address: the customer may have entered a REAL delivery address in the
+    // faddress* fields while faddressname is still the self-pickup placeholder.
+    // Split the two: nameIsPlaceholder (hide the bogus name) vs hasRealAddress
+    // (show no/district/province + skip the "ยังไม่มีที่อยู่จัดส่ง" warning).
+    const nameIsPlaceholder = isWarehousePlaceholderName(f.faddressname);
+    const hasRealAddress = [f.faddressno, f.faddressprovince, f.faddressdistrict]
+      .some((v) => (v ?? "").trim() !== "");
+    const addrMissing = !hasRealAddress;
     const key = [
       f.fshipby ?? "",
-      placeholder ? `__wh__${userid}` : "",
+      addrMissing ? `__wh__${userid}` : "",
       f.faddressname ?? "", f.faddresslastname ?? "",
       f.faddressno ?? "", f.faddresssubdistrict ?? "",
       f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",
@@ -286,7 +294,7 @@ function buildStops(
       const customerName = cust?.name || "";
       // Recipient = the real address name when present, else the customer name,
       // else the userid (never the bare warehouse placeholder).
-      const recipientName = placeholder
+      const recipientName = nameIsPlaceholder
         ? (customerName || userid)
         : `${(f.faddressname ?? "").trim()} ${(f.faddresslastname ?? "").trim()}`.trim();
       groupMap.set(key, {
@@ -296,7 +304,7 @@ function buildStops(
         userid,
         customerName:   customerName || userid,
         recipientName:  recipientName || userid,
-        addressMissing: placeholder,
+        addressMissing: addrMissing,
         items: [{
           id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
           userid: f.userid ?? "—", famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
@@ -307,15 +315,17 @@ function buildStops(
         totalWeight: Number(f.fweight ?? 0),
         totalVolume: Number(f.fvolume ?? 0),
         address: {
-          // Blank out the placeholder name so the card never prints
-          // "รับที่โกดัง Pacred" as a person; keep tel from the row if any.
-          name:        placeholder ? "" : (f.faddressname ?? ""),
-          lastName:    placeholder ? "" : (f.faddresslastname ?? ""),
-          no:          placeholder ? "" : (f.faddressno ?? ""),
-          subDistrict: placeholder ? "" : (f.faddresssubdistrict ?? ""),
+          // Hide ONLY the placeholder name (never print "รับที่โกดัง Pacred" as a
+          // person) — but ALWAYS show the real address fields when they exist, even
+          // if the name is the placeholder (ภูม 2026-06-30 · PR047 had a real addr
+          // 48/3 หมู่ 12 กระทุ่มแบน but was blanked + flagged "ยังไม่มีที่อยู่").
+          name:        nameIsPlaceholder ? "" : (f.faddressname ?? ""),
+          lastName:    nameIsPlaceholder ? "" : (f.faddresslastname ?? ""),
+          no:          hasRealAddress ? (f.faddressno ?? "") : "",
+          subDistrict: hasRealAddress ? (f.faddresssubdistrict ?? "") : "",
           district:    f.faddressdistrict ?? "",
-          province:    placeholder ? "" : (f.faddressprovince ?? ""),
-          zipCode:     placeholder ? "" : (f.faddresszipcode ?? ""),
+          province:    hasRealAddress ? (f.faddressprovince ?? "") : "",
+          zipCode:     hasRealAddress ? (f.faddresszipcode ?? "") : "",
           tel:         f.faddresstel ?? cust?.tel ?? "",
         },
       });
