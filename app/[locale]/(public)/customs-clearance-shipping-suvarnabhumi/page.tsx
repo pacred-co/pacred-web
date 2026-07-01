@@ -389,11 +389,32 @@ export default async function CustomsClearancePage({
               </div>
             </div>
 
-            {/* Bullet list — wrapped in a themed card. Subtle primary-red
-                tinted border + gradient bg + soft red shadow so it reads
-                as a "service highlights" block tied to the red banner above
-                without competing with it. */}
-            <div className="mt-4 md:mt-5 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
+          </div>
+        </section>
+
+        {/* ═══════ 3 clearance modes — sea/air/truck. Cards FIRST, heading moved
+             BELOW them (owner 2026-07-01 "ย้ายก้อนหัวข้อไปต่อท้ายการ์ดราคา").
+             Per ปอน 2026-05-16: 3 mode-grouped cards (เรือ / แอร์ / รถ). ═══════ */}
+        <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <CustomsModeCards />
+          </div>
+
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5 mt-5 md:mt-7">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
+              {tp("modeEyebrow")}
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              {tp("modeH2Before")} <span className="text-primary-600">{tp("modeH2Highlight")}</span> {tp("modeH2After")}<span className="md:hidden"> {tp("modeH2Mobile")}</span>
+            </h2>
+          </div>
+        </section>
+
+        {/* ═══════ Service highlights — bullet list card (below the pricing block). ═══════ */}
+        <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <ul className="flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
                   { icon: "/images/hero-section/icon-draf/billingicon.png",     text: tp("heroBullet1") },
@@ -411,26 +432,6 @@ export default async function CustomsClearancePage({
                 ))}
               </ul>
             </div>
-
-          </div>
-        </section>
-
-        {/* ═══════ 3 clearance modes — sea/air/truck with carrier logos ═══════
-             Per ปอน 2026-05-16: replace 7-port carousel with 3 mode-grouped
-             cards (เรือ / แอร์ / รถ) showing carriers (DHL/FedEx/COSCO etc). */}
-        <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
-          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-              <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              {tp("modeEyebrow")}
-            </div>
-            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              {tp("modeH2Before")} <span className="text-primary-600">{tp("modeH2Highlight")}</span> {tp("modeH2After")}<span className="md:hidden"> {tp("modeH2Mobile")}</span>
-            </h2>
-          </div>
-
-          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5 mt-5 md:mt-7">
-            <CustomsModeCards />
           </div>
         </section>
 
