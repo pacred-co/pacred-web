@@ -171,6 +171,18 @@ const editForwarderSchema = z.object({
 
   // Per-item crate list. Empty list = no crate updates.
   items:         z.array(itemCrateSchema).max(200).default([]),
+
+  // ── DIMS-ONLY save gate (ภูม 2026-07-01) ──────────────────────────────────
+  // Warehouse staff need to enter/save the physical measurements (น้ำหนัก · กว้าง ·
+  // ยาว · สูง · CBM) as soon as goods arrive — while the SELLER may not have set the
+  // freight rate yet. The default save auto-advances ถึงไทยแล้ว(4)→รอชำระเงิน(5)
+  // once a freight rate exists; that prematurely bills an order whose rate isn't
+  // ready. When `advanceToPayment === false`, this save persists the dimensions +
+  // recomputes CBM/price (price is a derived read — fine) but LEAVES fstatus AS-IS
+  // (no advance to 5, no lock, no billing). OPTIONAL + defaults to the legacy
+  // behaviour (advance when eligible) so every existing caller — the "บันทึก + ส่ง
+  // ไปรอชำระเงิน" button, the edit form, the rate-missing fallback — is unchanged.
+  advanceToPayment: z.boolean().optional(),
 });
 export type AdminEditForwarderInput = z.infer<typeof editForwarderSchema>;
 
@@ -577,7 +589,17 @@ export async function adminUpdateForwarderDimensions(
       // Mirrors the accounting bulk-bill stamp (forwarder-check.ts → fstatus '5'
       // + fdatestatus5), so the order shows up correctly in AR aging (which dates
       // the receivable from fdatestatus5).
-      const advancedToFive = String(before.fstatus ?? "") === "4" && newFTotalPrice > 0;
+      //
+      // 2026-07-01 (ภูม · แยก "บันทึกขนาด" ออกจาก "ส่งไปรอชำระ") — the caller can
+      // OPT OUT with advanceToPayment=false (the warehouse dims-only save). Then we
+      // persist the measurements + recomputed price but NEVER flip fstatus to 5:
+      // the order stays at "ถึงไทยแล้ว(4)" until the pricer is ready to bill. The
+      // flag defaults to the legacy behaviour (undefined → treated as advance), so
+      // the existing "บันทึก + ส่งไปรอชำระเงิน" path is byte-for-byte unchanged.
+      const advancedToFive =
+        d.advanceToPayment !== false &&
+        String(before.fstatus ?? "") === "4" &&
+        newFTotalPrice > 0;
       if (advancedToFive) {
         update.fstatus = "5";
         update.fdatestatus5 = nowIso;

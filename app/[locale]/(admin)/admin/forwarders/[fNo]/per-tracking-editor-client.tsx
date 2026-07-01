@@ -22,6 +22,7 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -135,6 +136,7 @@ export function PerTrackingEditorClient({
   profileCbmUnitRate = null,
 }: Props) {
   const router = useRouter();
+  const { confirm, dialogs } = useConfirmDialogs();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -306,10 +308,16 @@ export function PerTrackingEditorClient({
     profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate,
   ]);
 
-  async function onSaveAll() {
+  // ภูม 2026-07-01 — ONE save routine, TWO buttons:
+  //   • advanceToPayment=true  → "บันทึก + ส่งไปรอชำระเงิน" (the pricer is ready to
+  //     bill · legacy auto-advance ถึงไทยแล้ว(4)→รอชำระเงิน(5) when freight>0).
+  //   • advanceToPayment=false → "บันทึกขนาด (ยังไม่ส่งรอชำระ)" (warehouse saves the
+  //     measurements first · fstatus stays put · no billing). Same measurement +
+  //     price-recompute write either way — only the status advance differs (the
+  //     action gates it on the advanceToPayment flag it receives).
+  async function onSave(advanceToPayment: boolean) {
     setError(null);
     setSuccess(null);
-    setResults({});
     for (const r of rows) {
       if (
         (parseFloat(r.weight) || 0) < 0 || (parseFloat(r.width) || 0) < 0 ||
@@ -326,6 +334,16 @@ export function PerTrackingEditorClient({
       return;
     }
 
+    // §0f confirm-before-mutate — both saves get an explicit confirm so no one
+    // ลั่นปุ่ม. The two prompts spell out the different consequence (advance vs stay).
+    const ok = await confirm(
+      advanceToPayment
+        ? `ยืนยันบันทึกขนาด/ราคา ${rows.length} แทรคกิง แล้ว "ส่งไปรอชำระเงิน" (ออเดอร์ที่ตั้งเรทแล้วจะย้ายไปสถานะรอชำระเงิน) ?`
+        : `ยืนยัน "บันทึกขนาด" ${rows.length} แทรคกิง — เก็บน้ำหนัก/กว้าง/ยาว/สูง/CBM ไว้ก่อน โดยยังไม่ส่งไปรอชำระเงิน (สถานะคงเดิม) ?`,
+    );
+    if (!ok) return;
+
+    setResults({});
     startTransition(async () => {
       const fails: string[] = [];
       const nextResults: Record<number, RowResult> = {};
@@ -342,6 +360,8 @@ export function PerTrackingEditorClient({
           productType: r.productType,
           // items:[] — matches the legacy detail-page form (crate edited elsewhere).
           items: [],
+          // ภูม 2026-07-01 — dims-only save opts OUT of the fstatus 4→5 advance.
+          advanceToPayment,
           // ORDER-level shared rate toggles (applied to every row).
           customRate,
           customRateKg: parseFloat(customRateKg) || 0,
@@ -377,12 +397,19 @@ export function PerTrackingEditorClient({
         setError(`บันทึกไม่สำเร็จ ${fails.length}/${rows.length} แถว — ${fails[0]}`);
         return;
       }
-      // The save auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side — forward-only,
-      // ONLY when the FREIGHT rate (ftotalprice) > 0 (ภูม 2026-06-25). A row whose rate
-      // is still 0 (เซลยังไม่ตั้งเรท · เคสสร้างมือ) stays at "ถึงไทยแล้ว" — don't falsely
-      // claim it moved to billing; tell the pricer to set the rate. router.refresh
-      // re-renders the new status pill + the "สร้างใบวางบิล" button (fstatus 5/6).
-      if (notAdvanced.length > 0) {
+      if (!advanceToPayment) {
+        // DIMS-ONLY save — the pricer isn't billing yet. We deliberately kept
+        // fstatus as-is; say so clearly so no one thinks it should have advanced.
+        setSuccess(
+          `✓ บันทึกขนาด ${rows.length} แทรคกิงแล้ว · ยังไม่ส่งรอชำระ (สถานะคงเดิม) — ` +
+          `ตั้งเรท/ใส่ราคาให้ครบ แล้วกด "บันทึก + ส่งไปรอชำระเงิน" เมื่อพร้อมออกบิล`,
+        );
+      } else if (notAdvanced.length > 0) {
+        // The save auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side — forward-only,
+        // ONLY when the FREIGHT rate (ftotalprice) > 0 (ภูม 2026-06-25). A row whose rate
+        // is still 0 (เซลยังไม่ตั้งเรท · เคสสร้างมือ) stays at "ถึงไทยแล้ว" — don't falsely
+        // claim it moved to billing; tell the pricer to set the rate. router.refresh
+        // re-renders the new status pill + the "สร้างใบวางบิล" button (fstatus 5/6).
         setSuccess(
           `✓ บันทึกขนาด/น้ำหนักแล้ว — แต่ ${notAdvanced.length}/${rows.length} แทรคกิงยังไม่ส่งไปรอชำระเงิน ` +
           `เพราะราคา/เรท ยังเป็น 0 (${notAdvanced.slice(0, 3).join(", ")}${notAdvanced.length > 3 ? "…" : ""}) — ` +
@@ -554,13 +581,18 @@ export function PerTrackingEditorClient({
         </div>
       </div>
 
-      <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วกด “บันทึกทุกแถว” · ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก (ต้นทุน/ค่าเทียบ จาก server)</p>
+      <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วเลือกบันทึก — “💾 บันทึกขนาด” เก็บน้ำหนัก/ขนาด/CBM ไว้ก่อนโดยยังไม่ส่งรอชำระ (เผื่อเซลยังไม่ตั้งเรท) · “บันทึก + ส่งไปรอชำระเงิน” เมื่อพร้อมออกบิล · ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก (ต้นทุน/ค่าเทียบ จาก server)</p>
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onSaveAll} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        {/* ภูม 2026-07-01 — DIMS-ONLY: warehouse saves น้ำหนัก/ขนาด/CBM ก่อน โดยยังไม่ดัน
+            ไปรอชำระ (เผื่อเซลยังไม่ตั้งเรท). สถานะคงเดิม · ไม่ล็อก · ไม่ออกบิล. */}
+        <button type="button" onClick={() => onSave(false)} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-surface dark:text-foreground">
+          {pending ? "กำลังบันทึก..." : `💾 บันทึกขนาด (ยังไม่ส่งรอชำระ)`}
+        </button>
+        <button type="button" onClick={() => onSave(true)} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
           {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
         </button>
         {/* owner 2026-06-23 "ครบจบๆ" — jump straight to สร้างใบวางบิล (renders below at
@@ -569,6 +601,7 @@ export function PerTrackingEditorClient({
           🧾 ไปสร้างใบวางบิล ↓
         </a>
       </div>
+      {dialogs}
     </div>
   );
 }
