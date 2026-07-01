@@ -428,7 +428,7 @@ export async function runMomoSync(
   // MOMO is source-of-truth for STATUS, so AFTER the partner-feed + departed-container
   // passes (so those win when they DO have a signal), scrape the Live boards and advance
   // any matched tb_forwarder row toward the MOMO-Live status. Forward-only + STATUS-ONLY
-  // (writes only fstatus/fdatestatusN/adminidupdate='system-live' · no money) +
+  // (writes only fstatus/fdatestatusN/adminidupdate='sys-live' (≤10 · tb_forwarder.adminidupdate is varchar(10)) · no money) +
   // idempotent + TOCTOU-safe. Only runs when MOMO web creds are configured. Best-effort —
   // a scrape/login failure must NEVER fail the sync (the momo_* writes already landed).
   let liveStatusPropagation: LiveStatusPropagationResult | null = null;

@@ -122,7 +122,7 @@ export async function advanceDepartedContainerForwarders(
       // in-transit stamp). adminidupdate = the audit marker. NOTHING else.
       const update: Record<string, unknown> = {
         fstatus: ADVANCE_TO_FSTATUS,
-        adminidupdate: "system-auto",
+        adminidupdate: "sys-auto",
       };
       const hasStamp = !!f.fdatestatus3 && f.fdatestatus3 !== "0000-00-00";
       if (!hasStamp) update.fdatestatus3 = today;
