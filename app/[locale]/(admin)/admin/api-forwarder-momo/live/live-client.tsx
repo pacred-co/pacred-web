@@ -19,8 +19,9 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
-import { loadMomoLiveBoard } from "@/actions/admin/momo-web-live";
+import { loadMomoLiveBoard, propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { MOMO_LIVE_STATUSES, type MomoLiveParcel, type MomoLiveStatus } from "@/lib/integrations/momo-web/types";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 /** Thai labels for the 6 status boards (the tabs). */
 const STATUS_TH: Record<MomoLiveStatus, string> = {
@@ -53,7 +54,50 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
   const [zoom, setZoom] = useState<{ url: string; tracking: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // "อัปเดตสถานะเข้าระบบ PR" — the bulk status-propagate (writes tb_forwarder.fstatus).
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<
+    | { ok: true; matched: number; advanced: number; shopOrdersAdvanced: number; errorCount: number }
+    | { ok: false; error: string }
+    | null
+  >(null);
+  const { confirm, dialogs } = useConfirmDialogs();
+
   const loggedIn = parcels !== null;
+
+  // Bulk-propagate the MOMO Live status into tb_forwarder (all boards). WRITES —
+  // confirm first (§0f). Forward-only + status-only (server-enforced). This is the
+  // one-click version of what the ~5-min sync cron does; staff can push now.
+  async function runStatusSync() {
+    if (syncing) return;
+    const ok = await confirm(
+      "อัปเดตสถานะพัสดุจาก MOMO เข้าระบบ PR ตอนนี้เลยไหม?\n\n" +
+        "ระบบจะดึงทุกสถานะจาก MOMO แล้ว “เดินหน้า” สถานะรายการนำเข้าใน PR ให้ตรงกับ MOMO " +
+        "(เฉพาะเดินหน้า ไม่ถอยหลัง · ไม่แตะเรื่องเงิน/ค่าใช้จ่าย)",
+    );
+    if (!ok) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await propagateMomoLiveStatusNow();
+      if (res.ok && res.data) {
+        const s = res.data.summary;
+        setSyncResult({
+          ok: true,
+          matched: s.matched,
+          advanced: s.advanced,
+          shopOrdersAdvanced: s.shopOrdersAdvanced,
+          errorCount: s.errors.length,
+        });
+        // reflect the just-written statuses in the visible board
+        loadBoard(status);
+      } else {
+        setSyncResult({ ok: false, error: res.ok ? "ไม่มีข้อมูลผลลัพธ์" : res.error });
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   // Log in fresh (or re-login) + load ONE board. Reused by the login button,
   // the refresh button, and the status tabs.
@@ -162,7 +206,37 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
             >
               {pending ? "⏳ กำลังโหลด…" : "🔄 เข้าใหม่ / รีเฟรช"}
             </button>
+            {/* WRITE action — push MOMO's status into tb_forwarder (forward-only). */}
+            <button
+              type="button"
+              onClick={runStatusSync}
+              disabled={syncing || pending}
+              className="rounded-full border border-primary-300 bg-primary-50 px-3 py-1.5 text-[12px] font-bold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
+              title="ดึงสถานะจาก MOMO ทุกสถานะ แล้วเดินหน้าสถานะรายการนำเข้าใน PR ให้ตรง (เฉพาะเดินหน้า · ไม่แตะเรื่องเงิน)"
+            >
+              {syncing ? "⏳ กำลังอัปเดตสถานะ…" : "🔄 อัปเดตสถานะเข้าระบบ PR"}
+            </button>
           </nav>
+
+          {/* Result of the bulk status-propagate */}
+          {syncResult &&
+            (syncResult.ok ? (
+              <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-[12px] text-emerald-900 leading-relaxed">
+                <strong>อัปเดตสถานะเข้าระบบ PR สำเร็จ</strong> — เจอรายการที่ตรงกับ MOMO{" "}
+                {syncResult.matched.toLocaleString("th-TH")} รายการ · เดินหน้าสถานะ{" "}
+                <span className="font-bold">{syncResult.advanced.toLocaleString("th-TH")}</span> รายการ
+                {syncResult.shopOrdersAdvanced > 0 && (
+                  <> · อัปเดตงานฝากสั่งซื้อที่เชื่อมโยง {syncResult.shopOrdersAdvanced.toLocaleString("th-TH")} รายการ</>
+                )}
+                {syncResult.errorCount > 0 && (
+                  <span className="text-amber-700"> · มีข้อผิดพลาดบางรายการ {syncResult.errorCount} รายการ (ดู log)</span>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-red-300 bg-red-50 p-3 text-[12px] text-red-900 leading-relaxed">
+                <strong>อัปเดตสถานะไม่สำเร็จ</strong> — <span className="font-mono break-words">{syncResult.error}</span>
+              </div>
+            ))}
 
           <section className="rounded-2xl border border-border bg-white p-4 shadow-sm space-y-3">
             {/* Header: count + search */}
@@ -313,6 +387,9 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
           </div>
         </div>
       )}
+
+      {/* Confirm-before-mutate dialog (§0f) for the status-propagate button */}
+      {dialogs}
     </div>
   );
 }

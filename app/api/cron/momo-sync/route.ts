@@ -154,6 +154,12 @@ export async function GET(request: Request) {
           // advance-departed-containers.ts.
           departed_advance_scanned:  sync.departedAdvance?.scanned ?? 0,
           departed_advanced:         sync.departedAdvance?.advanced ?? 0,
+          // 2026-07-01 — MOMO Live-board STATUS propagate (the richer momocargo.com
+          // web source · forward-only · status-only). See lib/integrations/momo-web/
+          // propagate-live-status.ts.
+          live_status_matched:       sync.liveStatusPropagation?.matched ?? 0,
+          live_status_advanced:      sync.liveStatusPropagation?.advanced ?? 0,
+          live_status_shop_advanced: sync.liveStatusPropagation?.shopOrdersAdvanced ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -189,6 +195,18 @@ export async function GET(request: Request) {
                   advanced:    sync.departedAdvance.advanced,
                   containers:  sync.departedAdvance.containers,
                   errorCount:  sync.departedAdvance.errors.length,
+                }
+              : null,
+            // 2026-07-01 — MOMO Live-board STATUS propagate (see lib/integrations/
+            // momo-web/propagate-live-status.ts).
+            liveStatusPropagation: sync.liveStatusPropagation
+              ? {
+                  boardsFetched:      sync.liveStatusPropagation.boardsFetched,
+                  parcelsSeen:        sync.liveStatusPropagation.parcelsSeen,
+                  matched:            sync.liveStatusPropagation.matched,
+                  advanced:           sync.liveStatusPropagation.advanced,
+                  shopOrdersAdvanced: sync.liveStatusPropagation.shopOrdersAdvanced,
+                  errorCount:         sync.liveStatusPropagation.errors.length,
                 }
               : null,
           },

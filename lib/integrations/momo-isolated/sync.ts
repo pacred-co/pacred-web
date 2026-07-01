@@ -35,6 +35,11 @@ import {
   advanceDepartedContainerForwarders,
   type AdvanceDepartedResult,
 } from "@/lib/admin/advance-departed-containers";
+import { isMomoWebConfigured } from "@/lib/integrations/momo-web/client";
+import {
+  propagateMomoLiveStatus,
+  type LiveStatusPropagationResult,
+} from "@/lib/integrations/momo-web/propagate-live-status";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -82,6 +87,12 @@ export type RunMomoSyncResult = {
    *  where MOMO's API drops parcels once they leave China. `null` if the pass threw
    *  (best-effort · never fails the sync). See lib/admin/advance-departed-containers.ts. */
   departedAdvance:     AdvanceDepartedResult | null;
+  /** 2026-07-01 — after the partner-feed + departed-container passes, propagate STATUS
+   *  from MOMO's OWN web boards (momocargo.com master account — the richer source that
+   *  keeps a status even after the partner API drops the parcel). Forward-only + status-
+   *  only. `null` when MOMO web isn't configured OR the pass threw (best-effort · never
+   *  fails the sync). See lib/integrations/momo-web/propagate-live-status.ts. */
+  liveStatusPropagation: LiveStatusPropagationResult | null;
 };
 
 /**
@@ -411,6 +422,38 @@ export async function runMomoSync(
     });
   }
 
+  // ── 3.7 (2026-07-01) — MOMO Live-board STATUS propagate ──
+  // MOMO's partner import/track feed DROPS a parcel's status once it advances, but
+  // MOMO's OWN web (momocargo.com, master account) still shows it in the right board.
+  // MOMO is source-of-truth for STATUS, so AFTER the partner-feed + departed-container
+  // passes (so those win when they DO have a signal), scrape the Live boards and advance
+  // any matched tb_forwarder row toward the MOMO-Live status. Forward-only + STATUS-ONLY
+  // (writes only fstatus/fdatestatusN/adminidupdate='system-live' · no money) +
+  // idempotent + TOCTOU-safe. Only runs when MOMO web creds are configured. Best-effort —
+  // a scrape/login failure must NEVER fail the sync (the momo_* writes already landed).
+  let liveStatusPropagation: LiveStatusPropagationResult | null = null;
+  if (isMomoWebConfigured()) {
+    try {
+      liveStatusPropagation = await propagateMomoLiveStatus(admin);
+      if (liveStatusPropagation.errors.length > 0) {
+        for (const e of liveStatusPropagation.errors) {
+          errors.push({
+            scope:   "live_status_propagate",
+            error:   "MOMO_LIVE_STATUS_ROW_FAILED",
+            message: `${e.scope}: ${e.message}`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[runMomoSync] live-status propagate threw", err);
+      errors.push({
+        scope:   "live_status_propagate",
+        error:   "MOMO_LIVE_STATUS_THREW",
+        message: err instanceof Error ? err.message : "unknown",
+      });
+    }
+  }
+
   // ── 4. log this sync ──
   const totalScanned = importTrackCount + containerClosedCount + sackInfoCount;
   const mappedCount  = importMapped.filter((r) => r.shipmentStatus != null).length;
@@ -464,5 +507,6 @@ export async function runMomoSync(
     syncLogId:           syncLogRow?.id ?? null,
     propagation,
     departedAdvance,
+    liveStatusPropagation,
   };
 }
