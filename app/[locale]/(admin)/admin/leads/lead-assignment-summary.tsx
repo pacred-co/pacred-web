@@ -65,16 +65,24 @@ export function LeadAssignmentSummary({ reps, mine = false }: { reps: AssignRep[
     setBucketByRep({});
     setDetailCache({});
     autoExpandedRef.current = false; // re-arm the self-view auto-expand for this load
-    const res = await getImportedLeadAssignmentSummary({ mine });
-    if (res.ok && res.data) {
-      setRows(res.data.rows);
-      setTotal(res.data.total);
-    } else {
+    try {
+      const res = await getImportedLeadAssignmentSummary({ mine });
+      if (res.ok && res.data) {
+        setRows(res.data.rows);
+        setTotal(res.data.total);
+      } else {
+        setRows([]);
+        setTotal(null);
+        setErr(res.ok ? null : res.error ?? "error");
+      }
+    } catch (e) {
+      // Never leave an infinite spinner — a thrown action surfaces a real error.
       setRows([]);
       setTotal(null);
-      setErr(res.ok ? null : res.error ?? "error");
+      setErr(e instanceof Error ? e.message : "load_failed");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [mine]);
 
   // Defer so the fetch's setState isn't synchronous in the effect.
@@ -89,9 +97,14 @@ export function LeadAssignmentSummary({ reps, mine = false }: { reps: AssignRep[
       const key = `${rep}::${bucket}`;
       if (detailCache[key]) return;
       setDetailLoadingKey(key);
-      const res = await getImportedLeadAssignmentDetail({ rep, bucket, mine });
-      setDetailLoadingKey((cur) => (cur === key ? null : cur));
-      if (res.ok && res.data) setDetailCache((c) => ({ ...c, [key]: res.data!.rows }));
+      try {
+        const res = await getImportedLeadAssignmentDetail({ rep, bucket, mine });
+        if (res.ok && res.data) setDetailCache((c) => ({ ...c, [key]: res.data!.rows }));
+      } catch {
+        // swallow — the empty-state copy covers a failed drill-down fetch
+      } finally {
+        setDetailLoadingKey((cur) => (cur === key ? null : cur));
+      }
     },
     [detailCache, mine],
   );
