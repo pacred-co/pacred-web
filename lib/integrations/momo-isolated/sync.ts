@@ -31,6 +31,10 @@ import {
   type PropagationResult,
 } from "./propagate";
 import { aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
+import {
+  advanceDepartedContainerForwarders,
+  type AdvanceDepartedResult,
+} from "@/lib/admin/advance-departed-containers";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -73,6 +77,11 @@ export type RunMomoSyncResult = {
    *  propagate.ts for the safety rules + the env gate MOMO_SYNC_PROPAGATE_STATUS
    *  (DEFAULT-ON since 2026-06-19 · disables only when set to "false"). */
   propagation:         PropagationResult | null;
+  /** 2026-07-01 — after MOMO propagation, advance forwarders stuck at '1'/'2' in a
+   *  DEPARTED container (แต้ม ETD in the past) to '3' (กำลังส่งมาไทย). Fills the gap
+   *  where MOMO's API drops parcels once they leave China. `null` if the pass threw
+   *  (best-effort · never fails the sync). See lib/admin/advance-departed-containers.ts. */
+  departedAdvance:     AdvanceDepartedResult | null;
 };
 
 /**
@@ -372,6 +381,36 @@ export async function runMomoSync(
     }
   }
 
+  // ── 3.6 (2026-07-01) — DEPARTED-container auto-advance ──
+  // MOMO's import/track API stops feeding a parcel a status once it leaves China, so
+  // rows stay stuck at '1'/'2' though the container already DEPARTED. AFTER MOMO
+  // propagation (so MOMO wins whenever it DOES have a status), fill the gap: any
+  // forwarder still at '1'/'2' whose container has a แต้ม ETD in the past → advance to
+  // '3' (กำลังส่งมาไทย). Forward-only + STATUS-ONLY (writes only fstatus/fdatestatus3/
+  // adminidupdate · no money) + idempotent. Runs every sync regardless of whether MOMO
+  // returned import rows this cycle (the fix is driven by แต้ม ETD, not the MOMO pull).
+  // Best-effort — its failure must NEVER fail the sync.
+  let departedAdvance: AdvanceDepartedResult | null = null;
+  try {
+    departedAdvance = await advanceDepartedContainerForwarders(admin);
+    if (departedAdvance.errors.length > 0) {
+      for (const e of departedAdvance.errors) {
+        errors.push({
+          scope:   "departed_advance",
+          error:   "MOMO_DEPARTED_ADVANCE_ROW_FAILED",
+          message: `${e.container}: ${e.message}`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[runMomoSync] departed-container advance threw", err);
+    errors.push({
+      scope:   "departed_advance",
+      error:   "MOMO_DEPARTED_ADVANCE_THREW",
+      message: err instanceof Error ? err.message : "unknown",
+    });
+  }
+
   // ── 4. log this sync ──
   const totalScanned = importTrackCount + containerClosedCount + sackInfoCount;
   const mappedCount  = importMapped.filter((r) => r.shipmentStatus != null).length;
@@ -424,5 +463,6 @@ export async function runMomoSync(
     status,
     syncLogId:           syncLogRow?.id ?? null,
     propagation,
+    departedAdvance,
   };
 }

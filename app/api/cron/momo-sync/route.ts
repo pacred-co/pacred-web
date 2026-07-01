@@ -149,6 +149,11 @@ export async function GET(request: Request) {
           propagation_arrived:     sync.propagation?.arrivedWrites ?? 0,
           propagation_status_advance: sync.propagation?.statusAdvanceWrites ?? 0,
           propagation_status_skipped_by_gate: sync.propagation?.statusAdvanceSkippedByGate ?? 0,
+          // 2026-07-01 — departed-container auto-advance ('1'/'2' → '3' when the
+          // แต้ม ETD has passed but MOMO dropped the parcel). See lib/admin/
+          // advance-departed-containers.ts.
+          departed_advance_scanned:  sync.departedAdvance?.scanned ?? 0,
+          departed_advanced:         sync.departedAdvance?.advanced ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -174,6 +179,16 @@ export async function GET(request: Request) {
                   statusAdvanceWrites:      sync.propagation.statusAdvanceWrites,
                   statusAdvanceSkippedByGate: sync.propagation.statusAdvanceSkippedByGate,
                   errorCount:               sync.propagation.errors.length,
+                }
+              : null,
+            // 2026-07-01 — departed-container auto-advance (see lib/admin/
+            // advance-departed-containers.ts).
+            departedAdvance:     sync.departedAdvance
+              ? {
+                  scanned:     sync.departedAdvance.scanned,
+                  advanced:    sync.departedAdvance.advanced,
+                  containers:  sync.departedAdvance.containers,
+                  errorCount:  sync.departedAdvance.errors.length,
                 }
               : null,
           },
