@@ -9,11 +9,13 @@
  * form state initialises once per open via a lazy useState initializer — no
  * sync-setState-in-effect.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Link2 } from "lucide-react";
 import type { ContentItem, ContentLink } from "@/lib/marketing-planner/types";
+import { platformIdsOf, serviceIdsOf } from "@/lib/marketing-planner/types";
 import { usePlanner, uid } from "@/lib/marketing-planner/store";
-import { btnGhost, btnPrimary, cx, Field, GroupSelect, inputCls, Modal, UserMultiPicker, UserSelect } from "./ui";
+import { fmtNum } from "@/lib/marketing-planner/util";
+import { btnGhost, btnPrimary, cx, Field, GroupMultiSelect, GroupSelect, inputCls, Modal, UserSelect } from "./ui";
 import { LinkPreview } from "./link-preview";
 
 type FormState = {
@@ -25,8 +27,8 @@ type FormState = {
   contentPillarId?: string;
   funnelStageId?: string;
   customerStageId?: string;
-  platformId?: string;
-  serviceId?: string;
+  platformIds: string[];
+  serviceIds: string[];
   campaignId?: string;
   formatId?: string;
   toneId?: string;
@@ -63,7 +65,7 @@ function blank(defaults?: Partial<FormState>): FormState {
     title: "", topic: "", brief: "",
     targetAudience: "", keyword: "", hashtag: "", cta: "",
     hook: "", painPoint: "", context: "", storyTelling: "", proof: "", authority: "",
-    visual: "", organicSelling: "", branding: "", esg: "", contact: "", channelIds: [],
+    visual: "", organicSelling: "", branding: "", esg: "", contact: "", channelIds: [], platformIds: [], serviceIds: [],
     coOwnerIds: [], startDate: "", deadline: "", publishDate: "", publishTime: "", note: "",
     links: [],
     ...defaults,
@@ -74,8 +76,8 @@ function fromContent(c: ContentItem): FormState {
   return {
     title: c.title, topic: c.topic ?? "", brief: c.brief ?? "",
     marketingGoalId: c.marketingGoalId, contentTypeId: c.contentTypeId, contentPillarId: c.contentPillarId,
-    funnelStageId: c.funnelStageId, customerStageId: c.customerStageId, platformId: c.platformId,
-    serviceId: c.serviceId, campaignId: c.campaignId, formatId: c.formatId, toneId: c.toneId,
+    funnelStageId: c.funnelStageId, customerStageId: c.customerStageId, platformIds: platformIdsOf(c),
+    serviceIds: serviceIdsOf(c), campaignId: c.campaignId, formatId: c.formatId, toneId: c.toneId,
     targetAudience: c.targetAudience ?? "", keyword: c.keyword ?? "", hashtag: c.hashtag ?? "", cta: c.cta ?? "",
     hook: c.hook ?? "", painPoint: c.painPoint ?? "", context: c.context ?? "", storyTelling: c.storyTelling ?? "",
     proof: c.proof ?? "", authority: c.authority ?? "", visual: c.visual ?? "", organicSelling: c.organicSelling ?? "",
@@ -107,13 +109,84 @@ function FormSection({ title, children, cols = 2 }: { title: string; children: R
   );
 }
 
+/** 3-char n-grams of a string — used to fuzzy-match a service name to a keyword's
+ *  free-text service label (Thai has no word spaces, so token match is unreliable). */
+function ngrams(s: string, n: number): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + n <= s.length; i += 1) out.push(s.slice(i, i + n));
+  return out;
+}
+
+type KwSuggestion = { keyword: string; service: string; volume?: number; matched?: boolean };
+
+/** Keyword/SEO tag input — type your own OR pick from the Keyword-Planner dropdown
+ *  (suggestions relevant to the picked service bubble to the top). Stored as a
+ *  comma-joined string so search/filter/detail keep working with no data change. */
+function KeywordTagInput({ value, onChange, suggestions }: { value: string; onChange: (v: string) => void; suggestions: KwSuggestion[] }) {
+  const tags = value.split(",").map((t) => t.trim()).filter(Boolean);
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const addTag = (kw: string) => {
+    const t = kw.trim();
+    if (t && !tags.includes(t)) onChange([...tags, t].join(", "));
+    setText("");
+  };
+  const removeTag = (kw: string) => onChange(tags.filter((t) => t !== kw).join(", "));
+  const q = text.trim().toLowerCase();
+  const filtered = suggestions.filter((s) => !tags.includes(s.keyword) && (!q || s.keyword.toLowerCase().includes(q) || s.service.toLowerCase().includes(q)));
+  return (
+    <div className="relative" ref={ref}>
+      <div className={cx(inputCls, "flex min-h-[38px] flex-wrap items-center gap-1")}>
+        {tags.map((t) => (
+          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[12px] font-medium text-primary-700 dark:bg-primary-900/30">
+            {t}
+            <span role="button" tabIndex={-1} aria-label={`เอา ${t} ออก`} onClick={() => removeTag(t)} className="cursor-pointer leading-none hover:opacity-60">×</span>
+          </span>
+        ))}
+        <input
+          className="min-w-[140px] flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted/60"
+          value={text}
+          onChange={(e) => { setText(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(text); }
+            else if (e.key === "Backspace" && !text && tags.length) removeTag(tags[tags.length - 1]);
+          }}
+          placeholder={tags.length ? "" : "พิมพ์ keyword เอง หรือเลือกจากรายการแนะนำ…"}
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-white p-1 shadow-lg dark:bg-surface">
+          {filtered.slice(0, 40).map((s, i) => (
+            <button key={`${s.keyword}-${i}`} type="button" onClick={() => addTag(s.keyword)}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-primary-50 dark:hover:bg-primary-900/20">
+              <span className="flex items-center gap-1.5 text-[13px] text-foreground">
+                {s.matched && <span className="text-primary-600" title="ตรงกับบริการที่เลือก">★</span>}
+                {s.keyword}
+              </span>
+              <span className="shrink-0 text-[11px] text-muted">{s.service}{s.volume ? ` · ${fmtNum(s.volume)}/ด.` : ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ContentForm({ open, onClose, editId, defaultDate }: { open: boolean; onClose: () => void; editId?: string; defaultDate?: string }) {
   if (!open) return null;
   return <ContentFormBody key={`${editId ?? "new"}:${defaultDate ?? ""}`} onClose={onClose} editId={editId} defaultDate={defaultDate} />;
 }
 
 function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void; editId?: string; defaultDate?: string }) {
-  const { contents, byGroup, addContent, updateContent } = usePlanner();
+  const { contents, byGroup, byId, keywords, addContent, updateContent } = usePlanner();
   const linkTypes = byGroup("linkType");
   const defaultStatus = byGroup("status")[0]?.id;
 
@@ -123,12 +196,18 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [craftOpen, setCraftOpen] = useState(false);
-  const channels = byGroup("channel");
-
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleChannel = (id: string) =>
-    setForm((f) => ({ ...f, channelIds: f.channelIds.includes(id) ? f.channelIds.filter((x) => x !== id) : [...f.channelIds, id] }));
-  const craftCount = [form.hook, form.painPoint, form.context, form.storyTelling, form.proof, form.authority, form.visual, form.organicSelling, form.branding, form.esg, form.contact, form.cta, form.keyword].filter((x) => x.trim()).length;
+
+  // Keyword suggestions from the Keyword Planner; keywords for any of the picked
+  // services bubble to the top (matched by 3-gram — Thai has no word spaces).
+  const kwSuggestions = useMemo<KwSuggestion[]>(() => {
+    const names = form.serviceIds.map((id) => byId(id)?.name ?? "").filter(Boolean);
+    const grams = names.flatMap((n) => ngrams(n.toLowerCase(), 3));
+    const isMatch = (svc: string) => grams.length > 0 && grams.some((g) => svc.toLowerCase().includes(g));
+    const mapped: KwSuggestion[] = keywords.map((k) => ({ keyword: k.keyword, service: k.service, volume: k.volume, matched: isMatch(k.service) }));
+    return [...mapped.filter((m) => m.matched), ...mapped.filter((m) => !m.matched)];
+  }, [keywords, form.serviceIds, byId]);
+  const craftCount = [form.hook, form.painPoint, form.context, form.storyTelling, form.proof, form.authority, form.visual, form.organicSelling, form.branding, form.esg, form.contact, form.keyword].filter((x) => x.trim()).length;
 
   const addLink = () =>
     setForm((f) => ({ ...f, links: [...f.links, { id: uid("link"), linkTypeId: linkTypes[0]?.id ?? "", url: "", title: "", createdAt: new Date().toISOString() }] }));
@@ -158,8 +237,8 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
       topic: form.topic.trim() || undefined,
       brief: form.brief.trim() || undefined,
       marketingGoalId: form.marketingGoalId, contentTypeId: form.contentTypeId, contentPillarId: form.contentPillarId,
-      funnelStageId: form.funnelStageId, customerStageId: form.customerStageId, platformId: form.platformId,
-      serviceId: form.serviceId, campaignId: form.campaignId, formatId: form.formatId, toneId: form.toneId,
+      funnelStageId: form.funnelStageId, customerStageId: form.customerStageId, platformIds: form.platformIds, platformId: form.platformIds[0],
+      serviceIds: form.serviceIds, serviceId: form.serviceIds[0], campaignId: form.campaignId, formatId: form.formatId, toneId: form.toneId,
       targetAudience: form.targetAudience.trim() || undefined, keyword: form.keyword.trim() || undefined,
       hashtag: form.hashtag.trim() || undefined, cta: form.cta.trim() || undefined,
       hook: form.hook.trim() || undefined, painPoint: form.painPoint.trim() || undefined,
@@ -210,41 +289,30 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
         </FormSection>
 
         <FormSection title="การจัดประเภท" cols={3}>
-          <Field label="แพลตฟอร์ม"><GroupSelect group="platform" value={form.platformId} onChange={(v) => set("platformId", v)} /></Field>
+          <Field label="แพลตฟอร์ม (เลือกได้หลายช่อง)" className="sm:col-span-3">
+            <GroupMultiSelect group="platform" value={form.platformIds} onChange={(ids) => set("platformIds", ids)} placeholder="— เลือกแพลตฟอร์ม (ได้หลายช่อง) —" />
+          </Field>
           <Field label="ประเภทคอนเทนต์"><GroupSelect group="contentType" value={form.contentTypeId} onChange={(v) => set("contentTypeId", v)} /></Field>
-          <Field label="รูปแบบ (Format)"><GroupSelect group="format" value={form.formatId} onChange={(v) => set("formatId", v)} /></Field>
-          <Field label="เป้าหมายการตลาด"><GroupSelect group="marketingGoal" value={form.marketingGoalId} onChange={(v) => set("marketingGoalId", v)} /></Field>
           <Field label="เสาหลัก (Pillar)"><GroupSelect group="contentPillar" value={form.contentPillarId} onChange={(v) => set("contentPillarId", v)} /></Field>
-          <Field label="Funnel Stage"><GroupSelect group="funnelStage" value={form.funnelStageId} onChange={(v) => set("funnelStageId", v)} /></Field>
-          <Field label="Stage ลูกค้า"><GroupSelect group="customerStage" value={form.customerStageId} onChange={(v) => set("customerStageId", v)} /></Field>
-          <Field label="บริการที่เกี่ยวข้อง"><GroupSelect group="service" value={form.serviceId} onChange={(v) => set("serviceId", v)} /></Field>
-          <Field label="แคมเปญ"><GroupSelect group="campaign" value={form.campaignId} onChange={(v) => set("campaignId", v)} /></Field>
-          <Field label="โทน (Tone)"><GroupSelect group="tone" value={form.toneId} onChange={(v) => set("toneId", v)} /></Field>
-          <Field label="ความสำคัญ"><GroupSelect group="priority" value={form.priorityId} onChange={(v) => set("priorityId", v)} /></Field>
+          <Field label="บริการที่เกี่ยวข้อง (เลือกได้หลายช่อง)" className="sm:col-span-3">
+            <GroupMultiSelect group="service" value={form.serviceIds} onChange={(ids) => set("serviceIds", ids)} placeholder="— เลือกบริการ (ได้หลายช่อง) —" />
+          </Field>
         </FormSection>
 
-        <FormSection title="กำหนดการ" cols={3}>
-          <Field label="วันที่ต้องเริ่มทำ"><input type="date" className={inputCls} value={form.startDate} onChange={(e) => set("startDate", e.target.value)} /></Field>
-          <Field label="Deadline"><input type="date" className={inputCls} value={form.deadline} onChange={(e) => set("deadline", e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="วันที่ลง" required hint={errors.publishDate}><input type="date" className={cx(inputCls, errCls("publishDate"))} value={form.publishDate} onChange={(e) => set("publishDate", e.target.value)} /></Field>
-            <Field label="เวลาโพสต์"><input type="time" className={inputCls} value={form.publishTime} onChange={(e) => set("publishTime", e.target.value)} /></Field>
-          </div>
+        <FormSection title="กำหนดการ" cols={2}>
+          <Field label="วันที่ลง" required hint={errors.publishDate}><input type="date" className={cx(inputCls, errCls("publishDate"))} value={form.publishDate} onChange={(e) => set("publishDate", e.target.value)} /></Field>
+          <Field label="เวลาโพสต์"><input type="time" className={inputCls} value={form.publishTime} onChange={(e) => set("publishTime", e.target.value)} /></Field>
         </FormSection>
 
         <FormSection title="สถานะ & ผู้รับผิดชอบ" cols={2}>
           <Field label="สถานะ" required hint={errors.statusId}><GroupSelect group="status" value={form.statusId} onChange={(v) => set("statusId", v)} /></Field>
           <Field label="ผู้รับผิดชอบหลัก" hint={errors.ownerId}><UserSelect value={form.ownerId} onChange={(v) => set("ownerId", v)} /></Field>
-          <Field label="ผู้ช่วย (Co-owner)" className="sm:col-span-2">
-            <UserMultiPicker value={form.coOwnerIds} onChange={(ids) => set("coOwnerIds", ids)} exclude={form.ownerId} />
-          </Field>
         </FormSection>
 
         <FormSection title="SEO & รายละเอียด" cols={2}>
-          <Field label="Target Audience"><input className={inputCls} value={form.targetAudience} onChange={(e) => set("targetAudience", e.target.value)} /></Field>
-          <Field label="Keyword / SEO"><input className={inputCls} value={form.keyword} onChange={(e) => set("keyword", e.target.value)} /></Field>
-          <Field label="Hashtag"><input className={inputCls} value={form.hashtag} onChange={(e) => set("hashtag", e.target.value)} placeholder="#นำเข้าจีน #shipping" /></Field>
-          <Field label="CTA"><input className={inputCls} value={form.cta} onChange={(e) => set("cta", e.target.value)} placeholder="ทักแชทรับเรทพิเศษ" /></Field>
+          <Field label="Keyword / SEO (เลือกได้หลายคำ · แนะนำตามบริการที่เลือก)" className="sm:col-span-2">
+            <KeywordTagInput value={form.keyword} onChange={(v) => set("keyword", v)} suggestions={kwSuggestions} />
+          </Field>
           <Field label="หมายเหตุ" className="sm:col-span-2"><textarea className={cx(inputCls, "min-h-[56px] resize-y")} value={form.note} onChange={(e) => set("note", e.target.value)} /></Field>
         </FormSection>
 
@@ -252,7 +320,7 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
         <div className="space-y-2.5">
           <button type="button" onClick={() => setCraftOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
             <span className="text-[12px] font-bold uppercase tracking-wide text-primary-600">องค์ประกอบคอนเทนต์ (Content Craft)</span>
-            <span className="text-[11px] text-muted">{craftCount}/13 · {craftOpen ? "▲ ย่อ" : "▼ ขยาย"}</span>
+            <span className="text-[11px] text-muted">{craftCount}/12 · {craftOpen ? "▲ ย่อ" : "▼ ขยาย"}</span>
           </button>
           {craftOpen && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -267,26 +335,10 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
               <Field label="Branding — สี/ฟอนต์/โลโก้/สโลแกน"><input className={inputCls} value={form.branding} onChange={(e) => set("branding", e.target.value)} /></Field>
               <Field label="ESG — จุดยืนสนับสนุน สังคม/ประเทศ/ลูกค้า"><input className={inputCls} value={form.esg} onChange={(e) => set("esg", e.target.value)} /></Field>
               <Field label="Contact — ช่องทางติดต่อ" className="sm:col-span-2"><input className={inputCls} value={form.contact} onChange={(e) => set("contact", e.target.value)} /></Field>
-              <p className="text-[11px] text-muted sm:col-span-2">* CTA + SEO Keyword อยู่ในหัวข้อ “SEO &amp; รายละเอียด” ด้านบน (นับรวมใน {craftCount}/13)</p>
+              <p className="text-[11px] text-muted sm:col-span-2">* SEO Keyword อยู่ในหัวข้อ “SEO &amp; รายละเอียด” ด้านบน (นับรวมใน {craftCount}/12)</p>
             </div>
           )}
         </div>
-
-        {/* Distribution channels (ปอน MKT §4 — ระบบขยายผล) */}
-        <Field label="ช่องทางขยายผล (Distribution / Amplification)">
-          <div className="flex flex-wrap gap-1.5">
-            {channels.length === 0 && <span className="text-[11px] text-muted">ยังไม่มีช่องทางใน Settings</span>}
-            {channels.map((ch) => {
-              const on = form.channelIds.includes(ch.id);
-              return (
-                <button key={ch.id} type="button" onClick={() => toggleChannel(ch.id)}
-                  className={cx("rounded-full border px-2.5 py-1 text-[12px] transition", on ? "border-primary-300 bg-primary-50 font-medium text-primary-700" : "border-border text-muted hover:border-primary-200")}>
-                  {ch.name}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
 
         <fieldset className="space-y-2.5">
           <div className="flex items-center justify-between">

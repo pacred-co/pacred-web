@@ -3,6 +3,7 @@
  * (has draft / has final) take a name resolver so this stays store-free.
  */
 import type { ContentItem } from "./types";
+import { platformIdsOf, serviceIdsOf } from "./types";
 import { isResultEmpty } from "./performance";
 
 export type ContentFilter = {
@@ -73,14 +74,14 @@ export function applyFilter(items: ContentItem[], f: ContentFilter): ContentItem
     if (f.dateFrom && (c.publishDate ?? "") < f.dateFrom) return false;
     if (f.dateTo && (c.publishDate ?? "") > f.dateTo) return false;
 
-    if (f.platformId && c.platformId !== f.platformId) return false;
+    if (f.platformId && !platformIdsOf(c).includes(f.platformId)) return false;
     if (f.statusId && c.statusId !== f.statusId) return false;
     if (f.ownerId && c.ownerId !== f.ownerId && !c.coOwnerIds?.includes(f.ownerId)) return false;
     if (f.contentTypeId && c.contentTypeId !== f.contentTypeId) return false;
     if (f.marketingGoalId && c.marketingGoalId !== f.marketingGoalId) return false;
     if (f.contentPillarId && c.contentPillarId !== f.contentPillarId) return false;
     if (f.funnelStageId && c.funnelStageId !== f.funnelStageId) return false;
-    if (f.serviceId && c.serviceId !== f.serviceId) return false;
+    if (f.serviceId && !serviceIdsOf(c).includes(f.serviceId)) return false;
     if (f.campaignId && c.campaignId !== f.campaignId) return false;
     if (f.priorityId && c.priorityId !== f.priorityId) return false;
 

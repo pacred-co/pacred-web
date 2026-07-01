@@ -190,12 +190,13 @@ function MonthGrid({ year, month, byDate, onOpen, onCreate, onDrop, onSeeAll }: 
           const isToday = sameYmd(d, today);
           return (
             <div key={ds + i} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, d)}
-              className={cx("group min-h-[104px] border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/5", (i + 1) % 7 === 0 && "border-r-0")}>
+              className={cx("group min-h-[64px] border-b border-r border-border p-1 last:border-r-0 sm:min-h-[104px]", !inMonth && "bg-muted/5", (i + 1) % 7 === 0 && "border-r-0")}>
               <div className="mb-1 flex items-center justify-between">
-                <span className={cx("inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px]", isToday ? "bg-primary-600 font-bold text-white" : inMonth ? "text-foreground" : "text-muted/50")}>{d.getDate()}</span>
-                <button type="button" onClick={() => onCreate(ds)} className="rounded p-0.5 text-muted opacity-0 transition hover:bg-primary-50 hover:text-primary-700 group-hover:opacity-100" title="สร้างคอนเทนต์วันนี้"><Plus className="h-3.5 w-3.5" /></button>
+                <span className={cx("inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[12px]", isToday ? "bg-primary-600 font-bold text-white" : inMonth ? "text-foreground" : "text-muted/50")}>{d.getDate()}</span>
+                <button type="button" onClick={() => onCreate(ds)} className="hidden rounded p-0.5 text-muted opacity-0 transition hover:bg-primary-50 hover:text-primary-700 group-hover:opacity-100 sm:block" title="สร้างคอนเทนต์วันนี้"><Plus className="h-3.5 w-3.5" /></button>
               </div>
-              <div className="space-y-1">
+              {/* Desktop: chip previews. */}
+              <div className="hidden space-y-1 sm:block">
                 {items.slice(0, 3).map((c) => <Chip key={c.id} c={c} onOpen={onOpen} />)}
                 {items.length > 3 && (
                   <button type="button" onClick={() => onSeeAll(d)} className="w-full rounded-md px-1.5 py-0.5 text-left text-[11px] font-medium text-primary-700 hover:bg-primary-50">
@@ -203,6 +204,19 @@ function MonthGrid({ year, month, byDate, onOpen, onCreate, onDrop, onSeeAll }: 
                   </button>
                 )}
               </div>
+              {/* Mobile: a big tappable count so "วันนี้กี่คอนเทนต์" reads at a glance — chip
+                  titles are unreadable at a 1/7-width cell. Tap → the day view (full list). */}
+              <button type="button" onClick={() => (items.length ? onSeeAll(d) : onCreate(ds))}
+                aria-label={items.length ? `วันที่ ${d.getDate()} มี ${items.length} คอนเทนต์ — แตะดูทั้งหมด` : `วันที่ ${d.getDate()} ว่าง — แตะเพื่อสร้าง`}
+                className={cx("flex w-full items-center justify-center rounded-md py-1 transition sm:hidden", items.length ? "hover:bg-primary-50" : "text-muted/30 hover:bg-muted/10")}>
+                {items.length > 0 ? (
+                  <span className="inline-flex min-w-[24px] items-center justify-center gap-0.5 rounded-full bg-primary-600 px-1.5 py-1 text-[14px] font-extrabold leading-none text-white shadow-sm">
+                    {items.length.toLocaleString("th-TH")}
+                  </span>
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </button>
             </div>
           );
         })}

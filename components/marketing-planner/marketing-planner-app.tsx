@@ -29,10 +29,10 @@ import { KeywordPlanner } from "./keyword-planner";
 type Tab = "strategy" | "production" | "dashboard" | "calendar" | "kanban" | "jobs" | "library" | "analytics" | "keywords" | "settings";
 
 const TABS: { key: Tab; label: string; icon: typeof LayoutDashboard }[] = [
+  { key: "calendar", label: "ปฏิทิน", icon: CalendarDays },
   { key: "strategy", label: "แผนการตลาด", icon: Compass },
   { key: "production", label: "แผนการผลิต", icon: CalendarRange },
   { key: "dashboard", label: "ภาพรวม", icon: LayoutDashboard },
-  { key: "calendar", label: "ปฏิทิน", icon: CalendarDays },
   { key: "kanban", label: "Kanban", icon: KanbanSquare },
   { key: "jobs", label: "สั่งงาน", icon: Inbox },
   { key: "library", label: "คลังคอนเทนต์", icon: Library },
@@ -43,7 +43,7 @@ const TABS: { key: Tab; label: string; icon: typeof LayoutDashboard }[] = [
 
 function PlannerInner() {
   const { ready, contents, labelOf } = usePlanner();
-  const [tab, setTab] = useState<Tab>("strategy");
+  const [tab, setTab] = useState<Tab>("calendar");
   const [settingsGroup, setSettingsGroup] = useState<SettingGroup>("platform");
   const [filter, setFilter] = useState<ContentFilter>({});
   const [formOpen, setFormOpen] = useState(false);

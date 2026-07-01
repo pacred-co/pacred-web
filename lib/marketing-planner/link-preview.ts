@@ -28,6 +28,16 @@ export type LinkInfo = {
   isVideo: boolean; // play affordance
   thumbnail?: string;
   domain?: string;
+  videoId?: string; // YouTube video id — enables the live stats fetch
+};
+
+/** Live engagement stats for a video (currently YouTube only). */
+export type YouTubeStats = {
+  views: number;
+  likes: number;
+  comments: number;
+  title?: string;
+  fetchedAt: string; // ISO — "อัปเดตเมื่อ"
 };
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|#|$)/i;
@@ -82,6 +92,7 @@ export function detectLink(input: string): LinkInfo {
     return {
       ...base, provider: "YouTube", previewType: "youtube", isVideo: true, domain,
       canEmbed: !!id,
+      videoId: id ?? undefined,
       embedUrl: id ? `https://www.youtube.com/embed/${id}` : undefined,
       thumbnail: id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : undefined,
     };

@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, BarChart3, Copy, ExternalLink, Eye, Pencil, Trash2, X } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
+import { platformIdsOf } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { isResultEmpty, RESULT_STATUS_COLOR } from "@/lib/marketing-planner/performance";
 import { fmtThaiDate } from "@/lib/marketing-planner/util";
@@ -148,7 +149,7 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
                   </td>
                   <td className={TD}>{fmtThaiDate(c.publishDate)}</td>
                   <td className={cx(TD, "text-muted")}>{c.publishTime || "—"}</td>
-                  <td className={TD}><SettingTag id={c.platformId} /></td>
+                  <td className={TD}><div className="flex flex-wrap items-center gap-1">{platformIdsOf(c).map((pid) => <SettingTag key={pid} id={pid} />)}</div></td>
                   <td className={TD}><SettingTag id={c.contentTypeId} /></td>
                   <td className={TD}><SettingTag id={c.marketingGoalId} /></td>
                   <td className={TD}><SettingTag id={c.statusId} fallback="—" /></td>

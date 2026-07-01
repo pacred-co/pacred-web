@@ -138,8 +138,14 @@ export type ContentItem = {
   contentPillarId?: string;
   funnelStageId?: string;
   customerStageId?: string;
+  /** Legacy single platform — kept for back-compat reads; canonical is platformIds. */
   platformId?: string;
+  /** Platforms this content goes to (multi-select). */
+  platformIds?: string[];
+  /** Legacy single service — kept for back-compat reads; canonical is serviceIds. */
   serviceId?: string;
+  /** Services this content relates to (multi-select). */
+  serviceIds?: string[];
   campaignId?: string;
   formatId?: string;
   toneId?: string;
@@ -176,6 +182,20 @@ export type ContentItem = {
   updatedAt: string;
   archivedAt?: string | null;
 };
+
+/** All platform ids on a content — the multi-select `platformIds`, falling back to
+ *  the legacy single `platformId` so pre-multi data keeps working everywhere. */
+export function platformIdsOf(c: Pick<ContentItem, "platformIds" | "platformId">): string[] {
+  if (c.platformIds && c.platformIds.length > 0) return c.platformIds;
+  return c.platformId ? [c.platformId] : [];
+}
+
+/** All service ids on a content — multi-select `serviceIds`, back-compat with the
+ *  legacy single `serviceId`. */
+export function serviceIdsOf(c: Pick<ContentItem, "serviceIds" | "serviceId">): string[] {
+  if (c.serviceIds && c.serviceIds.length > 0) return c.serviceIds;
+  return c.serviceId ? [c.serviceId] : [];
+}
 
 // ── The whole persisted blob ──
 export const PLANNER_SCHEMA_VERSION = 2;

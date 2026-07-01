@@ -7,8 +7,10 @@
  * result. Heavy embeds (iframe/video) load only after the user clicks Play.
  */
 import { useState } from "react";
-import { Check, Copy, ExternalLink, Film, FileText, Globe, Image as ImageIcon, Play } from "lucide-react";
-import { detectLink, usesIframe, type LinkInfo, type PreviewType } from "@/lib/marketing-planner/link-preview";
+import { BarChart3, Check, Copy, ExternalLink, Eye, Film, FileText, Globe, Image as ImageIcon, MessageCircle, Play, RefreshCw, ThumbsUp } from "lucide-react";
+import { detectLink, usesIframe, type LinkInfo, type PreviewType, type YouTubeStats } from "@/lib/marketing-planner/link-preview";
+import { fmtNum } from "@/lib/marketing-planner/util";
+import { fetchYouTubeStats } from "@/actions/admin/youtube-stats";
 import { cx, iconBtn } from "./ui";
 
 function TypeIcon({ type, className }: { type: PreviewType; className?: string }) {
@@ -49,6 +51,49 @@ export function LinkActions({ url, className }: { url: string; className?: strin
   );
 }
 
+/** On-demand live YouTube stats (view/like/comment) via the server action.
+ *  Button-triggered — the YouTube Data API has a daily quota, so we pull current
+ *  numbers when asked + let the user รีเฟรช, rather than polling continuously. */
+function YouTubeStatsBar({ videoId }: { videoId: string }) {
+  const [stats, setStats] = useState<YouTubeStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetchYouTubeStats(videoId);
+      if (res.ok) setStats(res.stats);
+      else setErr(res.error);
+    } catch {
+      setErr("ดึงยอดไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const time = stats ? new Date(stats.fetchedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
+  return (
+    <div className="rounded-lg border border-border bg-primary-50/30 px-2.5 py-1.5 dark:bg-primary-900/10">
+      {stats ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-foreground">
+          <span className="inline-flex items-center gap-1" title="ยอดวิว"><Eye className="h-3.5 w-3.5 text-muted" /> <b>{fmtNum(stats.views)}</b></span>
+          <span className="inline-flex items-center gap-1" title="ไลก์"><ThumbsUp className="h-3.5 w-3.5 text-muted" /> <b>{fmtNum(stats.likes)}</b></span>
+          <span className="inline-flex items-center gap-1" title="คอมเมนต์"><MessageCircle className="h-3.5 w-3.5 text-muted" /> <b>{fmtNum(stats.comments)}</b></span>
+          <button type="button" onClick={load} disabled={loading} className="inline-flex items-center gap-1 text-[11px] text-primary-700 hover:underline disabled:opacity-50">
+            <RefreshCw className={cx("h-3 w-3", loading && "animate-spin")} /> รีเฟรช
+          </button>
+          <span className="text-[11px] text-muted">อัปเดต {time} น.</span>
+        </div>
+      ) : (
+        <button type="button" onClick={load} disabled={loading} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-primary-700 hover:underline disabled:opacity-50">
+          <BarChart3 className={cx("h-3.5 w-3.5", loading && "animate-spin")} /> {loading ? "กำลังดึงยอด…" : "ดึงยอดวิว / ไลก์ / คอมเมนต์ จริงจาก YouTube"}
+        </button>
+      )}
+      {err && <p className="mt-1 text-[11px] text-red-600">{err}</p>}
+    </div>
+  );
+}
+
 function EmbedSurface({ info, title }: { info: LinkInfo; title?: string }) {
   if (info.previewType === "image") {
     // eslint-disable-next-line @next/next/no-img-element
@@ -83,6 +128,7 @@ export function LinkPreview({ url, title, compact = false, autoActivate = false 
   // Images embed directly — no Play step.
   const directImage = info.previewType === "image" && info.canEmbed;
   const showEmbed = (active && info.canEmbed) || directImage;
+  const ytBar = info.previewType === "youtube" && info.videoId ? <YouTubeStatsBar videoId={info.videoId} /> : null;
 
   if (showEmbed) {
     return (
@@ -94,6 +140,7 @@ export function LinkPreview({ url, title, compact = false, autoActivate = false 
           </span>
           <LinkActions url={url} />
         </div>
+        {ytBar}
       </div>
     );
   }
@@ -134,6 +181,7 @@ export function LinkPreview({ url, title, compact = false, autoActivate = false 
           </div>
         </div>
       </div>
+      {ytBar && <div className="px-2 pb-2">{ytBar}</div>}
     </div>
   );
 }

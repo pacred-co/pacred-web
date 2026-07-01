@@ -3,9 +3,10 @@
 /** Read-only detail of a content item (owner brief §2.3 "เปิดรายละเอียด"). */
 import { BarChart3, CalendarClock, Pencil } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
+import { platformIdsOf, serviceIdsOf } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { RESULT_STATUS_COLOR, RESULT_STATUS_LABEL, isResultEmpty } from "@/lib/marketing-planner/performance";
-import { fmtMoney, fmtNum, fmtThaiDate, fmtThaiDateTime } from "@/lib/marketing-planner/util";
+import { fmtMoney, fmtNum, fmtThaiDateTime } from "@/lib/marketing-planner/util";
 import { btnGhost, btnPrimary, Modal, OwnerBadge, SettingTag, Tag } from "./ui";
 import { LinkPreview } from "./link-preview";
 
@@ -56,8 +57,7 @@ export function ContentDetail({ id, onClose, onEdit, onResult }: { id?: string; 
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
             <SettingTag id={c.statusId} fallback="ไม่มีสถานะ" />
-            {c.platformId && <SettingTag id={c.platformId} />}
-            {c.priorityId && <SettingTag id={c.priorityId} />}
+            {platformIdsOf(c).map((pid) => <SettingTag key={pid} id={pid} />)}
             <span className="inline-flex items-center gap-1 text-[12px] text-muted"><CalendarClock className="h-3.5 w-3.5" /> {fmtThaiDateTime(c.publishDate, c.publishTime)}</span>
           </div>
 
@@ -70,33 +70,24 @@ export function ContentDetail({ id, onClose, onEdit, onResult }: { id?: string; 
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Attr label="ผู้รับผิดชอบ"><OwnerBadge ownerId={c.ownerId} /></Attr>
-            <Attr label="เป้าหมาย"><SettingTag id={c.marketingGoalId} /></Attr>
             <Attr label="ประเภท"><SettingTag id={c.contentTypeId} /></Attr>
             <Attr label="Pillar"><SettingTag id={c.contentPillarId} /></Attr>
-            <Attr label="Funnel"><SettingTag id={c.funnelStageId} /></Attr>
-            <Attr label="Stage ลูกค้า"><SettingTag id={c.customerStageId} /></Attr>
-            <Attr label="บริการ"><SettingTag id={c.serviceId} /></Attr>
-            <Attr label="แคมเปญ"><SettingTag id={c.campaignId} /></Attr>
-            <Attr label="Format"><SettingTag id={c.formatId} /></Attr>
-            <Attr label="Tone"><SettingTag id={c.toneId} /></Attr>
-            <Attr label="เริ่มทำ">{fmtThaiDate(c.startDate)}</Attr>
-            <Attr label="Deadline">{fmtThaiDate(c.deadline)}</Attr>
+            <Attr label="บริการ">
+              {serviceIdsOf(c).length ? (
+                <span className="flex flex-wrap gap-1">{serviceIdsOf(c).map((sid) => <SettingTag key={sid} id={sid} />)}</span>
+              ) : <span className="text-[11px] text-muted">—</span>}
+            </Attr>
           </div>
 
-          {(c.coOwnerIds?.length || c.targetAudience || c.keyword || c.hashtag || c.cta) && (
+          {c.keyword && (
             <div className="grid grid-cols-2 gap-3">
-              {!!c.coOwnerIds?.length && <Attr label="ผู้ช่วย"><span className="flex flex-wrap gap-1.5">{c.coOwnerIds.map((o) => <OwnerBadge key={o} ownerId={o} />)}</span></Attr>}
-              {c.targetAudience && <Attr label="Target Audience">{c.targetAudience}</Attr>}
-              {c.keyword && <Attr label="Keyword">{c.keyword}</Attr>}
-              {c.hashtag && <Attr label="Hashtag"><span className="text-primary-700">{c.hashtag}</span></Attr>}
-              {c.cta && <Attr label="CTA">{c.cta}</Attr>}
-            </div>
-          )}
-
-          {!!c.channelIds?.length && (
-            <div className="space-y-1">
-              <p className="text-[11px] text-muted">ช่องทางขยายผล (Distribution)</p>
-              <div className="flex flex-wrap gap-1.5">{c.channelIds.map((id) => <SettingTag key={id} id={id} />)}</div>
+              <Attr label="Keyword">
+                <span className="flex flex-wrap gap-1">
+                  {c.keyword.split(",").map((k) => k.trim()).filter(Boolean).map((k) => (
+                    <span key={k} className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/30">{k}</span>
+                  ))}
+                </span>
+              </Attr>
             </div>
           )}
 

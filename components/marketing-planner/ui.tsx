@@ -5,10 +5,10 @@
  * toast lib) so the whole feature is a portable module. Badges read colors from
  * the settings store; Modal + ConfirmProvider give every mutation a §0f confirm.
  */
-import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { usePlanner } from "@/lib/marketing-planner/store";
-import type { SettingGroup } from "@/lib/marketing-planner/types";
+import type { SettingGroup, SettingItem } from "@/lib/marketing-planner/types";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -149,6 +149,61 @@ export function GroupSelect({ group, value, onChange, placeholder = "— เล�
         <option key={o.id} value={o.id}>{o.name}</option>
       ))}
     </select>
+  );
+}
+
+/** Multi-select dropdown driven by a settings group — click to open a checklist,
+ *  selected shown as removable tags in the trigger. Same data source as GroupSelect. */
+export function GroupMultiSelect({ group, value, onChange, placeholder = "— เลือก —", className }: { group: SettingGroup; value: string[]; onChange: (ids: string[]) => void; placeholder?: string; className?: string }) {
+  const { byGroup, byId } = usePlanner();
+  const opts = byGroup(group);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  const selected = value.map((id) => byId(id)).filter((s): s is SettingItem => !!s);
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        className={cx(inputCls, "flex min-h-[38px] flex-wrap items-center gap-1 text-left", className)}>
+        {selected.length === 0 ? (
+          <span className="text-muted/60">{placeholder}</span>
+        ) : (
+          selected.map((s) => (
+            <span key={s.id} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium" style={{ backgroundColor: `${s.color ?? "#94a3b8"}1a`, color: s.color ?? "#94a3b8" }}>
+              {s.name}
+              <span role="button" tabIndex={-1} aria-label={`เอา ${s.name} ออก`} onClick={(e) => { e.stopPropagation(); toggle(s.id); }} className="cursor-pointer leading-none hover:opacity-60">×</span>
+            </span>
+          ))
+        )}
+        <ChevronDown className={cx("ml-auto h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-white p-1 shadow-lg dark:bg-surface">
+          {opts.length === 0 && <p className="px-2 py-2 text-[12px] text-muted">ยังไม่มีตัวเลือกใน Settings</p>}
+          {opts.map((o) => {
+            const on = value.includes(o.id);
+            return (
+              <button key={o.id} type="button" onClick={() => toggle(o.id)}
+                className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition hover:bg-primary-50 dark:hover:bg-primary-900/20", on && "bg-primary-50/60 dark:bg-primary-900/20")}>
+                <span className={cx("flex h-4 w-4 shrink-0 items-center justify-center rounded border transition", on ? "border-primary-600 bg-primary-600 text-white" : "border-border")}>
+                  {on && <Check className="h-3 w-3" strokeWidth={3} />}
+                </span>
+                {o.color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: o.color }} />}
+                <span className="text-foreground">{o.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
