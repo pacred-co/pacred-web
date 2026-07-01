@@ -156,8 +156,8 @@ export function domesticShippingOptions(args: DomesticShipArgs): { zone: Domesti
       if (c.id === "2" || c.id === "24" || c.id === "11") continue; // already added
       options.push({ carrier: c.id, label: `${c.name} (กรอกค่าส่งเอง)`, cost: 0, payMethod: "2", forceCod: true, manual: true, note: "เก็บปลายทาง" });
     }
-    // PCS Express — near-zone PCS truck, manual amount.
-    options.push({ carrier: "PCSE", label: "PCS Express (กรอกค่าส่งเอง)", cost: 0, payMethod: "1", forceCod: false, manual: true, note: "รถบริษัทส่ง พื้นที่ใกล้" });
+    // PRE Express — near-zone Pacred truck, manual amount.
+    options.push({ carrier: "PCSE", label: "PRE Express (กรอกค่าส่งเอง)", cost: 0, payMethod: "1", forceCod: false, manual: true, note: "รถบริษัทส่ง พื้นที่ใกล้" });
   }
 
   options.push(SELF_PICKUP);
