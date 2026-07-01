@@ -215,9 +215,9 @@ export async function fillLiveDataForParcels(
       continue;
     }
 
-    // Build the fill payload. Weight/volume/pieces = the base aggregate (money).
-    // Dimensions = the representative first-parcel dims, filled ONLY when the row
-    // has none (defensive · dims don't feed price directly but keep the row whole).
+    // Build the fill payload. Weight/volume/pieces = the base aggregate — ADDITIVE,
+    // so money-correct: คิวรวม/น้ำหนักรวม = Σ across the split boxes, and the price
+    // uses คิวรวม (fvolume), not the per-box ก×ย×ส.
     const update: Record<string, number> = {
       fweight: r2(agg.weightKg),
       fvolume: r6(agg.cbm),
@@ -225,7 +225,14 @@ export async function fillLiveDataForParcels(
     if (agg.quantity > 0 && !(Number(row.famount ?? 0) > 0)) {
       update.famount = agg.quantity;
     }
-    const dims = dimsByBase.get(base);
+    // ก×ย×ส (dims) are NOT additive (owner/ภูม 2026-07-01): a multi-box tracking's
+    // boxes have DIFFERENT sizes (e.g. 204×61×80 vs 194×125×166 vs 190×115×110) —
+    // merging them into ONE ก×ย×ส is meaningless. So fill dims ONLY for a SINGLE-parcel
+    // tracking (parcelCount===1 = one real box); for a multi-box tracking leave ก×ย×ส
+    // BLANK (the per-box dims live on the MOMO Live board breakdown). คิวรวม already
+    // carries the total volume for pricing, so the row is money-complete without a
+    // (misleading) merged dim.
+    const dims = agg.parcelCount === 1 ? dimsByBase.get(base) : undefined;
     if (dims) {
       const hasNoDims =
         !(Number(row.fwidth ?? 0) > 0) &&
