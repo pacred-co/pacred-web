@@ -15,7 +15,7 @@ import {
   fdateColumnForFstatus,
   PROPAGATABLE_LIVE_STATUSES,
 } from "./live-status-plan";
-import { MOMO_LIVE_STATUSES } from "./types";
+import { MOMO_LIVE_STATUSES, type MomoLiveStatus } from "./types";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -46,8 +46,22 @@ check("every canonical Live board has a mapping (no board silently dropped)", ()
   }
 });
 
-check("PROPAGATABLE_LIVE_STATUSES = every board (all currently map)", () => {
-  assert.deepEqual([...PROPAGATABLE_LIVE_STATUSES], [...MOMO_LIVE_STATUSES]);
+check("PROPAGATABLE = China-side journey ONLY (1/2/3) · never auto-drives รอชำระ/dispatch", () => {
+  const props = [...PROPAGATABLE_LIVE_STATUSES];
+  assert.equal(props.length, 3, "only waiting/arrival_kodang/sending_thai propagate");
+  const chinaSide: MomoLiveStatus[] = ["waiting", "arrival_kodang", "sending_thai"];
+  const thaiSide: MomoLiveStatus[] = ["wait_pay", "sending", "done"];
+  for (const s of chinaSide) {
+    assert.ok(props.includes(s), `${s} (China-side) should auto-propagate`);
+  }
+  // wait_pay/sending/done map to 5/6/7 but MUST be excluded so MOMO never drives the
+  // Thailand-side / billing / dispatch statuses (owner rule 2026-07-01).
+  for (const s of thaiSide) {
+    assert.ok(!props.includes(s), `${s} (Thailand-side) must NOT auto-propagate`);
+  }
+  for (const s of props) {
+    assert.ok(fstatusRank(liveStatusToFstatus(s)) <= 3, `${s} must map to fstatus ≤ 3`);
+  }
 });
 
 console.log("MOMO Live status-plan — FORWARD-ONLY rank");

@@ -103,10 +103,30 @@ export function fdateColumnForFstatus(fstatus: string): string | null {
 }
 
 /**
- * All Live boards that map to a forwarder fstatus, newest-flow first — the order the
- * propagator fetches them in. (Currently every board maps, but keep the derivation
- * explicit so a future null-mapped board is skipped automatically.)
+ * The MAXIMUM fstatus rank the MOMO-Live auto-propagate may advance a row TO.
+ *
+ * owner/ภูม 2026-07-01 ("อัปเดตเฉพาะที่ค้างถึงโกดังจีน อย่าไปชนอันอื่น"): MOMO is the
+ * source-of-truth for the CHINA-SIDE journey only — รอเข้าโกดังจีน → ถึงโกดังจีน →
+ * กำลังส่งมาไทย (fstatus 1 → 2 → 3). The THAILAND-SIDE flow is Pacred's OWN workflow and
+ * must NEVER be moved by a MOMO scrape:
+ *   '4' ถึงไทย    ← warehouse scan-arrival
+ *   '5' รอชำระ    ← the seller has set the freight rate (money/billing gate)
+ *   '6'/'7'       ← Pacred driver dispatch / delivered
+ * If MOMO could push a row to '5' it would drop into the billing queue BEFORE the rate is
+ * set; to '7' it would read "ส่งแล้ว" while our driver hasn't delivered. So cap at '3'.
+ */
+export const MAX_LIVE_PROPAGATE_FSTATUS_RANK = 3;
+
+/**
+ * The Live boards the auto-propagate ACTS on — the China-side journey only (fstatus rank
+ * ≤ MAX_LIVE_PROPAGATE_FSTATUS_RANK = 1/2/3). `wait_pay`/`sending`/`done` map to 5/6/7 in
+ * LIVE_STATUS_TO_FSTATUS above (kept complete for display/reference) but are DELIBERATELY
+ * excluded here, so a MOMO scrape can never drive a Thailand-side / billing / dispatch
+ * status. The propagator fetches ONLY these boards.
  */
 export const PROPAGATABLE_LIVE_STATUSES: readonly MomoLiveStatus[] = MOMO_LIVE_STATUSES.filter(
-  (s) => liveStatusToFstatus(s) !== null,
+  (s) => {
+    const f = liveStatusToFstatus(s);
+    return f !== null && fstatusRank(f) <= MAX_LIVE_PROPAGATE_FSTATUS_RANK;
+  },
 );
