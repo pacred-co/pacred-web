@@ -141,7 +141,8 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
     if (!form.title.trim()) e.title = "กรุณากรอกชื่อคอนเทนต์";
     if (!form.publishDate) e.publishDate = "กรุณาเลือกวันที่ลง";
     if (!form.statusId) e.statusId = "กรุณาเลือกสถานะ";
-    if (!form.ownerId) e.ownerId = "กรุณาเลือกผู้รับผิดชอบ";
+    // ผู้รับผิดชอบ = optional: generated/placeholder slots have no owner yet, so
+    // requiring one silently blocked saving a quick edit. Assign later if needed.
     form.links.forEach((l) => {
       if (l.url.trim() && !isValidUrl(l.url)) e[`link-${l.id}`] = "URL ไม่ถูกต้อง";
     });
@@ -187,6 +188,9 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
       size="xl"
       footer={
         <>
+          {Object.keys(errors).length > 0 && (
+            <span className="mr-auto self-center text-[12px] font-medium text-red-600">⚠ กรอกช่องที่จำเป็นให้ครบ (ช่องที่ทำเครื่องหมายสีแดง)</span>
+          )}
           <button type="button" className={btnGhost} onClick={onClose}>ยกเลิก</button>
           <button type="button" className={btnPrimary} onClick={submit}>{editId ? "บันทึกการแก้ไข" : "สร้างคอนเทนต์"}</button>
         </>
@@ -230,7 +234,7 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
 
         <FormSection title="สถานะ & ผู้รับผิดชอบ" cols={2}>
           <Field label="สถานะ" required hint={errors.statusId}><GroupSelect group="status" value={form.statusId} onChange={(v) => set("statusId", v)} /></Field>
-          <Field label="ผู้รับผิดชอบหลัก" required hint={errors.ownerId}><UserSelect value={form.ownerId} onChange={(v) => set("ownerId", v)} /></Field>
+          <Field label="ผู้รับผิดชอบหลัก" hint={errors.ownerId}><UserSelect value={form.ownerId} onChange={(v) => set("ownerId", v)} /></Field>
           <Field label="ผู้ช่วย (Co-owner)" className="sm:col-span-2">
             <UserMultiPicker value={form.coOwnerIds} onChange={(ids) => set("coOwnerIds", ids)} exclude={form.ownerId} />
           </Field>

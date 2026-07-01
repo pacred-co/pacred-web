@@ -13,9 +13,15 @@ const TOGGLES: [keyof ContentFilter, string][] = [
   ["shouldRepeat", "ควรทำซ้ำ"],
 ];
 
+const CHIP = "rounded-full border px-2.5 py-1 text-[12px] transition";
+const CHIP_ON = "border-primary-300 bg-primary-50 font-medium text-primary-700";
+const CHIP_OFF = "border-border text-muted hover:border-primary-200";
+
 export function FilterBar({ value, onChange, variant = "full" }: { value: ContentFilter; onChange: (f: ContentFilter) => void; variant?: "full" | "compact" }) {
   const set = (patch: Partial<ContentFilter>) => onChange({ ...value, ...patch });
   const toggle = (k: keyof ContentFilter) => onChange({ ...value, [k]: value[k] ? undefined : true });
+  // Content-fill status is a single tri-state (both chips are mutually exclusive).
+  const setFilled = (v: "yes" | "no") => onChange({ ...value, filled: value.filled === v ? undefined : v });
   const active = isFilterActive(value);
 
   return (
@@ -41,9 +47,13 @@ export function FilterBar({ value, onChange, variant = "full" }: { value: Conten
         )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-medium text-muted">เนื้อหา:</span>
+        <button type="button" onClick={() => setFilled("yes")} className={cx(CHIP, value.filled === "yes" ? CHIP_ON : CHIP_OFF)}>เติมเนื้อหาแล้ว</button>
+        <button type="button" onClick={() => setFilled("no")} className={cx(CHIP, value.filled === "no" ? CHIP_ON : CHIP_OFF)}>ยังเป็นโครง</button>
+        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         {TOGGLES.map(([k, l]) => (
           <button key={k} type="button" onClick={() => toggle(k)}
-            className={cx("rounded-full border px-2.5 py-1 text-[12px] transition", value[k] ? "border-primary-300 bg-primary-50 font-medium text-primary-700" : "border-border text-muted hover:border-primary-200")}>
+            className={cx(CHIP, value[k] ? CHIP_ON : CHIP_OFF)}>
             {l}
           </button>
         ))}
