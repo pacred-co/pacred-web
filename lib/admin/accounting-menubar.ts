@@ -267,6 +267,12 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // interpreter batches surfaced 2026-06-02 by commit 101e75dc.
       { label: "เบิกค่าคอม Sales (batch รายเดือน)",  href: "/admin/accounting/withdraw/comm-sale" },
       { label: "เบิกค่าคอมล่าม (batch รายเดือน)",   href: "/admin/accounting/withdraw/comm-interpreter" },
+      // 2026-07-01 (spec docs/research/accounting-ap-2026-07-01 · mig 0239):
+      // the first-class AP / เบิกจ่าย ledger — the general per-shipment service
+      // disbursement (เบิกเงิน) row + the กองกลางโกดังจีน ¥ float. Slice 1 = READ
+      // + request/approve record only (no money-out pay-flip yet). §0d.
+      { label: "AP / เบิกจ่าย (Ledger)", href: "/admin/accounting/ap" },
+      { label: "กองกลางโกดังจีน (¥ float)", href: "/admin/accounting/ap/central-fund" },
       // TODO — legacy `acc-system-cargo.php` (header-menu/index.php L204-363):
       // ดูภาพรวม / ใบสั่งซื้อ / ใบจ่ายเงินมัดจำ / บันทึกค่าใช้จ่าย / ใบกำกับ
       // ภาษีซื้อ / รับใบลดหนี้ / รับใบเพิ่มหนี้ / นำเข้าเอกสาร.
