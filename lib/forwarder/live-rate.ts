@@ -47,6 +47,15 @@ function num(v: number | string | null | undefined): number {
   return Number.isFinite(p) ? p : 0;
 }
 
+/**
+ * ค่านำเข้าจีน-ไทย ขั้นต่ำ (ภูม 2026-07-01) — 50 บาท/แทรคกิ้ง. ของเบา/น้อยที่ resolve
+ * ออกมาต่ำกว่า 50 ให้ยกเป็น 50. FORWARDER-ONLY (บังคับใน resolveLiveForwarderRate ที่
+ * มีแต่พาธ tb_forwarder ใช้ · resolver กลาง resolveForwarderRate ที่ cart/quote ใช้
+ * ไม่โดน). NEVER applied on a rate-missing row (rate<=0) — กันสร้างยอดผี 50 บนแถว
+ * ที่ยังไม่มีเรท (ระบบจะไม่เขียน ฿0 อยู่แล้ว).
+ */
+export const FORWARDER_IMPORT_MIN_THB = 50;
+
 // ────────────────────────────────────────────────────────────
 // LIVE PRICING WATERFALL — port of forwarder.php `update_data` getPrice()
 // (L1806-1931) + the SVIP probe (L1841-1843). This is the SQL half; the
@@ -278,6 +287,17 @@ export async function resolveLiveForwarderRate(
   };
 
   const resolved = resolveForwarderRate(candidates, resolveInput);
+  // ค่านำเข้าจีน-ไทย ขั้นต่ำ 50 บาท (ภูม 2026-07-01) — ยกยอดที่ต่ำกว่า 50 (แต่มีเรทจริง)
+  // ขึ้นเป็น 50. ไม่แตะเคส rateMissing/rate<=0 (กันสร้างยอดผีบนแถวยังไม่มีเรท). จุดเดียว
+  // ที่ครอบทุกพาธ forwarder (save/MOMO import/computeAndFill/preview) โดยไม่กระทบ cart.
+  if (
+    !resolved.rateMissing &&
+    resolved.rate > 0 &&
+    resolved.transportSubtotal > 0 &&
+    resolved.transportSubtotal < FORWARDER_IMPORT_MIN_THB
+  ) {
+    resolved.transportSubtotal = FORWARDER_IMPORT_MIN_THB;
+  }
   // Both per-basis unit rates from the SAME candidates+input (display only — the
   // bill still uses `resolved`). null per basis = no rate card for that tuple.
   const unitRates = resolveBothBasisRates(candidates, resolveInput);
