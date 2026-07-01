@@ -3,16 +3,17 @@
 /**
  * Calendar view (owner brief §2.3) — month/week/day over publishDate.
  * Drag a chip to another day to reschedule (setContentDate). Click a chip to
- * open it; click a day (or +) to create on that date. Status colours, platform
- * dot, owner, time, and draft/final/result icons per chip.
+ * open it; the × on a chip deletes it (§0f); click a day (or +) to create on
+ * that date. "ล้างเดือนนี้" bulk-clears the visible month. Status colours,
+ * platform dot, owner, time, and draft/final/result icons per chip.
  */
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, FileEdit, CheckCircle2, BarChart3, Plus } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, FileEdit, CheckCircle2, BarChart3, Plus, Trash2 } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { isResultEmpty } from "@/lib/marketing-planner/performance";
-import { TH_DAYS, TH_MONTHS, monthMatrix, sameYmd, toDateStr, weekDays } from "@/lib/marketing-planner/util";
-import { btnGhost, cx } from "./ui";
+import { pad2, TH_DAYS, TH_MONTHS, monthMatrix, sameYmd, toDateStr, weekDays } from "@/lib/marketing-planner/util";
+import { btnGhost, cx, useConfirm } from "./ui";
 
 type ViewMode = "month" | "week" | "day";
 
@@ -24,42 +25,50 @@ function flags(c: ContentItem, labelOf: (id?: string) => string) {
 }
 
 function Chip({ c, onOpen, draggable = true }: { c: ContentItem; onOpen: (id: string) => void; draggable?: boolean }) {
-  const { colorOf, labelOf } = usePlanner();
+  const { colorOf, labelOf, deleteContent } = usePlanner();
+  const confirm = useConfirm();
   const color = colorOf(c.statusId) || "#94a3b8";
   const platformColor = colorOf(c.platformId);
   const f = flags(c, labelOf);
+  const onDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (await confirm({ title: "ลบคอนเทนต์", message: `ลบ "${c.title}" ถาวร? การลบนี้ย้อนกลับไม่ได้`, confirmText: "ลบถาวร", danger: true })) deleteContent(c.id);
+  };
   return (
-    <button
-      type="button"
+    <div
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData("text/planner-id", c.id)}
-      onClick={() => onOpen(c.id)}
-      className="group flex w-full items-center gap-1 rounded-md border-l-[3px] bg-white px-1.5 py-1 text-left text-[11px] shadow-sm transition hover:shadow dark:bg-surface"
+      className="group flex w-full items-center gap-1 rounded-md border-l-[3px] bg-white px-1.5 py-1 text-[11px] shadow-sm transition hover:shadow dark:bg-surface"
       style={{ borderLeftColor: color }}
       title={c.title}
     >
-      {platformColor && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: platformColor }} />}
-      {c.publishTime && <span className="shrink-0 font-mono text-[10px] text-muted">{c.publishTime}</span>}
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{c.title}</span>
+      <button type="button" onClick={() => onOpen(c.id)} className="flex min-w-0 flex-1 items-center gap-1 text-left">
+        {platformColor && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: platformColor }} />}
+        {c.publishTime && <span className="shrink-0 font-mono text-[10px] text-muted">{c.publishTime}</span>}
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{c.title}</span>
+      </button>
       <span className="flex shrink-0 items-center gap-0.5 text-muted">
         {f.draft && <FileEdit className="h-3 w-3" />}
         {f.final && <CheckCircle2 className="h-3 w-3 text-green-600" />}
         {f.result && <BarChart3 className="h-3 w-3 text-primary-600" />}
       </span>
-    </button>
+      <button type="button" onClick={onDelete} title="ลบคอนเทนต์นี้" aria-label={`ลบ ${c.title}`}
+        className="shrink-0 rounded p-0.5 text-muted/40 transition hover:bg-red-50 hover:text-red-600 group-hover:text-muted">
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </div>
   );
 }
 
 export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: ContentItem[]; onOpenContent: (id: string) => void; onCreateOn: (date: string) => void }) {
-  const { contents, byId } = usePlanner();
+  const { contents, byId, setContentDate, deleteContents } = usePlanner();
+  const confirm = useConfirm();
   const src = items ?? contents;
   const now = new Date();
   const [view, setView] = useState<ViewMode>("month");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [ref, setRef] = useState<Date>(now); // for week/day
-
-  const { setContentDate } = usePlanner();
 
   // Map dateStr → contents (honor status.meta.inCalendar; items with no status show)
   const byDate = useMemo(() => {
@@ -75,6 +84,16 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
     for (const arr of m.values()) arr.sort((a, b) => (a.publishTime ?? "").localeCompare(b.publishTime ?? ""));
     return m;
   }, [src, byId]);
+
+  // The month currently on screen (month view = year/month · week/day = ref's month).
+  const curYear = view === "month" ? year : ref.getFullYear();
+  const curMonth = view === "month" ? month : ref.getMonth();
+  const monthPrefix = `${curYear}-${pad2(curMonth + 1)}`;
+  const monthIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const [ds, arr] of byDate) if (ds.startsWith(monthPrefix)) for (const c of arr) ids.push(c.id);
+    return ids;
+  }, [byDate, monthPrefix]);
 
   const drop = (e: React.DragEvent, date: Date) => {
     e.preventDefault();
@@ -99,6 +118,17 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
     setRef(t);
   };
 
+  const clearMonth = async () => {
+    if (monthIds.length === 0) return;
+    const n = monthIds.length.toLocaleString("th-TH");
+    if (await confirm({
+      title: "ล้างคอนเทนต์เดือนนี้",
+      message: `ลบคอนเทนต์ ${n} รายการ ของเดือน ${TH_MONTHS[curMonth]} ${curYear + 543} ออกจากปฏิทินถาวร? การลบนี้ย้อนกลับไม่ได้`,
+      confirmText: `ลบ ${n} รายการ`,
+      danger: true,
+    })) deleteContents(monthIds);
+  };
+
   const headerLabel =
     view === "month"
       ? `${TH_MONTHS[month]} ${year + 543}`
@@ -116,13 +146,21 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
           <button type="button" className={cx(btnGhost, "px-2")} onClick={() => go(1)}><ChevronRight className="h-4 w-4" /></button>
           <span className="ml-1 inline-flex items-center gap-1.5 text-sm font-bold text-foreground"><CalendarDays className="h-4 w-4 text-primary-600" />{headerLabel}</span>
         </div>
-        <div className="inline-flex rounded-lg border border-border p-0.5">
-          {(["month", "week", "day"] as ViewMode[]).map((v) => (
-            <button key={v} type="button" onClick={() => setView(v)}
-              className={cx("rounded-md px-3 py-1 text-[12px] font-medium transition", view === v ? "bg-primary-600 text-white" : "text-muted hover:text-foreground")}>
-              {v === "month" ? "เดือน" : v === "week" ? "สัปดาห์" : "วัน"}
+        <div className="flex items-center gap-2">
+          {monthIds.length > 0 && (
+            <button type="button" onClick={clearMonth}
+              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[12px] font-medium text-red-600 transition hover:bg-red-100 dark:border-red-900/40 dark:bg-red-900/10">
+              <Trash2 className="h-3.5 w-3.5" /> ล้างเดือนนี้ ({monthIds.length.toLocaleString("th-TH")})
             </button>
-          ))}
+          )}
+          <div className="inline-flex rounded-lg border border-border p-0.5">
+            {(["month", "week", "day"] as ViewMode[]).map((v) => (
+              <button key={v} type="button" onClick={() => setView(v)}
+                className={cx("rounded-md px-3 py-1 text-[12px] font-medium transition", view === v ? "bg-primary-600 text-white" : "text-muted hover:text-foreground")}>
+                {v === "month" ? "เดือน" : v === "week" ? "สัปดาห์" : "วัน"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
