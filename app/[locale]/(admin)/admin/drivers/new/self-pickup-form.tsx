@@ -153,8 +153,12 @@ function CustomerPickupCard({
   // click handler — never inside startTransition).
   async function handleSubmit() {
     setErr(null);
+    // Legacy guard (forwarder-driver.php L1206): refuse + prompt "กรุณาเลือกรายการ"
+    // when nothing is ticked. The button stays CLICKABLE with 0 selected so this
+    // prompt actually fires (a disabled button would swallow it) — same fix as
+    // the มอบคนขับ tab. Here it's scoped to this customer's parcels.
     if (selected.count === 0) {
-      setErr("กรุณาเลือกอย่างน้อย 1 พัสดุของลูกค้าคนนี้");
+      setErr("กรุณาเลือกรายการพัสดุของลูกค้าคนนี้ก่อน");
       return;
     }
     const ok = await confirm(

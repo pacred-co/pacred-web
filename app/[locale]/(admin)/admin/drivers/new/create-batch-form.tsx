@@ -207,8 +207,12 @@ export function CreateBatchForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    // Legacy guard (forwarder-driver.php L1206 `#addFrom` click handler): if
+    // NOTHING is ticked, refuse + prompt "กรุณาเลือกรายการ" (Swal alert). We keep
+    // the submit button CLICKABLE with 0 ticked so this prompt actually fires —
+    // a disabled button would silently swallow the guard (the 2026-07-01 bug).
     if (summary.stops === 0) {
-      setErr("กรุณาเลือกอย่างน้อย 1 จุดส่ง");
+      setErr("กรุณาเลือกรายการ");
       return;
     }
     if (!driverCode) {
@@ -509,12 +513,15 @@ export function CreateBatchForm({
         </div>
       )}
 
-      {/* ── Footer action bar — เลือกคนขับรถ + เวลา + running totals + submit ──
-          (legacy: the "เลือกคนขับรถ" button + weight/volume totals at the bottom.) */}
+      {/* ── Footer action bar — legacy PCS puts the driver-select + action at the
+          BOTTOM-LEFT (forwarder-driver.php L1032: `position: fixed; bottom: 20px;
+          left: 70px`), with the running หนัก / ปริมาตร / ระบบแนะนำ totals beside it.
+          We keep that LEFT alignment: the action group (คนขับ · เวลา · submit) sits
+          on the left, the live totals fill the rest. 2026-07-01 ให้เหมือน PCS. */}
       <div className="sticky bottom-0 rounded border border-border bg-surface-alt/95 backdrop-blur px-3 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
         <div className="flex flex-wrap items-end gap-3">
-          {/* คนขับ + เวลา selectors */}
-          <div className="min-w-[220px] flex-1">
+          {/* คนขับ + เวลา selectors — LEFT (legacy bottom-left position) */}
+          <div className="min-w-[220px]">
             <label htmlFor="driver" className="block text-[11px] font-medium text-muted mb-1">
               คนขับรถ <span className="text-rose-600">*</span>
             </label>
@@ -522,8 +529,13 @@ export function CreateBatchForm({
               id="driver"
               value={driverCode}
               onChange={(e) => setDriverCode(e.target.value)}
-              disabled={pending || drivers.length === 0}
-              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px]"
+              /* Legacy: the driver picker is meaningless until ≥1 row is ticked
+                 (the whole footer bar is unusable with 0 selected). Disable it
+                 until something is picked so staff can't set a driver for an
+                 empty selection. */
+              disabled={pending || drivers.length === 0 || !anySelected}
+              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px] disabled:bg-surface-alt disabled:cursor-not-allowed"
+              title={!anySelected ? "เลือกรายการที่จะส่งก่อน แล้วจึงเลือกคนขับ" : undefined}
             >
               <option value="">— กรุณาเลือกพนักงานขับรถ —</option>
               {drivers.map((d) => (
@@ -539,8 +551,8 @@ export function CreateBatchForm({
               id="endtime"
               value={endTimeHours}
               onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
-              disabled={pending}
-              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px]"
+              disabled={pending || !anySelected}
+              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px] disabled:bg-surface-alt disabled:cursor-not-allowed"
             >
               <option value={17}>17 ชั่วโมง</option>
               <option value={24}>24 ชั่วโมง</option>
@@ -548,8 +560,22 @@ export function CreateBatchForm({
             </select>
           </div>
 
-          {/* Running totals (legacy footer: หนัก / ปริมาตร / ระบบแนะนำ · call.php) */}
-          <div className="text-xs text-foreground/80 leading-snug">
+          {/* Submit — the legacy "เลือกคนขับรถ / สร้างรายการ" button, kept on the
+              LEFT next to the selectors (NOT ml-auto). Deliberately NOT disabled
+              by the selection: clicking with 0 ticked must fire the legacy
+              "กรุณาเลือกรายการ" prompt (handleSubmit) — a disabled button would
+              swallow it. Only disabled while a create is in-flight. */}
+          <button
+            type="submit"
+            disabled={pending}
+            className="inline-flex items-center gap-2 rounded bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+          >
+            {pending ? "กำลังสร้าง..." : "เลือกคนขับรถและสร้างรายการ"}
+          </button>
+
+          {/* Running totals (legacy footer: หนัก / ปริมาตร / ระบบแนะนำ · call.php) —
+              fill the remaining space to the right of the left-aligned action. */}
+          <div className="ml-auto text-xs text-foreground/80 leading-snug text-right">
             <div>เลือกแล้ว : <b className="text-foreground tabular-nums">{summary.stops}</b> จุดส่ง · <b className="tabular-nums">{summary.items}</b> แทรคกิ้ง · <b className="tabular-nums">{summary.boxes}</b> กล่อง</div>
             <div>หนัก : <b className="tabular-nums">{summary.weight.toFixed(2)}</b> kg. · ปริมาตร : <b className="tabular-nums">{summary.volume.toFixed(3)}</b> CBM</div>
             <div className="mt-0.5">
@@ -568,15 +594,6 @@ export function CreateBatchForm({
               </span>
             </div>
           </div>
-
-          {/* Submit — the legacy "เลือกคนขับรถ / สร้างรายการ" button */}
-          <button
-            type="submit"
-            disabled={pending || !anySelected || !driverCode}
-            className="ml-auto inline-flex items-center gap-2 rounded bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-          >
-            {pending ? "กำลังสร้าง..." : "เลือกคนขับรถและสร้างรายการ"}
-          </button>
         </div>
         {(drivers.length === 0 || err) && (
           <div className="mt-2 space-y-1">
