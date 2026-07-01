@@ -22,6 +22,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
+import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
 
 type StopItem = {
   id:           number;
@@ -230,6 +231,10 @@ export function CreateBatchForm({
   }
 
   const anySelected = summary.stops > 0;
+
+  // ระบบแนะนำ — the legacy footer's vehicle recommendation, derived LIVE from the
+  // ticked selection's total weight (kg) + volume (CBM). Faithful port of call.php.
+  const recommendedVehicle = recommendVehicle(summary.weight, summary.volume, anySelected);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -543,10 +548,25 @@ export function CreateBatchForm({
             </select>
           </div>
 
-          {/* Running totals (legacy footer: น้ำหนัก / ปริมาตร / ระบบแม่ป้า) */}
+          {/* Running totals (legacy footer: หนัก / ปริมาตร / ระบบแนะนำ · call.php) */}
           <div className="text-xs text-foreground/80 leading-snug">
             <div>เลือกแล้ว : <b className="text-foreground tabular-nums">{summary.stops}</b> จุดส่ง · <b className="tabular-nums">{summary.items}</b> แทรคกิ้ง · <b className="tabular-nums">{summary.boxes}</b> กล่อง</div>
-            <div>น้ำหนัก : <b className="tabular-nums">{summary.weight.toFixed(2)}</b> kg. · ปริมาตร : <b className="tabular-nums">{summary.volume.toFixed(3)}</b> CBM</div>
+            <div>หนัก : <b className="tabular-nums">{summary.weight.toFixed(2)}</b> kg. · ปริมาตร : <b className="tabular-nums">{summary.volume.toFixed(3)}</b> CBM</div>
+            <div className="mt-0.5">
+              ระบบแนะนำ :{" "}
+              <span
+                title="รถที่ระบบแนะนำจากน้ำหนักรวม + ปริมาตรรวมของจุดที่เลือก (กระบะ ≤1800kg/6CBM · 6ล้อเล็ก ≤3500/12 · 6ล้อใหญ่ ≤5000/30)"
+                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-bold ${
+                  !anySelected
+                    ? "bg-surface-alt text-muted border-border"
+                    : recommendedVehicle === "มากกว่ารถที่กำหนด"
+                      ? "bg-rose-50 text-rose-700 border-rose-300"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-300"
+                }`}
+              >
+                {recommendedVehicle}
+              </span>
+            </div>
           </div>
 
           {/* Submit — the legacy "เลือกคนขับรถ / สร้างรายการ" button */}

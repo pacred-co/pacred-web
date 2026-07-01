@@ -64,6 +64,11 @@ const TAB_LABEL: Record<TabKey, string> = {
   done:    "เสร็จ",
 };
 
+// Item-status label. Legacy forwarder-driver-w.php statusDeliver() uses
+// 1=ยังไม่ส่งสินค้า 2=ส่งสินค้าแล้ว 3=หมดเวลาส่ง 4=ไม่พบลูกค้า. Pacred keeps the
+// driver-app wording (กำลังส่ง / ส่งสำเร็จ / ส่งไม่ได้ + the '' pre-load state) because
+// fdistatus=3 here means the driver couldn't deliver AND records an fdinote reason —
+// broader than legacy's "หมดเวลาส่ง" — so the Pacred label is the accurate one.
 const STATUS_LABEL: Record<string, string> = {
   "":  "ยังไม่ขึ้นรถ",
   "1": "กำลังส่ง",
