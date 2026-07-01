@@ -23,6 +23,23 @@ function thbFmt(n: number): string {
   });
 }
 
+/**
+ * วัน-เวลา แบบไทย 24 ชม (Asia/Bangkok) — ใช้กับ paid_at ที่ตอนนี้เก็บเวลาจริง
+ * (ตรวจ 2 รอบ + เวลารับชำระ 24 ชม). timestamptz จาก Postgres = UTC → แปลงเป็น
+ * เวลาไทยเพื่อโชว์เวลานาฬิกาที่พนักงานคีย์. fallback = raw slice ถ้า parse ไม่ได้.
+ */
+function fmtThaiDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
+  return d.toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    dateStyle: "medium",
+    timeStyle: "short",
+    hourCycle: "h23",
+  });
+}
+
 export default async function BillingRunDetailPage({
   params,
 }: {
@@ -238,7 +255,7 @@ export default async function BillingRunDetailPage({
         <div className="space-y-1.5 text-muted">
           <div>📄 ออกเอกสาร: {header.issued_at.slice(0, 16).replace("T", " ")} โดย {header.issued_by}</div>
           {header.paid_at && (
-            <div className="text-emerald-700">✓ ชำระแล้ว: {header.paid_at.slice(0, 16).replace("T", " ")} โดย {header.paid_by} · {header.payment_method} {header.payment_reference && `(${header.payment_reference})`}</div>
+            <div className="text-emerald-700">✓ ชำระแล้ว: {fmtThaiDateTime(header.paid_at)} น. โดย {header.paid_by} · {header.payment_method} {header.payment_reference && `(${header.payment_reference})`}</div>
           )}
           {header.cancelled_at && (
             <div className="text-stone-600">✕ ยกเลิก: {header.cancelled_at.slice(0, 16).replace("T", " ")} โดย {header.cancelled_by} · เหตุผล: {header.cancel_reason}</div>

@@ -35,14 +35,13 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   getReceiptList,
-  type ReceiptListRow,
   type ReceiptTab,
   type ReceiptTabCounts,
 } from "@/actions/admin/accounting-receipts";
 import { exportReceiptsAll } from "@/actions/admin/export/acc-receipts";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
-import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { Plus, Printer, Search } from "lucide-react";
+import { ReceiptsVoidTable } from "./receipts-void-table";
 
 // CSV columns — mirror the on-screen table (money as the formatted 2dp string,
 // dates sliced, codes as-is). Keys match the page-row mapping + exportReceiptsAll.
@@ -105,17 +104,6 @@ function tabLabel(t: ReceiptTab, counts: ReceiptTabCounts): string {
     case "issued":    return `ออกแล้ว (${counts.issued.toLocaleString()})`;
     case "cancelled": return `ยกเลิก (${counts.cancelled.toLocaleString()})`;
   }
-}
-
-function fmtThb(n: number): string {
-  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 function fmtDateInput(iso: string): string {
@@ -366,124 +354,8 @@ export default async function ReceiptsListPage({
           )}
         </form>
 
-        {/* ── Table — PEAK columns ── */}
-        <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium w-10">
-                  <input
-                    type="checkbox"
-                    aria-label="เลือกทั้งหมด"
-                    className="rounded border-slate-300"
-                    disabled
-                    title="Bulk actions ยังไม่เปิดใช้ — Wave 24+ wire ภายหลัง"
-                  />
-                </th>
-                <th className="px-3 py-2 text-left font-medium">เลขที่เอกสาร</th>
-                <th className="px-3 py-2 text-left font-medium">ลูกค้า</th>
-                <th className="px-3 py-2 text-left font-medium">วันที่</th>
-                <th className="px-3 py-2 text-right font-medium">
-                  <Explain label="มูลค่ารวม (ก่อน WHT)" def={GUIDE.bill_gross} align="right" />
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  <Explain label="WHT หัก" def={GUIDE.wht_1pct_bill} align="right" />
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  <Explain label="รับสุทธิ" def={GUIDE.bill_net_payable} align="right" />
-                </th>
-                <th className="px-3 py-2 text-center font-medium">สถานะ</th>
-                <th className="px-3 py-2 text-center font-medium">รายการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-3 py-12 text-center text-slate-500">
-                    ไม่พบใบเสร็จในเงื่อนไขที่เลือก
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r: ReceiptListRow) => {
-                  const cfg = rstatusCfg(r.rstatus);
-                  return (
-                    <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                      <td className="px-3 py-2 align-middle">
-                        <input
-                          type="checkbox"
-                          aria-label={`เลือก ${r.rid}`}
-                          className="rounded border-slate-300"
-                          disabled
-                        />
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {/* 2026-05-31 sitting-H-fix: row link → mPDF print page
-                            (canonical detail). The orphan [rid] summary was dropped
-                            since the print page already shows all the same data.
-                            Uses numeric tb_receipt.id since the print page route
-                            is /admin/accounting/forwarder-invoice/[id]. */}
-                        <Link
-                          href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                          className="font-medium text-primary-700 hover:underline"
-                        >
-                          {r.rid}
-                        </Link>
-                        {r.refid && r.refid.trim() && (
-                          <div className="text-xs text-slate-500 font-mono">{r.refid}</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-slate-900">{r.customerLabel}</div>
-                        <div className="text-xs text-slate-500 font-mono">
-                          {r.userid}{r.isCorporate ? " · นิติบุคคล" : ""}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-700">
-                        {fmtDate(r.rdate)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        ฿{fmtThb(r.totalBeforeWithholding)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-                        {r.whtAmount > 0 ? `฿${fmtThb(r.whtAmount)}` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary-700">
-                        ฿{fmtThb(r.ramount)}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cfg.chip}`}>
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center text-slate-700">
-                        {r.itemCount}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-sm">
-                  <td colSpan={4} className="px-3 py-2.5 text-right text-slate-600">
-                    ผลรวม {rows.length.toLocaleString()} รายการ ในหน้านี้
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    ฿{fmtThb(totals.totalBeforeWithholding)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
-                    ฿{fmtThb(totals.whtAmount)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-primary-700">
-                    ฿{fmtThb(totals.ramount)}
-                  </td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        {/* ── Table — PEAK columns + tick-to-VOID bulk action (task 4c) ── */}
+        <ReceiptsVoidTable rows={rows} totals={totals} />
 
         {/* ── Pagination — 10/page (PEAK default) ── */}
         {totalRowCount > 0 && (

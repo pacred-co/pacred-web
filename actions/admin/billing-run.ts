@@ -1356,7 +1356,13 @@ export async function markBillingRunPaid(
     async ({ adminId }) => {
       const admin = createAdminClient();
       const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
-      const paidAtIso = (v.paidAt ?? isoToday()) + "T00:00:00Z";
+      // ภูม 2026-07-01 — บันทึกวันที่ + เวลารับชำระ (24 ชม) เหมือนหน้า wallet.
+      // เวลาที่กรอก = เวลาไทย (UTC+7) → ต่อ offset +07:00 ให้ paid_at ตรงกับ
+      // เวลานาฬิกาที่พนักงานคีย์จริง. ถ้าไม่มีเวลา → เที่ยงคืน (คงพฤติกรรมเดิม).
+      const paidAtDate = v.paidAt ?? isoToday();
+      const paidAtIso = v.paidAtTime
+        ? `${paidAtDate}T${v.paidAtTime}:00+07:00`
+        : `${paidAtDate}T00:00:00Z`;
 
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
@@ -1590,6 +1596,86 @@ export async function cancelBillingRunInvoice(
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 7b. VOID (soft-cancel · KEEP HISTORY) — tick-to-void from the บิลลิสต์
+//     (task 4c · ภูม 2026-07-01)
+// ────────────────────────────────────────────────────────────────────────
+//
+// Difference vs cancelBillingRunInvoice (§7):
+//   - §7 cancel is for an issued (unpaid) bill that was output wrong — it
+//     REFUSES a paid bill (a paid bill's rows must not silently re-open for
+//     re-billing).
+//   - This VOID additionally covers a bill that was already รับชำระแล้ว/paid
+//     (owner: "even when status = รับชำระแล้ว, staff must be able to void") —
+//     a document void that KEEPS the record. It flips status → 'cancelled'
+//     (the existing voided state · badge "ยกเลิกแล้ว") and stamps the existing
+//     cancelled_* / cancel_reason columns so no new migration is needed.
+//
+// MONEY-SAFETY (critical · money lane):
+//   - SOFT only. Never DELETEs — the invoice header + its items stay for the
+//     audit trail; voided rows remain visible (badged), never disappear.
+//   - Moves NO money. A void does NOT touch tb_wallet / tb_payment, does NOT
+//     reset/re-open the linked forwarder rows (paydeposit / fstatus), and does
+//     NOT void the linked ใบเสร็จ (that has its own tick-to-void on the receipt
+//     list). It writes ONLY tb_forwarder_invoice.status + the cancel stamps.
+//   - Idempotent + race-guarded: `.neq("status","cancelled")` so an already-
+//     voided invoice is skipped; re-running is a no-op.
+
+export async function voidBillingRunInvoices(input: {
+  invoiceIds: number[];
+  reason: string;
+}): Promise<AdminActionResult<{ voided: number; skipped: number }>> {
+  const rawIds = Array.isArray(input?.invoiceIds) ? input.invoiceIds : [];
+  const reason = String(input?.reason ?? "").trim();
+  const invoiceIds = Array.from(
+    new Set(rawIds.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)),
+  );
+  if (invoiceIds.length === 0) return { ok: false, error: "ไม่ได้เลือกใบวางบิล" };
+  if (invoiceIds.length > 200) return { ok: false, error: "เลือกได้ครั้งละไม่เกิน 200 ใบ" };
+  if (reason.length < 3) return { ok: false, error: "กรุณาระบุเหตุผลที่ยกเลิก (อย่างน้อย 3 ตัวอักษร)" };
+
+  return withAdmin<{ voided: number; skipped: number }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
+
+      // Flip every NOT-already-cancelled invoice → cancelled (covers issued AND
+      // paid). Returns the rows it actually flipped so we report voided vs skipped.
+      const { data: flipped, error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({
+          status:        "cancelled",
+          cancelled_at:  new Date().toISOString(),
+          cancelled_by:  legacyAdminId,
+          cancel_reason: reason,
+        })
+        .in("id", invoiceIds)
+        .neq("status", "cancelled")
+        .select("id, doc_no");
+      if (updErr) {
+        console.error("[voidBillingRunInvoices] failed", { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+
+      const voidedRows = (flipped ?? []) as Array<{ id: number; doc_no: string }>;
+      const voided = voidedRows.length;
+      const skipped = invoiceIds.length - voided;
+
+      for (const r of voidedRows) {
+        await logAdminAction(adminId, "billing_run.void_invoice", "forwarder_invoice", String(r.id), {
+          doc_no: r.doc_no, reason,
+        });
+      }
+
+      revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
+      revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+
+      return { ok: true, data: { voided, skipped } };
     },
   );
 }

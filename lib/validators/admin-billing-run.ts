@@ -115,6 +115,13 @@ export const markBillingRunPaidSchema = z.object({
     .max(200, "หมายเลขอ้างอิงยาวเกินไป")
     .default(""),
   paidAt: isoDate.optional(),
+  // ภูม 2026-07-01 — เวลาที่รับชำระ (24 ชม · HH:mm) แยกจากวันที่ ให้บันทึกได้
+  // แบบเดียวกับหน้า wallet (ตรวจ 2 รอบ + เวลา 24 ชม). optional → ถ้าไม่กรอก
+  // action จะ default เป็นเวลา ณ ขณะบันทึก. รูปแบบ 24 ชม (ไม่มี AM/PM).
+  paidAtTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "กรุณากรอกเวลาในรูปแบบ 24 ชม HH:mm")
+    .optional(),
 });
 
 export type MarkBillingRunPaidInput = z.infer<

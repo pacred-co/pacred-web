@@ -82,6 +82,18 @@ export type ReceiptCommonProps = {
   showWht:            boolean;
   whtAmount:          number;
   grandTotal:         number;
+  /**
+   * The STORED, frozen pre-WHT total (= `tb_receipt.totalbeforewithholding`,
+   * incl เหมาๆ). A receipt is a document-of-record: its printed totals must
+   * equal what was stored at issuance (and match its ใบวางบิล) — NOT a live
+   * re-sum of the forwarder rows, which drift if a price is edited after the
+   * doc is issued (ภูม flag 2026-07-01 · บิล 2,135.43 vs ใบเสร็จ 2,057).
+   * When supplied, the "มูลค่าไม่มีหรือยกเว้นภาษี / จำนวนเงินทั้งสิ้น" figure
+   * renders this stored value instead of recomputing `preTax` from `totals`.
+   * Optional so the other surfaces that reuse this render (quote / bill / shop
+   * doc) — which pass no such prop — keep their existing live-derived behaviour.
+   */
+  preTaxTotal?:       number;
   grandTotalThaiWord: string;
   documentIssuer:     string;
   documentApprover:   string;
@@ -159,6 +171,7 @@ export function ReceiptPage({
   showWht,
   whtAmount,
   grandTotal,
+  preTaxTotal,
   grandTotalThaiWord,
   referenceOrder,
   pageNumber,
@@ -176,13 +189,17 @@ export function ReceiptPage({
   // Peak orange tint bg: rgba(255,163,10,0.165) ≈ #FFF0CC; gray tint ≈ #EBEBEA
   const tintBg       = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
 
-  // preTax = sum of every charge leg − discount + เหมาๆ = the PRE-WHT grand total
-  // (= lineSumWithMao upstream). For cargo freight there's no VAT, so this is
-  // also the VAT-exempt value shown on the left. The เหมาๆ (PCSF ฿100/shipment) is a
-  // header-level charge not in the per-leg sums → add it so preTax == grandTotal+WHT
-  // (it reconciles to the ใบวางบิล · ภูม 2026-06-23).
-  const preTax = totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
-                 totals.priceOther - totals.fDiscount + maoFee;
+  // preTax = the PRE-WHT grand total (incl เหมาๆ). A receipt is a FROZEN
+  // document-of-record: when the loader supplies the stored
+  // `preTaxTotal` (= tb_receipt.totalbeforewithholding), render THAT verbatim
+  // so the printed doc equals what was issued (and its ใบวางบิล) and can't
+  // drift when a forwarder price is edited later (ภูม flag 2026-07-01). Only
+  // when no stored value is passed (the quote / bill / shop-doc surfaces) do we
+  // fall back to the live per-leg re-sum (= lineSumWithMao upstream).
+  const preTax = (preTaxTotal !== undefined && preTaxTotal !== null)
+    ? preTaxTotal
+    : totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
+      totals.priceOther - totals.fDiscount + maoFee;
   // netPaid = the real amount the customer settles. `grandTotal` is ALREADY
   // net of WHT upstream (grandTotal = totalLineSum − whtAmount), so netPaid IS
   // grandTotal — do NOT subtract WHT again (that double-counted it). This is
