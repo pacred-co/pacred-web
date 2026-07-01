@@ -103,22 +103,29 @@ export default async function AdminApLedgerPage({
           title="เบิกจ่าย / AP Ledger"
           subtitle="บันทึกการเบิกเงิน (money-OUT) ต้นทุนบริการ · เงินทดรองจ่าย · เบิก/คืนเงิน — แยกตามงาน (SHIPMENT) · เลน · entity"
           actions={
-            <Link
-              href="/admin/accounting/ap/central-fund"
-              className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-            >
-              กองกลางโกดังจีน (¥) →
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/accounting/ap/new"
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+              >
+                + เพิ่มคำขอเบิก
+              </Link>
+              <Link
+                href="/admin/accounting/ap/central-fund"
+                className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+              >
+                กองกลางโกดังจีน (¥) →
+              </Link>
+            </div>
           }
         />
 
-        {/* SLICE banner — this surface is READ + request/approve; pay-flip is Slice 2. */}
+        {/* Workflow banner — request → approve → transfer(register). */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-800">
-          <span className="font-semibold">เฟส 1 (อ่าน + ขอเบิก/อนุมัติ)</span> — หน้านี้บันทึก
-          "คำขอเบิก" และ "อนุมัติ" เท่านั้น ยังไม่ตัดจ่ายเงินจริง.
-          การกด "โอนแล้ว" (บันทึกการโอนออกนอกระบบ + แนบสลิป) จะอยู่ใน{" "}
-          <span className="font-semibold">เฟส 2</span> พร้อม guard แบบ atomic-claim
-          (เหมือน markShopDisbursementPaid) — ยังไม่เปิดในเฟสนี้.
+          <span className="font-semibold">ขั้นตอน:</span> ขอเบิก (requested) → อนุมัติ (approved) →
+          "โอนแล้ว" (transferred). การกด "โอนแล้ว" เป็นการ{" "}
+          <span className="font-semibold">บันทึกว่าโอนออกนอกระบบแล้ว (register)</span> — เงินโอนออก
+          ทางธนาคารจริงแล้ว สลิปคือหลักฐาน ระบบไม่ได้ตัดเงินในแอป · มี guard atomic-claim กันกดซ้ำ.
         </div>
 
         {error && (

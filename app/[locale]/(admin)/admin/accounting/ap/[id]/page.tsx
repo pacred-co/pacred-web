@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { SlipImage } from "@/components/admin/slip-image";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import {
@@ -30,6 +31,7 @@ import {
   AP_TRANSFER_STATUS,
   AP_RECEIPT_STATUS,
 } from "@/lib/admin/ap-disbursement";
+import { ApDetailActions } from "./ap-detail-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +71,12 @@ export default async function ApDisbursementDetailPage({
   const net = rowNetAmount(row);
   const sourceAcc = resolveApSourceAccount(row);
 
+  // Slip lives in the private bucket 'disbursement-receipts' — sign it for the
+  // admin's session (null → SlipImage renders the missing-file fallback).
+  const slipUrl = row.transfer_slip_path
+    ? await getSignedBucketUrl("disbursement-receipts", row.transfer_slip_path)
+    : null;
+
   return (
     <>
       <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ap" />
@@ -99,11 +107,12 @@ export default async function ApDisbursementDetailPage({
           }
         />
 
-        {/* Slice-2 deferral note (no mutate on this READ-first detail). */}
+        {/* Slice-2 register note — the pay-flip here is a REGISTER only. */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-800">
-          หน้านี้เป็น <span className="font-semibold">การอ่าน (read-only)</span> ในเฟส 1 —
-          การขอเบิก/อนุมัติ และการกด "โอนแล้ว" (บันทึกการโอนออกนอกระบบ + แนบสลิป)
-          จะเปิดในเฟส 2 พร้อม guard atomic-claim.
+          การกด "โอนแล้ว" ในหน้านี้เป็นการ{" "}
+          <span className="font-semibold">บันทึกว่าโอนออกนอกระบบแล้ว (register)</span> —
+          เงินโอนออกทางธนาคารจริงแล้ว สลิปคือหลักฐาน ระบบไม่ได้ตัดเงินในแอป.
+          มี guard แบบ atomic-claim (เหมือน markShopDisbursementPaid) กันการกดซ้ำ/แข่งกัน.
         </div>
 
         {row.is_customer_named_receipt && (
@@ -230,13 +239,22 @@ export default async function ApDisbursementDetailPage({
           </ol>
         </section>
 
+        {/* ── write controls (Slice 2 · confirm-before-mutate) ── */}
+        <ApDetailActions
+          id={row.id}
+          transferStatus={row.transfer_status}
+          receiptStatus={row.receipt_status}
+          netAmount={net}
+          itemLabel={row.item_label || "(ไม่มีชื่อรายการ)"}
+        />
+
         {/* ── slips ── */}
-        {row.transfer_slip_path && (
+        {slipUrl && (
           <section className="rounded-xl border border-black/10 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-foreground">สลิปการโอน</h2>
-            <a href={row.transfer_slip_path} target="_blank" rel="noreferrer">
+            <a href={slipUrl} target="_blank" rel="noreferrer">
               <SlipImage
-                src={row.transfer_slip_path}
+                src={slipUrl}
                 alt="สลิปการโอน"
                 className="max-w-md rounded-lg border border-black/10"
               />
