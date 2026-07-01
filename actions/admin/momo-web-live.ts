@@ -27,10 +27,11 @@ import {
   type MomoLiveParcel,
   type MomoLiveStatus,
 } from "@/lib/integrations/momo-web/client";
+import { type LiveStatusPropagationResult } from "@/lib/integrations/momo-web/propagate-live-status";
 import {
-  propagateMomoLiveStatus,
-  type LiveStatusPropagationResult,
-} from "@/lib/integrations/momo-web/propagate-live-status";
+  propagateMomoLiveStatusAndData,
+  type LiveStatusAndDataResult,
+} from "@/lib/integrations/momo-web/propagate-live-data";
 
 const schema = z.object({
   status: z.enum(MOMO_LIVE_STATUSES),
@@ -67,24 +68,26 @@ export async function loadMomoLiveBoard(
 }
 
 /**
- * "🔄 อัปเดตสถานะเข้าระบบ PR" — bulk-propagate the MOMO Live status into tb_forwarder.
- * 2026-07-01 (owner/ภูม: MOMO is source-of-truth for STATUS).
+ * "🔄 อัปเดตสถานะ + ข้อมูลเข้าระบบ PR" — bulk-propagate the MOMO Live STATUS **and**
+ * fill missing measurements (น้ำหนัก/คิว/ขนาด/จำนวนชิ้น) into tb_forwarder.
+ * 2026-07-01 (owner/พี่ป๊อป: MOMO's partner API drops parcels, but MOMO's web still
+ * has both the status AND the full measurement).
  *
- * The partner import/track feed DROPS a parcel once it advances, but MOMO's web still
- * shows it in the right board. This action scrapes ALL MOMO Live boards (fresh master-
- * account login, server-side) and advances every matched tb_forwarder row toward the
- * MOMO-Live status — FORWARD-ONLY + STATUS-ONLY (writes only fstatus/fdatestatusN/
- * adminidupdate='system-live' · no money) + idempotent + TOCTOU-safe. It reuses the
- * exact same authenticated MOMO path as the /live board view, so an admin who is already
- * looking at the board can push those statuses into the system in one click (without
- * waiting for the ~5-min sync cron).
+ * ONE fresh master-account login (MOMO is single-session) serves BOTH passes:
+ *   1. STATUS — advance every matched tb_forwarder row toward the MOMO-Live status,
+ *      FORWARD-ONLY + STATUS-ONLY (fstatus/fdatestatusN/adminidupdate · no money) +
+ *      idempotent + TOCTOU-safe (China-side only, capped at fstatus '3').
+ *   2. DATA — fill fweight/fvolume/dims/famount, FILL-WHEN-EMPTY only, using the
+ *      TOTAL (per-piece × qty) MOMO's web shows, SKIPPING billed rows (fstatus 5/6/7),
+ *      never overwriting a non-zero value, flagging (not overwriting) any mismatch.
+ * The DATA fill is best-effort — its failure never undoes the STATUS writes.
  *
- * Returns a summary so the UI can report "advanced N rows".
+ * Returns both summaries so the UI can report "advanced N · filled M · flagged K".
  */
 export async function propagateMomoLiveStatusNow(): Promise<
-  AdminActionResult<{ summary: LiveStatusPropagationResult }>
+  AdminActionResult<{ summary: LiveStatusPropagationResult; data: LiveStatusAndDataResult["data"] }>
 > {
-  return withAdmin<{ summary: LiveStatusPropagationResult }>(
+  return withAdmin<{ summary: LiveStatusPropagationResult; data: LiveStatusAndDataResult["data"] }>(
     ["super", "ops", "warehouse", "accounting"],
     async ({ adminId }) => {
       if (!isMomoWebConfigured()) {
@@ -92,23 +95,26 @@ export async function propagateMomoLiveStatusNow(): Promise<
       }
       try {
         const admin = createAdminClient();
-        const summary = await propagateMomoLiveStatus(admin);
-        // Audit the bulk status push (best-effort · non-fatal).
+        const { status: summary, data } = await propagateMomoLiveStatusAndData(admin);
+        // Audit the bulk status + data push (best-effort · non-fatal).
         await logAdminAction(adminId, "momo_live_status_propagate", "tb_forwarder", "bulk", {
           matched: summary.matched,
           advanced: summary.advanced,
           shopOrdersAdvanced: summary.shopOrdersAdvanced,
           errorCount: summary.errors.length,
+          dataFilled: data.filled,
+          dataFlaggedMismatch: data.flaggedMismatch,
+          dataSkippedBilled: data.skippedBilled,
         });
-        return { ok: true, data: { summary } };
+        return { ok: true, data: { summary, data } };
       } catch (e) {
-        console.error("[momo-web-live] status propagate failed", e);
+        console.error("[momo-web-live] status+data propagate failed", e);
         return {
           ok: false,
           error:
             e instanceof Error
-              ? `อัปเดตสถานะจาก MOMO ไม่สำเร็จ: ${e.message}`
-              : "อัปเดตสถานะจาก MOMO ไม่สำเร็จ",
+              ? `อัปเดตสถานะ/ข้อมูลจาก MOMO ไม่สำเร็จ: ${e.message}`
+              : "อัปเดตสถานะ/ข้อมูลจาก MOMO ไม่สำเร็จ",
         };
       }
     },

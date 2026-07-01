@@ -36,10 +36,11 @@ import {
   type AdvanceDepartedResult,
 } from "@/lib/admin/advance-departed-containers";
 import { isMomoWebConfigured } from "@/lib/integrations/momo-web/client";
+import { type LiveStatusPropagationResult } from "@/lib/integrations/momo-web/propagate-live-status";
 import {
-  propagateMomoLiveStatus,
-  type LiveStatusPropagationResult,
-} from "@/lib/integrations/momo-web/propagate-live-status";
+  propagateMomoLiveStatusAndData,
+  type LiveDataFillResult,
+} from "@/lib/integrations/momo-web/propagate-live-data";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -93,6 +94,13 @@ export type RunMomoSyncResult = {
    *  only. `null` when MOMO web isn't configured OR the pass threw (best-effort · never
    *  fails the sync). See lib/integrations/momo-web/propagate-live-status.ts. */
   liveStatusPropagation: LiveStatusPropagationResult | null;
+  /** 2026-07-01 — the DATA companion to liveStatusPropagation: fill the missing
+   *  fweight/fvolume/dims/famount from the SAME MOMO Live boards (one login serves
+   *  both). FILL-WHEN-EMPTY · TOTAL (per-piece × qty) · skip billed rows (fstatus
+   *  5/6/7) · never overwrite · flag mismatches. `null` when MOMO web isn't
+   *  configured OR the pass threw (best-effort · never fails the sync). See
+   *  lib/integrations/momo-web/propagate-live-data.ts. */
+  liveDataFill: LiveDataFillResult | null;
 };
 
 /**
@@ -422,19 +430,29 @@ export async function runMomoSync(
     });
   }
 
-  // ── 3.7 (2026-07-01) — MOMO Live-board STATUS propagate ──
-  // MOMO's partner import/track feed DROPS a parcel's status once it advances, but
-  // MOMO's OWN web (momocargo.com, master account) still shows it in the right board.
-  // MOMO is source-of-truth for STATUS, so AFTER the partner-feed + departed-container
-  // passes (so those win when they DO have a signal), scrape the Live boards and advance
-  // any matched tb_forwarder row toward the MOMO-Live status. Forward-only + STATUS-ONLY
-  // (writes only fstatus/fdatestatusN/adminidupdate='sys-live' (≤10 · tb_forwarder.adminidupdate is varchar(10)) · no money) +
-  // idempotent + TOCTOU-safe. Only runs when MOMO web creds are configured. Best-effort —
-  // a scrape/login failure must NEVER fail the sync (the momo_* writes already landed).
+  // ── 3.7 (2026-07-01) — MOMO Live-board STATUS propagate + DATA fill ──
+  // MOMO's partner import/track feed DROPS a parcel once it advances past
+  // "ออกจากโกดังจีน" — losing BOTH its status AND its measurement — but MOMO's OWN web
+  // (momocargo.com, master account) still shows it in the right board WITH the full
+  // น้ำหนัก/คิว/ขนาด/จำนวนชิ้น. AFTER the partner-feed + departed-container passes (so
+  // those win when they DO have a signal), scrape the Live boards ONCE (single MOMO
+  // login) and run BOTH passes:
+  //   • STATUS — advance any matched tb_forwarder row toward the MOMO-Live status.
+  //     Forward-only + STATUS-ONLY (fstatus/fdatestatusN/adminidupdate · no money) +
+  //     idempotent + TOCTOU-safe (China-side, capped at '3').
+  //   • DATA — fill fweight/fvolume/dims/famount, FILL-WHEN-EMPTY only, using the TOTAL
+  //     (per-piece × qty) MOMO's web shows, SKIPPING billed rows (fstatus 5/6/7), never
+  //     overwriting a non-zero value, flagging (not overwriting) any mismatch.
+  // Only runs when MOMO web creds are configured. Best-effort — a scrape/login/fill
+  // failure must NEVER fail the sync (the momo_* writes already landed); the DATA fill's
+  // failure also never rolls back the STATUS writes.
   let liveStatusPropagation: LiveStatusPropagationResult | null = null;
+  let liveDataFill: LiveDataFillResult | null = null;
   if (isMomoWebConfigured()) {
     try {
-      liveStatusPropagation = await propagateMomoLiveStatus(admin);
+      const combined = await propagateMomoLiveStatusAndData(admin);
+      liveStatusPropagation = combined.status;
+      liveDataFill = combined.data;
       if (liveStatusPropagation.errors.length > 0) {
         for (const e of liveStatusPropagation.errors) {
           errors.push({
@@ -444,8 +462,17 @@ export async function runMomoSync(
           });
         }
       }
+      if (liveDataFill.errors.length > 0) {
+        for (const e of liveDataFill.errors) {
+          errors.push({
+            scope:   "live_data_fill",
+            error:   "MOMO_LIVE_DATA_ROW_FAILED",
+            message: `${e.scope}: ${e.message}`,
+          });
+        }
+      }
     } catch (err) {
-      console.error("[runMomoSync] live-status propagate threw", err);
+      console.error("[runMomoSync] live-status/data propagate threw", err);
       errors.push({
         scope:   "live_status_propagate",
         error:   "MOMO_LIVE_STATUS_THREW",
@@ -508,5 +535,6 @@ export async function runMomoSync(
     propagation,
     departedAdvance,
     liveStatusPropagation,
+    liveDataFill,
   };
 }
