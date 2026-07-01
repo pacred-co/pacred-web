@@ -58,11 +58,11 @@ Last updated: 2026-05-25 (post-org-shift roster — full per-department director
 
 ### 🏭 Warehouse (Samut Sakhon receiving — TH side)
 
-> 48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130
+> 48/2 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130
 
 | Field | Value |
 |---|---|
-| Address line | 48/3 หมู่ 12 |
+| Address line | 48/2 หมู่ 12 |
 | Subdistrict (ตำบล) | อ้อมน้อย |
 | District (อำเภอ) | กระทุ่มแบน |
 | Province | สมุทรสาคร |

@@ -24,6 +24,8 @@ export type ContentFilter = {
   hasFinal?: boolean;
   hasResult?: boolean;
   shouldRepeat?: boolean;
+  /** Content-fill status: "yes" = เติมเนื้อหาแล้ว · "no" = ยังเป็นโครงเปล่า. */
+  filled?: "yes" | "no";
   includeArchived?: boolean;
 };
 
@@ -40,6 +42,21 @@ function hasDraftLink(c: ContentItem, namer: LinkTypeNamer): boolean {
 }
 function hasFinalLink(c: ContentItem, namer: LinkTypeNamer): boolean {
   return c.links.some((l) => /final|publish|งานจริง|โพสต์|เผยแพร่/i.test(namer(l.linkTypeId)));
+}
+
+// The content fields the team fills in per slot (NOT classification/schedule/owner
+// metadata) — any one non-empty means the slot is no longer a bare skeleton.
+const CONTENT_TEXT_FIELDS: (keyof ContentItem)[] = [
+  "topic", "brief", "targetAudience", "keyword", "hashtag", "cta",
+  "hook", "painPoint", "context", "storyTelling", "proof", "authority",
+  "visual", "organicSelling", "branding", "esg", "contact", "note",
+];
+
+/** True once a slot has real content (topic/brief/craft field/link); false while
+ *  it's still the bare generated skeleton ("คลิปสั้น #1" with nothing filled in). */
+export function isContentFilled(c: ContentItem): boolean {
+  if (c.links.length > 0) return true;
+  return CONTENT_TEXT_FIELDS.some((k) => String(c[k] ?? "").trim() !== "");
 }
 
 export function applyFilter(items: ContentItem[], f: ContentFilter): ContentItem[] {
@@ -69,6 +86,9 @@ export function applyFilter(items: ContentItem[], f: ContentFilter): ContentItem
 
     if (f.hasResult && isResultEmpty(c.result)) return false;
     if (f.shouldRepeat && c.result?.shouldRepeat !== "yes") return false;
+
+    if (f.filled === "yes" && !isContentFilled(c)) return false;
+    if (f.filled === "no" && isContentFilled(c)) return false;
 
     return true;
   });
