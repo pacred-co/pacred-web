@@ -322,7 +322,9 @@ export default async function AdminDriversPage({
         <table className="w-full text-sm border-collapse min-w-[1000px]">
           <thead className="bg-surface-alt/60 text-left text-[11px] uppercase tracking-wide text-muted">
             <tr>
-              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap w-16">เลขที่</th>
+              {/* legacy forwarder-driver.php list mode L157-166: ID / วันที่สร้าง / ชื่อรายการ /
+                  ผู้รับผิดชอบ / ผู้สร้างรายการ / สถานะ / ตัวเลือก (ส่งแล้ว = Pacred progress add). */}
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap w-16">ID</th>
               <th className="border-b border-border px-3 py-2.5 whitespace-nowrap">วันที่สร้าง</th>
               <th className="border-b border-border px-3 py-2.5">ชื่อรายการ</th>
               <th className="border-b border-border px-3 py-2.5">ผู้รับผิดชอบ</th>

@@ -439,24 +439,29 @@ export default async function AdminDriverBatchDetailPage({
       <section className="rounded-2xl border border-border bg-white shadow-sm p-5 space-y-4">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
+            {/* legacy forwarder-driver.php L1635 — "รายการที่ต้องส่งของ เลขที่รายการ #ID" */}
             <p className="text-xs font-semibold tracking-widest text-primary-500">
-              รอบจัดส่ง · เลขที่ #{batch.id}
+              รายการที่ต้องส่งของ · เลขที่รายการ #{batch.id}
             </p>
             <h1 className="mt-1 text-xl font-bold flex items-center gap-2">
               <Truck className="h-5 w-5" />
               {batch.fdname ?? `รอบ #${batch.id}`}
             </h1>
             <div className="mt-1 text-xs text-muted space-y-0.5">
+              {/* legacy L1637 ชื่อเรื่อง / L1680 ดำเนินงาน / L1681 มอบหมายงาน / L1636 วันที่สร้าง */}
               <div>
-                <span className="font-medium">คนขับ:</span>{" "}
+                <span className="font-medium">ชื่อเรื่อง :</span> {batch.fdname ?? `รอบ #${batch.id}`}
+              </div>
+              <div>
+                <span className="font-medium">ดำเนินงาน :</span>{" "}
                 <span className="font-mono">{batch.fdadminid ?? "—"}</span> · {driverName}
               </div>
               <div>
-                <span className="font-medium">ผู้สร้าง:</span> {batch.fdadmincreator ?? "—"}
+                <span className="font-medium">มอบหมายงาน :</span> {batch.fdadmincreator ?? "—"}
               </div>
               {batch.fddate && (
                 <div>
-                  <span className="font-medium">วันที่สร้าง:</span>{" "}
+                  <span className="font-medium">วันที่สร้าง :</span>{" "}
                   {formatThaiDateTime(batch.fddate)}
                 </div>
               )}
@@ -470,8 +475,14 @@ export default async function AdminDriverBatchDetailPage({
               {fdstatus === "3" && <XCircle className="h-3.5 w-3.5" />}
               {BATCH_STATUS_LABEL[fdstatus]}
             </span>
+            {/* legacy L1644 "ส่งของก่อนเวลา :" — shown while the run is still open */}
             {batch.endtime && fdstatus === "1" && (
-              <BatchCountdown endTimeIso={batch.endtime} />
+              <>
+                <span className="text-[11px] text-muted">
+                  ส่งของก่อนเวลา : {formatThaiDateTime(batch.endtime)}
+                </span>
+                <BatchCountdown endTimeIso={batch.endtime} />
+              </>
             )}
           </div>
         </div>
@@ -480,7 +491,7 @@ export default async function AdminDriverBatchDetailPage({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-border">
           <Metric icon={<Package className="h-4 w-4" />} label="แทรคกิ้ง" value={totalItems} />
           <Metric icon={<Package className="h-4 w-4" />} label="กล่อง" value={totalBoxes} />
-          <Metric icon={<MapPin className="h-4 w-4" />} label="จุดส่ง" value={batch.fdamount ?? stops.length} />
+          <Metric icon={<MapPin className="h-4 w-4" />} label="จุดที่ส่ง" value={batch.fdamount ?? stops.length} />
           <Metric
             icon={<CheckCircle2 className="h-4 w-4" />}
             label="ส่งแล้ว"
@@ -711,7 +722,7 @@ export default async function AdminDriverBatchDetailPage({
                             <th className="px-2 py-1.5">รหัสสมาชิก</th>
                             <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
                             <th className="px-2 py-1.5 text-right">กล่อง</th>
-                            <th className="px-2 py-1.5 text-right">นน.</th>
+                            <th className="px-2 py-1.5 text-right">น้ำหนัก</th>
                             <th className="px-2 py-1.5 text-right">ปริมาตร</th>
                           </tr>
                         </thead>
