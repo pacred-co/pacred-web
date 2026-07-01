@@ -318,7 +318,7 @@ function buildStops(
           // Hide ONLY the placeholder name (never print "รับที่โกดัง Pacred" as a
           // person) — but ALWAYS show the real address fields when they exist, even
           // if the name is the placeholder (ภูม 2026-06-30 · PR047 had a real addr
-          // 48/3 หมู่ 12 กระทุ่มแบน but was blanked + flagged "ยังไม่มีที่อยู่").
+          // 48/2 หมู่ 12 กระทุ่มแบน but was blanked + flagged "ยังไม่มีที่อยู่").
           name:        nameIsPlaceholder ? "" : (f.faddressname ?? ""),
           lastName:    nameIsPlaceholder ? "" : (f.faddresslastname ?? ""),
           no:          hasRealAddress ? (f.faddressno ?? "") : "",
