@@ -6,15 +6,21 @@
  *
  * Mirrors legacy forwarder-driver.php "page=add" tab + addFrom.php modal,
  * collapsed into one inline form (no modal — Pacred pattern).
+ *
+ * PRESENTATION (2026-07-01 · owner "ให้เหมือน PCS 100%"): the stop picker is a
+ * DENSE TABLE — one <tr> per delivery group with the exact legacy columns:
+ *   [☑] · จำนวน · บริษัทขนส่ง · เลขแทรคกิ้ง (nested per-tracking sub-table:
+ *   # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง(+location) / กล่อง / น้ำหนัก /
+ *   ปริมาตร → "รวม" row) · ลำดับส่ง · ที่อยู่ (อำเภอ highlighted).
+ * Top: "แสดง N รายการ" length dropdown + "ค้นหา" box. Footer: เลือกคนขับรถ +
+ * running weight/volume totals + "แสดง 1 ถึง N จาก M รายการ" pagination.
+ * The LOGIC (state · createDriverBatch · route-order sort · carrier filter ·
+ * driver/endtime selectors) is UNCHANGED — only the markup matches legacy.
  */
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import {
-  MapPin, Phone, Package, AlertCircle,
-} from "lucide-react";
-import { Explain } from "@/components/ui/tooltip";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 
 type StopItem = {
@@ -101,6 +107,11 @@ export function CreateBatchForm({
   const [driverCode,    setDriverCode]    = useState<string>("");
   const [endTimeHours,  setEndTimeHours]  = useState<17 | 24 | 30>(17);
   const [carrierFilter, setCarrierFilter] = useState<string>("");
+  // Legacy list controls (DataTable "แสดง N รายการ" + "ค้นหา") — presentation
+  // only; they narrow which rows render, never the submit payload.
+  const [pageLength, setPageLength] = useState<number>(100);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [page, setPage] = useState<number>(1);
 
   // Aggregates for the selection summary.
   const summary = useMemo(() => {
@@ -142,10 +153,36 @@ export function CreateBatchForm({
       .sort((a, b) => b.count - a.count);
   }, [groups]);
 
-  // The route-sorted list, narrowed to the picked carrier (if any).
+  // The route-sorted list, narrowed to the picked carrier + the ค้นหา search
+  // (legacy DataTable searches across every visible cell: recipient · code ·
+  // carrier · tracking# · address). This is the FULL filtered set.
+  const filteredGroups = useMemo(() => {
+    let list = carrierFilter
+      ? sortedGroups.filter((g) => g.shipByLabel === carrierFilter)
+      : sortedGroups;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((g) => {
+        const hay = [
+          g.recipientName, g.customerName, g.userid, g.shipByLabel,
+          g.address.no, g.address.subDistrict, g.address.district,
+          g.address.province, g.address.zipCode, g.address.tel,
+          ...g.items.map((i) => `${i.fidorco} ${i.ftrackingchn} ${i.userid} ${i.fpallet}`),
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    return list;
+  }, [sortedGroups, carrierFilter, searchQuery]);
+
+  // The current page slice ("แสดง N รายการ" length · legacy pagination).
+  const totalFiltered = filteredGroups.length;
+  const pageCount = Math.max(1, Math.ceil(totalFiltered / pageLength));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageLength;
   const visibleGroups = useMemo(
-    () => (carrierFilter ? sortedGroups.filter((g) => g.shipByLabel === carrierFilter) : sortedGroups),
-    [sortedGroups, carrierFilter],
+    () => filteredGroups.slice(pageStart, pageStart + pageLength),
+    [filteredGroups, pageStart, pageLength],
   );
 
   function toggleStop(key: string) {
@@ -157,8 +194,10 @@ export function CreateBatchForm({
     });
   }
   function selectAll() {
-    // Select only what's currently visible (respects the ขนส่ง filter).
-    setSelectedKeys(new Set(visibleGroups.map((g) => g.key)));
+    // Select the whole filtered set (respects the ขนส่ง filter + ค้นหา · across
+    // every page — legacy "เลือกทั้งหมด" ticks all matching rows, not just the
+    // current page slice).
+    setSelectedKeys(new Set(filteredGroups.map((g) => g.key)));
   }
   function clearAll() {
     setSelectedKeys(new Set());
@@ -190,197 +229,176 @@ export function CreateBatchForm({
     });
   }
 
+  const anySelected = summary.stops > 0;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Driver + endtime panel — sticky on desktop */}
-      <section className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-4">
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          1. เลือกคนขับและเวลาส่งงาน
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
-          <div>
-            <label htmlFor="driver" className="block text-xs font-medium text-muted mb-1">
-              คนขับรถ <span className="text-rose-600">*</span>
-            </label>
-            <select
-              id="driver"
-              value={driverCode}
-              onChange={(e) => setDriverCode(e.target.value)}
-              disabled={pending || drivers.length === 0}
-              className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-base min-h-[44px]"
-            >
-              <option value="">— กรุณาเลือกพนักงานขับรถ —</option>
-              {drivers.map((d) => (
-                <option key={d.member_code} value={d.member_code}>{d.display}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="endtime" className="block text-xs font-medium text-muted mb-1">
-              ครบอายุมอบหมายงาน (ชั่วโมง) <span className="text-rose-600">*</span>
-            </label>
-            <select
-              id="endtime"
-              value={endTimeHours}
-              onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
-              disabled={pending}
-              className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-base min-h-[44px]"
-            >
-              <option value={17}>17 ชั่วโมง</option>
-              <option value={24}>24 ชั่วโมง</option>
-              <option value={30}>30 ชั่วโมง</option>
-            </select>
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {/* ── Legacy PCS list controls: "แสดง N รายการ" (left) + "ค้นหา" (right) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <div className="flex items-center gap-1.5 text-muted">
+          <span>แสดง</span>
+          <select
+            value={pageLength}
+            onChange={(e) => { setPageLength(Number(e.target.value)); setPage(1); }}
+            className="rounded border border-border bg-white px-2 py-1 text-sm"
+            aria-label="จำนวนรายการต่อหน้า"
+          >
+            {[25, 50, 100, 250, 500].map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <span>รายการ</span>
         </div>
-      </section>
-
-      {/* Stop selection */}
-      <section className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">
-            <Explain
-              label={`2. เลือกจุดส่ง (${carrierFilter ? `${visibleGroups.length}/${groups.length}` : groups.length} กลุ่ม)`}
-              def="เรียงตามลำดับส่ง — ป้ายส้ม “ลำดับส่ง” คือลำดับเส้นทางวิ่งรถ เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก · เรียงให้คนขับวิ่งเป็นเส้นเดียว ไม่ย้อนไปย้อนมา"
-            />
-          </h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-xs text-primary-600 hover:underline"
-            >
-              เลือกทั้งหมด
-            </button>
-            <span className="text-xs text-muted">·</span>
-            <button
-              type="button"
-              onClick={clearAll}
-              className="text-xs text-primary-600 hover:underline"
-            >
-              ล้างการเลือก
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="stop-search" className="text-muted">ค้นหา:</label>
+          <input
+            id="stop-search"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+            placeholder="ชื่อ / รหัสลูกค้า / แทรคกิ้ง / ที่อยู่"
+            className="rounded border border-border bg-white px-2.5 py-1 text-sm min-w-[200px]"
+          />
+          <span className="text-muted text-xs">·</span>
+          <button type="button" onClick={selectAll} className="text-xs text-primary-600 hover:underline">
+            เลือกทั้งหมด
+          </button>
+          <button type="button" onClick={clearAll} className="text-xs text-primary-600 hover:underline">
+            ล้างการเลือก
+          </button>
         </div>
+      </div>
 
-        {/* ขนส่ง filter chips — กรองตามบริษัทขนส่ง (Flash / J&T / เฟิร์ส / …) · Express tab only */}
-        {showCarrierFilter && carriers.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-            <span className="text-xs font-medium text-muted mr-0.5">🚚 ขนส่ง:</span>
+      {/* ขนส่ง filter chips — Express tab only (มอบคนขับ = Pacred-only, no filter) */}
+      {showCarrierFilter && carriers.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-muted mr-0.5">🚚 ขนส่ง:</span>
+          <button
+            type="button"
+            onClick={() => { setCarrierFilter(""); setPage(1); }}
+            className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+              !carrierFilter ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+            }`}
+          >
+            ทั้งหมด ({groups.length})
+          </button>
+          {carriers.map((c) => (
             <button
+              key={c.label}
               type="button"
-              onClick={() => setCarrierFilter("")}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                !carrierFilter ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
+              onClick={() => { setCarrierFilter(c.label); setPage(1); }}
+              className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+                carrierFilter === c.label ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
               }`}
             >
-              ทั้งหมด ({groups.length})
+              {c.label} ({c.count})
             </button>
-            {carriers.map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={() => setCarrierFilter(c.label)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  carrierFilter === c.label ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
-                }`}
-              >
-                {c.label} ({c.count})
-              </button>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {groups.length === 0 ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
-            <p className="text-sm text-muted">ไม่มีรายการรอมอบหมาย — ทุกอย่างถูกมอบหมายไปแล้ว</p>
-          </div>
-        ) : visibleGroups.length === 0 ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
-            <p className="text-sm text-muted">ไม่มีจุดส่งสำหรับขนส่ง &quot;{carrierFilter}&quot; — เลือกขนส่งอื่น หรือ &quot;ทั้งหมด&quot;</p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {visibleGroups.map((g) => {
-              const isSelected = selectedKeys.has(g.key);
-              const order = routeOrderOf(g.address.district);
-              return (
-                <li
-                  key={g.key}
-                  className={`overflow-hidden rounded-xl border transition-colors ${
-                    isSelected ? "border-primary-400 ring-1 ring-primary-200 bg-primary-50/10" : "border-border bg-white"
-                  }`}
-                >
-                  {/* Header bar — click anywhere to toggle the whole stop. Leads
-                      with the CUSTOMER (ชื่อ + รหัส), legacy columns จำนวน · ขนส่ง
-                      live in the badges; the ที่อยู่ moves to the RIGHT panel below
-                      (legacy keeps ที่อยู่ as the rightmost column). */}
-                  <label className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 cursor-pointer select-none border-b border-border ${
-                    isSelected ? "bg-primary-50/50" : "bg-surface-alt/40 hover:bg-surface-alt/70"
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleStop(g.key)}
-                      className="h-5 w-5 rounded border-border text-primary-500 focus:ring-primary-500 flex-shrink-0"
-                      aria-label={`เลือกจุดส่งของ ${g.recipientName}`}
-                    />
-                    {/* ลำดับส่ง — district route order (legacy $arrPositF index · sorted) */}
-                    <span
-                      title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก (รายการเรียงตามนี้ให้คนขับวิ่งเป็นเส้นเดียว)"
-                      className="flex-shrink-0 inline-flex flex-col items-center justify-center rounded-lg bg-orange-100 border border-orange-300 px-2.5 py-1 leading-tight"
-                    >
-                      <span className="text-[11px] font-medium text-orange-700/90">ลำดับส่ง</span>
-                      <span className="text-lg font-extrabold text-orange-700 tabular-nums">{order}</span>
-                    </span>
-                    <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="font-semibold text-sm text-foreground">
-                        คุณ{g.recipientName}
-                      </span>
-                      <span className="inline-flex items-center rounded-md bg-primary-50 border border-primary-100 text-primary-700 px-1.5 py-0.5 text-[11px] font-mono font-semibold">
-                        {g.userid}
-                      </span>
-                    </div>
-                    {/* บริษัทขนส่ง — legacy column */}
-                    <span className="inline-flex items-center rounded-full bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 text-[11px] font-medium flex-shrink-0">
-                      {g.shipByLabel}
-                    </span>
-                    {/* จำนวน — legacy column */}
-                    <span className="text-xs text-muted whitespace-nowrap flex-shrink-0">
-                      {g.items.length} แทรคกิ้ง · {g.totalBoxes} กล่อง
-                    </span>
-                  </label>
+      {/* ── The dense legacy PCS table — ONE ROW per delivery group ──
+          Columns (legacy forwarder-driver.php?page=add): [☑] · จำนวน · บริษัทขนส่ง ·
+          เลขแทรคกิ้ง (nested sub-table) · ลำดับส่ง · ที่อยู่. */}
+      <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
+        <table className="w-full text-sm border-collapse min-w-[1100px]">
+          <thead>
+            <tr className="bg-surface-alt text-left text-[11px] uppercase tracking-wide text-muted">
+              <th className="border-b border-border px-2 py-2 w-10 text-center">
+                <input
+                  type="checkbox"
+                  checked={filteredGroups.length > 0 && filteredGroups.every((g) => selectedKeys.has(g.key))}
+                  onChange={() => {
+                    const allOn = filteredGroups.length > 0 && filteredGroups.every((g) => selectedKeys.has(g.key));
+                    if (allOn) clearAll(); else selectAll();
+                  }}
+                  className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500 align-middle"
+                  aria-label="เลือกทั้งหมด"
+                />
+              </th>
+              <th className="border-b border-border px-3 py-2 w-20 text-center">จำนวน</th>
+              <th className="border-b border-border px-3 py-2 w-40">บริษัทขนส่ง</th>
+              <th className="border-b border-border px-3 py-2">เลขแทรคกิ้ง</th>
+              <th className="border-b border-border px-3 py-2 w-20 text-center">ลำดับส่ง</th>
+              <th className="border-b border-border px-3 py-2 w-[26rem]">ที่อยู่</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                  ไม่มีรายการรอมอบหมาย — ทุกอย่างถูกมอบหมายไปแล้ว
+                </td>
+              </tr>
+            ) : visibleGroups.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                  {searchQuery
+                    ? <>ไม่พบรายการที่ตรงกับ &quot;{searchQuery}&quot;</>
+                    : <>ไม่มีจุดส่งสำหรับขนส่ง &quot;{carrierFilter}&quot; — เลือกขนส่งอื่น หรือ &quot;ทั้งหมด&quot;</>}
+                </td>
+              </tr>
+            ) : (
+              visibleGroups.map((g, gi) => {
+                const isSelected = selectedKeys.has(g.key);
+                const order = routeOrderOf(g.address.district);
+                const zebra = gi % 2 === 0 ? "bg-white" : "bg-surface-alt/30";
+                return (
+                  <tr
+                    key={g.key}
+                    onClick={() => toggleStop(g.key)}
+                    className={`cursor-pointer border-b border-border align-top ${
+                      isSelected ? "bg-primary-50/60" : `${zebra} hover:bg-primary-50/30`
+                    }`}
+                  >
+                    {/* [☑] checkbox */}
+                    <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleStop(g.key)}
+                        className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
+                        aria-label={`เลือกจุดส่งของ ${g.recipientName}`}
+                      />
+                    </td>
 
-                  {/* Body — legacy lays the per-stop card LEFT→RIGHT as
-                      [tracking table] … [ที่อยู่]. We mirror that: tracking on the
-                      LEFT (main), the ที่อยู่ panel on the RIGHT (stacks on mobile). */}
-                  <div className="flex flex-col lg:flex-row">
-                    {/* LEFT — tracking table (เลขแทรคกิ้ง column = the inner table) */}
-                    <div className="flex-1 min-w-0 overflow-x-auto lg:border-r border-border">
-                      <table className="w-full text-sm table-fixed min-w-[640px]">
-                        <colgroup>
-                          <col className="w-[14%]" />
-                          <col className="w-[32%]" />
-                          <col className="w-[13%]" />
-                          <col className="w-[11%]" />
-                          <col className="w-[14%]" />
-                          <col className="w-[16%]" />
-                        </colgroup>
-                        <thead className="text-left text-[11px] uppercase tracking-wide text-muted bg-surface-alt/30">
-                          <tr>
-                            <th className="px-3 py-2 font-medium">F-no</th>
-                            <th className="px-3 py-2 font-medium">แทรคกิ้ง</th>
-                            <th className="px-3 py-2 font-medium">ลูกค้า</th>
-                            <th className="px-3 py-2 font-medium text-right">กล่อง</th>
-                            <th className="px-3 py-2 font-medium text-right">นน. (kg)</th>
-                            <th className="px-3 py-2 font-medium text-right">ปริมาตร (m³)</th>
+                    {/* จำนวน — box + tracking count for this stop */}
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                      <div className="font-bold text-base text-foreground tabular-nums">{g.totalBoxes}</div>
+                      <div className="text-[11px] text-muted">กล่อง</div>
+                      <div className="text-[11px] text-muted">({g.items.length} แทรค)</div>
+                    </td>
+
+                    {/* บริษัทขนส่ง */}
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 text-[11px] font-medium">
+                        {g.shipByLabel}
+                      </span>
+                      <div className="mt-1 text-xs font-medium text-foreground">คุณ{g.recipientName}</div>
+                      <div className="text-[11px] font-mono text-primary-700">{g.userid}</div>
+                    </td>
+
+                    {/* เลขแทรคกิ้ง — the nested per-tracking sub-table (legacy inner
+                        table: # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง+location /
+                        กล่อง / น้ำหนัก / ปริมาตร → รวม row) */}
+                    <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="text-left text-[11px] text-muted">
+                            <th className="px-1.5 py-1 font-medium w-8">#</th>
+                            <th className="px-1.5 py-1 font-medium">เลขออเดอร์</th>
+                            <th className="px-1.5 py-1 font-medium">รหัสสมาชิก</th>
+                            <th className="px-1.5 py-1 font-medium">เลขแทรคกิ้ง</th>
+                            <th className="px-1.5 py-1 font-medium text-right">กล่อง</th>
+                            <th className="px-1.5 py-1 font-medium text-right">น้ำหนัก</th>
+                            <th className="px-1.5 py-1 font-medium text-right">ปริมาตร</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {g.items.map((it) => (
-                            <tr key={it.id} className="border-t border-border/60 odd:bg-white even:bg-surface-alt/20 hover:bg-primary-50/30">
-                              <td className="px-3 py-2 align-top">
+                          {g.items.map((it, idx) => (
+                            <tr key={it.id} className="border-t border-border/50">
+                              <td className="px-1.5 py-1 text-muted tabular-nums">{idx + 1}</td>
+                              <td className="px-1.5 py-1">
                                 <Link
                                   href={`/admin/forwarders/${it.id}`}
                                   className="font-mono text-primary-600 hover:underline"
@@ -389,100 +407,173 @@ export function CreateBatchForm({
                                   {it.fidorco}
                                 </Link>
                               </td>
-                              <td className="px-3 py-2 align-top">
+                              <td className="px-1.5 py-1 font-mono text-[11px]">{it.userid}</td>
+                              <td className="px-1.5 py-1">
                                 <div className="font-medium break-all">{it.ftrackingchn}</div>
                                 {it.fpallet && (
-                                  <div className="text-[11px] text-muted">loc: {it.fpallet}</div>
+                                  <div className="text-[11px] text-muted">location : {it.fpallet}</div>
+                                )}
+                                {it.fnote && (
+                                  <div className="mt-0.5 inline-block text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1 py-0.5">
+                                    📝 {it.fnote}
+                                  </div>
                                 )}
                               </td>
-                              <td className="px-3 py-2 align-top font-mono text-xs">{it.userid}</td>
-                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.famount}</td>
-                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.fweight.toFixed(2)}</td>
-                              <td className="px-3 py-2 align-top text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
+                              <td className="px-1.5 py-1 text-right tabular-nums">{it.famount}</td>
+                              <td className="px-1.5 py-1 text-right tabular-nums">{it.fweight.toFixed(2)}</td>
+                              <td className="px-1.5 py-1 text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
                             </tr>
                           ))}
-                          {g.items.some((i) => i.fnote) && (
-                            <tr>
-                              <td colSpan={6} className="px-3 py-1.5">
-                                {g.items.filter((i) => i.fnote).map((i) => (
-                                  <div key={`note-${i.id}`} className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5 mb-0.5">
-                                    📝 {i.fidorco}: {i.fnote}
-                                  </div>
-                                ))}
-                              </td>
-                            </tr>
-                          )}
-                          <tr className="border-t-2 border-primary-400 bg-primary-100 text-primary-900 font-bold">
-                            <td colSpan={3} className="px-3 py-2 text-right">รวม</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{g.totalBoxes}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
+                          {/* รวม summary row */}
+                          <tr className="border-t border-border bg-surface-alt/60 font-semibold text-foreground">
+                            <td colSpan={4} className="px-1.5 py-1 text-right">รวม</td>
+                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalBoxes}</td>
+                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
+                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
                           </tr>
                         </tbody>
                       </table>
-                    </div>
+                    </td>
 
-                    {/* RIGHT — ที่อยู่จัดส่ง (legacy's rightmost column · ภูม 2026-06-30
-                        ขยายช่อง + ตัวใหญ่ขึ้น ให้เหมือน PCS อ่านง่ายตอนคนขับใช้). */}
-                    <aside className="lg:w-80 xl:w-96 2xl:w-[26rem] flex-shrink-0 p-3 sm:p-4 bg-surface-alt/20">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5 text-rose-500" />
-                        ที่อยู่จัดส่ง
-                      </p>
-                      <p className="font-semibold text-sm text-foreground">คุณ{g.recipientName}</p>
+                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) */}
+                    <td className="px-3 py-2 text-center">
+                      <span
+                        title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก"
+                        className="inline-flex items-center justify-center rounded bg-orange-100 border border-orange-300 px-2 py-1 text-base font-extrabold text-orange-700 tabular-nums"
+                      >
+                        {order}
+                      </span>
+                    </td>
+
+                    {/* ที่อยู่ — full delivery address, อำเภอ highlighted (legacy rightmost) */}
+                    <td className="px-3 py-2 text-sm">
                       {g.addressMissing ? (
-                        <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                        <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
                           ⚠️ ยังไม่มีที่อยู่จัดส่ง — เซลกรอกเพิ่มที่หน้ารายการนำเข้า
-                        </p>
+                        </span>
                       ) : (
-                        <p className="mt-1 text-sm text-foreground/90 leading-relaxed">
+                        <span className="text-foreground/90 leading-relaxed">
                           {g.address.no}
                           {g.address.subDistrict ? <> ต.{g.address.subDistrict}</> : null}{" "}
                           {g.address.district ? <>อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}</> : null}
                           {g.address.province ? <>จ.{g.address.province} </> : null}{g.address.zipCode}
-                        </p>
+                        </span>
                       )}
                       {g.address.tel && g.address.tel !== "-" && (
-                        <p className="mt-1.5 text-xs text-muted">
-                          <Phone className="inline h-3 w-3 mr-0.5" />
-                          {g.address.tel}
-                        </p>
+                        <div className="mt-1 text-xs text-muted">โทร. {g.address.tel}</div>
                       )}
-                    </aside>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Summary + submit */}
-      <section className="sticky bottom-0 rounded-2xl border border-rose-200 bg-gradient-to-r from-orange-50 to-rose-100 shadow-lg p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm">
-            <div className="font-bold text-base text-rose-900">
-              เลือกแล้ว: {summary.stops} จุดส่ง · {summary.items} แทรคกิ้ง · {summary.boxes} กล่อง
-            </div>
-            <div className="text-xs text-rose-700/80">
-              นน.รวม {summary.weight.toFixed(2)} kg · ปริมาตร {summary.volume.toFixed(3)} m³
-            </div>
+      {/* ── Legacy footer — pagination "แสดง 1 ถึง N จาก M รายการ" + prev/next ── */}
+      {totalFiltered > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <div>
+            แสดง {(pageStart + 1).toLocaleString("th-TH")} ถึง{" "}
+            {Math.min(pageStart + pageLength, totalFiltered).toLocaleString("th-TH")} จาก{" "}
+            {totalFiltered.toLocaleString("th-TH")} รายการ
+            {carrierFilter || searchQuery ? <> (กรองจากทั้งหมด {groups.length.toLocaleString("th-TH")})</> : null}
           </div>
+          {pageCount > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="rounded border border-border bg-white px-2.5 py-1 disabled:opacity-40 hover:bg-surface-alt"
+              >
+                ก่อนหน้า
+              </button>
+              <span className="px-1.5 tabular-nums">{currentPage} / {pageCount}</span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={currentPage >= pageCount}
+                className="rounded border border-border bg-white px-2.5 py-1 disabled:opacity-40 hover:bg-surface-alt"
+              >
+                ถัดไป
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Footer action bar — เลือกคนขับรถ + เวลา + running totals + submit ──
+          (legacy: the "เลือกคนขับรถ" button + weight/volume totals at the bottom.) */}
+      <div className="sticky bottom-0 rounded border border-border bg-surface-alt/95 backdrop-blur px-3 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-wrap items-end gap-3">
+          {/* คนขับ + เวลา selectors */}
+          <div className="min-w-[220px] flex-1">
+            <label htmlFor="driver" className="block text-[11px] font-medium text-muted mb-1">
+              คนขับรถ <span className="text-rose-600">*</span>
+            </label>
+            <select
+              id="driver"
+              value={driverCode}
+              onChange={(e) => setDriverCode(e.target.value)}
+              disabled={pending || drivers.length === 0}
+              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px]"
+            >
+              <option value="">— กรุณาเลือกพนักงานขับรถ —</option>
+              {drivers.map((d) => (
+                <option key={d.member_code} value={d.member_code}>{d.display}</option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[150px]">
+            <label htmlFor="endtime" className="block text-[11px] font-medium text-muted mb-1">
+              ครบอายุมอบหมายงาน <span className="text-rose-600">*</span>
+            </label>
+            <select
+              id="endtime"
+              value={endTimeHours}
+              onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
+              disabled={pending}
+              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px]"
+            >
+              <option value={17}>17 ชั่วโมง</option>
+              <option value={24}>24 ชั่วโมง</option>
+              <option value={30}>30 ชั่วโมง</option>
+            </select>
+          </div>
+
+          {/* Running totals (legacy footer: น้ำหนัก / ปริมาตร / ระบบแม่ป้า) */}
+          <div className="text-xs text-foreground/80 leading-snug">
+            <div>เลือกแล้ว : <b className="text-foreground tabular-nums">{summary.stops}</b> จุดส่ง · <b className="tabular-nums">{summary.items}</b> แทรคกิ้ง · <b className="tabular-nums">{summary.boxes}</b> กล่อง</div>
+            <div>น้ำหนัก : <b className="tabular-nums">{summary.weight.toFixed(2)}</b> kg. · ปริมาตร : <b className="tabular-nums">{summary.volume.toFixed(3)}</b> CBM</div>
+          </div>
+
+          {/* Submit — the legacy "เลือกคนขับรถ / สร้างรายการ" button */}
           <button
             type="submit"
-            disabled={pending || summary.stops === 0 || !driverCode}
-            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            disabled={pending || !anySelected || !driverCode}
+            className="ml-auto inline-flex items-center gap-2 rounded bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
-            <Package className="h-4 w-4" />
-            {pending ? "กำลังสร้าง..." : "สร้างรอบจัดส่ง"}
+            {pending ? "กำลังสร้าง..." : "เลือกคนขับรถและสร้างรายการ"}
           </button>
         </div>
-        {err && (
-          <div className="mt-3 text-sm bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-md">
-            ⚠️ {err}
+        {(drivers.length === 0 || err) && (
+          <div className="mt-2 space-y-1">
+            {drivers.length === 0 && (
+              <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded">
+                ⚠️ ยังไม่มีคนขับในระบบ — เพิ่มก่อนที่{" "}
+                <Link href="/admin/admins/new" className="underline">/admin/admins/new</Link> (role = driver)
+              </div>
+            )}
+            {err && (
+              <div className="text-sm bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded">
+                ⚠️ {err}
+              </div>
+            )}
           </div>
         )}
-      </section>
+      </div>
     </form>
   );
 }
