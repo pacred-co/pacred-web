@@ -194,7 +194,7 @@ export function OrderInlineEdits({
             {CRATE_LABEL[crate ?? ""] ?? "—"}
             {crate === "1" && (
               <span className="ml-2 text-muted">
-                · ราคา ฿{(pricecrate ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                · ราคา ¥{(pricecrate ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             )}
           </span>
@@ -206,11 +206,11 @@ export function OrderInlineEdits({
               <option value="1">ตีลังไม้</option>
               <option value="2">ไม่ตีลังไม้</option>
             </select>
-            {/* ราคาค่าตีลังไม้ (fix #3) — แสดงเมื่อเลือก "ตีลังไม้" · ต้นทุน/ค่าบริการ
-                ไม่กระทบราคาขาย · carried ไปยังใบฝากนำเข้าตอน spawn */}
+            {/* ราคาค่าตีลังไม้ (ภูม 2026-07-01) — ¥ หยวน · แสดงเมื่อเลือก "ตีลังไม้" ·
+                คิดเข้าราคารวมสุทธิทั้งฝั่งขาย (× เรทขาย) และต้นทุน (× เรทจริง) */}
             {crateVal === "1" && (
               <label className="block space-y-1">
-                <span className="text-[11px] text-muted">ราคาค่าตีลังไม้ (บาท) · ไม่กระทบยอดที่ลูกค้าจ่าย</span>
+                <span className="text-[11px] text-muted">ราคาค่าตีลังไม้ (¥ หยวน) · คิดเข้าราคารวม</span>
                 <input
                   type="number"
                   min="0"

@@ -133,7 +133,7 @@ type HRow = {
   haddresssubdistrict: string | null; haddressdistrict: string | null;
   haddressprovince: string | null; haddresszipcode: string | null;
   haddresstel: string | null; haddressnote: string | null;
-  userid: string; paymethod: string | null; crate: string | null;
+  userid: string; paymethod: string | null; crate: string | null; pricecrate: number | null;
   adminidip: string | null; adminidcreate: string | null;
   tax_doc_pref: string | null;
 };
@@ -158,7 +158,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_header_order")
     .select(
-      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,adminidip,adminidcreate,tax_doc_pref",
+      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,pricecrate,adminidip,adminidcreate,tax_doc_pref",
     )
     .eq("hno", hno)
     .maybeSingle();
@@ -300,8 +300,13 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const svc      = Number(r.hshippingservice ?? 0);
   const rateCost = Number(r.hratecost ?? 0);
   const costAll  = Number(r.hcostall ?? 0);
-  const netThb   = roundUp2((chn + shipChn) * rate + svc);
-  const profit   = (chn + shipChn) * rate - rateCost * costAll;
+  // ภูม 2026-07-01 — ค่าลังไม้ (ตีลังไม้) เก็บเป็น ¥ (pricecrate) · เข้าทั้งฝั่งขาย
+  // (× เรทขาย) และฝั่งต้นทุน (× เรทจริง) เพื่อให้ราคารวมสุทธิทั้งสองฝั่ง + กำไรถูกต้อง.
+  const crateCny = r.crate === "1" ? Number(r.pricecrate ?? 0) : 0;
+  const chnCny   = chn + shipChn + crateCny;           // ¥รวม (สินค้า + ค่าส่งจีน + ลังไม้)
+  const netThb   = roundUp2(chnCny * rate + svc);       // ราคารวมสุทธิ (ขาย)
+  const costNet  = rateCost * (costAll + crateCny);     // ราคารวมสุทธิ (ต้นทุน)
+  const profit   = chnCny * rate - costNet;
 
   const showPrint = status === "3" || status === "4" || status === "5";
   // legacy printShop: status 5 → print=1 ใบเสร็จ + print=2 ใบแจ้งหนี้; else print=2 only.
@@ -595,7 +600,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
           </div>
           <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
           <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
-          <KV label="ราคารวมหยวนจีน" value={`¥${cny(chn + shipChn)}`} mono />
+          {/* ภูม 2026-07-01 — ค่าลังไม้ (¥) ใต้ค่าขนส่งในจีน · แยกให้เห็นชัด. */}
+          {r.crate === "1" && <KV label="ค่าลังไม้ (ตีลังไม้)" value={`¥${cny(crateCny)}`} mono />}
+          <KV label="ราคารวมหยวนจีน" value={`¥${cny(chnCny)}`} mono />
           {svc > 0 && <KV label="ค่าบริการฝากสั่ง" value={`฿${thb(svc)}`} mono />}
           <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
             <span>ราคารวมสุทธิ</span>
@@ -606,8 +613,12 @@ export async function renderLegacyServiceOrderView(hno: string) {
             <KV label="อัตราแลกเปลี่ยนจริง" value={`${cny(rateCost)} บาท/หยวน`} mono />
             <KV label="ราคาซื้อจริงทั้งหมด" value={`¥${cny(costAll)}`} mono />
             {/* ภูม 2026-07-01 (บัญชี) — ราคารวมสุทธิของต้นทุน = อัตราแลกเปลี่ยนจริง ×
-                ราคาซื้อจริงทั้งหมด. เดิมโชว์แค่ราคารวมสุทธิฝั่งขาย. กำไรสุทธิ = ขาย − ต้นทุนนี้. */}
-            <KV label="ราคารวมสุทธิ (ราคาต้นทุน)" value={`฿${thb(rateCost * costAll)}`} mono />
+                (ราคาซื้อจริงทั้งหมด + ค่าลังไม้). ตัวเข้มเท่าราคารวมสุทธิฝั่งขายด้านบน.
+                กำไรสุทธิ = ราคารวมสุทธิ(ขาย) − ราคารวมสุทธิ(ต้นทุน). */}
+            <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
+              <span>ราคารวมสุทธิ (ราคาต้นทุน)</span>
+              <span className="font-mono tabular-nums">฿{thb(costNet)}</span>
+            </div>
             {costAll !== 0 && (
               <div className="flex justify-between border-t border-border pt-1.5 font-semibold">
                 <span>กำไรสุทธิ</span>

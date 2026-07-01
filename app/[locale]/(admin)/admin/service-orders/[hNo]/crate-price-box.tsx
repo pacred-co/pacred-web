@@ -67,18 +67,21 @@ export function CratePriceBox({
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1">
-          <span className="block text-[11px] text-muted">ราคาค่าลังไม้ (บาท) · ไม่กระทบยอดที่ลูกค้าจ่าย</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            disabled={pending}
-            className="w-40 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-right text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60"
-            placeholder="0.00"
-          />
+          <span className="block text-[11px] text-muted">ราคาค่าลังไม้ (¥ หยวน) · คิดเข้าราคารวม (¥ × เรท)</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-muted">¥</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              disabled={pending}
+              className="w-40 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-right text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60"
+              placeholder="0.00"
+            />
+          </div>
         </label>
         <button
           type="button"
@@ -89,7 +92,7 @@ export function CratePriceBox({
           {pending ? "กำลังบันทึก…" : "บันทึกราคาลังไม้"}
         </button>
         <span className="text-xs text-muted">
-          ปัจจุบัน: <span className="font-mono tabular-nums font-semibold text-foreground">฿{saved.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          ปัจจุบัน: <span className="font-mono tabular-nums font-semibold text-foreground">¥{saved.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </span>
       </div>
 
