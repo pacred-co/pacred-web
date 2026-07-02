@@ -175,6 +175,11 @@ export async function GET(request: Request) {
           // live-cabinet.ts.
           live_cabinet_filled:       sync.liveCabinetFill?.filled ?? 0,
           live_closedate_filled:     sync.liveCabinetFill?.closeDateFilled ?? 0,
+          // 2026-07-02 — MOMO box-split: aggregate rows split into N sibling rows
+          // (1 box = 1 row · matches MOMO's "-i/n"). See lib/integrations/momo-web/
+          // split-box-rows.ts (money-neutral guard · idempotent).
+          live_box_split:            sync.liveBoxSplit?.split ?? 0,
+          live_box_siblings_created: sync.liveBoxSplit?.siblingsCreated ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -257,6 +262,17 @@ export async function GET(request: Request) {
                   skippedBilled:              sync.liveCabinetFill.skippedBilled,
                   skippedHasReal:             sync.liveCabinetFill.skippedHasReal,
                   errorCount:                 sync.liveCabinetFill.errors.length,
+                }
+              : null,
+            // 2026-07-02 — MOMO box-split → sibling rows (1 box = 1 row · money-neutral
+            // guard · idempotent). See lib/integrations/momo-web/split-box-rows.ts.
+            liveBoxSplit:        sync.liveBoxSplit
+              ? {
+                  candidates:      sync.liveBoxSplit.candidates,
+                  split:           sync.liveBoxSplit.split,
+                  siblingsCreated: sync.liveBoxSplit.siblingsCreated,
+                  repriced:        sync.liveBoxSplit.repriced,
+                  errorCount:      sync.liveBoxSplit.errors.length,
                 }
               : null,
           },

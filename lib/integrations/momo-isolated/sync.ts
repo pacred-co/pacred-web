@@ -42,6 +42,7 @@ import {
   type LiveDataFillResult,
 } from "@/lib/integrations/momo-web/propagate-live-data";
 import { type BoxDetailFillResult } from "@/lib/integrations/momo-web/box-detail";
+import { type BoxSplitResult } from "@/lib/integrations/momo-web/split-box-rows";
 import { type LiveCabinetFillResult } from "@/lib/integrations/momo-web/live-cabinet";
 
 export type RunMomoSyncOpts = {
@@ -119,6 +120,12 @@ export type RunMomoSyncResult = {
    *  combined pass threw (best-effort · never fails the sync). See
    *  lib/integrations/momo-web/live-cabinet.ts. */
   liveCabinetFill: LiveCabinetFillResult | null;
+  /** 2026-07-02 — BOX-SPLIT companion: turn an aggregate tb_forwarder row (famount=N ·
+   *  boxes in momo_box_detail) into N sibling rows (one per box · matches MOMO's "-i/n")
+   *  so 1 box = 1 row. Money-neutral guard (unbilled · unpriced · Σ preserved) +
+   *  idempotent. `null` when MOMO web isn't configured OR the combined pass threw
+   *  (best-effort · never fails the sync). See lib/integrations/momo-web/split-box-rows.ts. */
+  liveBoxSplit: BoxSplitResult | null;
 };
 
 /**
@@ -479,6 +486,7 @@ export async function runMomoSync(
   let liveDataFill: LiveDataFillResult | null = null;
   let liveBoxDetail: BoxDetailFillResult | null = null;
   let liveCabinetFill: LiveCabinetFillResult | null = null;
+  let liveBoxSplit: BoxSplitResult | null = null;
   if (isMomoWebConfigured()) {
     try {
       const combined = await propagateMomoLiveStatusAndData(admin);
@@ -486,6 +494,7 @@ export async function runMomoSync(
       liveDataFill = combined.data;
       liveBoxDetail = combined.boxDetail;
       liveCabinetFill = combined.cabinet;
+      liveBoxSplit = combined.boxSplit;
       if (liveStatusPropagation.errors.length > 0) {
         for (const e of liveStatusPropagation.errors) {
           errors.push({
@@ -518,6 +527,15 @@ export async function runMomoSync(
           errors.push({
             scope:   "live_cabinet_fill",
             error:   "MOMO_LIVE_CABINET_ROW_FAILED",
+            message: `${e.scope}: ${e.message}`,
+          });
+        }
+      }
+      if (liveBoxSplit.errors.length > 0) {
+        for (const e of liveBoxSplit.errors) {
+          errors.push({
+            scope:   "live_box_split",
+            error:   "MOMO_LIVE_BOX_SPLIT_ROW_FAILED",
             message: `${e.scope}: ${e.message}`,
           });
         }
@@ -589,5 +607,6 @@ export async function runMomoSync(
     liveDataFill,
     liveBoxDetail,
     liveCabinetFill,
+    liveBoxSplit,
   };
 }

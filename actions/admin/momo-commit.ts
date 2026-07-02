@@ -109,6 +109,10 @@ type LiveFillSummary = {
   cabinet: number;
   /** Rows whose fdatecontainerclose (วันปิดตู้) was filled from MOMO. */
   closeDate: number;
+  /** Aggregate rows split into N sibling rows (1 box = 1 row · matches MOMO's "-i/n"). */
+  boxSplit: number;
+  /** New sibling rows created by the box-split pass. */
+  siblingsCreated: number;
 };
 
 async function runLiveFillAfterCommit(): Promise<LiveFillSummary | null> {
@@ -121,6 +125,8 @@ async function runLiveFillAfterCommit(): Promise<LiveFillSummary | null> {
       boxes: r.boxDetail.upserted,
       cabinet: r.cabinet.filled,
       closeDate: r.cabinet.closeDateFilled,
+      boxSplit: r.boxSplit.split,
+      siblingsCreated: r.boxSplit.siblingsCreated,
     };
   } catch (e) {
     console.error("[commitMomo→liveFill] best-effort Live fill failed (row still committed)", e);
