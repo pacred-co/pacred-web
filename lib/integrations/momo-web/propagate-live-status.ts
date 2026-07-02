@@ -38,6 +38,7 @@ import {
   type MomoLiveParcel,
 } from "./client";
 import { type MomoLiveStatus } from "./types";
+import { baseTrackingOf } from "./live-parcel-metrics";
 import {
   liveStatusToFstatus,
   fstatusRank,
@@ -159,23 +160,31 @@ export async function propagateBoardParcels(
 ): Promise<LiveStatusPropagationResult> {
   if (boardParcels.length === 0) return result;
 
-  // Batch-lookup tb_forwarder by ftrackingchn IN (...). Chunk to keep the IN list sane.
-  const targetByTracking = new Map<string, string>();
+  // Match tb_forwarder by BASE tracking. MOMO splits a tracking into "-i/n" boxes
+  // (e.g. 1781675788-1/4 … -4/4), but tb_forwarder holds ONE row per BASE tracking
+  // (1781675788). So key the target by BASE (max target across split siblings) and look
+  // up tb_forwarder by BOTH the base keys AND the exact trackings (a few rows are stored
+  // with the suffix). Without base-matching every SPLIT tracking failed the exact match →
+  // never advanced (owner/ภูม 2026-07-02: "กดอัปเดตสถานะแล้วยังไม่ขึ้น"). Mirrors the
+  // DATA-fill's base match (aggregateLiveMetricsByBase / baseTrackingOf).
+  const targetByBase = new Map<string, string>();
+  const exactTrackings = new Set<string>();
   for (const bp of boardParcels) {
     const t = bp.parcel.tracking.trim();
     if (!t) continue;
-    // newest-board-wins already applied in collect; keep the same here for direct callers.
-    const prev = targetByTracking.get(t);
+    exactTrackings.add(t);
+    const base = baseTrackingOf(t);
+    const prev = targetByBase.get(base);
     if (!prev || fstatusRank(bp.targetFstatus) > fstatusRank(prev)) {
-      targetByTracking.set(t, bp.targetFstatus);
+      targetByBase.set(base, bp.targetFstatus);
     }
   }
-  const trackings = Array.from(targetByTracking.keys());
+  const lookupKeys = Array.from(new Set<string>([...targetByBase.keys(), ...exactTrackings]));
 
-  const forwardersByTracking = new Map<string, ForwarderHit[]>();
+  const forwardersByBase = new Map<string, ForwarderHit[]>();
   const CHUNK = 200;
-  for (let i = 0; i < trackings.length; i += CHUNK) {
-    const slice = trackings.slice(i, i + CHUNK);
+  for (let i = 0; i < lookupKeys.length; i += CHUNK) {
+    const slice = lookupKeys.slice(i, i + CHUNK);
     const { data: rows, error: lookupErr } = await admin
       .from("tb_forwarder")
       .select(
@@ -191,19 +200,20 @@ export async function propagateBoardParcels(
       continue;
     }
     for (const row of (rows ?? []) as unknown as ForwarderHit[]) {
-      const key = row.ftrackingchn ?? "";
+      const key = (row.ftrackingchn ?? "").trim();
       if (!key) continue;
-      const list = forwardersByTracking.get(key) ?? [];
+      const base = baseTrackingOf(key);
+      const list = forwardersByBase.get(base) ?? [];
       list.push(row);
-      forwardersByTracking.set(key, list);
+      forwardersByBase.set(base, list);
     }
   }
-  result.matched = Array.from(forwardersByTracking.values()).reduce((n, l) => n + l.length, 0);
+  result.matched = Array.from(forwardersByBase.values()).reduce((n, l) => n + l.length, 0);
 
   const today = new Date().toISOString().slice(0, 10);
 
-  for (const [tracking, targetFstatus] of targetByTracking) {
-    const hits = forwardersByTracking.get(tracking);
+  for (const [tracking, targetFstatus] of targetByBase) {
+    const hits = forwardersByBase.get(tracking);
     if (!hits || hits.length === 0) continue;
 
     for (const f of hits) {
