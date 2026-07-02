@@ -46,6 +46,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
@@ -463,24 +464,30 @@ export async function adminSubmitCartAsOrder(
 
       // ── Step b. Pull source cart rows ───────────────────────────────
       // Legacy iterates POST['cAmount'] + per-row reads tb_cart by ID +
-      // userid. We pull all rows for the cart-owner in one query — same
-      // end result, single round-trip.
-      const { data: cartRows, error: readErr } = await admin
-        .from("tb_cart")
-        .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize")
-        .eq("userid", d.cart_owner_userid);
+      // userid. We pull all rows for the cart-owner — fetchAllRows so a
+      // >1000-item / >10-shop admin-placed cart reads EVERY row (a bare
+      // .eq(userid) truncates at the PostgREST 1000-row ceiling → items +
+      // total didn't carry into the order, same bug as the customer path).
+      // Stable .order("id") keeps pages from overlapping/skipping.
+      type CartRow = {
+        id: number; cdetails: string; curl: string; ctitle: string;
+        cnameshop: string; cprovider: string; cimages: string;
+        cprice: number; camount: number; ccolor: string; csize: string;
+      };
+      const { data: cartRows, error: readErr } = await fetchAllRows<CartRow>(
+        () => admin
+          .from("tb_cart")
+          .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize")
+          .eq("userid", d.cart_owner_userid)
+          .order("id", { ascending: true }),
+      );
 
       if (readErr) return { ok: false, error: readErr.message };
       if (!cartRows || cartRows.length === 0) {
         return { ok: false, error: "ไม่มีสินค้าในรถเข็น" };
       }
 
-      type CartRow = {
-        id: number; cdetails: string; curl: string; ctitle: string;
-        cnameshop: string; cprovider: string; cimages: string;
-        cprice: number; camount: number; ccolor: string; csize: string;
-      };
-      const rows = cartRows as unknown as CartRow[];
+      const rows = cartRows;
 
       // Validate camount > 0 on every row (legacy skips qty=0 in the POST loop).
       // Pacred enforces qty>0 at edit time so this is defence-in-depth.

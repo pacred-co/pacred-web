@@ -21,7 +21,7 @@ import {
   uploadShopOrderSlip,
   submitShopOrderSlipPayment,
 } from "@/actions/service-order";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { PayDestination } from "@/components/payment/pay-destination";
 
@@ -44,10 +44,15 @@ export function ShopOrderPayButton({
 }) {
   const t = useTranslations("shopOrderPayModal");
   // 3-account SOT routing (lib/payment/bank-accounts.ts). ฝากสั่งซื้อ → not a
-  // domestic-delivery leg; only a ใบกำกับ choice diverts to TRADING.
-  const account = resolvePaymentAccount({
-    issuesTaxInvoice: modeFromPref(taxDocPref) === "tax_invoice",
-  });
+  // domestic-delivery leg; only a ใบกำกับ choice diverts to TRADING (+VAT 7%),
+  // else SERVICE (PromptPay amount-QR for the exact total).
+  const issuesTaxInvoice = modeFromPref(taxDocPref) === "tax_invoice";
+  const account = resolvePaymentAccount({ issuesTaxInvoice });
+  // TRADING lane charges the customer output VAT 7% on top of the bill; SERVICE
+  // collects the base total. This VAT-inclusive amount is what's shown + QR-encoded.
+  const payAmount = issuesTaxInvoice
+    ? Math.round(totalThb * (1 + OUTPUT_VAT_RATE) * 100) / 100
+    : totalThb;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [qr, setQr] = useState<{ dataUrl: string; promptPayId: string } | null>(null);
@@ -62,12 +67,14 @@ export function ShopOrderPayButton({
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Fetch the company QR for the FULL bill (wallet removed → no remainder math).
+  // Amount = VAT-inclusive when a tax invoice is chosen. getForwarderPaymentQr
+  // returns the GENERATED SERVICE PromptPay amount-QR (exact total encoded).
   useEffect(() => {
     if (!open) return;
     if (qr) return;
     let alive = true;
     (async () => {
-      const r = await getForwarderPaymentQr(totalThb);
+      const r = await getForwarderPaymentQr(payAmount);
       if (!alive) return;
       if (r.ok && r.data) {
         setQr({ dataUrl: r.data.dataUrl, promptPayId: r.data.promptPayId });
@@ -77,7 +84,7 @@ export function ShopOrderPayButton({
     return () => {
       alive = false;
     };
-  }, [open, totalThb, qr, t]);
+  }, [open, payAmount, qr, t]);
 
   async function onSlipChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -156,7 +163,12 @@ export function ShopOrderPayButton({
               <>
                 <div className="rounded-2xl bg-gray-50 dark:bg-gray-800 px-4 py-3 text-center">
                   <p className="text-[13px] text-gray-500">{t("amountDue")}</p>
-                  <p className="text-[24px] font-bold text-primary-700 dark:text-primary-400">฿{fmt(totalThb)}</p>
+                  <p className="text-[24px] font-bold text-primary-700 dark:text-primary-400">฿{fmt(payAmount)}</p>
+                  {issuesTaxInvoice && (
+                    <p className="mt-0.5 text-[12px] text-gray-500">
+                      รวม VAT {Math.round(OUTPUT_VAT_RATE * 100)}% (ฐาน ฿{fmt(totalThb)})
+                    </p>
+                  )}
                 </div>
 
                 {/* Company QR + the doc-mode-correct destination account. The
@@ -166,7 +178,7 @@ export function ShopOrderPayButton({
                     account is resolved via the 3-account SOT (resolvePaymentAccount).
                     DISPLAY-ONLY — slip/record path unchanged. */}
                 <div className="mt-4 flex flex-col items-center">
-                  <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(totalThb) })}</p>
+                  <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(payAmount) })}</p>
                   {!qr && !qrErr && account.channel === "promptpay" && (
                     <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
                   )}
@@ -175,7 +187,7 @@ export function ShopOrderPayButton({
                   )}
                   <PayDestination
                     account={account}
-                    amountThb={totalThb}
+                    amountThb={payAmount}
                     serviceQrDataUrl={account.channel === "promptpay" ? qr?.dataUrl ?? null : null}
                     className="mt-2 w-full"
                   />

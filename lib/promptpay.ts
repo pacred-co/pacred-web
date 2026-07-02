@@ -30,6 +30,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import QRCode from "qrcode";
 import { composePromptPayPayload, DEFAULT_PROMPTPAY_ID } from "./promptpay-payload";
+import { PACRED_BANK_ACCOUNTS } from "./payment/bank-accounts";
 
 /** Public path of the static company payment QR (drop the K-Shop image here). */
 export const STATIC_PAYMENT_QR_PATH = "/images/payment/pacred-qr.png";
@@ -113,4 +114,32 @@ export async function buildPromptPayQrDataUrl(amountThb?: number): Promise<strin
 export function buildPromptPayPayload(amountThb?: number): string {
   if (!DYNAMIC_ENABLED) return ""; // static mode has no EMVCo payload
   return composePromptPayPayload(PROMPTPAY_ID, amountThb);
+}
+
+// ── owner 2026-07-02 (3-account SOT wiring) — the SERVICE lane ALWAYS gets a
+// generated amount-QR ────────────────────────────────────────────────────────
+// The owner's rule (money-critical): when the customer chooses ไม่รับเอกสาร the
+// pay screen MUST **generate a PromptPay amount-QR for the exact total, paid into
+// the SERVICE นิติ account** (204-1-55856-6 · PromptPay 0105564077716) — NOT a
+// static K-Shop image. That is unconditional: the DYNAMIC_ENABLED env gate above
+// applies only to the LEGACY generic helper (`buildPromptPayQrDataUrl`, which was
+// briefly wrong-account-static). This helper is the CORRECT source for the SERVICE
+// destination and reads the account's PromptPay id straight from the 3-account SOT
+// (lib/payment/bank-accounts.ts), so it can never drift to another number.
+//
+// The generated payload is proven EMVCo-correct by lib/promptpay-payload.test.ts;
+// it encodes the exact THB amount so the customer scans → the total is pre-filled →
+// transfers → attaches slip (staff still verify the slip). No env flag can turn
+// this into a static image.
+const SERVICE_PROMPTPAY_ID = (PACRED_BANK_ACCOUNTS.service.promptPayId ?? DEFAULT_PROMPTPAY_ID).trim();
+
+export async function buildServicePromptPayQrDataUrl(amountThb: number): Promise<string> {
+  const payload = composePromptPayPayload(SERVICE_PROMPTPAY_ID, amountThb);
+  if (!payload) return ""; // no id (should never happen — SOT is const) → caller degrades
+  try {
+    return await QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, width: 512 });
+  } catch (err) {
+    console.error("[promptpay] SERVICE amount-QR render failed", { err: String(err) });
+    return "";
+  }
 }

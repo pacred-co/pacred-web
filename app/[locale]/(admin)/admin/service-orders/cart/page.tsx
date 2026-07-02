@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import CartRowActions, { CartRowRemove } from "./cart-row-actions";
 import CartSubmitButton from "./cart-submit-button";
 
@@ -161,18 +162,25 @@ export default async function AdminCartPage({
   // tb_cart rows for target user.
   let cartRows: CartRow[] = [];
   if (targetUserId) {
-    const { data, error } = await admin
-      .from("tb_cart")
-      .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid")
-      .eq("userid", targetUserId)
-      .order("cprovider", { ascending: true })
-      .order("cnameshop", { ascending: true })
-      .order("id", { ascending: true });
+    // fetchAllRows: staff building a >1000-item cart on behalf of a customer
+    // must see every row (a bare .eq(userid) truncates at the PostgREST
+    // 1000-row ceiling). The trailing .order("id") is unique so the paged
+    // reads stay consistent under the provider/shop grouping.
+    const { data, error } = await fetchAllRows<CartRow>(
+      () => admin
+        .from("tb_cart")
+        .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid")
+        .eq("userid", targetUserId)
+        .order("cprovider", { ascending: true })
+        .order("cnameshop", { ascending: true })
+        .order("id", { ascending: true }),
+    );
     if (error) {
       console.error(`[tb_cart list] failed`, { code: error.code, message: error.message });
     }
-    cartRows = (data ?? []) as unknown as CartRow[];
+    cartRows = data as CartRow[];
   }
+
   const countCart = cartRows.length;
 
   // Group: cprovider → cnameshop → rows[]

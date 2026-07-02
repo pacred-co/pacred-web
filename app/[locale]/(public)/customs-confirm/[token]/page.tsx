@@ -22,7 +22,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
-import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
+import { buildServicePromptPayQrDataUrl } from "@/lib/promptpay";
 import { CustomsConfirmClient } from "./customs-confirm-client";
 
 export const dynamic = "force-dynamic";
@@ -92,10 +92,11 @@ export default async function CustomsConfirmPage({
 
   // SERVICE destination (own-name ใบขน issues NO ใบกำกับ → SERVICE · pass-through).
   const account = resolvePaymentAccount({ issuesTaxInvoice: false });
-  // The SERVICE lane is PromptPay → build its static company QR data-url server-side
-  // (no auth required, unlike the customer-only getForwarderPaymentQr action).
+  // SERVICE lane → GENERATE a PromptPay amount-QR for the exact collectable, paid
+  // into the SERVICE นิติ account 0105564077716 (owner rule 2026-07-02 · not a
+  // static K-Shop image). Built server-side (no auth, unlike getForwarderPaymentQr).
   const serviceQrDataUrl =
-    account.channel === "promptpay" ? (await buildPromptPayQrDataUrl(collectable)) || null : null;
+    account.channel === "promptpay" ? (await buildServicePromptPayQrDataUrl(collectable)) || null : null;
 
   const docTag = decl.declaration_no ?? decl.id.slice(0, 8);
   const status = (decl.customer_confirm_status ?? "sent") as "sent" | "confirmed" | "rejected";

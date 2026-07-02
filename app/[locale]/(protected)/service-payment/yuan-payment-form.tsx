@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useState, useTransition, useMemo } from "react";
+import { useCallback, useEffect, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createYuanPayment } from "@/actions/payment";
+import { getForwarderPaymentQr } from "@/actions/forwarder";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon } from "lucide-react";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { Explain } from "@/components/ui/tooltip";
 import { trackPlaceOrder } from "@/lib/analytics";
 import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { PayDestination } from "@/components/payment/pay-destination";
 
@@ -57,6 +58,36 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
     if (!Number.isFinite(y) || y <= 0) return 0;
     return Math.round(y * rate * 100) / 100;
   }, [yuan, rate]);
+
+  // TRADING (ใบกำกับ) lane charges output VAT 7% on top; SERVICE collects the base
+  // THB. This is what's shown + QR-encoded.
+  const payAmount = useMemo(
+    () =>
+      taxMode === "tax_invoice"
+        ? Math.round(thb * (1 + OUTPUT_VAT_RATE) * 100) / 100
+        : thb,
+    [thb, taxMode],
+  );
+
+  // SERVICE lane → generate a PromptPay amount-QR for the exact total (owner rule:
+  // ไม่รับเอกสาร → gen QR into the SERVICE นิติ account 0105564077716). The
+  // TRADING/LOGISTICS lanes render their own static K-Shop PNG inside
+  // <PayDestination>, so only fetch when the resolved lane IS SERVICE (promptpay).
+  const [serviceQr, setServiceQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (payAccount.channel !== "promptpay" || payAmount <= 0) {
+      setServiceQr(null);
+      return;
+    }
+    let alive = true;
+    void getForwarderPaymentQr(payAmount).then((res) => {
+      if (!alive) return;
+      setServiceQr(res.ok && res.data ? res.data.dataUrl : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [payAccount.channel, payAmount]);
 
   async function onSlipFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -278,17 +309,16 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-foreground">{t("paymentSection")}</h2>
         {/* Bank-account + QR block — routed by the 3-account SOT
-            (resolvePaymentAccount). ฝากโอนหยวน → SERVICE (PromptPay นิติ) by
-            default; a ใบกำกับ choice diverts to TRADING (+VAT 7%). The static
-            `pacred-qr.png` is bound to the K-Shop merchant account and does NOT
-            match either SERVICE or TRADING here, so no QR image is passed — the
-            account-number block carries the destination (the TRADING lane shows
-            its own static PNG when present). DISPLAY-ONLY — createYuanPayment +
-            slip path unchanged. */}
-        <PayDestination account={payAccount} amountThb={thb} serviceQrDataUrl={null} />
-        {/* TODO(pay-qr) — once a per-account amount-QR exists (lib/promptpay.ts
-            dynamic flag + the real SERVICE/TRADING K-Shop PNGs), pass the matching
-            QR data-url here so the SERVICE/ฝากโอน lane shows a scannable QR again. */}
+            (resolvePaymentAccount). ฝากโอนหยวน → SERVICE (PromptPay นิติ
+            0105564077716) by default → a GENERATED amount-QR for the exact total;
+            a ใบกำกับ choice diverts to TRADING (232-1-07669-9 · +VAT 7%, its own
+            static K-Shop PNG). DISPLAY-ONLY — createYuanPayment + slip path
+            unchanged. */}
+        <PayDestination
+          account={payAccount}
+          amountThb={payAmount}
+          serviceQrDataUrl={payAccount.channel === "promptpay" ? serviceQr : null}
+        />
         <div className="space-y-1">
           <span className="text-sm font-medium">
             <Explain

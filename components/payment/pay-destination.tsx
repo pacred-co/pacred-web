@@ -11,8 +11,10 @@
  * records / verifies / settles a payment — the slip-upload + verify flow stays
  * exactly as it was on each surface.
  *
- *   SERVICE   (PromptPay นิติ 0105564077716 · 204-1-55856-6) → dynamic/static
- *             PromptPay QR built server-side, passed in via `serviceQrDataUrl`.
+ *   SERVICE   (PromptPay นิติ 0105564077716 · 204-1-55856-6) → a GENERATED
+ *             amount-QR (exact total encoded) built server-side via
+ *             buildServicePromptPayQrDataUrl / getForwarderPaymentQr, passed in
+ *             via `serviceQrDataUrl`. Never a static K-Shop image (owner rule).
  *   LOGISTICS (225-2-91144-0) / TRADING (232-1-07669-9) → a static Thai-QR/K-Shop
  *             PNG at /images/payment/qr-{logistics,trading}.png. The PNGs are not
  *             on disk yet → onError hides the <img> and the account-number block

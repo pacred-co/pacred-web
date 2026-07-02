@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { ADDRESSES } from "@/components/seo/site";
 import { legacyMemberUrl } from "@/lib/legacy-image";
 import {
@@ -304,18 +305,26 @@ export default async function CartPage() {
   }
 
   // ── Cart rows, grouped provider → shop (cart.php L522-586) ───
-  const { data: cartRowsData, error: cartRowsErr } = await admin
-    .from("tb_cart")
-    .select(
-      "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
-    )
-    .eq("userid", userID);
+  // fetchAllRows: a customer with >1000 cart items must SEE + be able to
+  // select every row (a bare .eq(userid) truncates at the PostgREST 1000-row
+  // ceiling → the rows past #1000 never render → they can't be submitted).
+  // Stable .order("id") keeps the paged reads consistent with the grouped
+  // render order.
+  const { data: cartRowsData, error: cartRowsErr } = await fetchAllRows<CartRow>(
+    () => admin
+      .from("tb_cart")
+      .select(
+        "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
+      )
+      .eq("userid", userID)
+      .order("id", { ascending: true }),
+  );
   if (cartRowsErr) {
     // Cart rows are the primary content — surface the real error instead of silently showing an empty cart.
     console.error(`[cart rows list] failed`, { code: cartRowsErr.code, message: cartRowsErr.message });
     throw new Error(`cart rows list failed: ${cartRowsErr.message}`);
   }
-  const cartRows = (cartRowsData ?? []) as unknown as CartRow[];
+  const cartRows = cartRowsData as CartRow[];
 
   // Build the provider → shop → rows grouping. cart.php iterates
   // DISTINCT cProvider in result order, then DISTINCT cNameShop per

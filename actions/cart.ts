@@ -17,6 +17,7 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 // 600+ chars of tracking params (utparam/scm/spm/abtest/etc.) → overflow.
 // Strip to canonical id+skuId only.
 import { normalizeProductUrl } from "@/lib/url/normalize-product-url";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
@@ -470,11 +471,18 @@ export async function submitCartOrder(input: {
   // instead of a swallowed Postgres 22003 on the rollup. THB ≈ ¥ × rate.
   {
     const MONEY_COL_MAX = 999_999_999_999.99; // numeric(14,2) cap (mig 0196)
-    const { data: guardRows, error: guardErr } = await admin
-      .from("tb_cart")
-      .select("cprice, camount")
-      .in("id", input.ids)
-      .eq("userid", userID);
+    // fetchAllRows: a >1000-item order must not truncate at the PostgREST
+    // 1000-row ceiling here, or the projected-total ceiling check runs on a
+    // subset and passes a genuinely-over-cap order (order .in(id) with a
+    // stable .order("id") so pages don't overlap).
+    const { data: guardRows, error: guardErr } = await fetchAllRows<{ cprice: number; camount: number }>(
+      () => admin
+        .from("tb_cart")
+        .select("cprice, camount")
+        .in("id", input.ids)
+        .eq("userid", userID)
+        .order("id", { ascending: true }),
+    );
     if (guardErr) console.error(`[cart guard tb_cart] failed`, { code: guardErr.code, message: guardErr.message });
     if (guardRows && guardRows.length > 0) {
       const projectedCNY = (guardRows as Array<{ cprice: number; camount: number }>).reduce(
@@ -567,13 +575,31 @@ export async function submitCartOrder(input: {
 
   // shops.php L173-194 — INSERT tb_order rows (one per selected cart
   // row). Read cart rows ownership-gated, then bulk-insert with hno.
-  const { data: cartRows, error: cartRowsErr } = await admin
+  // fetchAllRows: a >1000-item / >10-shop order must read back EVERY
+  // selected cart row — a bare .in(id) truncates at the PostgREST 1000-row
+  // ceiling, which dropped the items past #1000 and made the header rollup
+  // (hcount / htotalpricechn) sum only the first 1000 ("รายการและยอดไม่
+  // ตามมา"). Stable .order("id") keeps pages from overlapping/skipping.
+  const { data: cartRows, error: cartRowsErr } = await fetchAllRows<{
+    id: number;
+    ctitle: string | null;
+    cnameshop: string | null;
+    curl: string | null;
+    cprovider: string | null;
+    cimages: string | null;
+    csize: string | null;
+    cprice: number | string | null;
+    ccolor: string | null;
+    camount: number | string | null;
+    cdetails: string | null;
+  }>(() => admin
     .from("tb_cart")
     .select(
       "id, ctitle, cnameshop, curl, cprovider, cimages, csize, cprice, ccolor, camount, cdetails",
     )
     .in("id", input.ids)
-    .eq("userid", userID);
+    .eq("userid", userID)
+    .order("id", { ascending: true }));
   if (cartRowsErr) {
     console.error(`[tb_cart list] failed`, { code: cartRowsErr.code, message: cartRowsErr.message });
   }
@@ -619,11 +645,17 @@ export async function submitCartOrder(input: {
     hwarehousename: "",
     hqc: "",
   }));
-  const { error: insertOrderErr } = await admin
-    .from("tb_order")
-    .insert(orderRowsPayload);
-  if (insertOrderErr) {
-    return { ok: false, error: insertOrderErr.message };
+  // Chunked insert — a >1000-item order inserts thousands of tb_order rows.
+  // A single giant INSERT risks the platform body cap; chunk at 500 so a
+  // 10,000-item cart still lands every row. (No double-insert: this runs once
+  // per submit; the header was just created with a fresh hNo.)
+  const INSERT_CHUNK = 500;
+  for (let i = 0; i < orderRowsPayload.length; i += INSERT_CHUNK) {
+    const chunk = orderRowsPayload.slice(i, i + INSERT_CHUNK);
+    const { error: insertOrderErr } = await admin.from("tb_order").insert(chunk);
+    if (insertOrderErr) {
+      return { ok: false, error: insertOrderErr.message };
+    }
   }
 
   // shops.php L203 — UPDATE tb_users defaults (last-used picks).
@@ -682,15 +714,22 @@ export async function submitCartOrder(input: {
   }
 
   // shops.php L231 — DELETE selected tb_cart rows (ownership-gated).
-  const { error: cartDeleteErr } = await admin
-    .from("tb_cart")
-    .delete()
-    .in("id", input.ids)
-    .eq("userid", userID);
-  if (cartDeleteErr) {
-    // Non-fatal: order is placed; a leftover cart row is a minor annoyance, not
-    // data loss. Don't fail the action (would risk a re-order). Log for Sentry.
-    console.error(`[submitCartOrder tb_cart cleanup] failed — order placed but cart not cleared`, { code: cartDeleteErr.code, message: cartDeleteErr.message, userID });
+  // Chunked: a bare .in("id", [1500 ids]) puts every id in the URL query
+  // string and overflows the platform URL-length limit for a large order,
+  // which left the cart uncleared (rows still in "รถเข็น" after submit).
+  const DELETE_CHUNK = 500;
+  for (let i = 0; i < input.ids.length; i += DELETE_CHUNK) {
+    const idChunk = input.ids.slice(i, i + DELETE_CHUNK);
+    const { error: cartDeleteErr } = await admin
+      .from("tb_cart")
+      .delete()
+      .in("id", idChunk)
+      .eq("userid", userID);
+    if (cartDeleteErr) {
+      // Non-fatal: order is placed; a leftover cart row is a minor annoyance, not
+      // data loss. Don't fail the action (would risk a re-order). Log for Sentry.
+      console.error(`[submitCartOrder tb_cart cleanup] failed — order placed but cart not cleared`, { code: cartDeleteErr.code, message: cartDeleteErr.message, userID });
+    }
   }
 
   revalidatePath("/cart");
@@ -797,14 +836,20 @@ export async function listCart(): Promise<ActionResult<CartItem[]>> {
   if (!userID) return { ok: true, data: [] };
 
   const admin = createAdminClient();
-  const { data: rows, error } = await admin
-    .from("tb_cart")
-    .select("id, cprovider, cnameshop, curl, ctitle, cimages, ccolor, csize, cprice, camount, cdetails")
-    .eq("userid", userID)
-    .order("id", { ascending: false });
+  // fetchAllRows: a customer with >1000 cart items must get EVERY row back so
+  // the /service-order/cart UI can render + submit all of them (a bare
+  // .eq(userid) truncates at the PostgREST 1000-row ceiling). .order("id") is
+  // unique so the paged reads don't overlap/skip.
+  const { data: rows, error } = await fetchAllRows<LegacyCartRow>(
+    () => admin
+      .from("tb_cart")
+      .select("id, cprovider, cnameshop, curl, ctitle, cimages, ccolor, csize, cprice, camount, cdetails")
+      .eq("userid", userID)
+      .order("id", { ascending: false }),
+  );
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: ((rows ?? []) as unknown as LegacyCartRow[]).map(legacyCartRowToCartItem) };
+  return { ok: true, data: (rows as LegacyCartRow[]).map(legacyCartRowToCartItem) };
 }
 
 // ────────────────────────────────────────────────────────────

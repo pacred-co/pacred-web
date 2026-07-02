@@ -11,7 +11,7 @@ import {
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import type { ForwarderRow } from "./forwarder-row-view";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { PayDestination } from "@/components/payment/pay-destination";
 
@@ -126,18 +126,33 @@ export function ForwarderPayModal({
   }, [rows, isJuristic]);
 
   // ── pay-destination routing (lib/payment/bank-accounts.ts — 3-account SOT) ──
-  // ฝากนำเข้า "ชำระก่อนจัดส่ง / ค่าส่งในไทย" = the DOMESTIC-DELIVERY leg → LOGISTICS
-  // by default. A ใบกำกับ choice on ANY selected row overrides → TRADING (+VAT 7%).
-  // tax_doc_pref is OPTIONAL on ForwarderRow — feeders that omit it (most list
-  // surfaces) safely keep LOGISTICS (the current/correct destination for this leg).
-  // DISPLAY-ONLY — the slip-upload + submitForwarderPayment path is untouched.
-  const payAccount = useMemo(() => {
-    const anyTaxInvoice = rows.some((r) => modeFromPref(r.tax_doc_pref) === "tax_invoice");
-    return resolvePaymentAccount({
-      issuesTaxInvoice: anyTaxInvoice,
-      isDomesticDeliveryLeg: true,
-    });
-  }, [rows]);
+  // owner 2026-07-02: an INT'L cargo-import balance is NOT a domestic-delivery
+  // leg — it must route to the SERVICE นิติ account (204-1-55856-6 · PromptPay
+  // amount-QR), NOT LOGISTICS (225-2-91144-0 = ค่าขนส่งในไทยเท่านั้น). A ใบกำกับ
+  // choice on ANY selected row overrides → TRADING (232-1-07669-9 · +VAT 7%).
+  // (`isDomesticDeliveryLeg` is intentionally NOT set here — this modal is the
+  // import-balance pay, not the in-Thailand shipping charge; LOGISTICS is only for
+  // a genuine domestic delivery leg on a dedicated surface.) DISPLAY-ONLY — the
+  // slip-upload + submitForwarderPayment path is untouched.
+  const anyTaxInvoice = useMemo(
+    () => rows.some((r) => modeFromPref(r.tax_doc_pref) === "tax_invoice"),
+    [rows],
+  );
+  const payAccount = useMemo(
+    () => resolvePaymentAccount({ issuesTaxInvoice: anyTaxInvoice }),
+    [anyTaxInvoice],
+  );
+
+  // ── VAT — only the TRADING (ใบกำกับ) lane charges the customer output VAT 7%
+  //    on top of the bill. SERVICE/LOGISTICS collect the base amount (no VAT
+  //    line). This is the amount shown, QR-encoded, and hinted in <PayDestination>.
+  const payAmountFinal = useMemo(
+    () =>
+      anyTaxInvoice
+        ? Math.round(bill.payAmount * (1 + OUTPUT_VAT_RATE) * 100) / 100
+        : bill.payAmount,
+    [anyTaxInvoice, bill.payAmount],
+  );
 
   // ── PromptPay QR (SERVICE lane only — the account number now comes from the
   //    3-account SOT resolved in `payAccount`, not from the QR response). ──
@@ -145,9 +160,9 @@ export function ForwarderPayModal({
   const [qrError, setQrError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (bill.payAmount <= 0) return;
+    if (payAmountFinal <= 0) return;
     let cancelled = false;
-    void getForwarderPaymentQr(bill.payAmount).then((res) => {
+    void getForwarderPaymentQr(payAmountFinal).then((res) => {
       if (cancelled) return;
       if (res.ok && res.data) {
         setQrDataUrl(res.data.dataUrl);
@@ -165,7 +180,7 @@ export function ForwarderPayModal({
     return () => {
       cancelled = true;
     };
-  }, [bill.payAmount]);
+  }, [payAmountFinal]);
 
   // ── slip upload ──
   const [slipPath, setSlipPath] = useState<string | null>(null);
@@ -457,12 +472,28 @@ export function ForwarderPayModal({
                         <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
                       </span>
                     </div>
+                    {/* VAT 7% — ONLY when a ใบกำกับภาษี is chosen (TRADING lane) */}
+                    {anyTaxInvoice && (
+                      <div className="flex items-baseline gap-2 text-[13px]">
+                        <span className="shrink-0 opacity-90">
+                          VAT{" "}
+                          <span className="inline-flex items-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold align-middle">
+                            {Math.round(OUTPUT_VAT_RATE * 100)}%
+                          </span>
+                        </span>
+                        <span aria-hidden className="flex-1 self-center border-b border-dotted border-white/30" />
+                        <span className="shrink-0 tabular-nums font-semibold">
+                          +{numberFormat2(Math.round(bill.payAmount * OUTPUT_VAT_RATE * 100) / 100)}{" "}
+                          <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
+                        </span>
+                      </div>
+                    )}
                     {/* ยอดชำระสุทธิ */}
                     <div className="flex items-baseline gap-2 border-t border-white/25 pt-2.5">
                       <span className="shrink-0 text-sm font-bold">{t("summaryNetPay")}</span>
                       <span aria-hidden className="flex-1" />
                       <span className="shrink-0 text-2xl md:text-3xl font-black tabular-nums totalPriceAll">
-                        {numberFormat2(bill.payAmount)}{" "}
+                        {numberFormat2(payAmountFinal)}{" "}
                         <span className="text-sm font-normal opacity-90">{t("baht")}</span>
                       </span>
                     </div>
@@ -502,16 +533,17 @@ export function ForwarderPayModal({
                   <div className="mt-2 text-base font-bold text-red-600">
                     {t("amountLabel")}{" "}
                     <span id="amount-show" className="tabular-nums">
-                      {numberFormat2(bill.payAmount)} {t("baht")}
+                      {numberFormat2(payAmountFinal)} {t("baht")}
                     </span>
                   </div>
 
                   {/* Destination account block — resolved by doc-mode (SOT). For
-                      the SERVICE lane the fetched PromptPay QR is passed in; the
-                      account number is always shown for manual transfer. */}
+                      the SERVICE lane the fetched PromptPay amount-QR is passed in
+                      (exact total encoded); the account number is always shown for
+                      manual transfer. TRADING shows +VAT 7% inline. */}
                   <PayDestination
                     account={payAccount}
-                    amountThb={bill.payAmount}
+                    amountThb={payAmountFinal}
                     serviceQrDataUrl={payAccount.channel === "promptpay" ? qrDataUrl : null}
                     className="mt-3"
                   />

@@ -12,7 +12,8 @@ import { sendNotification } from "@/lib/notifications";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
-import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
+import { buildServicePromptPayQrDataUrl } from "@/lib/promptpay";
+import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
 import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
 import {
   computeForwarderCollectTotal,
@@ -155,21 +156,21 @@ function numberFormatLegacy(n: number): string {
 // The `#qrcode` PromptPay QR in the `#list-payment2` modal
 // (`getListPayForwarder.php` L276 + the `makeCode()` JS L388-401).
 //
-// ⚠️ MONEY ROUTING — the legacy hard-coded `0105564077716` (PCS
-// Cargo's juristic tax id). Scanning that QR sends the customer's
-// payment to PCS Cargo's bank account — the OLD company. Pacred
-// MUST collect to ITS OWN account, so this action reads the Pacred
-// PromptPay id from the `PROMPTPAY_ID` env (the SAME id /wallet/
-// deposit already collects top-ups to, via `lib/promptpay.ts`).
-// This is NOT a brand-cosmetic scrub (AGENTS.md §3 — those wait for
-// ก๊อต) — it is where real customer money lands; it cannot route to
-// the predecessor company. `PROMPTPAY_ID` is empty in dev `.env.local`
-// + must be set on Vercel prod (Pacred's tax id is 0105564077716 per
-// the company DNA — the owner sets the registered PromptPay id).
+// ⚠️ MONEY ROUTING — this returns the SERVICE-lane PromptPay QR (the
+// ไม่รับเอกสาร / no-tax-invoice destination). The owner's rule (2026-07-02):
+// when the customer does NOT take a tax invoice, GENERATE a PromptPay amount-QR
+// for the EXACT total, paid into the SERVICE นิติ account
+// (204-1-55856-6 · PromptPay 0105564077716) — never a static K-Shop image, and
+// never the LOGISTICS (225-2-91144-0) account. The generated QR pre-fills the
+// exact amount; the customer still transfers + attaches a slip (staff verify).
 //
-// Returns a `data:image/png` URL + the configured id (so the modal
-// can show the human-readable number) — or `promptpay_not_configured`
-// when the env is unset, which the modal degrades to a friendly notice.
+// The pay surfaces decide the DESTINATION (SERVICE vs TRADING+7% vs LOGISTICS)
+// via resolvePaymentAccount() and only pass this QR into <PayDestination> when
+// the resolved lane IS SERVICE (channel="promptpay"); the TRADING/LOGISTICS
+// lanes render their own static K-Shop PNG. So this action always builds the
+// SERVICE amount-QR + returns the SERVICE PromptPay id (read from the 3-account
+// SOT — it can't drift to another number). `payload` kept "" for call-site
+// back-compat.
 export async function getForwarderPaymentQr(
   amountThb: number,
 ): Promise<ActionResult<{ dataUrl: string; payload: string; promptPayId: string }>> {
@@ -181,13 +182,12 @@ export async function getForwarderPaymentQr(
   if (!Number.isFinite(amountThb) || amountThb <= 0) {
     return { ok: false, error: "promptpay_invalid_amount" };
   }
-  // 2026-06-08 (owner): NO dynamic PromptPay. Serve the STATIC company K-Shop QR
-  // (lib/promptpay.ts) bound to the corporate bank account (site.ts BANK). The
-  // customer scans, types the amount, transfers, attaches slip; staff verify.
-  // `promptPayId` now carries the bank ACCOUNT NUMBER so the modal shows the
-  // real destination ("บัญชี 225-2-91144-0 · บจก. แพคเรด"); `payload` is unused.
-  const dataUrl = await buildPromptPayQrDataUrl(amountThb);
-  return { ok: true, data: { dataUrl, payload: "", promptPayId: BANK.accountNumber } };
+  // Always a GENERATED PromptPay amount-QR for the SERVICE นิติ account
+  // (0105564077716) — the exact total is encoded. No env gate, no static image.
+  const dataUrl = await buildServicePromptPayQrDataUrl(amountThb);
+  const promptPayId =
+    PACRED_BANK_ACCOUNTS.service.promptPayId ?? PACRED_BANK_ACCOUNTS.service.accountNo;
+  return { ok: true, data: { dataUrl, payload: "", promptPayId } };
 }
 
 // ────────────────────────────────────────────────────────────
