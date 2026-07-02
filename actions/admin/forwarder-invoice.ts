@@ -75,6 +75,7 @@ import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { isBillableForwarder } from "@/lib/forwarder/billing-eligibility";
+import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 
 // ────────────────────────────────────────────────────────────
 // Schema — multi-row batch input
@@ -110,6 +111,9 @@ type ForwarderRowForReceipt = {
   fcredit: string | null;
   paydeposit: string | null;
   ftrackingchn: string | null;
+  // ค่าส่งเหมาๆ anchor — the carrier code (PCSF/PRF) + tracking decide the
+  // once-per-shipment เหมาๆ flat fee (computeForwarderDebitBatch).
+  fshipby: string | null;
   // For per-row totals (matches grenrateReceiptF L548)
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
@@ -243,7 +247,7 @@ export async function adminIssueForwarderInvoice(
       const { data: fwRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, " +
+          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, fshipby, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
@@ -314,9 +318,33 @@ export async function adminIssueForwarderInvoice(
       }
       const corporate: 1 | 2 = corpRow?.corporatenumber ? 1 : 2;
 
-      // 3. Totals — sum per-row raw + apply juristic 1% if eligible
-      //    (legacy `grenrateReceiptF` L548-559).
-      const pricePayAll = rows.reduce((s, r) => s + perRowRaw(r), 0);
+      // 3. Totals — sum per-row raw (base buckets) + ค่าส่งเหมาๆ + apply
+      //    juristic 1% if eligible (legacy `grenrateReceiptF` L548-559).
+      const pricePayBase = rows.reduce((s, r) => s + perRowRaw(r), 0);
+
+      // เหมาๆ (PCSF/PRF flat ฿100/shipment · ภูม 2026-06-23) — perRowRaw carries only
+      // the base outstanding buckets (= calcForwarderOutstanding), which EXCLUDE the
+      // เหมาๆ. The ใบวางบิล DOES add it (mao_fee_thb on tb_forwarder_invoice) → without
+      // this the receipt ran ฿100 SHORT of its bill and dropped the "ค่าส่งเหมาๆ" line
+      // (owner · PR7429 · FRG…). Pull JUST the maoFee from the SAME once-per-shipment
+      // anchor engine the bill + the auto-issue path use, fold it into the total, and
+      // store it separately (mao_fee_thb) so the receipt paper renders its own line and
+      // the two docs reconcile to the satang.
+      const maoBatch = computeForwarderDebitBatch(
+        rows.map((r) => ({
+          id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn,
+          ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
+          fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
+          pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
+          priceother: r.priceother, fdiscount: r.fdiscount,
+        })),
+        { userId: userid, isCorporate: corporate === 1 },
+      );
+      const maoFeeThb = Math.round(
+        maoBatch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0) * 100,
+      ) / 100;
+      const pricePayAll = pricePayBase + maoFeeThb;
+
       const totalBeforeWithholding = Math.round(pricePayAll * 100) / 100;
       const applyJuristic1Pct = corporate === 1 && pricePayAll >= 1000;
       const rAmount = applyJuristic1Pct
@@ -349,8 +377,9 @@ export async function adminIssueForwarderInvoice(
         rdatecreate:            nowIso,
         rdate:                  issueIso,
         issuedate:              issueIso,
-        ramount:                rAmount,                       // post-juristic-1%
-        totalbeforewithholding: totalBeforeWithholding,        // pre-WHT
+        ramount:                rAmount,                       // post-juristic-1% (incl เหมาๆ)
+        totalbeforewithholding: totalBeforeWithholding,        // pre-WHT (incl เหมาๆ)
+        mao_fee_thb:            maoFeeThb,                      // ค่าส่งเหมาๆ — its own line · already part of the totals above
         adminid:                safeLegacyAdminId(adminId, 30),
         userid,
         statusprint:            "0",
