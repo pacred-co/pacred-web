@@ -38,11 +38,7 @@ export function FilterBar({ value, onChange, variant = "full" }: { value: Conten
         {variant === "full" && (
           <>
             <div className="w-[150px]"><GroupSelect group="contentType" value={value.contentTypeId} onChange={(v) => set({ contentTypeId: v })} placeholder="ประเภท" /></div>
-            <div className="w-[150px]"><GroupSelect group="marketingGoal" value={value.marketingGoalId} onChange={(v) => set({ marketingGoalId: v })} placeholder="เป้าหมาย" /></div>
-            <div className="w-[140px]"><GroupSelect group="funnelStage" value={value.funnelStageId} onChange={(v) => set({ funnelStageId: v })} placeholder="Funnel" /></div>
             <div className="w-[140px]"><GroupSelect group="service" value={value.serviceId} onChange={(v) => set({ serviceId: v })} placeholder="บริการ" /></div>
-            <div className="w-[140px]"><GroupSelect group="campaign" value={value.campaignId} onChange={(v) => set({ campaignId: v })} placeholder="แคมเปญ" /></div>
-            <div className="w-[130px]"><GroupSelect group="priority" value={value.priorityId} onChange={(v) => set({ priorityId: v })} placeholder="Priority" /></div>
           </>
         )}
       </div>

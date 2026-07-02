@@ -22,6 +22,11 @@ const SHORT_TYPE = "contentType-short";
 const ARTICLE_TYPE = "contentType-article";
 const POST_TYPE = "contentType-post";
 
+// Fixed-width numeric input — NOT inputCls: its `w-full` beats an appended `w-16`
+// (Tailwind source-order), so the input blew out to full width and squeezed the
+// pillar name to nothing. shrink-0 keeps it a small box so the name stays readable.
+const numInput = "shrink-0 rounded-lg border border-border bg-white px-2 py-1 text-right text-sm text-foreground outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:bg-surface dark:focus:ring-primary-900/30";
+
 type DistMode = "auto" | "manual";
 
 export function ProductionPlan() {
@@ -146,30 +151,39 @@ export function ProductionPlan() {
               return (
                 <div key={p.id} className="flex items-center gap-2 rounded-lg border border-border p-2">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-foreground" title={p.name}>{p.name}</span>
-                  <span className="text-[11px] text-muted">ทำแล้ว {done}</span>
-                  <input type="number" min={0} className={cx(inputCls, "w-16 px-2 py-1 text-right")} value={target} onChange={(e) => setLongTarget(p.id, Number(e.target.value))} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={p.name}>{p.name}</span>
+                  <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {done}</span>
+                  <input type="number" min={0} className={cx(numInput, "w-16")} value={target} onChange={(e) => setLongTarget(p.id, Number(e.target.value))} />
                 </div>
               );
             })}
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-sky-50/40 p-2 dark:bg-sky-900/10">
             <Film className="h-4 w-4 shrink-0 text-sky-600" />
-            <span className="flex-1 text-[12px] font-semibold text-foreground">คลิปสั้น / Reels / TikTok — รวมทั้งเดือน</span>
-            <span className="text-[11px] text-muted">ทำแล้ว {createdShort}</span>
-            <input type="number" min={0} className={cx(inputCls, "w-20 px-2 py-1 text-right")} value={targets.shortTotal} onChange={(e) => setShortTarget(Number(e.target.value))} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">คลิปสั้น</span>
+              <span className="block text-[11px] leading-tight text-muted">Reels / TikTok · รวมทั้งเดือน</span>
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdShort}</span>
+            <input type="number" min={0} className={cx(numInput, "w-20")} value={targets.shortTotal} onChange={(e) => setShortTarget(Number(e.target.value))} />
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-emerald-50/40 p-2 dark:bg-emerald-900/10">
             <FileText className="h-4 w-4 shrink-0 text-emerald-600" />
-            <span className="flex-1 text-[12px] font-semibold text-foreground">บทความ — ยืนพื้น/วัน <span className="font-normal text-muted">(× {activeDays} วัน = {totals.article})</span></span>
-            <span className="text-[11px] text-muted">ทำแล้ว {createdArticle}</span>
-            <input type="number" min={0} className={cx(inputCls, "w-16 px-2 py-1 text-right")} value={targets.articlePerDay ?? 0} onChange={(e) => setArticlePerDay(Number(e.target.value))} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">บทความ</span>
+              <span className="block text-[11px] leading-tight text-muted">ต่อวัน · × {activeDays} = {totals.article}/เดือน</span>
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdArticle}</span>
+            <input type="number" min={0} className={cx(numInput, "w-16")} value={targets.articlePerDay ?? 0} onChange={(e) => setArticlePerDay(Number(e.target.value))} />
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-amber-50/40 p-2 dark:bg-amber-900/10">
             <PenLine className="h-4 w-4 shrink-0 text-amber-600" />
-            <span className="flex-1 text-[12px] font-semibold text-foreground">โพสต์ — ยืนพื้น/วัน <span className="font-normal text-muted">(× {activeDays} วัน = {totals.post})</span></span>
-            <span className="text-[11px] text-muted">ทำแล้ว {createdPost}</span>
-            <input type="number" min={0} className={cx(inputCls, "w-16 px-2 py-1 text-right")} value={targets.postPerDay ?? 0} onChange={(e) => setPostPerDay(Number(e.target.value))} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">โพสต์</span>
+              <span className="block text-[11px] leading-tight text-muted">ต่อวัน · × {activeDays} = {totals.post}/เดือน</span>
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdPost}</span>
+            <input type="number" min={0} className={cx(numInput, "w-16")} value={targets.postPerDay ?? 0} onChange={(e) => setPostPerDay(Number(e.target.value))} />
           </div>
         </div>
       </SectionCard>
@@ -208,7 +222,7 @@ export function ProductionPlan() {
                 <p className="text-[11px] font-bold text-foreground">{s.day}</p>
                 <p className="text-[11px] leading-tight text-primary-700">ยาว {longN}</p>
                 <p className="text-[11px] leading-tight text-sky-600">สั้น {s.short}</p>
-                <p className="text-[11px] leading-tight text-muted">บท {s.article} · โพ {s.post}</p>
+                <p className="hidden text-[11px] leading-tight text-muted sm:block">บท {s.article} · โพ {s.post}</p>
               </>
             );
             return isManual ? (

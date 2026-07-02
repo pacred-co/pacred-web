@@ -13,7 +13,7 @@
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, KeywordItem, PlannerData, PlannerUser, ProductionTargets, SettingGroup, SettingItem } from "./types";
-import { PLANNER_SCHEMA_VERSION } from "./types";
+import { PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
 import { enrichResult } from "./performance";
 import { distributeMonth } from "./production-plan";
@@ -40,8 +40,8 @@ function isSettingReferenced(contents: ContentItem[], id: string): boolean {
   return contents.some(
     (c) =>
       c.marketingGoalId === id || c.contentTypeId === id || c.contentPillarId === id ||
-      c.funnelStageId === id || c.customerStageId === id || c.platformId === id ||
-      c.serviceId === id || c.campaignId === id || c.formatId === id || c.toneId === id ||
+      c.funnelStageId === id || c.customerStageId === id || platformIdsOf(c).includes(id) ||
+      serviceIdsOf(c).includes(id) || c.campaignId === id || c.formatId === id || c.toneId === id ||
       c.priorityId === id || c.statusId === id || c.ownerId === id ||
       !!c.coOwnerIds?.includes(id) || c.links.some((l) => l.linkTypeId === id),
   );
@@ -329,7 +329,15 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       const sel = selectedDays == null ? null : new Set(selectedDays);
       const slots = distributeMonth(year, month, t, sel);
       const ts = new Date().toISOString();
-      const ideaStatus = data.settings.find((s) => s.group === "status" && s.isActive)?.id;
+      // The initial pipeline status ("Idea"). Prefer the canonical seeded status,
+      // else the lowest-order active status. NOT `.find(first active)` — data.settings
+      // arrives from the DB in arbitrary row order (loadMarketing has no ORDER BY), so
+      // "first in the array" was landing on Cancelled and stamping every generated slot
+      // as cancelled. byGroup("status")[0] (content-form) is safe because it sorts first.
+      const activeStatuses = data.settings.filter((s) => s.group === "status" && s.isActive);
+      const ideaStatus =
+        activeStatuses.find((s) => s.id === "status-idea")?.id ??
+        [...activeStatuses].sort((a, b) => a.order - b.order)[0]?.id;
       const pillarName = (id: string) => data.settings.find((s) => s.id === id)?.name ?? "คอนเทนต์";
       // Running per-type counters → each generated slot gets a distinct, readable
       // name ("บทความ #7") instead of many identical "บทความ" — a placeholder the
