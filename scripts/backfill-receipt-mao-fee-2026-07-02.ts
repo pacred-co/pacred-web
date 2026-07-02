@@ -92,6 +92,14 @@ const APPLY = process.argv.includes("--apply");
 const LIMIT_ARG = process.argv.find((a) => a.startsWith("--limit="));
 const LIMIT = LIMIT_ARG ? Number(LIMIT_ARG.split("=")[1]) : 0; // 0 = no cap
 
+// --reissue=RID (owner-authorized · 2026-07-02): for a specific base-DRIFTED receipt
+// whose base changed after issuance (so "old total + fee" would NOT match the current
+// invoice), RE-ISSUE it to the CURRENT engine recompute (recomputed base + เหมาๆ) so the
+// receipt matches its current invoice exactly — instead of skipping it as does_not_reconcile.
+// Owner chose this for FRC2606-00002 (มอเตอร์ · invoice base 2057 + เหมาๆ 100 = 2157).
+const REISSUE_ARG = process.argv.find((a) => a.startsWith("--reissue="));
+const REISSUE_RID = REISSUE_ARG ? REISSUE_ARG.split("=")[1] : null;
+
 // A CONSTANT timestamp string for the backup filename (NOT Date.now()) — per the
 // script spec: the backup name is stable across the dry-run → --apply pair.
 const RUN_STAMP = "2026-07-02";
@@ -330,9 +338,9 @@ async function main() {
       }
 
       // ── correction math — EXACTLY like the fixed adminIssueForwarderInvoice ──
-      const newTotalBefore = round2(oldTotalBefore + newMaoFee);
-      const applyJuristic1Pct = corporate && newTotalBefore >= 1000;
-      const newRamount = applyJuristic1Pct
+      let newTotalBefore = round2(oldTotalBefore + newMaoFee);
+      let applyJuristic1Pct = corporate && newTotalBefore >= 1000;
+      let newRamount = applyJuristic1Pct
         ? round2(newTotalBefore * 0.99)
         : newTotalBefore;
 
@@ -372,6 +380,23 @@ async function main() {
         }, 0)) - newMaoFee;
         reconciles = Math.abs(round2(baseNoMao) - oldTotalBefore) <= 1.0; // ±1 baht (base may have shifted slightly)
         acceptanceNote = `no invoice · recomputed base ${round2(baseNoMao)} vs stored old total ${oldTotalBefore}`;
+
+        // ── owner-authorized RE-ISSUE (--reissue=RID) ──
+        // For a base-DRIFTED receipt the owner chose to re-issue to match its current
+        // invoice: use the CURRENT recomputed base (baseNoMao) + เหมาๆ as the new total
+        // (NOT the stale stored total), and force-accept. This is a deliberate re-price
+        // of ONE named receipt (FRC2606-00002 · มอเตอร์ · invoice 2057+100=2157), not the
+        // blind +fee the base-drift guard correctly refuses for everyone else.
+        if (REISSUE_RID && r.rid === REISSUE_RID) {
+          const reissueTotal = round2(round2(baseNoMao) + newMaoFee);
+          applyJuristic1Pct = corporate && reissueTotal >= 1000;
+          newTotalBefore = reissueTotal;
+          newRamount = applyJuristic1Pct ? round2(reissueTotal * 0.99) : reissueTotal;
+          reconciles = true;
+          acceptanceNote =
+            `RE-ISSUE (owner) · base ${round2(baseNoMao)} + เหมาๆ ${newMaoFee} = gross ${reissueTotal}` +
+            (applyJuristic1Pct ? ` · net ${newRamount} (นิติ −1%)` : "");
+        }
       }
 
       const row = {
