@@ -30,10 +30,19 @@ function InnerCarousel({
   slides,
   containerClass,
   delay,
+  eagerAll,
 }: {
   slides: Slide[];
   containerClass: string;
   delay?: number;
+  // Eager-load EVERY slide (not just the first). A rotating carousel reveals
+  // slides 1..n within seconds, but native lazy-loading only fires when a slide
+  // scrolls into view — the CSS-transform rotation doesn't reliably trigger it,
+  // so a lazy off-screen slide shows BLANK for the window between rotate-in and
+  // fetch-complete (the "ภาพหาย" the owner saw on mobile slide 2). Eager makes
+  // them ready before the first rotation. Scoped per-carousel so the hidden
+  // desktop banners don't download on phones (mobile-first bandwidth).
+  eagerAll?: boolean;
 }) {
   const [current, setCurrent] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -75,6 +84,7 @@ function InnerCarousel({
               sizes="(max-width: 768px) 100vw, 730px"
               className="object-cover transition-transform duration-500 ease-out group-hover/promo:scale-[1.045]"
               priority={i === 0}
+              loading={eagerAll && i !== 0 ? "eager" : undefined}
             />
             {/* Soft vignette on hover */}
             <span
@@ -124,11 +134,15 @@ export function PromoCarousel() {
         containerClass="hidden md:block relative md:w-[350px] md:h-[180px] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
         delay={3000}
       />
-      {/* RIGHT mobile — mobile-optimised banner (hidden on desktop) */}
+      {/* RIGHT mobile — mobile-optimised banner (hidden on desktop).
+          eagerAll: all 3 mobile slides are shown within seconds of load, so
+          preload them (fixes the blank slide-2 on rotate). These are the only
+          images phones actually render here, so eager = no wasted bytes. */}
       <InnerCarousel
         slides={RIGHT_MOBILE_SLIDES}
         containerClass="md:hidden relative w-full aspect-[17/6] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
         delay={3000}
+        eagerAll
       />
     </div>
   );
