@@ -166,6 +166,15 @@ export async function GET(request: Request) {
           live_data_filled:          sync.liveDataFill?.filled ?? 0,
           live_data_skipped_billed:  sync.liveDataFill?.skippedBilled ?? 0,
           live_data_flagged_mismatch: sync.liveDataFill?.flaggedMismatch ?? 0,
+          // 2026-07-02 — MOMO Live-board PER-BOX detail (each split box's ก×ย×ส →
+          // momo_box_detail · display-only). See lib/integrations/momo-web/box-detail.ts.
+          live_box_upserted:         sync.liveBoxDetail?.upserted ?? 0,
+          // 2026-07-02 — MOMO Live-board CABINET fill (real เลขตู้ + วันปิดตู้ into
+          // tb_forwarder · fill-when-empty · never-overwrite). This proves the real ตู้
+          // now auto-fills every cron (no /live click). See lib/integrations/momo-web/
+          // live-cabinet.ts.
+          live_cabinet_filled:       sync.liveCabinetFill?.filled ?? 0,
+          live_closedate_filled:     sync.liveCabinetFill?.closeDateFilled ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -226,6 +235,28 @@ export async function GET(request: Request) {
                   skippedHasValue:   sync.liveDataFill.skippedHasValue,
                   flaggedMismatch:   sync.liveDataFill.flaggedMismatch,
                   errorCount:        sync.liveDataFill.errors.length,
+                }
+              : null,
+            // 2026-07-02 — MOMO Live-board PER-BOX detail (see lib/integrations/
+            // momo-web/box-detail.ts · display-only).
+            liveBoxDetail:       sync.liveBoxDetail
+              ? {
+                  boxesSeen:  sync.liveBoxDetail.boxesSeen,
+                  upserted:   sync.liveBoxDetail.upserted,
+                  errorCount: sync.liveBoxDetail.errors.length,
+                }
+              : null,
+            // 2026-07-02 — MOMO Live-board CABINET fill: real เลขตู้ + วันปิดตู้ now
+            // auto-fill every cron (see lib/integrations/momo-web/live-cabinet.ts).
+            liveCabinetFill:     sync.liveCabinetFill
+              ? {
+                  baseTrackingsWithContainer: sync.liveCabinetFill.baseTrackingsWithContainer,
+                  matched:                    sync.liveCabinetFill.matched,
+                  filled:                     sync.liveCabinetFill.filled,
+                  closeDateFilled:            sync.liveCabinetFill.closeDateFilled,
+                  skippedBilled:              sync.liveCabinetFill.skippedBilled,
+                  skippedHasReal:             sync.liveCabinetFill.skippedHasReal,
+                  errorCount:                 sync.liveCabinetFill.errors.length,
                 }
               : null,
           },
