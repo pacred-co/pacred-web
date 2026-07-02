@@ -125,7 +125,12 @@ export function serviceSchema({
     url: absoluteUrl(slug, locale),
     image: imageUrl,
     provider: { "@id": `${SITE_URL}#organization` },
-    areaServed: areaServed.map((country) => ({ "@type": "Country", name: country })),
+    // ISO-2 codes (e.g. "TH") → Country; named places (e.g. "Bangkok",
+    // "Suvarnabhumi Airport") → Place — lets a geo-targeted service page declare
+    // local coverage instead of only country-level.
+    areaServed: areaServed.map((a) =>
+      /^[A-Z]{2}$/.test(a) ? { "@type": "Country", name: a } : { "@type": "Place", name: a },
+    ),
   };
 }
 

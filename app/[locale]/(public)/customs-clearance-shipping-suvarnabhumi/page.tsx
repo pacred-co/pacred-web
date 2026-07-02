@@ -60,8 +60,8 @@ export async function generateMetadata({
   // `name` + OG/Twitter title — only the <title> tag is forced.
   const absoluteTitle =
     locale === "en"
-      ? "Shipping, Customs Clearance & Import Duties | Pacred Shipping"
-      : "บริการ Shipping เคลียร์สินค้า(ติดด่าน) สุวรรณภูมิ คลองเตย แหลมฉบัง Pacred Shipping";
+      ? "Customs Clearance & Customs Broker Thailand | Pacred"
+      : "เคลียร์สินค้า พิธีการศุลกากร ตัวแทนออกของ | Pacred Shipping";
   return {
     ...base,
     title: { absolute: absoluteTitle },
@@ -274,6 +274,9 @@ export default async function CustomsClearancePage({
             slug: PATH,
             locale: typedLocale,
             serviceType: typedLocale === "th" ? "เคลียร์ศุลกากร" : "Customs clearance",
+            // Geo-target the structured data to the airport + ports this page serves
+            // (ปอน 2026-07-03 SEO · local relevance for "customs clearance suvarnabhumi").
+            areaServed: ["Suvarnabhumi Airport", "Bangkok", "Klong Toey Port", "Laem Chabang Port", "TH"],
           }),
           breadcrumbSchema(
             [
@@ -327,6 +330,11 @@ export default async function CustomsClearancePage({
               <span className="text-[0.7em] font-bold">{tp("h1Locations")}</span>{" "}
               <span className="text-primary-600">Pacred Shipping</span>
             </h1>
+
+            {/* SEO intro paragraph — broad-term topical depth (ปอน 2026-07-03) */}
+            <p className="mt-2 md:mt-3 max-w-[980px] text-[13px] md:text-[15px] leading-relaxed text-foreground/75 dark:text-white/70">
+              {tp("introParagraph")}
+            </p>
 
             {/* ─── Service scope banner — tappable LINE link, headline only (per เดฟ 2026-05-18) ─── */}
             <div
@@ -769,7 +777,9 @@ export default async function CustomsClearancePage({
             >
               <Image
                 src="/images/mainpage/banner/import-export/clearance3.png"
-                alt="เคลียร์สินค้าติดด่าน เริ่มต้น 2,800 บาท — Pacred Shipping พิธีการศุลกากร"
+                alt={typedLocale === "en"
+                  ? "Customs clearance for goods held at customs, from THB 2,800 — Pacred Shipping, Suvarnabhumi"
+                  : "เคลียร์สินค้าติดด่าน เริ่มต้น 2,800 บาท — Pacred Shipping พิธีการศุลกากร"}
                 width={2280}
                 height={440}
                 unoptimized

@@ -2659,8 +2659,8 @@
         "description": "Less-than-container imports from China — consolidated freight at lower cost, door-to-door by Pacred Shipping."
       },
       "customsClearance": {
-        "title": "Customs Clearance · Stuck-at-Customs Recovery",
-        "description": "Customs clearance under every Incoterm and port, including stuck-at-customs recovery — road, sea, air. 14 years with Pacred Shipping."
+        "title": "Customs Clearance & Customs Broker Thailand - Air, Sea & Truck, All Airports & Ports",
+        "description": "Licensed Thai customs broker & clearance agent — air/sea/truck, all airports & ports. DHL/FedEx/UPS held cargo, import duty + VAT. From THB 2,800, ~1 day."
       },
       "exportWorldwide": {
         "title": "Worldwide Export",
@@ -7035,11 +7035,12 @@
   },
   "customsClearancePage": {
     "breadcrumbHome": "Home",
-    "h1Before": "Service",
-    "h1ClearanceOpen": "Clearance (",
-    "h1Stuck": "Held at Customs",
-    "h1ClearanceClose": ")",
-    "h1Locations": "Suvarnabhumi · Klong Toey · Laem Chabang",
+    "h1Before": "Customs Clearance & Customs Broker Thailand",
+    "h1ClearanceOpen": "Licensed ",
+    "h1Stuck": "Clearance Agent",
+    "h1ClearanceClose": "",
+    "h1Locations": "Bangkok · Suvarnabhumi · Klong Toey · Laem Chabang · held-at-customs release",
+    "introParagraph": "Pacred Shipping is a licensed Thai customs broker and clearance agent handling customs clearance for air, sea and truck freight at every airport and seaport in Thailand — Suvarnabhumi, Don Mueang, Bangkok Port (Klong Toey), Laem Chabang and Lat Krabang ICD. As your customs broker we handle the full customs formalities: HS-code classification, import duty and VAT, permits, and DHL/FedEx/UPS cargo held at customs. Most shipments clear in about one day, from THB 2,800, backed by 14 years of licensed experience.",
     "scopeBannerAriaLabel": "Chat on LINE with Pacred Shipping — free clearance consult",
     "scopeBannerSrOnly": "Chat on LINE with Pacred Shipping",
     "scopeBannerServiceBefore": "Shipping & Customs Clearance —",
@@ -7053,10 +7054,10 @@
     "heroBullet5": "Free consultation with customs specialists with 14+ years of experience",
     "heroBullet6": "Licensed customs broker (Shipping License) and registered shipping association member",
     "heroBullet7": "Guaranteed low pricing, transparent — no hidden charges",
-    "modeEyebrow": "Shipping Clearance — Held Goods",
-    "modeH2Before": "Clearance Service:",
-    "modeH2Highlight": "Held at Customs",
-    "modeH2After": "Air · Sea · By Truck — All Ports, Clear Pricing",
+    "modeEyebrow": "Customs Clearance · Customs Broker Thailand",
+    "modeH2Before": "Customs Clearance in Thailand:",
+    "modeH2Highlight": "Licensed Customs Broker",
+    "modeH2After": "— Air · Sea · Truck, all airports & ports (incl. held-at-customs release)",
     "modeH2Mobile": "No hidden fees",
     "stepsEyebrow": "5 STEPS · Easy Contact — Cleared in 1 Hour",
     "stepsH2Before": "Simple Clearance Process",
