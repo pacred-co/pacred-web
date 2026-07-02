@@ -39,11 +39,11 @@ const ICON_BASE = "/images/home/iconfloating";
 type GridTile = { icon: string; labelKey: string; href: string; comingSoon?: boolean };
 const GRID_TILES: readonly GridTile[] = [
   { icon: `${ICON_BASE}/pcs-shops.png`,                  labelKey: "gridShop",       href: "/service-order" },
-  { icon: `${ICON_BASE}/pcs-forwarder.png`,              labelKey: "gridImport",     href: "/service-import" },
+  { icon: "/images/IMBOX.png",                           labelKey: "gridImport",     href: "/service-import" },
   // ส่งออก — Pacred's own roadmap tile, paired next to นำเข้า. Ships DISABLED
   // (grayscale "ไอคอนเทาๆ") because the export module isn't built yet. Adding it
   // also makes the grid an even 3×3 (8 tiles + logout = 9), matching PCS.
-  { icon: `${ICON_BASE}/export.png`,                     labelKey: "tileExport",     href: "#", comingSoon: true },
+  { icon: "/images/EXBOX.png",                           labelKey: "tileExport",     href: "#", comingSoon: true },
   { icon: "/images/hero-section/icon/billingpacred.png", labelKey: "gridReceipt",    href: "/service-import/pending" },
   { icon: `${ICON_BASE}/pcs-payment.png`,                labelKey: "gridPayment",    href: "/service-payment" },
   { icon: `${ICON_BASE}/pcs-wallet.png`,                 labelKey: "gridWalletCash", href: "/wallet" },
