@@ -7,11 +7,12 @@
  * this is a localStorage prototype, not a live keyword API.
  */
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { FileUp, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type { KeywordItem, KeywordTier } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { fmtMoney, fmtNum } from "@/lib/marketing-planner/util";
 import { btnGhost, btnPrimary, cx, EmptyState, Field, inputCls, Modal, SectionCard, Tag, useConfirm } from "./ui";
+import { KeywordImportModal } from "./keyword-import-modal";
 
 const TIER: Record<KeywordTier, { label: string; color: string }> = {
   primary: { label: "หลัก", color: "#B30000" },
@@ -103,6 +104,7 @@ export function KeywordPlanner() {
   const { keywords, deleteKeyword, loadSampleKeywords } = usePlanner();
   const confirm = useConfirm();
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<KeywordItem | null>(null);
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<KeywordTier | "all">("all");
@@ -134,7 +136,10 @@ export function KeywordPlanner() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="inline-flex items-center gap-2 text-base font-bold text-foreground"><Search className="h-5 w-5 text-primary-600" /> Keyword บริการ (SEO)</h2>
-        <button type="button" className={btnPrimary} onClick={openAdd}><Plus className="h-4 w-4" /> เพิ่มคีย์เวิร์ด</button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnGhost} onClick={() => setImportOpen(true)}><FileUp className="h-4 w-4" /> นำเข้า CSV</button>
+          <button type="button" className={btnPrimary} onClick={openAdd}><Plus className="h-4 w-4" /> เพิ่มคีย์เวิร์ด</button>
+        </div>
       </div>
       <p className="text-[12px] text-muted">กางคีย์เวิร์ดต่อบริการ — หลัก/รอง/ย่อย · ค้นหา/เดือน (Volume) · CPC แพงไหม (฿) · ความยากในการแข่งขัน · กรอกค่าจากเครื่องมือวิจัยคีย์เวิร์ด (Keyword Planner / Ahrefs ฯลฯ)</p>
 
@@ -143,7 +148,7 @@ export function KeywordPlanner() {
           icon={<Search className="h-6 w-6" />}
           title="ยังไม่มีคีย์เวิร์ด"
           message="เพิ่มคีย์เวิร์ดของแต่ละบริการ หรือโหลดชุดตัวอย่าง 5 บริการเพื่อเริ่มต้น"
-          action={<div className="flex gap-2"><button type="button" className={btnPrimary} onClick={openAdd}><Plus className="h-4 w-4" /> เพิ่มคีย์เวิร์ด</button><button type="button" className={btnGhost} onClick={loadSampleKeywords}>โหลดตัวอย่าง 5 บริการ</button></div>}
+          action={<div className="flex flex-wrap justify-center gap-2"><button type="button" className={btnPrimary} onClick={openAdd}><Plus className="h-4 w-4" /> เพิ่มคีย์เวิร์ด</button><button type="button" className={btnGhost} onClick={() => setImportOpen(true)}><FileUp className="h-4 w-4" /> นำเข้า CSV</button><button type="button" className={btnGhost} onClick={loadSampleKeywords}>โหลดตัวอย่าง 5 บริการ</button></div>}
         />
       ) : (
         <div className="space-y-4">
@@ -234,6 +239,7 @@ export function KeywordPlanner() {
       )}
 
       {formOpen && <KeywordForm editing={editing} services={services} onClose={() => setFormOpen(false)} />}
+      {importOpen && <KeywordImportModal onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
