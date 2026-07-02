@@ -21,9 +21,11 @@
 import { Fragment, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
+import { adminUpdateMomoBoxDetails } from "@/actions/admin/forwarder-box-detail";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { MomoBoxDetailView } from "@/lib/integrations/momo-web/box-detail";
+import { rollupBoxes, isBoxBillHeader, type BoxDims } from "@/lib/integrations/momo-web/box-detail-recompute";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -39,7 +41,221 @@ function Sum({ label, value, negative }: { label: string; value: number; negativ
   );
 }
 
-// ── Per-box breakdown (ภูม 2026-07-02) — READ-ONLY ────────────────────────────
+// The base tracking of a box ("…-3/6" / "…-3" → the base). Used both to key the
+// edit save AND to detect a หัวบิล (bare) row. Empty → "".
+function boxBaseOf(boxTracking: string): string {
+  return (boxTracking ?? "").trim().replace(/-\d+(?:\/\d+)?$/, "");
+}
+const suffixLabel = (t: string) => {
+  const m = /-(\d+(?:\/\d+)?)$/.exec(t);
+  return m ? `#${m[1]}` : t;
+};
+
+// ── EDITABLE per-box breakdown (ภูม 2026-07-02) ────────────────────────────────
+// A tracking MOMO split into N different-size boxes stores its AGGREGATE on ONE
+// tb_forwarder row. MOMO's per-box dims are often WRONG — staff must be able to FIX
+// each box's ก×ย×ส/น้ำหนัก/ชิ้น themselves (not wait for แต้ม's packing list). This
+// renders editable inputs per box + a live Σ (น้ำหนักรวม + คิวรวม over the REAL
+// boxes, หัวบิล excluded), then "บันทึกขนาดกล่อง" upserts momo_box_detail AND
+// recomputes the ONE row's fweight/fvolume via adminUpdateMomoBoxDetails.
+//
+// 💰 ONE row = ONE bill. This NEVER splits rows or touches billing/rate/status —
+//    only momo_box_detail + this row's น้ำหนักรวม/คิวรวม (the price basis).
+type EditBox = {
+  boxTracking: string;
+  width: string; length: string; height: string; weightKg: string; cbm: string; quantity: string;
+};
+function EditableBoxBreakdown({
+  forwarderId,
+  boxes,
+  onSaved,
+}: {
+  forwarderId: number;
+  boxes: MomoBoxDetailView[];
+  onSaved?: (fweight: number, fvolume: number) => void;
+}) {
+  const { confirm, dialogs } = useConfirmDialogs();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [items, setItems] = useState<EditBox[]>(() =>
+    boxes.map((b) => ({
+      boxTracking: b.boxTracking,
+      width: String(b.width || 0),
+      length: String(b.length || 0),
+      height: String(b.height || 0),
+      weightKg: String(b.weightKg || 0),
+      cbm: String(b.cbm || 0),
+      quantity: String(b.quantity || 1),
+    })),
+  );
+
+  function patch(idx: number, p: Partial<EditBox>) {
+    setItems((rs) => rs.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+  }
+  // typing ก/ย/ส auto-fills that box's คิว (last edit wins — typing คิว overrides).
+  function patchDim(idx: number, key: "width" | "length" | "height", v: string) {
+    setItems((rs) =>
+      rs.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, [key]: v };
+        next.cbm = String(
+          cbmFromDims(parseFloat(next.width) || 0, parseFloat(next.length) || 0, parseFloat(next.height) || 0),
+        );
+        return next;
+      }),
+    );
+  }
+
+  // Live Σ over the REAL boxes (หัวบิล excluded) — mirrors the server rollup, so the
+  // preview matches what the save writes to the ONE row's fweight/fvolume.
+  const preview = useMemo(() => {
+    const dims: BoxDims[] = items.map((r) => ({
+      boxTracking: r.boxTracking,
+      width: parseFloat(r.width) || 0,
+      length: parseFloat(r.length) || 0,
+      height: parseFloat(r.height) || 0,
+      weightKg: parseFloat(r.weightKg) || 0,
+      cbm: parseFloat(r.cbm) || 0,
+      quantity: parseInt(r.quantity, 10) || 1,
+    }));
+    return { roll: rollupBoxes(dims), dims };
+  }, [items]);
+
+  async function onSave() {
+    setError(null);
+    setSuccess(null);
+    for (const r of items) {
+      if (
+        (parseFloat(r.width) || 0) < 0 || (parseFloat(r.length) || 0) < 0 ||
+        (parseFloat(r.height) || 0) < 0 || (parseFloat(r.weightKg) || 0) < 0
+      ) {
+        setError(`กล่อง ${suffixLabel(r.boxTracking)}: ค่าทุกช่องต้อง ≥ 0`);
+        return;
+      }
+    }
+    const base = boxBaseOf(items[0]?.boxTracking ?? "");
+    if (!base) {
+      setError("ไม่พบเลขแทรคกิงของกล่อง");
+      return;
+    }
+    // §0f confirm-before-mutate — spell out the consequence (recompute the row's total).
+    const ok = await confirm(
+      `ยืนยันแก้ขนาดกล่อง ${preview.roll.countableCount} กล่อง แล้วคิดน้ำหนัก/คิวรวมของแทรคนี้ใหม่ ` +
+        `(น้ำหนักรวม ${preview.roll.fweight} กก. · คิวรวม ${preview.roll.fvolume}) ?`,
+    );
+    if (!ok) return;
+
+    startTransition(async () => {
+      const res = await adminUpdateMomoBoxDetails({
+        baseTracking: base,
+        forwarderId,
+        boxes: items.map((r) => ({
+          boxTracking: r.boxTracking,
+          width: parseFloat(r.width) || 0,
+          length: parseFloat(r.length) || 0,
+          height: parseFloat(r.height) || 0,
+          weightKg: parseFloat(r.weightKg) || 0,
+          cbm: parseFloat(r.cbm) || 0,
+          quantity: parseInt(r.quantity, 10) || 1,
+        })),
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setSuccess(
+        `✓ บันทึกขนาด ${res.data?.boxesSaved ?? 0} กล่องแล้ว — คิดน้ำหนัก/คิวรวมของแทรคนี้ใหม่ ` +
+          `(น้ำหนักรวม ${res.data?.fweight ?? 0} กก. · คิวรวม ${res.data?.fvolume ?? 0}) 📦`,
+      );
+      onSaved?.(res.data?.fweight ?? 0, res.data?.fvolume ?? 0);
+      setTimeout(() => setSuccess(null), 8000);
+    });
+  }
+
+  const d0 = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+  const d6 = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 6 });
+  const BOXCELL = "h-8 w-full min-w-[56px] rounded-md border border-amber-200 bg-white dark:bg-surface px-1.5 text-[11px] font-mono text-right focus:border-amber-500 focus:outline-none disabled:bg-slate-50";
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-white dark:bg-surface">
+      <div className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 border-b border-amber-200">
+        📦 ขนาดรายกล่อง (จาก MOMO · {boxes.length} กล่อง) — แต่ละกล่องคนละขนาด แก้ได้ที่นี่ · ระบบคิดน้ำหนัก/คิวรวมของแทรคใหม่จากทุกกล่อง (กรอกรวมเป็นเลขเดียวไม่ได้)
+      </div>
+      <div className="overflow-x-auto scrollbar-x-visible">
+        <table className="w-full text-[11px]">
+          <thead className="text-muted bg-amber-50/60">
+            <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:text-right [&>th]:font-medium">
+              <th className="!text-left">กล่อง</th>
+              <th>กว้าง</th>
+              <th>ยาว</th>
+              <th>สูง</th>
+              <th>ชิ้น</th>
+              <th>น้ำหนัก/ชิ้น</th>
+              <th>คิว/ชิ้น</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((b, idx) => {
+              // A หัวบิล (bare, no signal) is not a real box — show it dimmed + note it
+              // won't be counted (matches the server's Σ exclusion). Real boxes editable.
+              const isHeader = isBoxBillHeader({
+                boxTracking: b.boxTracking,
+                width: parseFloat(b.width) || 0,
+                length: parseFloat(b.length) || 0,
+                height: parseFloat(b.height) || 0,
+                weightKg: parseFloat(b.weightKg) || 0,
+                cbm: parseFloat(b.cbm) || 0,
+                quantity: parseInt(b.quantity, 10) || 1,
+              });
+              return (
+                <tr key={b.boxTracking} className={`border-t border-amber-100 [&>td]:px-2 [&>td]:py-1 [&>td]:text-right tabular-nums${isHeader ? " opacity-50" : ""}`}>
+                  <td className="!text-left font-mono text-muted" title={b.boxTracking}>
+                    {suffixLabel(b.boxTracking)}
+                    {isHeader && <span className="ml-1 text-[10px] text-amber-600">(หัวบิล · ไม่นับ)</span>}
+                  </td>
+                  <td><input type="number" min={0} step="0.01" value={b.width} onChange={(e) => patchDim(idx, "width", e.target.value)} disabled={pending} className={BOXCELL} placeholder="0" /></td>
+                  <td><input type="number" min={0} step="0.01" value={b.length} onChange={(e) => patchDim(idx, "length", e.target.value)} disabled={pending} className={BOXCELL} placeholder="0" /></td>
+                  <td><input type="number" min={0} step="0.01" value={b.height} onChange={(e) => patchDim(idx, "height", e.target.value)} disabled={pending} className={BOXCELL} placeholder="0" /></td>
+                  <td><input type="number" min={1} step="1" value={b.quantity} onChange={(e) => patch(idx, { quantity: e.target.value })} disabled={pending} className={`${BOXCELL} min-w-[44px]`} placeholder="1" /></td>
+                  <td><input type="number" min={0} step="0.01" value={b.weightKg} onChange={(e) => patch(idx, { weightKg: e.target.value })} disabled={pending} className={BOXCELL} placeholder="0" /></td>
+                  <td><input type="number" min={0} step="0.000001" value={b.cbm} onChange={(e) => patch(idx, { cbm: e.target.value })} disabled={pending} className={BOXCELL} placeholder="0" /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-amber-200 bg-amber-50/70 font-semibold text-amber-800 [&>td]:px-2 [&>td]:py-1 [&>td]:text-right tabular-nums">
+              <td className="!text-left">รวมทุกกล่อง ({preview.roll.countableCount})</td>
+              <td colSpan={3} className="!text-right text-muted font-normal">น้ำหนักรวม · คิวรวม →</td>
+              <td />
+              <td>{d0(preview.roll.fweight)}</td>
+              <td>{d6(preview.roll.fvolume)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {error && <div className="m-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700">⚠ {error}</div>}
+      {success && <div className="m-2 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-[11px] text-green-700">{success}</div>}
+      <div className="flex items-center gap-2 border-t border-amber-100 px-2.5 py-2">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={pending}
+          className="rounded-lg bg-amber-600 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {pending ? "กำลังบันทึก..." : "💾 บันทึกขนาดกล่อง + คิดคิว/น้ำหนักรวมใหม่"}
+        </button>
+        <span className="text-[10px] text-muted">คิวรวม/น้ำหนักรวมด้านบน (ช่องกรอกของแทรค) จะถูกอัปเดตตามผลรวมทุกกล่อง</span>
+      </div>
+      {dialogs}
+    </div>
+  );
+}
+
+// ── Per-box breakdown (ภูม 2026-07-02) — READ-ONLY (multi-sibling path) ─────────
+// For a multi-ROW sibling group (each tracking is its own editable main row), the
+// per-box detail stays READ-ONLY here — those rows are edited individually above.
 // A tracking MOMO split into N different-size boxes stores its AGGREGATE on ONE
 // tb_forwarder row (its ก×ย×ส blank — a merged dim would be meaningless). This
 // panel SHOWS each box's real ก×ย×ส (from MOMO's Live scrape · momo_box_detail) so
@@ -256,6 +472,12 @@ export function PerTrackingEditorClient({
       fShippingService: String(r.fShippingService),
     })),
   );
+
+  // A SINGLE tb_forwarder row (not a multi-ROW sibling group) — only then do we
+  // make the per-box breakdown EDITABLE (that one row's fweight/fvolume is what the
+  // per-box edit recomputes). A sibling group (each tracking = its own editable main
+  // row) keeps the read-only per-box view untouched (owner: "800117017081 = 3 rows").
+  const isSingleRow = rowsInit.length === 1;
 
   function patch(idx: number, p: Partial<RowState>) {
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...p } : r)));
@@ -616,7 +838,24 @@ export function PerTrackingEditorClient({
                 <tr className="border-t border-cyan-100 bg-cyan-50/40">
                   <td colSpan={15} className="px-3 py-2">
                     {boxDetail && boxDetail.length > 0 ? (
-                      <PerBoxBreakdown boxes={boxDetail} />
+                      // SINGLE tb_forwarder row (rows.length===1) → EDITABLE per-box
+                      // (staff fix MOMO's messy dims + the row's fweight/fvolume is
+                      // recomputed). MULTI-ROW sibling groups keep the READ-ONLY view
+                      // (each sibling is its own editable main row — do NOT touch that
+                      // path per owner: "800117017081 already 3 editable rows").
+                      isSingleRow ? (
+                        <EditableBoxBreakdown
+                          forwarderId={r.id}
+                          boxes={boxDetail}
+                          onSaved={(fweight, fvolume) => {
+                            // Keep the row's aggregate inputs (น้ำหนัก + CBM) in sync so
+                            // the price preview above reflects the just-recomputed Σ.
+                            patch(idx, { weight: String(fweight), cbm: String(fvolume) });
+                          }}
+                        />
+                      ) : (
+                        <PerBoxBreakdown boxes={boxDetail} />
+                      )
                     ) : (
                       <div className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-[11px] text-cyan-800 dark:bg-surface">
                         📦 แทรคนี้ MOMO แยก {boxCount} กล่อง — ขนาดรายกล่องจะขึ้นหลังตัวดึง MOMO Live รัน ·
