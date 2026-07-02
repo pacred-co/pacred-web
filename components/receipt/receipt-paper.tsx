@@ -641,14 +641,14 @@ export function ReceiptPage({
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
                       สแกนเพื่อเปิดด้วยเว็บไซต์
                     </p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "center" }}>
                       <Image
                         src={qrDataUrl}
                         alt={`QR เปิดใบเสร็จ ${rid}`}
                         width={120}
                         height={120}
                         unoptimized
-                        style={{ width: "18mm", height: "18mm", display: "block" }}
+                        style={{ width: "18mm", height: "13mm", display: "block" }}
                       />
                     </div>
                   </div>
@@ -656,7 +656,7 @@ export function ReceiptPage({
                   {/* Box 2: ผู้ออกเอกสาร (ผู้ขาย) */}
                   <div className="certifiedBox userCreate" style={{ flex: 1, textAlign: "center" }}>
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้ออกเอกสาร (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "flex-end" }}>
                       <Image
                         src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
                         alt="ลายมือชื่อ"
@@ -675,7 +675,7 @@ export function ReceiptPage({
                   {/* Box 3: ผู้อนุมัติเอกสาร (ผู้ขาย) */}
                   <div className="certifiedBox userApprove" style={{ flex: 1, textAlign: "center" }}>
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "flex-end" }}>
                       <Image
                         src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
                         alt="ลายมือชื่อ"
@@ -696,14 +696,14 @@ export function ReceiptPage({
                   {/* Box 4: ตราประทับ (ผู้ขาย) */}
                   <div className="certifiedBox merchantStamp" style={{ flex: 1, textAlign: "center" }}>
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
+                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "center" }}>
                       <Image
                         src="/images/pacred-stamp-tight.png"
                         alt="ตราประทับ"
                         width={106}
                         height={58}
                         unoptimized
-                        style={{ width: "auto", height: "18mm" }}
+                        style={{ width: "auto", height: "13mm" }}
                       />
                     </div>
                     <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
@@ -714,7 +714,7 @@ export function ReceiptPage({
                   {/* Box 5: ผู้รับเอกสาร (ลูกค้า) */}
                   <div className="certifiedBox received" style={{ flex: 1, textAlign: "center" }}>
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้รับเอกสาร (ลูกค้า)</p>
-                    <div className="emptyBoxRemainingSignature" style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
+                    <div className="emptyBoxRemainingSignature" style={{ height: "13mm", border: "0.5px solid #d1d5db" }}></div>
                     <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
                       <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{customerName}</p>
                     </div>
@@ -723,7 +723,7 @@ export function ReceiptPage({
                   {/* Box 6: ตราประทับ (ลูกค้า) */}
                   <div className="certifiedBox stamp" style={{ flex: 1, textAlign: "center" }}>
                     <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ลูกค้า)</p>
-                    <div className="stampBox" style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
+                    <div className="stampBox" style={{ height: "13mm", border: "0.5px solid #d1d5db" }}></div>
                     <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
                       <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
                     </div>
@@ -781,7 +781,7 @@ export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps)
              Chrome's datetime/URL/page-# header/footer is dialog-only
              ("Headers and footers: off"). Sidebar is print:hidden via the
              admin layout. */
-          @page { size: A4 portrait; margin: 5mm; }
+          @page { size: A4 portrait; margin: 3mm; }
           html, body {
             background: white !important;
             margin: 0 !important;
@@ -795,11 +795,15 @@ export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps)
             padding: 0 !important;
             max-width: none !important;
             width: 100% !important;
-            /* A4 portrait inner area = 297mm − 2×8mm @page margin = 281mm.
-               Use both height and min-height so the flex:1 spacer has a
-               concrete target to grow into. */
-            height: 287mm !important;
-            min-height: 287mm !important;
+            /* A4 portrait usable = 297mm − 2×3mm @page margin = 291mm. Reserve
+               285mm (6mm slack) so a full receipt (incl. the ค่าส่งเหมาๆ row)
+               NEVER spills a hair onto a 2nd sheet — the old 287mm@5mm was
+               exactly the usable height (zero slack) so one extra summary row
+               tipped each copy to 2 pages (2→4 sheets · owner 2026-07-02).
+               The flex:1 spacer still pushes the summary/cert block to the
+               bottom of this 285mm page. */
+            height: 285mm !important;
+            min-height: 285mm !important;
             page-break-after: always;
             page-break-inside: avoid;
           }
