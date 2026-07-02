@@ -101,13 +101,27 @@ async function resolveLegacyAdminId(): Promise<string> {
 // fails the commit (the row is already created; the cron fills it later, exactly
 // as before this change), so there is zero regression risk.
 // ────────────────────────────────────────────────────────────
-type LiveFillSummary = { filled: number; advanced: number; boxes: number };
+type LiveFillSummary = {
+  filled: number;
+  advanced: number;
+  boxes: number;
+  /** Rows whose fcabinetnumber was filled with the REAL Live container (เลขตู้). */
+  cabinet: number;
+  /** Rows whose fdatecontainerclose (วันปิดตู้) was filled from MOMO. */
+  closeDate: number;
+};
 
 async function runLiveFillAfterCommit(): Promise<LiveFillSummary | null> {
   try {
     const admin = createAdminClient();
     const r = await propagateMomoLiveStatusAndData(admin);
-    return { filled: r.data.filled, advanced: r.status.advanced, boxes: r.boxDetail.upserted };
+    return {
+      filled: r.data.filled,
+      advanced: r.status.advanced,
+      boxes: r.boxDetail.upserted,
+      cabinet: r.cabinet.filled,
+      closeDate: r.cabinet.closeDateFilled,
+    };
   } catch (e) {
     console.error("[commitMomo→liveFill] best-effort Live fill failed (row still committed)", e);
     return null;

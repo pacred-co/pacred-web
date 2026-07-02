@@ -41,6 +41,8 @@ import {
   propagateMomoLiveStatusAndData,
   type LiveDataFillResult,
 } from "@/lib/integrations/momo-web/propagate-live-data";
+import { type BoxDetailFillResult } from "@/lib/integrations/momo-web/box-detail";
+import { type LiveCabinetFillResult } from "@/lib/integrations/momo-web/live-cabinet";
 
 export type RunMomoSyncOpts = {
   /** ISO date "YYYY-MM-DD" — required for the date-range pulls (track + closed). */
@@ -101,6 +103,22 @@ export type RunMomoSyncResult = {
    *  configured OR the pass threw (best-effort · never fails the sync). See
    *  lib/integrations/momo-web/propagate-live-data.ts. */
   liveDataFill: LiveDataFillResult | null;
+  /** 2026-07-02 — the PER-BOX detail companion to the Live status/data passes:
+   *  persist each split box's real ก×ย×ส into momo_box_detail (display-only · NEVER
+   *  touches tb_forwarder / any money path). Runs on the SAME single MOMO login as
+   *  liveStatusPropagation + liveDataFill. `null` when MOMO web isn't configured OR
+   *  the combined pass threw (best-effort · never fails the sync). See
+   *  lib/integrations/momo-web/box-detail.ts. */
+  liveBoxDetail: BoxDetailFillResult | null;
+  /** 2026-07-02 — the CABINET companion: fill the REAL เลขตู้ (fcabinetnumber ← GZS/
+   *  GZE/GZA) + วันปิดตู้ (fdatecontainerclose) from the SAME MOMO Live boards.
+   *  FILL-WHEN-EMPTY-OR-PLACEHOLDER (cabinet) · FILL-WHEN-EMPTY (close date) · never
+   *  overwrites a real ตู้/existing date · skips billed rows (fstatus 5/6/7) · TOCTOU-
+   *  safe. This is what makes the real เลขตู้ + วันปิดตู้ auto-fill every 10-min cron
+   *  (no human /live click needed). `null` when MOMO web isn't configured OR the
+   *  combined pass threw (best-effort · never fails the sync). See
+   *  lib/integrations/momo-web/live-cabinet.ts. */
+  liveCabinetFill: LiveCabinetFillResult | null;
 };
 
 /**
@@ -430,29 +448,44 @@ export async function runMomoSync(
     });
   }
 
-  // ── 3.7 (2026-07-01) — MOMO Live-board STATUS propagate + DATA fill ──
+  // ── 3.7 (2026-07-01 · box+cabinet added 2026-07-02) — MOMO Live-board propagate ──
   // MOMO's partner import/track feed DROPS a parcel once it advances past
-  // "ออกจากโกดังจีน" — losing BOTH its status AND its measurement — but MOMO's OWN web
-  // (momocargo.com, master account) still shows it in the right board WITH the full
-  // น้ำหนัก/คิว/ขนาด/จำนวนชิ้น. AFTER the partner-feed + departed-container passes (so
-  // those win when they DO have a signal), scrape the Live boards ONCE (single MOMO
-  // login) and run BOTH passes:
+  // "ออกจากโกดังจีน" — losing BOTH its status AND its measurement AND the real เลขตู้ —
+  // but MOMO's OWN web (momocargo.com, master account) still shows it in the right board
+  // WITH the full น้ำหนัก/คิว/ขนาด/จำนวนชิ้น + the real container. AFTER the partner-feed +
+  // departed-container passes (so those win when they DO have a signal), scrape the Live
+  // boards ONCE (single MOMO login) and run ALL FOUR passes (propagateMomoLiveStatusAndData
+  // fetches the boards once and threads them through every pass — no second login):
   //   • STATUS — advance any matched tb_forwarder row toward the MOMO-Live status.
   //     Forward-only + STATUS-ONLY (fstatus/fdatestatusN/adminidupdate · no money) +
   //     idempotent + TOCTOU-safe (China-side, capped at '3').
   //   • DATA — fill fweight/fvolume/dims/famount, FILL-WHEN-EMPTY only, using the TOTAL
   //     (per-piece × qty) MOMO's web shows, SKIPPING billed rows (fstatus 5/6/7), never
   //     overwriting a non-zero value, flagging (not overwriting) any mismatch.
+  //   • PER-BOX — persist each split box's real ก×ย×ส into momo_box_detail. DISPLAY-ONLY
+  //     (report-cnt "แยกตามขนาด" panel + the per-box editor); NEVER touches tb_forwarder
+  //     or any money path.
+  //   • CABINET — fill the REAL เลขตู้ (fcabinetnumber ← GZS/GZE/GZA) + วันปิดตู้
+  //     (fdatecontainerclose). FILL-WHEN-EMPTY-OR-PLACEHOLDER (cabinet) · FILL-WHEN-EMPTY
+  //     (date) · never overwrites a real ตู้/existing date · skips billed rows · TOCTOU-
+  //     safe. THIS is what makes the real เลขตู้ + วันปิดตู้ auto-fill every 10-min cron
+  //     (previously they filled only when a human clicked /live · owner ภูม 2026-07-02).
   // Only runs when MOMO web creds are configured. Best-effort — a scrape/login/fill
-  // failure must NEVER fail the sync (the momo_* writes already landed); the DATA fill's
-  // failure also never rolls back the STATUS writes.
+  // failure must NEVER fail the sync (the momo_* writes already landed). Each of the DATA/
+  // PER-BOX/CABINET passes is individually try/caught inside propagateMomoLiveStatusAndData,
+  // so a box/cabinet failure NEVER rolls back the STATUS writes; the outer try here guards
+  // the shared scrape/login.
   let liveStatusPropagation: LiveStatusPropagationResult | null = null;
   let liveDataFill: LiveDataFillResult | null = null;
+  let liveBoxDetail: BoxDetailFillResult | null = null;
+  let liveCabinetFill: LiveCabinetFillResult | null = null;
   if (isMomoWebConfigured()) {
     try {
       const combined = await propagateMomoLiveStatusAndData(admin);
       liveStatusPropagation = combined.status;
       liveDataFill = combined.data;
+      liveBoxDetail = combined.boxDetail;
+      liveCabinetFill = combined.cabinet;
       if (liveStatusPropagation.errors.length > 0) {
         for (const e of liveStatusPropagation.errors) {
           errors.push({
@@ -467,6 +500,24 @@ export async function runMomoSync(
           errors.push({
             scope:   "live_data_fill",
             error:   "MOMO_LIVE_DATA_ROW_FAILED",
+            message: `${e.scope}: ${e.message}`,
+          });
+        }
+      }
+      if (liveBoxDetail.errors.length > 0) {
+        for (const e of liveBoxDetail.errors) {
+          errors.push({
+            scope:   "live_box_detail",
+            error:   "MOMO_LIVE_BOX_DETAIL_ROW_FAILED",
+            message: `${e.scope}: ${e.message}`,
+          });
+        }
+      }
+      if (liveCabinetFill.errors.length > 0) {
+        for (const e of liveCabinetFill.errors) {
+          errors.push({
+            scope:   "live_cabinet_fill",
+            error:   "MOMO_LIVE_CABINET_ROW_FAILED",
             message: `${e.scope}: ${e.message}`,
           });
         }
@@ -536,5 +587,7 @@ export async function runMomoSync(
     departedAdvance,
     liveStatusPropagation,
     liveDataFill,
+    liveBoxDetail,
+    liveCabinetFill,
   };
 }

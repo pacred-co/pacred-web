@@ -174,6 +174,110 @@ function suffixOf(tracking: string): number {
   return m ? Number(m[1]) : 0;
 }
 
+/**
+ * One edited box to persist (from the forwarder editor's staff-fixed dims). The
+ * dimension/weight/คิว/pieces the pricer typed for THIS box.
+ */
+export type MomoBoxDetailEdit = {
+  boxTracking: string;
+  width: number;
+  length: number;
+  height: number;
+  weightKg: number;
+  cbm: number;
+  quantity: number;
+};
+
+/**
+ * UPSERT staff-edited per-box dims into momo_box_detail (keyed by
+ * base_tracking + box_tracking). Recomputes each box's cbm from its own dims
+ * (fallback to the passed cbm when all dims are 0). Preserves the box's existing
+ * member_code/container_* (this edit path only touches the physical measurements,
+ * so the identity/container columns set by the Live scrape are left intact via the
+ * merge-select below). best-effort chunked · idempotent (ON CONFLICT overwrites in
+ * place). NEVER touches tb_forwarder / money — the caller recomputes the ONE row.
+ *
+ * @param baseTracking the base tracking these boxes belong to (the JOIN key).
+ * @returns count upserted + any per-chunk error (never throws).
+ */
+export async function upsertEditedBoxDetails(
+  admin: SupabaseClient,
+  baseTracking: string,
+  edits: readonly MomoBoxDetailEdit[],
+): Promise<{ upserted: number; errors: Array<{ scope: string; message: string }> }> {
+  const base = (baseTracking ?? "").trim();
+  const result = { upserted: 0, errors: [] as Array<{ scope: string; message: string }> };
+  if (!base || edits.length === 0) return result;
+
+  // Read the existing rows so we KEEP the identity/container columns MOMO's Live
+  // scrape set (member_code / container_*) — this staff-edit only rewrites the
+  // physical dims. Missing table / any error → we still upsert with nulls (the box
+  // dims are the point; identity columns just won't be back-filled).
+  const boxKeys = Array.from(new Set(edits.map((e) => (e.boxTracking ?? "").trim()).filter(Boolean)));
+  const existingByBox = new Map<string, Record<string, unknown>>();
+  {
+    const { data, error } = await admin
+      .from("momo_box_detail")
+      .select("box_tracking, member_code, container_name, container_code, container_no, status_id, status_text")
+      .eq("base_tracking", base)
+      .in("box_tracking", boxKeys);
+    if (error) {
+      console.error("[upsertEditedBoxDetails] existing lookup failed (upsert w/o identity merge)", {
+        code: error.code, message: error.message, base,
+      });
+    } else {
+      for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+        const bt = String(r.box_tracking ?? "").trim();
+        if (bt) existingByBox.set(bt, r);
+      }
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const rows = edits
+    .map((e) => {
+      const boxTracking = (e.boxTracking ?? "").trim();
+      if (!boxTracking) return null;
+      const w = r2(e.width), l = r2(e.length), h = r2(e.height);
+      const cbm = w > 0 || l > 0 || h > 0 ? r6((w * l * h) / 1_000_000) : r6(e.cbm);
+      const prev = existingByBox.get(boxTracking) ?? {};
+      return {
+        base_tracking: base,
+        box_tracking: boxTracking,
+        member_code: (prev.member_code as string | null) ?? null,
+        container_name: (prev.container_name as string | null) ?? null,
+        container_code: (prev.container_code as string | null) ?? null,
+        container_no: (prev.container_no as string | null) ?? null,
+        width: w,
+        length: l,
+        height: h,
+        weight_kg: r2(e.weightKg),
+        cbm,
+        quantity: piecesOf(e.quantity),
+        status_id: Number.isFinite(Number(prev.status_id)) ? Number(prev.status_id) : 0,
+        status_text: (prev.status_text as string | null) ?? "",
+        last_synced_at: nowIso,
+        updated_at: nowIso,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK);
+    const { error } = await admin
+      .from("momo_box_detail")
+      .upsert(slice, { onConflict: "base_tracking,box_tracking" });
+    if (error) {
+      console.error("[upsertEditedBoxDetails] upsert failed", { code: error.code, message: error.message });
+      result.errors.push({ scope: `chunk:${i}`, message: `${error.code} ${error.message}` });
+      continue;
+    }
+    result.upserted += slice.length;
+  }
+  return result;
+}
+
 export type BoxDetailFillResult = {
   /** Distinct split boxes seen across the Live parcels. */
   boxesSeen: number;

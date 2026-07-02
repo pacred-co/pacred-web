@@ -31,11 +31,6 @@ import {
 // cards). Uses the EXACT same waterfall the save runs → preview == save (no drift).
 import { resolveLiveForwarderRate, type PricingRowContext } from "@/lib/forwarder/live-rate";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
-// 2026-07-02 (ภูม · per-box dims) — a tracking split by MOMO into N different-size
-// boxes stores its AGGREGATE on ONE tb_forwarder row (ก×ย×ส blank). Read the per-box
-// breakdown MOMO's Live scrape captured (momo_box_detail) so the editor can SHOW each
-// box's real size under that one blank dims input. READ-ONLY · display only.
-import { getBoxDetailsForBaseTrackings, type MomoBoxDetailView } from "@/lib/integrations/momo-web/box-detail";
 import { PerTrackingEditorClient, type PerTrackingRow } from "./per-tracking-editor-client";
 
 // The landed row passed from page.tsx (carries userid for the sibling lookup).
@@ -401,65 +396,10 @@ export async function ForwarderPerTrackingEditor({
   // delivery is the flat MAO_FLAT_FEE. Surface it explicitly (owner 2026-06-23).
   const isMao = rows.some((row) => isMaoCarrier(row.fshipby));
 
-  // ── Multi-box detection + per-box breakdown (ภูม 2026-07-02) ──
-  // A tracking MOMO split into N DIFFERENT-size boxes stores its AGGREGATE on ONE
-  // tb_forwarder row — a single merged ก×ย×ส is meaningless (owner: "กรอกขนาดมั่ว").
-  // We flag such a row as MULTI-BOX so the client HIDES the 3 merged dims inputs
-  // (keeps น้ำหนัก + คิวรวม editable — the aggregate that prices the order) and shows
-  // MOMO's per-box breakdown instead.
-  //
-  // multiBox = (MOMO's per-box detail has >1 box for this base) OR (famount > 1 AND
-  // the merged fwidth/flength/fheight are ALL ≤ 0). The blank-dims clause avoids a
-  // false-positive on a single box with many PIECES (famount = pieces, not boxes; a
-  // real single box gets its merged dims filled by the Live data-fill). The
-  // per-box breakdown itself is shown when momo_box_detail actually carries the
-  // boxes (populated after the MOMO Live scrape runs); until then the client shows
-  // a "sizes will appear after the MOMO Live fill" note.
-  const multiBoxByFid: Record<number, true> = {};
-  for (const row of display) {
-    const blankDims =
-      !(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0);
-    if (num(row.famount) > 1 && blankDims) multiBoxByFid[row.id] = true;
-  }
-
-  // Fetch the per-box detail for EVERY base that has at least one multi-box row (or a
-  // blank-dims row) so a >1-box detail can both confirm multi-box AND feed the panel.
-  const lookupBases = Array.from(
-    new Set(
-      display
-        .filter(
-          (row) =>
-            multiBoxByFid[row.id] ||
-            (!(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0)),
-        )
-        .map((row) => baseTracking(row.ftrackingchn))
-        .filter((b): b is string => !!b),
-    ),
-  );
-  const boxDetailByBase =
-    lookupBases.length > 0
-      ? await getBoxDetailsForBaseTrackings(admin, lookupBases)
-      : new Map<string, MomoBoxDetailView[]>();
-
-  // Attach the per-box detail (only when MOMO split into >1 box) + fold a >1-box
-  // detail into the multi-box flag (so a row with real-but-per-box sizes still hides
-  // the merged input even if famount==1 in tb_forwarder).
-  const boxDetailByFid: Record<number, MomoBoxDetailView[]> = {};
-  for (const row of display) {
-    const base = baseTracking(row.ftrackingchn);
-    const boxes = base ? boxDetailByBase.get(base) : undefined;
-    if (boxes && boxes.length > 1) {
-      boxDetailByFid[row.id] = boxes;
-      multiBoxByFid[row.id] = true;
-    }
-  }
-
   return (
     <PerTrackingEditorClient
       rows={editorRows}
       isMao={isMao}
-      boxDetailByFid={boxDetailByFid}
-      multiBoxByFid={multiBoxByFid}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
       customRateCbmInit={customRateCbmInit}
