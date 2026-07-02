@@ -3,7 +3,7 @@
 import { useEffect, useTransition } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Pencil, Settings, Camera } from "lucide-react";
+import { Pencil, Settings, Camera, Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 
@@ -91,13 +91,9 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               edit) + edit/settings icons top-right + name + รหัสสมาชิก, on a
               full-bleed red gradient with a rounded bottom (0 0 30px 30px). */}
       <section
-        className="relative overflow-hidden rounded-b-[30px] text-white px-4 pt-12 pb-14 -mt-8"
-        style={{ background: "linear-gradient(135deg,#E11D2A 0%,#B30000 100%)" }}
+        className="relative overflow-hidden rounded-b-[30px] text-white px-4 pt-10 pb-9 -mt-8"
+        style={{ background: "#E11D2A" }}
       >
-        {/* soft decorative blobs — echo the legacy wavy red backdrop */}
-        <span aria-hidden className="pointer-events-none absolute -top-10 -left-10 w-40 h-40 rounded-full bg-white/10" />
-        <span aria-hidden className="pointer-events-none absolute -bottom-12 -right-8 w-44 h-44 rounded-full bg-black/5" />
-
         {/* edit + settings — top-right */}
         <div className="relative z-10 flex justify-end gap-2">
           <Link
@@ -116,13 +112,15 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           </Link>
         </div>
 
-        <div className="relative z-10 flex flex-col items-center -mt-1">
-          <div className="relative">
-            <div className="relative w-[84px] h-[84px] rounded-full bg-white/95 overflow-hidden ring-4 ring-white/40 shadow-lg flex items-center justify-center">
+        {/* Profile — avatar LEFT + name/code beside it (Facebook-style, like the
+            original Pacred hero — not the centered legacy layout). */}
+        <div className="relative z-10 flex items-center gap-3.5 mt-1">
+          <div className="relative shrink-0">
+            <div className="relative w-[70px] h-[70px] rounded-full bg-white/95 overflow-hidden ring-4 ring-white/40 shadow-lg flex items-center justify-center">
               {avatarUrl ? (
-                <Image src={avatarUrl} alt={fullName} fill sizes="84px" className="object-cover" unoptimized />
+                <Image src={avatarUrl} alt={fullName} fill sizes="70px" className="object-cover" unoptimized />
               ) : (
-                <span className="text-[32px] font-black text-primary-600 leading-none select-none">{initial}</span>
+                <span className="text-[28px] font-black text-primary-600 leading-none select-none">{initial}</span>
               )}
             </div>
             <Link
@@ -133,27 +131,32 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               <Camera className="w-3.5 h-3.5" strokeWidth={2} />
             </Link>
           </div>
-          <h2 className="mt-3 text-[19px] font-bold text-white text-center leading-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
-            {fullName}
-          </h2>
-          <p className="mt-1 text-[13px] font-medium text-white/95">
-            {t("memberCode")} :{" "}
-            <span className="text-[15px] font-bold tracking-wider align-middle">{memberCode || "—"}</span>
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+              {t("welcome")}
+            </p>
+            <h2 className="text-[18px] font-bold text-white leading-tight truncate [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
+              {fullName}
+            </h2>
+            <p className="mt-0.5 text-[13px] font-medium text-white/95">
+              {t("memberCode")} :{" "}
+              <span className="text-[15px] font-bold tracking-wider align-middle">{memberCode || "—"}</span>
+            </p>
+          </div>
         </div>
       </section>
 
       {/* ── 2. Wallet card — overlaps the hero. "กระเป๋าสตางค์ (บาท)" + big
               balance + Pacred logo + full-width orange gradient bar (legacy). */}
-      <div className="px-4 -mt-9 relative z-20">
+      <div className="px-4 -mt-4 relative z-20">
         <Link
           href="/wallet"
-          className="block bg-white rounded-[26px] shadow-[0_10px_28px_rgba(17,24,39,0.16)] px-5 pt-4 pb-4 active:scale-[0.99] transition-transform"
+          className="block bg-white rounded-[22px] shadow-[0_8px_22px_rgba(17,24,39,0.14)] px-4 pt-3 pb-3.5 active:scale-[0.99] transition-transform"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[14px] text-gray-700 font-medium">{t("walletCardTitle")}</div>
-              <div className="text-[2.7rem] leading-[1.05] font-bold text-gray-800 mt-0.5">{walletText}</div>
+              <div className="text-[2.2rem] leading-[1.05] font-semibold text-gray-800 mt-0.5">{walletText}</div>
             </div>
             <Image
               src="/images/pdiwaicon.png"
@@ -164,39 +167,40 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
             />
           </div>
           <div
-            className="mt-3 h-3 rounded-full w-full"
+            className="mt-2.5 h-2.5 rounded-full w-full"
             style={{ background: "linear-gradient(90deg,#F97316 0%,#FB9E3A 55%,#FBBF24 100%)" }}
           />
         </Link>
       </div>
 
       {/* ── 3. Sales + CS cards — the customer's assigned Sales rep + CS rep,
-              side by side. Legacy PCS "box-sale" stacked look: a red rounded
-              layer sits BEHIND, offset right, so a curved red accent peeks out
-              on the RIGHT edge of each white card (NOT a full border). */}
+              side by side. Plain white cards (no red accent) — clean + airy. */}
       <div className="px-4 mt-3.5 grid grid-cols-2 gap-3">
         {repCards.map(({ role, rep }) => (
-          <div key={role} className="relative">
-            {/* red accent layer behind */}
-            <div
-              aria-hidden
-              className="absolute inset-y-0 left-4 right-0 rounded-[18px] shadow-sm"
-              style={{ background: "linear-gradient(135deg,#FF5A5A 0%,#E4002B 55%,#B10018 100%)" }}
-            />
-            {/* white content card on top, right margin reveals the red accent */}
-            <div className="relative mr-2 bg-white rounded-[18px] shadow-sm px-2 py-2.5 flex items-center gap-1.5">
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-[#F3C6CB] bg-white shrink-0">
-                <Image src={rep.picture} alt={rep.name} fill sizes="36px" className="object-cover" unoptimized />
+          <div
+            key={role}
+            className="bg-white rounded-[16px] shadow-sm border border-black/5 px-2.5 py-2.5 flex items-center gap-2"
+          >
+            <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-[#F3C6CB] bg-white shrink-0">
+              <Image src={rep.picture} alt={rep.name} fill sizes="36px" className="object-cover" unoptimized />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-bold text-primary-600 leading-tight truncate">
+                {role} : {rep.name}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-bold text-primary-600 leading-tight truncate">
-                  {role} : {rep.name}
-                </div>
-                <div className="text-[11px] text-gray-700 mt-0.5 whitespace-nowrap">
-                  Tel : <a href={`tel:${rep.tel}`} className="text-gray-900 font-medium">{rep.tel}</a>
-                </div>
+              <div className="text-[11px] text-gray-700 mt-0.5 whitespace-nowrap">
+                <a href={`tel:${rep.tel}`} className="text-gray-900 font-medium">{rep.tel}</a>
               </div>
             </div>
+            {/* call button — a phone icon (square, not a round button) that
+                dials the rep on tap */}
+            <a
+              href={`tel:${rep.tel}`}
+              aria-label={`โทรหา ${role} ${rep.name}`}
+              className="shrink-0 p-1.5 -mr-0.5 text-primary-600 active:scale-90 transition-transform"
+            >
+              <Phone className="w-4 h-4" fill="currentColor" />
+            </a>
           </div>
         ))}
       </div>
