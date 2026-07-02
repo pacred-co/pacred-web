@@ -401,33 +401,57 @@ export async function ForwarderPerTrackingEditor({
   // delivery is the flat MAO_FLAT_FEE. Surface it explicitly (owner 2026-06-23).
   const isMao = rows.some((row) => isMaoCarrier(row.fshipby));
 
-  // ── Per-box breakdown for BLANK-dim rows (ภูม 2026-07-02) ──
-  // A tb_forwarder row whose ก×ย×ส is blank AND whose tracking MOMO split into
-  // several different-size boxes → show each box's real dims (read-only) under the
-  // single dims input so staff can SEE the sizes they can't enter as one number.
-  // Only rows that need it (blank dims) get a breakdown, keyed by the row id.
-  const blankDimBases = Array.from(
+  // ── Multi-box detection + per-box breakdown (ภูม 2026-07-02) ──
+  // A tracking MOMO split into N DIFFERENT-size boxes stores its AGGREGATE on ONE
+  // tb_forwarder row — a single merged ก×ย×ส is meaningless (owner: "กรอกขนาดมั่ว").
+  // We flag such a row as MULTI-BOX so the client HIDES the 3 merged dims inputs
+  // (keeps น้ำหนัก + คิวรวม editable — the aggregate that prices the order) and shows
+  // MOMO's per-box breakdown instead.
+  //
+  // multiBox = (MOMO's per-box detail has >1 box for this base) OR (famount > 1 AND
+  // the merged fwidth/flength/fheight are ALL ≤ 0). The blank-dims clause avoids a
+  // false-positive on a single box with many PIECES (famount = pieces, not boxes; a
+  // real single box gets its merged dims filled by the Live data-fill). The
+  // per-box breakdown itself is shown when momo_box_detail actually carries the
+  // boxes (populated after the MOMO Live scrape runs); until then the client shows
+  // a "sizes will appear after the MOMO Live fill" note.
+  const multiBoxByFid: Record<number, true> = {};
+  for (const row of display) {
+    const blankDims =
+      !(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0);
+    if (num(row.famount) > 1 && blankDims) multiBoxByFid[row.id] = true;
+  }
+
+  // Fetch the per-box detail for EVERY base that has at least one multi-box row (or a
+  // blank-dims row) so a >1-box detail can both confirm multi-box AND feed the panel.
+  const lookupBases = Array.from(
     new Set(
       display
-        .filter((row) => !(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0))
+        .filter(
+          (row) =>
+            multiBoxByFid[row.id] ||
+            (!(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0)),
+        )
         .map((row) => baseTracking(row.ftrackingchn))
         .filter((b): b is string => !!b),
     ),
   );
   const boxDetailByBase =
-    blankDimBases.length > 0
-      ? await getBoxDetailsForBaseTrackings(admin, blankDimBases)
+    lookupBases.length > 0
+      ? await getBoxDetailsForBaseTrackings(admin, lookupBases)
       : new Map<string, MomoBoxDetailView[]>();
-  // Attach the detail to each blank-dim row (by id). A row with >1 box gets the panel.
+
+  // Attach the per-box detail (only when MOMO split into >1 box) + fold a >1-box
+  // detail into the multi-box flag (so a row with real-but-per-box sizes still hides
+  // the merged input even if famount==1 in tb_forwarder).
   const boxDetailByFid: Record<number, MomoBoxDetailView[]> = {};
   for (const row of display) {
-    const hasDims = num(row.fwidth) > 0 || num(row.flength) > 0 || num(row.fheight) > 0;
-    if (hasDims) continue;
     const base = baseTracking(row.ftrackingchn);
     const boxes = base ? boxDetailByBase.get(base) : undefined;
-    // Show the breakdown only when MOMO actually split it into >1 box (the case a
-    // single blank dims input can't represent). A 1-box detail adds no value here.
-    if (boxes && boxes.length > 1) boxDetailByFid[row.id] = boxes;
+    if (boxes && boxes.length > 1) {
+      boxDetailByFid[row.id] = boxes;
+      multiBoxByFid[row.id] = true;
+    }
   }
 
   return (
@@ -435,6 +459,7 @@ export async function ForwarderPerTrackingEditor({
       rows={editorRows}
       isMao={isMao}
       boxDetailByFid={boxDetailByFid}
+      multiBoxByFid={multiBoxByFid}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
       customRateCbmInit={customRateCbmInit}
