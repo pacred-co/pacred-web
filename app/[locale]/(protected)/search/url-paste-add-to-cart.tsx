@@ -129,6 +129,10 @@ export function UrlPasteAddToCart({
   const [manualPrice, setManualPrice] = useState<string>(priceCny > 0 ? String(priceCny) : "");
   const [error,      setError]      = useState<string | null>(null);
   const [success,    setSuccess]    = useState<boolean>(false);
+  // Running count of rows added THIS session — powers a persistent
+  // "อยู่ในตะกร้าแล้ว N รายการ · ดูตะกร้า" chip that survives the 4s
+  // transient-toast auto-hide (so the customer never loses the cart link).
+  const [addedCount, setAddedCount] = useState<number>(0);
   const [pending,    startTransition] = useTransition();
 
   // ── Derived: matched SKU + effective price/image ──────────────────
@@ -309,7 +313,7 @@ export function UrlPasteAddToCart({
         });
       }
       if (rows.length === 0) {
-        setError("กรอกจำนวนอย่างน้อย 1 ตัวเลือก");
+        setError(t("enterAtLeastOneOption"));
         return;
       }
       setError(null); setSuccess(false);
@@ -317,6 +321,7 @@ export function UrlPasteAddToCart({
         const res = await addCartItemsBulk(rows);
         if (res.ok) {
           setSuccess(true);
+          setAddedCount((c) => c + rows.length);
           setQtyBySku({}); setDetails("");
           setTimeout(() => setSuccess(false), 4000);
         } else {
@@ -366,6 +371,7 @@ export function UrlPasteAddToCart({
       });
       if (res.ok) {
         setSuccess(true);
+        setAddedCount((c) => c + 1);
         // Clear form so customer can paste another URL without stale qty.
         // Keep manualPrice — TAMIT often fails on a whole shop, so the
         // next URL from the same vendor likely shares the price posture.
@@ -403,9 +409,9 @@ export function UrlPasteAddToCart({
       {isMultiPickMode && skuMap && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
           <p className="text-sm font-semibold text-emerald-900">
-            เลือกตัวเลือกสินค้า + จำนวน{" "}
+            {t("pickOptionsAndQty")}{" "}
             <span className="text-xs font-normal text-emerald-700">
-              ({skuMap.length} ตัวเลือก · เลือกได้หลายอันพร้อมกัน)
+              {t("pickOptionsHint", { count: skuMap.length })}
             </span>
           </p>
           <div className="overflow-x-auto rounded-lg border border-emerald-200 bg-white">
@@ -705,6 +711,18 @@ export function UrlPasteAddToCart({
             {t("addedToCart")} ·{" "}
             <Link href="/cart" className="underline font-semibold">{t("viewCart")}</Link>
           </span>
+        </div>
+      )}
+      {/* Persistent cart chip — survives the 4s success-toast auto-hide so
+          the running "N in cart" count + link never disappears. */}
+      {addedCount > 0 && (
+        <div className="flex items-center gap-2 text-[12px] text-muted">
+          <ShoppingCart className="h-4 w-4 text-primary-600 flex-shrink-0" />
+          <span className="font-semibold text-foreground">{t("inCartCount", { count: addedCount })}</span>
+          <span>·</span>
+          <Link href="/cart" className="font-semibold text-primary-600 underline min-h-[44px] inline-flex items-center">
+            {t("viewCart")}
+          </Link>
         </div>
       )}
 

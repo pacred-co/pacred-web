@@ -668,7 +668,7 @@ function RadioCard({
           {icon}
         </span>
         <span className="text-[12.5px] font-bold text-foreground leading-tight">{title}</span>
-        <span className="text-[10.5px] text-muted leading-none">{hint}</span>
+        <span className="text-[11px] text-muted leading-none">{hint}</span>
       </label>
     </div>
   );

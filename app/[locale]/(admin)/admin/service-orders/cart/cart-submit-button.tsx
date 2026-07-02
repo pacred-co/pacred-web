@@ -110,7 +110,7 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
 
   return (
     <button
-      type="submit"
+      type="button"
       className="checkout2 btn btn-outline-info round btn-min-width waves-effect"
       id="CheckWait"
       name="addOrder"

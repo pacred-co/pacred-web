@@ -39,6 +39,7 @@ import {
   ChevronDown, ChevronRight, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/confirm";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import {
   adminMarkShopOrderOrdered,
@@ -182,7 +183,7 @@ export function ShopFieldsBoard({
   }
 
   // ─── status 3 → submit all shops cshippingnumber + flip 3→4 ───────
-  function onSubmitOrdered() {
+  async function onSubmitOrdered() {
     setMsg(null);
     setErr(null);
     const payload = shops.map((s) => ({
@@ -194,10 +195,10 @@ export function ShopFieldsBoard({
       setErr(`กรอกเลขออเดอร์ร้านจีนให้ครบทุกร้าน · ขาด ${missing.length} ร้าน`);
       return;
     }
-    if (!confirm(
+    if (!(await confirm(
       `ยืนยันส่งออเดอร์ #${hNo} เป็น "รอร้านจีนจัดส่ง"?\n\n` +
       `บันทึกเลขออเดอร์ร้านจีน ${payload.length} ร้าน · เปลี่ยนสถานะ 3 → 4 · แจ้งลูกค้า 3 ช่องทาง`,
-    )) return;
+    ))) return;
     startTransition(async () => {
       const res = await adminMarkShopOrderOrdered({
         hNo,
@@ -851,12 +852,12 @@ function InlinePriceUpdateCell({
   const [rowErr, setRowErr] = useState<string | null>(null);
   const refunded = item.crewallet === "1";
 
-  function save() {
+  async function save() {
     setRowErr(null);
     const n = Number(val);
     if (!Number.isFinite(n) || n < 0) { setRowErr("ตัวเลขไม่ถูกต้อง"); return; }
     if (Math.abs(n - Number(item.cpriceupdate ?? 0)) < 0.005) { setRowErr("ไม่เปลี่ยน"); return; }
-    if (!confirm(`บันทึก ¥ เพิ่ม/ลด ของ "${item.ctitle || `#${item.id}`}" = ${n.toFixed(2)} ?`)) return;
+    if (!(await confirm(`บันทึก ¥ เพิ่ม/ลด ของ "${item.ctitle || `#${item.id}`}" = ${n.toFixed(2)} ?`))) return;
     startTransition(async () => {
       const res = await adminUpdateCartItemPriceUpdate({ tb_order_id: item.id, c_price_update: n });
       if (res.ok) onSaved();
@@ -920,18 +921,18 @@ function ShippingNumberTypoFixer({
   const [pending, startTransition] = useTransition();
   const [rowErr, setRowErr] = useState<string | null>(null);
 
-  function save() {
+  async function save() {
     setRowErr(null);
     const next = val.trim();
     if (next === (currentShippingNumber ?? "").trim()) {
       setRowErr("ไม่มีการเปลี่ยนแปลง");
       return;
     }
-    if (!confirm(
+    if (!(await confirm(
       `แก้คำผิดเลขออเดอร์ร้านจีน "${cNameShop}"?\n\n` +
       `เดิม: ${currentShippingNumber || "(ว่าง)"}\n` +
       `ใหม่: ${next || "(ว่าง — จะล้างค่า)"}`,
-    )) return;
+    ))) return;
     startTransition(async () => {
       const res = await adminUpdateCartItemShippingNumber({
         h_no: hNo, c_name_shop: cNameShop, c_shipping_number: next,
@@ -1021,19 +1022,19 @@ function TrackingTypoFixer({
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
 
-  function save() {
+  async function save() {
     setRowErr(null);
     const o = oldTok.trim();
     const n = newTok.trim();
     if (!o) { setRowErr("ระบุเลข tracking เดิม"); return; }
     if (!n) { setRowErr("ระบุเลข tracking ใหม่"); return; }
     if (o === n) { setRowErr("เลข tracking ใหม่เหมือนเดิม"); return; }
-    if (!confirm(
+    if (!(await confirm(
       `แก้คำผิดเลข tracking?\n\n` +
       `เดิม: ${o}\n` +
       `ใหม่: ${n}\n\n` +
       `จะอัพเดททุก tb_order ของออเดอร์นี้ + cascade ไป tb_forwarder + แจ้งลูกค้า`,
-    )) return;
+    ))) return;
     startTransition(async () => {
       const res = await adminUpdateCartItemCTracking({
         h_no: hNo,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
@@ -205,18 +205,36 @@ export function CartInteractivity({
     });
   }
 
+  // Local total compute — SAME formula as `changeAmount` / `initialTotals`.
+  // Used for checkbox toggles so each click updates the summary instantly
+  // (no server round-trip → no lag/flicker, no stale-response stomp). The
+  // money math is identical to the server's calculateCartTotal.
+  function computeLocalTotals(sel: Set<number>, pro2: boolean) {
+    let priceCny = 0;
+    for (const s of sel) {
+      const r = findRow(groupedProviders, s);
+      if (r) priceCny += r.cprice * (amounts.get(s) ?? r.camount);
+    }
+    const rate = pro2 ? 5.10 : Number(totals.rate);
+    setTotals({
+      priceCny: numberFormat(priceCny),
+      priceThb: numberFormat(priceCny * rate),
+      rate: String(rate),
+    });
+  }
+
   function toggleRow(id: number, next: boolean) {
     const ns = new Set(selectedIds);
     if (next) ns.add(id);
     else ns.delete(id);
     setSelectedIds(ns);
-    recompute(ns, pro2Checked);
+    computeLocalTotals(ns, pro2Checked);
   }
 
   function toggleAll(next: boolean) {
     const ns = next ? new Set(allIds) : new Set<number>();
     setSelectedIds(ns);
-    recompute(ns, pro2Checked);
+    computeLocalTotals(ns, pro2Checked);
   }
 
   function changeAmount(id: number, val: number) {
@@ -335,10 +353,39 @@ export function CartInteractivity({
     });
   }
 
-  // ── updateQuantity.php wire — fire-and-forget the persistence write. ──
+  // ── updateQuantity.php wire — persist the qty + surface failures. ──
+  // Track the last successfully-saved qty per row so a failed save can
+  // revert the visible amount (no silent stale-qty order). Seeded from the
+  // server-rendered qty (== the persisted value on first render).
+  const lastSavedAmounts = useRef<Map<number, number>>(new Map(amounts));
+  const [qtyErrorId, setQtyErrorId] = useState<number | null>(null);
+
   function persistAmount(id: number, amount: number) {
+    const prev = lastSavedAmounts.current.get(id) ?? amount;
     startTransition(async () => {
-      await updateCartItemQuantity({ id, quantity: amount });
+      const res = await updateCartItemQuantity({ id, quantity: amount });
+      if (res.ok) {
+        lastSavedAmounts.current.set(id, amount);
+        setQtyErrorId((cur) => (cur === id ? null : cur));
+      } else {
+        // Revert the on-screen amount to the last-known-good + flag the row,
+        // and re-sync the summary totals to the reverted quantities.
+        const nm = new Map(amounts);
+        nm.set(id, prev);
+        setAmounts(nm);
+        setQtyErrorId(id);
+        let priceCny = 0;
+        for (const s of selectedIds) {
+          const r = findRow(groupedProviders, s);
+          if (r) priceCny += r.cprice * (nm.get(s) ?? r.camount);
+        }
+        const rate = pro2Checked ? 5.10 : Number(totals.rate);
+        setTotals({
+          priceCny: numberFormat(priceCny),
+          priceThb: numberFormat(priceCny * rate),
+          rate: String(rate),
+        });
+      }
     });
   }
 
@@ -498,6 +545,9 @@ export function CartInteractivity({
                     const amt = amounts.get(r.id) ?? r.camount;
                     const checked = selectedIds.has(r.id);
                     const lineTotal = r.cprice * amt;
+                    // Display-only ฿ line-total using the same rate the summary
+                    // uses (no persisted value / no money-math change).
+                    const lineTotalThb = lineTotal * (Number(totals.rate) || 0);
                     return (
                       <div
                         key={r.id}
@@ -559,6 +609,11 @@ export function CartInteractivity({
                                 <span className="font-bold">{t("note")}</span> {r.cdetails}
                               </p>
                             )}
+                            {qtyErrorId === r.id && (
+                              <p className="mt-1 text-[11px] font-semibold text-rose-600">
+                                {t("qtySaveFailed")}
+                              </p>
+                            )}
 
                             {/* Mobile-only inline price + qty row */}
                             <div className="md:hidden mt-2 flex items-center justify-between gap-2 flex-wrap">
@@ -579,8 +634,13 @@ export function CartInteractivity({
                                   className="ml-1 w-14 px-1.5 py-0.5 text-[12px] text-center rounded border border-border focus:border-primary-500 focus:ring-1 focus:ring-primary-100 focus:outline-none"
                                 />
                               </div>
-                              <div className="text-[13px] font-black text-primary-600 notranslate">
-                                {numberFormat(lineTotal)} ¥
+                              <div className="text-right">
+                                <div className="text-[13px] font-black text-primary-600 notranslate">
+                                  {numberFormat(lineTotal)} ¥
+                                </div>
+                                <div className="text-[11px] text-muted notranslate">
+                                  ฿{numberFormat(lineTotalThb)}
+                                </div>
                               </div>
                               <button
                                 type="button"
@@ -622,6 +682,9 @@ export function CartInteractivity({
                             <div className="text-[12px] text-muted mb-1">{t("lineTotal")}</div>
                             <div className="text-[13.5px] font-black text-primary-600 notranslate font-mono">
                               {numberFormat(lineTotal)}
+                            </div>
+                            <div className="text-[11px] text-muted notranslate font-mono">
+                              ฿{numberFormat(lineTotalThb)}
                             </div>
                             <button
                               type="button"
