@@ -25,6 +25,12 @@ type Props = {
   /** The customer's assigned Sales rep + CS rep (Pacred fallback when none). */
   salesRep: Rep;
   csRep: Rep;
+  /** Redirect ≥md viewers to /dashboard. TRUE for the standalone
+   *  /m/dashboard route (desktop has no launchpad there). Pass FALSE when
+   *  embedding the launchpad inside another page that already ships its own
+   *  desktop layout (e.g. /profile renders this ONLY < md) — otherwise the
+   *  bounce hijacks that page on desktop. Default true (back-compat). */
+  bounceDesktopToDashboard?: boolean;
 };
 
 // Pacred-red brand icon set (the same PNGs FloatingTabs + the legacy PCS home
@@ -51,13 +57,15 @@ const GRID_TILES: readonly GridTile[] = [
   { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "gridAddress",    href: "/service-import/warehouse-addresses" },
 ];
 
-export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep, csRep }: Props) {
+export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep, csRep, bounceDesktopToDashboard = true }: Props) {
   const t = useTranslations("mobileLaunchpad");
   const initial = (fullName || "?").trim().charAt(0).toUpperCase();
   const [signOutPending, startSignOut] = useTransition();
 
   // Desktop bounce — anything ≥ md gets sent to the canonical /dashboard.
+  // Skipped when embedded in a page that owns its own desktop view (/profile).
   useEffect(() => {
+    if (!bounceDesktopToDashboard) return;
     const mql = window.matchMedia("(min-width: 768px)");
     const bounce = () => {
       window.location.replace("/dashboard");
@@ -71,7 +79,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
     };
     mql.addEventListener("change", onChange);
     return () => mql.removeEventListener("change", onChange);
-  }, []);
+  }, [bounceDesktopToDashboard]);
 
   const walletText = walletTotal.toLocaleString("en-US", {
     minimumFractionDigits: 2,

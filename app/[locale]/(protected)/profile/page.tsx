@@ -10,6 +10,11 @@ import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { getBusinessConfig } from "@/lib/business-config";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY, customerCoverKey } from "@/actions/admin/profile-cover-keys";
+import { MobileLaunchpad } from "../m/dashboard/mobile-launchpad";
+import {
+  getSalesRepContactForUserid,
+  getCsRepContactForUserid,
+} from "@/lib/admin/sales-rep-contact";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -116,6 +121,9 @@ function buildFullAddress(
 
 export default async function ProfilePage() {
   const t = await getTranslations("profilePage");
+  // Fallback display name for the mobile launchpad member card (reuses the
+  // /m/dashboard i18n key so a nameless customer still shows "ลูกค้า Pacred").
+  const tMobile = await getTranslations("mobileDashboard");
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -288,8 +296,50 @@ export default async function ProfilePage() {
   const hasMyCover = !!myCoverPath;
   const isJuristic = profile.account_type === "juristic";
 
+  // The customer's assigned Sales + CS reps (Pacred fallback when none) — for
+  // the mobile launchpad member card. Same shape /m/dashboard builds: short
+  // nickname + digits-only phone + photo (Pacred logo when the rep has none).
+  const PACRED_LOGO = "/images/pacred-logo-red.png";
+  const [salesContact, csContact] = await Promise.all([
+    getSalesRepContactForUserid(memberCode),
+    getCsRepContactForUserid(memberCode),
+  ]);
+  const salesRep = {
+    name: salesContact.nickname,
+    tel: salesContact.phoneDisplay.replace(/\D/g, ""),
+    picture: salesContact.avatarUrl ?? PACRED_LOGO,
+  };
+  const csRep = {
+    name: csContact.nickname,
+    tel: csContact.phoneDisplay.replace(/\D/g, ""),
+    picture: csContact.avatarUrl ?? PACRED_LOGO,
+  };
+
   return (
-    <div className="pcs-legacy">
+    <>
+      {/* ── MOBILE (< md) — the launchpad member card (ภาพที่ ปอน ต้องการ).
+              ปอน 2026-07-02: the FloatingTabs "เมนู" tab now routes to /profile,
+              so on phones /profile must show the launchpad look (avatar hero +
+              wallet + Sales/CS + service grid — the exact /m/dashboard design),
+              NOT the desktop detail form. We reuse the /m/dashboard
+              <MobileLaunchpad> verbatim (it's md:hidden) with the desktop
+              bounce disabled, rendered OUTSIDE .pcs-legacy so the legacy
+              profile.css can't leak into the Tailwind launchpad. (/m/dashboard
+              is otherwise orphaned since the เมนู tab stopped routing there —
+              this gives that design its live home · §0d.) */}
+      <MobileLaunchpad
+        memberCode={userID}
+        fullName={fullName || tMobile("customerFallback")}
+        avatarUrl={profile.avatar_url}
+        walletTotal={walletTotal}
+        salesRep={salesRep}
+        csRep={csRep}
+        bounceDesktopToDashboard={false}
+      />
+
+      {/* ── DESKTOP (≥ md) — the faithful-port detailed profile (unchanged),
+              kept scoped to .pcs-legacy for its theme CSS. */}
+      <div className="hidden md:block pcs-legacy">
       {/* Legacy PCS theme CSS — static public/ asset, loaded via a plain
           <link> so it bypasses the app's Tailwind/PostCSS pipeline. The
           four legacy This-Page plugin CSS files (dropify / cropper /
@@ -797,6 +847,7 @@ export default async function ProfilePage() {
               "2026-05-26 LINE Notify dead"). */}
       </div>
       {/* END: Content — L403 */}
-    </div>
+      </div>
+    </>
   );
 }
