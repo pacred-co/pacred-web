@@ -46,6 +46,7 @@ import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { getShopOrderDocuments } from "@/lib/admin/order-documents";
 import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
+import { buildTrackingGroups } from "@/lib/admin/shop-order-tracking-groups";
 import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
@@ -132,7 +133,7 @@ type HRow = {
   haddresssubdistrict: string | null; haddressdistrict: string | null;
   haddressprovince: string | null; haddresszipcode: string | null;
   haddresstel: string | null; haddressnote: string | null;
-  userid: string; paymethod: string | null; crate: string | null;
+  userid: string; paymethod: string | null; crate: string | null; pricecrate: number | null;
   adminidip: string | null; adminidcreate: string | null;
   tax_doc_pref: string | null;
 };
@@ -157,7 +158,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_header_order")
     .select(
-      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,adminidip,adminidcreate,tax_doc_pref",
+      "id,hno,htitle,hcover,hcount,hdate,hdate2,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hpriceupdate,hcostall,hcostallth,hratecost,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate,pricecrate,adminidip,adminidcreate,tax_doc_pref",
     )
     .eq("hno", hno)
     .maybeSingle();
@@ -263,6 +264,23 @@ export async function renderLegacyServiceOrderView(hno: string) {
   // order shows "X/Y ร้าน" instead of jumping to สำเร็จ when only one shop arrives.
   const shopArrivals = await countShopArrivals(admin, r.hno);
 
+  // ภูม 2026-07-01 — จัดกลุ่มตามแทรคกิ้ง สำหรับ panel "ร้านที่สั่ง" (เหมือนหน้า /edit ·
+  // SHARED helper → กลุ่มเดียวกันเป๊ะ). หลายร้านที่แชร์ 1 แทรคกิ้ง ยุบเป็น 1 กลุ่มเดียว
+  // (เดิม 4 ร้าน แต่ 2 แทรคกิ้ง → 4 แถวซ้ำ → ตอนนี้ 2 กลุ่ม · โชว์ รายการ/ชิ้น/¥/ฝากนำเข้า #fNo).
+  const shopCoverUrlById = new Map<number, string | null>();
+  items.forEach((it, i) => shopCoverUrlById.set(it.id, coverUrls[i] ?? null));
+  const shopSpawnedByTracking = new Map<string, { id: number; fstatus: string | null }>();
+  for (const f of linkedImports) {
+    const key = (f.ftrackingchn ?? "").trim();
+    if (key && !shopSpawnedByTracking.has(key)) shopSpawnedByTracking.set(key, { id: f.id, fstatus: f.fstatus });
+  }
+  const shopTrackingGroups = buildTrackingGroups({
+    items,
+    coverUrlById: shopCoverUrlById,
+    spawnedByTracking: shopSpawnedByTracking,
+    arrivalSummary: shopArrivals,
+  });
+
   // B3 (2026-06-22) — per-order document registry (read-only · tax invoices +
   // receipts issued for this hno). Empty until tax-doc issuance is enabled.
   const orderDocs = await getShopOrderDocuments(r.hno);
@@ -282,8 +300,13 @@ export async function renderLegacyServiceOrderView(hno: string) {
   const svc      = Number(r.hshippingservice ?? 0);
   const rateCost = Number(r.hratecost ?? 0);
   const costAll  = Number(r.hcostall ?? 0);
-  const netThb   = roundUp2((chn + shipChn) * rate + svc);
-  const profit   = (chn + shipChn) * rate - rateCost * costAll;
+  // ภูม 2026-07-01 — ค่าลังไม้ (ตีลังไม้) เก็บเป็น ¥ (pricecrate) · เข้าทั้งฝั่งขาย
+  // (× เรทขาย) และฝั่งต้นทุน (× เรทจริง) เพื่อให้ราคารวมสุทธิทั้งสองฝั่ง + กำไรถูกต้อง.
+  const crateCny = r.crate === "1" ? Number(r.pricecrate ?? 0) : 0;
+  const chnCny   = chn + shipChn + crateCny;           // ¥รวม (สินค้า + ค่าส่งจีน + ลังไม้)
+  const netThb   = roundUp2(chnCny * rate + svc);       // ราคารวมสุทธิ (ขาย)
+  const costNet  = rateCost * (costAll + crateCny);     // ราคารวมสุทธิ (ต้นทุน)
+  const profit   = chnCny * rate - costNet;
 
   const showPrint = status === "3" || status === "4" || status === "5";
   // legacy printShop: status 5 → print=1 ใบเสร็จ + print=2 ใบแจ้งหนี้; else print=2 only.
@@ -447,24 +470,53 @@ export async function renderLegacyServiceOrderView(hno: string) {
               ยังมีร้านที่ของยังไม่เข้าโกดังจีน — สถานะจะคงไว้ที่ “รอร้านจีนจัดส่ง” จนกว่าจะครบทุกร้าน
             </p>
           )}
+          {/* จัดกลุ่มตามแทรคกิ้ง (ภูม 2026-07-01) — หลายร้านที่แชร์แทรคกิ้งเดียว
+              ยุบเป็นแถวเดียว · โชว์ รายการ/ชิ้น/¥รวม/ฝากนำเข้า #fNo เหมือนหน้า /edit. */}
+          <p className="text-[11px] text-muted">
+            📦 จัดกลุ่มตามแทรคกิ้ง ({shopTrackingGroups.length.toLocaleString()} แทรคกิ้ง · {shopArrivals.totalShops} ร้าน)
+          </p>
           <ul className="space-y-1.5">
-            {shopArrivals.shops.map((s) => {
-              const pill = s.done
+            {shopTrackingGroups.map((g) => {
+              const pill = g.done
                 ? { t: "✓ ออกจากจีน/ได้ตู้", c: "bg-emerald-100 text-emerald-700 border-emerald-300" }
-                : s.arrived
+                : g.arrived
                   ? { t: "📦 ถึงโกดังจีนแล้ว", c: "bg-sky-100 text-sky-700 border-sky-300" }
-                  : s.tracking
+                  : g.tracking
                     ? { t: "🚚 รอเข้าโกดังจีน", c: "bg-stone-100 text-stone-600 border-stone-300" }
                     : { t: "⏳ ร้านยังไม่ส่ง", c: "bg-stone-100 text-stone-500 border-stone-300" };
+              const thbEst = rate > 0 ? g.subtotalCny * rate : null;
               return (
-                <li key={s.orderRowId} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-xs">
-                  <div className="min-w-0">
-                    <div className="font-medium text-foreground truncate">{s.shopName || s.productTitle || `รายการ #${s.orderRowId}`}</div>
-                    <div className="font-mono text-[11px] text-muted truncate">
-                      {s.tracking ? s.tracking : <span className="italic">ยังไม่มีแทรคกิ้ง</span>}
-                    </div>
+                <li key={g.tracking || "__none__"} className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-xs space-y-1.5">
+                  {/* แถวบน: แทรคกิ้ง + สถานะการมาถึง */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] text-foreground break-all min-w-0" title={g.tracking || "ยังไม่มีแทรคกิ้ง"}>
+                      {g.tracking ? g.tracking : <span className="italic text-muted">ยังไม่มีแทรคกิ้ง</span>}
+                    </span>
+                    <span className={`shrink-0 rounded-full border text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${pill.c}`}>{pill.t}</span>
                   </div>
-                  <span className={`shrink-0 rounded-full border text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${pill.c}`}>{pill.t}</span>
+                  {/* แถวล่าง: ร้าน + รายการ/ชิ้น + ¥รวม + ฝากนำเข้า #fNo */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {g.shops.length > 0 && (
+                      <span className="text-[11px] text-muted truncate max-w-[45%]" title={g.shops.join(" · ")}>🏪 {g.shops.join(" · ")}</span>
+                    )}
+                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums">
+                      {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
+                    </span>
+                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums font-semibold">
+                      ¥{cny(g.subtotalCny)}{thbEst != null && <span className="ml-1 font-normal text-muted">≈฿{thb(thbEst)}</span>}
+                    </span>
+                    {g.fNo != null && (
+                      <a
+                        href={`/admin/forwarders/${g.fNo}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                        title="เปิดรายการฝากนำเข้าของแทรคกิ้งนี้"
+                      >
+                        ฝากนำเข้า #{g.fNo}
+                      </a>
+                    )}
+                  </div>
                 </li>
               );
             })}
@@ -548,7 +600,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
           </div>
           <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
           <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
-          <KV label="ราคารวมหยวนจีน" value={`¥${cny(chn + shipChn)}`} mono />
+          {/* ภูม 2026-07-01 — ค่าลังไม้ (¥) ใต้ค่าขนส่งในจีน · แยกให้เห็นชัด. */}
+          {r.crate === "1" && <KV label="ค่าลังไม้ (ตีลังไม้)" value={`¥${cny(crateCny)}`} mono />}
+          <KV label="ราคารวมหยวนจีน" value={`¥${cny(chnCny)}`} mono />
           {svc > 0 && <KV label="ค่าบริการฝากสั่ง" value={`฿${thb(svc)}`} mono />}
           <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
             <span>ราคารวมสุทธิ</span>
@@ -558,8 +612,15 @@ export async function renderLegacyServiceOrderView(hno: string) {
           <div className="border-t border-border pt-2 space-y-1">
             <KV label="อัตราแลกเปลี่ยนจริง" value={`${cny(rateCost)} บาท/หยวน`} mono />
             <KV label="ราคาซื้อจริงทั้งหมด" value={`¥${cny(costAll)}`} mono />
+            {/* ภูม 2026-07-01 (บัญชี) — ราคารวมสุทธิของต้นทุน = อัตราแลกเปลี่ยนจริง ×
+                (ราคาซื้อจริงทั้งหมด + ค่าลังไม้). ตัวเข้มเท่าราคารวมสุทธิฝั่งขายด้านบน.
+                กำไรสุทธิ = ราคารวมสุทธิ(ขาย) − ราคารวมสุทธิ(ต้นทุน). */}
+            <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
+              <span>ราคารวมสุทธิ (ราคาต้นทุน)</span>
+              <span className="font-mono tabular-nums">฿{thb(costNet)}</span>
+            </div>
             {costAll !== 0 && (
-              <div className="flex justify-between font-semibold">
+              <div className="flex justify-between border-t border-border pt-1.5 font-semibold">
                 <span>กำไรสุทธิ</span>
                 <span className={`font-mono tabular-nums ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>฿{thb(profit)}</span>
               </div>

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import {
@@ -21,6 +20,8 @@ import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
+import { ADDRESSES } from "@/components/seo/site";
+import { WarehouseGallery } from "./warehouse-gallery";
 
 const PATH = "/warehouses/thailand";
 
@@ -33,7 +34,8 @@ export async function generateMetadata({
   return buildPageMetadata({ locale, path: PATH, namespace: "seo.warehouses.thailand" });
 }
 
-const ADDRESS_TH = "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130";
+// Address from the single source of truth (components/seo/site.ts) — never hardcode (AGENTS §7).
+const ADDRESS_TH = ADDRESSES.warehouseTh.full;
 // Precise warehouse pin (lat/lng 13.71125, 100.3240556) — ปอน 2026-06-08
 // "แก้ google map โกดัง 118 ให้เป็นอันนี้ให้หมด".
 const MAP_PLACE_URL =
@@ -83,6 +85,12 @@ export default async function Page({
       desc: t("highlight4Desc"),
     },
   ];
+
+  const galleryPhotos = PHOTOS.map((p, i) => ({
+    src: p.src,
+    alt: t("photoAlt", { index: i + 1 }),
+    label: `WAREHOUSE ${i + 1}/${PHOTOS.length}`,
+  }));
 
   return (
     <>
@@ -222,28 +230,9 @@ export default async function Page({
                 <span className="text-primary-600"> {t("galleryH3Part2")}</span>
               </h3>
 
-              {/* Horizontal-scroll gallery — mobile 2 rows, desktop 1 row.
-                  `grid-flow-col` packs items column-first so cards wrap into
-                  the row grid before overflowing horizontally. */}
-              <div className="mt-4 md:mt-5 grid grid-rows-2 md:grid-rows-1 grid-flow-col auto-cols-[170px] md:auto-cols-[280px] gap-2.5 md:gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory -mx-3 md:-mx-4 px-3 md:px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {PHOTOS.map((photo, i) => (
-                  <div
-                    key={photo.src}
-                    className="group relative aspect-[4/3] rounded-xl md:rounded-2xl overflow-hidden border border-border shadow-[0_6px_18px_rgba(15,23,42,0.06)] snap-start"
-                  >
-                    <Image
-                      src={photo.src}
-                      alt={t("photoAlt", { index: i + 1 })}
-                      fill
-                      sizes="(max-width: 768px) 170px, 280px"
-                      className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-                    />
-                    <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[11px] font-black text-primary-600">
-                      WAREHOUSE {i + 1}/{PHOTOS.length}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {/* Horizontal-scroll gallery — mobile 2 rows + touch-swipe, desktop
+                  1 row + prev/next arrows (WarehouseGallery client component). */}
+              <WarehouseGallery photos={galleryPhotos} />
             </div>
 
             {/* Highlights grid */}

@@ -132,13 +132,15 @@ export async function maybeCompleteShopOrder(
   if (target === "5" && opts.recomputeSell) {
     const { data: header, error: hErr } = await admin
       .from("tb_header_order")
-      .select("htotalpricechn, hshippingchn, hrate, hshippingservice")
+      .select("htotalpricechn, hshippingchn, hrate, hshippingservice, crate, pricecrate")
       .eq("hno", hno)
       .maybeSingle<{
         htotalpricechn: number | string | null;
         hshippingchn: number | string | null;
         hrate: number | string | null;
         hshippingservice: number | string | null;
+        crate: string | null;
+        pricecrate: number | string | null;
       }>();
     if (hErr) {
       console.error("[maybeCompleteShopOrder] header read for sell recompute failed", {
@@ -149,8 +151,11 @@ export async function maybeCompleteShopOrder(
       const ship = Number(header.hshippingchn ?? 0);
       const rate = Number(header.hrate ?? 0);
       const svc = Number(header.hshippingservice ?? 0);
-      const raw = (chn + ship) * rate + svc;
-      if ([chn, ship, rate, svc].every(Number.isFinite) && Number.isFinite(raw) && raw > 0) {
+      // ภูม 2026-07-01 — ค่าลังไม้ (¥ · เมื่อ crate="1") เข้าราคารวมสุทธิฝั่งขายด้วย
+      // (× เรทขาย). 0 สำหรับออเดอร์เดิม (pricecrate default 0) = ไม่กระทบของเก่า.
+      const crateCny = header.crate === "1" ? Number(header.pricecrate ?? 0) : 0;
+      const raw = (chn + ship + crateCny) * rate + svc;
+      if ([chn, ship, rate, svc, crateCny].every(Number.isFinite) && Number.isFinite(raw) && raw > 0) {
         // round_up(x,2) — CEIL to 2dp (legacy round_up · satang-safe).
         update.htotalpriceuser = Math.ceil(raw * 100 - 1e-9 * Math.max(1, Math.abs(raw * 100))) / 100;
       }

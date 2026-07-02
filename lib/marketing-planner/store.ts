@@ -72,6 +72,8 @@ export type PlannerContextValue = {
   addContent: (partial: Partial<ContentItem> & { title: string }) => ContentItem;
   updateContent: (id: string, patch: Partial<ContentItem>) => void;
   deleteContent: (id: string) => void;
+  /** Batch-delete many contents in one state update (bulk actions). */
+  deleteContents: (ids: string[]) => void;
   duplicateContent: (id: string) => ContentItem | undefined;
   archiveContent: (id: string) => void;
   restoreContent: (id: string) => void;
@@ -85,8 +87,9 @@ export type PlannerContextValue = {
   setShortTarget: (n: number) => void;
   setArticlePerDay: (n: number) => void;
   setPostPerDay: (n: number) => void;
-  /** Generate idea slots for a month from the quota; returns how many were created. */
-  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }) => number;
+  /** Generate idea slots for a month from the quota; returns how many were created.
+   *  `selectedDays` (1-based day numbers) confines placement to those days; null = every day. */
+  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }, selectedDays?: number[] | null) => number;
   // ── Job board ──
   currentUserId: string;
   jobs: JobOrder[];
@@ -227,6 +230,18 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     [apply],
   );
 
+  const deleteContents = useCallback<PlannerContextValue["deleteContents"]>(
+    (ids) => {
+      if (ids.length === 0) return;
+      const drop = new Set(ids);
+      // One state update removes them all → a single saveMarketing upsert of the
+      // survivors; each removed row is also hard-deleted from the DB.
+      apply((d) => ({ ...d, contents: d.contents.filter((c) => !drop.has(c.id)) }));
+      for (const id of ids) void deleteMarketingRow("mkt_contents", id);
+    },
+    [apply],
+  );
+
   const duplicateContent = useCallback<PlannerContextValue["duplicateContent"]>(
     (id) => {
       const src = data.contents.find((c) => c.id === id);
@@ -309,34 +324,43 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     [apply],
   );
   const generateFromPlan = useCallback<PlannerContextValue["generateFromPlan"]>(
-    (year, month, opts) => {
+    (year, month, opts, selectedDays) => {
       const t = data.targets ?? DEFAULT_TARGETS;
-      const slots = distributeMonth(year, month, t);
+      const sel = selectedDays == null ? null : new Set(selectedDays);
+      const slots = distributeMonth(year, month, t, sel);
       const ts = new Date().toISOString();
       const ideaStatus = data.settings.find((s) => s.group === "status" && s.isActive)?.id;
       const pillarName = (id: string) => data.settings.find((s) => s.id === id)?.name ?? "คอนเทนต์";
+      // Running per-type counters → each generated slot gets a distinct, readable
+      // name ("บทความ #7") instead of many identical "บทความ" — a placeholder the
+      // team renames to the real topic later. Numbered in publish-date order.
+      let nLong = 0, nShort = 0, nArticle = 0, nPost = 0;
       const items: ContentItem[] = [];
       for (const slot of slots) {
         if (opts.long) {
           for (const lg of slot.longs) {
             for (let k = 0; k < lg.count; k += 1) {
-              items.push({ id: uid("content"), title: `${pillarName(lg.pillarId)} (คลิปยาว)`, statusId: ideaStatus, contentTypeId: "contentType-long", contentPillarId: lg.pillarId, publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+              nLong += 1;
+              items.push({ id: uid("content"), title: `${pillarName(lg.pillarId)} — คลิปยาว #${nLong}`, statusId: ideaStatus, contentTypeId: "contentType-long", contentPillarId: lg.pillarId, publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
             }
           }
         }
         if (opts.short) {
           for (let k = 0; k < slot.short; k += 1) {
-            items.push({ id: uid("content"), title: "คลิปสั้น / Reels", statusId: ideaStatus, contentTypeId: "contentType-short", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+            nShort += 1;
+            items.push({ id: uid("content"), title: `คลิปสั้น / Reels #${nShort}`, statusId: ideaStatus, contentTypeId: "contentType-short", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
           }
         }
         if (opts.article) {
           for (let k = 0; k < slot.article; k += 1) {
-            items.push({ id: uid("content"), title: "บทความ", statusId: ideaStatus, contentTypeId: "contentType-article", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+            nArticle += 1;
+            items.push({ id: uid("content"), title: `บทความ #${nArticle}`, statusId: ideaStatus, contentTypeId: "contentType-article", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
           }
         }
         if (opts.post) {
           for (let k = 0; k < slot.post; k += 1) {
-            items.push({ id: uid("content"), title: "โพสต์", statusId: ideaStatus, contentTypeId: "contentType-post", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
+            nPost += 1;
+            items.push({ id: uid("content"), title: `โพสต์ #${nPost}`, statusId: ideaStatus, contentTypeId: "contentType-post", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
           }
         }
       }
@@ -406,7 +430,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       contents: data.contents,
       byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
       addSetting, updateSetting, toggleSetting, deleteSetting,
-      addContent, updateContent, deleteContent, duplicateContent, archiveContent, restoreContent,
+      addContent, updateContent, deleteContent, deleteContents, duplicateContent, archiveContent, restoreContent,
       setResult, setContentDate, setContentStatus, resetAll,
       targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
@@ -414,7 +438,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     }),
     [
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
-      addSetting, updateSetting, toggleSetting, deleteSetting, addContent, updateContent, deleteContent,
+      addSetting, updateSetting, toggleSetting, deleteSetting, addContent, updateContent, deleteContent, deleteContents,
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
       targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,

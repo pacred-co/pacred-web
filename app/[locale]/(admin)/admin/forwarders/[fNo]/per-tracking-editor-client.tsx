@@ -288,6 +288,11 @@ export function PerTrackingEditorClient({
       byWeight = comparisonOn ? kgPerCbm > threshold : false;
       transport = 0;
     }
+    // ภูม 2026-07-01 — ค่านำเข้าจีน-ไทย ขั้นต่ำ 50 บาท: ของเบา/น้อยที่คำนวณต่ำกว่า 50
+    // ยกเป็น 50 (ตรงกับ server floor FORWARDER_IMPORT_MIN_THB ใน resolveLiveForwarderRate
+    // ที่ตอนบันทึกจะเขียน 50 → preview กับยอดที่ save ตรงกัน ไม่งง). floor เฉพาะเมื่อมี
+    // ยอดจริง (>0) — ยอด 0 (ยังไม่คำนวณ/ไม่มีเรท) ไม่แตะ.
+    if (transport > 0 && transport < 50) transport = 50;
     const subtotal = transport + chnThb + service + other + thai;
     return {
       cr, useProfile, profileRate, profileBasis,

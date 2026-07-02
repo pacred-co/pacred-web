@@ -30,7 +30,7 @@ import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -192,60 +192,6 @@ export default async function AdminDriversPage({
     );
   }
 
-  // ── GROUP the visible batches BY DRIVER (self-explaining-row standard) ──────
-  // Pure-JS grouping over the already-fetched `rows`. No new DB query.
-  // Group key = `fdadminid` (the legacy text driver id each batch carries).
-  // Each group renders a header (driver name/code + per-status batch counts +
-  // delivery progress) over its own batches in an expandable <details>.
-  type Group = {
-    key:        string;                       // fdadminid, or "__none__" when unassigned
-    driverId:   string | null;
-    driverName: string;
-    batches:    BatchRow[];
-    counts:     { s1: number; s2: number; s3: number }; // กำลังดำเนินการ / สำเร็จ / ไม่สำเร็จ
-    doneStops:  number;                       // delivered stops across the group
-    totalStops: number;                       // tracked items across the group
-    boxSum:     number;
-    hasExpired: boolean;                      // any open batch past its endtime
-  };
-  const groupMap = new Map<string, Group>();
-  for (const r of rows) {
-    const key = r.fdadminid ?? "__none__";
-    let g = groupMap.get(key);
-    if (!g) {
-      const dir = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
-      g = {
-        key,
-        driverId:   r.fdadminid ?? null,
-        driverName: dir?.name ?? (r.fdadminid ? r.fdadminid : "ยังไม่ระบุคนขับ"),
-        batches:    [],
-        counts:     { s1: 0, s2: 0, s3: 0 },
-        doneStops:  0,
-        totalStops: 0,
-        boxSum:     0,
-        hasExpired: false,
-      };
-      groupMap.set(key, g);
-    }
-    g.batches.push(r);
-    const fdstatus = (r.fdstatus ?? "1") as FdStatus;
-    if (fdstatus === "1") g.counts.s1 += 1;
-    else if (fdstatus === "2") g.counts.s2 += 1;
-    else if (fdstatus === "3") g.counts.s3 += 1;
-    const agg = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
-    g.doneStops  += agg.doneCount;
-    g.totalStops += agg.itemCount;
-    g.boxSum     += agg.boxSum;
-    if (r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1") g.hasExpired = true;
-  }
-  // Order: drivers with open (กำลังดำเนินการ) batches first, then by batch count.
-  const groups = Array.from(groupMap.values()).sort((a, b) => {
-    if ((b.counts.s1 > 0 ? 1 : 0) !== (a.counts.s1 > 0 ? 1 : 0)) {
-      return (b.counts.s1 > 0 ? 1 : 0) - (a.counts.s1 > 0 ? 1 : 0);
-    }
-    return b.batches.length - a.batches.length;
-  });
-
   // Pending forwarders ready for assignment for the CTA badge + the alert banner.
   // 2026-06-19 (owner): the accurate "รอจัดรถ" = fstatus=6 (เตรียมส่ง · ชำระแล้ว) NOT
   // already in an open driver batch (the plain fstatus=6 count over-counted by
@@ -369,153 +315,136 @@ export default async function AdminDriversPage({
         </Chip>
       </div>
 
-      {/* Grouped by driver — one block per คนขับ, batches expandable beneath. */}
-      <div className="space-y-3">
-        {groups.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-white shadow-sm p-12 text-center">
-            <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
-            <p className="text-sm text-muted">ยังไม่มีรอบจัดส่งในช่วงนี้</p>
-          </div>
-        ) : (
-          groups.map((g) => (
-            <details
-              key={g.key}
-              open={g.counts.s1 > 0}
-              className="group rounded-2xl border border-border bg-white shadow-sm overflow-hidden"
-            >
-              {/* Driver header = at-a-glance summary (whose · counts · progress) */}
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-surface-alt/30 flex-wrap">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600">
-                    <Truck className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold truncate">{g.driverName}</span>
-                      {g.driverId && (
-                        <span className="font-mono text-[11px] text-muted">{g.driverId}</span>
+      {/* Flat dense table — one row per batch (legacy forwarder-driver.php default
+          list mode L269-348: ID · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
+          ผู้สร้างรายการ · สถานะ · ตัวเลือก). No driver grouping — 1 row = 1 รอบ. */}
+      <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white shadow-sm">
+        <table className="w-full text-sm border-collapse min-w-[1000px]">
+          <thead className="bg-surface-alt/60 text-left text-[11px] uppercase tracking-wide text-muted">
+            <tr>
+              {/* legacy forwarder-driver.php list mode L157-166: ID / วันที่สร้าง / ชื่อรายการ /
+                  ผู้รับผิดชอบ / ผู้สร้างรายการ / สถานะ / ตัวเลือก (ส่งแล้ว = Pacred progress add). */}
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap w-16">ID</th>
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap">วันที่สร้าง</th>
+              <th className="border-b border-border px-3 py-2.5">ชื่อรายการ</th>
+              <th className="border-b border-border px-3 py-2.5">ผู้รับผิดชอบ</th>
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap">ผู้สร้างรายการ</th>
+              <th className="border-b border-border px-3 py-2.5 text-right whitespace-nowrap">
+                <Explain
+                  align="right"
+                  label="ส่งแล้ว"
+                  def="ส่งแล้ว / ทั้งหมด — จำนวนจุดที่คนขับส่งสำเร็จ เทียบกับจุดทั้งหมดในรอบนี้ (เช่น 3/5 = ส่งแล้ว 3 จาก 5 จุด)"
+                />
+              </th>
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap">
+                <Explain
+                  label="สถานะ"
+                  def="สถานะรอบจัดส่ง — กำลังดำเนินการ (คนขับกำลังวิ่งงาน) · สำเร็จ (ส่งครบทุกจุด) · ไม่สำเร็จ (เลยเวลาหรือส่งไม่ครบ)"
+                />
+              </th>
+              <th className="border-b border-border px-3 py-2.5 text-center whitespace-nowrap">ตัวเลือก</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-3 py-12 text-center">
+                  <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
+                  <p className="text-sm text-muted">ยังไม่มีรอบจัดส่งในช่วงนี้</p>
+                </td>
+              </tr>
+            ) : (
+              rows.map((r, ri) => {
+                const fdstatus = (r.fdstatus ?? "1") as FdStatus;
+                const agg      = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
+                const expired  = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
+                const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
+                const zebra    = ri % 2 === 0 ? "bg-white" : "bg-surface-alt/20";
+                return (
+                  <tr key={r.id} className={`border-b border-border align-top hover:bg-primary-50/30 ${zebra}`}>
+                    {/* เลขที่ (ID) */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <Link
+                        href={`/admin/drivers/${r.id}`}
+                        className="font-mono font-semibold text-primary-600 hover:underline"
+                      >
+                        #{r.id}
+                      </Link>
+                    </td>
+                    {/* วันที่สร้าง — date + ส่งก่อนเวลา (legacy DATE/TIME + ส่งก่อนเวลา) */}
+                    <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                      {r.fddate && <div className="text-foreground/80">{formatThaiDate(r.fddate)}</div>}
+                      {r.endtime && (
+                        <div className={expired ? "text-rose-600 font-medium" : ""}>
+                          ส่งก่อน {formatThaiDateTime(r.endtime)}
+                          {expired ? " (เลย)" : ""}
+                        </div>
                       )}
-                      {g.hasExpired && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
-                          <AlertCircle className="h-3 w-3" /> มีงานเลยเวลา
-                        </span>
+                    </td>
+                    {/* ชื่อรายการ (+ inline meta: แทรคกิ้ง / กล่อง / จุดส่ง) */}
+                    <td className="px-3 py-3">
+                      <Link
+                        href={`/admin/drivers/${r.id}`}
+                        className="font-medium text-primary-600 hover:underline"
+                      >
+                        {r.fdname ?? `รอบ #${r.id}`}
+                      </Link>
+                      <div className="mt-0.5 text-[11px] text-muted">
+                        จำนวนแทรคกิ้ง : {agg.itemCount} · จำนวนกล่อง : {agg.boxSum} · จำนวนจุดที่ส่ง : {r.fdamount ?? 0}
+                      </div>
+                    </td>
+                    {/* ผู้รับผิดชอบ (คนขับ = fdadminid) */}
+                    <td className="px-3 py-3 text-xs">
+                      {r.fdadminid ? (
+                        <>
+                          <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
+                          <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
+                        </>
+                      ) : (
+                        <span className="text-muted">— ยังไม่ระบุคนขับ —</span>
                       )}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      {g.batches.length} รอบ · ส่งแล้ว {g.doneStops}/{g.totalStops} จุด · กล่อง {g.boxSum}
-                    </div>
-                  </div>
-                </div>
-                {/* Per-status batch counts */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {g.counts.s1 > 0 && (
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["1"]}`}>
-                      {STATUS_ICON["1"]} {STATUS_LABEL["1"]} {g.counts.s1}
-                    </span>
-                  )}
-                  {g.counts.s2 > 0 && (
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["2"]}`}>
-                      {STATUS_ICON["2"]} {STATUS_LABEL["2"]} {g.counts.s2}
-                    </span>
-                  )}
-                  {g.counts.s3 > 0 && (
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS["3"]}`}>
-                      {STATUS_ICON["3"]} {STATUS_LABEL["3"]} {g.counts.s3}
-                    </span>
-                  )}
-                  <span className="ml-1 text-xs text-muted transition-transform group-open:rotate-90">▸</span>
-                </div>
-              </summary>
-
-              {/* The driver's batches */}
-              <div className="overflow-x-auto scrollbar-x-visible border-t border-border">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-3 py-2.5 whitespace-nowrap">เลขที่</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">วันที่/ส่งก่อน</th>
-                      <th className="px-3 py-2.5">ชื่อรายการ</th>
-                      <th className="px-3 py-2.5">ผู้สร้าง</th>
-                      <th className="px-3 py-2.5 whitespace-nowrap text-right">
-                        <Explain
-                          align="right"
-                          label="ส่งแล้ว"
-                          def="ส่งแล้ว / ทั้งหมด — จำนวนจุดที่คนขับส่งสำเร็จ เทียบกับจุดทั้งหมดในรอบนี้ (เช่น 3/5 = ส่งแล้ว 3 จาก 5 จุด)"
-                        />
-                      </th>
-                      <th className="px-3 py-2.5 whitespace-nowrap">
-                        <Explain
-                          label="สถานะ"
-                          def="สถานะรอบจัดส่ง — กำลังดำเนินการ (คนขับกำลังวิ่งงาน) · สำเร็จ (ส่งครบทุกจุด) · ไม่สำเร็จ (เลยเวลาหรือส่งไม่ครบ)"
-                        />
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.batches.map((r) => {
-                      const fdstatus = (r.fdstatus ?? "1") as FdStatus;
-                      const agg     = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
-                      const expired = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
-                      return (
-                        <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <Link
-                              href={`/admin/drivers/${r.id}`}
-                              className="font-mono text-primary-600 hover:underline font-semibold"
-                            >
-                              #{r.id}
-                            </Link>
-                          </td>
-                          <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                            {r.fddate && (
-                              <div>{formatThaiDate(r.fddate)}</div>
-                            )}
-                            {r.endtime && (
-                              <div className={expired ? "text-rose-600 font-medium" : ""}>
-                                → {formatThaiDateTime(r.endtime)}
-                                {expired ? " (เลย)" : ""}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            <Link
-                              href={`/admin/drivers/${r.id}`}
-                              className="text-primary-600 hover:underline"
-                            >
-                              {r.fdname ?? `รอบ #${r.id}`}
-                            </Link>
-                            <div className="text-[11px] text-muted">
-                              แทรคกิ้ง {agg.itemCount} · กล่อง {agg.boxSum} · จุดส่ง {r.fdamount ?? 0}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-xs text-muted">{r.fdadmincreator ?? "—"}</td>
-                          <td className="px-3 py-3 text-xs text-right">
-                            <div className="font-medium">{agg.doneCount} / {agg.itemCount}</div>
-                            <div className="text-[11px] text-muted">ส่งแล้ว</div>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}
-                              >
-                                {STATUS_ICON[fdstatus]}
-                                {STATUS_LABEL[fdstatus]}
-                              </span>
-                              {/* ลบรอบจากหน้า list (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ */}
-                              {fdstatus === "1" && agg.doneCount === 0 && (
-                                <BatchDeleteInline batchId={r.id} />
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          ))
-        )}
+                    </td>
+                    {/* ผู้สร้างรายการ */}
+                    <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">{r.fdadmincreator ?? "—"}</td>
+                    {/* ส่งแล้ว / ทั้งหมด */}
+                    <td className="px-3 py-3 text-xs text-right whitespace-nowrap">
+                      <div className="font-semibold text-foreground tabular-nums">{agg.doneCount} / {agg.itemCount}</div>
+                    </td>
+                    {/* สถานะ */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
+                        {STATUS_ICON[fdstatus]}
+                        {STATUS_LABEL[fdstatus]}
+                      </span>
+                    </td>
+                    {/* ตัวเลือก — ดูรายละเอียด / พิมพ์ใบค้นหาสินค้า / ลบรายการ (legacy 3-button) */}
+                    <td className="px-3 py-3 text-center whitespace-nowrap">
+                      <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
+                        <Link
+                          href={`/admin/drivers/${r.id}`}
+                          className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                        >
+                          ดูรายละเอียด
+                        </Link>
+                        <Link
+                          href={`/admin/drivers/${r.id}/print`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                        >
+                          <Printer className="h-3 w-3" /> พิมพ์ใบค้นหาสินค้า
+                        </Link>
+                        {/* ลบรายการ (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ */}
+                        {fdstatus === "1" && agg.doneCount === 0 && (
+                          <BatchDeleteInline batchId={r.id} />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       <Pagination

@@ -91,35 +91,11 @@ export type ShopSpawnSummaryRow = {
 
 // 2026-06-30 (owner · spec §5 GROUPING) — items that share the SAME
 // `ctrackingnumber` collapse into ONE dropdown whose HEADER summarises that
-// tracking (mirrors the report-cnt box-breakdown dropdown). The arrival fields
-// (fstatus/hasContainer/arrived/done) come from the SAME `countShopArrivals`
-// data the 3-stage gate uses, so the SUMMARY agrees with the status to the
-// satang. Built server-side in edit/page.tsx · display-only (no new mutation).
-export type TrackingGroupItem = {
-  id: number;
-  ctitle: string;
-  camount: number;
-  cprice: number;
-  cshippingchn: number;
-  crewallet: string | null;
-  coverUrl: string | null;
-  curl: string | null;
-  ccolor: string | null;
-  csize: string | null;
-};
-export type TrackingGroup = {
-  tracking: string;       // ctrackingnumber ("" = ยังไม่ส่ง → its own group)
-  itemCount: number;      // จำนวนรายการ
-  totalQty: number;       // จำนวนรวม (Σ camount · skip refunded)
-  subtotalCny: number;    // ¥รวม (Σ camount×cprice + cshippingchn · skip refunded)
-  fstatus: string;        // linked forwarder status ("" = no forwarder)
-  hasContainer: boolean;  // เลขตู้ assigned
-  arrived: boolean;       // fstatus ≥ 2 (ถึงโกดังจีน)
-  done: boolean;          // hasContainer || fstatus ≥ 3
-  fNo: number | null;     // linked tb_forwarder id (deep link #fNo)
-  shops: string[];        // distinct ร้าน (cnameshop) folded into this tracking
-  items: TrackingGroupItem[];
-};
+// tracking (mirrors the report-cnt box-breakdown dropdown). The grouping math +
+// the TrackingGroup shape now live in the SHARED lib helper so the /edit board
+// AND the read-only detail panel render the same groups (ภูม 2026-07-01 · §12).
+export type { TrackingGroup, TrackingGroupItem } from "@/lib/admin/shop-order-tracking-groups";
+import type { TrackingGroup } from "@/lib/admin/shop-order-tracking-groups";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt disabled:text-muted";

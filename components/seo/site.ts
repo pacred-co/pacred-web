@@ -82,7 +82,7 @@ export const ADDRESSES = {
   },
   /** Bangkok-area receiving warehouse — Samut Sakhon.
    *
-   *  Canonical address (= ปอน's podeng SOT): `48/3 หมู่ 12 ตำบลอ้อมน้อย
+   *  Canonical address (= ปอน's podeng SOT): `48/2 หมู่ 12 ตำบลอ้อมน้อย
    *  อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130`. The visible signage at the
    *  gate reads "S&T WAREHOUSE219" — surfaced as `warehouseName` so
    *  customers can find the entrance when shipping cargo. GPS coords +
@@ -90,13 +90,13 @@ export const ADDRESSES = {
    *  re-querying.
    */
   warehouseTh: {
-    line:          "48/3 หมู่ 12",
+    line:          "48/2 หมู่ 12",
     warehouseName: "S&T WAREHOUSE219",
     subDistrict:   "อ้อมน้อย",
     district:      "กระทุ่มแบน",
     province:      "สมุทรสาคร",
     postcode:      "74130",
-    full:          "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
+    full:          "48/2 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
     lat:           13.71125,
     lng:           100.3240556,
     // Precise warehouse pin (ปอน 2026-06-08 "แก้ google map โกดัง 118 ให้หมด").

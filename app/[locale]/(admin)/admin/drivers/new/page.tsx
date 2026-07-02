@@ -28,8 +28,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ArrowLeft, Truck, Package, MapPin, Home, Send, CheckCircle2, Zap } from "lucide-react";
-import { Explain } from "@/components/ui/tooltip";
+import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
 
@@ -318,7 +317,7 @@ function buildStops(
           // Hide ONLY the placeholder name (never print "รับที่โกดัง Pacred" as a
           // person) — but ALWAYS show the real address fields when they exist, even
           // if the name is the placeholder (ภูม 2026-06-30 · PR047 had a real addr
-          // 48/3 หมู่ 12 กระทุ่มแบน but was blanked + flagged "ยังไม่มีที่อยู่").
+          // 48/2 หมู่ 12 กระทุ่มแบน but was blanked + flagged "ยังไม่มีที่อยู่").
           name:        nameIsPlaceholder ? "" : (f.faddressname ?? ""),
           lastName:    nameIsPlaceholder ? "" : (f.faddresslastname ?? ""),
           no:          hasRealAddress ? (f.faddressno ?? "") : "",
@@ -531,38 +530,24 @@ export default async function CreateDriverBatchPage({
         </Link>
       </div>
 
-      {/* Mode-guide hint — explain the 3 work-tabs at a glance (in-system guide) */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
-        <Explain
-          label={<span className="font-medium text-foreground">มอบงานให้คนขับรถ</span>}
-          def="มอบงานให้คนขับรถ = ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง + เลือกคนขับ + กำหนดเวลา แล้วสร้างรอบจัดส่ง"
-        />
-        <Explain
-          label={<span className="font-medium text-foreground">รับเองหน้าโกดัง</span>}
-          def="รับเองหน้าโกดัง = ลูกค้ามารับของเองที่โกดัง (ไม่มีคนขับ) — ติ๊กที่รับแล้ว แนบรูปถ้ามี → ปิดงานเป็น “ส่งแล้ว” ได้ทันที"
-        />
-        <Explain
-          label={<span className="font-medium text-foreground">Express (ขนส่งภายนอก)</span>}
-          def="Express = ส่งผ่านบริษัทขนส่งภายนอก (Flash · Kerry · J&T · …) — มอบคนขับ Pacred เอาของไปส่งให้ขนส่งเจ้านั้น · มีตัวกรองเลือกบริษัทขนส่งด้านล่าง"
-        />
+      {/* Plain legacy-style count line (PCS has no stat cards — just a summary row) */}
+      <div className="text-xs text-muted">
+        {activeTab !== "pickup" ? (
+          <>
+            แทรคกิ้งรอมอบหมาย <b className="text-foreground">{eligible.length.toLocaleString("th-TH")}</b> ·
+            {" "}จุดส่งจัดกลุ่มแล้ว <b className="text-foreground">{groups.length.toLocaleString("th-TH")}</b> ·
+            {" "}คนขับพร้อมรับงาน <b className="text-foreground">{drivers.length.toLocaleString("th-TH")}</b>
+          </>
+        ) : (
+          <>
+            แทรคกิ้งรอปิดงาน <b className="text-foreground">{eligible.length.toLocaleString("th-TH")}</b> ·
+            {" "}ลูกค้า (จัดกลุ่มแล้ว) <b className="text-foreground">{pickupGroups.length.toLocaleString("th-TH")}</b>
+          </>
+        )}
       </div>
 
-      {/* Stats strip — driver + Express both assign a driver (3 stats); pickup = 2 */}
-      {activeTab !== "pickup" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <Stat icon={<Package className="h-4 w-4" />} label="แทรคกิ้งรอมอบหมาย" value={eligible.length} />
-          <Stat icon={<MapPin className="h-4 w-4" />} label="จุดส่งจัดกลุ่มแล้ว" value={groups.length} />
-          <Stat icon={<Truck className="h-4 w-4" />} label="คนขับพร้อมรับงาน" value={drivers.length} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <Stat icon={<Package className="h-4 w-4" />} label="แทรคกิ้งรอปิดงาน" value={eligible.length} />
-          <Stat icon={<Home className="h-4 w-4" />} label="ลูกค้า (จัดกลุ่มแล้ว)" value={pickupGroups.length} />
-        </div>
-      )}
-
       {(activeTab === "driver" || activeTab === "express") && drivers.length === 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           ⚠️ ยังไม่มีคนขับในระบบ — เพิ่มก่อนที่{" "}
           <Link href="/admin/admins/new" className="underline">/admin/admins/new</Link>{" "}
           (role = driver)
@@ -607,14 +592,3 @@ function TabLink({
   );
 }
 
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-surface-alt px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted">
-        {icon}
-        {label}
-      </div>
-      <div className="text-2xl font-bold mt-0.5">{value.toLocaleString("th-TH")}</div>
-    </div>
-  );
-}
