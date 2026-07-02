@@ -95,7 +95,7 @@ export default async function AdminIncidentsPage({
 }) {
   // READ is broad — every office + operational role. WRITE actions
   // self-gate to super+ops. `roles` decides whether triage buttons show.
-  const { roles } = await requireAdmin([
+  const { user, roles } = await requireAdmin([
     "super", "ops", "accounting", "sales_admin", "warehouse", "driver", "interpreter",
   ]);
   const canTriage = isGodRole(roles) || roles.includes("ops");
@@ -378,6 +378,8 @@ export default async function AdminIncidentsPage({
                       id={r.id}
                       status={r.status as IncidentStatus}
                       hasWorkItem={r.work_item_id != null}
+                      currentAdminId={user.id}
+                      assignedToMe={r.assigned_to === user.id}
                     />
                   )}
                 </li>
