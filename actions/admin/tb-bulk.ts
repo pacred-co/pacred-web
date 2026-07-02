@@ -36,6 +36,7 @@ import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { spendCashbackAtCheckout } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
@@ -121,7 +122,7 @@ export async function adminBulkApproveWalletHs(
       //    fStatus 5→6 settle below can pick the credit vs non-credit branch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, note, wusercredit, reviewed_at")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -137,6 +138,7 @@ export async function adminBulkApproveWalletHs(
         status: string;
         typeservice: string | null;
         reforder: string | null;
+        reforder2: string | null;
         dateslip: string | null;
         note: string | null;
         wusercredit: string | null;
@@ -160,8 +162,6 @@ export async function adminBulkApproveWalletHs(
       const pcsf50AppliedBatches = new Set<string>();
 
       for (const r of candidates) {
-        const amt = Number(r.amount);
-
         // A4 TWO-ROUND verify (owner 2026-06-21) — bulk approve is ROUND 2; it
         // only settles rows already ROUND-1 reviewed (reviewed_at set). Customer
         // payment slips (type 1/4/8) not yet reviewed are SKIPPED + reported so
@@ -186,22 +186,46 @@ export async function adminBulkApproveWalletHs(
             continue;
           }
         }
-        // Determine wallet delta from legacy `type` taxonomy:
-        //   '1'/'2' = deposit (credit) · '4'/'7' = order-pay/pending-pay (debit)
-        // ADR-0018 P1-26 note: type='3' (customer withdraw) is INTENTIONALLY
-        // delta=0 here — its wallet debit already happened at submit (the
-        // "debit-hold" model), so bulk-approving a withdraw only flips status
-        // 1→2 with NO balance change (matches adminApproveWithdraw). A reject
-        // (with refund) must go through the per-row queue (/admin/wallet/
-        // withdrawals), NOT this bulk-approve bar.
-        const delta = (r.type === "1" || r.type === "2") ? amt
-                    : (r.type === "4" || r.type === "7") ? -amt
-                    : 0;
+        // Determine the wallet delta via the shared classifier (money-critical ·
+        // 2026-07-02). DIRECT-CUT: a ฝากนำเข้า direct-slip (type='4'
+        // typeservice='2' reforder set · reforder2 empty · no paydeposit link)
+        // settled from the bank at CREATE and NEVER credited the wallet
+        // (submitForwarderPayment · forwarder.ts L509-561) → walletDelta 0, so
+        // the negative-wallet guard + debit below are inert and admins can
+        // finally settle real slips against a ฿0 wallet. A cascade/wallet-funded
+        // row keeps its legacy delta (credits +amt · debits −amt · else 0) so the
+        // guard stays armed. type='3' (withdraw) is delta=0 (debit-hold at submit).
+        //   Resolve the paydeposit link defensively (empty for direct slips · set
+        //   for the topup-and-pay cascade shape).
+        let rowHasPaydepositLink = false;
+        {
+          const { data: pdLinks, error: pdErr } = await admin
+            .from("tb_wallet_paydeposit")
+            .select("id")
+            .eq("whid", r.id)
+            .limit(1);
+          if (pdErr) {
+            // Fail-safe: a money classification we can't complete must hold.
+            failed++;
+            errors.push(`id=${r.id} ${r.userid}: paydeposit-link check failed: ${pdErr.message}`);
+            continue;
+          }
+          rowHasPaydepositLink = (pdLinks?.length ?? 0) > 0;
+        }
+        const rowClass = classifyWalletHsRow(
+          { type: r.type, typeservice: r.typeservice, reforder: r.reforder, reforder2: r.reforder2, amount: r.amount },
+          { hasPaydepositLink: rowHasPaydepositLink },
+        );
+        // Preserve the legacy withdraw (type='3') delta=0 exactly (classifier
+        // returns 0 for it too since '3' ∉ {1,2,4,7}). The classifier's
+        // direct-slip → 0 is the behavior change; everything else is identical.
+        const delta = rowClass.walletDelta;
 
         // NEGATIVE-WALLET GUARD (owner 2026-06-21) — mirror of the single-row
         // approve: never let a debit (type 4/7) drive the wallet below 0 (the
         // legacy "เติม-แล้วจ่าย" pair bug · PR130 −646). Pre-check BEFORE the claim
-        // so the row stays pending (the accountant approves the paired topup first).
+        // so the row stays pending (the accountant approves the paired topup
+        // first). Inert for a direct-slip (delta 0 · money in bank).
         if (delta < 0) {
           const { data: wPre, error: wPreErr } = await admin
             .from("tb_wallet").select("wallettotal").eq("userid", r.userid)

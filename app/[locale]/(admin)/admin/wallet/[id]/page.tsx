@@ -76,6 +76,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { EditDateSlipForm, EditAmountForm, ApproveRejectForm } from "./edit-form";
+import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ type WalletHsRow = {
   amount: number;
   status: string | null;
   type: string | null;
+  typeservice: string | null;
   imagesslip: string | null;
   userid: string;
   note: string | null;
@@ -150,6 +152,7 @@ type WalletHsRow = {
   depositnamebank: string | null;
   adminidupdate: string | null;
   reforder: string | null;
+  reforder2: string | null;
 };
 
 type UserRow = {
@@ -190,7 +193,7 @@ export default async function AdminWalletDetail({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reviewed_at",
+      "id,date,dateslip,amount,status,type,typeservice,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reforder2,reviewed_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -386,6 +389,19 @@ export default async function AdminWalletDetail({
   const isDebit = isDebitType(typeKey);
   const shouldHaveOwnSlip = typeShouldHaveOwnSlip(typeKey);
 
+  // DIRECT-CUT label fix (money-critical · 2026-07-02). A ฝากนำเข้า direct-slip
+  // (type='4' typeservice='2' · reforder set · reforder2 empty · NOT part of a
+  // "เติม-แล้วจ่าย" cascade) is settled from the BANK — the wallet is untouched
+  // (submitForwarderPayment · forwarder.ts L509-561 · approve keeps walletDelta 0).
+  // Rendering the red "−฿… หักจากกระเป๋า" label lies. `partnerTopupId === null`
+  // means the reverse paydeposit lookup found no paired topup → not a cascade →
+  // treat the classifier's hasPaydepositLink as false for the label.
+  const directSlipShape = classifyWalletHsRow(
+    { type: row.type, typeservice: row.typeservice, reforder: row.reforder, reforder2: row.reforder2, amount: row.amount },
+    { hasPaydepositLink: partnerTopupId !== null },
+  );
+  const isDirectSlip = directSlipShape.shape === "direct-slip";
+
   // ────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────
@@ -472,15 +488,25 @@ export default async function AdminWalletDetail({
             </div>
 
             <div className="text-sm">
-              {/* Wave 19 BUG #4: sign-aware amount label.
+              {/* Wave 19 BUG #4 + DIRECT-CUT (2026-07-02): sign-aware amount label.
                   Credit (type 1/2): green "+เข้ากระเป๋า"
-                  Debit (type 3/4/6/7): red "−หักจากกระเป๋า"
+                  Direct-slip (type 4 direct-cut): neutral blue "ชำระโดยสลิป / โอนเข้าบัญชี"
+                    — money settled from the BANK, the wallet is untouched, so the
+                    red "−หักจากกระเป๋า" would be a lie.
+                  Debit (type 3/4-cascade/6/7): red "−หักจากกระเป๋า"
                   type 5 (admin manual): neutral — let the raw sign speak. */}
               {isCredit ? (
                 <>
                   <span className="font-semibold text-green-700">จำนวนเงินเข้ากระเป๋า: </span>
                   <span className="font-mono font-bold text-green-700">
                     +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  </span>
+                </>
+              ) : isDirectSlip ? (
+                <>
+                  <span className="font-semibold text-sky-700">ชำระโดยสลิป / โอนเข้าบัญชี: </span>
+                  <span className="font-mono font-bold text-sky-700">
+                    {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
                 </>
               ) : isDebit ? (
