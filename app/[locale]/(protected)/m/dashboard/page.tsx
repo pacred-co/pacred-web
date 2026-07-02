@@ -2,8 +2,13 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CONTACT } from "@/components/seo/site";
+import {
+  getSalesRepContactForUserid,
+  getCsRepContactForUserid,
+} from "@/lib/admin/sales-rep-contact";
 import { MobileLaunchpad } from "./mobile-launchpad";
+
+const PACRED_LOGO = "/images/pacred-logo-red.png";
 
 /**
  * Mobile-only customer launchpad — the FloatingTabs "เมนู" destination.
@@ -41,14 +46,27 @@ export default async function MobileDashboardPage() {
 
   const fullName = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
 
-  // Sales rep — per ปอน 2026-05-26, ALL customers see the central Pacred
-  // care line on the mobile launchpad (no per-customer adminidsale lookup).
-  // Single source of truth = CONTACT in components/seo/site.ts so the number
-  // stays in sync with the rest of the site.
+  // Sales + CS reps — the customer's OWN assigned people (tb_users.adminIDSale
+  // / adminIDCS → tb_admin), each resolved to name + tel + photo. A customer
+  // with no rep on file gets the Pacred-wide CS fallback (never an empty box).
+  const [salesContact, csContact] = await Promise.all([
+    getSalesRepContactForUserid(uid),
+    getCsRepContactForUserid(uid),
+  ]);
+
+  // Compact display for the two side-by-side cards: the rep's short nickname
+  // ("ปูปู" / "พลอย" · "Pacred" when none) + phone as raw digits (matches the
+  // mockup). The resolver already handled the active-rep fallback, so whatever
+  // it returns is a WORKING contact.
   const salesRep = {
-    nickname: "แนท",
-    picture: "/images/pacred-logo-red.png",
-    tel: CONTACT.phoneCompanyDisplay,
+    name: salesContact.nickname,
+    tel: salesContact.phoneDisplay.replace(/\D/g, ""),
+    picture: salesContact.avatarUrl ?? PACRED_LOGO,
+  };
+  const csRep = {
+    name: csContact.nickname,
+    tel: csContact.phoneDisplay.replace(/\D/g, ""),
+    picture: csContact.avatarUrl ?? PACRED_LOGO,
   };
 
   return (
@@ -58,6 +76,7 @@ export default async function MobileDashboardPage() {
       avatarUrl={profile.avatar_url}
       walletTotal={walletTotal}
       salesRep={salesRep}
+      csRep={csRep}
     />
   );
 }

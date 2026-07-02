@@ -4319,6 +4319,16 @@
     "customerFallback": "Pacred Customer"
   },
   "mobileLaunchpad": {
+    "walletCardTitle": "Wallet (THB)",
+    "editAria": "Edit profile",
+    "editPhotoAria": "Change photo",
+    "gridShop": "Shop order",
+    "gridImport": "Import",
+    "gridReceipt": "Receipts",
+    "gridPayment": "Transfer / pay",
+    "gridWalletCash": "Wallet",
+    "gridWithdraw": "Withdraw",
+    "gridAddress": "Shipping address",
     "settingsAria": "User account settings",
     "welcome": "Welcome",
     "memberCode": "Member ID",
