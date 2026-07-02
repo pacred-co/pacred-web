@@ -18,11 +18,12 @@
  * the pricer knows which tracking each input row belongs to.
  */
 
-import { useState, useTransition, useMemo } from "react";
+import { Fragment, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import type { MomoBoxDetailView } from "@/lib/integrations/momo-web/box-detail";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -35,6 +36,63 @@ function Sum({ label, value, negative }: { label: string; value: number; negativ
       <span className="text-muted">{label} :</span>
       <span className={`font-mono tabular-nums ${negative ? "text-red-600" : "text-foreground"}`}>{negative ? "−" : ""}{baht(value)}</span>
     </p>
+  );
+}
+
+// ── Per-box breakdown (ภูม 2026-07-02) — READ-ONLY ────────────────────────────
+// A tracking MOMO split into N different-size boxes stores its AGGREGATE on ONE
+// tb_forwarder row (its ก×ย×ส blank — a merged dim would be meaningless). This
+// panel SHOWS each box's real ก×ย×ส (from MOMO's Live scrape · momo_box_detail) so
+// staff can SEE the sizes they can't enter as one number. คิวรวม (the row's CBM
+// input) already carries the total for pricing — this is display only.
+function PerBoxBreakdown({ boxes }: { boxes: MomoBoxDetailView[] }) {
+  const d0 = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
+  const d6 = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 6 });
+  const suffix = (t: string) => {
+    const m = /-(\d+(?:\/\d+)?)$/.exec(t);
+    return m ? `#${m[1]}` : t;
+  };
+  return (
+    <div className="rounded-lg border border-amber-200 bg-white dark:bg-surface">
+      <div className="px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 border-b border-amber-200">
+        📦 ขนาดรายกล่อง (จาก MOMO · {boxes.length} กล่อง) — แต่ละกล่องคนละขนาด กรอกรวมเป็นเลขเดียวไม่ได้ · คิวรวมด้านบนใช้คิดราคาแล้ว
+      </div>
+      <table className="w-full text-[11px]">
+        <thead className="text-muted bg-amber-50/60">
+          <tr className="[&>th]:px-2.5 [&>th]:py-1 [&>th]:text-right [&>th]:font-medium">
+            <th className="!text-left">กล่อง</th>
+            <th>กว้าง</th>
+            <th>ยาว</th>
+            <th>สูง</th>
+            <th>ชิ้น</th>
+            <th>น้ำหนัก/ชิ้น</th>
+            <th>คิว/ชิ้น</th>
+          </tr>
+        </thead>
+        <tbody>
+          {boxes.map((b) => {
+            const hasDims = b.width > 0 || b.length > 0 || b.height > 0;
+            return (
+              <tr key={b.boxTracking} className="border-t border-amber-100 [&>td]:px-2.5 [&>td]:py-1 [&>td]:text-right tabular-nums">
+                <td className="!text-left font-mono text-muted" title={b.boxTracking}>{suffix(b.boxTracking)}</td>
+                {hasDims ? (
+                  <>
+                    <td>{d0(b.width)}</td>
+                    <td>{d0(b.length)}</td>
+                    <td>{d0(b.height)}</td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="!text-center text-amber-600">ไม่ระบุ</td>
+                )}
+                <td>{b.quantity}</td>
+                <td>{d0(b.weightKg)}</td>
+                <td>{d6(b.cbm)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -93,6 +151,12 @@ type Props = {
   profileKgUnitRate?: number | null;
   /** uniform cbm unit rate to label "× rate" (null = rows differ → omit multiplier). */
   profileCbmUnitRate?: number | null;
+  /**
+   * ภูม 2026-07-02 — per-box dimension breakdown for a BLANK-dim row, keyed by the
+   * tb_forwarder row id. Present only when MOMO split that tracking into >1 box with
+   * different sizes (so its single ก×ย×ส input can't hold them). READ-ONLY display.
+   */
+  boxDetailByFid?: Record<number, MomoBoxDetailView[]>;
 };
 
 const WAREHOUSE_CHINA = [
@@ -134,6 +198,7 @@ export function PerTrackingEditorClient({
   profileCbmAmount = null,
   profileKgUnitRate = null,
   profileCbmUnitRate = null,
+  boxDetailByFid = {},
 }: Props) {
   const router = useRouter();
   const { confirm, dialogs } = useConfirmDialogs();
@@ -481,8 +546,11 @@ export function PerTrackingEditorClient({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => (
-              <tr key={r.id} className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:border-r [&>td]:border-border">
+            {rows.map((r, idx) => {
+              const boxDetail = boxDetailByFid[r.id];
+              return (
+              <Fragment key={r.id}>
+              <tr className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:border-r [&>td]:border-border">
                 <td className="min-w-[170px] max-w-[260px] text-left">
                   <div className="font-mono text-[11px] font-medium break-words">{r.tracking || "—"}</div>
                   {r.detail && r.detail !== r.tracking && <div className="text-[11px] text-muted break-words">{r.detail}</div>}
@@ -508,7 +576,16 @@ export function PerTrackingEditorClient({
                 <td><input type="number" min={0} step="0.01" value={r.priceOther} onChange={(e) => patch(idx, { priceOther: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.fShippingService} onChange={(e) => patch(idx, { fShippingService: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
               </tr>
-            ))}
+              {boxDetail && boxDetail.length > 0 && (
+                <tr className="border-t border-border/40 bg-amber-50/50">
+                  <td colSpan={15} className="px-3 py-2">
+                    <PerBoxBreakdown boxes={boxDetail} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

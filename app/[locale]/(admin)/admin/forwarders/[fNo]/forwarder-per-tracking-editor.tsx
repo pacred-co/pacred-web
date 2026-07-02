@@ -31,6 +31,11 @@ import {
 // cards). Uses the EXACT same waterfall the save runs → preview == save (no drift).
 import { resolveLiveForwarderRate, type PricingRowContext } from "@/lib/forwarder/live-rate";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+// 2026-07-02 (ภูม · per-box dims) — a tracking split by MOMO into N different-size
+// boxes stores its AGGREGATE on ONE tb_forwarder row (ก×ย×ส blank). Read the per-box
+// breakdown MOMO's Live scrape captured (momo_box_detail) so the editor can SHOW each
+// box's real size under that one blank dims input. READ-ONLY · display only.
+import { getBoxDetailsForBaseTrackings, type MomoBoxDetailView } from "@/lib/integrations/momo-web/box-detail";
 import { PerTrackingEditorClient, type PerTrackingRow } from "./per-tracking-editor-client";
 
 // The landed row passed from page.tsx (carries userid for the sibling lookup).
@@ -396,10 +401,40 @@ export async function ForwarderPerTrackingEditor({
   // delivery is the flat MAO_FLAT_FEE. Surface it explicitly (owner 2026-06-23).
   const isMao = rows.some((row) => isMaoCarrier(row.fshipby));
 
+  // ── Per-box breakdown for BLANK-dim rows (ภูม 2026-07-02) ──
+  // A tb_forwarder row whose ก×ย×ส is blank AND whose tracking MOMO split into
+  // several different-size boxes → show each box's real dims (read-only) under the
+  // single dims input so staff can SEE the sizes they can't enter as one number.
+  // Only rows that need it (blank dims) get a breakdown, keyed by the row id.
+  const blankDimBases = Array.from(
+    new Set(
+      display
+        .filter((row) => !(num(row.fwidth) > 0) && !(num(row.flength) > 0) && !(num(row.fheight) > 0))
+        .map((row) => baseTracking(row.ftrackingchn))
+        .filter((b): b is string => !!b),
+    ),
+  );
+  const boxDetailByBase =
+    blankDimBases.length > 0
+      ? await getBoxDetailsForBaseTrackings(admin, blankDimBases)
+      : new Map<string, MomoBoxDetailView[]>();
+  // Attach the detail to each blank-dim row (by id). A row with >1 box gets the panel.
+  const boxDetailByFid: Record<number, MomoBoxDetailView[]> = {};
+  for (const row of display) {
+    const hasDims = num(row.fwidth) > 0 || num(row.flength) > 0 || num(row.fheight) > 0;
+    if (hasDims) continue;
+    const base = baseTracking(row.ftrackingchn);
+    const boxes = base ? boxDetailByBase.get(base) : undefined;
+    // Show the breakdown only when MOMO actually split it into >1 box (the case a
+    // single blank dims input can't represent). A 1-box detail adds no value here.
+    if (boxes && boxes.length > 1) boxDetailByFid[row.id] = boxes;
+  }
+
   return (
     <PerTrackingEditorClient
       rows={editorRows}
       isMao={isMao}
+      boxDetailByFid={boxDetailByFid}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
       customRateCbmInit={customRateCbmInit}

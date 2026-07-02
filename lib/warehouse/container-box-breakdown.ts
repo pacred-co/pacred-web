@@ -98,36 +98,219 @@ export function groupBoxesByDimension(rows: FwForBreakdown[]): BoxDimGroup[] {
     const cbm = rowCbm(r.fvolume, r.famount, r.famountcount);
     const tracking = (r.ftrackingchn ?? "").trim();
     const userid = (r.userid ?? "").trim();
-    const key = `${width}|${length}|${height}`;
-    const g = map.get(key);
-    if (g) {
-      g.boxes += boxes;
-      g.cbm += cbm;
-      if (tracking && !g.trackings.includes(tracking)) g.trackings.push(tracking);
-      if (userid && !g.userids.includes(userid)) g.userids.push(userid);
-    } else {
-      map.set(key, {
-        width,
-        length,
-        height,
-        boxes,
-        cbm,
-        trackings: tracking ? [tracking] : [],
-        userids: userid ? [userid] : [],
-      });
-    }
+    addToGroup(map, { width, length, height, boxes, cbm, tracking, userid });
   }
+  return sortGroups(map);
+}
+
+// ── report-cnt แยกตามขนาด v2 (owner/ภูม 2026-07-02) ────────────────────────
+//
+// The v1 grouping above keys purely on the tb_forwarder row's (w,l,h). But a MOMO
+// tracking split into N boxes with DIFFERENT sizes stores only its AGGREGATE on
+// ONE tb_forwarder row, whose ก×ย×ส is left BLANK on purpose (a merged dim would be
+// meaningless — see propagate-live-data.ts). So EVERY such multi-box row falls into
+// the (0,0,0) bucket → the panel showed a fake "1 ขนาด" cramming many trackings +
+// customers into one row (the bug ภูม flagged on GZE260701-1).
+//
+// v2 uses the per-box detail (momo_box_detail) to EXPAND a blank-dim row into its
+// real distinct sizes: a blank-dim row that has per-box detail contributes one box
+// UNIT per detail box (grouped by that box's ACTUAL size, boxes = the box's pieces,
+// CBM = per-piece × pieces). A blank-dim row with NO detail stays in the genuine
+// "ไม่ระบุขนาด" bucket. Rows that already carry real dims (manual / single-box) are
+// grouped by their own size, unchanged.
+//
+// 💰 The tb_forwarder aggregate is untouched — this only decides how the DISPLAY
+// buckets the boxes. The price still uses fvolume (คิวรวม).
+
+/** One split box's per-box detail — the grouping input (subset of momo_box_detail). */
+export type BoxDetailForGrouping = {
+  base_tracking: string;
+  member_code: string | null;
+  /** per-box dims (cm) */
+  width: number | string | null;
+  length: number | string | null;
+  height: number | string | null;
+  /** per-PIECE volume (คิว) — the box total = cbm × quantity */
+  cbm: number | string | null;
+  /** pieces in this box */
+  quantity: number | string | null;
+};
+
+/** True when a forwarder row carries NO real dimension (all three are 0/blank). */
+function rowHasNoDims(r: FwForBreakdown): boolean {
+  return (
+    !(Number(r.fwidth ?? 0) > 0) &&
+    !(Number(r.flength ?? 0) > 0) &&
+    !(Number(r.fheight ?? 0) > 0)
+  );
+}
+
+/** Add a box contribution to the dimension map (merge on identical size). */
+function addToGroup(
+  map: Map<string, BoxDimGroup>,
+  c: { width: number; length: number; height: number; boxes: number; cbm: number; tracking: string; userid: string },
+): void {
+  const key = `${c.width}|${c.length}|${c.height}`;
+  const g = map.get(key);
+  if (g) {
+    g.boxes += c.boxes;
+    g.cbm += c.cbm;
+    if (c.tracking && !g.trackings.includes(c.tracking)) g.trackings.push(c.tracking);
+    if (c.userid && !g.userids.includes(c.userid)) g.userids.push(c.userid);
+  } else {
+    map.set(key, {
+      width: c.width,
+      length: c.length,
+      height: c.height,
+      boxes: c.boxes,
+      cbm: c.cbm,
+      trackings: c.tracking ? [c.tracking] : [],
+      userids: c.userid ? [c.userid] : [],
+    });
+  }
+}
+
+/** Largest groups first (most boxes, then CBM). */
+function sortGroups(map: Map<string, BoxDimGroup>): BoxDimGroup[] {
   return [...map.values()].sort((a, b) => b.boxes - a.boxes || b.cbm - a.cbm);
+}
+
+/**
+ * Pure — group a container's boxes by ACTUAL size, expanding blank-dim MOMO rows
+ * via their per-box detail. `boxDetailsByBase` maps a BASE tracking → its per-box
+ * detail rows (from momo_box_detail).
+ *
+ *  - Row WITH real dims  → grouped by its own (w,l,h) with famount boxes (v1 rule).
+ *  - Row with BLANK dims + detail → one contribution PER detail box, grouped by the
+ *    box's real (w,l,h); boxes = box.quantity, CBM = box.cbm × quantity.
+ *  - Row with BLANK dims + NO detail → the genuine (0,0,0) "ไม่ระบุขนาด" bucket
+ *    (aggregate rowCbm + famount), NOT merged with real sizes.
+ *
+ * A detail box that itself has no size falls into "ไม่ระบุขนาด" too. Sorted largest
+ * first, same as v1.
+ */
+export function groupBoxesWithDetail(
+  rows: FwForBreakdown[],
+  boxDetailsByBase: Map<string, BoxDetailForGrouping[]>,
+): BoxDimGroup[] {
+  const map = new Map<string, BoxDimGroup>();
+  for (const r of rows) {
+    const tracking = (r.ftrackingchn ?? "").trim();
+    const userid = (r.userid ?? "").trim();
+
+    // Manual / single-box row that already carries a real dim → group as-is (v1).
+    if (!rowHasNoDims(r)) {
+      addToGroup(map, {
+        width: Number(r.fwidth ?? 0) || 0,
+        length: Number(r.flength ?? 0) || 0,
+        height: Number(r.fheight ?? 0) || 0,
+        boxes: Number(r.famount ?? 0) || 0,
+        cbm: rowCbm(r.fvolume, r.famount, r.famountcount),
+        tracking,
+        userid,
+      });
+      continue;
+    }
+
+    // Blank-dim row → try to expand via the per-box detail (keyed by BASE tracking).
+    const base = baseOfTracking(tracking);
+    const detail = base ? boxDetailsByBase.get(base) : undefined;
+    if (detail && detail.length > 0) {
+      for (const b of detail) {
+        const w = Number(b.width ?? 0) || 0;
+        const l = Number(b.length ?? 0) || 0;
+        const h = Number(b.height ?? 0) || 0;
+        const qty = Math.max(1, Math.round(Number(b.quantity ?? 0)) || 0) || 1;
+        const boxCbm = (Number(b.cbm ?? 0) || 0) * qty;
+        addToGroup(map, {
+          width: w,
+          length: l,
+          height: h,
+          boxes: qty,
+          cbm: boxCbm,
+          tracking,
+          userid: (b.member_code ?? "").trim() || userid,
+        });
+      }
+      continue;
+    }
+
+    // Blank-dim row with no detail → genuine "ไม่ระบุขนาด" (aggregate, unmerged with sizes).
+    addToGroup(map, {
+      width: 0,
+      length: 0,
+      height: 0,
+      boxes: Number(r.famount ?? 0) || 0,
+      cbm: rowCbm(r.fvolume, r.famount, r.famountcount),
+      tracking,
+      userid,
+    });
+  }
+  return sortGroups(map);
+}
+
+/**
+ * Strip a MOMO "-i/n" (or "-i") split-suffix → the BASE tracking. Identical
+ * convention to lib/integrations/momo-web/live-parcel-metrics.ts baseTrackingOf
+ * (kept local so this pure module has no server-only import): strips a NUMERIC
+ * split-suffix ONLY ("-3" / "-1/3"); a legit hyphenated tracking like
+ * "CBX260620-SEA07" is left intact (SEA isn't digits).
+ */
+export function baseOfTracking(tracking: string): string {
+  return (tracking ?? "").trim().replace(/-\d+(\/\d+)?$/, "");
 }
 
 /** Column set kept in sync with FwForBreakdown. */
 const BREAKDOWN_SELECT =
   "id, famount, famountcount, fvolume, fwidth, flength, fheight, ftrackingchn, fweight, userid";
 
+/** momo_box_detail columns the grouping needs. */
+const BOX_DETAIL_SELECT =
+  "base_tracking, member_code, width, length, height, cbm, quantity";
+
+/**
+ * Fetch the per-box detail for a container and index it by BASE tracking. Best-
+ * effort: if the table is absent (prod before mig 0240) or the query fails, we
+ * return an EMPTY map so the grouping falls back to the v1 (blank-dim → "ไม่ระบุ
+ * ขนาด") behaviour — never fatal. Keyed by container_name = fcabinetnumber.
+ */
+async function fetchBoxDetailByBase(
+  admin: AdminClient,
+  fcabinetnumber: string,
+): Promise<Map<string, BoxDetailForGrouping[]>> {
+  const byBase = new Map<string, BoxDetailForGrouping[]>();
+  const { data, error } = await admin
+    .from("momo_box_detail")
+    .select(BOX_DETAIL_SELECT)
+    .eq("container_name", fcabinetnumber)
+    .limit(50_000);
+  if (error) {
+    // Missing table (42P01) or any error → degrade silently to no-detail.
+    console.error(`[getContainerBoxBreakdown] box-detail lookup failed (fallback to no-detail)`, {
+      code: error.code,
+      message: error.message,
+      fcabinetnumber,
+    });
+    return byBase;
+  }
+  for (const b of (data ?? []) as unknown as BoxDetailForGrouping[]) {
+    const base = (b.base_tracking ?? "").trim();
+    if (!base) continue;
+    const arr = byBase.get(base);
+    if (arr) arr.push(b);
+    else byBase.set(base, [b]);
+  }
+  return byBase;
+}
+
 /**
  * Fetch + group the box-dimension breakdown for ONE container. Called lazily
  * on row-expand (NOT eagerly for every container — most are never opened).
  * Returns [] on any DB error (the UI degrades to "ไม่มีข้อมูล").
+ *
+ * Uses the MOMO per-box detail (momo_box_detail) to expand a multi-box tracking
+ * whose tb_forwarder ก×ย×ส is blank into its real distinct sizes (owner/ภูม
+ * 2026-07-02). Falls back to the v1 aggregate grouping when no detail exists.
  */
 export async function getContainerBoxBreakdown(
   admin: AdminClient,
@@ -156,5 +339,9 @@ export async function getContainerBoxBreakdown(
     weight: (r) => Number(r.fweight ?? 0),
     userid: (r) => r.userid ?? "",
   });
-  return groupBoxesByDimension(countable.length > 0 ? countable : rows);
+  const grouping = countable.length > 0 ? countable : rows;
+
+  // Per-box detail (best-effort) — expands blank-dim MOMO rows into real sizes.
+  const boxDetailsByBase = await fetchBoxDetailByBase(admin, fcabinetnumber);
+  return groupBoxesWithDetail(grouping, boxDetailsByBase);
 }

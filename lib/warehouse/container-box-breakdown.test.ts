@@ -18,8 +18,11 @@
 import assert from "node:assert/strict";
 import {
   groupBoxesByDimension,
+  groupBoxesWithDetail,
+  baseOfTracking,
   rowCbm,
   type FwForBreakdown,
+  type BoxDetailForGrouping,
 } from "./container-box-breakdown";
 
 let passed = 0;
@@ -157,6 +160,146 @@ it("sorts groups by box count desc, then CBM desc", () => {
 
 it("empty input → empty breakdown", () => {
   assert.deepEqual(groupBoxesByDimension([]), []);
+});
+
+// ── v2: groupBoxesWithDetail — expand blank-dim MOMO rows via per-box detail ──
+console.log("container-box-breakdown — baseOfTracking:");
+
+it("baseOfTracking — strips -i and -i/n suffixes, keeps SEA-style intact", () => {
+  assert.equal(baseOfTracking("1782103385-3"), "1782103385");
+  assert.equal(baseOfTracking("1782103385-3/6"), "1782103385");
+  assert.equal(baseOfTracking("1782103385"), "1782103385");
+  assert.equal(baseOfTracking("CBX260620-SEA07"), "CBX260620-SEA07"); // SEA isn't digits
+});
+
+// per-box detail helper
+function bd(p: Partial<BoxDetailForGrouping>): BoxDetailForGrouping {
+  return {
+    base_tracking: p.base_tracking ?? "T1",
+    member_code: "member_code" in p ? (p.member_code ?? null) : "PR1",
+    width: p.width ?? 0,
+    length: p.length ?? 0,
+    height: p.height ?? 0,
+    cbm: p.cbm ?? 0,
+    quantity: p.quantity ?? 1,
+  };
+}
+
+console.log("container-box-breakdown — groupBoxesWithDetail (THE fix · owner ภูม 2026-07-02):");
+
+it("THE bug case — a blank-dim MOMO row expands into its real distinct sizes (not one '—' bucket)", () => {
+  // ONE tb_forwarder row (the base 1782103385) with BLANK dims + aggregate famount=6.
+  const rows = [
+    fw({ id: 1, famount: 6, famountcount: "1", fvolume: 0.5, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "1782103385", userid: "PR9" }),
+  ];
+  // 6 boxes, 3 distinct sizes (2× 204×61×80, 3× 194×125×166, 1× 75×90×40).
+  const detail = new Map<string, BoxDetailForGrouping[]>([
+    ["1782103385", [
+      bd({ base_tracking: "1782103385", width: 204, length: 61, height: 80, cbm: 0.05, quantity: 1 }),
+      bd({ base_tracking: "1782103385", width: 204, length: 61, height: 80, cbm: 0.05, quantity: 1 }),
+      bd({ base_tracking: "1782103385", width: 194, length: 125, height: 166, cbm: 0.1, quantity: 1 }),
+      bd({ base_tracking: "1782103385", width: 194, length: 125, height: 166, cbm: 0.1, quantity: 1 }),
+      bd({ base_tracking: "1782103385", width: 194, length: 125, height: 166, cbm: 0.1, quantity: 1 }),
+      bd({ base_tracking: "1782103385", width: 75, length: 90, height: 40, cbm: 0.02, quantity: 1 }),
+    ]],
+  ]);
+  const groups = groupBoxesWithDetail(rows, detail);
+  // 3 distinct real sizes — NOT one fake "—" bucket, NOT "1 ขนาด".
+  assert.equal(groups.length, 3);
+  const s204 = groups.find((g) => g.width === 204)!;
+  const s194 = groups.find((g) => g.width === 194)!;
+  const s75 = groups.find((g) => g.width === 75)!;
+  assert.equal(s194.boxes, 3); // biggest group first
+  assert.equal(s204.boxes, 2);
+  assert.equal(s75.boxes, 1);
+  assert.deepEqual(groups.map((g) => g.boxes), [3, 2, 1]); // sorted desc
+});
+
+it("a row that already carries real dims is grouped by its own size (v1 unchanged)", () => {
+  const rows = [
+    fw({ id: 1, famount: 6, famountcount: "2", fvolume: 0.06, fwidth: 50, flength: 40, fheight: 30, ftrackingchn: "MANUAL1" }),
+  ];
+  const groups = groupBoxesWithDetail(rows, new Map());
+  assert.equal(groups.length, 1);
+  assert.deepEqual({ w: groups[0].width, boxes: groups[0].boxes }, { w: 50, boxes: 6 });
+});
+
+it("a blank-dim row with NO detail stays the genuine 'ไม่ระบุขนาด' (0,0,0) bucket", () => {
+  const rows = [
+    fw({ id: 1, famount: 12, famountcount: "1", fvolume: 0.4, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "1782000000" }),
+  ];
+  const groups = groupBoxesWithDetail(rows, new Map()); // no detail
+  assert.equal(groups.length, 1);
+  assert.deepEqual({ w: groups[0].width, l: groups[0].length, h: groups[0].height }, { w: 0, l: 0, h: 0 });
+  assert.equal(groups[0].boxes, 12); // aggregate famount
+  assert.equal(Number(groups[0].cbm.toFixed(6)), 0.4); // MOMO total (famountcount='1')
+});
+
+it("MIXED container — real-dim rows + blank rows w/ detail + blank rows w/o detail all coexist", () => {
+  const rows = [
+    // A manual row with its own size.
+    fw({ id: 1, famount: 2, famountcount: "2", fvolume: 0.1, fwidth: 50, flength: 40, fheight: 30, ftrackingchn: "MAN", userid: "PR1" }),
+    // A blank MOMO row that HAS detail → expands.
+    fw({ id: 2, famount: 3, famountcount: "1", fvolume: 0.3, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "AAA", userid: "PR2" }),
+    // A blank MOMO row with NO detail → "ไม่ระบุขนาด".
+    fw({ id: 3, famount: 5, famountcount: "1", fvolume: 0.5, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "BBB", userid: "PR3" }),
+  ];
+  const detail = new Map<string, BoxDetailForGrouping[]>([
+    ["AAA", [
+      bd({ base_tracking: "AAA", width: 60, length: 60, height: 60, cbm: 0.1, quantity: 2, member_code: "PR2" }),
+      bd({ base_tracking: "AAA", width: 20, length: 20, height: 20, cbm: 0.05, quantity: 1, member_code: "PR2" }),
+    ]],
+  ]);
+  const groups = groupBoxesWithDetail(rows, detail);
+  // sizes present: 50×40×30 (manual, 2) · 60×60×60 (detail, 2) · 20×20×20 (detail, 1) · unsized (5)
+  assert.equal(groups.length, 4);
+  const unsized = groups.find((g) => g.width === 0)!;
+  assert.equal(unsized.boxes, 5);
+  const man = groups.find((g) => g.width === 50)!;
+  assert.equal(man.boxes, 2);
+  const big = groups.find((g) => g.width === 60)!;
+  assert.equal(big.boxes, 2);
+  const small = groups.find((g) => g.width === 20)!;
+  assert.equal(small.boxes, 1);
+  // Total boxes preserved: 2 + 2 + 1 + 5 = 10.
+  assert.equal(groups.reduce((s, g) => s + g.boxes, 0), 10);
+});
+
+it("detail is matched by BASE tracking even when the tb_forwarder row stores a suffixed tracking", () => {
+  const rows = [
+    fw({ id: 1, famount: 4, famountcount: "1", fvolume: 0.4, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "1782103385-1", userid: "PR9" }),
+  ];
+  const detail = new Map<string, BoxDetailForGrouping[]>([
+    ["1782103385", [
+      bd({ base_tracking: "1782103385", width: 100, length: 100, height: 100, cbm: 0.2, quantity: 2 }),
+      bd({ base_tracking: "1782103385", width: 30, length: 30, height: 30, cbm: 0.05, quantity: 2 }),
+    ]],
+  ]);
+  const groups = groupBoxesWithDetail(rows, detail);
+  assert.equal(groups.length, 2); // matched via base → expanded (not the "—" bucket)
+  assert.ok(groups.every((g) => g.width > 0));
+});
+
+it("detail box with no size falls into 'ไม่ระบุขนาด'; a box's quantity drives its box count", () => {
+  const rows = [
+    fw({ id: 1, famount: 7, famountcount: "1", fvolume: 0.7, fwidth: 0, flength: 0, fheight: 0, ftrackingchn: "CCC" }),
+  ];
+  const detail = new Map<string, BoxDetailForGrouping[]>([
+    ["CCC", [
+      bd({ base_tracking: "CCC", width: 40, length: 40, height: 40, cbm: 0.06, quantity: 5 }), // 5 boxes this size
+      bd({ base_tracking: "CCC", width: 0, length: 0, height: 0, cbm: 0.02, quantity: 2 }),    // 2 unsized
+    ]],
+  ]);
+  const groups = groupBoxesWithDetail(rows, detail);
+  const sized = groups.find((g) => g.width === 40)!;
+  const unsized = groups.find((g) => g.width === 0)!;
+  assert.equal(sized.boxes, 5);
+  assert.equal(unsized.boxes, 2);
+  assert.equal(Number(sized.cbm.toFixed(6)), 0.3); // 0.06 × 5
+});
+
+it("empty input → empty breakdown (v2)", () => {
+  assert.deepEqual(groupBoxesWithDetail([], new Map()), []);
 });
 
 console.log(`\ncontainer-box-breakdown: ${passed} assertions passed ✅`);

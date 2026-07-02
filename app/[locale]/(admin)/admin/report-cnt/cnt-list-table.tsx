@@ -920,12 +920,14 @@ function BoxBreakdownPanel({
   const totalBoxes = groups.reduce((s, g) => s + g.boxes, 0);
   const totalCbm = groups.reduce((s, g) => s + g.cbm, 0);
   const hasUnsized = groups.some((g) => g.width === 0 && g.length === 0 && g.height === 0);
+  // Count only REAL distinct sizes for the header (the unsized bucket isn't "a size").
+  const sizedCount = groups.filter((g) => g.width > 0 || g.length > 0 || g.height > 0).length;
   const dim = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 
   return (
     <div className="rounded-lg border border-border bg-white dark:bg-surface overflow-x-auto">
       <div className="px-3 py-1.5 text-[11px] font-semibold text-foreground border-b border-border">
-        📦 รายละเอียดกล่อง — แยกตามขนาด ({groups.length} ขนาด)
+        📦 รายละเอียดกล่อง — แยกตามขนาด ({sizedCount} ขนาด{hasUnsized ? " + ไม่ระบุขนาด" : ""})
       </div>
       <table className="w-full text-[11px]">
         <thead className="text-muted bg-surface-alt/40">
@@ -974,9 +976,17 @@ function BoxBreakdownPanel({
                     <span className="text-muted">—</span>
                   )}
                 </td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.width) : "—"}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.length) : "—"}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{hasDims ? dim(g.height) : "—"}</td>
+                {hasDims ? (
+                  <>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{dim(g.width)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{dim(g.length)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{dim(g.height)}</td>
+                  </>
+                ) : (
+                  <td colSpan={3} className="px-3 py-1.5 text-center text-[11px] text-amber-600" title="ยังไม่มีข้อมูลขนาดรายกล่องจาก MOMO">
+                    ไม่ระบุขนาด
+                  </td>
+                )}
                 <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(perBox, 6)}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{g.boxes.toLocaleString()}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(g.cbm, 6)}</td>
@@ -995,7 +1005,7 @@ function BoxBreakdownPanel({
       </table>
       {hasUnsized && (
         <div className="px-3 py-1 text-[11px] text-muted border-t border-border">
-          &quot;—&quot; = กล่องที่ไม่ได้ระบุขนาด (เช่น พัสดุ MOMO ที่บันทึกแต่ CBM รวม)
+          &quot;ไม่ระบุขนาด&quot; = ยังไม่มีข้อมูลขนาดรายกล่องจาก MOMO (เช่น พัสดุที่บันทึกแต่ CBM รวม) — คิวรวมด้านบนใช้คิดราคาได้ปกติ
         </div>
       )}
     </div>

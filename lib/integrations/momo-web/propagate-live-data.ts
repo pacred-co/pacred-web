@@ -50,6 +50,7 @@ import {
   propagateBoardParcels,
   type LiveStatusPropagationResult,
 } from "./propagate-live-status";
+import { fillMomoBoxDetails, type BoxDetailFillResult } from "./box-detail";
 
 /**
  * fstatus codes that are IN or THROUGH billing — a data-fill must NEVER touch
@@ -281,6 +282,8 @@ export async function fillLiveDataForParcels(
 export type LiveStatusAndDataResult = {
   status: LiveStatusPropagationResult;
   data: LiveDataFillResult;
+  /** Per-box dimension detail written into momo_box_detail (display-only · best-effort). */
+  boxDetail: BoxDetailFillResult;
 };
 
 /**
@@ -317,14 +320,26 @@ export async function propagateMomoLiveStatusAndData(
 
   // ── pass 2: DATA fill (fill-when-empty, TOTAL, skip billed). Best-effort:
   //    a data-fill failure must NEVER undo the status writes above. ──
+  const parcels = boardParcels.map((bp) => bp.parcel);
   const dataResult = emptyDataFillResult();
   try {
-    const parcels = boardParcels.map((bp) => bp.parcel);
     await fillLiveDataForParcels(admin, parcels, dataResult);
   } catch (e) {
     console.error("[propagateMomoLiveStatusAndData] data-fill threw", e);
     dataResult.errors.push({ scope: "data-fill", message: e instanceof Error ? e.message : "unknown" });
   }
 
-  return { status: statusResult, data: dataResult };
+  // ── pass 3: PER-BOX detail (momo_box_detail · display-only · best-effort). A
+  //    multi-box tracking's ก×ย×ส can't live on the single tb_forwarder row, so
+  //    we persist each split box's real dims here for the report + editor views.
+  //    NEVER touches tb_forwarder / any money path; a failure is non-fatal. ──
+  const boxDetailResult: BoxDetailFillResult = { boxesSeen: 0, upserted: 0, errors: [] };
+  try {
+    await fillMomoBoxDetails(admin, parcels, boxDetailResult);
+  } catch (e) {
+    console.error("[propagateMomoLiveStatusAndData] box-detail threw", e);
+    boxDetailResult.errors.push({ scope: "box-detail", message: e instanceof Error ? e.message : "unknown" });
+  }
+
+  return { status: statusResult, data: dataResult, boxDetail: boxDetailResult };
 }
