@@ -3,84 +3,56 @@
 import { useEffect, useTransition } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Phone, Settings } from "lucide-react";
+import { Pencil, Settings, Camera } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 
-type SalesRep = {
-  /** Display name — adminnickname or fullname. Falls back to "แนท" (the
-   *  central Pacred care rep) when the customer has no adminidsale. */
-  nickname: string;
-  /** Avatar URL — `tb_admin.adminpicture` if present, otherwise the Pacred
-   *  brand logo so the slot is never an empty initial. */
+type Rep = {
+  /** Display name — the rep's name, or the Pacred CS fallback. */
+  name: string;
+  /** Avatar URL — the rep's photo, or the Pacred brand logo fallback. */
   picture: string;
-  /** Direct phone — tb_organization_tell.tell joined via tb_org_tell_ships,
-   *  or the Pacred office line 02-421-3325 as fallback. */
+  /** Phone (display form) — tap-to-call strips it to digits. */
   tel: string;
 };
 
 type Props = {
   memberCode: string;
   fullName: string;
-  /** profiles.avatar_url — null until customer uploads a photo */
+  /** profiles.avatar_url — null until the customer uploads a photo. */
   avatarUrl: string | null;
   walletTotal: number;
-  salesRep: SalesRep;
+  /** The customer's assigned Sales rep + CS rep (Pacred fallback when none). */
+  salesRep: Rep;
+  csRep: Rep;
 };
 
-// 8-icon launchpad — 4 cols × 2 rows per ปอน 2026-05-26. Uses the legacy
-// PNG icon set from /images/home/iconfloating/ (Pacred-red brand icons —
-// same set FloatingTabs draws from) so the launchpad matches the rest of
-// the customer chrome instead of looking like generic Lucide outlines.
+// Pacred-red brand icon set (the same PNGs FloatingTabs + the legacy PCS home
+// draw from) so the launchpad grid matches the rest of the customer chrome.
 const ICON_BASE = "/images/home/iconfloating";
 
-// 4 bottom-banner promo cards — scroll horizontally in an infinite marquee
-// at the bottom of the launchpad. Sources are the same customer-theme PNGs
-// the desktop dashboard carousel draws from.
-const BOTTOM_BANNERS = [
-  { src: "/images/customertheme/shop.png",  altKey: "bannerShop",   href: "/service-order"          },
-  { src: "/images/customertheme/drive.png", altKey: "bannerDrive",  href: "/service-import"      },
-  { src: "/images/customertheme/bill.png",  altKey: "bannerBill",   href: "/service-import/pending" },
-  { src: "/images/customertheme/line.png",  altKey: "bannerLine",   href: "/notifications"          },
-] as const;
-
-// Launchpad item type — `comingSoon: true` flips the tile to disabled
-// grayscale + "COMING SOON" caption (no Link navigation).
-type LaunchpadItem = {
-  icon: string;
-  labelKey: string;
-  href: string;
-  comingSoon?: boolean;
-};
-
-// ROW 1 — shipping / import / export services. Grouped as the "ส่งของ"
-// workflow with นำเข้า ↔ ส่งออก paired side-by-side (เดฟ 2026-05-27 — ปอน:
-// "เอาส่งออกไปคู่กับนำเข้าให้หน่อย"). ส่งออก carries `comingSoon: true`
-// because the export module isn't built yet — `export.png` is its dedicated
-// icon (already in the iconfloating set), grayscale + "COMING SOON" badge
-// applied in the render branch.
-const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
-  { icon: "/images/hero-section/icon/cart.png", labelKey: "tileShopOrder", href: "/cart/add"   },
-  { icon: `${ICON_BASE}/pcs-payment.png`,      labelKey: "tileYuanTransfer", href: "/service-payment" },
-  { icon: `${ICON_BASE}/pcs-forwarder.png`,    labelKey: "tileImport",     href: "/service-import"  },
-  { icon: `${ICON_BASE}/export.png`,           labelKey: "tileExport",     href: "#", comingSoon: true },
+// The service tiles of the legacy PCS member home, wired to the live Pacred
+// routes — a faithful 1:1 port of pcscargo.co.th/member/ (D1), 3-column grid
+// with a big icon + label. "เติมเงิน" (top-up → /wallet/deposit) is
+// intentionally omitted: the owner cancelled the top-up model on 2026-06-07
+// (pay-direct + verify-slip). Add it back only on the owner's word.
+type GridTile = { icon: string; labelKey: string; href: string; comingSoon?: boolean };
+const GRID_TILES: readonly GridTile[] = [
+  { icon: `${ICON_BASE}/pcs-shops.png`,                  labelKey: "gridShop",       href: "/service-order" },
+  { icon: `${ICON_BASE}/pcs-forwarder.png`,              labelKey: "gridImport",     href: "/service-import" },
+  // ส่งออก — Pacred's own roadmap tile, paired next to นำเข้า. Ships DISABLED
+  // (grayscale "ไอคอนเทาๆ") because the export module isn't built yet. Adding it
+  // also makes the grid an even 3×3 (8 tiles + logout = 9), matching PCS.
+  { icon: `${ICON_BASE}/export.png`,                     labelKey: "tileExport",     href: "#", comingSoon: true },
+  { icon: "/images/hero-section/icon/billingpacred.png", labelKey: "gridReceipt",    href: "/service-import/pending" },
+  { icon: `${ICON_BASE}/pcs-payment.png`,                labelKey: "gridPayment",    href: "/service-payment" },
+  { icon: `${ICON_BASE}/pcs-wallet.png`,                 labelKey: "gridWalletCash", href: "/wallet" },
+  { icon: `${ICON_BASE}/pcs-wallet-drop.png`,            labelKey: "gridWithdraw",   href: "/wallet/withdraw" },
+  { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "gridAddress",    href: "/service-import/warehouse-addresses" },
 ];
 
-// ROW 2 — utility / account actions: address, wallet, history.
-// ออกจากระบบ moves to row 3 as a single end-of-session cell (rendered as a
-// <button> after this list because logout is a Server Action, not a link).
-// The "ชำระเงิน" (top-up → /wallet/deposit) tile is hidden — owner 2026-06-07:
-// top-up is cancelled. The /wallet/deposit route is kept; only the tile drops.
-const SECONDARY_ACTIONS: readonly LaunchpadItem[] = [
-  { icon: `${ICON_BASE}/pcs-address.png`,                labelKey: "tileShipAddress", href: "/service-import/warehouse-addresses" },
-  { icon: `${ICON_BASE}/pcs-wallet.png`,                 labelKey: "tileWallet", href: "/wallet"                 },
-  { icon: "/images/hero-section/icon/billingpacred.png", labelKey: "tileReceiptHistory",  href: "/service-import/pending" },
-];
-
-export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep }: Props) {
+export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep, csRep }: Props) {
   const t = useTranslations("mobileLaunchpad");
-  // Customer initial — first character of the display name, uppercased.
-  // Used as a clean fallback if avatar_url is null / fails to load.
   const initial = (fullName || "?").trim().charAt(0).toUpperCase();
   const [signOutPending, startSignOut] = useTransition();
 
@@ -106,216 +78,160 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
     maximumFractionDigits: 2,
   });
 
+  // Sales + CS shown as two side-by-side cards (legacy "box-sale" stacked look).
+  const repCards = [
+    { role: "Sales", rep: salesRep },
+    { role: "CS", rep: csRep },
+  ] as const;
+
   return (
-    <div className="md:hidden w-full px-3 pt-0 pb-24 space-y-2.5">
+    <div className="md:hidden w-full pb-24">
 
-      {/* ── 1. Profile hero — FULL-BLEED edge-to-edge banner (เดฟ 2026-05-27 —
-              ปอน: "ทำให้เต็มแล้วโค้งมนๆเลยตรงมุม"). `-mx-3` undoes the
-              parent wrapper's `px-3` so the banner extends to the viewport
-              edges; `rounded-b-3xl` rounds ONLY the bottom corners — the top
-              edge sits flat under the SearchBar so it reads as one continuous
-              chrome surface ("drawer pulling down from under header"). The
-              `-mt-8` keeps the legacy-PCS "bite into the search bar" overlap.
-              Min-height 180px reveals the full truck illustration in
-              `bannermobilemain.png` (`cover` scales with container height). */}
-      <section className="relative overflow-hidden rounded-b-2xl text-white px-4 pt-14 pb-5 shadow-md min-h-[190px] -mt-8 -mx-3">
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background: "url('/images/bannermobile/bannermobilemain.png') center center / cover no-repeat",
-          }}
-        />
-        {/* Settings gear — top-right of the hero, opens /account-settings.
-            Wrapped in a circular white/translucent button so it's tap-friendly
-            and reads against the photo background. */}
-        <Link
-          href="/account-settings"
-          aria-label={t("settingsAria")}
-          className="absolute top-14 right-2 z-10 w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 backdrop-blur-sm flex items-center justify-center text-white shadow-md ring-1 ring-white/30 active:scale-95 transition-all"
-        >
-          <Settings className="w-3.5 h-3.5" strokeWidth={2.2} />
-        </Link>
+      {/* ── 1. Profile hero — legacy PCS 1:1: centered avatar (with camera
+              edit) + edit/settings icons top-right + name + รหัสสมาชิก, on a
+              full-bleed red gradient with a rounded bottom (0 0 30px 30px). */}
+      <section
+        className="relative overflow-hidden rounded-b-[30px] text-white px-4 pt-12 pb-14 -mt-8"
+        style={{ background: "linear-gradient(135deg,#E11D2A 0%,#B30000 100%)" }}
+      >
+        {/* soft decorative blobs — echo the legacy wavy red backdrop */}
+        <span aria-hidden className="pointer-events-none absolute -top-10 -left-10 w-40 h-40 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-12 -right-8 w-44 h-44 rounded-full bg-black/5" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="relative w-[64px] h-[64px] rounded-full bg-white/95 overflow-hidden shadow-lg ring-4 ring-white/30 shrink-0 flex items-center justify-center">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={fullName}
-                fill
-                sizes="64px"
-                className="object-cover"
-                unoptimized
-              />
-            ) : (
-              <span className="text-[28px] font-black text-primary-600 leading-none select-none">
-                {initial}
-              </span>
-            )}
+        {/* edit + settings — top-right */}
+        <div className="relative z-10 flex justify-end gap-2">
+          <Link
+            href="/account-settings"
+            aria-label={t("editAria")}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center ring-1 ring-white/25 active:scale-95 transition-all"
+          >
+            <Pencil className="w-4 h-4" strokeWidth={2.2} />
+          </Link>
+          <Link
+            href="/account-settings"
+            aria-label={t("settingsAria")}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center ring-1 ring-white/25 active:scale-95 transition-all"
+          >
+            <Settings className="w-4 h-4" strokeWidth={2.2} />
+          </Link>
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center -mt-1">
+          <div className="relative">
+            <div className="relative w-[84px] h-[84px] rounded-full bg-white/95 overflow-hidden ring-4 ring-white/40 shadow-lg flex items-center justify-center">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt={fullName} fill sizes="84px" className="object-cover" unoptimized />
+              ) : (
+                <span className="text-[32px] font-black text-primary-600 leading-none select-none">{initial}</span>
+              )}
+            </div>
+            <Link
+              href="/account-settings"
+              aria-label={t("editPhotoAria")}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gray-800 text-white flex items-center justify-center border-2 border-white shadow-md active:scale-95 transition-transform"
+            >
+              <Camera className="w-3.5 h-3.5" strokeWidth={2} />
+            </Link>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-bold text-white [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.6)]">
-              {t("welcome")}
-            </p>
-            <p className="text-[15px] font-bold leading-tight whitespace-nowrap truncate text-white/95 [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.7),0_4px_12px_rgba(0,0,0,0.45)]">
-              {fullName}
-            </p>
-            <p className="mt-1 text-[13px] font-bold text-white [-webkit-text-stroke:0.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_5px_rgba(0,0,0,0.55)]">
-              {t("memberCode")} :{" "}
-              <span className="text-[19px] font-black tracking-wider align-middle [-webkit-text-stroke:0.9px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_7px_rgba(0,0,0,0.65)]">
-                {memberCode || "—"}
-              </span>
-            </p>
-          </div>
+          <h2 className="mt-3 text-[19px] font-bold text-white text-center leading-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
+            {fullName}
+          </h2>
+          <p className="mt-1 text-[13px] font-medium text-white/95">
+            {t("memberCode")} :{" "}
+            <span className="text-[15px] font-bold tracking-wider align-middle">{memberCode || "—"}</span>
+          </p>
         </div>
       </section>
 
-      {/* ── 2. Sales rep card — PRIMARY slot (overlapping the hero). Colour
-              switched sky → Pacred RED + sized up to match the legacy PCS card
-              feel (ปอน 2026-06-08 — "สี แดง/ส้ม ตามแบรนด์ + ใหญ่ขึ้นแบบ legacy").
-              Order unchanged (เซลล์บน, กระเป๋าเงินล่าง — เดิม). */}
-      <section className="relative z-10 -mt-16 overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-4 py-3.5 flex items-center gap-3">
-        <span
-          aria-hidden
-          className="absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full bg-gradient-to-b from-primary-500 to-primary-700"
-        />
-
-        <div className="relative shrink-0">
-          <div className="relative w-16 h-16 overflow-hidden rounded-full border-2 border-primary-500/40 bg-white">
+      {/* ── 2. Wallet card — overlaps the hero. "กระเป๋าสตางค์ (บาท)" + big
+              balance + Pacred logo + full-width orange gradient bar (legacy). */}
+      <div className="px-4 -mt-9 relative z-20">
+        <Link
+          href="/wallet"
+          className="block bg-white rounded-[26px] shadow-[0_10px_28px_rgba(17,24,39,0.16)] px-5 pt-4 pb-4 active:scale-[0.99] transition-transform"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[14px] text-gray-700 font-medium">{t("walletCardTitle")}</div>
+              <div className="text-[2.7rem] leading-[1.05] font-bold text-gray-800 mt-0.5">{walletText}</div>
+            </div>
             <Image
-              src={salesRep.picture}
-              alt={salesRep.nickname}
-              fill
-              sizes="64px"
-              className="object-cover"
-              unoptimized
+              src="/images/pdiwaicon.png"
+              alt="Pacred"
+              width={96}
+              height={96}
+              className="w-12 h-12 rounded-[13px] object-cover shrink-0 mt-0.5 shadow-sm"
             />
           </div>
-          <span aria-hidden className="absolute bottom-0 right-0 flex h-4 w-4">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-4 w-4 rounded-full bg-emerald-500 border-2 border-white" />
-          </span>
-        </div>
-
-        <div className="relative min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="text-[12px] font-semibold uppercase tracking-wider text-primary-700">
-              {t("salesRepLabel")}
-            </p>
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold px-1.5 py-0.5 border border-emerald-100">
-              <span className="w-1 h-1 rounded-full bg-emerald-500" />
-              ONLINE
-            </span>
-          </div>
-          <p className="text-[16px] font-bold text-foreground truncate leading-tight">
-            {t("salesRepName", { name: salesRep.nickname })}
-          </p>
-          <p className="mt-0.5 text-[12.5px] text-muted font-mono whitespace-nowrap">
-            {t("phoneLabel")} : <span className="text-foreground">{salesRep.tel}</span>
-          </p>
-        </div>
-
-        <a
-          href={`tel:${salesRep.tel.replace(/[^+0-9]/g, "")}`}
-          aria-label={t("callSalesAria", { name: salesRep.nickname })}
-          className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-primary-600 text-white text-[11.5px] font-bold px-3 py-2 shadow-md shadow-primary-600/25 active:scale-95 transition-transform"
-        >
-          <Phone className="w-3.5 h-3.5" fill="currentColor" />
-          {t("contactSales")}
-        </a>
-      </section>
-
-      {/* ── 3. Wallet balance card — secondary slot under the rep. Colour
-              switched emerald → ORANGE + balance digit sized up to the legacy
-              feel (ปอน 2026-06-08 — "สี แดง/ส้ม ตามแบรนด์ + ใหญ่ขึ้นแบบ legacy").
-              Kept the single-row, no-icon layout (owner 2026-06-04). */}
-      <Link
-        href="/wallet"
-        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-sm px-4 py-3.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
-      >
-        <span
-          aria-hidden
-          className="absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full bg-gradient-to-b from-orange-400 to-orange-600"
-        />
-
-        {/* Single row — no icon, label + balance inline (owner 2026-06-04:
-            "ไม่ต้องมีไอคอนกระเป๋าพักเงิน และทำให้ทุกอย่างเป็นแถวเดียวกัน"). */}
-        <div className="relative min-w-0 flex-1 flex items-baseline gap-1.5 pl-1.5">
-          <span className="shrink-0 text-[12.5px] font-semibold uppercase tracking-wider text-orange-700">
-            {t("walletLabel")}
-          </span>
-          <span className="truncate text-[22px] font-black tracking-tight text-orange-600">
-            {walletText}
-          </span>
-          <span className="shrink-0 text-[13px] font-bold text-orange-500/90">{t("baht")}</span>
-        </div>
-
-        {/* Top-up ("ชำระเงิน") CTA pill hidden — owner 2026-06-07: top-up is
-            cancelled. The card now just links to /wallet to view balance +
-            history (cashback used as a discount at checkout). */}
-      </Link>
-
-      {/* ── 4. Section header — matches homepage OurServices style:
-              red dot + uppercase-tracked label, centered on mobile. */}
-      <div className="flex items-center justify-center gap-1.5 pt-2 text-red-600 text-[10.5px] font-black tracking-[0.08em] uppercase">
-        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-        {t("ourServices")}
+          <div
+            className="mt-3 h-3 rounded-full w-full"
+            style={{ background: "linear-gradient(90deg,#F97316 0%,#FB9E3A 55%,#FBBF24 100%)" }}
+          />
+        </Link>
       </div>
 
-      {/* ── 5. launchpad — 4-col grid (7 active links + 1 disabled coming-soon
-              tile + 1 logout button). Layout intent (ปอน 2026-05-27):
-                Row 1 (services + roadmap): ฝากสั่งซื้อ · ฝากโอนชำระ · นำเข้า · ส่งออก[COMING SOON]
-                Row 2 (utility actions):    ที่อยู่จัดส่ง · กระเป๋าพักเงิน · ประวัติใบเสร็จ
-                (the "ชำระเงิน" top-up tile was removed — owner 2026-06-07, top-up cancelled)
-              ส่งออก sits next to นำเข้า — natural import↔export pair — but
-              wears the disabled grayscale + COMING SOON badge because the
-              export module isn't built yet. Active state on links = subtle
-              rose tint so the tap has tactile feedback. */}
-      <section className="grid grid-cols-4 gap-2 pt-1 pb-2">
-        {[...PRIMARY_SERVICES, ...SECONDARY_ACTIONS].map((item) => {
-          if (item.comingSoon) {
+      {/* ── 3. Sales + CS cards — the customer's assigned Sales rep + CS rep,
+              side by side. Legacy PCS "box-sale" stacked look: a red rounded
+              layer sits BEHIND, offset right, so a curved red accent peeks out
+              on the RIGHT edge of each white card (NOT a full border). */}
+      <div className="px-4 mt-3.5 grid grid-cols-2 gap-3">
+        {repCards.map(({ role, rep }) => (
+          <div key={role} className="relative">
+            {/* red accent layer behind */}
+            <div
+              aria-hidden
+              className="absolute inset-y-0 left-4 right-0 rounded-[18px] shadow-sm"
+              style={{ background: "linear-gradient(135deg,#FF5A5A 0%,#E4002B 55%,#B10018 100%)" }}
+            />
+            {/* white content card on top, right margin reveals the red accent */}
+            <div className="relative mr-2 bg-white rounded-[18px] shadow-sm px-2 py-2.5 flex items-center gap-1.5">
+              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-[#F3C6CB] bg-white shrink-0">
+                <Image src={rep.picture} alt={rep.name} fill sizes="36px" className="object-cover" unoptimized />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-bold text-primary-600 leading-tight truncate">
+                  {role} : {rep.name}
+                </div>
+                <div className="text-[11px] text-gray-700 mt-0.5 whitespace-nowrap">
+                  Tel : <a href={`tel:${rep.tel}`} className="text-gray-900 font-medium">{rep.tel}</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── 4. Service grid — legacy 3-column launchpad, big icon + label. */}
+      <div className="px-3 mt-5 grid grid-cols-3 gap-x-2 gap-y-5 text-center">
+        {GRID_TILES.map((tile) => {
+          if (tile.comingSoon) {
             return (
               <div
-                key={item.labelKey}
+                key={tile.labelKey}
                 aria-disabled
-                className="flex flex-col items-center justify-start gap-1 px-1 py-2.5 rounded-xl cursor-not-allowed select-none"
+                className="flex flex-col items-center gap-2 cursor-not-allowed select-none"
               >
-                <span className="relative w-11 h-11 shrink-0">
-                  <Image
-                    src={item.icon}
-                    alt={t(item.labelKey)}
-                    fill
-                    sizes="44px"
-                    className="object-contain grayscale opacity-50"
-                  />
+                <span className="relative w-16 h-16 shrink-0">
+                  <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" className="object-contain grayscale opacity-45" />
                 </span>
-                <span className="text-[10.5px] leading-[1.2] text-center font-medium text-gray-400 line-clamp-1">
-                  {t(item.labelKey)}
-                </span>
-                <span className="text-[8px] leading-none font-bold text-gray-400 uppercase tracking-wider">
-                  Coming Soon
-                </span>
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[12px] font-medium text-gray-400 line-clamp-1">{t(tile.labelKey)}</span>
+                  <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">เร็วๆ นี้</span>
+                </div>
               </div>
             );
           }
           return (
             <Link
-              key={item.href}
-              href={item.href}
-              className="flex flex-col items-center justify-start gap-1.5 px-1 py-2.5 rounded-xl active:bg-rose-50/60 transition-colors"
+              key={tile.href}
+              href={tile.href}
+              className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
             >
-              <span className="relative w-11 h-11 shrink-0">
-                <Image
-                  src={item.icon}
-                  alt={t(item.labelKey)}
-                  fill
-                  sizes="44px"
-                  className="object-contain"
-                />
+              <span className="relative w-16 h-16 shrink-0">
+                <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" className="object-contain" />
               </span>
-              <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
-                {t(item.labelKey)}
+              <span className="text-[12px] leading-[1.25] font-medium text-gray-700 line-clamp-2">
+                {t(tile.labelKey)}
               </span>
             </Link>
           );
@@ -325,48 +241,16 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           type="button"
           disabled={signOutPending}
           onClick={() => startSignOut(() => { void signOutAction(); })}
-          className="flex flex-col items-center justify-start gap-1.5 px-1 py-2.5 rounded-xl active:bg-rose-50/60 transition-colors disabled:opacity-60"
+          className="flex flex-col items-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
         >
-          <span className="relative w-11 h-11 shrink-0">
-            <Image
-              src={`${ICON_BASE}/pcs-log-out.png`}
-              alt={t("logout")}
-              fill
-              sizes="44px"
-              className="object-contain"
-            />
+          <span className="relative w-16 h-16 shrink-0">
+            <Image src={`${ICON_BASE}/pcs-log-out.png`} alt={t("logout")} fill sizes="64px" className="object-contain" />
           </span>
-          <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
+          <span className="text-[12px] leading-[1.25] font-medium text-gray-700 line-clamp-2">
             {t("logout")}
           </span>
         </button>
-      </section>
-
-      {/* ── 6. Bottom banner marquee — infinite horizontal scroll of the
-              4 customertheme promo banners (bill / line / drive / shop).
-              The strip is duplicated 2× so the `marquee` keyframe (defined
-              in app/globals.css §@keyframes marquee: translateX(0→-50%))
-              loops seamlessly. Pauses on hover/active for tap accessibility. */}
-      <section className="relative overflow-hidden rounded-2xl" aria-label={t("promoMarqueeAria")}>
-        <div className="flex w-max gap-3 animate-[marquee_28s_linear_infinite] hover:[animation-play-state:paused]">
-          {[...BOTTOM_BANNERS, ...BOTTOM_BANNERS].map((b, i) => (
-            <Link
-              key={`${b.src}-${i}`}
-              href={b.href}
-              className="shrink-0 w-[280px] block rounded-2xl overflow-hidden shadow-md active:scale-[0.99] transition-transform"
-            >
-              <Image
-                src={b.src}
-                alt={t(b.altKey)}
-                width={460}
-                height={140}
-                className="w-full h-auto"
-              />
-            </Link>
-          ))}
-        </div>
-      </section>
-
+      </div>
     </div>
   );
 }
