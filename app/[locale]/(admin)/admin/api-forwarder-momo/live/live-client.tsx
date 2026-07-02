@@ -68,6 +68,8 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
         dataFilled: number;
         dataFlaggedMismatch: number;
         dataSkippedBilled: number;
+        cabinetFilled: number;
+        closeDateFilled: number;
       }
     | { ok: false; error: string }
     | null
@@ -95,15 +97,18 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
       if (res.ok && res.data) {
         const s = res.data.summary;
         const d = res.data.data;
+        const c = res.data.cabinet;
         setSyncResult({
           ok: true,
           matched: s.matched,
           advanced: s.advanced,
           shopOrdersAdvanced: s.shopOrdersAdvanced,
-          errorCount: s.errors.length + d.errors.length,
+          errorCount: s.errors.length + d.errors.length + c.errors.length,
           dataFilled: d.filled,
           dataFlaggedMismatch: d.flaggedMismatch,
           dataSkippedBilled: d.skippedBilled,
+          cabinetFilled: c.filled,
+          closeDateFilled: c.closeDateFilled,
         });
         // reflect the just-written statuses in the visible board
         loadBoard(status);
@@ -243,6 +248,12 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
                 <span className="font-bold">{syncResult.advanced.toLocaleString("th-TH")}</span> รายการ ·
                 เติมน้ำหนัก/คิว/ขนาด/จำนวนชิ้น{" "}
                 <span className="font-bold">{syncResult.dataFilled.toLocaleString("th-TH")}</span> รายการ
+                {syncResult.cabinetFilled > 0 && (
+                  <> · เติมเลขตู้จริง <span className="font-bold">{syncResult.cabinetFilled.toLocaleString("th-TH")}</span> รายการ</>
+                )}
+                {syncResult.closeDateFilled > 0 && (
+                  <> · เติมวันปิดตู้ <span className="font-bold">{syncResult.closeDateFilled.toLocaleString("th-TH")}</span> รายการ</>
+                )}
                 {syncResult.shopOrdersAdvanced > 0 && (
                   <> · อัปเดตงานฝากสั่งซื้อที่เชื่อมโยง {syncResult.shopOrdersAdvanced.toLocaleString("th-TH")} รายการ</>
                 )}

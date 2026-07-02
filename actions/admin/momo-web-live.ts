@@ -82,12 +82,20 @@ export async function loadMomoLiveBoard(
  *      never overwriting a non-zero value, flagging (not overwriting) any mismatch.
  * The DATA fill is best-effort — its failure never undoes the STATUS writes.
  *
- * Returns both summaries so the UI can report "advanced N · filled M · flagged K".
+ * Returns both summaries so the UI can report "advanced N · filled M · เลขตู้ C · flagged K".
  */
 export async function propagateMomoLiveStatusNow(): Promise<
-  AdminActionResult<{ summary: LiveStatusPropagationResult; data: LiveStatusAndDataResult["data"] }>
+  AdminActionResult<{
+    summary: LiveStatusPropagationResult;
+    data: LiveStatusAndDataResult["data"];
+    cabinet: LiveStatusAndDataResult["cabinet"];
+  }>
 > {
-  return withAdmin<{ summary: LiveStatusPropagationResult; data: LiveStatusAndDataResult["data"] }>(
+  return withAdmin<{
+    summary: LiveStatusPropagationResult;
+    data: LiveStatusAndDataResult["data"];
+    cabinet: LiveStatusAndDataResult["cabinet"];
+  }>(
     ["super", "ops", "warehouse", "accounting"],
     async ({ adminId }) => {
       if (!isMomoWebConfigured()) {
@@ -95,7 +103,7 @@ export async function propagateMomoLiveStatusNow(): Promise<
       }
       try {
         const admin = createAdminClient();
-        const { status: summary, data } = await propagateMomoLiveStatusAndData(admin);
+        const { status: summary, data, cabinet } = await propagateMomoLiveStatusAndData(admin);
         // Audit the bulk status + data push (best-effort · non-fatal).
         await logAdminAction(adminId, "momo_live_status_propagate", "tb_forwarder", "bulk", {
           matched: summary.matched,
@@ -105,8 +113,10 @@ export async function propagateMomoLiveStatusNow(): Promise<
           dataFilled: data.filled,
           dataFlaggedMismatch: data.flaggedMismatch,
           dataSkippedBilled: data.skippedBilled,
+          cabinetFilled: cabinet.filled,
+          closeDateFilled: cabinet.closeDateFilled,
         });
-        return { ok: true, data: { summary, data } };
+        return { ok: true, data: { summary, data, cabinet } };
       } catch (e) {
         console.error("[momo-web-live] status+data propagate failed", e);
         return {

@@ -167,7 +167,7 @@ export function ReviewGridClient({
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkSummary, setBulkSummary] = useState<{
     total: number; succeeded: number; failed: number;
-    liveFill?: { filled: number; advanced: number; boxes: number } | null;
+    liveFill?: { filled: number; advanced: number; boxes: number; cabinet: number; closeDate: number } | null;
   } | null>(null);
   // 2026-06-04 (ภูม flag) — lightbox state สำหรับ quick-zoom ป้าย MOMO.
   // Carries the FULL `urls: string[]` (some MOMO rows have multiple labels)
@@ -216,7 +216,7 @@ export function ReviewGridClient({
       if (res.ok) {
         const lf = res.data?.liveFill;
         const liveMsg = lf
-          ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${lf.filled} · กล่อง ${lf.boxes}`
+          ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${lf.filled}${lf.cabinet > 0 ? ` · เลขตู้ ${lf.cabinet}` : ""}${lf.closeDate > 0 ? ` · วันปิดตู้ ${lf.closeDate}` : ""} · กล่อง ${lf.boxes}`
           : lf === null
             ? " · (ดึง MOMO Live ไม่สำเร็จ · ตัวดึงอัตโนมัติจะเติมให้ภายหลัง)"
             : "";
@@ -478,7 +478,7 @@ export function ReviewGridClient({
             ทั้งหมด {bulkSummary.total} · สำเร็จ {bulkSummary.succeeded}
             {bulkSummary.failed > 0 ? ` · ล้มเหลว ${bulkSummary.failed} (ดู message ในแต่ละ row)` : ""}
             {bulkSummary.liveFill
-              ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${bulkSummary.liveFill.filled} · สถานะ ${bulkSummary.liveFill.advanced} · กล่อง ${bulkSummary.liveFill.boxes}`
+              ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${bulkSummary.liveFill.filled} · สถานะ ${bulkSummary.liveFill.advanced}${bulkSummary.liveFill.cabinet > 0 ? ` · เลขตู้ ${bulkSummary.liveFill.cabinet}` : ""}${bulkSummary.liveFill.closeDate > 0 ? ` · วันปิดตู้ ${bulkSummary.liveFill.closeDate}` : ""} · กล่อง ${bulkSummary.liveFill.boxes}`
               : bulkSummary.liveFill === null && bulkSummary.succeeded > 0
                 ? " · (ดึง MOMO Live ไม่สำเร็จ · ตัวดึงอัตโนมัติจะเติมให้ภายหลัง)"
                 : ""}

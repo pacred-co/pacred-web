@@ -51,6 +51,11 @@ import {
   type LiveStatusPropagationResult,
 } from "./propagate-live-status";
 import { fillMomoBoxDetails, type BoxDetailFillResult } from "./box-detail";
+import {
+  fillLiveCabinetForParcels,
+  emptyCabinetFillResult,
+  type LiveCabinetFillResult,
+} from "./live-cabinet";
 
 /**
  * fstatus codes that are IN or THROUGH billing — a data-fill must NEVER touch
@@ -284,17 +289,24 @@ export type LiveStatusAndDataResult = {
   data: LiveDataFillResult;
   /** Per-box dimension detail written into momo_box_detail (display-only · best-effort). */
   boxDetail: BoxDetailFillResult;
+  /** Real เลขตู้ (fcabinetnumber) filled from the Live container (fill-when-placeholder · best-effort). */
+  cabinet: LiveCabinetFillResult;
 };
 
 /**
- * Scrape the MOMO Live boards ONCE (server-side auto-login) and run BOTH passes:
+ * Scrape the MOMO Live boards ONCE (server-side auto-login) and run ALL passes:
  *   1. STATUS propagate — advance matched tb_forwarder.fstatus forward-only (China-side).
  *   2. DATA fill        — fill missing fweight/fvolume/dims/famount (fill-when-empty).
+ *   3. PER-BOX detail   — persist each split box's real dims into momo_box_detail.
+ *   4. CABINET fill     — fill tb_forwarder.fcabinetnumber with the REAL Live container
+ *                         (GZS/GZE/GZA) when the row's cabinet is empty or a routing-batch
+ *                         placeholder (fill-when-placeholder · never overwrites a real ตู้).
  *
  * Sharing the fetched boards means only ONE MOMO login per run (MOMO is single-
- * session). The DATA fill is independent + best-effort — its failure never rolls
- * back the STATUS writes (they already landed). This is what the /live button and
- * the sync cron call so a single click / cycle both advances status AND fills data.
+ * session). Passes 2-4 are independent + best-effort — a failure never rolls back
+ * the STATUS writes (they already landed). This is what the /live button and the
+ * sync cron / commit call so a single click / cycle advances status AND fills data
+ * AND fills the real เลขตู้.
  *
  * @param admin a service-role Supabase client (bypasses RLS · server-only)
  */
@@ -341,5 +353,18 @@ export async function propagateMomoLiveStatusAndData(
     boxDetailResult.errors.push({ scope: "box-detail", message: e instanceof Error ? e.message : "unknown" });
   }
 
-  return { status: statusResult, data: dataResult, boxDetail: boxDetailResult };
+  // ── pass 4: CABINET fill (tb_forwarder.fcabinetnumber ← the REAL Live container).
+  //    MOMO's web already knows the real เลขตู้ (GZS/GZE/GZA); fill it when the row
+  //    still carries a routing-batch placeholder / is empty. NEVER overwrites a real
+  //    container, SKIPS billed rows, TOCTOU-safe. best-effort: a failure here must
+  //    NEVER undo the status/data/box writes above. ──
+  const cabinetResult = emptyCabinetFillResult();
+  try {
+    await fillLiveCabinetForParcels(admin, parcels, cabinetResult);
+  } catch (e) {
+    console.error("[propagateMomoLiveStatusAndData] cabinet-fill threw", e);
+    cabinetResult.errors.push({ scope: "cabinet-fill", message: e instanceof Error ? e.message : "unknown" });
+  }
+
+  return { status: statusResult, data: dataResult, boxDetail: boxDetailResult, cabinet: cabinetResult };
 }
