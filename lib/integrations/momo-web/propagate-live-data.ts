@@ -56,6 +56,11 @@ import {
   emptyCabinetFillResult,
   type LiveCabinetFillResult,
 } from "./live-cabinet";
+import {
+  splitAggregatedMomoBoxRows,
+  emptyBoxSplitResult,
+  type BoxSplitResult,
+} from "./split-box-rows";
 
 /**
  * fstatus codes that are IN or THROUGH billing — a data-fill must NEVER touch
@@ -291,6 +296,10 @@ export type LiveStatusAndDataResult = {
   boxDetail: BoxDetailFillResult;
   /** Real เลขตู้ (fcabinetnumber) filled from the Live container (fill-when-placeholder · best-effort). */
   cabinet: LiveCabinetFillResult;
+  /** Box-split → sibling rows: an aggregate tb_forwarder row (famount=N · boxes in
+   *  momo_box_detail) split into N sibling rows (one per box · matches MOMO's "-i/n").
+   *  Money-neutral guard (unbilled · unpriced · Σ preserved) · idempotent · best-effort. */
+  boxSplit: BoxSplitResult;
 };
 
 /**
@@ -301,6 +310,9 @@ export type LiveStatusAndDataResult = {
  *   4. CABINET fill     — fill tb_forwarder.fcabinetnumber with the REAL Live container
  *                         (GZS/GZE/GZA) when the row's cabinet is empty or a routing-batch
  *                         placeholder (fill-when-placeholder · never overwrites a real ตู้).
+ *   5. BOX-SPLIT        — split an aggregate row (famount=N · boxes in momo_box_detail)
+ *                         into N sibling rows (one per box · matches MOMO's "-i/n").
+ *                         Money-neutral guard + idempotent (see split-box-rows.ts).
  *
  * Sharing the fetched boards means only ONE MOMO login per run (MOMO is single-
  * session). Passes 2-4 are independent + best-effort — a failure never rolls back
@@ -366,5 +378,30 @@ export async function propagateMomoLiveStatusAndData(
     cabinetResult.errors.push({ scope: "cabinet-fill", message: e instanceof Error ? e.message : "unknown" });
   }
 
-  return { status: statusResult, data: dataResult, boxDetail: boxDetailResult, cabinet: cabinetResult };
+  // ── pass 5: BOX-SPLIT → sibling rows (owner/ภูม 2026-07-02). Runs AFTER pass 3 so
+  //    the per-box dims are already in momo_box_detail. For a base tracking MOMO split
+  //    into N boxes, turn the ONE aggregate tb_forwarder row into N sibling rows (one
+  //    per box · matches MOMO's "-i/n"). Money-neutral: splits ONLY when the row is
+  //    UNBILLED + UNPRICED + the box Σ preserves famount/fweight/fvolume (else left
+  //    intact + counted skipped); IDEMPOTENT (a base already split is skipped). Uses the
+  //    multi-box bases SEEN on this scrape (baseTrackingOf(parcel)). best-effort — a
+  //    failure NEVER undoes the status/data/box/cabinet writes above. ──
+  const boxSplitResult = emptyBoxSplitResult();
+  try {
+    const scrapedBases = Array.from(
+      new Set(parcels.map((p) => baseTrackingOf((p.tracking ?? "").trim())).filter(Boolean)),
+    );
+    await splitAggregatedMomoBoxRows(admin, scrapedBases, boxSplitResult);
+  } catch (e) {
+    console.error("[propagateMomoLiveStatusAndData] box-split threw", e);
+    boxSplitResult.errors.push({ scope: "box-split", message: e instanceof Error ? e.message : "unknown" });
+  }
+
+  return {
+    status: statusResult,
+    data: dataResult,
+    boxDetail: boxDetailResult,
+    cabinet: cabinetResult,
+    boxSplit: boxSplitResult,
+  };
 }
