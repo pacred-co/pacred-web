@@ -36,6 +36,7 @@ import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportBillingRunAll } from "@/actions/admin/export/billing-run";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
+import { BillingVoidTable, type BillingVoidRow } from "./billing-void-table";
 
 // CSV columns — mirror the list <thead> 1:1.
 const CSV_COLS: CsvCol[] = [
@@ -231,19 +232,6 @@ function tabToneCls(tone: TabDef["tone"], active: boolean): string {
   return "bg-white dark:bg-surface text-foreground border-border hover:bg-surface-alt";
 }
 
-function statusBadge(status: "issued" | "paid" | "cancelled", isOverdue: boolean) {
-  if (status === "paid") {
-    return <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">รับชำระแล้ว</span>;
-  }
-  if (status === "cancelled") {
-    return <span className="rounded-full bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-0.5 text-xs whitespace-nowrap">ยกเลิก</span>;
-  }
-  if (isOverdue) {
-    return <span className="rounded-full bg-red-50 text-red-700 border border-red-200 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">เกินเวลา</span>;
-  }
-  return <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">รอรับชำระ</span>;
-}
-
 export default async function BillingRunListPage({
   searchParams,
 }: {
@@ -341,6 +329,22 @@ export default async function BillingRunListPage({
     date_issued: (r.date_issued ?? "").slice(0, 10),
     date_due: (r.date_due ?? "").slice(0, 10),
     status: csvStatusName(r.status, r.is_overdue),
+  }));
+
+  // Rows for the client void-table island (tick-to-void · task 4c).
+  const billingVoidRows: BillingVoidRow[] = rows.map((r) => ({
+    id: r.id,
+    doc_no: r.doc_no,
+    buyer_name: r.buyer_name,
+    userid: r.userid,
+    item_count: r.item_count,
+    total_thb: r.total_thb,
+    wht_amount: r.wht_amount,
+    net_payable: r.net_payable,
+    date_issued: r.date_issued,
+    date_due: r.date_due,
+    status: r.status,
+    is_overdue: r.is_overdue,
   }));
 
   return (
@@ -476,64 +480,8 @@ export default async function BillingRunListPage({
             )}
           </div>
 
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/60 text-xs font-medium text-muted">
-                <tr>
-                  <th className="px-3 py-2 text-left">เลขที่เอกสาร</th>
-                  <th className="px-3 py-2 text-left">ลูกค้า</th>
-                  <th className="px-3 py-2 text-right">จำนวนรายการ</th>
-                  <th className="px-3 py-2 text-right">
-                    <Explain label="ยอดรวม (฿)" def={GUIDE.bill_gross} align="right" />
-                  </th>
-                  <th className="px-3 py-2 text-center">วันที่ออก</th>
-                  <th className="px-3 py-2 text-center">ครบกำหนด</th>
-                  <th className="px-3 py-2 text-center">สถานะ</th>
-                  <th className="px-3 py-2 text-right">ดู</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-muted text-sm">
-                      ไม่มีใบวางบิลในมุมมองนี้
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r) => (
-                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-3 py-2.5">
-                        <Link href={`/admin/billing-run/${r.id}`} className="font-mono text-primary-600 hover:underline">
-                          {r.doc_no}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="font-medium">{r.buyer_name || "—"}</div>
-                        <div className="text-xs text-muted">{r.userid}</div>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">{r.item_count}</td>
-                      <td className="px-3 py-2.5 text-right font-medium">
-                        {thbFmt(r.total_thb)}
-                        {r.wht_amount > 0 && (
-                          <div className="text-xs font-normal text-emerald-700">
-                            <Explain label={`สุทธิ ฿${thbFmt(r.net_payable)}`} def={GUIDE.bill_net_payable} align="right" />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-xs">{r.date_issued}</td>
-                      <td className="px-3 py-2.5 text-center text-xs">{r.date_due}</td>
-                      <td className="px-3 py-2.5 text-center">{statusBadge(r.status, r.is_overdue)}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        <Link href={`/admin/billing-run/${r.id}`} className="text-xs text-primary-600 hover:underline">
-                          ดู →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* Table + tick-to-VOID bulk action (task 4c) */}
+          <BillingVoidTable rows={billingVoidRows} />
         </section>
 
         {/* PEAK-style help note */}

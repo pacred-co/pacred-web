@@ -153,12 +153,13 @@ function CustomerPickupCard({
   // click handler — never inside startTransition).
   async function handleSubmit() {
     setErr(null);
-    // Legacy guard (forwarder-driver.php L1206): refuse + prompt "กรุณาเลือกรายการ"
-    // when nothing is ticked. The button stays CLICKABLE with 0 selected so this
-    // prompt actually fires (a disabled button would swallow it) — same fix as
-    // the มอบคนขับ tab. Here it's scoped to this customer's parcels.
+    // Legacy guard (forwarder-driver.php L1206): refuse + POP UP "กรุณาเลือกรายการ"
+    // (legacy Swal → our centered useConfirmDialogs.alert) when nothing is ticked.
+    // The button stays CLICKABLE with 0 selected so this prompt actually fires (a
+    // disabled button would swallow it) — same fix as the มอบคนขับ tab. Here it's
+    // scoped to this customer's parcels.
     if (selected.count === 0) {
-      setErr("กรุณาเลือกรายการพัสดุของลูกค้าคนนี้ก่อน");
+      await alert("กรุณาเลือกรายการพัสดุของลูกค้าคนนี้ก่อน");
       return;
     }
     const ok = await confirm(
@@ -332,7 +333,9 @@ function CustomerPickupCard({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={pending || selected.count === 0}
+            /* Kept CLICKABLE at 0-select so the "กรุณาเลือกรายการ" popup fires
+               (a disabled button would swallow it). Only disabled in-flight. */
+            disabled={pending}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             <CheckCircle2 className="h-4 w-4" />

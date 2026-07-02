@@ -160,6 +160,12 @@ export async function GET(request: Request) {
           live_status_matched:       sync.liveStatusPropagation?.matched ?? 0,
           live_status_advanced:      sync.liveStatusPropagation?.advanced ?? 0,
           live_status_shop_advanced: sync.liveStatusPropagation?.shopOrdersAdvanced ?? 0,
+          // 2026-07-01 — MOMO Live-board DATA fill (น้ำหนัก/คิว/ขนาด/จำนวนชิ้น · fill-when-
+          // empty · TOTAL · skip billed). See lib/integrations/momo-web/propagate-live-data.ts.
+          live_data_matched:         sync.liveDataFill?.matched ?? 0,
+          live_data_filled:          sync.liveDataFill?.filled ?? 0,
+          live_data_skipped_billed:  sync.liveDataFill?.skippedBilled ?? 0,
+          live_data_flagged_mismatch: sync.liveDataFill?.flaggedMismatch ?? 0,
           sync_log_id:          sync.syncLogId,
         },
         payload: {
@@ -207,6 +213,19 @@ export async function GET(request: Request) {
                   advanced:           sync.liveStatusPropagation.advanced,
                   shopOrdersAdvanced: sync.liveStatusPropagation.shopOrdersAdvanced,
                   errorCount:         sync.liveStatusPropagation.errors.length,
+                }
+              : null,
+            // 2026-07-01 — MOMO Live-board DATA fill (see lib/integrations/
+            // momo-web/propagate-live-data.ts).
+            liveDataFill:        sync.liveDataFill
+              ? {
+                  baseTrackingsSeen: sync.liveDataFill.baseTrackingsSeen,
+                  matched:           sync.liveDataFill.matched,
+                  filled:            sync.liveDataFill.filled,
+                  skippedBilled:     sync.liveDataFill.skippedBilled,
+                  skippedHasValue:   sync.liveDataFill.skippedHasValue,
+                  flaggedMismatch:   sync.liveDataFill.flaggedMismatch,
+                  errorCount:        sync.liveDataFill.errors.length,
                 }
               : null,
           },

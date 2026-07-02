@@ -19,6 +19,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readThaiBaht } from "@/lib/utils/thai-number";
+import { resolveReceiptFrozenTotals } from "@/lib/receipt/receipt-frozen-totals";
 import { ADDRESSES } from "@/components/seo/site";
 import type {
   ReceiptCommonProps,
@@ -404,19 +405,24 @@ export async function loadReceiptDocument(
   // WHT 1% — legacy: only for corporate AND totalbeforewithholding ≥ 1000
   const totalBeforeWithholding = headerTotalBefore || lineSumWithMao;
   const showWht = isCorporate && totalBeforeWithholding >= 1000;
-  // When items are missing, derive WHT from the header difference instead of
-  // re-applying the 1% rule (the header values are post-fact authoritative).
-  // The เหมาๆ is part of the bill total → it's in the WHT base too (consistent w/ the bill).
-  const whtAmount =
-    itemsMissing
-      ? Math.max(0, headerTotalBefore - headerRamount)
-      : showWht
-        ? lineSumWithMao * 0.01
-        : 0;
-  const grandTotal =
-    itemsMissing
-      ? headerRamount
-      : lineSumWithMao - whtAmount;
+
+  // ── FROZEN document-of-record (ภูม flag 2026-07-01 · บิล ≠ ใบเสร็จ) ──
+  // A receipt is a snapshot: its printed total MUST equal what was written at
+  // issuance (tb_receipt.ramount / .totalbeforewithholding, incl เหมาๆ) — the
+  // same number on its ใบวางบิล. Re-summing the forwarder rows LIVE (the old
+  // path) drifted whenever a price was edited AFTER the receipt was issued
+  // (e.g. บิล 2,135.43 vs ใบเสร็จ 2,057). resolveReceiptFrozenTotals renders the
+  // stored frozen figures verbatim when the header carries them, and only falls
+  // back to the live per-line sum for legacy receipts whose header was never
+  // populated. The per-line rows below stay for detail only (no longer the total).
+  const { preTaxTotal, whtAmount, grandTotal } = resolveReceiptFrozenTotals({
+    headerTotalBefore,
+    headerRamount,
+    lineSumWithMao,
+    showWht,
+    itemsMissing,
+  });
+
   const grandTotalThaiWord = readThaiBaht(grandTotal);
 
   // When items are missing, also patch the totals BREAKDOWN to put the
@@ -491,6 +497,7 @@ export async function loadReceiptDocument(
     showWht:             showWht || (itemsMissing && whtAmount > 0),
     whtAmount,
     grandTotal,
+    preTaxTotal,
     grandTotalThaiWord,
     documentIssuer,
     documentApprover,

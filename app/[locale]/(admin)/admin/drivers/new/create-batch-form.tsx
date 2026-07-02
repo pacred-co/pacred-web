@@ -16,13 +16,23 @@
  * running weight/volume totals + "แสดง 1 ถึง N จาก M รายการ" pagination.
  * The LOGIC (state · createDriverBatch · route-order sort · carrier filter ·
  * driver/endtime selectors) is UNCHANGED — only the markup matches legacy.
+ *
+ * FOOTER (2026-07-01 · owner "เอาแบบ PCS ไปเลย"): a COMPACT COLORED (primary/red)
+ * action bar pinned bottom-left — faithful to legacy `.m-driver-footer`
+ * (forwarder-driver.php L1032: `position: fixed; bottom: 20px; left: 70px`, a
+ * `btn-group` of `btn-color-main round` pills). The truck action button sits on
+ * the LEFT, the driver + endtime selectors + the running หนัก / ปริมาตร /
+ * ระบบแนะนำ totals inline beside it — NOT a tall gray panel. The 0-select guard
+ * POPS UP centered (legacy Swal "กรุณาเลือกรายการ") via useConfirmDialogs.alert.
  */
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { Truck } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 type StopItem = {
   id:           number;
@@ -99,8 +109,8 @@ export function CreateBatchForm({
   showCarrierFilter?: boolean;
 }) {
   const router = useRouter();
+  const { alert, dialogs } = useConfirmDialogs();
   const [pending, startTransition] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
 
   // Selected stop keys (the user picks WHOLE stops, not individual items —
   // matches legacy "select N rows from grouped table"). Defaults to empty.
@@ -206,17 +216,17 @@ export function CreateBatchForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
     // Legacy guard (forwarder-driver.php L1206 `#addFrom` click handler): if
-    // NOTHING is ticked, refuse + prompt "กรุณาเลือกรายการ" (Swal alert). We keep
-    // the submit button CLICKABLE with 0 ticked so this prompt actually fires —
-    // a disabled button would silently swallow the guard (the 2026-07-01 bug).
+    // NOTHING is ticked, refuse + POP UP "กรุณาเลือกรายการ" (legacy Swal error →
+    // our centered useConfirmDialogs.alert). We keep the submit button CLICKABLE
+    // with 0 ticked so this prompt actually fires — a disabled button would
+    // silently swallow the guard (the 2026-07-01 bug).
     if (summary.stops === 0) {
-      setErr("กรุณาเลือกรายการ");
+      void alert("กรุณาเลือกรายการ");
       return;
     }
     if (!driverCode) {
-      setErr("กรุณาเลือกคนขับ");
+      void alert("กรุณาเลือกพนักงานขับรถ");
       return;
     }
     startTransition(async () => {
@@ -229,7 +239,8 @@ export function CreateBatchForm({
       if (res.ok && res.data) {
         router.push(`/admin/drivers/${res.data.batchId}`);
       } else if (!res.ok) {
-        setErr(res.error);
+        // Server-side failure — surface it in the same centered popup.
+        void alert(res.error);
       }
     });
   }
@@ -242,6 +253,9 @@ export function CreateBatchForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {/* Centered popup host (legacy Swal replacement) — 0-select guard etc. */}
+      {dialogs}
+
       {/* ── Legacy PCS list controls: "แสดง N รายการ" (left) + "ค้นหา" (right) ── */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-1.5 text-muted">
@@ -513,104 +527,88 @@ export function CreateBatchForm({
         </div>
       )}
 
-      {/* ── Footer action bar — legacy PCS puts the driver-select + action at the
-          BOTTOM-LEFT (forwarder-driver.php L1032: `position: fixed; bottom: 20px;
-          left: 70px`), with the running หนัก / ปริมาตร / ระบบแนะนำ totals beside it.
-          We keep that LEFT alignment: the action group (คนขับ · เวลา · submit) sits
-          on the left, the live totals fill the rest. 2026-07-01 ให้เหมือน PCS. */}
-      <div className="sticky bottom-0 rounded border border-border bg-surface-alt/95 backdrop-blur px-3 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-wrap items-end gap-3">
-          {/* คนขับ + เวลา selectors — LEFT (legacy bottom-left position) */}
-          <div className="min-w-[220px]">
-            <label htmlFor="driver" className="block text-[11px] font-medium text-muted mb-1">
-              คนขับรถ <span className="text-rose-600">*</span>
-            </label>
-            <select
-              id="driver"
-              value={driverCode}
-              onChange={(e) => setDriverCode(e.target.value)}
-              /* Legacy: the driver picker is meaningless until ≥1 row is ticked
-                 (the whole footer bar is unusable with 0 selected). Disable it
-                 until something is picked so staff can't set a driver for an
-                 empty selection. */
-              disabled={pending || drivers.length === 0 || !anySelected}
-              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px] disabled:bg-surface-alt disabled:cursor-not-allowed"
-              title={!anySelected ? "เลือกรายการที่จะส่งก่อน แล้วจึงเลือกคนขับ" : undefined}
-            >
-              <option value="">— กรุณาเลือกพนักงานขับรถ —</option>
-              {drivers.map((d) => (
-                <option key={d.member_code} value={d.member_code}>{d.display}</option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-[150px]">
-            <label htmlFor="endtime" className="block text-[11px] font-medium text-muted mb-1">
-              ครบอายุมอบหมายงาน <span className="text-rose-600">*</span>
-            </label>
-            <select
-              id="endtime"
-              value={endTimeHours}
-              onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
-              disabled={pending || !anySelected}
-              className="w-full rounded border border-border bg-white px-3 py-2 text-sm min-h-[40px] disabled:bg-surface-alt disabled:cursor-not-allowed"
-            >
-              <option value={17}>17 ชั่วโมง</option>
-              <option value={24}>24 ชั่วโมง</option>
-              <option value={30}>30 ชั่วโมง</option>
-            </select>
-          </div>
-
-          {/* Submit — the legacy "เลือกคนขับรถ / สร้างรายการ" button, kept on the
-              LEFT next to the selectors (NOT ml-auto). Deliberately NOT disabled
+      {/* ── Footer action bar — legacy PCS `.m-driver-footer` (forwarder-driver.php
+          L1032: a `btn-group` of `btn-color-main round` pills pinned
+          `position: fixed; bottom: 20px; left: 70px`). We render a COMPACT COLORED
+          (brand red) bar pinned bottom-LEFT: the truck action button + the
+          driver/endtime selectors + the running หนัก / ปริมาตร / ระบบแนะนำ pills all
+          inline in ONE slim row — NOT a tall gray panel. 2026-07-01 เอาแบบ PCS. */}
+      <div className="sticky bottom-3 z-20 flex justify-start">
+        <div className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-primary-700/40 bg-primary-600 px-2.5 py-2 text-white shadow-lg ring-1 ring-black/5">
+          {/* Submit — the legacy "เลือกคนขับรถ" truck pill. Deliberately NOT disabled
               by the selection: clicking with 0 ticked must fire the legacy
-              "กรุณาเลือกรายการ" prompt (handleSubmit) — a disabled button would
-              swallow it. Only disabled while a create is in-flight. */}
+              "กรุณาเลือกรายการ" POPUP (handleSubmit → alert) — a disabled button
+              would swallow it. Only disabled while a create is in-flight. */}
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex items-center gap-2 rounded bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-sm font-bold text-primary-700 shadow-sm hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed min-h-[40px]"
           >
-            {pending ? "กำลังสร้าง..." : "เลือกคนขับรถและสร้างรายการ"}
+            <Truck className="h-4 w-4" />
+            {pending ? "กำลังสร้าง..." : "เลือกคนขับรถ"}
           </button>
 
-          {/* Running totals (legacy footer: หนัก / ปริมาตร / ระบบแนะนำ · call.php) —
-              fill the remaining space to the right of the left-aligned action. */}
-          <div className="ml-auto text-xs text-foreground/80 leading-snug text-right">
-            <div>เลือกแล้ว : <b className="text-foreground tabular-nums">{summary.stops}</b> จุดส่ง · <b className="tabular-nums">{summary.items}</b> แทรคกิ้ง · <b className="tabular-nums">{summary.boxes}</b> กล่อง</div>
-            <div>หนัก : <b className="tabular-nums">{summary.weight.toFixed(2)}</b> kg. · ปริมาตร : <b className="tabular-nums">{summary.volume.toFixed(3)}</b> CBM</div>
-            <div className="mt-0.5">
-              ระบบแนะนำ :{" "}
-              <span
-                title="รถที่ระบบแนะนำจากน้ำหนักรวม + ปริมาตรรวมของจุดที่เลือก (กระบะ ≤1800kg/6CBM · 6ล้อเล็ก ≤3500/12 · 6ล้อใหญ่ ≤5000/30)"
-                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-bold ${
-                  !anySelected
-                    ? "bg-surface-alt text-muted border-border"
-                    : recommendedVehicle === "มากกว่ารถที่กำหนด"
-                      ? "bg-rose-50 text-rose-700 border-rose-300"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-300"
-                }`}
-              >
-                {recommendedVehicle}
-              </span>
-            </div>
-          </div>
+          {/* คนขับ + เวลา selectors — inline in the colored bar (legacy bottom-left).
+              Disabled until ≥1 row is ticked (the whole bar is unusable at 0). */}
+          <select
+            id="driver"
+            aria-label="คนขับรถ"
+            value={driverCode}
+            onChange={(e) => setDriverCode(e.target.value)}
+            disabled={pending || drivers.length === 0 || !anySelected}
+            className="rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] max-w-[200px] disabled:opacity-60 disabled:cursor-not-allowed"
+            title={!anySelected ? "เลือกรายการที่จะส่งก่อน แล้วจึงเลือกคนขับ" : undefined}
+          >
+            <option value="">— เลือกพนักงานขับรถ —</option>
+            {drivers.map((d) => (
+              <option key={d.member_code} value={d.member_code}>{d.display}</option>
+            ))}
+          </select>
+          <select
+            id="endtime"
+            aria-label="ครบอายุมอบหมายงาน"
+            value={endTimeHours}
+            onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
+            disabled={pending || !anySelected}
+            className="rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <option value={17}>17 ชั่วโมง</option>
+            <option value={24}>24 ชั่วโมง</option>
+            <option value={30}>30 ชั่วโมง</option>
+          </select>
+
+          {/* Running totals — legacy pills (หนัก / ปริมาตร / ระบบแนะนำ · call.php),
+              inline in the colored bar. */}
+          <span className="inline-flex items-center rounded-full bg-primary-700/40 px-3 py-1.5 text-xs font-medium whitespace-nowrap">
+            เลือก <b className="mx-1 tabular-nums">{summary.stops}</b> จุด
+          </span>
+          <span className="inline-flex items-center rounded-full bg-primary-700/40 px-3 py-1.5 text-xs font-medium whitespace-nowrap">
+            หนัก <b className="mx-1 tabular-nums">{summary.weight.toFixed(2)}</b> kg.
+          </span>
+          <span className="inline-flex items-center rounded-full bg-primary-700/40 px-3 py-1.5 text-xs font-medium whitespace-nowrap">
+            ปริมาตร <b className="mx-1 tabular-nums">{summary.volume.toFixed(3)}</b> CBM
+          </span>
+          <span
+            title="รถที่ระบบแนะนำจากน้ำหนักรวม + ปริมาตรรวมของจุดที่เลือก (กระบะ ≤1800kg/6CBM · 6ล้อเล็ก ≤3500/12 · 6ล้อใหญ่ ≤5000/30)"
+            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap ${
+              !anySelected
+                ? "bg-white/25 text-white/90"
+                : recommendedVehicle === "มากกว่ารถที่กำหนด"
+                  ? "bg-amber-300 text-amber-950"
+                  : "bg-white text-primary-700"
+            }`}
+          >
+            ระบบแนะนำ : {recommendedVehicle}
+          </span>
         </div>
-        {(drivers.length === 0 || err) && (
-          <div className="mt-2 space-y-1">
-            {drivers.length === 0 && (
-              <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded">
-                ⚠️ ยังไม่มีคนขับในระบบ — เพิ่มก่อนที่{" "}
-                <Link href="/admin/admins/new" className="underline">/admin/admins/new</Link> (role = driver)
-              </div>
-            )}
-            {err && (
-              <div className="text-sm bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded">
-                ⚠️ {err}
-              </div>
-            )}
-          </div>
-        )}
       </div>
+
+      {drivers.length === 0 && (
+        <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded">
+          ⚠️ ยังไม่มีคนขับในระบบ — เพิ่มก่อนที่{" "}
+          <Link href="/admin/admins/new" className="underline">/admin/admins/new</Link> (role = driver)
+        </div>
+      )}
     </form>
   );
 }

@@ -17,7 +17,7 @@ import "server-only";
  * SAFETY — STATUS-ONLY · FORWARD-ONLY · TOCTOU-safe · best-effort
  * ──────────────────────────────────────────────────────────────
  *   - Writes ONLY: fstatus + the matching fdatestatusN (only when empty) +
- *     adminidupdate='system-live'. NEVER money / wallet / commission / cabinet /
+ *     adminidupdate='sys-live'. NEVER money / wallet / commission / cabinet /
  *     weight / price / dispatch / userid.
  *   - FORWARD-ONLY: advances a row ONLY when the MOMO-Live board status is STRICTLY
  *     newer than the row's current fstatus (isForwardAdvance). The UPDATE WHERE carries
@@ -217,7 +217,7 @@ export async function propagateBoardParcels(
       // (never overwrite a real stamp). adminidupdate = the audit marker. NOTHING else.
       const update: Record<string, unknown> = {
         fstatus: targetFstatus,
-        adminidupdate: "system-live",
+        adminidupdate: "sys-live",
       };
       const dateCol = fdateColumnForFstatus(targetFstatus);
       if (dateCol) {

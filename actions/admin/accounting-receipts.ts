@@ -58,8 +58,11 @@
  * super | accounting — money tier. Matches forwarder-invoice.ts.
  */
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
 // Types — public surface (server-action callers use these)
@@ -655,4 +658,90 @@ export async function getReceiptDetailByRid(rid: string): Promise<ReceiptDetail 
   }
   if (!data) return null;
   return getReceiptDetail(data.id);
+}
+
+// ────────────────────────────────────────────────────────────
+// adminVoidReceipts — SOFT-cancel (void · KEEP HISTORY) one or many
+// receipts from the ใบเสร็จรับเงิน list tick-selection (task 4c · ภูม
+// 2026-07-01).
+//
+// WHY / WHAT:
+//   Staff must be able to VOID a receipt even after it is "ออกแล้ว/paid"
+//   (rstatus='1') — e.g. it was issued wrong / to the wrong customer. A void
+//   is a SOFT cancel: it flips rstatus → '2' (the EXISTING legacy cancelled
+//   state · red "ยกเลิก") and NEVER deletes the row, so the document-of-record
+//   survives for the audit trail. The existing single-doc
+//   `adminCancelForwarderInvoice` only handles pending→cancelled ('3'→'2');
+//   this bulk void additionally handles the PAID case ('1'→'2') that the tick-
+//   to-void list needs.
+//
+// MONEY-SAFETY (critical · money lane):
+//   - SOFT only. No DELETE — the frozen receipt row + its totals stay intact.
+//   - Moves NO money. The receipt is a document; the customer's payment (wallet
+//     / bill) already landed on its own ledger. Voiding the DOC must not touch
+//     tb_wallet / tb_payment / the bill — so this writes ONLY tb_receipt.rstatus.
+//   - Idempotent + race-guarded: `.in("rstatus", ["1","3"])` so an already-
+//     voided ('2') row is skipped (no error, no double-write). Re-running is a
+//     no-op.
+//   - Audit: logs each voided rid with the reason (tb_receipt has no reason
+//     column · the reason lives in the admin action log, mirroring
+//     adminCancelForwarderInvoice).
+// ────────────────────────────────────────────────────────────
+
+const voidReceiptsSchema = z.object({
+  receiptIds: z.array(z.number().int().positive()).min(1, "ไม่ได้เลือกใบเสร็จ").max(200, "เลือกได้ครั้งละไม่เกิน 200 ใบ"),
+  reason:     z.string().trim().min(3, "กรุณาระบุเหตุผลที่ยกเลิก (อย่างน้อย 3 ตัวอักษร)").max(500, "เหตุผลยาวเกินไป"),
+});
+export type AdminVoidReceiptsInput = z.infer<typeof voidReceiptsSchema>;
+
+export async function adminVoidReceipts(
+  input: AdminVoidReceiptsInput,
+): Promise<AdminActionResult<{ voided: number; skipped: number }>> {
+  const parsed = voidReceiptsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { receiptIds, reason } = parsed.data;
+
+  return withAdmin<{ voided: number; skipped: number }>(
+    // Same money-tier gate as the other receipt mutations (+ Doc roles per the
+    // 2026-06-05 ops-workflow unlock · tb_receipt-only, no wallet write).
+    ["super", "accounting", "freight_export_doc", "freight_import_doc"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const uniqueIds = Array.from(new Set(receiptIds));
+
+      // Flip ONLY rows currently ออกแล้ว/paid ('1') or รอชำระ ('3') → ยกเลิก ('2').
+      // Already-cancelled ('2') rows are excluded by the WHERE → skipped silently.
+      // Returns the rows it actually flipped so we can report voided vs skipped.
+      const { data: flipped, error: updErr } = await admin
+        .from("tb_receipt")
+        .update({ rstatus: "2" })
+        .in("id", uniqueIds)
+        .in("rstatus", ["1", "3"])
+        .select("id, rid");
+      if (updErr) {
+        console.error("[adminVoidReceipts] failed", { code: updErr.code, message: updErr.message });
+        return { ok: false, error: updErr.message };
+      }
+
+      const voidedRows = (flipped ?? []) as Array<{ id: number; rid: string }>;
+      const voided = voidedRows.length;
+      const skipped = uniqueIds.length - voided;
+
+      for (const r of voidedRows) {
+        await logAdminAction(adminId, "receipt.void", "tb_receipt", String(r.id), {
+          rid: r.rid, reason,
+        });
+      }
+
+      revalidatePath("/admin/accounting/receipts");
+      revalidatePath("/admin/accounting/forwarder-invoice");
+      for (const r of voidedRows) {
+        revalidatePath(`/admin/accounting/forwarder-invoice/${r.id}`);
+      }
+
+      return { ok: true, data: { voided, skipped } };
+    },
+  );
 }

@@ -61,6 +61,12 @@ function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** เวลาปัจจุบันแบบ 24 ชม "HH:mm" (ไม่มี AM/PM) — default ของช่องเวลารับชำระ. */
+function nowHHmm(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Pure given the iso string (deterministic) — safe in render. */
 function fmtDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -81,6 +87,8 @@ export function BillingRunActions({
     useState<"bank_transfer" | "cheque" | "wallet" | "other">("bank_transfer");
   const [paymentRef, setPaymentRef] = useState("");
   const [paidAt, setPaidAt] = useState(isoToday());
+  // เวลาที่รับชำระ (24 ชม) — เหมือนหน้า wallet · default = เวลาปัจจุบัน
+  const [paidAtTime, setPaidAtTime] = useState(nowHHmm());
 
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -175,6 +183,7 @@ export function BillingRunActions({
         paymentMethod,
         paymentReference: paymentRef,
         paidAt,
+        paidAtTime,
       });
       if (res.ok) {
         setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
@@ -345,7 +354,7 @@ export function BillingRunActions({
               <h4 className="font-medium text-sm text-emerald-800">
                 ✓ บันทึกการรับชำระ {hasPendingSlip ? "(อนุมัติ + ตัดจ่าย · รอบ 2)" : ""}
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <label>
                   <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
                   <select
@@ -362,6 +371,18 @@ export function BillingRunActions({
                 <label>
                   <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
                   <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
+                </label>
+                <label>
+                  {/* เวลาที่รับชำระ — 24 ชม (HH:mm · ไม่มี AM/PM) เหมือนหน้า wallet */}
+                  <span className="block text-xs font-medium text-muted mb-1">เวลาที่รับชำระ (24 ชม)</span>
+                  <input
+                    type="time"
+                    step={60}
+                    value={paidAtTime}
+                    onChange={(e) => setPaidAtTime(e.target.value)}
+                    className={inputCls}
+                    lang="en-GB"
+                  />
                 </label>
                 <label>
                   <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>

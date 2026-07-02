@@ -196,8 +196,8 @@ const SHIPBY_PRESETS = ["PCS", "PCSF", "PCSE"] as const;
 // raw PCS* code (mirrors the customer page label map).
 const SHIPBY_LABEL: Record<string, string> = {
   PCS:  "รับเองโกดัง Pacred (สมุทรสาคร)",
-  PCSF: "Pacred เหมาเหมา (ส่งฟรีในเขต)",
-  PCSE: "Pacred Express (ส่งด่วน)",
+  PCSF: "PRF เหมาๆ (ส่งฟรีในเขต)",
+  PCSE: "PRE Express (ส่งด่วน)",
 };
 
 type Props = {
@@ -1043,8 +1043,8 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
           <>
             <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
               <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
-              <option value="PCSF">Pacred เหมาเหมา · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
-              <option value="PCSE">Pacred Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
+              <option value="PCSF">PRF เหมาๆ · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
+              <option value="PCSE">PRE Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
               <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
             </select>
             {shipByMode === "_ext" && (

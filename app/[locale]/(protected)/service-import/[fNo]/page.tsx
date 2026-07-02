@@ -224,7 +224,7 @@ const NAME_SHIP_BY: Record<string, string> = {
   "37": "โชคสถาพรขนส่ง", "38": "ทรัพย์สมบูรณ์ถาวร", "39": "MNB Transport",
   "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014", "41": "สิรินครขนส่ง", "42": "พาณิชย์การขนส่ง KSD",
   PCS: "รับเองโกดัง Pacred (สมุทรสาคร)", F: "บริษัทจัดหาให้อัตโนมัติ",
-  PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express",
+  PCSF: "PRF เหมาๆ", PCSE: "PRE Express",
 };
 function nameShipBy(fShipBy: string | null, t: T): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? t("notFound");

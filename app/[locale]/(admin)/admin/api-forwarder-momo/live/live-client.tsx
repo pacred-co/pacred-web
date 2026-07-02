@@ -21,6 +21,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { loadMomoLiveBoard, propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { MOMO_LIVE_STATUSES, type MomoLiveParcel, type MomoLiveStatus } from "@/lib/integrations/momo-web/types";
+import { parcelTotals } from "@/lib/integrations/momo-web/live-parcel-metrics";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 /** Thai labels for the 6 status boards (the tabs). */
@@ -54,10 +55,20 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
   const [zoom, setZoom] = useState<{ url: string; tracking: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // "อัปเดตสถานะเข้าระบบ PR" — the bulk status-propagate (writes tb_forwarder.fstatus).
+  // "อัปเดตสถานะ + ข้อมูลเข้าระบบ PR" — the bulk status-propagate (writes tb_forwarder.fstatus)
+  // + the DATA fill (น้ำหนัก/คิว/ขนาด/จำนวนชิ้น · fill-when-empty).
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<
-    | { ok: true; matched: number; advanced: number; shopOrdersAdvanced: number; errorCount: number }
+    | {
+        ok: true;
+        matched: number;
+        advanced: number;
+        shopOrdersAdvanced: number;
+        errorCount: number;
+        dataFilled: number;
+        dataFlaggedMismatch: number;
+        dataSkippedBilled: number;
+      }
     | { ok: false; error: string }
     | null
   >(null);
@@ -71,9 +82,10 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
   async function runStatusSync() {
     if (syncing) return;
     const ok = await confirm(
-      "อัปเดตสถานะพัสดุจาก MOMO เข้าระบบ PR ตอนนี้เลยไหม?\n\n" +
-        "ระบบจะดึงทุกสถานะจาก MOMO แล้ว “เดินหน้า” สถานะรายการนำเข้าใน PR ให้ตรงกับ MOMO " +
-        "(เฉพาะเดินหน้า ไม่ถอยหลัง · ไม่แตะเรื่องเงิน/ค่าใช้จ่าย)",
+      "อัปเดตสถานะ + ข้อมูลจาก MOMO เข้าระบบ PR ตอนนี้เลยไหม?\n\n" +
+        "ระบบจะดึงจาก MOMO แล้ว: (1) “เดินหน้า” สถานะรายการนำเข้าใน PR ให้ตรงกับ MOMO " +
+        "(เฉพาะเดินหน้า ไม่ถอยหลัง) · (2) เติม น้ำหนัก/คิว/ขนาด/จำนวนชิ้น ให้เฉพาะรายการที่ยังว่างอยู่ " +
+        "(ไม่ทับของเดิม · ข้ามรายการที่วางบิลแล้ว · ไม่แตะเรื่องเงิน/ค่าใช้จ่ายโดยตรง)",
     );
     if (!ok) return;
     setSyncing(true);
@@ -82,12 +94,16 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
       const res = await propagateMomoLiveStatusNow();
       if (res.ok && res.data) {
         const s = res.data.summary;
+        const d = res.data.data;
         setSyncResult({
           ok: true,
           matched: s.matched,
           advanced: s.advanced,
           shopOrdersAdvanced: s.shopOrdersAdvanced,
-          errorCount: s.errors.length,
+          errorCount: s.errors.length + d.errors.length,
+          dataFilled: d.filled,
+          dataFlaggedMismatch: d.flaggedMismatch,
+          dataSkippedBilled: d.skippedBilled,
         });
         // reflect the just-written statuses in the visible board
         loadBoard(status);
@@ -212,9 +228,9 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
               onClick={runStatusSync}
               disabled={syncing || pending}
               className="rounded-full border border-primary-300 bg-primary-50 px-3 py-1.5 text-[12px] font-bold text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
-              title="ดึงสถานะจาก MOMO ทุกสถานะ แล้วเดินหน้าสถานะรายการนำเข้าใน PR ให้ตรง (เฉพาะเดินหน้า · ไม่แตะเรื่องเงิน)"
+              title="ดึงจาก MOMO: เดินหน้าสถานะ (เฉพาะเดินหน้า) + เติมน้ำหนัก/คิว/ขนาด/จำนวนชิ้นให้รายการที่ยังว่าง (ไม่ทับของเดิม · ข้ามรายการที่วางบิลแล้ว)"
             >
-              {syncing ? "⏳ กำลังอัปเดตสถานะ…" : "🔄 อัปเดตสถานะเข้าระบบ PR"}
+              {syncing ? "⏳ กำลังอัปเดตสถานะ + ข้อมูล…" : "🔄 อัปเดตสถานะ + ข้อมูลเข้าระบบ PR"}
             </button>
           </nav>
 
@@ -222,11 +238,22 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
           {syncResult &&
             (syncResult.ok ? (
               <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-[12px] text-emerald-900 leading-relaxed">
-                <strong>อัปเดตสถานะเข้าระบบ PR สำเร็จ</strong> — เจอรายการที่ตรงกับ MOMO{" "}
+                <strong>อัปเดตสถานะ + ข้อมูลเข้าระบบ PR สำเร็จ</strong> — เจอรายการที่ตรงกับ MOMO{" "}
                 {syncResult.matched.toLocaleString("th-TH")} รายการ · เดินหน้าสถานะ{" "}
-                <span className="font-bold">{syncResult.advanced.toLocaleString("th-TH")}</span> รายการ
+                <span className="font-bold">{syncResult.advanced.toLocaleString("th-TH")}</span> รายการ ·
+                เติมน้ำหนัก/คิว/ขนาด/จำนวนชิ้น{" "}
+                <span className="font-bold">{syncResult.dataFilled.toLocaleString("th-TH")}</span> รายการ
                 {syncResult.shopOrdersAdvanced > 0 && (
                   <> · อัปเดตงานฝากสั่งซื้อที่เชื่อมโยง {syncResult.shopOrdersAdvanced.toLocaleString("th-TH")} รายการ</>
+                )}
+                {syncResult.dataSkippedBilled > 0 && (
+                  <span className="text-muted"> · ข้ามรายการที่วางบิลแล้ว {syncResult.dataSkippedBilled.toLocaleString("th-TH")} รายการ</span>
+                )}
+                {syncResult.dataFlaggedMismatch > 0 && (
+                  <span className="text-amber-700">
+                    {" "}· พบยอดไม่ตรงกับ MOMO {syncResult.dataFlaggedMismatch.toLocaleString("th-TH")} รายการ
+                    (ไม่ทับของเดิม · ให้ตรวจกับแต้ม)
+                  </span>
                 )}
                 {syncResult.errorCount > 0 && (
                   <span className="text-amber-700"> · มีข้อผิดพลาดบางรายการ {syncResult.errorCount} รายการ (ดู log)</span>
@@ -280,9 +307,10 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
                     <tr className="whitespace-nowrap">
                       <th className="text-left px-2 py-2 border-b font-semibold">รหัสลูกค้า</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">เลขพัสดุจีน</th>
-                      <th className="text-right px-2 py-2 border-b font-semibold">น้ำหนัก (กก.)</th>
-                      <th className="text-right px-2 py-2 border-b font-semibold">คิว (ลบ.ม.)</th>
-                      <th className="text-left px-2 py-2 border-b font-semibold">ก×ย×ส</th>
+                      <th className="text-right px-2 py-2 border-b font-semibold">จำนวน (ชิ้น)</th>
+                      <th className="text-right px-2 py-2 border-b font-semibold">น้ำหนักรวม (กก.)</th>
+                      <th className="text-right px-2 py-2 border-b font-semibold">คิวรวม (ลบ.ม.)</th>
+                      <th className="text-left px-2 py-2 border-b font-semibold">ก×ย×ส (ต่อชิ้น)</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">ประเภท</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">ขนส่ง</th>
                       <th className="text-left px-2 py-2 border-b font-semibold">ตู้</th>
@@ -296,6 +324,10 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
                         p.width || p.length || p.height
                           ? `${p.width || 0}×${p.length || 0}×${p.height || 0}`
                           : "–";
+                      // MOMO's web shows the TOTAL (per-piece × จำนวนชิ้น). The scrape
+                      // reports PER-PIECE kg/cbm, so multiply to match MOMO's board
+                      // (VERIFIED 2026-07-01 · tracking 1782113771: 20kg × 10 = 200kg).
+                      const totals = parcelTotals(p);
                       return (
                         <tr
                           key={`${p.tracking}-${i}`}
@@ -313,8 +345,18 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
                           </td>
                           {/* เลขพัสดุจีน */}
                           <td className="px-2 py-2 font-mono">{p.tracking}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{p.weightKg || "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{p.cbm || "—"}</td>
+                          {/* จำนวนชิ้น */}
+                          <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                            {totals.quantity.toLocaleString("th-TH")}
+                          </td>
+                          {/* น้ำหนักรวม = per-piece × qty (matches MOMO's board) */}
+                          <td className="px-2 py-2 text-right tabular-nums">
+                            {totals.weightKg ? totals.weightKg.toLocaleString("th-TH") : "—"}
+                          </td>
+                          {/* คิวรวม = per-piece × qty */}
+                          <td className="px-2 py-2 text-right tabular-nums">
+                            {totals.cbm ? Number(totals.cbm.toFixed(6)).toLocaleString("th-TH") : "—"}
+                          </td>
                           <td className="px-2 py-2 font-mono text-[11px] text-muted">{dims}</td>
                           <td className="px-2 py-2">{p.type || "—"}</td>
                           <td className="px-2 py-2">{shipByTh(p.shipBy)}</td>

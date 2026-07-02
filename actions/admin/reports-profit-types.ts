@@ -94,8 +94,8 @@ export const SHIP_BY_LABEL: Record<string, string> = {
   // raw "รหัส PCSF". See drivers SHIP_BY_LABEL + nameShipBy SOT.
   PRF: "Pacred เหมาๆ (PRF)",
   PCSF: "Pacred เหมาๆ (PRF)",
-  PRE: "Pacred Express (PRE)",
-  PCSE: "Pacred Express (PRE)",
+  PRE: "PRE Express",
+  PCSE: "PRE Express",
   "1": "DHL Express",
   "2": "Flash Express",
   "3": "J.K. เอ็กซ์เพรส",

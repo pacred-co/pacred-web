@@ -68,8 +68,8 @@ type DriverOption = {
 // legacy "1" = DHL Express) and was MISSING 8–47, so the per-row carrier badge +
 // the ขนส่ง filter showed wrong/raw labels. 2026-06-23.
 const SHIP_BY_LABEL: Record<string, string> = {
-  PCSF: "Pacred เหมาเหมา",          // legacy "PCS เหมาเหมา"
-  PCSE: "Pacred Express",            // legacy "PCS Express"
+  PCSF: "PRF เหมาๆ",               // legacy "PCS เหมาเหมา"
+  PCSE: "PRE Express",             // legacy "PCS Express"
   PCS:  "รับเองโกดัง Pacred",        // legacy "รับเองโกดัง PCS กทม"
   F:    "บริษัทจัดหาให้อัตโนมัติ",
   "1":  "DHL Express",
