@@ -34,6 +34,11 @@ import {
   resolveLegacyPromoCode,
   type LegacyPromo,
 } from "@/lib/promo/catalog";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). The
+// throwing checkout action delegates to a non-exported *Impl run through
+// withObservability: transparent (same return on success · re-throws the
+// ORIGINAL error), files only UNEXPECTED throws.
+import { withObservability } from "@/lib/observability/with-observability";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -240,7 +245,9 @@ export async function updateCartItemQuantity(input: {
 // PCS warehouse address (when hShipBy='PCS') = the Pacred Nong Khaem
 // warehouse, copied verbatim from shops.php L82-91 (same physical
 // address; rebrand the company-name string only).
-export async function submitCartOrder(input: {
+// F3 — named so the export + its *Impl share ONE type (no duplication). Was an
+// inline param type on submitCartOrder; extracting it is behavior-neutral.
+type SubmitCartOrderInput = {
   ids: number[];                          // selected tb_cart row IDs
   hTransportType: string;                 // 1=land / 2=sea / 3=air etc.
   crate: string;                          // 1=ตี / 0=ไม่ตี
@@ -276,7 +283,20 @@ export async function submitCartOrder(input: {
     addressProvince: string;
     addressZIPCode: string;
   } | null;
-}): Promise<ActionResult<{ hNo: string }>> {
+};
+
+export async function submitCartOrder(
+  input: SubmitCartOrderInput,
+): Promise<ActionResult<{ hNo: string }>> {
+  // F3 — capture UNEXPECTED throws (null-deref / DB driver) as a
+  // platform_incident, then re-throw unchanged. Handled `{ ok:false }` returns
+  // propagate normally (never captured).
+  return withObservability("submitCartOrder", submitCartOrderImpl)(input);
+}
+
+async function submitCartOrderImpl(
+  input: SubmitCartOrderInput,
+): Promise<ActionResult<{ hNo: string }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
   const data = await getCurrentUserWithProfile();

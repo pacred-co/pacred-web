@@ -71,6 +71,14 @@ import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { logger } from "@/lib/logger";
+// F3 — server-side capture rail. A "use server" file may only EXPORT async
+// functions, so `withObservability` (which returns a bound value) can't be used
+// at the `export const` boundary; instead the throwing money action delegates to
+// a non-exported *Impl and the thin export runs it through withObservability —
+// transparent (same return value on success · re-throws the ORIGINAL error) so
+// only UNEXPECTED throws (requireAdmin auth-throw · null-deref · DB driver
+// throw) are filed as incidents; handled `{ ok:false }` returns are untouched.
+import { withObservability } from "@/lib/observability/with-observability";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -863,6 +871,15 @@ export async function adminUpdateWalletHsPendingAmount(
 }
 
 export async function adminApproveWalletDeposit(
+  input: AdminApproveWalletDepositInput,
+): Promise<AdminActionResult<ApproveResult>> {
+  // F3 — capture UNEXPECTED throws (auth-throw / null-deref / DB driver) as a
+  // platform_incident, then re-throw unchanged. Handled `{ ok:false }` returns
+  // propagate normally (never captured).
+  return withObservability("adminApproveWalletDeposit", adminApproveWalletDepositImpl)(input);
+}
+
+async function adminApproveWalletDepositImpl(
   input: AdminApproveWalletDepositInput,
 ): Promise<AdminActionResult<ApproveResult>> {
   const parsed = approveDepositSchema.safeParse(input);

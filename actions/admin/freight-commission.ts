@@ -26,6 +26,11 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). The
+// throwing freight-commission money actions (accrue + approve + pay) delegate to
+// non-exported *Impl fns run through withObservability: transparent (same return
+// on success · re-throws the ORIGINAL error), files only UNEXPECTED throws.
+import { withObservability } from "@/lib/observability/with-observability";
 import { isFreightCommissionEnabled } from "@/lib/freight-commission/flag";
 import { selectActiveConfirmedTiers } from "@/lib/freight/commission-tier-select";
 import {
@@ -141,6 +146,13 @@ export type AccrueResult = {
  * is a visibility row, paid out only via the withdrawal workflow.
  */
 export async function adminAccrueFreightCommission(
+  input: AdminAccrueFreightCommissionInput,
+): Promise<AdminActionResult<AccrueResult>> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("adminAccrueFreightCommission", adminAccrueFreightCommissionImpl)(input);
+}
+
+async function adminAccrueFreightCommissionImpl(
   input: AdminAccrueFreightCommissionInput,
 ): Promise<AdminActionResult<AccrueResult>> {
   const parsed = accrueSchema.safeParse(input);
@@ -551,6 +563,13 @@ const idSchema = z.object({ id: z.string().uuid() });
 export async function adminApproveCommissionWithdrawal(
   input: z.infer<typeof idSchema>,
 ): Promise<AdminActionResult<void>> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("adminApproveCommissionWithdrawal", adminApproveCommissionWithdrawalImpl)(input);
+}
+
+async function adminApproveCommissionWithdrawalImpl(
+  input: z.infer<typeof idSchema>,
+): Promise<AdminActionResult<void>> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
@@ -645,6 +664,14 @@ export type AdminMarkCommissionWithdrawalPaidInput = z.infer<typeof paidSchema>;
  * removed so no orphan file lingers.
  */
 export async function adminMarkCommissionWithdrawalPaid(
+  input: AdminMarkCommissionWithdrawalPaidInput,
+  slipImage: File,
+): Promise<AdminActionResult<{ id: string }>> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("adminMarkCommissionWithdrawalPaid", adminMarkCommissionWithdrawalPaidImpl)(input, slipImage);
+}
+
+async function adminMarkCommissionWithdrawalPaidImpl(
   input: AdminMarkCommissionWithdrawalPaidInput,
   slipImage: File,
 ): Promise<AdminActionResult<{ id: string }>> {

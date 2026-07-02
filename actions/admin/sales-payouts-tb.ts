@@ -57,6 +57,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). The
+// throwing commission pay-out delegates to a non-exported *Impl run through
+// withObservability: transparent (same return on success · re-throws the
+// ORIGINAL error), files only UNEXPECTED throws.
+import { withObservability } from "@/lib/observability/with-observability";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same per-file helper pattern as wallet-hs.ts.
@@ -374,6 +379,15 @@ export type AdminMarkSalesPayoutPaidTbInput = z.infer<typeof payoutPaidSchema>;
  * the guard into the UPDATE's WHERE closes it).
  */
 export async function adminMarkSalesPayoutPaidTb(
+  input: AdminMarkSalesPayoutPaidTbInput,
+  slipImage: File,
+): Promise<AdminActionResult<{ id: number; imagesSlip: string }>> {
+  // F3 — capture UNEXPECTED throws (auth-throw / DB driver) as a
+  // platform_incident, then re-throw; handled `{ ok:false }` returns untouched.
+  return withObservability("adminMarkSalesPayoutPaidTb", adminMarkSalesPayoutPaidTbImpl)(input, slipImage);
+}
+
+async function adminMarkSalesPayoutPaidTbImpl(
   input: AdminMarkSalesPayoutPaidTbInput,
   slipImage: File,
 ): Promise<AdminActionResult<{ id: number; imagesSlip: string }>> {

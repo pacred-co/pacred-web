@@ -28,6 +28,11 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). The
+// throwing billing money actions (issue + pay) delegate to non-exported *Impl
+// fns run through withObservability: transparent (same return on success ·
+// re-throws the ORIGINAL error), files only UNEXPECTED throws.
+import { withObservability } from "@/lib/observability/with-observability";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { mintForwarderInvoiceDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { baseTracking, filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
@@ -951,6 +956,14 @@ export async function getInvoiceDetail(
 export async function createBillingRunInvoice(
   input: CreateBillingRunInvoiceInput,
 ): Promise<AdminActionResult<{ invoiceId: number; docNo: string }>> {
+  // F3 — capture UNEXPECTED throws (auth-throw / DB driver) as a
+  // platform_incident, then re-throw; handled `{ ok:false }` returns untouched.
+  return withObservability("createBillingRunInvoice", createBillingRunInvoiceImpl)(input);
+}
+
+async function createBillingRunInvoiceImpl(
+  input: CreateBillingRunInvoiceInput,
+): Promise<AdminActionResult<{ invoiceId: number; docNo: string }>> {
   const parsed = createBillingRunInvoiceSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -1343,6 +1356,13 @@ export async function createBillingRunInvoice(
 // ────────────────────────────────────────────────────────────────────────
 
 export async function markBillingRunPaid(
+  input: MarkBillingRunPaidInput,
+): Promise<AdminActionResult<{ invoiceId: number }>> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("markBillingRunPaid", markBillingRunPaidImpl)(input);
+}
+
+async function markBillingRunPaidImpl(
   input: MarkBillingRunPaidInput,
 ): Promise<AdminActionResult<{ invoiceId: number }>> {
   const parsed = markBillingRunPaidSchema.safeParse(input);

@@ -44,6 +44,11 @@ import {
   cargoDutyThb,
   nullableShortText,
 } from "@/lib/validators/cargo-cost-fields";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). The
+// throwing cost setters delegate to non-exported *Impl fns run through
+// withObservability: transparent (same return on success · re-throws the
+// ORIGINAL error), files only UNEXPECTED throws.
+import { withObservability } from "@/lib/observability/with-observability";
 
 // Roles allowed to capture cost. Owner 2026-06-18 (mig 0189): cost is an
 // ultra/accounting/pricing domain — `super` is god for everything EXCEPT money
@@ -93,6 +98,14 @@ const forwarderItemCostSchema = z.object({
 });
 
 export async function setForwarderItemCost(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<AdminActionResult> {
+  // F3 — capture UNEXPECTED throws (auth-throw / DB driver) as a
+  // platform_incident, then re-throw; handled `{ ok:false }` returns untouched.
+  return withObservability("setForwarderItemCost", setForwarderItemCostImpl)(raw);
+}
+
+async function setForwarderItemCostImpl(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
   const denied = await assertCostAccess();
@@ -167,6 +180,13 @@ const forwarderImportDutySchema = z.object({
 export async function setForwarderImportDuty(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("setForwarderImportDuty", setForwarderImportDutyImpl)(raw);
+}
+
+async function setForwarderImportDutyImpl(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<AdminActionResult> {
   const denied = await assertCostAccess();
   if (denied) return denied;
   const parsed = forwarderImportDutySchema.safeParse(raw);
@@ -217,6 +237,13 @@ const shopOrderItemCostSchema = z.object({
 });
 
 export async function setShopOrderItemCost(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<AdminActionResult> {
+  // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
+  return withObservability("setShopOrderItemCost", setShopOrderItemCostImpl)(raw);
+}
+
+async function setShopOrderItemCostImpl(
   raw: Record<string, FormDataEntryValue | undefined>,
 ): Promise<AdminActionResult> {
   const denied = await assertCostAccess();

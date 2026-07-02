@@ -16,14 +16,29 @@
  * the browser. It imports no server code.
  */
 
+import { isTransientAbortError } from "./is-transient-abort";
+
 const INGEST_URL = "/api/observability/incident";
 
 /**
  * Fire-and-forget POST of a client render error to the ingest sink.
  * Returns a promise that always resolves (never rejects) so callers
  * can `void` it safely.
+ *
+ * Genuine transient navigation-abort / network-cancel errors are SKIPPED
+ * (not a bug — the user navigated away / backgrounded the tab / lost
+ * signal and an in-flight Server-Action or RSC fetch was cancelled).
+ * These are stack-less "Load failed" / "Failed to fetch" / "Connection
+ * closed." shapes that otherwise flood /admin/incidents with
+ * unactionable rows. The friendly fallback UI still renders (the caller
+ * — the error boundary — is unaffected); only the report POST is
+ * suppressed. See lib/observability/is-transient-abort.ts for the
+ * tightly-scoped allow-list — a real error is never suppressed.
  */
 export async function reportClientIncident(error: Error & { digest?: string }): Promise<void> {
+  // Skip pure transient aborts — they are not incidents.
+  if (isTransientAbortError(error)) return;
+
   try {
     // Route — best-effort from the browser location. The server
     // re-normalises it for the fingerprint.

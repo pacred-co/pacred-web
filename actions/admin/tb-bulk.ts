@@ -37,6 +37,11 @@ import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { spendCashbackAtCheckout } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
+// F3 — server-side capture rail (see wallet-hs.ts docblock). Delegate the
+// throwing bulk money action to a non-exported *Impl run through
+// withObservability — transparent, re-throws the ORIGINAL error, files only
+// UNEXPECTED throws (handled `{ ok:false }` returns are untouched).
+import { withObservability } from "@/lib/observability/with-observability";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-trans.ts L49 (fourth caller).
@@ -93,6 +98,14 @@ const bulkApproveWalletHsSchema = z.object({
 export type AdminBulkApproveWalletHsInput = z.infer<typeof bulkApproveWalletHsSchema>;
 
 export async function adminBulkApproveWalletHs(
+  input: AdminBulkApproveWalletHsInput,
+): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[] }>> {
+  // F3 — capture UNEXPECTED throws as a platform_incident, then re-throw
+  // unchanged (handled `{ ok:false }` returns propagate normally).
+  return withObservability("adminBulkApproveWalletHs", adminBulkApproveWalletHsImpl)(input);
+}
+
+async function adminBulkApproveWalletHsImpl(
   input: AdminBulkApproveWalletHsInput,
 ): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[] }>> {
   const parsed = bulkApproveWalletHsSchema.safeParse(input);

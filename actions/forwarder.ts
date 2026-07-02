@@ -20,6 +20,12 @@ import {
   userNotPCS50,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
+// F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). A
+// "use server" file may only EXPORT async functions, so the throwing payment
+// action delegates to a non-exported *Impl run through withObservability:
+// transparent (same return value on success · re-throws the ORIGINAL error),
+// files only UNEXPECTED throws (handled `{ ok:false }` returns untouched).
+import { withObservability } from "@/lib/observability/with-observability";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -299,6 +305,15 @@ export type SubmitForwarderPaymentInput = z.infer<
 >;
 
 export async function submitForwarderPayment(
+  input: SubmitForwarderPaymentInput,
+): Promise<ActionResult<{ submitted: number[]; alreadySubmitted: boolean }>> {
+  // F3 — capture UNEXPECTED throws (null-deref / DB driver) as a
+  // platform_incident, then re-throw unchanged. Handled `{ ok:false }` returns
+  // propagate normally (never captured).
+  return withObservability("submitForwarderPayment", submitForwarderPaymentImpl)(input);
+}
+
+async function submitForwarderPaymentImpl(
   input: SubmitForwarderPaymentInput,
 ): Promise<ActionResult<{ submitted: number[]; alreadySubmitted: boolean }>> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations
