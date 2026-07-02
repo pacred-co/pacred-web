@@ -619,11 +619,16 @@ export async function renderLegacyCustomerView(
               />
               <SaleRepEditor compact userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
               <CsRepEditor compact userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
-              {/* FEATURE D (owner 2026-06-26) — ล่ามจีน / Pricing / ผู้สั่งซื้อ ของลูกค้า
-                  ข้าง Sales/CS (หลังบ้านเห็นหมด · §0g self-explaining row). */}
-              <ExtraRepEditor compact kind="interpreter" userid={u.userID} currentRep={u.adminIDInterpreter} admins={activeAdmins} />
-              <ExtraRepEditor compact kind="pricing" userid={u.userID} currentRep={u.adminIDPricing} admins={activeAdmins} />
-              <ExtraRepEditor compact kind="purchaser" userid={u.userID} currentRep={u.adminIDPurchaser} admins={activeAdmins} />
+              {/* ทีม Pricing (owner 2026-07-02) — ผู้สั่งซื้อ + ล่ามจีน + pricing = ทีมเดียว.
+                  จัดกลุ่มใต้หัวเดียว (ไม่แยกเป็น 3 ก้อนลอยๆ) = "งานนี้ทีม Pricing ใครดูต่อ"
+                  ตามงานหลังบ้าน. คงผู้รับผิดชอบ 3 บทบาทไว้เพื่อจ่ายค่าคอมถูกคน (บางงาน
+                  คนอื่นในทีมทำ · commission เดิม). §0g self-explaining · §0h ≥11px. */}
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-1">
+                <span className="text-[11px] font-semibold text-amber-800">ทีม Pricing</span>
+                <ExtraRepEditor compact kind="interpreter" userid={u.userID} currentRep={u.adminIDInterpreter} admins={activeAdmins} />
+                <ExtraRepEditor compact kind="pricing" userid={u.userID} currentRep={u.adminIDPricing} admins={activeAdmins} />
+                <ExtraRepEditor compact kind="purchaser" userid={u.userID} currentRep={u.adminIDPurchaser} admins={activeAdmins} />
+              </div>
             </div>
           </div>
           {/* Action buttons — moved into the name row (right-aligned · FB-style)

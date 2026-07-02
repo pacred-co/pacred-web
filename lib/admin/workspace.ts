@@ -160,10 +160,16 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
     queues: [Q.walletTopup, Q.yuanPending, Q.fwdAwaitPay, Q.cntDrawMoney, Q.walletWdraw, Q.salesPayout, Q.fwdCredit],
   },
 
-  // ── Pricing (COST capture) ───────────────────────────────────────────────
+  // ── ทีม Pricing (owner 2026-07-02: ผู้สั่งซื้อ + ล่ามจีน + pricing = ทีมเดียว) ──
+  // The purchaser (ผู้สั่งซื้อ), Chinese interpreter (ล่าม) and pricing all sit in
+  // ONE back-office team — the owner's model. They share ONE workspace (the union
+  // of their queues) so a job "ใครดูต่อ หลังบ้าน" is the team's, not 3 split seats;
+  // whoever on the team picks it up gets it. `interpreter` resolves to this SAME
+  // spec (below). Commission stays per-person (comm-interpreter payout untouched)
+  // so the right teammate is still paid — the team grouping is display/workflow only.
   pricing: {
-    headingTh: "พื้นที่งานตั้งราคา (Pricing)",
-    queues: [Q.shopPending, Q.fwdArrived],
+    headingTh: "พื้นที่งานทีม Pricing (ตั้งราคา · สั่งซื้อ · ล่ามจีน)",
+    queues: [Q.shopPending, Q.yuanPending, Q.fwdArrived],
   },
 
   // ── Sales / CS (biz_cs · share a base · doc §3 "Cs กับ เซลล์ประมาณนี้") ──────
@@ -255,9 +261,12 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
     headingTh: "พื้นที่งานปฏิบัติการ (Ops)",
     queues: [Q.shopPending, Q.fwdArrived, Q.yuanPending, Q.contactMsg, Q.incidents],
   },
+  // ล่ามจีน = ส่วนหนึ่งของ "ทีม Pricing" (owner 2026-07-02) → ลงพื้นที่งานทีมเดียวกับ
+  // pricing (ผู้สั่งซื้อ/ตั้งราคา/ล่าม เห็นคิวหลังบ้านชุดเดียวกัน). role ยังแยกไว้เพื่อจ่าย
+  // ค่าคอมล่ามถูกคน (comm-interpreter). heading/queues = ทีม Pricing (ตรงกับ pricing ด้านบน).
   interpreter: {
-    headingTh: "พื้นที่งานล่ามจีน (Interpreter)",
-    queues: [Q.shopPending, Q.yuanPending],
+    headingTh: "พื้นที่งานทีม Pricing (ตั้งราคา · สั่งซื้อ · ล่ามจีน)",
+    queues: [Q.shopPending, Q.yuanPending, Q.fwdArrived],
   },
 
   // ── Manager — oversight (sees the broad set + the dashboard) ──────────────
