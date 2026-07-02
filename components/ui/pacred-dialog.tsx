@@ -24,6 +24,7 @@
  */
 
 import { useRef, useState, type RefObject, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useTranslations } from "next-intl";
 
 // ──────────────────────────────────────────────────────────────
@@ -152,23 +153,33 @@ type ConfirmState = {
   open: boolean;
   message: string;
   kind: "confirm" | "alert";
-  resolve: (ok: boolean) => void;
 } | null;
 
 export function useConfirmDialogs() {
   const t = useTranslations("pacredDialog");
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<ConfirmState>(null);
+  // The pending resolver lives in a REF (not state) so close()/onClose can
+  // ALWAYS settle the promise. A caller that opens the dialog from inside a
+  // startTransition() gets its setState deferred → `state` stayed null → the
+  // old `state.resolve(ok)` was a no-op → the promise never resolved → the
+  // caller's button spun forever. The ref is immune to that deferral.
+  const resolveRef = useRef<((ok: boolean) => void) | null>(null);
 
   function open(message: string, kind: "confirm" | "alert"): Promise<boolean> {
     return new Promise((resolve) => {
-      setState({ open: true, message, kind, resolve });
-      // Defer to next tick — ref must be attached when we call .showModal()
-      queueMicrotask(() => dialogRef.current?.showModal());
+      resolveRef.current = resolve;
+      // flushSync forces the message to COMMIT synchronously even when open()
+      // is called inside a transition — otherwise the <dialog> renders with a
+      // blank message until the (deferred) transition commits. The dialog
+      // element is always mounted, so its ref is attached and showModal() works.
+      flushSync(() => setState({ open: true, message, kind }));
+      dialogRef.current?.showModal();
     });
   }
   function close(ok: boolean) {
-    state?.resolve(ok);
+    resolveRef.current?.(ok);
+    resolveRef.current = null;
     dialogRef.current?.close();
     setState(null);
   }
@@ -180,7 +191,8 @@ export function useConfirmDialogs() {
         if (e.target === dialogRef.current) close(false);
       }}
       onClose={() => {
-        if (state) state.resolve(false);
+        resolveRef.current?.(false);
+        resolveRef.current = null;
         setState(null);
       }}
       className="rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 w-[min(420px,95vw)]"
