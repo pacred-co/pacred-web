@@ -310,14 +310,14 @@ export function FloatingTabs({
               <span className={`text-[11px] leading-tight font-medium ${active === 4 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("chat")}</span>
             </a>
 
-            {/* 6 — เมนู → mobile launchpad (/m/dashboard auto-redirects to
-                /dashboard on desktop, so this href is safe on both viewports).
-                Always rendered on every page — incl. /m/dashboard itself —
-                so the bottom-nav stays consistent across the customer portal
-                (เดฟ 2026-05-27 — ปอน: "ปุ่มเมนูหายในมือถืออะ ที่เป็น 3 ขีด",
-                reverting the earlier /m/dashboard hide). On /m/dashboard the
-                tap is a no-op page-refresh, which is acceptable. */}
-            <Link href="/m/dashboard" onClick={() => setActive(5)}
+            {/* 6 — เมนู (อวตาร) → หน้าโปรไฟล์ /profile (Facebook-style: the
+                avatar tab always opens the member's profile when logged in —
+                ปอน 2026-07-02 "ให้เมนูเป็นหน้าโปรไฟล์ตลอดถ้า log in"). /profile
+                is auth-guarded (requireAuth → /login for guests), so a
+                signed-out tap lands on login. Was /m/dashboard (a no-op refresh
+                when already on the launchpad); /profile is a real destination
+                from every page, incl. /m/dashboard itself. */}
+            <Link href="/profile" onClick={() => setActive(5)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               {avatarUrl ? (
                 <span

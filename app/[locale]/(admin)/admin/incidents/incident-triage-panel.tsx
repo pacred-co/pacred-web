@@ -21,6 +21,8 @@ import {
   markIncidentInProgress,
   resolveIncident,
   ignoreIncident,
+  reopenIncident,
+  assignIncident,
   spawnFixWorkItem,
 } from "@/actions/admin/incidents";
 import {
@@ -32,17 +34,30 @@ type Props = {
   id:          string;
   status:      IncidentStatus;
   hasWorkItem: boolean;
+  /** The viewing admin's profiles.id — powers "มอบหมายให้ฉัน" (assign-to-self). */
+  currentAdminId: string;
+  /** True when this incident is already assigned to the viewing admin. */
+  assignedToMe:   boolean;
 };
 
 const BTN_BASE =
   "min-h-[40px] rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50";
 
-export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
+export function IncidentTriagePanel({
+  id,
+  status,
+  hasWorkItem,
+  currentAdminId,
+  assignedToMe,
+}: Props) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
 
   const legal = INCIDENT_STATUS_TRANSITIONS[status] ?? [];
+  // Assign-to-self is offered only while the incident is still live (a
+  // closed resolved/ignored row is not assignable per the action's guard).
+  const isClosed = status === "resolved" || status === "ignored";
 
   function run(label: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
     setMsg(null);
@@ -71,6 +86,16 @@ export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
     if (!(await confirm("ปิด incident นี้แบบ 'ไม่ใช่บั๊ก'?"))) return;
     const note = (await prompt("เหตุผล (ไม่บังคับ):")) ?? "";
     run("ปิดงาน — ไม่ใช่บั๊ก", () => ignoreIncident({ id, note }));
+  }
+
+  async function handleReopen() {
+    if (!(await confirm("เปิด incident นี้ใหม่ (กลับสถานะเป็น 'เปิด รอตรวจ')?"))) return;
+    run("เปิดใหม่", () => reopenIncident({ id }));
+  }
+
+  async function handleAssignSelf() {
+    if (!(await confirm("มอบหมาย incident นี้ให้ตัวคุณเอง?"))) return;
+    run("มอบหมายให้ฉันแล้ว", () => assignIncident({ id, assignee: currentAdminId }));
   }
 
   return (
@@ -123,10 +148,23 @@ export function IncidentTriagePanel({ id, status, hasWorkItem }: Props) {
         <button
           type="button"
           disabled={pending}
-          onClick={() => run("เปิดใหม่", () => acknowledgeIncident({ id }))}
+          onClick={handleReopen}
           className={`${BTN_BASE} border border-border bg-white text-foreground hover:bg-surface-alt`}
         >
-          เปิดใหม่ (รับเรื่อง)
+          เปิดใหม่ (รอตรวจ)
+        </button>
+      )}
+
+      {/* Assign-to-self — reachable + useful (F5). Offered while the
+          incident is still live and not already mine. */}
+      {!isClosed && !assignedToMe && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={handleAssignSelf}
+          className={`${BTN_BASE} border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100`}
+        >
+          มอบหมายให้ฉัน
         </button>
       )}
 

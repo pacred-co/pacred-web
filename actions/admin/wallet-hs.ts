@@ -65,6 +65,7 @@ import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
@@ -886,7 +887,7 @@ export async function adminApproveWalletDeposit(
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note, typeservice, reforder, dateslip, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, reforder2, dateslip, wusercredit, reviewed_at")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -897,6 +898,7 @@ export async function adminApproveWalletDeposit(
           note: string | null;
           typeservice: string | null;
           reforder: string | null;
+          reforder2: string | null;
           dateslip: string | null;
           wusercredit: string | null;
           reviewed_at: string | null;
@@ -985,13 +987,42 @@ export async function adminApproveWalletDeposit(
         const userid = rowRaw.userid;
         const cascadedRows: CascadedRow[] = [];
 
+        // ── DIRECT-CUT classification (money-critical · 2026-07-02).
+        //    `submitForwarderPayment` inserts this slip WITHOUT crediting the
+        //    wallet — the customer transferred straight to the bank + the slip
+        //    proves it (actions/forwarder.ts L509-561). So approving a genuine
+        //    direct slip must NOT debit the wallet; the old unconditional debit +
+        //    negative-wallet guard refused every ฿0-wallet import slip
+        //    ("ยอดกระเป๋าลูกค้าไม่พอ") = admins could not settle real payments.
+        //    Resolve the paydeposit link defensively (empty for direct slips) +
+        //    classify: direct-slip → skip the guard + debit (walletDelta 0);
+        //    any other shape (cascade/funded) → keep the guard + debit armed.
+        let type4HasPaydepositLink = false;
+        {
+          const { data: pdLinks, error: pdErr } = await admin
+            .from("tb_wallet_paydeposit")
+            .select("id")
+            .eq("whid", id)
+            .limit(1);
+          if (pdErr) {
+            console.error(`[approve type=4 paydeposit link check] failed`, { code: pdErr.code, message: pdErr.message });
+            return { ok: false, error: `db_error:${pdErr.code ?? "unknown"}` };
+          }
+          type4HasPaydepositLink = (pdLinks?.length ?? 0) > 0;
+        }
+        const type4Class = classifyWalletHsRow(
+          { type: rowRaw.type, typeservice: rowRaw.typeservice, reforder: rowRaw.reforder, reforder2: rowRaw.reforder2, amount: rowRaw.amount },
+          { hasPaydepositLink: type4HasPaydepositLink },
+        );
+        const type4IsDirectSlip = type4Class.shape === "direct-slip";
+
         // ── NEGATIVE-WALLET GUARD (owner 2026-06-21) — the legacy "เติม-แล้วจ่าย"
         //    pair (a +topup row + this −pay row) goes NEGATIVE when this debit is
         //    approved before the paired topup credited (prod evidence: PR130 −646
         //    + 4 armed pairs). Refuse BEFORE any mutation (the row stays pending)
-        //    so the accountant approves the paired topup first — or, under the new
-        //    direct-cut model, the import-pay never debits the wallet at all.
-        {
+        //    so the accountant approves the paired topup first. SKIPPED for a
+        //    direct-slip (walletDelta 0 · money in bank · wallet uninvolved).
+        if (!type4IsDirectSlip) {
           const { data: wPre, error: wPreErr } = await admin
             .from("tb_wallet").select("wallettotal").eq("userid", userid)
             .maybeSingle<{ wallettotal: number | string | null }>();
@@ -1038,36 +1069,52 @@ export async function adminApproveWalletDeposit(
         }
         cascadedRows.push({ table: "tb_wallet_hs", id: String(id), fromStatus: "1", toStatus: "2", note: "direct forwarder-pay (type=4)" });
 
-        // (ii) Debit tb_wallet.wallettotal −= amount (type='4' is a spend;
-        //      matches tb-bulk.ts delta rule). Read-then-update, upsert if missing.
+        // (ii) Wallet leg. DIRECT-CUT: a direct-slip settles from the bank →
+        //      walletDelta 0 → read the balance READ-ONLY (for the result payload)
+        //      and do NOT touch it. Any other shape (cascade/funded) debits
+        //      tb_wallet.wallettotal −= amount (type='4' is a spend; matches
+        //      tb-bulk.ts delta rule) via read-then-update, upsert if missing.
         let walletBefore = 0;
         let walletAfter = 0;
-        const { data: wRow, error: wRowErr } = await admin
-          .from("tb_wallet")
-          .select("userid, wallettotal")
-          .eq("userid", userid)
-          .maybeSingle<{ userid: string; wallettotal: number }>();
-        if (wRowErr) {
-          console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
-        }
-        if (!wRow) {
-          walletBefore = 0;
-          walletAfter = -amount;
-          const { error: walletInsErr } = await admin
+        if (type4IsDirectSlip) {
+          const { data: wRO, error: wROErr } = await admin
             .from("tb_wallet")
-            .insert({ userid, wallettotal: walletAfter });
-          if (walletInsErr) {
-            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}` };
+            .select("wallettotal")
+            .eq("userid", userid)
+            .maybeSingle<{ wallettotal: number | string | null }>();
+          if (wROErr) {
+            console.error(`[tb_wallet read-only (direct slip)] failed`, { code: wROErr.code, message: wROErr.message });
           }
+          walletBefore = Number(wRO?.wallettotal ?? 0);
+          walletAfter = walletBefore; // direct-cut · wallet untouched
         } else {
-          walletBefore = Number(wRow.wallettotal);
-          walletAfter = walletBefore - amount;
-          const { error: walletUpdErr } = await admin
+          const { data: wRow, error: wRowErr } = await admin
             .from("tb_wallet")
-            .update({ wallettotal: walletAfter })
-            .eq("userid", userid);
-          if (walletUpdErr) {
-            return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}` };
+            .select("userid, wallettotal")
+            .eq("userid", userid)
+            .maybeSingle<{ userid: string; wallettotal: number }>();
+          if (wRowErr) {
+            console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
+          }
+          if (!wRow) {
+            walletBefore = 0;
+            walletAfter = -amount;
+            const { error: walletInsErr } = await admin
+              .from("tb_wallet")
+              .insert({ userid, wallettotal: walletAfter });
+            if (walletInsErr) {
+              return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet insert ล้มเหลว: ${walletInsErr.message}` };
+            }
+          } else {
+            walletBefore = Number(wRow.wallettotal);
+            walletAfter = walletBefore - amount;
+            const { error: walletUpdErr } = await admin
+              .from("tb_wallet")
+              .update({ wallettotal: walletAfter })
+              .eq("userid", userid);
+            if (walletUpdErr) {
+              return { ok: false, error: `อนุมัติ tb_wallet_hs สำเร็จ (id=${id}) แต่ tb_wallet update ล้มเหลว: ${walletUpdErr.message}` };
+            }
           }
         }
 

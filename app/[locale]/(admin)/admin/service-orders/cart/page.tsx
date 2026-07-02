@@ -147,6 +147,25 @@ export default async function AdminCartPage({
   const viewingCustomer = sp.userID && sp.userID.trim() !== "";
   const targetUserId = viewingCustomer ? sp.userID!.trim() : myLegacyAdminId;
 
+  // Admin-on-behalf: resolve the customer's display name + their real
+  // membership tier (coID) so the header shows WHO the cart is for and the
+  // ประเภทสมาชิก select defaults to the correct tier (read-only; the write
+  // path is unchanged). Only when viewing a specific customer's cart.
+  let customerName = "";
+  let customerCoId = "";
+  if (viewingCustomer && targetUserId) {
+    const { data: custRow, error: custErr } = await admin
+      .from("tb_users")
+      .select("userName, userLastName, coID")
+      .eq("userID", targetUserId)
+      .maybeSingle<{ userName: string | null; userLastName: string | null; coID: string | null }>();
+    if (custErr) {
+      console.error(`[tb_users lookup] failed`, { code: custErr.code, message: custErr.message });
+    }
+    customerName = `${custRow?.userName ?? ""} ${custRow?.userLastName ?? ""}`.trim();
+    customerCoId = (custRow?.coID ?? "").trim();
+  }
+
   // tb_settings — exchange rate + free-shipping flag.
   const { data: settingsData, error: settingsErr } = await admin
     .from("tb_settings")
@@ -238,13 +257,16 @@ export default async function AdminCartPage({
             รถเข็นสินค้า
             {viewingCustomer && (
               <span className="ml-2 text-sm text-muted font-normal">
-                — ของลูกค้า{" "}
-                <span className="font-mono text-primary-600">{sp.userID}</span>
+                — ตะกร้าของ:{" "}
+                {customerName && (
+                  <span className="font-semibold text-foreground">{customerName}</span>
+                )}{" "}
+                <span className="font-mono text-primary-600">({sp.userID})</span>
               </span>
             )}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {numberFormat0(countCart)}/100 รายการ
+            {numberFormat0(countCart)} รายการในรถเข็น
             {targetUserId && (
               <>
                 {" "}· เจ้าของ <code className="rounded bg-surface-alt px-1 text-xs">{targetUserId}</code>
@@ -332,9 +354,12 @@ export default async function AdminCartPage({
           </Link>
         </div>
       ) : (
+        // No native form action: submit is handled entirely by the
+        // <CartSubmitButton> island (onClick → adminSubmitCartAsOrder, with
+        // its own e.preventDefault). The former method="POST"
+        // action="/admin/shops" was a dead route (404) that would lose the
+        // cart if the island failed to hydrate.
         <form
-          method="POST"
-          action="/admin/shops"
           autoComplete="off"
           className="space-y-5"
         >
@@ -457,7 +482,13 @@ export default async function AdminCartPage({
                     id="coID"
                     name="coID"
                     required
-                    defaultValue=""
+                    // Default to the customer's real membership tier when
+                    // known + valid; otherwise force an explicit pick.
+                    defaultValue={
+                      customerCoId && coRows.some((c) => c.coID === customerCoId)
+                        ? customerCoId
+                        : ""
+                    }
                     className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
                   >
                     <option value="" disabled>

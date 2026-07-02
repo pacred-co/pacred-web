@@ -24,6 +24,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { type BadgeCounts, ADMIN_SIDEBAR_COUNTS_TAG } from "@/lib/admin/sidebar-menu";
+import { LIVE_INCIDENT_STATUSES } from "@/lib/validators/platform-incident";
 import { logger } from "@/lib/logger";
 
 /**
@@ -181,8 +182,12 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       admin.from("bookings").select("id", { count: "exact", head: true })
         .in("status", ["submitted", "contacted"]),
       // ── Incident triage (IO-1) ──────────────────────────────────
+      // Count the FULL live set (open + acknowledged + in_progress) — the
+      // same LIVE_INCIDENT_STATUSES the /admin/incidents page + its
+      // "ยังไม่ปิด" chip use. Was ["open","acknowledged"] which dropped
+      // in_progress → the badge under-counted vs the page.
       admin.from("platform_incidents").select("id", { count: "exact", head: true })
-        .in("status", ["open", "acknowledged"]),
+        .in("status", [...LIVE_INCIDENT_STATUSES]),
       // ── ค่าตู้รออนุมัติ (tb_cnt — B-6 shipped) ─────────────────────
       // cntStatus = '1' = รอจ่ายเงิน (legacy varchar(1)). Wave-1 audit
       // (docs/research/wave-1-fidelity/audit-b6-container-payments.md)

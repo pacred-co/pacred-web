@@ -73,7 +73,10 @@ export const PHASE_2_PLUS_ROUTES = [
   // staff would just see an empty page instead of a silent redirect.
   "/admin/forwarder-sales",              // freight withdrawal (commissions)
   "/admin/freight/declarations",         // customs declarations (service #8 not live)
-  "/admin/incidents",                    // incident triage (QA-like)
+  // 2026-07-02 — "/admin/incidents" moved to PHASE_1_CARVEOUTS below: its READ
+  // is broad (super/ops/accounting/sales_admin/warehouse/driver/interpreter);
+  // the page's own requireAdmin([...]) is the gate + the WRITE actions self-gate
+  // to super/ops. Keeping it here bounced every non-god role at the proxy.
   "/admin/inventory",                    // corporate assets (maint / purchasing / stock)
   "/admin/refunds",                      // refunds (not live to customers)
   "/admin/reports/containers-awaiting-th", // QA SLA-breach queue
@@ -148,6 +151,15 @@ function stripLocale(pathname: string): string {
  */
 const PHASE_1_CARVEOUTS = [
   "/admin/drivers/work",                 // 2026-05-28 — Driver mobile UI parity sprint
+  // 2026-07-02 — /admin/incidents READ is broad (super/ops/accounting/
+  // sales_admin/warehouse/driver/interpreter per the page's own
+  // requireAdmin([...]) list). It was ALSO listed in PHASE_2_PLUS_ROUTES
+  // above, so proxy.ts bounced every non-god role back to /admin BEFORE the
+  // page's own gate could run — contradicting the page. This carve-out
+  // makes the page's requireAdmin([...]) the single gate (the triage WRITE
+  // actions still self-gate to super/ops inside each Server Action). The
+  // stale PHASE_2_PLUS_ROUTES entry was removed in the same change.
+  "/admin/incidents",
 ] as const;
 
 /** Does this pathname target a Phase 2/3/4 admin URL? */

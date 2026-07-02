@@ -195,42 +195,54 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
     });
   }
 
+  // NOTE: confirm() MUST run OUTSIDE start() — a setState inside a transition is
+  // deferred, so the <dialog> renders with a null state (blank message + OK's
+  // state?.resolve is a no-op → the promise never resolves → the button spins
+  // forever). Confirm first, THEN start() only the mutation.
   function onApprove() {
     if (!initial) return;
-    start(async () => {
+    void (async () => {
       if (!(await confirm("อนุมัติและเผยแพร่บทความนี้ขึ้นหน้าเว็บ?"))) return;
-      const res = await approveCmsArticle({ id: initial.id });
-      if (!res.ok) { setErr(errText(res.error ?? "")); return; }
-      setNotice("✅ เผยแพร่แล้ว — ขึ้นหน้าเว็บเรียบร้อย"); router.refresh();
-    });
+      start(async () => {
+        const res = await approveCmsArticle({ id: initial.id });
+        if (!res.ok) { setErr(errText(res.error ?? "")); return; }
+        setNotice("✅ เผยแพร่แล้ว — ขึ้นหน้าเว็บเรียบร้อย"); router.refresh();
+      });
+    })();
   }
   function onReject() {
     if (!initial) return;
-    start(async () => {
+    void (async () => {
       if (!(await confirm("ตีกลับบทความนี้ให้แก้ไข?"))) return;
       const note = window.prompt("เหตุผล/สิ่งที่ต้องแก้ (ไม่บังคับ):", "") ?? "";
-      const res = await rejectCmsArticle({ id: initial.id, note: note.trim() });
-      if (!res.ok) { setErr(errText(res.error ?? "")); return; }
-      setNotice("ตีกลับแล้ว"); router.refresh();
-    });
+      start(async () => {
+        const res = await rejectCmsArticle({ id: initial.id, note: note.trim() });
+        if (!res.ok) { setErr(errText(res.error ?? "")); return; }
+        setNotice("ตีกลับแล้ว"); router.refresh();
+      });
+    })();
   }
   function onUnpublish() {
     if (!initial) return;
-    start(async () => {
+    void (async () => {
       if (!(await confirm("นำบทความนี้ลงจากหน้าเว็บ (กลับเป็นร่าง)?"))) return;
-      const res = await unpublishCmsArticle({ id: initial.id });
-      if (!res.ok) { setErr(errText(res.error ?? "")); return; }
-      setNotice("นำลงจากหน้าเว็บแล้ว"); router.refresh();
-    });
+      start(async () => {
+        const res = await unpublishCmsArticle({ id: initial.id });
+        if (!res.ok) { setErr(errText(res.error ?? "")); return; }
+        setNotice("นำลงจากหน้าเว็บแล้ว"); router.refresh();
+      });
+    })();
   }
   function onDelete() {
     if (!initial) return;
-    start(async () => {
+    void (async () => {
       if (!(await confirm("ลบบทความนี้ถาวร?"))) return;
-      const res = await deleteCmsArticle({ id: initial.id });
-      if (!res.ok) { setErr(errText(res.error ?? "")); return; }
-      router.push("/admin/articles");
-    });
+      start(async () => {
+        const res = await deleteCmsArticle({ id: initial.id });
+        if (!res.ok) { setErr(errText(res.error ?? "")); return; }
+        router.push("/admin/articles");
+      });
+    })();
   }
 
   const inputCls = "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm dark:bg-surface";

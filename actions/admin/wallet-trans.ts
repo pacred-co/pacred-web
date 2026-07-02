@@ -55,6 +55,7 @@ import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { logger } from "@/lib/logger";
 import { spendCashbackAtCheckout, refundCashbackOnReject } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 
 // ────────────────────────────────────────────────────────────
 // UNIT C (owner 2026-06-19) — "หมายเหตุงาน" work-note append helper.
@@ -220,7 +221,7 @@ export async function adminApproveWalletHs(
       //    non-credit branch (submitForwarderPayment stamps it per row).
       const { data: row, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, dateslip, note, wusercredit")
+        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, note, wusercredit")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -230,6 +231,7 @@ export async function adminApproveWalletHs(
           status: string | null;
           typeservice: string | null;
           reforder: string | null;
+          reforder2: string | null;
           dateslip: string | null;
           note: string | null;
           wusercredit: string | null;
@@ -259,10 +261,32 @@ export async function adminApproveWalletHs(
       }
 
       const amt = Number(row.amount);
-      const t = row.type ?? "1";
-      const delta = (t === "1" || t === "2") ? amt
-                  : (t === "4" || t === "7") ? -amt
-                  : 0;
+
+      // Wallet delta via the shared classifier (money-critical · 2026-07-02).
+      // DIRECT-CUT: a ฝากนำเข้า direct-slip (type='4' typeservice='2' reforder
+      // set · reforder2 empty · no paydeposit link) settled from the bank at
+      // CREATE and never credited the wallet (submitForwarderPayment ·
+      // forwarder.ts L509-561) → walletDelta 0, so no debit fires here. A
+      // cascade/wallet-funded row keeps its legacy delta (credits +amt · debits
+      // −amt · else 0). Resolve the paydeposit link defensively (empty for
+      // direct slips · set for the topup-and-pay cascade).
+      let rowHasPaydepositLink = false;
+      {
+        const { data: pdLinks, error: pdErr } = await admin
+          .from("tb_wallet_paydeposit")
+          .select("id")
+          .eq("whid", id)
+          .limit(1);
+        if (pdErr) {
+          console.error(`[approve wallet_hs paydeposit link check] failed`, { code: pdErr.code, message: pdErr.message });
+          return { ok: false, error: `db_error:${pdErr.code ?? "unknown"}` };
+        }
+        rowHasPaydepositLink = (pdLinks?.length ?? 0) > 0;
+      }
+      const delta = classifyWalletHsRow(
+        { type: row.type, typeservice: row.typeservice, reforder: row.reforder, reforder2: row.reforder2, amount: row.amount },
+        { hasPaydepositLink: rowHasPaydepositLink },
+      ).walletDelta;
 
       // 2. UPDATE tb_wallet_hs status='2'. UNIT C — when a "หมายเหตุงาน" work
       //    note is supplied, append it onto the existing note (preserving the

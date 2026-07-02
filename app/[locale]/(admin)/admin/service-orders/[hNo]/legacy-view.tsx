@@ -667,62 +667,96 @@ export async function renderLegacyServiceOrderView(hno: string) {
   );
 }
 
-/** Read-only item list for non-editable steps (3/4/5). */
+/** Read-only item list for non-editable steps (3/4/5).
+ *  2026-07-02 — grouped by ร้าน (cnameshop) into collapsible sections so
+ *  a big multi-shop order is scannable at a glance (owner "แอดมินเข้าไปดูยากมาก").
+ *  Matches the grouped look on /edit; reuses the same read-only columns. */
 function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: boolean }) {
   if (items.length === 0) return null;
+
+  // Group preserving first-seen shop order (items already ordered by id).
+  const groups: { shop: string; rows: EditorItem[] }[] = [];
+  for (const it of items) {
+    const shop = (it.cnameshop ?? "").trim() || "— ไม่ระบุร้าน —";
+    let g = groups.find((x) => x.shop === shop);
+    if (!g) { g = { shop, rows: [] }; groups.push(g); }
+    g.rows.push(it);
+  }
+
+  const lineOf = (it: EditorItem) =>
+    it.crewallet === "1" ? 0 : roundUp2(it.camount * it.cprice + it.cshippingchn);
+
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-3">
       <h3 className="font-bold text-sm">
-        รายการสินค้า ({items.length}){completed ? " · สำเร็จ" : ""}
+        รายการสินค้า ({items.length}) · {groups.length} ร้าน{completed ? " · สำเร็จ" : ""}
       </h3>
-      <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
-        <table className="w-full min-w-[640px] text-xs">
-          <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
-            <tr>
-              <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
-              <th className="px-2 py-2 text-right w-16">จำนวน</th>
-              <th className="px-2 py-2 text-right w-24">¥/ชิ้น</th>
-              <th className="px-2 py-2 text-right w-24">ค่าส่งจีน</th>
-              <th className="px-2 py-2 text-right w-28">รวม (¥)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it) => {
-              const refunded = it.crewallet === "1";
-              const line = refunded ? 0 : roundUp2(it.camount * it.cprice + it.cshippingchn);
-              return (
-                <tr key={it.id} className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}>
-                  <td className="px-2 py-2">
-                    <div className="flex gap-2">
-                      {it.coverUrl ? (
-                        <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
-                        </a>
-                      ) : null}
-                      <div className="min-w-0">
-                        {it.curl ? (
-                          <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
-                            {it.ctitle || it.curl}
-                          </a>
-                        ) : (
-                          <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
-                        )}
-                        {(it.ccolor || it.csize) && (
-                          <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
-                  <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="space-y-2">
+        {groups.map((g) => {
+          const shopYuan = g.rows.reduce((s, it) => s + lineOf(it), 0);
+          return (
+            <details key={g.shop} open className="rounded-lg border border-border overflow-hidden">
+              <summary className="flex items-center justify-between gap-2 cursor-pointer select-none bg-surface-alt/60 px-3 py-2 text-xs">
+                <span className="font-semibold truncate">
+                  🏪 {g.shop}
+                  <span className="ml-1.5 text-muted font-normal">({g.rows.length} รายการ)</span>
+                </span>
+                <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
+                  รวม ¥{cny(shopYuan)}
+                </span>
+              </summary>
+              <div className="overflow-x-auto scrollbar-x-visible">
+                <table className="w-full min-w-[640px] text-xs">
+                  <thead className="bg-surface-alt/40 text-[11px] uppercase tracking-wide text-muted">
+                    <tr>
+                      <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
+                      <th className="px-2 py-2 text-right w-16">จำนวน</th>
+                      <th className="px-2 py-2 text-right w-24">¥/ชิ้น</th>
+                      <th className="px-2 py-2 text-right w-24">ค่าส่งจีน</th>
+                      <th className="px-2 py-2 text-right w-28">รวม (¥)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map((it) => {
+                      const refunded = it.crewallet === "1";
+                      const line = lineOf(it);
+                      return (
+                        <tr key={it.id} className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}>
+                          <td className="px-2 py-2">
+                            <div className="flex gap-2">
+                              {it.coverUrl ? (
+                                <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
+                                </a>
+                              ) : null}
+                              <div className="min-w-0">
+                                {it.curl ? (
+                                  <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
+                                    {it.ctitle || it.curl}
+                                  </a>
+                                ) : (
+                                  <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
+                                )}
+                                {(it.ccolor || it.csize) && (
+                                  <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
+                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
+                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
+                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          );
+        })}
       </div>
     </div>
   );

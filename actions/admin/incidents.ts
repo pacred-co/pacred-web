@@ -289,6 +289,66 @@ export async function ignoreIncident(
 }
 
 // ────────────────────────────────────────────────────────────
+// 4b) Reopen — resolved | ignored → open (a regression / wrongly-dismissed)
+// ────────────────────────────────────────────────────────────
+//
+// The lifecycle whitelist (INCIDENT_STATUS_TRANSITIONS) allows
+// resolved→open and ignored→open, but the ONLY re-open target it permits
+// is 'open' — NOT 'acknowledged'. The triage panel's "เปิดใหม่" button
+// used to call acknowledgeIncident (→ 'acknowledged'), which
+// isLegalTransition() always rejected from a closed status, so re-open
+// silently failed. This action transitions a closed incident back to
+// 'open' and NULLs resolved_at + resolution_note so the 0077
+// *_resolved_consistent CHECK (resolved_at ⇔ status='resolved') stays
+// satisfied.
+
+export async function reopenIncident(
+  input: AcknowledgeIncidentInput,
+): Promise<AdminActionResult> {
+  // Reuse the id-only schema (same shape as acknowledge).
+  const parsed = acknowledgeIncidentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { id } = parsed.data;
+
+  return withAdmin([...ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const existing = await readIncident(admin, id);
+    if (!existing) return { ok: false, error: "not_found" };
+    if (!isLegalTransition(existing.status, "open")) {
+      return { ok: false, error: `illegal_transition:${existing.status}->open` };
+    }
+
+    // Back to an untriaged 'open' — clear the resolution artifacts so the
+    // *_resolved_consistent CHECK holds (resolved_at + resolution_note only
+    // belong on a 'resolved' row).
+    const { data: updated, error } = await admin
+      .from("platform_incidents")
+      .update({
+        status:          "open",
+        resolved_at:     null,
+        resolution_note: null,
+      })
+      .eq("id", id)
+      .eq("status", existing.status)         // optimistic race-guard
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) return { ok: false, error: error.message };
+    if (!updated) return { ok: false, error: "conflict_retry" };
+
+    await logAdminAction(adminId, "incident.reopen", "platform_incident", id, {
+      from: existing.status,
+    });
+
+    revalidateIncidents();
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // 5) Assign / reassign — pin the incident to an admin
 // ────────────────────────────────────────────────────────────
 
