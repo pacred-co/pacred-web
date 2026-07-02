@@ -167,6 +167,7 @@ export function ReviewGridClient({
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkSummary, setBulkSummary] = useState<{
     total: number; succeeded: number; failed: number;
+    liveFill?: { filled: number; advanced: number; boxes: number } | null;
   } | null>(null);
   // 2026-06-04 (ภูม flag) — lightbox state สำหรับ quick-zoom ป้าย MOMO.
   // Carries the FULL `urls: string[]` (some MOMO rows have multiple labels)
@@ -213,11 +214,17 @@ export function ReviewGridClient({
     try {
       const res = await commitMomoRowToForwarder(input);
       if (res.ok) {
+        const lf = res.data?.liveFill;
+        const liveMsg = lf
+          ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${lf.filled} · กล่อง ${lf.boxes}`
+          : lf === null
+            ? " · (ดึง MOMO Live ไม่สำเร็จ · ตัวดึงอัตโนมัติจะเติมให้ภายหลัง)"
+            : "";
         setRowResults((m) => ({
           ...m,
           [rowId]: {
             ok:          true,
-            message:     `สร้างสำเร็จ → tb_forwarder #${res.data?.forwarderId}`,
+            message:     `สร้างสำเร็จ → tb_forwarder #${res.data?.forwarderId}${liveMsg}`,
             forwarderId: res.data?.forwarderId,
           },
         }));
@@ -364,6 +371,7 @@ export function ReviewGridClient({
       total:     res.data.total,
       succeeded: res.data.succeeded,
       failed:    res.data.failed,
+      liveFill:  res.data.liveFill ?? null,
     });
     // Reload — committed rows disappear from pending grid.
     startTransition(() => router.refresh());
@@ -469,6 +477,11 @@ export function ReviewGridClient({
             <strong>Bulk commit เสร็จ:</strong>{" "}
             ทั้งหมด {bulkSummary.total} · สำเร็จ {bulkSummary.succeeded}
             {bulkSummary.failed > 0 ? ` · ล้มเหลว ${bulkSummary.failed} (ดู message ในแต่ละ row)` : ""}
+            {bulkSummary.liveFill
+              ? ` · เติมจาก MOMO Live: น้ำหนัก/คิว ${bulkSummary.liveFill.filled} · สถานะ ${bulkSummary.liveFill.advanced} · กล่อง ${bulkSummary.liveFill.boxes}`
+              : bulkSummary.liveFill === null && bulkSummary.succeeded > 0
+                ? " · (ดึง MOMO Live ไม่สำเร็จ · ตัวดึงอัตโนมัติจะเติมให้ภายหลัง)"
+                : ""}
           </div>
         </div>
       )}

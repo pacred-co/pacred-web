@@ -44,6 +44,7 @@ import {
   commitMomoRowCore,
   type CommitMomoRowInput,
 } from "@/lib/admin/commit-momo-row-core";
+import { propagateMomoLiveStatusAndData } from "@/lib/integrations/momo-web/propagate-live-data";
 
 // NOTE: do NOT re-export CommitMomoRowInput from this file. A previous
 // attempt did `export type { CommitMomoRowInput }` here, betting that the
@@ -83,13 +84,44 @@ async function resolveLegacyAdminId(): Promise<string> {
 }
 
 // ────────────────────────────────────────────────────────────
-// commitMomoRowToForwarder — single-row commit (the main button).
-// Thin admin-auth wrapper: resolve session identity → delegate to the
-// auth-agnostic core (Wave 30.5 extraction). The 51-column atomic INSERT
-// + the committed_at stamp + the sync log all live in the core now.
+// runLiveFillAfterCommit — after a manual commit lands a fresh tb_forwarder
+// row, pull MOMO's OWN web ONCE to COMPLETE it in the same click.
+//
+// Why (owner/ภูม 2026-07-02): the review grid commits from the PARTNER API,
+// which lags MOMO's web and often carries NO weight ("รอ MOMO ชั่ง") — so a
+// bare commit created an incomplete row (weight/คิว/ขนาด empty). If someone
+// then billed it before the 10-min cron filled it, the price (driven by
+// weight/คิว) would be WRONG. Pulling MOMO Live at commit closes that window:
+// the row is complete the moment it's created.
+//
+// Reuses the SAME proven money-safe Live cycle the /live button + cron run:
+// forward-only status (China-side cap ≤3) · fill-when-empty weight/คิว/ขนาด
+// (skip billed 5/6/7 · never overwrite a non-zero) · per-box breakdown into
+// momo_box_detail (display-only). BEST-EFFORT — a MOMO-login failure NEVER
+// fails the commit (the row is already created; the cron fills it later, exactly
+// as before this change), so there is zero regression risk.
 // ────────────────────────────────────────────────────────────
+type LiveFillSummary = { filled: number; advanced: number; boxes: number };
 
-export async function commitMomoRowToForwarder(
+async function runLiveFillAfterCommit(): Promise<LiveFillSummary | null> {
+  try {
+    const admin = createAdminClient();
+    const r = await propagateMomoLiveStatusAndData(admin);
+    return { filled: r.data.filled, advanced: r.status.advanced, boxes: r.boxDetail.upserted };
+  } catch (e) {
+    console.error("[commitMomo→liveFill] best-effort Live fill failed (row still committed)", e);
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// commitOneRow — the shared commit PRIMITIVE (no Live fill). Used directly by
+// the batch loop so the (slow) MOMO Live scrape runs ONCE after the whole
+// batch, not once per row. Thin admin-auth wrapper: resolve session identity
+// → delegate to the auth-agnostic core (Wave 30.5). The 51-column atomic
+// INSERT + committed_at stamp + sync log all live in the core.
+// ────────────────────────────────────────────────────────────
+async function commitOneRow(
   rawInput: CommitMomoRowInput,
 ): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string }>> {
   return withAdmin<{ forwarderId: number; fIDorCO: string }>(
@@ -108,6 +140,22 @@ export async function commitMomoRowToForwarder(
       );
     },
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// commitMomoRowToForwarder — single-row commit (the "สร้างใหม่" button):
+// commit the row THEN pull MOMO Live to complete it (weight/คิว/ขนาด/สถานะ/
+// กล่อง) in the same click. `liveFill` reports what the Live pass did (null if
+// MOMO login failed — the row is still committed; the cron completes it later).
+// ────────────────────────────────────────────────────────────
+
+export async function commitMomoRowToForwarder(
+  rawInput: CommitMomoRowInput,
+): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string; liveFill?: LiveFillSummary | null }>> {
+  const res = await commitOneRow(rawInput);
+  if (!res.ok || !res.data) return res;
+  const liveFill = await runLiveFillAfterCommit();
+  return { ok: true, data: { ...res.data, liveFill } };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -130,6 +178,8 @@ export type CommitMomoBatchResult = {
   succeeded: number;
   failed:    number;
   results:  Array<{ rowId: string; ok: boolean; forwarderId?: number; error?: string }>;
+  /** One MOMO-Live pass after the batch completes the fresh rows (null if login failed). */
+  liveFill?: LiveFillSummary | null;
 };
 
 export async function commitMomoRowsBatch(
@@ -147,7 +197,9 @@ export async function commitMomoRowsBatch(
       let succeeded = 0;
       let failed = 0;
       for (const r of parsed.data.rows) {
-        const res = await commitMomoRowToForwarder(r);
+        // Use the no-fill primitive in the loop — the (slow) MOMO Live scrape
+        // runs ONCE below, after every row is committed, not once per row.
+        const res = await commitOneRow(r);
         if (res.ok) {
           succeeded++;
           results.push({ rowId: r.rowId, ok: true, forwarderId: res.data?.forwarderId });
@@ -156,6 +208,9 @@ export async function commitMomoRowsBatch(
           results.push({ rowId: r.rowId, ok: false, error: res.error });
         }
       }
+      // Pull MOMO Live ONCE to complete every fresh row (weight/คิว/ขนาด/สถานะ/
+      // กล่อง). Best-effort: a failure never undoes the commits above.
+      const liveFill = succeeded > 0 ? await runLiveFillAfterCommit() : null;
       return {
         ok: true,
         data: {
@@ -163,6 +218,7 @@ export async function commitMomoRowsBatch(
           succeeded,
           failed,
           results,
+          liveFill,
         },
       };
     },
