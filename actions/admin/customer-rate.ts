@@ -35,7 +35,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
-  COST_FLOOR,
   DEFAULT_START,
   PRODUCTS,
   TRANSPORTS,
@@ -184,10 +183,11 @@ export async function adminSaveCustomerRate(
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
 
-      // Resolve the LIVE CBM floor (business_config override || COST_FLOOR
-      // constant default · ultra-editable). KG floor stays on the constant
-      // (owner only set the CBM rate). `floor[wh].cbm[t][p]` / `floor[wh].kg`
-      // read identically to COST_FLOOR — only the CBM source swaps.
+      // Resolve the LIVE floor (business_config override || constant default ·
+      // ultra-editable). BOTH CBM and KG resolve from config now (KG default
+      // รถ 17 · เรือ 7 · owner 2026-07-03). `floor[wh].cbm[t][p]` /
+      // `floor[wh].kg[t][p]` read identically to COST_FLOOR — only the SOURCE
+      // swaps to the resolved (config || constant) matrix.
       const floor = await getResolvedFloor();
 
       // Verify the customer exists.
@@ -234,7 +234,7 @@ export async function adminSaveCustomerRate(
       for (const c of d.cells) {
         const k = cellKey(c.t, c.p);
         const cbmFloor = floor[wh].cbm[c.t][c.p]; // resolved (config || constant)
-        const kgFloor = COST_FLOOR[wh].kg[c.t][c.p];
+        const kgFloor = floor[wh].kg[c.t][c.p]; // resolved (config || constant · 17/7)
         const tS = TRANSPORTS.find((x) => x.id === c.t)?.short ?? c.t;
         const pL = PRODUCTS.find((x) => x.id === c.p)?.label ?? c.p;
         if (c.rcbm > 0 && cbmFloor != null && c.rcbm < cbmFloor) {

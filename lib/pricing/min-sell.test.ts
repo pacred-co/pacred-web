@@ -5,6 +5,18 @@ import {
   DEFAULT_MIN_SELL_FLOORS,
   type MinSellFloors,
 } from "./min-sell";
+// KG sell-floor default (owner 2026-07-03 · รถ 17 · เรือ 7). Imported from the
+// NON-server-only constants module (lib/admin/sell-floor-config.ts is
+// `server-only`, so it can't be imported in a plain tsx unit test — the
+// projection + block predicate are re-derived here from the same constants the
+// resolver + hard-block use).
+import {
+  COST_FLOOR,
+  KG_FLOOR_DEFAULT,
+  type ProductId,
+  type TransportId,
+  type WarehouseId,
+} from "@/lib/admin/customer-rate-tables";
 
 let pass = 0;
 const t = (name: string, fn: () => void) => {
@@ -112,6 +124,78 @@ t("air transport label appears for transport=3", () => {
   assert.equal(a.level, "below");        // floor = 2900 + 1000 = 3900
   assert.equal(a.floorThb, 3900);
   assert.ok(a.message && a.message.includes("ทางอากาศ"));
+});
+
+// ── KG sell-floor default (รถ 17 · เรือ 7) — owner 2026-07-03 ────────────────
+// The KG floor is now a DB-overridable default (pricing.sell_rate_floor_kg), but
+// the DEFAULT / fallback source is KG_FLOOR_DEFAULT (flat per transport, shared
+// both warehouses). We assert the default values + that the per-customer save
+// hard-block predicate (from actions/admin/customer-rate.ts) blocks a below-floor
+// KG rate and allows an at/above one — grandfathering an unchanged legacy cell.
+// (sell-floor-config.ts is `server-only` → can't import here; the projection +
+// predicate are the same pure logic re-derived from the same constant.)
+
+t("KG_FLOOR_DEFAULT is flat 17 (รถ) / 7 (เรือ) for all 4 products", () => {
+  for (const p of ["1", "2", "3", "4"] as ProductId[]) {
+    assert.equal(KG_FLOOR_DEFAULT["1"][p], 17, `รถ product ${p}`);
+    assert.equal(KG_FLOOR_DEFAULT["2"][p], 7, `เรือ product ${p}`);
+  }
+});
+
+t("COST_FLOOR KG default = 17/7 · same both warehouses", () => {
+  for (const wh of ["1", "2"] as WarehouseId[]) {
+    for (const p of ["1", "2", "3", "4"] as ProductId[]) {
+      assert.equal(COST_FLOOR[wh].kg["1"][p], 17, `wh ${wh} รถ product ${p}`);
+      assert.equal(COST_FLOOR[wh].kg["2"][p], 7, `wh ${wh} เรือ product ${p}`);
+    }
+  }
+});
+
+// The exact hard-block predicate from customer-rate.ts (KG side): a NEWLY-set
+// (entered !== existing) below-floor rkg blocks; an unchanged legacy value is
+// grandfathered; 0 is never below (= "ไม่คิดตามหน่วยนี้").
+function kgBlocked(
+  wh: WarehouseId,
+  t: TransportId,
+  p: ProductId,
+  entered: number,
+  existing: number | null,
+): boolean {
+  const kgFloor = COST_FLOOR[wh].kg[t][p]; // resolved-default source
+  if (!(entered > 0 && kgFloor != null && entered < kgFloor)) return false;
+  // grandfather: unchanged legacy below-floor cell does not block
+  return !(existing != null && existing === entered);
+}
+
+t("KG floor 17 (รถ) blocks a below-floor new save (16 < 17)", () => {
+  assert.equal(kgBlocked("1", "1", "1", 16, null), true);
+});
+
+t("KG floor 7 (เรือ) blocks a below-floor new save (5 < 7)", () => {
+  assert.equal(kgBlocked("2", "2", "1", 5, null), true);
+});
+
+t("KG rate AT floor allowed (รถ 17 = 17 → not blocked)", () => {
+  assert.equal(kgBlocked("1", "1", "1", 17, null), false);
+});
+
+t("KG rate ABOVE floor allowed (เรือ 10 > 7 → not blocked)", () => {
+  assert.equal(kgBlocked("2", "2", "1", 10, null), false);
+});
+
+t("KG 0 never below floor (= ไม่คิดตามน้ำหนัก)", () => {
+  assert.equal(kgBlocked("1", "1", "1", 0, null), false);
+});
+
+t("KG grandfather: unchanged legacy below-floor cell does NOT block (15==15)", () => {
+  // an old customer at ฿15/kg รถ (below the new 17 floor) — an unrelated save
+  // that leaves it unchanged must not be blocked (กันงานหาย).
+  assert.equal(kgBlocked("1", "1", "1", 15, 15), false);
+});
+
+t("KG grandfather off: CHANGING an existing below-floor cell to another below-floor value blocks", () => {
+  // was ฿15, now ฿14 — a NEW below-floor value → blocked.
+  assert.equal(kgBlocked("1", "1", "1", 14, 15), true);
 });
 
 console.log(`✓ min-sell — ${pass} passed`);
