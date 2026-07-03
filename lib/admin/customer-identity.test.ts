@@ -14,6 +14,7 @@
 import {
   CORP_STATUS,
   corporateStatusLabel,
+  resolveBillingIdentity,
   updateUserIdentitySchema,
   convertToJuristicSchema,
 } from "./customer-identity";
@@ -117,6 +118,64 @@ ok("rejects bad birthday format", !updateUserIdentitySchema.safeParse({
     userid: "PR1", userName: "A", userLastName: "B", userEmail: "", userTel: "0891234567", userSex: "หญิง",
   });
   ok("accepts Thai 'หญิง' directly", r.success && r.data?.userSex === "หญิง");
+}
+
+// ── resolveBillingIdentity — juristic vs person display/billing identity ───
+console.log("\nresolveBillingIdentity (2026-07-03 SOT)");
+{
+  // Personal customer — no corp row, userCompany not '1'.
+  const r = resolveBillingIdentity({ userCompany: "0", userName: "PEA", userLastName: "PEA", corp: null });
+  eq("person: not juristic", r.isJuristic, false);
+  eq("person: name = person full name", r.name, "PEA PEA");
+  eq("person: taxId ''", r.taxId, "");
+  eq("person: registeredAddress ''", r.registeredAddress, "");
+  eq("person: personName = person full name", r.personName, "PEA PEA");
+}
+{
+  // Juristic via userCompany='1' + full corp row (the PR075 "HOME CAMERA" case).
+  const r = resolveBillingIdentity({
+    userCompany: "1", userName: "PEA", userLastName: "PEA",
+    corp: { corporatename: "HOME CAMERA CO.,LTD.", corporatenumber: "0105564077716", corporateaddress: "123 ถ.สุขุมวิท กทม." },
+  });
+  eq("juristic: isJuristic", r.isJuristic, true);
+  eq("juristic: name = COMPANY name (not person)", r.name, "HOME CAMERA CO.,LTD.");
+  eq("juristic: taxId = corporatenumber", r.taxId, "0105564077716");
+  eq("juristic: registeredAddress = corporateaddress", r.registeredAddress, "123 ถ.สุขุมวิท กทม.");
+  eq("juristic: personName stays the contact person", r.personName, "PEA PEA");
+}
+{
+  // Juristic via corp tax-id only (migrated row lost userCompany) — the union.
+  const r = resolveBillingIdentity({
+    userCompany: null, userName: "สมชาย", userLastName: "ใจดี",
+    corp: { corporatename: "บ.เอบีซี จก.", corporatenumber: "0994000123456", corporateaddress: "" },
+  });
+  eq("union: taxId-only → juristic", r.isJuristic, true);
+  eq("union: name = company", r.name, "บ.เอบีซี จก.");
+  eq("union: registeredAddress '' (none stored) → falls back to caller", r.registeredAddress, "");
+}
+{
+  // Juristic flag but blank corp name → fall back to the person name (never blank).
+  const r = resolveBillingIdentity({
+    userCompany: "1", userName: "สมหญิง", userLastName: "รักดี",
+    corp: { corporatename: "", corporatenumber: "0105500000001", corporateaddress: "x" },
+  });
+  eq("juristic blank corp name → person fallback", r.name, "สมหญิง รักดี");
+  eq("juristic blank corp name still juristic", r.isJuristic, true);
+}
+{
+  // Whitespace-only corp tax-id must NOT flip a person to juristic.
+  const r = resolveBillingIdentity({
+    userCompany: "0", userName: "A", userLastName: "B",
+    corp: { corporatename: "  ", corporatenumber: "   ", corporateaddress: "  " },
+  });
+  eq("whitespace corpnumber → not juristic", r.isJuristic, false);
+  eq("whitespace → person name", r.name, "A B");
+}
+{
+  // Null/undefined name halves — never crash, trim to a clean string.
+  const r = resolveBillingIdentity({ userCompany: null, userName: null, userLastName: undefined, corp: null });
+  eq("null name halves → '' (no crash)", r.name, "");
+  eq("null name halves → not juristic", r.isJuristic, false);
 }
 
 // ── convert-to-juristic schema (legacy update-corporate) ───────────────────

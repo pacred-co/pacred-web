@@ -6,12 +6,12 @@
  * difficulty. Values are entered by hand (research from external tools) since
  * this is a localStorage prototype, not a live keyword API.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileUp, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type { KeywordItem, KeywordTier } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { fmtMoney, fmtNum } from "@/lib/marketing-planner/util";
-import { btnGhost, btnPrimary, cx, EmptyState, Field, inputCls, Modal, SectionCard, Tag, useConfirm } from "./ui";
+import { btnGhost, btnPrimary, cx, EmptyState, Field, inputCls, Modal, Tag, useConfirm } from "./ui";
 import { KeywordImportModal } from "./keyword-import-modal";
 
 const TIER: Record<KeywordTier, { label: string; color: string }> = {
@@ -100,6 +100,30 @@ function KeywordForm({ editing, services, onClose }: { editing: KeywordItem | nu
 const TH = "whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-muted";
 const TD = "whitespace-nowrap px-2 py-1.5 align-middle text-[12px]";
 
+// Rows shown per page — caps the DOM so a big imported CSV doesn't lag (ปอน 2026-07-03).
+const PER_PAGE = 50;
+
+/** Compact page-number window: 1 2 … cur-1 cur cur+1 … last (ellipsis for the gaps). */
+function pageWindow(cur: number, total: number): (number | "…")[] {
+  const keep = new Set<number>();
+  for (const n of [1, 2, total - 1, total, cur - 1, cur, cur + 1]) if (n >= 1 && n <= total) keep.add(n);
+  const out: (number | "…")[] = [];
+  let last = 0;
+  for (const n of [...keep].sort((a, b) => a - b)) {
+    if (last && n - last > 1) out.push("…");
+    out.push(n);
+    last = n;
+  }
+  return out;
+}
+
+const pagerBtn = (active: boolean, disabled: boolean) =>
+  cx(
+    "min-w-[34px] rounded-lg border px-2.5 py-1 text-[12px] transition",
+    active ? "border-primary-300 bg-primary-50 font-semibold text-primary-700" : "border-border text-muted hover:border-primary-200",
+    disabled && "cursor-not-allowed opacity-40 hover:border-border",
+  );
+
 export function KeywordPlanner() {
   const { keywords, deleteKeyword, loadSampleKeywords } = usePlanner();
   const confirm = useConfirm();
@@ -109,22 +133,46 @@ export function KeywordPlanner() {
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<KeywordTier | "all">("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const services = useMemo(() => [...new Set(keywords.map((k) => k.service))], [keywords]);
-  const grouped = useMemo(() => {
+  // Stable service order (insertion order) → a service's rows stay contiguous in the flat list.
+  const serviceRank = useMemo(() => new Map(services.map((s, i) => [s, i] as const)), [services]);
+
+  // Flat filtered list. ALL filter/search work is in-memory (keywords load ONCE —
+  // no DB query per keystroke), so search stays instant across the WHOLE dataset;
+  // the pager below only caps how many rows reach the DOM (the real lag when a big
+  // CSV lands). ปอน 2026-07-03.
+  const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase();
-    return services
-      .filter((s) => serviceFilter === "all" || s === serviceFilter)
-      .map((service) => ({
-        service,
-        items: keywords
-          .filter((k) => k.service === service)
-          .filter((k) => tierFilter === "all" || k.tier === tierFilter)
-          .filter((k) => !kw || k.keyword.toLowerCase().includes(kw) || (k.intent ?? "").toLowerCase().includes(kw))
-          .sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || (b.volume ?? 0) - (a.volume ?? 0)),
-      }))
-      .filter((g) => g.items.length > 0);
-  }, [services, keywords, serviceFilter, tierFilter, search]);
+    return keywords
+      .filter((k) => serviceFilter === "all" || k.service === serviceFilter)
+      .filter((k) => tierFilter === "all" || k.tier === tierFilter)
+      .filter((k) => !kw || k.keyword.toLowerCase().includes(kw) || (k.intent ?? "").toLowerCase().includes(kw) || k.service.toLowerCase().includes(kw))
+      .sort(
+        (a, b) =>
+          (serviceRank.get(a.service) ?? 0) - (serviceRank.get(b.service) ?? 0) ||
+          TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
+          (b.volume ?? 0) - (a.volume ?? 0),
+      );
+  }, [keywords, serviceFilter, tierFilter, search, serviceRank]);
+
+  // Any filter/search change → jump back to page 1 (see fresh matches from the top).
+  useEffect(() => { setPage(1); }, [search, serviceFilter, tierFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+  const from = filtered.length === 0 ? 0 : (safePage - 1) * PER_PAGE + 1;
+  const to = Math.min(safePage * PER_PAGE, filtered.length);
+  const showServiceCol = serviceFilter === "all";
+
+  // Summary over the FULL filtered set (not just the visible page).
+  const totalVol = useMemo(() => filtered.reduce((s, k) => s + (k.volume ?? 0), 0), [filtered]);
+  const avgCpc = useMemo(() => {
+    const vals = filtered.filter((k) => typeof k.cpc === "number").map((k) => k.cpc as number);
+    return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : undefined;
+  }, [filtered]);
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (k: KeywordItem) => { setEditing(k); setFormOpen(true); };
@@ -157,7 +205,7 @@ export function KeywordPlanner() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-[200px] flex-1">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                <input className={cx(inputCls, "pl-8")} placeholder="ค้นหาคีย์เวิร์ด..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className={cx(inputCls, "pl-8")} placeholder="ค้นหาคีย์เวิร์ด / บริการ / intent..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="flex flex-wrap gap-1">
                 {(["all", "primary", "secondary", "longtail"] as const).map((t) => (
@@ -182,23 +230,22 @@ export function KeywordPlanner() {
             </div>
           </div>
 
-          {grouped.length === 0 ? (
+          {filtered.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border py-8 text-center text-[12px] text-muted">ไม่พบคีย์เวิร์ดตามตัวกรอง</p>
           ) : (
-            grouped.map(({ service, items }) => {
-          const totalVol = items.reduce((s, k) => s + (k.volume ?? 0), 0);
-          const cpcVals = items.filter((k) => typeof k.cpc === "number").map((k) => k.cpc as number);
-          const avgCpc = cpcVals.length ? cpcVals.reduce((s, v) => s + v, 0) / cpcVals.length : undefined;
-          return (
-            <SectionCard
-              key={service}
-              title={<span className="text-[13px]">{service}</span>}
-              actions={<span className="text-[11px] text-muted">{items.length} คำ · รวม {fmtNum(totalVol)} ค้นหา/เดือน · CPC เฉลี่ย {avgCpc ? fmtMoney(Math.round(avgCpc)) : "—"}</span>}
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-[12px]">
+            <div className="space-y-3">
+              {/* สรุปยอด — คำนวณจากชุดที่กรองทั้งหมด (ไม่ใช่แค่หน้าปัจจุบัน) */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
+                <span>พบ <b className="text-foreground">{fmtNum(filtered.length)}</b> คำ</span>
+                <span>รวม <b className="text-foreground">{fmtNum(totalVol)}</b> ค้นหา/เดือน</span>
+                <span>CPC เฉลี่ย <b className="text-foreground">{avgCpc != null ? fmtMoney(avgCpc) : "—"}</b></span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+                <table className="w-full min-w-[720px] text-[12px]">
                   <thead>
                     <tr className="border-b border-border">
+                      {showServiceCol && <th className={TH}>บริการ</th>}
                       <th className={TH}>คีย์เวิร์ด</th>
                       <th className={TH}>ระดับ</th>
                       <th className={cx(TH, "text-right")}>Volume</th>
@@ -209,10 +256,11 @@ export function KeywordPlanner() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((k) => {
+                    {pageItems.map((k) => {
                       const dt = diffTone(k.difficulty);
                       return (
                         <tr key={k.id} className="border-b border-border last:border-0 hover:bg-primary-50/20">
+                          {showServiceCol && <td className={cx(TD, "text-muted")}>{k.service}</td>}
                           <td className={cx(TD, "font-medium text-foreground")}>{k.keyword}</td>
                           <td className={TD}><Tag color={TIER[k.tier].color} label={TIER[k.tier].label} /></td>
                           <td className={cx(TD, "text-right")}>{fmtNum(k.volume)}</td>
@@ -231,9 +279,25 @@ export function KeywordPlanner() {
                   </tbody>
                 </table>
               </div>
-            </SectionCard>
-          );
-        })
+
+              {/* แบ่งหน้า — โผล่เมื่อมีมากกว่า 1 หน้า */}
+              {totalPages > 1 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[12px] text-muted">แสดง {fmtNum(from)}–{fmtNum(to)} จาก {fmtNum(filtered.length)}</span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button type="button" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} className={pagerBtn(false, safePage <= 1)}>‹ ก่อนหน้า</button>
+                    {pageWindow(safePage, totalPages).map((p, i) =>
+                      p === "…" ? (
+                        <span key={`gap-${i}`} className="px-1 text-[12px] text-muted">…</span>
+                      ) : (
+                        <button key={p} type="button" onClick={() => setPage(p)} className={pagerBtn(p === safePage, false)}>{p}</button>
+                      ),
+                    )}
+                    <button type="button" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)} className={pagerBtn(false, safePage >= totalPages)}>ถัดไป ›</button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

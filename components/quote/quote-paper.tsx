@@ -19,7 +19,9 @@ import type { ReactNode } from "react";
 import {
   CONTACT, SOCIAL, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, SITE_LEGAL_NAME, TAX_ID, SITE_URL,
 } from "@/components/seo/site";
+import { Phone, Mail, Globe, User } from "lucide-react";
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
+import { readThaiBaht } from "@/lib/utils/thai-number";
 import {
   CUSTOMS_ADDON, QUOTE_HEADER, QUOTE_HOW_TO, type PackageRate,
 } from "@/lib/quote/cargo-promo-packages";
@@ -57,47 +59,63 @@ export type QuoteModel = {
   conditions: string[]; notes: string[]; extraNote: string;
 };
 
-// ── Peak-style quotation card ─────────────────────────────────────────────
-export function QuoteCard({ model }: { model: QuoteModel }) {
+// ── ใบเสนอราคา (Pacred) — 1:1 clone of the Peak "QO" PDF export (ปอน 2026-07-03).
+//    Header (logo · หน้า/ต้นฉบับ · indigo title) · ผู้ขาย/ลูกค้า blocks + contact
+//    icons + lavender meta-box + ติดต่อกลับที่ · 7-col items table · สรุป + a
+//    highlighted จำนวนเงินที่ชำระ box · KBank payment · รับรอง signature row.
+//    Shared by the admin preview + public /q. `qrDataUrl` optional (the /q QR).
+// Palette sampled from the PDF (inline-styled — the theme's `primary` is red):
+const ACCENT = "#B30000";   // dark red (Pacred) — title + accent numbers
+const TINT = "#FBEAEA";     // light red tint — meta-box · table header · amount box
+const TINT_BD = "#EFD1D1";  // light red border
+export function QuoteCard({ model, qrDataUrl }: { model: QuoteModel; qrDataUrl?: string }) {
   const t = model.totals;
+  const isCalc = model.view === "calc";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm overflow-hidden">
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-primary-600">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={QUOTE_LOGO} alt="Pacred" className="h-9 w-auto" />
-        <div className="text-right">
-          <div className="text-xl font-black text-primary-700">ใบเสนอราคา</div>
-          <div className="text-[11px] text-slate-400">Quotation</div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-[860px] overflow-hidden rounded border border-slate-200 bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-col gap-4 p-4 sm:p-8">
 
-      <div className="p-3 sm:p-5 space-y-3 text-[12px]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-slate-200 p-2.5 leading-relaxed">
-            <p className="font-bold text-slate-800">ผู้ขาย</p>
-            <p>{SELLER.nameTh}</p>
-            <p className="text-slate-500">{SELLER.address}</p>
-            <p className="text-slate-500 font-mono">เลขภาษี {SELLER.taxId}</p>
-            <p className="text-slate-500">โทร {SELLER.phone} · {SELLER.email}</p>
+        {/* Header — logo · หน้า/ต้นฉบับ + indigo title */}
+        <div className="flex items-start justify-between gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={QUOTE_LOGO} alt="Pacred" className="h-20 w-auto sm:h-28" />
+          <div className="text-right leading-tight">
+            <div className="text-[11px] text-slate-500">หน้า 1/1</div>
+            <div className="text-[10px] text-slate-400">(ต้นฉบับ)</div>
+            <div className="mt-1 text-[26px] font-black sm:text-[34px]" style={{ color: ACCENT }}>{isCalc ? "ใบเสนอราคา" : "ใบประเมินราคา"}</div>
+            <div className="text-[11px] tracking-wide text-slate-400">Quotation</div>
           </div>
-          <div className="rounded-lg border border-slate-200 p-2.5 leading-relaxed">
-            <div className="grid grid-cols-[auto_1fr] gap-x-2">
-              <span className="text-slate-500">เลขที่</span><span className="font-bold text-primary-700">{model.refNo}</span>
-              <span className="text-slate-500">วันที่</span><span>{model.dateLabel}</span>
-              <span className="text-slate-500">ใช้ได้ถึง</span><span>{model.validUntil}</span>
-              <span className="text-slate-500">ลูกค้า</span><span className="font-semibold">{model.buyerName || "—"}{model.juristic ? " (นิติบุคคล)" : ""}</span>
-              {model.customerCode && <><span className="text-slate-500">รหัสลูกค้า</span><span className="font-mono font-semibold">{model.customerCode}</span></>}
-              {(model.buyerPhone || model.salesName) && <><span className="text-slate-500">ติดต่อ</span><span>{model.salesName || "—"} {model.salesTel ? `· ${model.salesTel}` : ""}</span></>}
+        </div>
+
+        {/* Info row — ผู้ขาย/ลูกค้า (left) · meta-box + ติดต่อกลับที่ (right) */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+          <div className="min-w-0 flex-1 space-y-2.5">
+            <PartyBlock role="ผู้ขาย" name={SELLER.nameTh} address={SELLER.address} taxId={`${SELLER.taxId} (สำนักงานใหญ่)`} phone={SELLER.phone} email="admin@pacred.co" web="pacred.co.th" />
+            <div className="border-t border-slate-200" />
+            <PartyBlock role="ลูกค้า" name={`${model.buyerName || "—"}${model.juristic ? " (นิติบุคคล)" : ""}`} address={model.buyerAddress || "—"} taxId={model.buyerTaxId || "—"} phone={model.buyerPhone || "-"} email="-" web="-" />
+          </div>
+          <div className="shrink-0 space-y-2.5 sm:w-[38%] sm:max-w-[300px]">
+            <div className="rounded border" style={{ background: TINT, borderColor: TINT_BD }}>
+              <MetaRow k="เลขที่เอกสาร" v={<span className="font-bold" style={{ color: ACCENT }}>{model.refNo}</span>} />
+              <MetaRow k="วันที่ออก" v={model.dateLabel} />
+              <MetaRow k="วันที่ตอบรับ" v={model.dateLabel} />
+              <MetaRow k="ใช้ได้ถึง" v={model.validUntil} />
+              <MetaRow k="อ้างอิง" v={model.customerCode || "-"} last />
+            </div>
+            <div className="px-0.5">
+              <p className="mb-0.5 text-[10px] font-bold text-slate-500">ติดต่อกลับที่ :</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-700"><User className="h-3 w-3 shrink-0 text-slate-900" /> {model.salesName || "Sales Pacred"}</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-700"><Phone className="h-3 w-3 shrink-0 text-slate-900" /> {model.salesTel || CONTACT.phoneDisplay}</p>
             </div>
           </div>
         </div>
 
-        <p className="text-[11px] font-semibold text-primary-700">{model.packageLabel}</p>
+        {model.packageLabel ? <p className="text-[11px] font-bold" style={{ color: ACCENT }}>{model.packageLabel}</p> : null}
 
-        {model.view === "compare" ? <CompareTable model={model} /> : <LineItems model={model} t={t} />}
+        {isCalc ? <LineItems model={model} /> : <CompareTable model={model} />}
 
-        {/* Customs add-on info (compare-mode list / calc shows it as line items already) */}
-        {model.view === "compare" && model.showCustomsInfo && (
+        {/* Customs add-on info (compare mode) */}
+        {!isCalc && model.showCustomsInfo && (
           <div className="rounded-lg border border-slate-200 p-3 space-y-1.5">
             <p className="text-[12px] font-bold">📦 {CUSTOMS_ADDON.title}</p>
             <table className="w-full text-[11.5px]">
@@ -107,25 +125,58 @@ export function QuoteCard({ model }: { model: QuoteModel }) {
                 ))}
               </tbody>
             </table>
-            <p className="text-[12px] font-bold text-primary-700">✅ {CUSTOMS_ADDON.summary}</p>
+            <p className="text-[12px] font-bold" style={{ color: ACCENT }}>✅ {CUSTOMS_ADDON.summary}</p>
           </div>
         )}
 
+        {/* Summary (calc mode) */}
+        {isCalc && model.lines.length > 0 && <Summary t={t} />}
+
         {model.juristic && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-[12px] text-blue-900">
-            ลูกค้านิติบุคคล — <b>หัก ณ ที่จ่าย 1%</b> จากค่าบริการ{model.view === "calc" ? " (คำนวณในยอดสุทธิแล้ว)" : ""}
+            ลูกค้านิติบุคคล — <b>หัก ณ ที่จ่าย 1%</b> จากค่าบริการ{isCalc ? " (คำนวณในยอดสุทธิแล้ว)" : ""}
           </div>
         )}
 
         {model.conditions.length > 0 && <Section title="เงื่อนไขแพ็คเกจ">{model.conditions.map((c, i) => <li key={i}>{c}</li>)}</Section>}
         <Section title="📌 หมายเหตุ">{model.notes.map((n, i) => <li key={i}>{n}</li>)}</Section>
-        <Section title="วิธีการใช้บริการ">{QUOTE_HOW_TO.map((s, i) => <li key={i}>{s.text}{s.link && <span className="ml-1 text-primary-600 break-all">{s.link}</span>}</li>)}</Section>
+        <Section title="วิธีการใช้บริการ">{QUOTE_HOW_TO.map((s, i) => <li key={i}>{s.text}{s.link && <span className="ml-1 break-all" style={{ color: ACCENT }}>{s.link}</span>}</li>)}</Section>
         {model.extraNote && <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-900 whitespace-pre-wrap">{model.extraNote}</div>}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-[11px] text-slate-600">
-          <div><p className="font-bold text-slate-800">💳 ชำระเงิน</p><p>{BANK.name} ({BANK.accountType})</p><p className="font-mono font-bold">{BANK.accountNumber}</p><p>{BANK.accountName}</p></div>
-          <div className="sm:text-right flex flex-col gap-0.5"><span>📞 CS {CONTACT.phoneCsDisplay} · ☎️ {SELLER.phone}</span><span>✉️ {SELLER.email}</span><span className="text-primary-600">LINE: {SOCIAL.line}</span></div>
+        {/* Payment (KBank) */}
+        <div className="border-t border-slate-200 pt-3">
+          <div className="flex items-start gap-2 text-[11px] text-slate-700">
+            <span className="whitespace-nowrap font-bold text-slate-800">💳 ชำระเงิน</span>
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-600 text-[10px] font-black text-white">K</span>
+              <div>
+                <p className="font-semibold text-slate-800">{BANK.name}</p>
+                <p className="font-mono">{BANK.accountType} {BANK.accountNumber}</p>
+                <p className="text-slate-500">{BANK.accountName}</p>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Certified — รับรอง signature/stamp row */}
+        <CertifiedRow customerName={model.buyerName} dateLabel={model.dateLabel} salesName={model.salesName} refNo={model.refNo} qrDataUrl={qrDataUrl} />
+      </div>
+    </div>
+  );
+}
+
+function PartyBlock({ role, name, address, taxId, phone, email, web }: { role: string; name: string; address: string; taxId: string; phone: string; email: string; web: string }) {
+  return (
+    <div className="flex items-start gap-x-4">
+      <div className="min-w-0 shrink-0 space-y-0.5" style={{ width: "60%" }}>
+        <DocRow label={role} strong>{name}</DocRow>
+        <DocRow label="ที่อยู่">{address}</DocRow>
+        <DocRow label="เลขที่ภาษี">{taxId}</DocRow>
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5 text-[10.5px] text-slate-600">
+        <p className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0 text-slate-900" /> {phone}</p>
+        <p className="flex items-center gap-1.5"><Mail className="h-3 w-3 shrink-0 text-slate-900" /> {email}</p>
+        <p className="flex items-center gap-1.5"><Globe className="h-3 w-3 shrink-0 text-slate-900" /> {web}</p>
       </div>
     </div>
   );
@@ -135,7 +186,7 @@ function CompareTable({ model }: { model: QuoteModel }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full text-[11px] sm:text-[12px]">
-        <thead className="bg-slate-800 text-white text-[11px]">
+        <thead className="border-b text-[11px] text-slate-700" style={{ background: TINT, borderColor: TINT_BD }}>
           <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
@@ -155,54 +206,147 @@ function CompareTable({ model }: { model: QuoteModel }) {
 function RateCell({ r, extraDays }: { r: PackageRate; extraDays?: string }) {
   return (
     <div>
-      <div className="font-mono font-bold text-primary-700">฿{BAHT(r.cbm)}<span className="text-[11px] font-normal text-slate-500">/คิว</span></div>
+      <div className="font-mono font-bold" style={{ color: ACCENT }}>฿{BAHT(r.cbm)}<span className="text-[11px] font-normal text-slate-500">/คิว</span></div>
       <div className="font-mono text-[11px]">฿{BAHT(r.kg)}<span className="text-[11px] text-slate-500">/กก.</span></div>
       <div className="text-[11px] text-slate-500">{r.days}{extraDays ? ` ${extraDays}` : ""}</div>
     </div>
   );
 }
 
-function LineItems({ model, t }: { model: QuoteModel; t: QuoteModel["totals"] }) {
+// 7-col items table matching the PDF (คำอธิบาย·จำนวน·ราคา·ส่วนลด·VAT·มูลค่ารวมภาษี·WHT).
+function LineItems({ model }: { model: QuoteModel }) {
+  const thL = "px-2 py-2 text-left text-[10.5px] font-semibold whitespace-nowrap";
+  const thR = "px-2 py-2 text-right text-[10.5px] font-semibold whitespace-nowrap";
+  const thC = "px-2 py-2 text-center text-[10.5px] font-semibold whitespace-nowrap";
   return (
-    <>
-      <p className="text-[11px] text-slate-500">{model.routeLabel}{model.density != null ? ` · คิดตาม ${model.basisLabel}` : ""}</p>
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full text-[11px] sm:text-[12px]">
-          <thead className="bg-slate-800 text-white text-[11px]">
-            <tr><th className="px-2 sm:px-2.5 py-1.5 text-left font-semibold">รายการ</th><th className="px-1.5 sm:px-2 py-1.5 text-right font-semibold whitespace-nowrap">จำนวน</th><th className="hidden sm:table-cell px-2 py-1.5 text-right font-semibold">ราคา/หน่วย</th><th className="px-2 sm:px-2.5 py-1.5 text-right font-semibold">จำนวนเงิน</th><th className="px-1 sm:px-1.5 py-1.5 text-center font-semibold">VAT</th></tr>
-          </thead>
-          <tbody>
-            {model.lines.map((l, i) => (
+    <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <table className="w-full min-w-[660px] text-[11px]">
+        <thead className="border-b text-slate-700" style={{ background: TINT, borderColor: TINT_BD }}>
+          <tr>
+            <th className={thL}>คำอธิบาย</th>
+            <th className={thR}>จำนวน</th>
+            <th className={thR}>ราคา</th>
+            <th className={thR}>ส่วนลด</th>
+            <th className={thC}>VAT</th>
+            <th className={thR}>มูลค่ารวมภาษี</th>
+            <th className={thC}>WHT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {model.routeLabel ? (
+            <tr><td colSpan={7} className="px-2 pt-2 text-[10.5px] text-slate-500">{model.routeLabel}{model.density != null ? ` · คิดตาม ${model.basisLabel}` : ""}</td></tr>
+          ) : null}
+          {model.lines.map((l, i) => {
+            const inclVat = round2(l.amount + (l.vat ? l.amount * 0.07 : 0));
+            return (
               <tr key={i} className="border-t border-slate-100 align-top">
-                <td className="px-2 sm:px-2.5 py-1.5">{i + 1}. {l.desc}</td>
-                <td className="px-1.5 sm:px-2 py-1.5 text-right text-slate-500 whitespace-nowrap">{l.qtyLabel}</td>
-                <td className="hidden sm:table-cell px-2 py-1.5 text-right font-mono">{THB(l.price)}</td>
-                <td className="px-2 sm:px-2.5 py-1.5 text-right font-mono font-semibold">{THB(l.amount)}</td>
-                <td className="px-1 sm:px-1.5 py-1.5 text-center text-[11px] text-slate-400">{l.vat ? "7%" : "-"}</td>
+                <td className="px-2 py-1.5">{i + 1}. {l.desc}</td>
+                <td className="px-2 py-1.5 text-right font-mono text-slate-500 whitespace-nowrap">{l.qtyLabel}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{THB(l.price)}</td>
+                <td className="px-2 py-1.5 text-right font-mono text-slate-500">0.00</td>
+                <td className="px-2 py-1.5 text-center text-[10.5px] text-slate-500">{l.vat ? "7%" : "ไม่มี"}</td>
+                <td className="px-2 py-1.5 text-right font-mono font-semibold">{THB(inclVat)}</td>
+                <td className="px-2 py-1.5 text-center text-[10.5px] text-slate-400">{model.juristic && l.whtApplicable ? "1%" : "-"}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-end">
-        <table className="text-[12px] w-full sm:w-auto sm:min-w-[260px]">
-          <tbody>
-            <Row label="มูลค่าไม่มี/ยกเว้นภาษี" v={t.subtotalNoVat} />
-            <Row label="มูลค่าที่คำนวณภาษี" v={t.subtotalVat} />
-            <Row label="ภาษีมูลค่าเพิ่ม 7%" v={t.vatAmount} />
-            <tr className="border-t border-slate-300"><td className="px-2 py-1.5 font-bold">รวมเป็นเงิน</td><td className="px-2 py-1.5 text-right font-mono font-black text-primary-700 text-[15px]">฿{THB(t.grandTotal)}</td></tr>
-            {t.whtAmount > 0 && <Row label="หัก ณ ที่จ่าย 1%" v={-t.whtAmount} />}
-            {t.whtAmount > 0 && <tr className="bg-slate-800 text-white"><td className="px-2 py-1.5 font-bold">ยอดชำระสุทธิ</td><td className="px-2 py-1.5 text-right font-mono font-black text-[15px]">฿{THB(t.netPayable)}</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function Row({ label, v }: { label: string; v: number }) {
-  return <tr><td className="px-2 py-1 text-slate-500">{label}</td><td className="px-2 py-1 text-right font-mono">{THB(v)}</td></tr>;
+// สรุป — breakdown (left · incl. Thai-baht words) + highlighted จำนวนเงินที่ชำระ box (right).
+function Summary({ t }: { t: QuoteTotals }) {
+  const netPaid = t.whtAmount > 0 ? t.netPayable : t.grandTotal;
+  return (
+    <div className="flex flex-col gap-4 border-t border-slate-200 pt-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex gap-2">
+        <p className="whitespace-nowrap text-[12px] font-bold text-slate-800">📋 สรุป</p>
+        <div className="min-w-0 space-y-0.5 text-[11px]">
+          <SumLine k="มูลค่าไม่มีหรือยกเว้นภาษี" v={`${THB(t.subtotalNoVat)} บาท`} />
+          <SumLine k="มูลค่าที่คำนวณภาษี 7%" v={`${THB(t.subtotalVat)} บาท`} />
+          <SumLine k="ภาษีมูลค่าเพิ่ม 7%" v={`${THB(t.vatAmount)} บาท`} />
+          <div className="flex flex-wrap justify-between gap-x-6 border-t border-slate-100 pt-0.5">
+            <span className="text-slate-500">จำนวนเงินทั้งสิ้น</span>
+            <span className="text-slate-600">{readThaiBaht(t.grandTotal)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="shrink-0 space-y-1 sm:w-[290px]">
+        <div className="flex items-center justify-between rounded border px-3 py-2" style={{ background: TINT, borderColor: TINT_BD }}>
+          <span className="text-[11px] font-bold text-slate-600">จำนวนเงินที่ชำระ</span>
+          <span className="font-mono text-[20px] font-black" style={{ color: ACCENT }}>{THB(netPaid)}<span className="ml-1 text-[12px]">บาท</span></span>
+        </div>
+        <div className="flex justify-between px-1 text-[11px]"><span className="text-slate-500">จำนวนเงินที่ถูกหัก ณ ที่จ่าย</span><span className="font-mono text-slate-700">{THB(t.whtAmount)} บาท</span></div>
+        <div className="flex justify-between px-1 text-[11px]"><span className="text-slate-500">จำนวนเงินทั้งสิ้น</span><span className="font-mono text-slate-700">{THB(t.grandTotal)} บาท</span></div>
+      </div>
+    </div>
+  );
 }
+
+function SumLine({ k, v }: { k: string; v: string }) {
+  return <div className="flex flex-wrap justify-between gap-x-6"><span className="text-slate-500">{k}</span><span className="font-mono text-slate-700">{v}</span></div>;
+}
+
+// ── Peak document helpers (label rows · meta-box · certified signatures) ──
+function DocRow({ label, children, strong }: { label: string; children: ReactNode; strong?: boolean }) {
+  return (
+    <div className="flex gap-1.5 leading-[1.5]">
+      <span className="w-[58px] shrink-0 text-[10px] font-bold text-slate-500">{label} :</span>
+      <span className={`min-w-0 flex-1 text-[10.5px] ${strong ? "font-bold text-slate-800" : "text-slate-600"}`}>{children}</span>
+    </div>
+  );
+}
+
+function MetaRow({ k, v, last }: { k: string; v: ReactNode; last?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-2 px-2.5 py-1.5" style={last ? undefined : { borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
+      <span className="shrink-0 text-[10px] font-bold text-slate-500">{k} :</span>
+      <span className="text-right text-[10.5px] text-slate-800">{v}</span>
+    </div>
+  );
+}
+
+function CertifiedRow({ customerName, dateLabel, salesName, refNo, qrDataUrl }: { customerName: string; dateLabel: string; salesName: string; refNo: string; qrDataUrl?: string }) {
+  return (
+    <div className="border-t border-slate-200 pt-3">
+      <p className="mb-2 text-[11px] font-bold text-slate-800">✍ รับรอง</p>
+      <div className={`grid grid-cols-2 gap-3 ${qrDataUrl ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+        {qrDataUrl && (
+          <CertBox title="สแกนเพื่อเปิดด้วยเว็บไซต์">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrDataUrl} alt={`QR ${refNo}`} className="h-12 w-12 object-contain" />
+          </CertBox>
+        )}
+        <CertBox title="ผู้ออกเอกสาร (ผู้ขาย)" name={salesName || "Sales Pacred"} date={dateLabel}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายเซ็น" className="h-8 w-auto object-contain" />
+        </CertBox>
+        <CertBox title="ผู้อนุมัติเอกสาร (ผู้ขาย)" name="Account Pacred" date={dateLabel}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/pacred-stamp-tight.png" alt="ตราประทับ" className="h-11 w-auto object-contain opacity-90" />
+        </CertBox>
+        <CertBox title="ผู้รับเอกสาร (ลูกค้า)" name={customerName || " "} dashedLine />
+        <CertBox title="ตราประทับ (ลูกค้า)"><div className="h-11 w-full rounded border border-dashed border-slate-300" /></CertBox>
+      </div>
+    </div>
+  );
+}
+
+function CertBox({ title, name, date, dashedLine, children }: { title: string; name?: string; date?: string; dashedLine?: boolean; children?: ReactNode }) {
+  return (
+    <div className="min-w-0 text-center">
+      <p className="mb-1 text-[9px] font-bold text-slate-600">{title}</p>
+      <div className="flex h-12 items-end justify-center">{children}</div>
+      <div className={`pt-1 ${dashedLine ? "border-t border-dashed border-slate-400" : "border-t border-slate-400"}`}>
+        <p className="truncate text-[9px] font-bold text-slate-800">{name || " "}</p>
+        {date ? <p className="text-[8px] text-slate-500">{date}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return <div><p className="text-[12px] font-bold text-slate-900 mb-1">{title}</p><ul className="list-disc pl-5 text-[12px] text-slate-700 space-y-0.5">{children}</ul></div>;
 }

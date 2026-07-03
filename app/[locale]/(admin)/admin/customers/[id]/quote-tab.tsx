@@ -4,17 +4,17 @@
  * ใบเสนอราคา tab — cargo LCL quotation (owner ปอน 2026-06-21, simplified v3).
  *
  * Two modes, clean UI:
- *  • 📋 เทียบเรท (default) — new customers don't know CBM/KG yet, so this just
- *    COMPARES the rates side-by-side (กว่างโจว/อี้อู × รถ/เรือ) for the chosen
- *    package + conditions → a ready-to-send quotation, no numbers needed.
- *  • 🧮 คำนวณราคา — when CBM/KG are known: density (ค่าเทียบ) billing → a Peak
+ *  • 📋 ใบประเมินราคา (default · view=compare) — new customers don't know CBM/KG
+ *    yet, so this just COMPARES the rates side-by-side (กว่างโจว/อี้อู × รถ/เรือ) for
+ *    the chosen package + conditions → a ready-to-send quotation, no numbers needed.
+ *  • 🧮 ออกใบเสนอราคา (view=calc) — when CBM/KG are known: density (ค่าเทียบ) billing → a Peak
  *    line-item quote with VAT/WHT totals.
  * นิติบุคคล toggle → หัก ณ ที่จ่าย 1% auto. อี้อู·รถ +600 is folded into the rate
  * (5,500), not a condition. Pacred logo. Pure client, no DB write (prod-safe).
  */
 
 import { useMemo, useState } from "react";
-import { Copy, Printer, Check, Calculator, LayoutList, Link2 } from "lucide-react";
+import { Copy, Printer, Check, Link2 } from "lucide-react";
 import { calcFreight, calcQuoteTotals, round2 } from "@/lib/quote/cargo-quote-calc";
 import {
   CARGO_PROMO_PACKAGES, CUSTOMS_ADDON, DEFAULT_COMPARISON, MIN_CHARGE, MODE_LABEL,
@@ -37,11 +37,35 @@ const QTY = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 3 
 
 const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
 
-export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { customerName: string; userid: string; comparisonValue?: number }) {
+export function QuoteTab({
+  customerName,
+  userid,
+  comparisonValue = 0,
+  buyerTaxId: buyerTaxIdInit = "",
+  buyerAddress: buyerAddressInit = "",
+  buyerIsJuristic = false,
+  buyerPhone: buyerPhoneInit = "",
+}: {
+  customerName: string;
+  userid: string;
+  comparisonValue?: number;
+  /** Registered corporate tax id (juristic) — seeds the buyer block (default ''). */
+  buyerTaxId?: string;
+  /** Registered company address (juristic) — seeds the buyer block (default ''). */
+  buyerAddress?: string;
+  /** True = juristic → the นิติบุคคล/WHT-1% toggle + buyer defaults start filled. */
+  buyerIsJuristic?: boolean;
+  /** Customer phone — seeds the buyer phone (default ''). */
+  buyerPhone?: string;
+}) {
   const [view, setView] = useState<View>("compare");
+  // ประเภทบริการ — Cargo เปิดใช้อย่างเดียว · Freight/Clearance เทาไว้ (เร็วๆ นี้ · ปอน 2026-07-03)
+  const [service, setService] = useState("cargo");
   const [pkgId, setPkgId] = useState(CARGO_PROMO_PACKAGES[0].id);
   const [licensed, setLicensed] = useState(false);
-  const [juristic, setJuristic] = useState(false);
+  // Juristic default from the resolved customer identity (was hardcoded false →
+  // the rep had to know + tick it). Admin can still toggle.
+  const [juristic, setJuristic] = useState(buyerIsJuristic);
 
   // calc-mode inputs
   const [warehouse, setWarehouse] = useState<WarehouseKey>("guangzhou");
@@ -77,10 +101,13 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
   const ymd = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
   const [refNo, setRefNo] = useState(`QT-${userid}-${ymd}`);
   const [validUntil, setValidUntil] = useState(() => { const d = new Date(today); d.setDate(d.getDate() + 7); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }); });
+  // Buyer block seeded from the resolved billing identity: for a juristic
+  // customer `customerName` is already the COMPANY name, and the tax id +
+  // registered address are pre-filled (were blank → rep typed them by hand).
   const [buyerName, setBuyerName] = useState(customerName || "");
-  const [buyerTaxId, setBuyerTaxId] = useState("");
-  const [buyerAddress, setBuyerAddress] = useState("");
-  const [buyerPhone, setBuyerPhone] = useState("");
+  const [buyerTaxId, setBuyerTaxId] = useState(buyerTaxIdInit);
+  const [buyerAddress, setBuyerAddress] = useState(buyerAddressInit);
+  const [buyerPhone, setBuyerPhone] = useState(buyerPhoneInit);
   const [salesName, setSalesName] = useState("");
   const [salesTel, setSalesTel] = useState("");
   const [extraNote, setExtraNote] = useState("");
@@ -184,19 +211,28 @@ export function QuoteTab({ customerName, userid, comparisonValue = 0 }: { custom
     }
   }
 
-  const seg = (active: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${active ? "bg-primary-600 text-white" : "text-muted hover:bg-surface-alt"}`;
   const inputCls = "w-full rounded-md border border-border px-2.5 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500";
   const selectCls = "rounded-md border border-border bg-white dark:bg-surface px-2.5 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40";
 
   return (
     <div className="space-y-3 text-sm">
-      {/* Mode toggle + juristic */}
+      {/* Service type (Cargo live · Freight/Clearance เทาไว้) + mode select + juristic */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-border p-0.5 bg-surface-alt/40">
-          <button type="button" onClick={() => setView("compare")} className={seg(view === "compare")}><LayoutList className="w-3.5 h-3.5" /> เทียบเรท</button>
-          <button type="button" onClick={() => setView("calc")} className={seg(view === "calc")}><Calculator className="w-3.5 h-3.5" /> คำนวณราคา</button>
-        </div>
+        <label className="inline-flex items-center gap-2">
+          <span className="text-[12px] font-semibold text-foreground whitespace-nowrap">บริการ:</span>
+          <select value={service} onChange={(e) => setService(e.target.value)} className={selectCls}>
+            <option value="cargo">Cargo</option>
+            <option value="freight" disabled>Freight · เร็วๆ นี้</option>
+            <option value="clearance" disabled>Clearance · เร็วๆ นี้</option>
+          </select>
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <span className="text-[12px] font-semibold text-foreground whitespace-nowrap">รูปแบบ:</span>
+          <select value={view} onChange={(e) => setView(e.target.value as View)} className={selectCls}>
+            <option value="compare">ใบประเมินราคา</option>
+            <option value="calc">ออกใบเสนอราคา</option>
+          </select>
+        </label>
         <label className="inline-flex items-center gap-1.5 text-[12px] ml-auto">
           <input type="checkbox" checked={juristic} onChange={(e) => setJuristic(e.target.checked)} className="accent-primary-600" />
           ลูกค้านิติบุคคล (หัก ณ ที่จ่าย 1%)
