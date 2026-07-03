@@ -170,7 +170,9 @@ type WRow = {
 };
 // Wave 20 P0-1: juristic company info — legacy `tb_corporate` keyed by
 // userid (mirrors the customer-portal `/profile` + `/service-order/add`
-// reads). `corporatestatus` '1' = approved/verified.
+// reads). corporatestatus codes (canonical SOT lib/admin/customer-identity.ts
+// CORP_STATUS · statusComp function.php:530): '1' = รอตรวจสอบ (pending) ·
+// '2' = อนุมัติแล้ว (verified) · '3' = ไม่ผ่าน (rejected).
 type CRow = {
   id: number;
   corporatename: string | null;
