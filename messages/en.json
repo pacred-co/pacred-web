@@ -3344,6 +3344,7 @@
       "title": "Update import entries",
       "momo": "MOMO",
       "momoLive": "MOMO (Live)",
+      "momoDiscovery": "Found on MOMO Live (queue)",
       "cn": "CargoCenter",
       "jmf": "JMF",
       "ttp": "TTP",
