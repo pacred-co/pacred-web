@@ -14,7 +14,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Settings, Save, AlertTriangle, X, BadgeCheck, Scale, Trash2 } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, Scale, Trash2, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
@@ -32,6 +32,7 @@ import {
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { SellFloorCbmConfig } from "@/lib/admin/sell-floor-config";
 import { QuoteTab } from "./quote-tab";
+import { QuoteHistoryTab } from "./quote-history-tab";
 
 type Measure = "kg" | "cbm";
 
@@ -88,9 +89,12 @@ export function CustomerRateEditor({
   const floorMatrix = useMemo(() => buildFloorMatrix(sellFloorCbm), [sellFloorCbm]);
   const tCmp = useTranslations("customerRateComparison");
   const [pending, startTransition] = useTransition();
-  // "cmp" = the ค่าเทียบ (CPS) tab — set the kg-over-คิว threshold in the SAME
-  // flow as the cbm/kg sell rate (owner "การดึงเรทราคามาสรุป" · set together).
-  const [tab, setTab] = useState<WarehouseId | "info" | "quote" | "cmp">("1");
+  // Top bar = 2 tabs (owner ปอน 2026-07-03): ใบเสนอราคา (default) + ประวัติใบเสนอราคา.
+  // The rate-setting screens (2 warehouse grids · ค่าเทียบ · ราคาขั้นต่ำ+คำอธิบาย) are
+  // collapsed into a "ตั้งค่าเรทลูกค้า" accordion INSIDE the ใบเสนอราคา tab, driven by
+  // `rateTab` — so the quote is front-and-center + rate settings stay one click away.
+  const [tab, setTab] = useState<"quote" | "history">("quote");
+  const [rateTab, setRateTab] = useState<WarehouseId | "cmp" | "info">("1");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
@@ -257,9 +261,9 @@ export function CustomerRateEditor({
               </button>
             </div>
 
-      {/* Tabs */}
+      {/* Tabs — top bar = 2 (ใบเสนอราคา + ประวัติ); the rate-setting screens are
+          collapsed into an accordion inside the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
       <div className="flex border-b border-border bg-surface-alt/30 text-sm">
-        {/* ใบเสนอราคา — ปักไว้เป็นแท็บแรก ก่อนโกดังกวางโจว (owner 2026-06-22) */}
         <button
           type="button"
           onClick={() => setTab("quote")}
@@ -271,117 +275,142 @@ export function CustomerRateEditor({
         >
           ใบเสนอราคา
         </button>
-        {WAREHOUSES.map((w) => (
-          <button
-            key={w.id}
-            type="button"
-            onClick={() => setTab(w.id)}
-            className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
-              tab === w.id
-                ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
-                : "border-transparent text-muted hover:text-foreground"
-            }`}
-          >
-            {w.label}
-            {whHasCustom(w.id) ? <span className="ml-1 text-primary-500">●</span> : null}
-          </button>
-        ))}
-        {/* ค่าเทียบ (CPS) — owner "การดึงเรทราคามาสรุป": set the kg-over-คิว
-            threshold in the SAME flow as the cbm/kg sell rate. */}
         <button
           type="button"
-          onClick={() => setTab("cmp")}
+          onClick={() => setTab("history")}
           className={`inline-flex items-center gap-1 px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
-            tab === "cmp"
+            tab === "history"
               ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
               : "border-transparent text-muted hover:text-foreground"
           }`}
         >
-          <Scale className="w-3.5 h-3.5" /> {tCmp("tabLabel")}
-          {comparisonEnabled ? <span className="ml-0.5 text-primary-500">●</span> : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("info")}
-          className={`px-4 py-2.5 font-medium transition-colors border-b-2 -mb-px ${
-            tab === "info"
-              ? "border-primary-600 text-primary-700 bg-white dark:bg-surface"
-              : "border-transparent text-muted hover:text-foreground"
-          }`}
-        >
-          คำอธิบาย + ราคาขั้นต่ำ
+          <History className="w-3.5 h-3.5" /> ประวัติใบเสนอราคา
         </button>
       </div>
 
       <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{error}</span>
-          </div>
-        )}
-        {success && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-            ✓ {success}
-          </div>
-        )}
+        {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
+        {tab === "quote" && (
+          <div className="space-y-3">
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} />
 
-        {/* Warehouse rate grids */}
-        {(["1", "2"] as const).map((wh) =>
-          tab === wh ? (
-            <div key={wh} className="space-y-3">
-              {!whHasCustom(wh) && (
-                <p className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                  ลูกค้ายังไม่มีเรทเฉพาะตัวสำหรับโกดังนี้ (ใช้เรทกลุ่ม/default) — กดบันทึกจะ
-                  <strong> สร้างเรทเฉพาะตัว</strong> ทำให้เป็น SVIP
-                </p>
-              )}
-              <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} floorMatrix={floorMatrix} />
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-[11px] text-muted">
-                  ตัวเลขสีแดง = ต่ำกว่าราคาขั้นต่ำ · เรทนี้ใช้กับ
-                  <strong> ออเดอร์ใหม่</strong>เท่านั้น (ออเดอร์เดิมไม่เปลี่ยน)
-                </p>
-                <Button type="button" size="sm" disabled={pending} onClick={() => setConfirmWh(wh)}>
-                  <Save className="size-4" /> {pending ? "กำลังบันทึก..." : `บันทึกเรทโกดัง${WAREHOUSES.find((w) => w.id === wh)?.short}`}
-                </Button>
+            {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
+            <details className="rounded-lg border border-border bg-surface-alt/20">
+              <summary className="flex cursor-pointer items-center gap-1.5 px-3 py-2 text-[13px] font-semibold text-foreground">
+                <Settings className="w-3.5 h-3.5 text-primary-600" /> ตั้งค่าเรทลูกค้า (โกดัง · ค่าเทียบ · ราคาขั้นต่ำ)
+                {matrix.isSvip ? (
+                  <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-primary-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <BadgeCheck className="w-2.5 h-2.5" /> SVIP
+                  </span>
+                ) : null}
+              </summary>
+              <div className="space-y-3 border-t border-border p-3">
+                {error && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{error}</span>
+                  </div>
+                )}
+                {success && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">✓ {success}</div>
+                )}
+
+                {/* Rate sub-tabs (โกดัง · ค่าเทียบ · ราคาขั้นต่ำ+คำอธิบาย) */}
+                <div className="flex flex-wrap gap-x-1 border-b border-border text-[13px]">
+                  {WAREHOUSES.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => setRateTab(w.id)}
+                      className={`px-3 py-2 font-medium transition-colors border-b-2 -mb-px ${
+                        rateTab === w.id ? "border-primary-600 text-primary-700" : "border-transparent text-muted hover:text-foreground"
+                      }`}
+                    >
+                      {w.label}
+                      {whHasCustom(w.id) ? <span className="ml-1 text-primary-500">●</span> : null}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setRateTab("cmp")}
+                    className={`inline-flex items-center gap-1 px-3 py-2 font-medium transition-colors border-b-2 -mb-px ${
+                      rateTab === "cmp" ? "border-primary-600 text-primary-700" : "border-transparent text-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Scale className="w-3.5 h-3.5" /> {tCmp("tabLabel")}
+                    {comparisonEnabled ? <span className="ml-0.5 text-primary-500">●</span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRateTab("info")}
+                    className={`px-3 py-2 font-medium transition-colors border-b-2 -mb-px ${
+                      rateTab === "info" ? "border-primary-600 text-primary-700" : "border-transparent text-muted hover:text-foreground"
+                    }`}
+                  >
+                    คำอธิบาย + ราคาขั้นต่ำ
+                  </button>
+                </div>
+
+                {/* Warehouse rate grids */}
+                {(["1", "2"] as const).map((wh) =>
+                  rateTab === wh ? (
+                    <div key={wh} className="space-y-3">
+                      {!whHasCustom(wh) && (
+                        <p className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                          ลูกค้ายังไม่มีเรทเฉพาะตัวสำหรับโกดังนี้ (ใช้เรทกลุ่ม/default) — กดบันทึกจะ
+                          <strong> สร้างเรทเฉพาะตัว</strong> ทำให้เป็น SVIP
+                        </p>
+                      )}
+                      <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} floorMatrix={floorMatrix} />
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="text-[11px] text-muted">
+                          ตัวเลขสีแดง = ต่ำกว่าราคาขั้นต่ำ · เรทนี้ใช้กับ
+                          <strong> ออเดอร์ใหม่</strong>เท่านั้น (ออเดอร์เดิมไม่เปลี่ยน)
+                        </p>
+                        <Button type="button" size="sm" disabled={pending} onClick={() => setConfirmWh(wh)}>
+                          <Save className="size-4" /> {pending ? "กำลังบันทึก..." : `บันทึกเรทโกดัง${WAREHOUSES.find((w) => w.id === wh)?.short}`}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null,
+                )}
+
+                {/* ค่าเทียบ (CPS) — set/clear in the same modal as the sell rate */}
+                {rateTab === "cmp" && (
+                  <ComparisonTab
+                    userid={userid}
+                    enabled={comparisonEnabled}
+                    value={comparisonValue}
+                    onDone={(msg) => {
+                      setError(null);
+                      setSuccess(msg);
+                      router.refresh();
+                      setTimeout(() => setSuccess(null), 6000);
+                    }}
+                    onError={(msg) => setError(msg)}
+                  />
+                )}
+
+                {/* Info + cost floor (ultra can edit the floor inline here) */}
+                {rateTab === "info" && (
+                  <InfoTab
+                    sellFloorCbm={sellFloorCbm}
+                    canEdit={canEditSellFloor}
+                    onSaved={(msg) => {
+                      setError(null);
+                      setSuccess(msg);
+                      router.refresh();
+                      setTimeout(() => setSuccess(null), 6000);
+                    }}
+                    onError={(msg) => setError(msg)}
+                  />
+                )}
               </div>
-            </div>
-          ) : null,
+            </details>
+          </div>
         )}
 
-        {/* ค่าเทียบ (CPS) — set/clear in the same modal as the sell rate */}
-        {tab === "cmp" && (
-          <ComparisonTab
-            userid={userid}
-            enabled={comparisonEnabled}
-            value={comparisonValue}
-            onDone={(msg) => {
-              setError(null);
-              setSuccess(msg);
-              router.refresh();
-              setTimeout(() => setSuccess(null), 6000);
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        )}
-
-        {/* ใบเสนอราคา */}
-        {tab === "quote" && <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} />}
-
-        {/* Info + cost floor (ultra can edit the floor inline here) */}
-        {tab === "info" && (
-          <InfoTab
-            sellFloorCbm={sellFloorCbm}
-            canEdit={canEditSellFloor}
-            onSaved={(msg) => {
-              setError(null);
-              setSuccess(msg);
-              router.refresh();
-              setTimeout(() => setSuccess(null), 6000);
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        )}
+        {/* ── ประวัติใบเสนอราคา ── */}
+        {tab === "history" && <QuoteHistoryTab userid={userid} />}
       </div>
           </div>
 

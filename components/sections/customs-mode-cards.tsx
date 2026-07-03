@@ -18,11 +18,11 @@ import { Link } from "@/i18n/navigation";
 
 const PATH = "/customs-clearance-shipping-suvarnabhumi";
 
-// Mobile 2-row grid placement (ปอน 2026-06-21): AIR full-width on top, then
-// TRUCK + SEA on the second row. `order-*` reorders within the grid (DOM order
-// is SEA, AIR, TRUCK); reset to DOM order + single-col on desktop (md+).
+// Mobile single-column stack (ปอน 2026-07-03 "อยากให้เป็นแบบสุวรรณภูมิ · ไถแล้ว
+// ไหลลงมา"): ALL cards full-width, stacked vertically like the AIR card, scroll
+// down. `order-*` keeps AIR (featured) on top; reset to DOM order on desktop (md+).
 const MOBILE_GRID: Record<string, string> = {
-  แอร์: "order-1 col-span-2 md:order-none md:col-span-1",
+  แอร์: "order-1 md:order-none",
   รถ: "order-2 md:order-none",
   เรือ: "order-3 md:order-none",
 };
@@ -125,16 +125,16 @@ export function CustomsModeCards() {
     },
   ];
 
-  // Mobile layout (ปอน 2026-06-21): a 2-row grid — AIR full-width on top, then
-  // TRUCK + SEA side-by-side below (see MOBILE_GRID order/span classes). No more
-  // swipe carousel. `activeIdx` now drives the DESKTOP hover-zoom only; it starts
-  // on the AIR (featured) card so AIR is emphasised on first desktop paint.
+  // Mobile layout (ปอน 2026-07-03): a single-column stack — every card full-width
+  // like the AIR card, scroll down through them (see MOBILE_GRID order classes).
+  // `activeIdx` now drives the DESKTOP hover-zoom only; it starts on the AIR
+  // (featured) card so AIR is emphasised on first desktop paint.
   const initialActiveIdx = Math.max(0, MODES.findIndex((m) => m.featured));
   const [activeIdx, setActiveIdx] = useState(initialActiveIdx);
 
   return (
     <div className="relative">
-      <div className="grid grid-cols-2 gap-3 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch">
+      <div className="grid grid-cols-1 gap-3 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch">
         {MODES.map((c, i) => {
           const Icon = c.badgeIcon;
           // `isRecommended` = the card flagged in MODES data (AIR) — controls
@@ -230,18 +230,16 @@ export function CustomsModeCards() {
                   </span>
                 </div>
                 {/* MOBILE title + price (md:hidden — desktop uses the white-body block above).
-                    Narrow TRUCK/SEA cards STACK (title, then a big price below — a big
-                    price squeezes the title on a 2-col card). The full-width AIR card has
-                    room → title LEFT + price RIGHT, side-by-side (ปอน 2026-06-21
-                    "ในมือถือ เฉพาะของแอร์ ขยับไปด้านขวา"). isRecommended = the AIR card. */}
-                <div className={`md:hidden flex ${isRecommended ? "items-center justify-between gap-3" : "flex-col gap-1"}`}>
-                  <h3 className={`text-[13px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2${isRecommended ? " flex-1 min-w-0" : ""}`}>
+                    Every card is full-width now (ปอน 2026-07-03 "แบบสุวรรณภูมิ") → title
+                    LEFT + price RIGHT, side-by-side on all cards. */}
+                <div className="md:hidden flex items-center justify-between gap-3">
+                  <h3 className="text-[13px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2 flex-1 min-w-0">
                     {c.title}
                   </h3>
                   {/* price only — the mobile "เพิ่มเติม/ย่อ" toggle was removed (ปอน
                       2026-07-03 "ให้การ์ดกางไว้เลย · ไม่ต้องมีปุ่มเพิ่มเติม"): the card
                       details are always shown now. */}
-                  <div className={`flex items-baseline flex-wrap gap-x-1.5 gap-y-0 leading-none${isRecommended ? " shrink-0 justify-end" : ""}`}>
+                  <div className="flex items-baseline flex-wrap gap-x-1.5 gap-y-0 leading-none shrink-0 justify-end">
                     <span className="inline-flex items-baseline gap-1">
                       <span className="text-[22px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
                       <span className="text-[12px] font-black text-primary-600">{t("baht")}</span>
@@ -256,9 +254,9 @@ export function CustomsModeCards() {
                   <span>{c.ports}</span>
                 </div>
 
-                {/* Spec row — 3 mini cards. On mobile: AIR (featured) only — hidden on
-                    รถ/เรือ (ปอน 2026-07-03 "เอาก้อนนี้ออก เฉพาะ รถ เรือ") · always on desktop. */}
-                <div className={`grid-cols-3 gap-1.5 md:gap-2 ${isRecommended ? "grid" : "hidden md:grid"}`}>
+                {/* Spec row — 3 mini cards. Every card full-width on mobile now
+                    (ปอน 2026-07-03 "แบบสุวรรณภูมิ") → shown on all cards, both viewports. */}
+                <div className="grid-cols-3 gap-1.5 md:gap-2 grid">
                   {c.stats.map((s) => {
                     const SIcon = s.icon;
                     return (
