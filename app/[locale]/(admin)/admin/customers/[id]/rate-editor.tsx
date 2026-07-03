@@ -313,7 +313,7 @@ export function CustomerRateEditor({
         {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
         {tab === "quote" && (
           <div className="space-y-3">
-            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} />
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} />
 
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">
@@ -431,53 +431,8 @@ export function CustomerRateEditor({
           </div>
         )}
 
-        {/* ค่าเทียบ (CPS) — set/clear in the same modal as the sell rate */}
-        {tab === "cmp" && (
-          <ComparisonTab
-            userid={userid}
-            enabled={comparisonEnabled}
-            value={comparisonValue}
-            onDone={(msg) => {
-              setError(null);
-              setSuccess(msg);
-              router.refresh();
-              setTimeout(() => setSuccess(null), 6000);
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        )}
-
-        {/* ใบเสนอราคา */}
-        {tab === "quote" && (
-          <QuoteTab
-            customerName={customerName}
-            userid={userid}
-            comparisonValue={comparisonValue}
-            buyerTaxId={buyerTaxId}
-            buyerAddress={buyerAddress}
-            buyerIsJuristic={buyerIsJuristic}
-            buyerPhone={buyerPhone}
-          />
-        )}
-
         {/* ── ประวัติใบเสนอราคา ── */}
         {tab === "history" && <QuoteHistoryTab userid={userid} />}
-
-        {/* Info + cost floor (ultra can edit the floor inline here) */}
-        {tab === "info" && (
-          <InfoTab
-            sellFloorCbm={sellFloorCbm}
-            sellFloorKg={sellFloorKg}
-            canEdit={canEditSellFloor}
-            onSaved={(msg) => {
-              setError(null);
-              setSuccess(msg);
-              router.refresh();
-              setTimeout(() => setSuccess(null), 6000);
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        )}
       </div>
           </div>
 
