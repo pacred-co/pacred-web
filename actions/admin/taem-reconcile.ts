@@ -36,9 +36,55 @@ import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
 const schema = z.object({ text: z.string().min(5).max(500_000) });
 
+/**
+ * Per-tracking manual OVERRIDE the admin typed in the preview table before applying
+ * (owner ภูม 2026-07-02: "เช็ค แก้ไข เพิ่มเข้าระบบได้เลยอย่างถูกต้อง"). Every field is
+ * optional — only the ones the admin edited are sent. These are MERGED over the
+ * server-re-parsed แต้ม values in applyTaemReconcile, and flow through the SAME
+ * money-guard path (a billed row stays skipped, the sell price is re-derived from the
+ * merged basis). Keyed by tracking (the 1:1 match key). Bounded + range-guarded so a
+ * fat-finger can't store garbage into the SELL-basis.
+ */
+const editSchema = z.object({
+  tracking: z.string().min(1).max(128),
+  wt: z.number().min(0).max(1_000_000).nullable().optional(),
+  vol: z.number().min(0).max(100_000).nullable().optional(),
+  parcel: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  container: z.string().max(128).nullable().optional(),
+});
+const applySchema = z.object({
+  text: z.string().min(5).max(500_000),
+  edits: z.array(editSchema).max(20_000).optional(),
+});
+type ReconcileEdit = z.infer<typeof editSchema>;
+
 const BILLED = new Set(["5", "6", "7"]);
 const WT_EPS = 0.01;
 const VOL_EPS = 0.000001;
+
+/**
+ * A real container code (goods are en route to Thailand) vs a note / blank. แต้ม's
+ * Container-Name cell is EITHER a real container (GZS…/GZE…/GZA…/EK… — sea/road/air)
+ * OR a note (กระสอบรวม / ยังไม่ปิดตู้). Only a real code means the container has closed
+ * and is shipping to TH, so an early fstatus on such a row is STALE. Prefix-anchored
+ * (not substring) so a note that happens to contain "SEA"/"EK" isn't mis-read as a
+ * container.
+ */
+export function isRealContainerCode(container: string | null | undefined): boolean {
+  const c = (container ?? "").trim().toUpperCase();
+  if (!c) return false;
+  return /^(GZS|GZE|GZA|EK)/.test(c);
+}
+
+/**
+ * The container is real (goods shipping to TH) but the Pacred fstatus is still an
+ * early "in China" state (1 = รอเข้าโกดังจีน · 2 = ถึงโกดังจีน · < 3 = กำลังส่งมาไทย).
+ * A closed container ⇒ the row should be at least "3" → an early status is stale.
+ */
+function isEarlyFstatus(fstatus: string | null | undefined): boolean {
+  const s = (fstatus ?? "").trim();
+  return s === "1" || s === "2";
+}
 
 export type TaemReconcileRow = {
   tracking: string;
@@ -75,6 +121,11 @@ export type TaemReconcileRow = {
   curBoxMark: string | null;        // tb_forwarder.fbox_mark
   curTaemHsCode: string | null;     // tb_forwarder.ftaem_hs_code
   curProductType: string | null;    // tb_forwarder.fproductstype (price-feeding · read only)
+  // packing-list container reality + stale-status flag (ภูม 2026-07-02)
+  /** true = แต้ม Container-Name is a real closed container (GZS/GZE/GZA/EK) → มาไทย. */
+  containerIsReal: boolean;
+  /** true = real container BUT the Pacred fstatus is still early (1/2) = สถานะค้าง. */
+  statusStale: boolean;
   // diff + verdict
   wtDiff: boolean;
   volDiff: boolean;
@@ -107,7 +158,8 @@ export type TaemReconcilePreview = {
     willUpdate: number;
     billedDiffer: number;
     alreadyOk: number;
-    noMatch: number;
+    noMatch: number;         // 🔴 tracking in the packing list but NOT in tb_forwarder = ตกหล่น
+    statusStale: number;     // 📦 real container (มาไทย) but fstatus still early (1/2) = สถานะค้าง
     // classification capture (reference only · no price impact)
     classWillWrite: number;   // rows where ftaem_hs_code / fbox_mark will be filled
     classConflict: number;    // rows where แต้ม HS/box-mark differs from a stored value
@@ -163,9 +215,20 @@ function taemTypeToFproductstype(taemType: string | null): string | null {
   return null;
 }
 
-async function buildPreview(text: string): Promise<TaemReconcilePreview> {
+async function buildPreview(text: string, edits?: ReconcileEdit[]): Promise<TaemReconcilePreview> {
   const { rows: parsed } = parseTaemReconcile(text);
   const admin = createAdminClient();
+
+  // Merge the admin's inline edits over the re-parsed แต้ม values, keyed by tracking.
+  // Only fields the admin actually typed override the packing-list values; the merged
+  // result flows through the SAME diff → verdict → money-guard path below, so an
+  // edited row is priced from the edited basis and a billed row stays skipped. Guarded
+  // to keep the write-basis clean (Number.isFinite + non-negative; empty string clears
+  // to no-override, not to 0).
+  const editByTracking = new Map<string, ReconcileEdit>();
+  for (const e of edits ?? []) {
+    if (e?.tracking) editByTracking.set(e.tracking, e);
+  }
 
   // Match ALL trackings (data + note) so note rows still show whether Pacred has them.
   const trackings = Array.from(new Set(parsed.map((r) => r.tracking)));
@@ -185,6 +248,23 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
   const rows: TaemReconcileRow[] = parsed.map((t) => {
     const f = fByTracking.get(t.tracking) ?? null;
     const matched = !!f;
+
+    // ── Effective แต้ม basis = parsed value, overridden by the admin's inline edit.
+    // A field is overridden only when the edit provides a finite non-negative number
+    // (wt/vol/parcel) or a non-empty container string; `null`/absent = keep parsed.
+    const edit = editByTracking.get(t.tracking);
+    const effWt =
+      edit && edit.wt != null && Number.isFinite(edit.wt) && edit.wt >= 0 ? edit.wt : t.totalWt;
+    const effVol =
+      edit && edit.vol != null && Number.isFinite(edit.vol) && edit.vol >= 0 ? edit.vol : t.totalVol;
+    const effParcel =
+      edit && edit.parcel != null && Number.isFinite(edit.parcel) && edit.parcel >= 0
+        ? edit.parcel
+        : t.parcel;
+    const effContainer =
+      edit && typeof edit.container === "string" && edit.container.trim() !== ""
+        ? edit.container.trim()
+        : t.container;
     const curWt = f ? num(f.fweight) : null;
     const curVol = f ? num(f.fvolume) : null;
     const curAmt = f ? num(f.famount) : null;
@@ -213,15 +293,15 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
     } else if (!matched) {
       verdict = "no-match";
     } else {
-      wtDiff = t.totalWt != null && (curWt == null || Math.abs(curWt - t.totalWt) > WT_EPS);
-      volDiff = t.totalVol != null && (curVol == null || Math.abs(curVol - t.totalVol) > VOL_EPS);
-      // Only a cabinet diff when แต้ม actually HAS a container value. Continuation
-      // rows (1779955936-2..-5) carry an empty container cell (they inherit the
-      // parent's), so an empty แต้ม container must NOT flag-diff against Pacred's real
-      // cabinet — else those rows would show "จะอัปเดต" forever (and the apply guard
+      wtDiff = effWt != null && (curWt == null || Math.abs(curWt - effWt) > WT_EPS);
+      volDiff = effVol != null && (curVol == null || Math.abs(curVol - effVol) > VOL_EPS);
+      // Only a cabinet diff when แต้ม (or the admin's edit) actually HAS a container
+      // value. Continuation rows (1779955936-2..-5) carry an empty container cell (they
+      // inherit the parent's), so an empty container must NOT flag-diff against Pacred's
+      // real cabinet — else those rows would show "จะอัปเดต" forever (and the apply guard
       // skips the cabinet write anyway). Pacred's cabinet is authoritative there.
-      cabDiff = !!t.container && t.container.trim() !== (curCab ?? "").trim();
-      amtDiff = t.parcel != null && curAmt != null && curAmt !== t.parcel;
+      cabDiff = !!effContainer && effContainer.trim() !== (curCab ?? "").trim();
+      amtDiff = effParcel != null && curAmt != null && curAmt !== effParcel;
       const anyDiff = wtDiff || volDiff || cabDiff || amtDiff;
       verdict = !anyDiff ? "ok" : isBilled ? "billed" : "update";
     }
@@ -262,16 +342,27 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       if (taemHasFee !== momoCrated) crateMismatch = true;
     }
 
+    // ── มีเลขตู้ = มาไทย · สถานะค้าง (ภูม 2026-07-02) ──────────────────────────
+    // A real container code means the goods have left China → the row should be at
+    // least "กำลังส่งมาไทย" (fstatus ≥ 3). If Pacred is still at an early "in China"
+    // status (1 รอเข้าโกดัง / 2 ถึงโกดังจีน), the status is STALE — flag for the ops
+    // team to advance. Only meaningful on a matched row. Display-only (no auto-write).
+    const containerIsReal = isRealContainerCode(effContainer);
+    const statusStale = matched && containerIsReal && isEarlyFstatus(f?.fstatus);
+
     return {
       tracking: t.tracking,
       isData: t.isData,
       note: t.note,
-      taemContainer: t.container,
+      // taem* basis reflects the EFFECTIVE value (admin edit merged over the parsed
+      // packing-list value) — this is exactly what the apply loop writes to the SELL
+      // basis, so the preview shows the truth of what will be written.
+      taemContainer: effContainer,
       taemTrans: t.trans,
       taemCode: t.code,
-      taemParcel: t.parcel,
-      taemWt: t.totalWt,
-      taemVol: t.totalVol,
+      taemParcel: effParcel,
+      taemWt: effWt,
+      taemVol: effVol,
       taemEtd: t.etd,
       taemEta: t.eta,
       taemCg, taemBoxMark, taemProductType, taemNote, taemServiceFee,
@@ -282,6 +373,7 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       fstatus: f?.fstatus ?? null,
       curWt, curVol, curCab, curAmt,
       curBoxMark, curTaemHsCode, curProductType,
+      containerIsReal, statusStale,
       wtDiff, volDiff, cabDiff, amtDiff,
       hsWillWrite, hsConflict, boxMarkWillWrite, boxMarkConflict, productTypeMismatch,
       crateMismatch,
@@ -300,6 +392,7 @@ async function buildPreview(text: string): Promise<TaemReconcilePreview> {
       billedDiffer: rows.filter((r) => r.verdict === "billed").length,
       alreadyOk: rows.filter((r) => r.verdict === "ok").length,
       noMatch: rows.filter((r) => r.verdict === "no-match").length,
+      statusStale: rows.filter((r) => r.statusStale).length,
       classWillWrite: rows.filter((r) => r.hsWillWrite || r.boxMarkWillWrite).length,
       classConflict: rows.filter((r) => r.hsConflict || r.boxMarkConflict).length,
       productTypeMismatch: rows.filter((r) => r.productTypeMismatch).length,
@@ -328,13 +421,16 @@ export type TaemApplyResult = {
   classConflicts: number; // rows skipped because แต้ม HS/box-mark differs (manual review)
 };
 
-/** Apply — re-parses the SAME text, writes the basis on non-billed differing rows,
- *  then re-derives the sell price. Idempotent + logged. */
+/** Apply — re-parses the SAME text, merges the admin's inline edits, writes the basis
+ *  on non-billed differing rows, then re-derives the sell price. Idempotent + logged.
+ *  The `edits` overrides flow through the SAME money-guard path as the parsed values
+ *  (billed rows stay skipped; the sell price is re-derived from the merged basis). */
 export async function applyTaemReconcile(input: unknown): Promise<AdminActionResult<TaemApplyResult>> {
-  const parsed = schema.safeParse(input);
+  const parsed = applySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   return withAdmin<TaemApplyResult>(["ops", "super", "warehouse"], async ({ adminId }) => {
-    const preview = await buildPreview(parsed.data.text);
+    // Re-parse + re-merge edits server-side (never trusts a client-passed preview).
+    const preview = await buildPreview(parsed.data.text, parsed.data.edits);
     const admin = createAdminClient();
 
     let basisUpdated = 0, repriced = 0, repriceFailed = 0;
