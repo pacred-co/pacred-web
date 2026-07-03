@@ -224,7 +224,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
                 className="flex flex-col items-center gap-2 cursor-not-allowed select-none"
               >
                 <span className="relative w-16 h-16 shrink-0">
-                  <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" className="object-contain grayscale opacity-45" />
+                  <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" quality={100} className="object-contain grayscale opacity-45" />
                 </span>
                 <div className="flex flex-col items-center leading-tight">
                   <span className="text-[12px] font-medium text-gray-400 line-clamp-1">{t(tile.labelKey)}</span>
@@ -240,7 +240,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
               className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
             >
               <span className="relative w-16 h-16 shrink-0">
-                <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" className="object-contain" />
+                <Image src={tile.icon} alt={t(tile.labelKey)} fill sizes="64px" quality={100} className="object-contain" />
               </span>
               <span className="text-[12px] leading-[1.25] font-medium text-gray-700 line-clamp-2">
                 {t(tile.labelKey)}
@@ -256,7 +256,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           className="flex flex-col items-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
         >
           <span className="relative w-16 h-16 shrink-0">
-            <Image src={`${ICON_BASE}/pcs-log-out.png`} alt={t("logout")} fill sizes="64px" className="object-contain" />
+            <Image src={`${ICON_BASE}/pcs-log-out.png`} alt={t("logout")} fill sizes="64px" quality={100} className="object-contain" />
           </span>
           <span className="text-[12px] leading-[1.25] font-medium text-gray-700 line-clamp-2">
             {t("logout")}

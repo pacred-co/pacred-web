@@ -102,6 +102,10 @@ export type PlannerContextValue = {
   // ── Keyword planner ──
   keywords: KeywordItem[];
   addKeyword: (item: Omit<KeywordItem, "id">) => void;
+  /** Import keywords in ONE state update (CSV import) → a single DB save. UPSERTS by
+   *  (service + keyword, case-insensitive): an existing keyword is OVERWRITTEN in place
+   *  (keeps its id — never a duplicate row); the rest are added. Returns {added, updated}. */
+  importKeywords: (items: Omit<KeywordItem, "id">[]) => { added: number; updated: number };
   updateKeyword: (id: string, patch: Partial<KeywordItem>) => void;
   deleteKeyword: (id: string) => void;
   loadSampleKeywords: () => void;
@@ -425,6 +429,30 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   // ── Keyword planner ──
   const keywords = useMemo(() => data.keywords ?? [], [data.keywords]);
   const addKeyword = useCallback<PlannerContextValue["addKeyword"]>((item) => apply((d) => ({ ...d, keywords: [...(d.keywords ?? []), { ...item, id: uid("kw") }] })), [apply]);
+  const importKeywords = useCallback<PlannerContextValue["importKeywords"]>((items) => {
+    if (items.length === 0) return { added: 0, updated: 0 };
+    const keyOf = (service: string, keyword: string) => `${service} ${keyword.trim().toLowerCase()}`;
+    // Dedup the incoming batch (last occurrence wins) so an in-file repeat can't add twice.
+    const batch = new Map<string, Omit<KeywordItem, "id">>();
+    for (const it of items) batch.set(keyOf(it.service, it.keyword), it);
+    // Count add-vs-update from the CURRENT snapshot (outside the updater → StrictMode-safe).
+    const existingKeys = new Set((data.keywords ?? []).map((k) => keyOf(k.service, k.keyword)));
+    let added = 0, updated = 0;
+    for (const key of batch.keys()) (existingKeys.has(key) ? (updated += 1) : (added += 1));
+    apply((d) => {
+      const rows = (d.keywords ?? []).slice();
+      const pos = new Map<string, number>();
+      rows.forEach((k, i) => pos.set(keyOf(k.service, k.keyword), i));
+      for (const [key, it] of batch) {
+        const at = pos.get(key);
+        // Overwrite an existing keyword in place (keep its id — no duplicate row); else append.
+        if (at != null) rows[at] = { ...rows[at], ...it, id: rows[at].id };
+        else { rows.push({ ...it, id: uid("kw") }); pos.set(key, rows.length - 1); }
+      }
+      return { ...d, keywords: rows };
+    });
+    return { added, updated };
+  }, [apply, data.keywords]);
   const updateKeyword = useCallback<PlannerContextValue["updateKeyword"]>((id, patch) => apply((d) => ({ ...d, keywords: (d.keywords ?? []).map((k) => (k.id === id ? { ...k, ...patch, id: k.id } : k)) })), [apply]);
   const deleteKeyword = useCallback<PlannerContextValue["deleteKeyword"]>((id) => { apply((d) => ({ ...d, keywords: (d.keywords ?? []).filter((k) => k.id !== id) })); void deleteMarketingRow("mkt_keywords", id); }, [apply]);
   const loadSampleKeywords = useCallback<PlannerContextValue["loadSampleKeywords"]>(() => apply((d) => ({ ...d, keywords: [...DEFAULT_KEYWORDS] })), [apply]);
@@ -442,7 +470,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       setResult, setContentDate, setContentStatus, resetAll,
       targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, updateKeyword, deleteKeyword, loadSampleKeywords,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
     }),
     [
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
@@ -450,7 +478,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
       targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, updateKeyword, deleteKeyword, loadSampleKeywords,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
     ],
   );
 
