@@ -82,6 +82,7 @@ import { TAX_DOC_MODES, prefFromMode, type TaxDocMode } from "@/lib/tax/tax-doc-
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
+import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
@@ -91,9 +92,12 @@ const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
  * Auto-suggest the carrier for a delivery address (owner/ภูม 2026-07-03 · "จับจากเลขไปรษณีย์
  * ว่าจังหวัดไหน แล้วเลือกบริษัทขนส่งในจังหวัดนั้นให้เลย · แต่ยังแก้ได้"). Rules:
  *   - Keep a PCS-family carrier if already set (Pacred's own delivery is valid anywhere).
- *   - Else keep the current carrier if it's still eligible for the province.
- *   - Else pick the first province-eligible carrier (getShipByOptionsForAddress).
- *   - Else fall back to the current value (no eligible option → don't blank it).
+ *   - BKK-metro / ปริมณฑล (เหมาๆ zone · isFreeShippingZip) → PCSF (เหมาๆ ฿100 · ต้นทาง). NOTE:
+ *     getShipByOptionsForAddress returns Flash-ONLY for this zone — that's a legacy dropdown-
+ *     HIDING quirk (the maomao branch hides the picker), NOT "Flash is the carrier". The real
+ *     zone carrier is เหมาๆ. (This is why order #52142 นนทบุรี wrongly auto-picked "2"=Flash.)
+ *   - Upcountry → the first province-eligible courier (COD collected at delivery).
+ *   - Else keep the current carrier if still eligible / fall back to it (don't blank it).
  * The result is ALWAYS staff-editable afterward via <EditShipByField>.
  */
 function suggestCarrierForAddress(
@@ -101,7 +105,8 @@ function suggestCarrierForAddress(
   ctx: { zip: string; province: string; amphoe: string | null; userID: string },
 ): string {
   const c = (current ?? "").trim();
-  if (PCS_FAMILY.has(c)) return c;
+  if (PCS_FAMILY.has(c)) return c; // keep Pacred's own delivery (เหมาๆ/ด่วน/รับเอง)
+  if (isFreeShippingZip(ctx.zip)) return "PCSF"; // เหมาๆ zone → เหมาๆ, not the Flash-only quirk
   const eligible = getShipByOptionsForAddress(ctx);
   if (c && eligible.some((o) => o.id === c)) return c;
   return eligible[0]?.id ?? c;

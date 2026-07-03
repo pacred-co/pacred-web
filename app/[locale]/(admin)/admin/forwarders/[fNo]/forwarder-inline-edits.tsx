@@ -68,6 +68,7 @@ import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
+import { nameShipBy } from "@/lib/freight/shipping-methods";
 import {
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
@@ -202,6 +203,20 @@ const SHIPBY_LABEL: Record<string, string> = {
   PCSF: "PRF เหมาๆ (ส่งฟรีในเขต)",
   PCSE: "PRE Express (ส่งด่วน)",
 };
+
+/**
+ * Friendly carrier label for a stored fshipby (owner/ภูม 2026-07-03: "ทำไมขึ้นเลข 2").
+ * A numeric external-courier code (e.g. "2" = Flash) must show its NAME, not the raw code.
+ * Order: the PCS-family rebrand labels → the full legacy nameShipBy() map (1-47) → the raw
+ * value (a custom carrier name the admin typed · nameShipBy returns "ไม่พบข้อมูล" there).
+ */
+function carrierLabel(code: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  if (!c) return "—";
+  if (SHIPBY_LABEL[c]) return SHIPBY_LABEL[c];
+  const n = nameShipBy(c);
+  return n === "ไม่พบข้อมูล" ? c : n;
+}
 
 type Props = {
   fId:            number;            // tb_forwarder.id — primary key for all writers
@@ -474,7 +489,7 @@ export function ForwarderInlineEdits(p: Props) {
         label="บริษัทขนส่ง"
         editing={editShipBy}
         setEditing={setEditShipBy}
-        display={p.fshipby || "—"}
+        display={carrierLabel(p.fshipby)}
       >
         {(close) => (
           <>
@@ -1040,7 +1055,7 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
         label="บริษัทขนส่ง"
         editing={editing}
         setEditing={setEditing}
-        display={fshipby ? (SHIPBY_LABEL[fshipby] ?? <span className="break-words">{fshipby}</span>) : "—"}
+        display={<span className="break-words">{carrierLabel(fshipby)}</span>}
       >
         {(close) => (
           <>
