@@ -59,14 +59,31 @@ export type AggregateRowInput = {
   fstatus: string;
   /** reforder — must be empty (no linked ฝากสั่งซื้อ) to be splittable. */
   reforder: string;
-  /** ftotalprice — must be ≤0 (unpriced) to be splittable (never re-price a billed amount). */
+  /**
+   * ftotalprice — the aggregate's SELL freight. When ≤0 the row is UNPRICED and
+   * splits with each sibling reset to 0 (re-priced later from its own คิว). When >0
+   * the row is PRICED: splittable ONLY under `opts.allowPriced` (the human-triggered
+   * button/backfill), and then the total is PRESERVED — split proportionally across
+   * boxes so Σ(sibling ftotalprice) === this aggregate exactly (money-neutral).
+   */
   ftotalprice: number;
-  /** famount — the aggregate pieces count (must equal Σ box quantity). */
+  /** famount — the aggregate pieces count (must equal Σ box quantity UNLESS folded). */
   famount: number;
+  /**
+   * famountcount — '1' = รวมกล่อง (the row is FOLDED: famount is a combined marker, usually
+   * 1, NOT the real piece count · the real count is in momo_box_detail). When folded, the
+   * Σ-pieces-must-equal-famount guard is RELAXED (the split restores the real per-box count).
+   * famount is display-only (not in ANY bill formula) so this is money-safe.
+   */
+  famountcount?: string | null;
   /** fweight — the aggregate TOTAL weight (must ≈ Σ box total weight). */
   fweight: number;
   /** fvolume — the aggregate TOTAL คิว (must ≈ Σ box total cbm). */
   fvolume: number;
+  /** frefrate — the SELL rate (฿/คิว or ฿/kg) · COPIED onto each priced sibling. */
+  frefrate?: number | string | null;
+  /** frefprice — the pricing-basis flag ('2'=คิว/CBM · else kg) · copied onto siblings. */
+  frefprice?: number | string | null;
 };
 
 /** The plan for ONE box row the writer will create (the aggregate's non-metric
@@ -88,6 +105,19 @@ export type BoxRowPlan = {
   fheight: number;
   /** famount — this box's pieces count. */
   famount: number;
+  /**
+   * PRICED split ONLY (decision.priced === true): this box's PRESERVED SELL freight —
+   * a proportional share of the aggregate ftotalprice (Σ across siblings === the
+   * aggregate exactly · anchor absorbs the satang remainder). The writer writes this
+   * verbatim and does NOT re-price from the live rate (that would move money). For an
+   * UNPRICED split these three are undefined and the writer resets price to 0 +
+   * re-prices each box from its own คิว.
+   */
+  ftotalprice?: number;
+  /** PRICED split: the aggregate's frefrate copied onto this box (display + future edit). */
+  frefrate?: number | string | null;
+  /** PRICED split: the aggregate's frefprice (basis) copied onto this box. */
+  frefprice?: number | string | null;
 };
 
 /** Why an aggregate row was NOT split (for logging + the backfill dry-run print). */
@@ -102,8 +132,22 @@ export type SplitSkipReason =
   | "not_bare_base";        // ftrackingchn already carries a suffix (unexpected)
 
 export type BoxSplitDecision =
-  | { split: true; rows: BoxRowPlan[] }
+  | { split: true; priced: boolean; rows: BoxRowPlan[] }
   | { split: false; reason: SplitSkipReason };
+
+/** Options for planBoxRowSplit. */
+export type BoxSplitOptions = {
+  /**
+   * Allow splitting a PRICED aggregate (ftotalprice>0) money-neutrally (the total is
+   * preserved · split proportionally). DEFAULT false → the automatic MOMO-Live cron
+   * pass NEVER touches a priced row (unchanged behaviour · no surprise mass-split);
+   * ONLY the human-triggered button + the backfill pass allowPriced:true. An UNBILLED
+   * guard (fstatus 1-4) + no-reforder still hold — a billed row is never split.
+   */
+  allowPriced?: boolean;
+  /** The weight/คิว-match tolerance for the money-basis guard (default 2%). */
+  relTolerance?: number;
+};
 
 const BILLED_FSTATUS = new Set(["5", "6", "7"]);
 
@@ -116,6 +160,11 @@ function r2(n: number): number {
 function r6(n: number): number {
   const v = Number(n);
   return Number.isFinite(v) ? Number(v.toFixed(6)) : 0;
+}
+/** Round THB to 2 satang (money). */
+function money2(n: number): number {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
 }
 /** Pieces count — floored at 1 (a box is at least one piece). */
 function piecesOf(q: number): number {
@@ -148,7 +197,12 @@ export function suffixOf(tracking: string): number {
  * The MONEY-NEUTRAL guard (all must hold, else `{ split:false, reason }`):
  *   1. NOT billed (fstatus ∉ 5/6/7) — never regroup/re-price a billing row.
  *   2. NO reforder — a linked ฝากสั่งซื้อ complicates the arrival trigger; leave it.
- *   3. NOT priced (ftotalprice ≤ 0) — never re-price a row that already carries money.
+ *   3. PRICE: an UNPRICED row (ftotalprice ≤ 0) always splits (each sibling re-prices
+ *      from its own คิว). A PRICED row (ftotalprice > 0) splits ONLY under
+ *      `opts.allowPriced` — and then the total is PRESERVED (split proportionally so
+ *      Σ(sibling ftotalprice) === the aggregate exactly · money-neutral), NOT re-priced.
+ *      Without allowPriced a priced row is refused (`already_priced`) — that's what the
+ *      automatic cron pass does, so it never surprise-touches money.
  *   4. ftrackingchn is the BARE base (no suffix) — a suffixed row is already split.
  *   5. > 1 box in momo_box_detail — nothing to split otherwise.
  *   6. Σ box pieces === famount (EXACT) — the split must not change the pieces count.
@@ -165,9 +219,11 @@ export function suffixOf(tracking: string): number {
 export function planBoxRowSplit(
   agg: AggregateRowInput,
   boxes: readonly BoxDetailInput[],
-  relTolerance = 0.02,
+  opts: BoxSplitOptions = {},
 ): BoxSplitDecision {
-  // 1. never touch a billing row.
+  const relTolerance = opts.relTolerance ?? 0.02;
+  const priced = Number(agg.ftotalprice) > 0;
+  // 1. never touch a billing row (fstatus 5/6/7) — the hardest money guard.
   if (BILLED_FSTATUS.has((agg.fstatus ?? "").trim())) {
     return { split: false, reason: "already_billed" };
   }
@@ -175,8 +231,11 @@ export function planBoxRowSplit(
   if ((agg.reforder ?? "").trim() !== "") {
     return { split: false, reason: "has_reforder" };
   }
-  // 3. never re-price a row that already carries a bill amount.
-  if (Number(agg.ftotalprice) > 0) {
+  // 3. a PRICED row (money already on it) splits ONLY when the caller opts in
+  //    (allowPriced — the human-triggered button/backfill). The automatic cron pass
+  //    leaves it → `already_priced`. When allowed, the split PRESERVES the total
+  //    (proportional · Σ === aggregate exactly), computed below.
+  if (priced && !opts.allowPriced) {
     return { split: false, reason: "already_priced" };
   }
   // 4. the aggregate must be the bare base (a suffixed row is already a sibling).
@@ -223,8 +282,18 @@ export function planBoxRowSplit(
     };
   });
 
-  // 6. pieces count must be preserved EXACTLY.
-  if (sumQty !== Math.round(Number(agg.famount))) {
+  // 6. pieces count must be preserved EXACTLY — UNLESS the aggregate is FOLDED.
+  //    A folded row (รวมกล่อง · famountcount='1', or famount≤1 while box_detail has >1 box)
+  //    stores famount as a COMBINED marker (usually 1), NOT the real piece count — the real
+  //    count is in momo_box_detail. Splitting INTENDS to restore that count (Σ box qty), so
+  //    the exact-match would wrongly refuse EVERY folded aggregate (the whole target set).
+  //    famount is display-only (NOT in any bill formula — verified outstanding.ts +
+  //    forwarder-debit-total.ts), so relaxing it moves NO money. A NON-folded row keeps the
+  //    exact match (a real Σ≠famount there means box_detail genuinely disagrees → refuse).
+  const isFolded =
+    (agg.famountcount ?? "").trim() === "1" ||
+    (Math.round(Number(agg.famount)) <= 1 && uniq.length > 1);
+  if (!isFolded && sumQty !== Math.round(Number(agg.famount))) {
     return { split: false, reason: "qty_mismatch" };
   }
   // 7. money basis (weight + คิว) must be preserved within tolerance.
@@ -233,6 +302,31 @@ export function planBoxRowSplit(
   }
   if (relDiff(sumCbm, Number(agg.fvolume) || 0) > relTolerance) {
     return { split: false, reason: "cbm_mismatch" };
+  }
+
+  // For a PRICED split (allowPriced), split the FROZEN aggregate ftotalprice across
+  // the boxes MONEY-NEUTRALLY: proportional to each box's share of the billed metric
+  // (คิว when the shipment has volume, else weight, else pieces), with the ANCHOR box
+  // (index 0) absorbing the satang remainder so Σ(box ftotalprice) === the aggregate
+  // ftotalprice EXACTLY. Billing sums the STORED per-row ftotalprice (outstanding.ts
+  // forwarderPriceFull + forwarder-debit-total.ts), so an exact Σ === the aggregate =
+  // the customer's bill is byte-identical after the split (the per-box allocation is
+  // internal). frefrate/frefprice are copied for display + a future per-box re-price.
+  const priceShares: number[] = [];
+  if (priced) {
+    const total = money2(Number(agg.ftotalprice));
+    let basis = boxTotals.map((b) => b.fvolume);
+    let basisSum = sumCbm;
+    if (!(basisSum > 0)) { basis = boxTotals.map((b) => b.fweight); basisSum = sumWeight; }
+    if (!(basisSum > 0)) { basis = boxTotals.map(() => 1); basisSum = boxTotals.length; }
+    // siblings (index ≥1) get their rounded proportional share; the anchor takes the rest.
+    let siblingSum = 0;
+    for (let i = 1; i < boxTotals.length; i++) {
+      const share = money2((total * basis[i]) / basisSum);
+      priceShares[i] = share;
+      siblingSum += share;
+    }
+    priceShares[0] = money2(total - siblingSum); // anchor absorbs the remainder → Σ === total
   }
 
   // Build the plan: the FIRST box becomes the anchor (keeps the BARE base tracking +
@@ -248,7 +342,10 @@ export function planBoxRowSplit(
     flength: b.flength,
     fheight: b.fheight,
     famount: b.famount,
+    ...(priced
+      ? { ftotalprice: priceShares[i], frefrate: agg.frefrate ?? 0, frefprice: agg.frefprice ?? "0" }
+      : {}),
   }));
 
-  return { split: true, rows };
+  return { split: true, priced, rows };
 }

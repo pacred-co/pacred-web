@@ -170,10 +170,117 @@ check("REFUSES a row linked to a ฝากสั่งซื้อ order (reford
   assert.equal(d.split, false);
   if (!d.split) assert.equal(d.reason, "has_reforder");
 });
-check("REFUSES an already-priced row (ftotalprice > 0) — never re-price money", () => {
+check("REFUSES an already-priced row by DEFAULT (no allowPriced) — the cron never touches money", () => {
   const d = planBoxRowSplit(agg({ ftotalprice: 3439.77 }), bugCaseBoxes());
   assert.equal(d.split, false);
   if (!d.split) assert.equal(d.reason, "already_priced");
+  // decision carries no `priced` on a refusal.
+});
+
+// ── PRICED split (opts.allowPriced) — the human-triggered button/backfill · money-NEUTRAL ──
+check("PRICED split (#52142 REAL case: FOLDED famount=1 · รวมกล่อง): 2 boxes · Σ === aggregate", () => {
+  // The real prod row is FOLDED: famountcount='1' (รวมกล่อง) → famount=1 (a combined marker),
+  // while momo_box_detail has 2 real boxes (Σ qty=2). The qty guard must be RELAXED here.
+  const a = agg({
+    ftrackingchn: "908006917359", ftotalprice: 128.93, famount: 1, famountcount: "1",
+    fweight: 50, fvolume: 0.02262, frefrate: 5700, frefprice: "2",
+  });
+  const boxes = [
+    box({ boxTracking: "908006917359", weightKgPerPiece: 28.5, cbmPerPiece: 0.0138, quantity: 1, width: 30, length: 23, height: 20 }),
+    box({ boxTracking: "908006917359-2", weightKgPerPiece: 21.5, cbmPerPiece: 0.00882, quantity: 1, width: 30, length: 21, height: 14 }),
+  ];
+  const d = planBoxRowSplit(a, boxes, { allowPriced: true });
+  assert.equal(d.split, true);
+  if (!d.split) return;
+  assert.equal(d.priced, true, "flagged as a priced split");
+  assert.equal(d.rows.length, 2);
+  // anchor = bare base; sibling = -2. proportional by คิว: box2 = 128.93×0.00882/0.02262 = 50.27, anchor = 78.66.
+  assert.equal(d.rows[0].ftrackingchn, "908006917359");
+  assert.equal(d.rows[0].ftotalprice, 78.66, "anchor share");
+  assert.equal(d.rows[1].ftrackingchn, "908006917359-2");
+  assert.equal(d.rows[1].ftotalprice, 50.27, "sibling share");
+  // 💰 the money-neutral invariant: Σ === the aggregate to the satang.
+  const sumPrice = d.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+  assert.equal(Number(sumPrice.toFixed(2)), a.ftotalprice, "Σ(ftotalprice) === aggregate");
+  // frefrate/frefprice copied onto BOTH rows (display + future per-box edit).
+  for (const r of d.rows) {
+    assert.equal(r.frefrate, 5700);
+    assert.equal(r.frefprice, "2");
+  }
+});
+
+check("FOLDED qty-relax: famountcount='1' (รวมกล่อง · famount=1) SPLITS even though Σ box qty=2", () => {
+  // The exact-qty guard must be RELAXED for a folded row (famount=1 is a combined marker, not
+  // the real count) — else every folded MOMO aggregate is wrongly refused. Test BOTH signals.
+  const boxes = bugCaseBoxes(); // 4 boxes, Σ qty = 4
+  const byFlag = planBoxRowSplit(agg({ famount: 1, famountcount: "1" }), boxes, { allowPriced: true });
+  assert.equal(byFlag.split, true, "famountcount='1' → relaxed");
+  if (byFlag.split) {
+    // per-box famount = its own qty; Σ = the real box count (4), restoring the folded marker.
+    assert.equal(byFlag.rows.reduce((s, r) => s + r.famount, 0), 4);
+  }
+  const byFallback = planBoxRowSplit(agg({ famount: 1, famountcount: null }), boxes);
+  assert.equal(byFallback.split, true, "famount≤1 with >1 box → treated as folded too");
+});
+
+check("NON-folded qty-mismatch STILL refuses (even with allowPriced) — a real box_detail disagreement", () => {
+  // famount=10 · not folded (famountcount≠'1', famount>1) · box Σ qty=4 → genuine disagreement.
+  const d = planBoxRowSplit(agg({ famount: 10, ftotalprice: 500 }), bugCaseBoxes(), { allowPriced: true });
+  assert.equal(d.split, false);
+  if (!d.split) assert.equal(d.reason, "qty_mismatch");
+});
+
+check("PRICED split: the ANCHOR absorbs the rounding remainder so Σ is EXACT (no satang drift)", () => {
+  // 3 equal-คิว boxes of ฿100 total → naive 33.33×3 = 99.99 (drifts 0.01). Anchor absorbs → Σ 100.00.
+  const a = agg({ ftrackingchn: "RND", ftotalprice: 100, famount: 3, fweight: 3, fvolume: 0.03, frefrate: 1, frefprice: "2" });
+  const boxes = [
+    box({ boxTracking: "RND", weightKgPerPiece: 1, cbmPerPiece: 0.01, quantity: 1 }),
+    box({ boxTracking: "RND-2", weightKgPerPiece: 1, cbmPerPiece: 0.01, quantity: 1 }),
+    box({ boxTracking: "RND-3", weightKgPerPiece: 1, cbmPerPiece: 0.01, quantity: 1 }),
+  ];
+  const d = planBoxRowSplit(a, boxes, { allowPriced: true });
+  assert.ok(d.split);
+  if (!d.split) return;
+  assert.equal(d.rows[0].ftotalprice, 33.34, "anchor takes the +0.01 remainder");
+  assert.equal(d.rows[1].ftotalprice, 33.33);
+  assert.equal(d.rows[2].ftotalprice, 33.33);
+  const sumPrice = d.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+  assert.equal(Number(sumPrice.toFixed(2)), 100, "Σ === 100.00 exactly");
+});
+
+check("PRICED split still REFUSES a billed / reforder row even with allowPriced (hard guards hold)", () => {
+  const boxes = bugCaseBoxes();
+  const billed = planBoxRowSplit(agg({ ftotalprice: 500, fstatus: "5" }), boxes, { allowPriced: true });
+  assert.equal(billed.split, false);
+  if (!billed.split) assert.equal(billed.reason, "already_billed");
+  const linked = planBoxRowSplit(agg({ ftotalprice: 500, reforder: "P22301" }), boxes, { allowPriced: true });
+  assert.equal(linked.split, false);
+  if (!linked.split) assert.equal(linked.reason, "has_reforder");
+});
+
+check("UNPRICED split sets NO per-box price (decision.priced=false → writer re-prices)", () => {
+  const d = planBoxRowSplit(agg(), bugCaseBoxes()); // ftotalprice 0
+  assert.ok(d.split);
+  if (!d.split) return;
+  assert.equal(d.priced, false);
+  for (const r of d.rows) assert.equal(r.ftotalprice, undefined, "unpriced → no frozen price");
+});
+
+check("PRICED split falls back to WEIGHT proportion when the shipment has no คิว", () => {
+  // a kg-only shipment (fvolume 0) → proportion by weight instead. Σ still exact.
+  const a = agg({ ftrackingchn: "KG", ftotalprice: 200, famount: 2, fweight: 100, fvolume: 0, frefrate: 2, frefprice: "1" });
+  const boxes = [
+    box({ boxTracking: "KG", weightKgPerPiece: 60, cbmPerPiece: 0, quantity: 1 }),
+    box({ boxTracking: "KG-2", weightKgPerPiece: 40, cbmPerPiece: 0, quantity: 1 }),
+  ];
+  const d = planBoxRowSplit(a, boxes, { allowPriced: true, relTolerance: 1 });
+  assert.ok(d.split);
+  if (!d.split) return;
+  // 200 × 40/100 = 80 (sibling); anchor = 120.
+  assert.equal(d.rows[1].ftotalprice, 80);
+  assert.equal(d.rows[0].ftotalprice, 120);
+  const sumPrice = d.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+  assert.equal(Number(sumPrice.toFixed(2)), 200);
 });
 check("REFUSES when ≤1 box (nothing to split)", () => {
   const d = planBoxRowSplit(agg({ famount: 1, fweight: 398, fvolume: 0.6555 }), [bugCaseBoxes()[0]]);

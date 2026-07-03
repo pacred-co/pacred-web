@@ -79,6 +79,8 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { ADDRESSES } from "@/components/seo/site";
 import { TAX_DOC_MODES, prefFromMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
+import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
+import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 
 // Local resolveLegacyAdminId (same pattern as forwarders-edit.ts / pay-user.ts
 // — known consolidation TODO; kept local to avoid premature extraction).
@@ -1443,5 +1445,79 @@ export async function adminUpdateForwarderDateToThai(
     revalidatePath(`/admin/forwarders/${d.fId}`);
     revalidatePath("/admin/forwarders");
     return { ok: true };
+  });
+}
+
+// ── adminSplitForwarderBoxes — แตกกล่อง MOMO เป็นแถวแยก (money-neutral) ───────────
+//
+// owner/ภูม 2026-07-03: a MOMO cargo tracking split into N boxes of different sizes is
+// currently ONE aggregate tb_forwarder row (famount=N · per-box dims in momo_box_detail).
+// The customer can SEE the total is right but staff CAN'T edit a single box (e.g. when
+// MOMO sent a wrong dimension). This action turns the aggregate into N SIBLING rows — one
+// editable row per box — reusing the money-neutral splitAggregatedMomoBoxRows with
+// allowPriced:true (the total SELL bill is PRESERVED to the satang · the split is only
+// the human-triggered button/backfill, never the automatic cron). Hard guards still hold:
+// a BILLED (fstatus 5/6/7) or ฝากสั่งซื้อ-linked row is refused.
+const splitBoxesSchema = z.object({ fId: z.number().int().positive() });
+export type AdminSplitForwarderBoxesInput = z.infer<typeof splitBoxesSchema>;
+
+/** Human-readable reason for a refused split (maps SplitSkipReason → Thai). */
+const SPLIT_SKIP_MSG: Record<string, string> = {
+  already_billed: "รายการนี้อยู่ในขั้นตอนชำระเงิน/จัดส่งแล้ว — แตกกล่องไม่ได้ (กันบิลเพี้ยน)",
+  has_reforder: "รายการนี้เชื่อมกับฝากสั่งซื้อ — แตกกล่องไม่ได้",
+  already_priced: "รายการนี้คิดราคาแล้ว (ต้องกดยืนยันแตกกล่องผ่านปุ่มนี้เท่านั้น)",
+  not_multi_box: "รายการนี้มีกล่องเดียว (ไม่มีอะไรให้แตก) — MOMO ยังไม่ส่งข้อมูลกล่องแยกมา",
+  qty_mismatch: "จำนวนชิ้นรวมของกล่องแยกไม่ตรงกับรายการรวม — แตกไม่ได้ (กันข้อมูลเพี้ยน)",
+  weight_mismatch: "น้ำหนักรวมของกล่องแยกไม่ตรงกับรายการรวม — แตกไม่ได้",
+  cbm_mismatch: "คิวรวมของกล่องแยกไม่ตรงกับรายการรวม — แตกไม่ได้",
+  not_bare_base: "รายการนี้ถูกแตกเป็นกล่องแยกไปแล้ว",
+  already_split: "รายการนี้ถูกแตกเป็นกล่องแยกไปแล้ว",
+  no_aggregate_row: "ไม่พบรายการรวมของแทรคนี้",
+};
+
+export async function adminSplitForwarderBoxes(
+  rawInput: AdminSplitForwarderBoxesInput,
+): Promise<AdminActionResult<{ siblingsCreated: number }>> {
+  const parsed = splitBoxesSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ siblingsCreated: number }>(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Resolve the base tracking for this row (the writer keys off the base + re-verifies).
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; ftrackingchn: string | null }>();
+    if (fwdErr) {
+      console.error(`[adminSplitForwarderBoxes read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+    const base = baseOfTracking((fwd.ftrackingchn ?? "").trim());
+    if (!base) return { ok: false, error: "รายการนี้ไม่มีเลขแทรคกิ้ง" };
+
+    // money-neutral split · allowPriced:true (this is the human-triggered path).
+    const result = await splitAggregatedMomoBoxRows(admin, [base], undefined, { allowPriced: true });
+
+    if (result.split >= 1) {
+      await logAdminAction(adminId, "tb_forwarder.split_boxes", "tb_forwarder", String(d.fId), {
+        base, siblingsCreated: result.siblingsCreated,
+      });
+      revalidatePath(`/admin/forwarders/${d.fId}`);
+      revalidatePath("/admin/forwarders");
+      return { ok: true, data: { siblingsCreated: result.siblingsCreated } };
+    }
+
+    // No split → surface the most relevant skip reason (or a generic error).
+    const skipReason = (Object.entries(result.skipped).find(([, n]) => n > 0)?.[0]) ?? null;
+    if (skipReason) return { ok: false, error: SPLIT_SKIP_MSG[skipReason] ?? `แตกกล่องไม่สำเร็จ (${skipReason})` };
+    if (result.errors.length > 0) {
+      console.error(`[adminSplitForwarderBoxes] writer errors`, result.errors);
+      return { ok: false, error: `แตกกล่องไม่สำเร็จ: ${result.errors[0]?.message ?? "unknown"}` };
+    }
+    return { ok: false, error: "ไม่พบข้อมูลกล่องแยกสำหรับแทรคนี้ (MOMO ยังไม่ส่งข้อมูลกล่องมา)" };
   });
 }
