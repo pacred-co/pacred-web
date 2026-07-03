@@ -4,8 +4,6 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { ForwarderStepRevert } from "./forwarder-step-revert";
-import { DomesticShippingSelector } from "./domestic-shipping-selector";
-import { domesticShippingOptions } from "@/lib/forwarder/domestic-shipping";
 import { CreateOrderBillButton } from "./create-order-bill-button";
 import { AdvanceBillConfirmButton } from "./advance-bill-confirm-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -1256,48 +1254,10 @@ async function tryRenderTbForwarder(
           <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} advanceConfirmed={advanceConfirmed} />
         </div>
 
-        {/* ── จัดส่งในไทย — zone-aware smart selector (task F · owner 2026-06-22):
-           เหมาๆ in-zone · ต่างจังหวัด/นอกเขต บังคับเก็บปลายทาง · รับเอง. Options
-           computed server-side from THIS order's delivery address; the save
-           re-derives + validates (action gates RBAC ops/accounting/super/warehouse). ── */}
-        {(() => {
-          // Flash domestic fee = sum PER PARCEL (legacy is per-row · Flash caps a
-          // single parcel at 50kg → a combined 104kg would return 0). MOMO orders
-          // split into -N/M boxes; the หัวบิล row carries 0 weight/dims, so we feed
-          // the countable siblings (the real boxes) as parcels.
-          const domParcels = collectSiblings
-            .map((s) => ({
-              weightKg: Math.max(0, Number(s.fweight) || 0),
-              width: Math.max(0, Number(s.fwidth) || 0),
-              length: Math.max(0, Number(s.flength) || 0),
-              height: Math.max(0, Number(s.fheight) || 0),
-            }))
-            .filter((p) => p.weightKg > 0 || p.width > 0);
-          const dom = domesticShippingOptions({
-            addressID: isSelfPickup ? "PCS" : null,
-            zip: r.faddresszipcode,
-            province: r.faddressprovince,
-            amphoe: r.faddressdistrict,
-            weightKg: Number(r.fweight) || 0,
-            width: Number(r.fwidth) || 0,
-            length: Number(r.flength) || 0,
-            height: Number(r.fheight) || 0,
-            parcels: domParcels.length > 0 ? domParcels : undefined,
-          });
-          const addrText = [r.faddresssubdistrict, r.faddressdistrict, r.faddressprovince, r.faddresszipcode]
-            .map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
-          return (
-            <div className="mt-4">
-              <DomesticShippingSelector
-                fId={r.id}
-                zone={dom.zone}
-                options={dom.options}
-                currentCarrier={r.fshipby}
-                addressText={addrText}
-              />
-            </div>
-          );
-        })()}
+        {/* ── "จัดส่งในไทย" (DomesticShippingSelector) REMOVED — owner/ภูม 2026-07-03:
+           ซ้ำซ้อนกับ "บริษัทขนส่ง" (EditShipByField) + "ที่อยู่จัดส่ง" (auto ขนส่งตามจังหวัด) →
+           พนักงานงงว่าต้องเลือกขนส่ง 2 รอบ. ตัดออก · ขนส่ง+ค่าส่ง+COD จัดการที่ บริษัทขนส่ง +
+           การเก็บเงินค่าขนส่งในไทย + ที่อยู่จัดส่ง (adminPickForwarderAddress auto). ── */}
 
         {/* ── แจ้งปัญหาพัสดุ — parcel-exception flag/record/resolve (gap G7 ·
            owner "อุดจุดบอด" · mig 0230). RECORD-ONLY: flag a row as ของแตก/ไม่ใช่
