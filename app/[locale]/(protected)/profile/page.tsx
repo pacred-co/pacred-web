@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
 import { ProfileAvatarUpload } from "./profile-avatar-upload";
@@ -148,12 +149,13 @@ export default async function ProfilePage() {
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
-      "userName, userLastName, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID",
+      "userName, userLastName, userCompany, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID",
     )
     .eq("userID", memberCode)
     .maybeSingle<{
       userName: string | null;
       userLastName: string | null;
+      userCompany: string | null;
       userEmail: string | null;
       userTel: string | null;
       userPicture: string | null;
@@ -174,7 +176,7 @@ export default async function ProfilePage() {
   // header.php L86-92 — SELECT walletTotal FROM tb_wallet WHERE userID=…
   // header.php L100/104/105 — the three stat-card COUNT()s.
   // header.php L107 — the main-address row (via tb_address_main).
-  const [walletRes, shopsRes, forwarderRes, paymentRes, addressMainRes] =
+  const [walletRes, shopsRes, forwarderRes, paymentRes, addressMainRes, corpRes] =
     await Promise.all([
       admin
         .from("tb_wallet")
@@ -198,6 +200,17 @@ export default async function ProfilePage() {
         .select("addressid")
         .eq("userid", memberCode)
         .maybeSingle<{ addressid: string | number | null }>(),
+      // Juristic identity (นิติบุคคล) — for the header name precedence. Best-effort:
+      // a null corp row (personal customer) just resolves to the person name.
+      admin
+        .from("tb_corporate")
+        .select("corporatename, corporatenumber, corporateaddress")
+        .eq("userid", memberCode)
+        .maybeSingle<{
+          corporatename: string | null;
+          corporatenumber: string | null;
+          corporateaddress: string | null;
+        }>(),
     ]);
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
@@ -253,7 +266,21 @@ export default async function ProfilePage() {
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
     .trim();
-  const fullName = legacyName || profileName || profile.company_name || "";
+  // Juristic-aware header name (2026-07-03) — for a company the COMPANY name
+  // wins (was leaking the person, company only a last-resort fallback). The
+  // resolver keys on userCompany='1' OR a corp tax-id; the corp name falls back
+  // to the tb_corporate name, else the Pacred profile.company_name, else person.
+  const corp = corpRes.data ?? null;
+  const personDisplayName = legacyName || profileName;
+  const billingIdentity = resolveBillingIdentity({
+    userCompany: userRow?.userCompany,
+    userName: personDisplayName, // pass the resolved person name as the "userName" half
+    userLastName: "",
+    corp: corp
+      ? { corporatename: corp.corporatename || profile.company_name || null, corporatenumber: corp.corporatenumber, corporateaddress: corp.corporateaddress }
+      : (userRow?.userCompany === "1" ? { corporatename: profile.company_name || null, corporatenumber: null, corporateaddress: null } : null),
+  });
+  const fullName = billingIdentity.name || personDisplayName || profile.company_name || "";
 
   // $_SESSION['userID'] — the customer's member code (legacy PCS#### is
   // rebranded PR####). profile.php's <title> + the <h5> both print it.

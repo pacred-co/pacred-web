@@ -75,6 +75,79 @@ export const updateUserIdentitySchema = z.object({
 // (userSex accepts any string · normalize happens inside the schema).
 export type UpdateUserIdentityInput = z.input<typeof updateUserIdentitySchema>;
 
+// ───────────────────────────────────────────────────────────────────────────
+// Billing / display identity resolver (2026-07-03)
+//
+// THE single source of truth for "which name/tax-id/address does a document or
+// header show for THIS customer" — juristic (นิติบุคคล) vs person. Before this,
+// every juristic-aware surface reimplemented the same 3-line inline pattern
+//   isJuristic = userCompany==='1' || corp.corporatenumber
+//   name       = corp.corporatename ?? `${userName} ${userLastName}`
+//   taxId      = corp.corporatenumber ?? ""
+//   address    = corp.corporateaddress ?? ""
+// and the leaking surfaces (admin header · portal profile · ใบเสนอราคา) simply
+// never ran it — they showed the person for a company. This pure function is
+// the reusable home so every surface resolves identity identically.
+//
+// DISPLAY-ONLY: this changes the identity TEXT shown, never any amount / VAT /
+// WHT / tax-doc eligibility / serial. A ใบกำกับภาษี for a juristic buyer must
+// show the registered company name + 13-digit tax id + registered address —
+// this returns exactly those for isJuristic.
+//
+// `registeredAddress` is the tb_corporate.corporateaddress (the COMPANY's
+// registered address — what tax docs require). It is NOT the shipping/delivery
+// address; callers that show a delivery leg keep their own address unchanged.
+// ───────────────────────────────────────────────────────────────────────────
+
+/** The tb_corporate columns the resolver needs (null when no corp row). */
+export type CorporateIdentityRow = {
+  corporatename: string | null;
+  corporatenumber: string | null;
+  corporateaddress: string | null;
+};
+
+export type BillingIdentity = {
+  /** True when the customer is a company (userCompany='1' OR a corp tax-id exists). */
+  isJuristic: boolean;
+  /** Company name for juristic (falls back to the person name if the corp name is blank); else the person full name. */
+  name: string;
+  /** 13-digit corporate tax id for juristic; '' when none. */
+  taxId: string;
+  /** Registered company address for juristic; '' when none (caller may fall back to a delivery address). */
+  registeredAddress: string;
+  /** Always the contact person's full name — for a "ผู้ติดต่อ" sub-line on a juristic header. */
+  personName: string;
+};
+
+/**
+ * Resolve the DISPLAY/BILLING identity for a customer.
+ *
+ * Juristic detection is the UNION of both signals (`userCompany==='1'` OR a
+ * corp row carrying a tax id) — some migrated rows lost `userCompany` but still
+ * have a tb_corporate row, so keying on either matches the widest correct set
+ * (this is the same union billing-run.ts already used).
+ *
+ * @example
+ *   resolveBillingIdentity({ userCompany: "1", userName: "PEA", userLastName: "PEA",
+ *     corp: { corporatename: "HOME CAMERA CO.,LTD.", corporatenumber: "0105564077716", corporateaddress: "…" } })
+ *   // → { isJuristic:true, name:"HOME CAMERA CO.,LTD.", taxId:"0105564077716",
+ *   //     registeredAddress:"…", personName:"PEA PEA" }
+ */
+export function resolveBillingIdentity(input: {
+  userCompany: string | null | undefined;
+  userName: string | null | undefined;
+  userLastName: string | null | undefined;
+  corp: CorporateIdentityRow | null | undefined;
+}): BillingIdentity {
+  const personName = `${input.userName ?? ""} ${input.userLastName ?? ""}`.trim();
+  const corpName = (input.corp?.corporatename ?? "").trim();
+  const taxId = (input.corp?.corporatenumber ?? "").trim();
+  const registeredAddress = (input.corp?.corporateaddress ?? "").trim();
+  const isJuristic = input.userCompany === "1" || taxId !== "";
+  const name = isJuristic ? (corpName || personName) : personName;
+  return { isJuristic, name, taxId, registeredAddress, personName };
+}
+
 /** Convert-to-juristic field map (legacy update-corporate POST). */
 export const convertToJuristicSchema = z.object({
   userid:          z.string().trim().min(1).max(20),

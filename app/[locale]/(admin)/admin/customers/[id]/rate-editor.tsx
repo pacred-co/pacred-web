@@ -69,6 +69,10 @@ function vKey(wh: WarehouseId, m: Measure, t: TransportId, p: ProductId) {
 export function CustomerRateEditor({
   userid,
   customerName,
+  buyerTaxId = "",
+  buyerAddress = "",
+  buyerIsJuristic = false,
+  buyerPhone = "",
   matrix,
   comparisonEnabled = false,
   comparisonValue = 0,
@@ -78,6 +82,14 @@ export function CustomerRateEditor({
 }: {
   userid: string;
   customerName: string;
+  /** Registered corporate tax id (juristic) — seeds the ใบเสนอราคา buyer block. */
+  buyerTaxId?: string;
+  /** Registered company address (juristic) — seeds the ใบเสนอราคา buyer block. */
+  buyerAddress?: string;
+  /** True = juristic → ใบเสนอราคา defaults the นิติบุคคล/WHT-1% toggle ON. */
+  buyerIsJuristic?: boolean;
+  /** Customer phone — seeds the ใบเสนอราคา buyer phone. */
+  buyerPhone?: string;
   matrix: CustomerRateMatrix;
   /** tb_users.userComparison==1 — ค่าเทียบ (CPS) is currently ON. */
   comparisonEnabled?: boolean;
@@ -375,7 +387,17 @@ export function CustomerRateEditor({
         )}
 
         {/* ใบเสนอราคา */}
-        {tab === "quote" && <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} />}
+        {tab === "quote" && (
+          <QuoteTab
+            customerName={customerName}
+            userid={userid}
+            comparisonValue={comparisonValue}
+            buyerTaxId={buyerTaxId}
+            buyerAddress={buyerAddress}
+            buyerIsJuristic={buyerIsJuristic}
+            buyerPhone={buyerPhone}
+          />
+        )}
 
         {/* Info + cost floor (ultra can edit the floor inline here) */}
         {tab === "info" && (

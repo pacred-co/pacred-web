@@ -87,6 +87,8 @@ export function QuoteCard({ model }: { model: QuoteModel }) {
               <span className="text-slate-500">ใช้ได้ถึง</span><span>{model.validUntil}</span>
               <span className="text-slate-500">ลูกค้า</span><span className="font-semibold">{model.buyerName || "—"}{model.juristic ? " (นิติบุคคล)" : ""}</span>
               {model.customerCode && <><span className="text-slate-500">รหัสลูกค้า</span><span className="font-mono font-semibold">{model.customerCode}</span></>}
+              {model.buyerTaxId && <><span className="text-slate-500">เลขผู้เสียภาษี</span><span className="font-mono font-semibold">{model.buyerTaxId}</span></>}
+              {model.buyerAddress && <><span className="text-slate-500">ที่อยู่</span><span className="whitespace-pre-line">{model.buyerAddress}</span></>}
               {(model.buyerPhone || model.salesName) && <><span className="text-slate-500">ติดต่อ</span><span>{model.salesName || "—"} {model.salesTel ? `· ${model.salesTel}` : ""}</span></>}
             </div>
           </div>
@@ -214,6 +216,8 @@ export function buildQuoteText(m: QuoteModel): string {
   L.push(`ใบเสนอราคา — PACRED (${m.refNo}) · วันที่ ${m.dateLabel} · ใช้ได้ถึง ${m.validUntil}`);
   L.push(`เรียน: ${m.buyerName || "ลูกค้า"}${m.juristic ? " (นิติบุคคล)" : ""}`);
   if (m.customerCode) L.push(`รหัสลูกค้า: ${m.customerCode}`);
+  if (m.buyerTaxId) L.push(`เลขผู้เสียภาษี: ${m.buyerTaxId}`);
+  if (m.buyerAddress) L.push(`ที่อยู่: ${m.buyerAddress}`);
   L.push(m.packageLabel);
   L.push("");
   if (m.view === "compare") {
@@ -314,6 +318,8 @@ table{width:100%;border-collapse:collapse}small{font-size:8px;color:#777}
       <tr><td class="mut">วันที่</td><td>${esc(m.dateLabel)}</td></tr><tr><td class="mut">ใช้ได้ถึง</td><td>${esc(m.validUntil)}</td></tr>
       <tr><td class="mut">ลูกค้า</td><td class="b">${esc(m.buyerName || "—")}${m.juristic ? " (นิติบุคคล)" : ""}</td></tr>
       ${m.customerCode ? `<tr><td class="mut">รหัสลูกค้า</td><td class="mono b">${esc(m.customerCode)}</td></tr>` : ""}
+      ${m.buyerTaxId ? `<tr><td class="mut">เลขผู้เสียภาษี</td><td class="mono b">${esc(m.buyerTaxId)}</td></tr>` : ""}
+      ${m.buyerAddress ? `<tr><td class="mut">ที่อยู่</td><td>${esc(m.buyerAddress)}</td></tr>` : ""}
       <tr><td class="mut">ติดต่อ</td><td>${esc(m.salesName || "—")} ${m.salesTel ? "· " + esc(m.salesTel) : ""}</td></tr></table></div>
   </div>
   <div class="mut" style="font-size:10px;font-weight:700;color:#b30000;margin-bottom:4px">${esc(m.packageLabel)}</div>

@@ -68,6 +68,7 @@ import {
   AddressManager,
 } from "./profile-sections";
 import { parseCorporateDocs } from "@/lib/admin/corporate-docs";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 
 type URow = {
@@ -412,8 +413,19 @@ export async function renderLegacyCustomerView(
   const forwarderRows = forwarderRes.data;
   const shopRows = shopRes.data;
   const yuanRows = yuanRes.data;
-  const isJuristic = u.userCompany === "1";
-  const fullName = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+  // Identity for the header — juristic-aware via the shared resolver (2026-07-03).
+  // For a company the H2 shows the COMPANY name (was leaking the contact person
+  // "PEA PEA" — company only appeared as a static "ลูกค้า นิติบุคคล" tag). The
+  // person stays as the "ผู้ติดต่อ" sub-line. Personal customers unchanged.
+  const identity = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp,
+  });
+  const isJuristic = identity.isJuristic;
+  const fullName = identity.name || "—";
+  const contactPersonName = identity.personName;
   const active = u.userActive ?? "1";
   const statusCfg = STATUS_ACTIVE_CFG[active] ?? {
     label: `status ${active}`,
@@ -599,6 +611,15 @@ export async function renderLegacyCustomerView(
                 ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
               </span>
             </div>
+            {/* Juristic (นิติบุคคล) — the H2 above is now the COMPANY name; show the
+                contact person + tax id here so staff still see who they talk to.
+                (Personal customers: nothing extra — the H2 already is the person.) */}
+            {isJuristic && (contactPersonName || identity.taxId) ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
+                {contactPersonName ? <span>ผู้ติดต่อ: <span className="text-foreground font-medium">{contactPersonName}</span></span> : null}
+                {identity.taxId ? <span>เลขผู้เสียภาษี: <span className="text-foreground font-mono">{identity.taxId}</span></span> : null}
+              </div>
+            ) : null}
             {/* Meta row — รหัสลูกค้า + สถานะ + Sales/CS tags inline
                 (legacy "Sale : admin_xxx แก้ไข" badge → compact editable pills). */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -640,6 +661,10 @@ export async function renderLegacyCustomerView(
             <CustomerRateEditor
               userid={u.userID}
               customerName={fullName}
+              buyerTaxId={identity.taxId}
+              buyerAddress={identity.registeredAddress}
+              buyerIsJuristic={isJuristic}
+              buyerPhone={u.userTel ?? ""}
               matrix={rateMatrix}
               comparisonEnabled={comparisonEnabled}
               comparisonValue={comparisonValue}
@@ -688,6 +713,14 @@ export async function renderLegacyCustomerView(
                 </div>
               </div>
             </div>
+            {/* Registered company address (นิติบุคคล) — the address tax docs use.
+                Kept SEPARATE from the delivery address below (do not conflate). */}
+            {isJuristic && identity.registeredAddress ? (
+              <div className="pt-1 border-b border-border/40 pb-2">
+                <span className="text-muted">ที่อยู่จดทะเบียน (บริษัท · ออกใบกำกับ)</span>
+                <p className="mt-1 text-foreground">{identity.registeredAddress}</p>
+              </div>
+            ) : null}
             <div className="pt-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">ที่อยู่จัดส่ง (หลัก)</span>
