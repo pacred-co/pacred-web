@@ -16,14 +16,13 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchMomoLiveListFresh } from "@/lib/integrations/momo-web/client";
+import { fetchMomoLiveAllInOneFresh } from "@/lib/integrations/momo-web/client";
 import type { MomoLiveParcel } from "@/lib/integrations/momo-web/types";
 import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
 import {
   classifyDiscovery,
   normalizeMemberCode,
   buildImportTrackRow,
-  DISCOVERY_BOARDS,
   type DiscoveryCandidate,
 } from "@/lib/admin/momo-live-discovery-plan";
 
@@ -114,41 +113,36 @@ async function addPartnerFeedTrackings(
 }
 
 /**
- * Run the discovery scan. Best-effort per board (a failed board is recorded, not fatal);
- * if the MOMO login itself fails, `scrapeError` is set and `rows` is empty.
- */
-/**
- * Scrape the discovery boards once (fresh MOMO login · single-session) → deduped
- * parcels + per-board counts + a scrape error (login/network) if any board failed.
+ * Scrape EVERY MOMO Live parcel in ONE call (fresh login · `status=all`) — the complete
+ * mirror across all statuses. This replaces the old per-board loop (ภูม 2026-07-03:
+ * "เอาของทุกสถานะมาเลย"); the per-board params were partly wrong (done/sending/wait_pay
+ * returned 0) so `all` is the only way to see every board. Deduped by tracking.
  */
 async function scrapeDiscoveryBoards(
-  sizePerBoard: number,
+  size: number,
 ): Promise<{ parcels: MomoLiveParcel[]; boards: Array<{ board: string; parcels: number }>; scrapeError: string | null }> {
-  const byTracking = new Map<string, MomoLiveParcel>();
-  const boards: Array<{ board: string; parcels: number }> = [];
-  let scrapeError: string | null = null;
-  for (const board of DISCOVERY_BOARDS) {
-    try {
-      const parcels = await fetchMomoLiveListFresh(board, sizePerBoard);
-      boards.push({ board, parcels: parcels.length });
-      for (const p of parcels) {
-        const t = (p.tracking ?? "").trim();
-        if (t && !byTracking.has(t)) byTracking.set(t, p);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "scrape failed";
-      console.error("[momo-live-discovery] board scrape failed", { board, msg });
-      // first failure = likely a login failure → surface it (the whole scan is degraded)
-      scrapeError = scrapeError ?? msg;
-      boards.push({ board, parcels: 0 });
+  try {
+    const parcels = await fetchMomoLiveAllInOneFresh(size);
+    const byTracking = new Map<string, MomoLiveParcel>();
+    for (const p of parcels) {
+      const t = (p.tracking ?? "").trim();
+      if (t && !byTracking.has(t)) byTracking.set(t, p);
     }
+    return {
+      parcels: Array.from(byTracking.values()),
+      boards: [{ board: "all", parcels: byTracking.size }],
+      scrapeError: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "scrape failed";
+    console.error("[momo-live-discovery] all-status scrape failed", { msg });
+    return { parcels: [], boards: [{ board: "all", parcels: 0 }], scrapeError: msg };
   }
-  return { parcels: Array.from(byTracking.values()), boards, scrapeError };
 }
 
 export async function runMomoLiveDiscovery(
   admin: SupabaseClient,
-  sizePerBoard = 500,
+  sizePerBoard = 1000,
 ): Promise<MomoLiveDiscoveryResult> {
   // ── 1. Scrape the discovery boards (dedup by exact tracking) ──
   const { parcels, boards, scrapeError } = await scrapeDiscoveryBoards(sizePerBoard);
@@ -267,7 +261,7 @@ export async function runMomoLiveDiscovery(
  * parcels map through (existence is enforced per-commit by existingForwarderForBase).
  */
 export async function scrapeLiveCandidatesByBase(
-  sizePerBoard = 500,
+  sizePerBoard = 1000,
 ): Promise<{ byBase: Map<string, DiscoveryCandidate>; scrapeError: string | null }> {
   const { parcels, scrapeError } = await scrapeDiscoveryBoards(sizePerBoard);
   const byBase = new Map<string, DiscoveryCandidate>();
