@@ -639,7 +639,7 @@ export default async function ServiceOrderAddPage({
                                             } else if (cover !== "") {
                                               hCover = legacyMemberUrl(`images/shops/${cover}`);
                                             } else {
-                                              hCover = "/legacy/pcs/shops/default.png";
+                                              hCover = "/images/no-cover.svg";
                                             }
                                             const promoId = promoMap.get(row.hno);
                                             return (
@@ -821,7 +821,7 @@ export default async function ServiceOrderAddPage({
                                         } else if (cover !== "") {
                                           hCover = legacyMemberUrl(`images/shops/${cover}`);
                                         } else {
-                                          hCover = "/legacy/pcs/shops/default.png";
+                                          hCover = "/images/no-cover.svg";
                                         }
                                         const promoId = promoMap.get(row.hno);
                                         return (

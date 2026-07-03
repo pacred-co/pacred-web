@@ -23,13 +23,20 @@
  * shape so every consumer (the hard-block in customer-rate.ts + the rate-editor
  * grid / InfoTab) reads it identically.
  *
- * The KG floor is NOT overridable here (owner only spoke to the CBM rate) — it
- * stays on `KG_FLOOR_LEGACY` inside the constant. The projected matrix keeps
- * the constant's `kg` so consumers read KG unchanged.
+ * The KG floor is now ALSO overridable (owner 2026-07-03: "ต่ำสุด รถ 17 เรือ 7")
+ * — the exact same pattern in a twin key:
+ *
+ *   pricing.sell_rate_floor_kg
+ *     = { "1": <รถ>, "2": <เรือ> }   (per-transport flat, shared BOTH warehouses)
+ *
+ * The owner gave ONE value per transport (not per warehouse), so the KG stored
+ * shape is flat by transport and applied to both warehouses. `getSellFloorKg()`
+ * falls back to the `KG_FLOOR_DEFAULT` constant (รถ 17 · เรือ 7) cell-by-cell, so
+ * NO migration is needed — the row is created on the first ultra-save.
  *
  * Server-only (reads business_config) — never import from a Client Component.
- * The rate-editor (a client component) receives the resolved CBM floor as a
- * prop from the server page.
+ * The rate-editor (a client component) receives the resolved CBM + KG floors as
+ * props from the server page.
  */
 
 import "server-only";
@@ -37,6 +44,7 @@ import "server-only";
 import { getBusinessConfig } from "@/lib/business-config";
 import {
   COST_FLOOR,
+  KG_FLOOR_DEFAULT,
   type ProductId,
   type RateMatrix,
   type TransportId,
@@ -46,9 +54,16 @@ import {
 /** The business_config json key holding the per-warehouse × transport CBM floor. */
 export const SELL_FLOOR_CBM_KEY = "pricing.sell_rate_floor_cbm";
 
+/** The business_config json key holding the per-transport (flat) KG floor. */
+export const SELL_FLOOR_KG_KEY = "pricing.sell_rate_floor_kg";
+
 /** Sane bounds for a CBM floor value (฿/คิว) — guards the ultra edit. */
 export const SELL_FLOOR_MIN = 1000;
 export const SELL_FLOOR_MAX = 99999;
+
+/** Sane bounds for a KG floor value (฿/กก.) — guards the ultra edit. */
+export const SELL_FLOOR_KG_MIN = 1;
+export const SELL_FLOOR_KG_MAX = 999;
 
 /**
  * The stored shape: warehouse → transport → flat ฿/คิว value. Product type is
@@ -101,22 +116,66 @@ export async function getSellFloorCbm(): Promise<SellFloorCbmConfig> {
   return out;
 }
 
+// ── KG floor twin (per-transport flat, shared both warehouses) ─────────────
+
 /**
- * Project the resolved flat CBM floor back into the full `RateMatrix`-shaped
- * `COST_FLOOR` map (CBM populated per warehouse from config, KG kept from the
- * constant). This is what the hard-block + the rate-editor consume so the
- * existing `floor[wh].cbm[t][p]` / `floor[wh].kg[t][p]` access pattern is
- * unchanged — only the CBM SOURCE swaps from constant → resolved.
+ * The stored KG shape: transport → flat ฿/กก. value. Product type is NOT
+ * stored (one value for all 4 products), and warehouse is NOT stored either
+ * (owner gave one value per transport, shared both warehouses).
+ */
+export type SellFloorKgConfig = Record<TransportId, number>;
+
+/** Read one flat KG floor cell straight from the constant (the default source). */
+function constKg(t: TransportId): number {
+  // The constant stores the same value for every product type; read product "1".
+  return Number(KG_FLOOR_DEFAULT[t]["1"] ?? 0);
+}
+
+/** The constant's KG floor expressed in the stored config shape (the fallback). */
+export function defaultSellFloorKg(): SellFloorKgConfig {
+  return { "1": constKg("1"), "2": constKg("2") };
+}
+
+/** True if a value is a usable, in-bounds KG floor number. */
+function validKgFloor(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= SELL_FLOOR_KG_MIN && v <= SELL_FLOOR_KG_MAX;
+}
+
+/**
+ * Resolve the live KG floor config: the `pricing.sell_rate_floor_kg`
+ * business_config key, falling back to the `KG_FLOOR_DEFAULT` constant for any
+ * cell that is absent / out-of-range / malformed. NEVER throws.
+ */
+export async function getSellFloorKg(): Promise<SellFloorKgConfig> {
+  const stored = await getBusinessConfig<unknown>(SELL_FLOOR_KG_KEY, null);
+  if (!stored || typeof stored !== "object") return defaultSellFloorKg();
+
+  const out = defaultSellFloorKg();
+  for (const t of ["1", "2"] as TransportId[]) {
+    const v = (stored as Record<string, unknown>)[t];
+    if (validKgFloor(v)) out[t] = v;
+  }
+  return out;
+}
+
+/**
+ * Project the resolved flat CBM + KG floors back into the full `RateMatrix`-
+ * shaped `COST_FLOOR` map (CBM per warehouse from config; KG flat by transport,
+ * shared both warehouses, from config). This is what the hard-block + the
+ * rate-editor consume so the existing `floor[wh].cbm[t][p]` / `floor[wh].kg[t][p]`
+ * access pattern is unchanged — only the SOURCE swaps from constant → resolved.
  */
 export function buildResolvedFloor(
   cbm: SellFloorCbmConfig,
+  kg: SellFloorKgConfig,
 ): Record<WarehouseId, RateMatrix> {
   const flat = (v: number): Record<ProductId, number | null> => ({
     "1": v, "2": v, "3": v, "4": v,
   });
+  // KG is flat by transport, applied to both warehouses (owner: one value/mode).
+  const kgMatrix: RateMatrix["kg"] = { "1": flat(kg["1"]), "2": flat(kg["2"]) };
   const forWarehouse = (wh: WarehouseId): RateMatrix => ({
-    // KG floor stays on the constant (owner spoke only to CBM).
-    kg: COST_FLOOR[wh].kg,
+    kg: kgMatrix,
     cbm: {
       "1": flat(cbm[wh]["1"]),
       "2": flat(cbm[wh]["2"]),
@@ -125,7 +184,8 @@ export function buildResolvedFloor(
   return { "1": forWarehouse("1"), "2": forWarehouse("2") };
 }
 
-/** Convenience: resolve + project to the full `COST_FLOOR`-shaped matrix. */
+/** Convenience: resolve BOTH cbm + kg + project to the full `COST_FLOOR`-shaped matrix. */
 export async function getResolvedFloor(): Promise<Record<WarehouseId, RateMatrix>> {
-  return buildResolvedFloor(await getSellFloorCbm());
+  const [cbm, kg] = await Promise.all([getSellFloorCbm(), getSellFloorKg()]);
+  return buildResolvedFloor(cbm, kg);
 }

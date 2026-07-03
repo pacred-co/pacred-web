@@ -49,6 +49,7 @@ import {
   suffixOf,
   type BoxDetailInput,
   type AggregateRowInput,
+  type BoxSplitOptions,
   type SplitSkipReason,
 } from "./split-box-rows-plan";
 
@@ -56,13 +57,29 @@ import {
  *  #1; the plan's guard is defence #2, the WHERE `.in('fstatus', …)` is defence #3). */
 const FILLABLE_FSTATUS: string[] = ["1", "2", "3", "4"];
 
+/**
+ * SHIPMENT-LEVEL money columns — they belong to the WHOLE shipment (once), NOT per box.
+ * They STAY on the ANCHOR (the UPDATE never touches them → preserved) and are set to 0 on
+ * every new sibling (via CLONE_OMIT below), so Σ across the siblings === the aggregate.
+ * (Cloning them onto N siblings would MULTIPLY the bill/cost — the double-count trap.)
+ * Prod check 2026-07-03: all 27 multi-box aggregates have otherCharges=0, but 5 carry a
+ * non-zero fcosttotalprice → this anchor-only rule is load-bearing for cost integrity.
+ */
+const SHIPMENT_LEVEL_MONEY: string[] = [
+  "ftransportprice", "fpriceupdate", "fshippingservice",
+  "pricecrate", "ftransportpricechnthb", "priceother", "fdiscount",
+  "fcosttotalprice",
+];
+
 /** Metric/price columns we set per-sibling — everything else is CLONED from the aggregate. */
 const CLONE_OMIT = new Set<string>([
   "id",
   // per-box metrics (set from the box)
   "ftrackingchn", "fweight", "fvolume", "fwidth", "flength", "fheight", "famount",
-  // price columns (reset to 0 → re-priced from the box's own คิว)
+  // per-box SELL freight (reset to 0 + re-priced for an unpriced split · preserved for a priced split)
   "ftotalprice", "frefrate", "frefprice",
+  // shipment-level money — anchor keeps it, siblings get 0 (never multiply)
+  ...SHIPMENT_LEVEL_MONEY,
 ]);
 
 export type BoxSplitResult = {
@@ -134,6 +151,7 @@ export async function splitAggregatedMomoBoxRows(
   admin: SupabaseClient,
   baseTrackings: readonly string[],
   result: BoxSplitResult = emptyBoxSplitResult(),
+  opts: BoxSplitOptions = {},
 ): Promise<BoxSplitResult> {
   const bases = Array.from(
     new Set(baseTrackings.map((t) => baseOf((t ?? "").trim())).filter(Boolean)),
@@ -216,8 +234,11 @@ export async function splitAggregatedMomoBoxRows(
       reforder: String(aggregate.reforder ?? ""),
       ftotalprice: n(aggregate.ftotalprice as number | string | null),
       famount: n(aggregate.famount as number | string | null),
+      famountcount: aggregate.famountcount as string | null,
       fweight: n(aggregate.fweight as number | string | null),
       fvolume: n(aggregate.fvolume as number | string | null),
+      frefrate: aggregate.frefrate as number | string | null,
+      frefprice: aggregate.frefprice as number | string | null,
     };
     const boxInputs: BoxDetailInput[] = boxRows.map((b) => ({
       boxTracking: (b.box_tracking ?? "").trim(),
@@ -229,10 +250,25 @@ export async function splitAggregatedMomoBoxRows(
       quantity: n(b.quantity),
     }));
 
-    const decision = planBoxRowSplit(aggInput, boxInputs);
+    const decision = planBoxRowSplit(aggInput, boxInputs, { allowPriced: opts.allowPriced });
     if (!decision.split) {
       result.skipped[decision.reason] += 1;
       continue;
+    }
+
+    // 💰 PRICED-split defence: the plan forces Σ(sibling ftotalprice) === the aggregate,
+    // but VERIFY it here before writing a single row — a mismatch aborts this base (leaves
+    // it intact) rather than risk a bill that drifts by even a satang.
+    if (decision.priced) {
+      const planSum = decision.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+      const drift = Math.abs(Math.round(planSum * 100) / 100 - Math.round(aggInput.ftotalprice * 100) / 100);
+      if (drift > 0.005) {
+        console.error("[splitAggregatedMomoBoxRows] priced-split Σ drift — ABORT base", {
+          base, planSum, aggregate: aggInput.ftotalprice, drift,
+        });
+        result.errors.push({ scope: `priced-drift:${base}`, message: `Σ ${planSum} ≠ ${aggInput.ftotalprice}` });
+        continue;
+      }
     }
 
     // ── 4. Apply the plan ──
@@ -243,11 +279,56 @@ export async function splitAggregatedMomoBoxRows(
     }
 
     const touchedIds: number[] = [];
-    let stepFailed = false;
 
-    // 4a. Anchor — UPDATE the aggregate in place (keep id + bare base tracking).
+    // 💰 ORDER = SIBLINGS-FIRST, then ANCHOR, with a compensating DELETE if the anchor fails.
+    // There is no cross-statement DB txn from the JS client, so we order the writes so NO partial
+    // failure can under-bill: the aggregate's money is reduced (anchor UPDATE) ONLY AFTER the
+    // siblings that carry the rest are safely inserted. If the anchor UPDATE then fails/0-rows,
+    // we DELETE the just-inserted siblings → the aggregate is left WHOLE (its full price intact).
+    // (Money review 2026-07-03 — the old anchor-first order silently lost the siblings' share on
+    // an insert failure, and a re-run re-split the reduced anchor. The backfill uses a real txn.)
     const anchor = decision.rows.find((r) => r.isAnchor)!;
-    const { data: updRows, error: updErr } = await admin
+    const anchorPrice = decision.priced
+      ? { ftotalprice: Number(anchor.ftotalprice ?? 0), frefrate: anchor.frefrate ?? 0, frefprice: anchor.frefprice ?? "0" }
+      : { ftotalprice: 0, frefrate: 0, frefprice: "0" };
+
+    // 4a. INSERT siblings (boxes 2..N) FIRST. Clone non-money fields, set each box's own metrics,
+    // FORCE every shipment-level money column to 0 (anchor keeps them · no multiply), set the
+    // freight: 0 for an unpriced split (re-priced below) · the PRESERVED share for a priced split.
+    const zeroShipmentMoney = Object.fromEntries(SHIPMENT_LEVEL_MONEY.map((k) => [k, 0]));
+    const newRows = decision.rows
+      .filter((r) => !r.isAnchor)
+      .map((r) => ({
+        ...template,
+        ...zeroShipmentMoney,
+        ftrackingchn: r.ftrackingchn,
+        fweight: r.fweight,
+        fvolume: r.fvolume,
+        fwidth: r.fwidth,
+        flength: r.flength,
+        fheight: r.fheight,
+        famount: r.famount,
+        ftotalprice: decision.priced ? Number(r.ftotalprice ?? 0) : 0,
+        frefrate: decision.priced ? (r.frefrate ?? 0) : 0,
+        frefprice: decision.priced ? (r.frefprice ?? "0") : "0",
+        adminidupdate: "sys-split",
+      }));
+    const insertedIds: number[] = [];
+    if (newRows.length > 0) {
+      const { data: ins, error: insErr } = await admin.from("tb_forwarder").insert(newRows).select("id");
+      if (insErr) {
+        // Siblings failed → the aggregate is UNTOUCHED (whole) → clean skip, no money moved.
+        console.error("[splitAggregatedMomoBoxRows] sibling insert failed (aggregate intact)", {
+          code: insErr.code, message: insErr.message, base, count: newRows.length,
+        });
+        result.errors.push({ scope: `siblings:${base}`, message: `${insErr.code} ${insErr.message}` });
+        continue;
+      }
+      for (const row of (ins ?? []) as Array<{ id: number }>) insertedIds.push(row.id);
+    }
+
+    // 4b. UPDATE the anchor (keep id + bare base + shipment-level money) → reduce to its share.
+    let updateQ = admin
       .from("tb_forwarder")
       .update({
         fweight: anchor.fweight,
@@ -256,81 +337,63 @@ export async function splitAggregatedMomoBoxRows(
         flength: anchor.flength,
         fheight: anchor.fheight,
         famount: anchor.famount,
-        // reset price so the re-price below computes from the box's own คิว.
-        ftotalprice: 0,
-        frefrate: 0,
-        frefprice: "0",
+        ...anchorPrice,
         adminidupdate: "sys-split",
       })
       .eq("id", aggInput.id)
-      // TOCTOU: only if STILL unbilled AND STILL the aggregate (famount unchanged) AND
-      // STILL unpriced — a row that raced into billing / got split / got priced → 0 rows.
+      // TOCTOU: still unbilled AND still the aggregate (famount unchanged) — else 0 rows.
       .in("fstatus", FILLABLE_FSTATUS)
-      .eq("famount", aggInput.famount)
-      .lte("ftotalprice", 0)
-      .select("id");
-    if (updErr) {
-      console.error("[splitAggregatedMomoBoxRows] anchor update failed", {
-        code: updErr.code, message: updErr.message, base, id: aggInput.id,
-      });
-      result.errors.push({ scope: `anchor:${base}`, message: `${updErr.code} ${updErr.message}` });
-      continue;
-    }
-    if (!updRows || updRows.length === 0) {
-      // Raced (billed / already split / priced between read + write) → skip, not an error.
-      result.skipped.already_split += 1;
-      continue;
-    }
-    touchedIds.push(aggInput.id);
+      .eq("famount", aggInput.famount);
+    // Price-race guard: UNPRICED requires still-unpriced (≤0); PRICED requires price UNCHANGED.
+    updateQ = decision.priced ? updateQ.eq("ftotalprice", aggInput.ftotalprice) : updateQ.lte("ftotalprice", 0);
+    const { data: updRows, error: updErr } = await updateQ.select("id");
 
-    // 4b. New siblings — INSERT boxes 2..N (clone + own metrics + reset price).
-    const newRows = decision.rows
-      .filter((r) => !r.isAnchor)
-      .map((r) => ({
-        ...template,
-        ftrackingchn: r.ftrackingchn,
-        fweight: r.fweight,
-        fvolume: r.fvolume,
-        fwidth: r.fwidth,
-        flength: r.flength,
-        fheight: r.fheight,
-        famount: r.famount,
-        ftotalprice: 0,
-        frefrate: 0,
-        frefprice: "0",
-        adminidupdate: "sys-split",
-      }));
-    if (newRows.length > 0) {
-      const { data: ins, error: insErr } = await admin
-        .from("tb_forwarder")
-        .insert(newRows)
-        .select("id");
-      if (insErr) {
-        console.error("[splitAggregatedMomoBoxRows] sibling insert failed", {
-          code: insErr.code, message: insErr.message, base, count: newRows.length,
-        });
-        result.errors.push({ scope: `siblings:${base}`, message: `${insErr.code} ${insErr.message}` });
-        stepFailed = true;
-      } else {
-        for (const row of (ins ?? []) as Array<{ id: number }>) touchedIds.push(row.id);
-        result.siblingsCreated += (ins ?? []).length;
-      }
-    }
-
-    if (!stepFailed) result.split += 1;
-
-    // ── 5. Re-price every touched row from its OWN คิว (best-effort · money-isolated) ──
-    // computeAndFillForwarderImportRate writes ONLY frefrate/frefprice/ftotalprice and
-    // never persists a silent ฿0 — so a rate-missing box stays at 0 for an admin to fill.
-    for (const id of touchedIds) {
-      try {
-        const rr = await computeAndFillForwarderImportRate(admin, id);
-        if (rr.wrote) result.repriced += 1;
-        else if (!rr.ok) {
-          console.error("[splitAggregatedMomoBoxRows] re-price failed", { id, reason: rr.reason });
+    if (updErr || !updRows || updRows.length === 0) {
+      // Anchor failed/raced → COMPENSATE: delete the just-inserted siblings so the aggregate is
+      // left WHOLE (full price on the untouched anchor). No under-bill, no over-bill.
+      if (insertedIds.length > 0) {
+        const { error: delErr } = await admin.from("tb_forwarder").delete().in("id", insertedIds);
+        if (delErr) {
+          // Double-failure — the ONLY over-count window. Log LOUD for a human to reconcile.
+          console.error("[splitAggregatedMomoBoxRows] 🔴 CRITICAL: sibling rollback FAILED — over-count risk", {
+            base, insertedIds, delCode: delErr.code, delMessage: delErr.message,
+          });
+          result.errors.push({ scope: `rollback:${base}`, message: `rollback failed: ${delErr.message}` });
         }
-      } catch (e) {
-        console.error("[splitAggregatedMomoBoxRows] re-price threw", { id, error: e instanceof Error ? e.message : String(e) });
+      }
+      if (updErr) {
+        console.error("[splitAggregatedMomoBoxRows] anchor update failed (siblings rolled back)", {
+          code: updErr.code, message: updErr.message, base, id: aggInput.id,
+        });
+        result.errors.push({ scope: `anchor:${base}`, message: `${updErr.code} ${updErr.message}` });
+      } else {
+        result.skipped.already_split += 1; // raced (billed / split / re-priced)
+      }
+      continue;
+    }
+
+    touchedIds.push(aggInput.id, ...insertedIds);
+    result.siblingsCreated += insertedIds.length;
+    result.split += 1;
+
+    // ── 5. Re-price every touched row from its OWN คิว (UNPRICED split ONLY) ──
+    // For a PRICED split we PRESERVED the frozen per-box share (Σ === aggregate · the
+    // customer's bill is byte-identical) — re-pricing it at the live rate would MOVE money
+    // (rate drift · a per-box ค่าเทียบ kg/cbm flip), so we skip it. The row is now editable:
+    // if MOMO's dims were wrong, staff edit a box → THAT re-prices just that box (intended).
+    // computeAndFillForwarderImportRate writes ONLY frefrate/frefprice/ftotalprice and never
+    // persists a silent ฿0 — so an unpriced rate-missing box stays 0 for an admin to fill.
+    if (!decision.priced) {
+      for (const id of touchedIds) {
+        try {
+          const rr = await computeAndFillForwarderImportRate(admin, id);
+          if (rr.wrote) result.repriced += 1;
+          else if (!rr.ok) {
+            console.error("[splitAggregatedMomoBoxRows] re-price failed", { id, reason: rr.reason });
+          }
+        } catch (e) {
+          console.error("[splitAggregatedMomoBoxRows] re-price threw", { id, error: e instanceof Error ? e.message : String(e) });
+        }
       }
     }
   }

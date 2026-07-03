@@ -63,7 +63,11 @@ import {
   EditDateCloseField,
   EditCoverField,
   EditTaxDocModeField,
+  EditDeliveryAddressField,
+  SplitBoxesButton,
 } from "./forwarder-inline-edits";
+// ภูม 2026-07-03 — box-split eligibility (แตกกล่อง MOMO เป็นแถวแยก · money-neutral).
+import { baseOf as baseOfTracking, suffixOf as suffixOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 // 2026-06-11 (Lane B · doc-choice visibility) — show the customer's tax-doc
 // choice (ใบกำกับ/ใบขน/ไม่รับเอกสาร) + the juristic-WHT signal at a glance.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
@@ -456,6 +460,67 @@ async function tryRenderTbForwarder(
     } else {
       // No saved tb_address → try the registered company address (juristic).
       deliveryAddrCorp = await loadJuristicCorporateAddress(admin, r.userid);
+    }
+  }
+
+  // ── ภูม 2026-07-03: saved-address list for the inline "แก้ไขที่อยู่จัดส่ง" picker ──
+  // Staff can re-pick from the customer's saved tb_address (like the ship-by edit).
+  // Only relevant for a delivery carrier (self-pickup has no delivery address). The
+  // pick action (adminPickForwarderAddress) re-verifies ownership + snapshots.
+  const savedAddresses: { addressID: number; label: string; province: string }[] = [];
+  if (!isSelfPickup) {
+    const { data: addrList, error: addrListErr } = await admin
+      .from("tb_address")
+      .select("addressid, addressname, addresslastname, addressprovince, addresszipcode")
+      .eq("userid", r.userid)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: true });
+    if (addrListErr) {
+      console.error("[forwarder detail] saved-address list failed", { code: addrListErr.code, userid: r.userid });
+    }
+    for (const a of (addrList ?? []) as Array<{
+      addressid: number; addressname: string | null; addresslastname: string | null;
+      addressprovince: string | null; addresszipcode: string | null;
+    }>) {
+      const province = (a.addressprovince ?? "").trim();
+      const nm = `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim();
+      savedAddresses.push({
+        addressID: a.addressid,
+        province,
+        label: [nm || "(ไม่มีชื่อ)", province || "—", (a.addresszipcode ?? "").trim()].filter(Boolean).join(" · "),
+      });
+    }
+  }
+
+  // ── ภูม 2026-07-03: box-split eligibility (แตกกล่อง MOMO เป็นแถวแยก) ──
+  // A MOMO tracking split into N boxes is ONE aggregate row → staff can't edit a single
+  // box. Show the "แตกกล่อง" button when momo_box_detail knows this base has >1 box AND
+  // this row is the bare-base aggregate with no sibling rows yet AND it's not billed +
+  // not ฝากสั่งซื้อ-linked. The action (adminSplitForwarderBoxes) re-verifies + splits
+  // money-neutrally (the customer's bill is preserved to the satang · coarse check here).
+  let splitBoxCount = 0;
+  let canSplitBoxes = false;
+  {
+    const track = (r.ftrackingchn ?? "").trim();
+    const base = baseOfTracking(track);
+    const isBareBase = base.length > 0 && suffixOfTracking(track) === 0;
+    const notBilled = !["5", "6", "7"].includes((r.fstatus ?? "").trim());
+    const noReforder = (r.reforder ?? "").trim() === "";
+    if (isBareBase && notBilled && noReforder) {
+      const { count: boxCount, error: bcErr } = await admin
+        .from("momo_box_detail")
+        .select("base_tracking", { count: "exact", head: true })
+        .eq("base_tracking", base);
+      if (bcErr) console.error("[forwarder detail] box_detail count failed", { code: bcErr.code, base });
+      splitBoxCount = boxCount ?? 0;
+      if (splitBoxCount > 1) {
+        const { count: sibCount, error: sibErr } = await admin
+          .from("tb_forwarder")
+          .select("id", { count: "exact", head: true })
+          .like("ftrackingchn", `${base}-%`);
+        if (sibErr) console.error("[forwarder detail] sibling count failed", { code: sibErr.code, base });
+        canSplitBoxes = (sibCount ?? 0) === 0; // no suffix sibling yet → not split
+      }
     }
   }
 
@@ -974,6 +1039,7 @@ async function tryRenderTbForwarder(
                   </>
                 )}
               </div>
+              <EditDeliveryAddressField fId={r.id} fshipby={r.fshipby} addresses={savedAddresses} />
             </div>
             <p className="text-foreground"><b className="font-semibold">เลขพัสดุในไทย : </b>{r.ftrackingth ?? "—"}</p>
           </div>
@@ -986,6 +1052,9 @@ async function tryRenderTbForwarder(
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
+            {/* ภูม 2026-07-03: แตกกล่อง MOMO เป็นแถวแยก (money-neutral) — MOMO ส่งหลายกล่อง
+                คนละขนาด แต่รวมเป็นแถวเดียว แก้รายกล่องไม่ได้ → กดแตกเป็น N แถวจริง (ยอดบิลเท่าเดิม). */}
+            {canSplitBoxes && <SplitBoxesButton fId={r.id} boxCount={splitBoxCount} />}
             {/* 2026-06-24 (owner) — เอกสารภาษี ต้อง "เลือกได้ทุกครั้ง · หาที่แก้ง่าย":
                 ดันขึ้นเป็นกล่องเด่น พร้อมหัวข้อชัด แทนที่จะฝังเป็นแถว compact กลางหน้า
                 (เดิม owner หาไม่เจอว่าแก้ตรงไหน). ใช้ adminUpdateForwarderTaxDocMode

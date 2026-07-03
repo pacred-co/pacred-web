@@ -7,6 +7,8 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Search, Truck, Ship, Plane, Check, Home, Anchor, FileText, PackageCheck, Box, ChevronRight, RefreshCw } from "lucide-react";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
+import { forwarderCoverUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "../_shared/cover-thumb";
 import { type ForwarderRow } from "../forwarder-row-view";
 
 // ── Pure helpers (server-safe duplicates of the ones in forwarder-row-view,
@@ -16,19 +18,15 @@ import { type ForwarderRow } from "../forwarder-row-view";
 
 // calPriceForwarderSumCompany — shared in @/lib/forwarder/calc-company-total (imported above).
 
-/** Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437. */
+/**
+ * Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437. Delegates to
+ * the centralized `forwarderCoverUrl()`: the empty fallback is the neutral
+ * Pacred no-cover placeholder (was the "PCS Cargo Shop" logo — brand leak the
+ * owner flagged 2026-07-03), and a `pcscargo.co.th` cover is re-pointed at the
+ * Supabase mirror instead of leaking the legacy host.
+ */
 function convertIMGCHN(url: string | null, size: string): string {
-  if (!url || url === "") return "/legacy/pcs/shops/default.png";
-  let u = url
-    .replace("?x-oss-process=style/alsy", "")
-    .replace("?x-oss-process=style/tbsy", "")
-    .replace("_250x250.jpg", "");
-  if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) return u;
-    return u + size;
-  }
-  u = `https://pcscargo.co.th/member/images/shops/${u}`;
-  return u;
+  return forwarderCoverUrl(url, size);
 }
 
 function dmy(ts: string | null): string {
@@ -1017,10 +1015,8 @@ async function ContainerItemRow({
     <div className="bg-white dark:bg-surface border border-border rounded-xl p-3 grid grid-cols-[72px_minmax(0,1.3fr)_repeat(4,minmax(0,.7fr))_minmax(0,.9fr)_auto] md:items-center gap-3 md:gap-4 shadow-sm">
       {/* Thumbnail */}
       <a href={convertIMGCHN(row.fcover, "")} className="image-popup-vertical-fit block shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <CoverThumb
           src={convertIMGCHN(row.fcover, "_80x80.jpg")}
-          alt=""
           className="w-[72px] h-[72px] rounded-lg object-cover border border-border bg-surface-alt"
           width={72}
           height={72}

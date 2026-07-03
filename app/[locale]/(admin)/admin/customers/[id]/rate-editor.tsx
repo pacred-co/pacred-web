@@ -19,9 +19,8 @@ import { Button } from "@/components/ui/button";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { adminSetUserComparison, adminRemoveUserComparison } from "@/actions/admin/users-pricing";
-import { adminUpdateSellFloorCbm } from "@/actions/admin/sell-floor";
+import { adminUpdateSellFloorCbm, adminUpdateSellFloorKg } from "@/actions/admin/sell-floor";
 import {
-  COST_FLOOR,
   DEFAULT_START,
   PRODUCTS,
   TRANSPORTS,
@@ -30,7 +29,7 @@ import {
   type RateMatrix,
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
-import type { SellFloorCbmConfig } from "@/lib/admin/sell-floor-config";
+import type { SellFloorCbmConfig, SellFloorKgConfig } from "@/lib/admin/sell-floor-config";
 import { QuoteTab } from "./quote-tab";
 import { QuoteHistoryTab } from "./quote-history-tab";
 
@@ -41,17 +40,24 @@ type Measure = "kg" | "cbm";
 // client component).
 const FLOOR_MIN = 1000;
 const FLOOR_MAX = 99999;
+const KG_FLOOR_MIN = 1;
+const KG_FLOOR_MAX = 999;
 
 /**
- * Project the resolved flat CBM floor (sellFloorCbm prop) + the constant KG
- * floor into the full `COST_FLOOR`-shaped matrix the grid/InfoTab/belowFloor
- * code reads. Only the CBM source swaps (config || constant); KG stays on the
- * constant. Mirrors buildResolvedFloor() in the server resolver.
+ * Project the resolved flat CBM floor (sellFloorCbm) + the resolved flat KG
+ * floor (sellFloorKg · per-transport, shared both warehouses) into the full
+ * `COST_FLOOR`-shaped matrix the grid/InfoTab/belowFloor code reads. Both
+ * sources swap to the resolved config || constant. Mirrors buildResolvedFloor()
+ * in the server resolver.
  */
-function buildFloorMatrix(cbm: SellFloorCbmConfig): Record<WarehouseId, RateMatrix> {
+function buildFloorMatrix(
+  cbm: SellFloorCbmConfig,
+  kg: SellFloorKgConfig,
+): Record<WarehouseId, RateMatrix> {
   const flat = (v: number): Record<ProductId, number | null> => ({ "1": v, "2": v, "3": v, "4": v });
+  const kgMatrix: RateMatrix["kg"] = { "1": flat(kg["1"]), "2": flat(kg["2"]) };
   const forWh = (wh: WarehouseId): RateMatrix => ({
-    kg: COST_FLOOR[wh].kg,
+    kg: kgMatrix,
     cbm: { "1": flat(cbm[wh]["1"]), "2": flat(cbm[wh]["2"]) },
   });
   return { "1": forWh("1"), "2": forWh("2") };
@@ -68,6 +74,7 @@ export function CustomerRateEditor({
   comparisonEnabled = false,
   comparisonValue = 0,
   sellFloorCbm,
+  sellFloorKg,
   canEditSellFloor = false,
 }: {
   userid: string;
@@ -77,16 +84,18 @@ export function CustomerRateEditor({
   comparisonEnabled?: boolean;
   /** tb_users.userComparisonValue — the kg-per-CBM density threshold. */
   comparisonValue?: number;
-  /** Resolved CBM sell floor (business_config override || COST_FLOOR constant). */
+  /** Resolved CBM sell floor (business_config override || constant). */
   sellFloorCbm: SellFloorCbmConfig;
+  /** Resolved KG sell floor (business_config override || constant · รถ 17/เรือ 7). */
+  sellFloorKg: SellFloorKgConfig;
   /** True = viewer is ultra (Ultra Admin Z) → can edit the floor inline. */
   canEditSellFloor?: boolean;
 }) {
   const router = useRouter();
-  // Resolved floor matrix — CBM from the prop (config || constant), KG from the
-  // constant. ALL floor reads (grid "ขั้นต่ำ" labels · belowFloor block · InfoTab
-  // table) go through this, NOT the raw COST_FLOOR constant.
-  const floorMatrix = useMemo(() => buildFloorMatrix(sellFloorCbm), [sellFloorCbm]);
+  // Resolved floor matrix — CBM + KG from the props (config || constant). ALL
+  // floor reads (grid "ขั้นต่ำ" labels · belowFloor block · InfoTab table) go
+  // through this, NOT the raw COST_FLOOR constant.
+  const floorMatrix = useMemo(() => buildFloorMatrix(sellFloorCbm, sellFloorKg), [sellFloorCbm, sellFloorKg]);
   const tCmp = useTranslations("customerRateComparison");
   const [pending, startTransition] = useTransition();
   // Top bar = 2 tabs (owner ปอน 2026-07-03): ใบเสนอราคา (default) + ประวัติใบเสนอราคา.
@@ -394,6 +403,7 @@ export function CustomerRateEditor({
                 {rateTab === "info" && (
                   <InfoTab
                     sellFloorCbm={sellFloorCbm}
+                    sellFloorKg={sellFloorKg}
                     canEdit={canEditSellFloor}
                     onSaved={(msg) => {
                       setError(null);
@@ -615,11 +625,13 @@ function ComparisonTab({
 // adminUpdateSellFloorCbm. Non-ultra sees the same numbers read-only.
 function InfoTab({
   sellFloorCbm,
+  sellFloorKg,
   canEdit,
   onSaved,
   onError,
 }: {
   sellFloorCbm: SellFloorCbmConfig;
+  sellFloorKg: SellFloorKgConfig;
   canEdit: boolean;
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
@@ -640,6 +652,47 @@ function InfoTab({
   const setCell = (wh: WarehouseId, t: TransportId, v: string) =>
     setDraft((prev) => new Map(prev).set(fkey(wh, t), v));
   const readCell = (wh: WarehouseId, t: TransportId) => draft.get(fkey(wh, t)) ?? "";
+
+  // ── KG floor drafts (per transport · flat both warehouses · รถ 17/เรือ 7) ──
+  const [kgPending, startKg] = useTransition();
+  const [kgDraft, setKgDraft] = useState<{ "1": string; "2": string }>(() => ({
+    "1": String(sellFloorKg["1"]),
+    "2": String(sellFloorKg["2"]),
+  }));
+
+  function parsedKgFloor(): { ok: true; truck: number; sea: number } | { ok: false; bad: string } {
+    const out: Record<TransportId, number> = { "1": 0, "2": 0 };
+    for (const t of ["1", "2"] as TransportId[]) {
+      const n = parseFloat(kgDraft[t].replace(/,/g, "").trim());
+      const tShort = TRANSPORTS.find((x) => x.id === t)?.short;
+      if (!Number.isFinite(n) || n < KG_FLOOR_MIN || n > KG_FLOOR_MAX) {
+        return { ok: false, bad: `${tShort} (ต้อง ${KG_FLOOR_MIN}–${KG_FLOOR_MAX})` };
+      }
+      out[t] = n;
+    }
+    return { ok: true, truck: out["1"], sea: out["2"] };
+  }
+
+  function saveKg() {
+    const p = parsedKgFloor();
+    if (!p.ok) {
+      onError(`ค่าราคาขั้นต่ำ KG ไม่ถูกต้อง: ${p.bad}`);
+      return;
+    }
+    startKg(async () => {
+      const ok = await confirm(
+        `ยืนยันแก้ราคาขายขั้นต่ำ (KG) — รถ ฿${p.truck.toLocaleString()}/กก. · เรือ ฿${p.sea.toLocaleString()}/กก. ` +
+          `(ทุกโกดัง) ? มีผลกับการเซฟเรททุกลูกค้าทันที`,
+      );
+      if (!ok) return;
+      const res = await adminUpdateSellFloorKg({ truck: p.truck, sea: p.sea });
+      if (!res.ok) {
+        onError(res.error);
+        return;
+      }
+      onSaved("บันทึกราคาขายขั้นต่ำ (KG) แล้ว — มีผลกับการเซฟเรททันที");
+    });
+  }
 
   function parsedFloor(): { ok: true; floor: SellFloorCbmConfig } | { ok: false; bad: string } {
     const out = { "1": { "1": 0, "2": 0 }, "2": { "1": 0, "2": 0 } } as SellFloorCbmConfig;
@@ -739,7 +792,7 @@ function InfoTab({
           </table>
         </div>
         <p className="text-[11px] text-muted mt-1.5">
-          * ราคาขั้นต่ำ CBM เท่ากันทุกประเภทสินค้า (ทั่วไป/มอก./อย./พิเศษ) · ราคาขั้นต่ำ KG ใช้เรทเดิม · 0 = ไม่คิดตามหน่วยนั้น
+          * ราคาขั้นต่ำ CBM เท่ากันทุกประเภทสินค้า (ทั่วไป/มอก./อย./พิเศษ) · 0 = ไม่คิดตามหน่วยนั้น
         </p>
         {canEdit ? (
           <div className="flex items-center justify-between flex-wrap gap-2 mt-2">
@@ -747,7 +800,62 @@ function InfoTab({
               ⚠ การแก้ราคาขั้นต่ำมีผลกับการเซฟเรทของ <strong>ทุกลูกค้า</strong> ทันที — เฉพาะ Ultra Admin Z
             </p>
             <Button type="button" size="sm" disabled={pending} onClick={save}>
-              <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "บันทึกราคาขั้นต่ำ"}
+              <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "บันทึกราคาขั้นต่ำ CBM"}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {/* ── ราคาขายขั้นต่ำ — KG (฿/กก.) — flat per transport, ทุกโกดัง ───────── */}
+      <div>
+        <h3 className="font-semibold text-foreground mb-1.5 flex items-center gap-2 flex-wrap">
+          <span>ราคาขายขั้นต่ำ — KG (฿/กก. · ห้ามขายต่ำกว่านี้)</span>
+          {canEdit ? (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[11px] font-semibold">
+              <BadgeCheck className="w-3 h-3" /> Ultra · แก้ได้
+            </span>
+          ) : null}
+        </h3>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full text-sm min-w-[280px]">
+            <thead className="bg-surface-alt/60 text-[11px] uppercase text-muted">
+              <tr>
+                <th className="px-3 py-2 text-right">KG · รถ</th>
+                <th className="px-3 py-2 text-right">KG · เรือ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-border">
+                {(["1", "2"] as TransportId[]).map((t) => (
+                  <td key={t} className="px-3 py-2 text-right">
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={kgDraft[t]}
+                        disabled={kgPending}
+                        onChange={(e) => setKgDraft((prev) => ({ ...prev, [t]: e.target.value }))}
+                        className="w-24 rounded-md border border-border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                      />
+                    ) : (
+                      <span className="font-mono">{sellFloorKg[t].toLocaleString()}</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-muted mt-1.5">
+          * ราคาขั้นต่ำ KG เท่ากันทุกประเภทสินค้า + ทุกโกดัง (ค่าเดียวต่อขนส่ง) · 0 = ไม่คิดตามหน่วยนั้น
+        </p>
+        {canEdit ? (
+          <div className="flex items-center justify-between flex-wrap gap-2 mt-2">
+            <p className="text-[11px] text-amber-700">
+              ⚠ การแก้ราคาขั้นต่ำมีผลกับการเซฟเรทของ <strong>ทุกลูกค้า</strong> ทันที — เฉพาะ Ultra Admin Z
+            </p>
+            <Button type="button" size="sm" disabled={kgPending} onClick={saveKg}>
+              <Save className="size-4" /> {kgPending ? "กำลังบันทึก..." : "บันทึกราคาขั้นต่ำ KG"}
             </Button>
           </div>
         ) : null}

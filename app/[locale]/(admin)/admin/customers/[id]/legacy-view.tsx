@@ -37,7 +37,7 @@ import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
-import { getSellFloorCbm } from "@/lib/admin/sell-floor-config";
+import { getSellFloorCbm, getSellFloorKg } from "@/lib/admin/sell-floor-config";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins, listActiveAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
@@ -170,7 +170,9 @@ type WRow = {
 };
 // Wave 20 P0-1: juristic company info — legacy `tb_corporate` keyed by
 // userid (mirrors the customer-portal `/profile` + `/service-order/add`
-// reads). `corporatestatus` '1' = approved/verified.
+// reads). corporatestatus codes (canonical SOT lib/admin/customer-identity.ts
+// CORP_STATUS · statusComp function.php:530): '1' = รอตรวจสอบ (pending) ·
+// '2' = อนุมัติแล้ว (verified) · '3' = ไม่ผ่าน (rejected).
 type CRow = {
   id: number;
   corporatename: string | null;
@@ -527,11 +529,12 @@ export async function renderLegacyCustomerView(
   // never bypass the real gate).
   const isSuperAdmin = isGodRole(adminRoles);
 
-  // Sell-rate CBM floor — resolve the LIVE floor (business_config override ||
-  // COST_FLOOR constant) on the server and pass it into the (client) rate
-  // editor for both enforcement display + the InfoTab floor table. The floor is
-  // EDITABLE inline by `ultra` only (isGodRole) — non-ultra sees it read-only.
-  const sellFloorCbm = await getSellFloorCbm();
+  // Sell-rate floors — resolve the LIVE floors (business_config override ||
+  // constant default) on the server and pass BOTH into the (client) rate editor
+  // for enforcement display + the InfoTab floor tables. Both are EDITABLE inline
+  // by `ultra` only (isGodRole) — non-ultra sees them read-only. (KG default
+  // รถ 17 · เรือ 7 · owner 2026-07-03.)
+  const [sellFloorCbm, sellFloorKg] = await Promise.all([getSellFloorCbm(), getSellFloorKg()]);
   const canEditSellFloor = isGodRole(adminRoles); // ultra/super only
 
   const fwdCount = fwdCountRes.count ?? 0;
@@ -641,6 +644,7 @@ export async function renderLegacyCustomerView(
               comparisonEnabled={comparisonEnabled}
               comparisonValue={comparisonValue}
               sellFloorCbm={sellFloorCbm}
+              sellFloorKg={sellFloorKg}
               canEditSellFloor={canEditSellFloor}
             />
             <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">

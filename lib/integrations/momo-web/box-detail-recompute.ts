@@ -203,6 +203,40 @@ if (process.argv[1] && process.argv[1].endsWith("box-detail-recompute.ts")) {
   eq("empty fweight", empty.fweight, 0);
   eq("empty fvolume", empty.fvolume, 0);
 
+  // ── DOUBLE-COUNT regression (GZE260627-1 · fid 52225 · owner 2026-07-03) ──
+  // The bug: fvolume was stored as perbox×70² = 475.1432 (an extra ×70) and every
+  // consumer then applied ×famount again → a 189-million-baht bill. rollupBoxes
+  // over the REAL per-box dims must yield the TOTAL perbox×70 = 6.78776 — the
+  // stored total — NEVER perbox×70² and NEVER re-multiplied. (The write path pairs
+  // this with famountcount='1' so consumers read the total directly.)
+  //  62×34×46 = 96,968 cm³ = 0.096968 คิว/box · 70 boxes.
+  eq("perbox cbm 62×34×46", boxCbmFromDims({ width: 62, length: 34, height: 46, cbm: 0 }), 0.096968);
+  // (a) 70 identical per-box rows (real "-N/M" split) → Σ = perbox×70 (the total).
+  const seventyRows: BoxDims[] = Array.from({ length: 70 }, (_, i) => ({
+    boxTracking: `KY4001-${i + 1}/70`, width: 62, length: 34, height: 46, weightKg: 1, cbm: 0, quantity: 1,
+  }));
+  const many = rollupBoxes(seventyRows);
+  eq("70 per-box rows → total 6.78776 (NOT 475.1432)", many.fvolume, 6.78776);
+  eq("70 per-box rows fweight", many.fweight, 70);
+  eq("70 per-box rows count", many.countableCount, 70);
+  // (b) ONE box carrying quantity=70 (per-piece dims) → per-piece × ชิ้น = same total.
+  const oneRowQty70 = rollupBoxes([
+    { boxTracking: "KY4001", width: 62, length: 34, height: 46, weightKg: 1, cbm: 0, quantity: 70 },
+  ]);
+  eq("1 box × qty 70 → total 6.78776 (NOT 475.1432)", oneRowQty70.fvolume, 6.78776);
+  eq("1 box × qty 70 fweight", oneRowQty70.fweight, 70);
+  // The corrupted value the bug produced — assert rollup NEVER emits it.
+  is("rollup never emits the perbox×70² corruption", Math.abs(many.fvolume - 475.1432) < 1e-6, false);
+  // Sibling '-6' shape (40×62×34 = 0.084320/box × 14²) — rollup over the 14 real
+  // per-box rows yields the TOTAL 0.084320×14 = 1.18048, not 16.5267.
+  eq("perbox cbm 40×62×34", boxCbmFromDims({ width: 40, length: 62, height: 34, cbm: 0 }), 0.08432);
+  const sib6 = rollupBoxes(
+    Array.from({ length: 14 }, (_, i) => ({
+      boxTracking: `KY4001-6-${i + 1}/14`, width: 40, length: 62, height: 34, weightKg: 1, cbm: 0, quantity: 1,
+    })),
+  );
+  eq("sibling -6 → total 1.18048 (NOT 16.5267)", sib6.fvolume, 1.18048);
+
   console.log(`\nbox-detail-recompute: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

@@ -108,30 +108,44 @@ export const DEFAULT_START: Record<WarehouseId, RateMatrix> = {
  *    (MOMO ต้นทุนจริง = 2,500/คิว · floor เรือ 2,900 = ต้นทุน + margin ขั้นต่ำ.)
  *    These REPLACE the older per-product cost figures (5300/3300… were stale).
  *
- * ── KG floor (฿/กก.) — legacy values kept (owner spoke only to the CBM rate);
- *    same both warehouses. A 0 = "ไม่คิดตามหน่วยนี้" → never below floor.
+ * ── KG floor (฿/กก.) — owner-set FLAT value per transport, same for every
+ *    product type + BOTH warehouses (owner 2026-07-03: "ต่ำสุด รถ 17 เรือ 7"),
+ *    matching how the CBM floor is "ค่าเดียวทุกประเภทสินค้า":
+ *      รถ (transport '1') = 17 · เรือ (transport '2') = 7
+ *    (was the old per-product legacy table รถ {20,25,25,50}/เรือ {15,20,20,40}.)
+ *    A 0 = "ไม่คิดตามหน่วยนี้" → never below floor.
  *
- * Edit-the-floor itself = ultra (Ultra Admin Z) only — see the InfoTab note +
- * the (deferred) in-app floor editor. Today it is code-locked (no non-ultra can
- * lower it).
+ * ── Both floors are now DB-OVERRIDABLE by ultra (Ultra Admin Z) WITHOUT a
+ *    deploy — the constants below are only the DEFAULT / fallback. The live
+ *    resolver + upsert live in lib/admin/sell-floor-config.ts (CBM key
+ *    `pricing.sell_rate_floor_cbm`, KG key `pricing.sell_rate_floor_kg`) +
+ *    actions/admin/sell-floor.ts (adminUpdateSellFloorCbm/Kg). NO migration —
+ *    the config row is created on the first ultra-save. `KG_FLOOR_DEFAULT` /
+ *    `COST_FLOOR[wh].kg` are the fallback source the resolver reads cell-by-cell
+ *    when the key is absent/partial.
  */
-const KG_FLOOR_LEGACY: RateMatrix["kg"] = {
-  "1": { "1": 20, "2": 25, "3": 25, "4": 50 }, // ทางรถ
-  "2": { "1": 15, "2": 20, "3": 20, "4": 40 }, // ทางเรือ
-};
-/** Build a CBM floor row: one flat value for all 4 product types. */
-const cbmFlat = (v: number): Record<ProductId, number | null> => ({
+/** Build a floor row: one flat value for all 4 product types. */
+const floorFlat = (v: number): Record<ProductId, number | null> => ({
   "1": v, "2": v, "3": v, "4": v,
 });
+const cbmFlat = floorFlat;
+/**
+ * KG sell-floor DEFAULT — flat per transport, shared BOTH warehouses (owner:
+ * รถ 17 · เรือ 7). Now the DB-overridable default (see `SELL_FLOOR_KG_KEY`).
+ */
+export const KG_FLOOR_DEFAULT: RateMatrix["kg"] = {
+  "1": floorFlat(17), // ทางรถ
+  "2": floorFlat(7), // ทางเรือ
+};
 export const COST_FLOOR: Record<WarehouseId, RateMatrix> = {
-  // กวางโจว — รถ 4,900 · เรือ 2,900
+  // กวางโจว — KG รถ 17/เรือ 7 · CBM รถ 4,900/เรือ 2,900
   "1": {
-    kg: KG_FLOOR_LEGACY,
+    kg: KG_FLOOR_DEFAULT,
     cbm: { "1": cbmFlat(4900), "2": cbmFlat(2900) },
   },
-  // อี้อู — รถ 5,500 · เรือ 2,900
+  // อี้อู — KG รถ 17/เรือ 7 · CBM รถ 5,500/เรือ 2,900
   "2": {
-    kg: KG_FLOOR_LEGACY,
+    kg: KG_FLOOR_DEFAULT,
     cbm: { "1": cbmFlat(5500), "2": cbmFlat(2900) },
   },
 };

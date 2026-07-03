@@ -44,7 +44,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, AlertTriangle, Camera, Trash2 } from "lucide-react";
+import { Pencil, AlertTriangle, Camera, Trash2, PackageOpen } from "lucide-react";
 import {
   adminUpdateForwarderTransportType,
   adminUpdateForwarderCrate,
@@ -60,6 +60,8 @@ import {
   adminAddForwarderImage,
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
+  adminPickForwarderAddress,
+  adminSplitForwarderBoxes,
 } from "@/actions/admin/forwarders-field-edits";
 import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
@@ -1066,6 +1068,91 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
   );
 }
 
+/**
+ * ที่อยู่จัดส่ง — เลือกจากที่อยู่ที่ลูกค้าบันทึกไว้ (ภูม 2026-07-03 · "แก้ไขที่อยู่หน้านี้ได้เลย
+ * ดึงจากที่อยู่ในโปรไฟล์ลูกค้า · ถ้ามีหลายที่อยู่กดเลือกได้ เหมือนตอนเลือกบริษัทขนส่ง").
+ *
+ * Reuses adminPickForwarderAddress (PCS L1737 · ownership+active-guarded · snapshots the
+ * chosen tb_address into tb_forwarder.fAddress*). NO new write path. Guards:
+ *   - fshipby='PCS' (รับเองโกดัง) → ไม่มีที่อยู่จัดส่ง → ปุ่มโชว์หมายเหตุ (action ก็ปฏิเสธ)
+ *   - ไม่มีที่อยู่บันทึกไว้ → หมายเหตุ + ลิงก์ให้ลูกค้าเพิ่มที่อยู่
+ * Confirm-before-mutate (§0f). The address SNAPSHOT changes only; the carrier stays as its
+ * own edit (บริษัทขนส่ง แก้ไข) — pick a matching carrier separately if the province changed.
+ */
+export function EditDeliveryAddressField({
+  fId,
+  fshipby,
+  addresses,
+}: {
+  fId: number;
+  fshipby: string | null;
+  addresses: { addressID: number; label: string; province: string }[];
+}) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [sel, setSel] = useState<string>(addresses[0]?.addressID ? String(addresses[0].addressID) : "");
+  const isPcs = (fshipby ?? "").trim() === "PCS";
+
+  async function onSave(close: () => void) {
+    const addressId = Number(sel);
+    if (!Number.isInteger(addressId) || addressId <= 0) {
+      run(() => Promise.resolve({ ok: false, error: "กรุณาเลือกที่อยู่" }), () => {});
+      return;
+    }
+    const picked = addresses.find((a) => a.addressID === addressId);
+    if (!(await confirm(
+      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${picked?.label ?? `#${addressId}`}\n\n(ดึง snapshot ที่อยู่ของลูกค้ามาใส่ในออเดอร์นี้)`,
+    ))) return;
+    run(() => adminPickForwarderAddress({ fId, addressId }), close);
+  }
+
+  return (
+    <div className="mt-1.5">
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-xs font-medium text-sky-600 hover:underline"
+        >
+          ✏️ เลือก/แก้ไขที่อยู่จัดส่ง
+        </button>
+      ) : isPcs ? (
+        <div className="space-y-1 text-left">
+          <p className="text-[11px] text-amber-700">
+            ℹ️ ออเดอร์นี้เป็นแบบ <b>รับเองที่โกดัง Pacred</b> — ไม่มีที่อยู่จัดส่ง (เปลี่ยนบริษัทขนส่งก่อนถ้าต้องการส่งถึงบ้าน)
+          </p>
+          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
+        </div>
+      ) : addresses.length === 0 ? (
+        <div className="space-y-1 text-left">
+          <p className="text-[11px] text-muted">ลูกค้ายังไม่มีที่อยู่จัดส่งที่บันทึกไว้</p>
+          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
+        </div>
+      ) : (
+        <div className="space-y-2 text-left">
+          <select className={selectCls} value={sel} onChange={(e) => setSel(e.target.value)}>
+            {addresses.map((a) => (
+              <option key={a.addressID} value={a.addressID}>{a.label}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-muted">
+            เลือกจากที่อยู่ที่ลูกค้าบันทึกไว้ ({addresses.length} ที่อยู่) · ระบบจะ snapshot มาใส่ในออเดอร์นี้
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={pending || !sel} className={btnSave} onClick={() => onSave(() => setEditing(false))}>
+              บันทึก
+            </button>
+            <button type="button" disabled={pending} className={btnCancel} onClick={() => setEditing(false)}>
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** ผู้รับใบกำกับ (Bill-to override) · Pacred extension. */
 export function EditBillToField({ fId, fbilltoname, defaultBillTo }: { fId: number; fbilltoname: string | null; defaultBillTo: string }) {
   const { pending, err, run } = useEditor();
@@ -1353,6 +1440,46 @@ export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; 
           </>
         )}
       </EditableRow>
+    </div>
+  );
+}
+
+/**
+ * แตกกล่อง MOMO เป็นแถวแยก — owner/ภูม 2026-07-03.
+ * A MOMO cargo tracking split into N boxes of different sizes is stored as ONE aggregate
+ * row → staff CAN'T edit a single box (e.g. when MOMO sent a wrong ก×ย×ส). This turns it
+ * into N SIBLING rows (one editable row per box), PRESERVING the bill to the satang
+ * (adminSplitForwarderBoxes · money-neutral). Rendered ONLY when the page computed it's a
+ * bare-base aggregate that momo_box_detail knows has >1 box, with no siblings yet + unbilled.
+ */
+export function SplitBoxesButton({ fId, boxCount }: { fId: number; boxCount: number }) {
+  const { pending, err, run } = useEditor();
+  async function onSplit() {
+    if (
+      !(await confirm(
+        `แตกรายการนี้เป็น ${boxCount} กล่องแยก (คนละแถว) ?\n\n` +
+          `• ยอดเงินรวมเท่าเดิมทุกบาท (แค่แยกให้แก้ไขรายกล่องได้)\n` +
+          `• แต่ละกล่องจะเป็นแถวของตัวเอง แก้ขนาด/น้ำหนักได้`,
+      ))
+    )
+      return;
+    run(() => adminSplitForwarderBoxes({ fId }), () => {});
+  }
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={onSplit}
+        disabled={pending}
+        className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+      >
+        <PackageOpen className="h-3.5 w-3.5" />
+        {pending ? "กำลังแตกกล่อง…" : `แตกกล่อง MOMO เป็น ${boxCount} แถว (แก้ไขรายกล่องได้)`}
+      </button>
+      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
+      <p className="mt-1 text-[11px] text-muted">
+        MOMO ส่ง {boxCount} กล่องคนละขนาด — แตกแล้วยอดเงินรวมเท่าเดิม แต่แก้ไขแต่ละกล่องได้
+      </p>
     </div>
   );
 }

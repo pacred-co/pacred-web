@@ -1256,9 +1256,13 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    corporatenumber: corp?.corporatenumber ?? "",
-    corporatename: corp?.corporatename ?? "",
-    corporateaddress: corp?.corporateaddress ?? "",
+    // Legacy tb_corporate rows can store a dirty tax id (dash/space/apostrophe).
+    // Strip non-digits on PRE-FILL — not just on subsequent keystrokes — so a
+    // click-through save (edit → บันทึก without retyping) doesn't submit a dirty
+    // value that the strict server regex /^\d{13}$/ rejects → silent "บันทึกไม่ได้".
+    corporatenumber: (corp?.corporatenumber ?? "").replace(/\D/g, ""),
+    corporatename: (corp?.corporatename ?? "").trim(),
+    corporateaddress: (corp?.corporateaddress ?? "").trim(),
   });
 
   function save() {
@@ -1285,10 +1289,12 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
           <button
             type="button"
             onClick={() => {
+              // Re-normalize on entering edit-mode too (mirror the initial pre-fill)
+              // so a dirty stored tax id never blocks the strict server regex.
               setForm({
-                corporatenumber: corp?.corporatenumber ?? "",
-                corporatename: corp?.corporatename ?? "",
-                corporateaddress: corp?.corporateaddress ?? "",
+                corporatenumber: (corp?.corporatenumber ?? "").replace(/\D/g, ""),
+                corporatename: (corp?.corporatename ?? "").trim(),
+                corporateaddress: (corp?.corporateaddress ?? "").trim(),
               });
               setEditing(true);
             }}

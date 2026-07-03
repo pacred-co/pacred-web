@@ -64,6 +64,15 @@ export type ForwarderCountAccessors<T> = {
   tracking: (row: T) => string | null | undefined;
   weight: (row: T) => number | null | undefined;
   userid: (row: T) => string | null | undefined;
+  /**
+   * OPTIONAL — the billable money on the row (Σ ftotalprice + otherCharges). A genuine
+   * MOMO หัวบิล placeholder carries ZERO money; a row that DOES carry money is a REAL
+   * order/box and must NEVER be dropped from a MONEY Σ — even at fweight=0. This protects
+   * a MOMO box-SPLIT anchor whose own box is dims-only (fweight=0) from silently vanishing
+   * from ยอดเก็บจริง / ใบวางบิล (owner/ภูม 2026-07-03 · money review). Count-only callers
+   * omit it → the genuine 0-weight-0-money placeholder is still dropped from the box-count.
+   */
+  money?: (row: T) => number | null | undefined;
 };
 
 /**
@@ -111,6 +120,10 @@ export function isMomoBillHeader<T>(
 ): boolean {
   // Only a BARE (suffix 0) zero-weight row can be a header.
   if (trackingSuffix(acc.tracking(row)) !== 0) return false;
+  // A row that carries billable money is a REAL order/box (e.g. a MOMO box-SPLIT anchor whose
+  // own box is dims-only → fweight=0 but ftotalprice>0) — never a placeholder. Drop-guard so
+  // it can't vanish from a money Σ. Only checked when the caller supplies the `money` accessor.
+  if (acc.money && (acc.money(row) || 0) > 0) return false;
   if ((acc.weight(row) || 0) !== 0) return false;
   const base = baseTracking(acc.tracking(row));
   if (base == null) return false;
