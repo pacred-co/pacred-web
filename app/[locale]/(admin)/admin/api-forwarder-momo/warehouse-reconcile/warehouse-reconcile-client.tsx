@@ -20,7 +20,10 @@ const VERDICT: Record<string, { label: string; cls: string }> = {
   note:      { label: "ยังไม่มีข้อมูล",   cls: "bg-gray-100 text-gray-600 border border-gray-300" },
 };
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB guard
+// 40MB — a real แต้ม packing list (e.g. GZS260524-1 = 10.86MB) tops 10MB from Excel
+// metadata/styles. Safe: the xlsx is parsed CLIENT-side to TSV; only the small TSV text
+// reaches the server action (never the raw file), so there's no server body-size limit.
+const MAX_FILE_BYTES = 40 * 1024 * 1024; // 40MB guard
 const SHEET_NAME = "Shipment Report";
 
 /** One inline edit the admin typed in a preview row (keyed by tracking). Only the
@@ -52,7 +55,7 @@ export function TaemReconcileClient() {
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setMsg({ kind: "err", text: `ไฟล์ใหญ่เกินไป (${(file.size / 1024 / 1024).toFixed(1)} MB) — จำกัด 10 MB` });
+      setMsg({ kind: "err", text: `ไฟล์ใหญ่เกินไป (${(file.size / 1024 / 1024).toFixed(1)} MB) — จำกัด 40 MB` });
       return;
     }
     const reader = new FileReader();
@@ -204,7 +207,7 @@ export function TaemReconcileClient() {
         >
           <span className="text-2xl">📄</span>
           <span className="text-sm font-medium">ลากไฟล์ .xlsx มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
-          <span className="text-[11px] text-muted">packing list ของแต้ม · จำกัด 10 MB · ชีต &quot;Shipment Report&quot;</span>
+          <span className="text-[11px] text-muted">packing list ของแต้ม · จำกัด 40 MB · ชีต &quot;Shipment Report&quot;</span>
           {fileName && <span className="mt-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800">📎 {fileName}</span>}
           <input
             ref={fileInputRef}
