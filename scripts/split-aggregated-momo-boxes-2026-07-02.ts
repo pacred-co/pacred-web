@@ -47,6 +47,11 @@ import {
 } from "../lib/integrations/momo-web/split-box-rows-plan";
 
 const APPLY = process.argv.includes("--apply");
+// --priced (owner/ภูม 2026-07-03): ALSO split rows that are already PRICED, money-neutrally
+// (the total SELL is preserved — split proportionally · Σ === aggregate to the satang). The
+// default run stays UNPRICED-only (the original safe behaviour). Prod has 26 priced multi-box
+// aggregates (e.g. #52142) that stay folded until this flag runs.
+const ALLOW_PRICED = process.argv.includes("--priced");
 const PROJECT_REF = "yzljakczhwrpbxflnmco"; // PROD
 const PASSWORD = process.env.SUPABASE_DB_PASSWORD;
 if (!PASSWORD) {
@@ -59,12 +64,20 @@ const HOSTS = [
 ];
 const USER = `postgres.${PROJECT_REF}`;
 
+// Shipment-level money columns — anchor keeps them, siblings get 0 (never multiply).
+// Matches split-box-rows.ts SHIPMENT_LEVEL_MONEY (otherCharges + cost).
+const SHIPMENT_LEVEL_MONEY = [
+  "ftransportprice", "fpriceupdate", "fshippingservice",
+  "pricecrate", "ftransportpricechnthb", "priceother", "fdiscount",
+  "fcosttotalprice",
+];
 // tb_forwarder columns to CLONE onto a new sibling (everything except id + the
 // per-box metrics + price columns we set explicitly). Matches split-box-rows.ts.
 const CLONE_OMIT = new Set<string>([
   "id",
   "ftrackingchn", "fweight", "fvolume", "fwidth", "flength", "fheight", "famount",
   "ftotalprice", "frefrate", "frefprice",
+  ...SHIPMENT_LEVEL_MONEY,
 ]);
 
 async function connect(): Promise<pg.Client> {
@@ -151,8 +164,11 @@ async function main() {
       reforder: String(aggregate.reforder ?? ""),
       ftotalprice: n(aggregate.ftotalprice),
       famount: n(aggregate.famount),
+      famountcount: (aggregate.famountcount as string | null) ?? null,
       fweight: n(aggregate.fweight),
       fvolume: n(aggregate.fvolume),
+      frefrate: aggregate.frefrate as number | string | null,
+      frefprice: aggregate.frefprice as number | string | null,
     };
     const boxInputs: BoxDetailInput[] = boxRows.map((b) => ({
       boxTracking: String(b.box_tracking ?? "").trim(),
@@ -164,11 +180,22 @@ async function main() {
       quantity: n(b.quantity),
     }));
 
-    const decision = planBoxRowSplit(aggInput, boxInputs);
+    const decision = planBoxRowSplit(aggInput, boxInputs, { allowPriced: ALLOW_PRICED });
     if (!decision.split) {
       bump(decision.reason);
       console.log(`  SKIP  ${base}  (${decision.reason}) — fid=${aggInput.id} amt=${aggInput.famount} wt=${aggInput.fweight} cbm=${aggInput.fvolume} total=${aggInput.ftotalprice} status=${aggInput.fstatus}`);
       continue;
+    }
+
+    // 💰 PRICED-split defence: the plan forces Σ === aggregate, but VERIFY before writing.
+    if (decision.priced) {
+      const planSum = decision.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+      const drift = Math.abs(Math.round(planSum * 100) / 100 - Math.round(aggInput.ftotalprice * 100) / 100);
+      if (drift > 0.005) {
+        bump("priced_drift");
+        console.log(`  SKIP  ${base}  (priced_drift Σ${planSum} ≠ ${aggInput.ftotalprice}) — fid=${aggInput.id}`);
+        continue;
+      }
     }
 
     summary.willSplit += 1;
@@ -192,43 +219,72 @@ async function main() {
     }
 
     const anchor = decision.rows.find((r) => r.isAnchor)!;
-    // 4a. UPDATE the aggregate → box-1 (TOCTOU-guarded: still unbilled/aggregate/unpriced).
-    const upd = await q(
-      `update tb_forwarder
-         set fweight=$1, fvolume=$2, fwidth=$3, flength=$4, fheight=$5, famount=$6,
-             ftotalprice=0, frefrate=0, frefprice='0', adminidupdate='sys-split'
-       where id=$7 and fstatus = any($8) and famount=$9 and ftotalprice<=0
-       returning id`,
-      [anchor.fweight, anchor.fvolume, anchor.fwidth, anchor.flength, anchor.fheight, anchor.famount,
-       aggInput.id, ["1", "2", "3", "4"], aggInput.famount],
-    );
-    if (upd.length === 0) {
-      console.log(`          ! anchor UPDATE matched 0 rows (raced/priced) — skipping ${base}`);
-      bump("already_split");
+    // Per-box price: PRICED split writes the PRESERVED share + the copied rate (mirrors
+    // split-box-rows.ts) · UNPRICED split resets to 0 (re-priced later by the MOMO cron).
+    const priced = decision.priced === true;
+    const priceOf = (r: (typeof decision.rows)[number]) =>
+      priced
+        ? { ftotalprice: Number(r.ftotalprice ?? 0), frefrate: r.frefrate ?? 0, frefprice: r.frefprice ?? "0" }
+        : { ftotalprice: 0, frefrate: 0, frefprice: "0" };
+    const ap = priceOf(anchor);
+    // 💰 ATOMIC per-base: wrap the anchor UPDATE + sibling INSERTs in ONE txn so a partial
+    // failure can NEVER under/over-bill (a ROLLBACK undoes everything). (Money review 2026-07-03.)
+    await c.query("begin");
+    try {
+      // 4a. UPDATE the aggregate → box-1. TOCTOU: still unbilled/aggregate AND (unpriced path:
+      // still ≤0 · priced path: price UNCHANGED). Shipment-money columns are NOT touched.
+      const upd = await q(
+        `update tb_forwarder
+           set fweight=$1, fvolume=$2, fwidth=$3, flength=$4, fheight=$5, famount=$6,
+               ftotalprice=$7, frefrate=$8, frefprice=$9, adminidupdate='sys-split'
+         where id=$10 and fstatus = any($11) and famount=$12 and ${priced ? "ftotalprice=$13" : "ftotalprice<=0"}
+         returning id`,
+        [anchor.fweight, anchor.fvolume, anchor.fwidth, anchor.flength, anchor.fheight, anchor.famount,
+         ap.ftotalprice, ap.frefrate, ap.frefprice,
+         aggInput.id, ["1", "2", "3", "4"], aggInput.famount,
+         ...(priced ? [aggInput.ftotalprice] : [])],
+      );
+      if (upd.length === 0) {
+        await c.query("rollback");
+        console.log(`          ! anchor UPDATE matched 0 rows (raced/priced-changed) — skipping ${base}`);
+        bump("already_split");
+        summary.willSplit -= 1;
+        summary.siblingsToCreate -= newSiblings;
+        backup.pop();
+        continue;
+      }
+
+      // 4b. INSERT boxes 2..N. Clone non-money fields, force shipment-money = 0, set the per-box
+      // freight (0 unpriced · preserved share priced). Parameterised multi-row insert.
+      const cols = Object.keys(template);
+      for (const r of decision.rows.filter((x) => !x.isAnchor)) {
+        const sp = priceOf(r);
+        const rowCols = [
+          ...cols,
+          ...SHIPMENT_LEVEL_MONEY,
+          "ftrackingchn", "fweight", "fvolume", "fwidth", "flength", "fheight", "famount",
+          "ftotalprice", "frefrate", "frefprice", "adminidupdate",
+        ];
+        const rowVals = [
+          ...cols.map((k) => template[k]),
+          ...SHIPMENT_LEVEL_MONEY.map(() => 0),
+          r.ftrackingchn, r.fweight, r.fvolume, r.fwidth, r.flength, r.fheight, r.famount,
+          sp.ftotalprice, sp.frefrate, sp.frefprice, "sys-split",
+        ];
+        const placeholders = rowVals.map((_, i) => `$${i + 1}`).join(", ");
+        const colList = rowCols.map((k) => `"${k}"`).join(", ");
+        await c.query(`insert into tb_forwarder (${colList}) values (${placeholders})`, rowVals);
+      }
+      await c.query("commit");
+      console.log(`          ✓ applied: updated anchor id=${aggInput.id} + inserted ${newSiblings} siblings${priced ? " (priced · money-neutral)" : ""}`);
+    } catch (txErr) {
+      await c.query("rollback").catch(() => {});
+      console.log(`          ! txn ROLLED BACK for ${base}: ${(txErr as Error).message}`);
+      bump("txn_error");
       summary.willSplit -= 1;
       summary.siblingsToCreate -= newSiblings;
       backup.pop();
-      continue;
     }
-
-    // 4b. INSERT boxes 2..N. Build a parameterised multi-row insert from the clone template.
-    const cols = Object.keys(template);
-    for (const r of decision.rows.filter((x) => !x.isAnchor)) {
-      const rowCols = [
-        ...cols,
-        "ftrackingchn", "fweight", "fvolume", "fwidth", "flength", "fheight", "famount",
-        "ftotalprice", "frefrate", "frefprice", "adminidupdate",
-      ];
-      const rowVals = [
-        ...cols.map((k) => template[k]),
-        r.ftrackingchn, r.fweight, r.fvolume, r.fwidth, r.flength, r.fheight, r.famount,
-        0, 0, "0", "sys-split",
-      ];
-      const placeholders = rowVals.map((_, i) => `$${i + 1}`).join(", ");
-      const colList = rowCols.map((k) => `"${k}"`).join(", ");
-      await c.query(`insert into tb_forwarder (${colList}) values (${placeholders})`, rowVals);
-    }
-    console.log(`          ✓ applied: updated anchor id=${aggInput.id} + inserted ${newSiblings} siblings`);
   }
 
   if (APPLY && backup.length > 0) {

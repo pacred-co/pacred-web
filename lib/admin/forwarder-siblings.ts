@@ -70,10 +70,25 @@ export async function fetchCountableForwarderSiblings<
       if (exact.length > 0) rows = exact;
     }
   }
+  const num = (v: unknown) => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  };
   const countable = filterCountableForwarderRows(rows, {
     tracking: (row) => row.ftrackingchn,
     weight: (row) => Number(row.fweight ?? 0),
     userid: (row) => row.userid ?? "",
+    // A row carrying billable money is NEVER a หัวบิล placeholder — protects a MOMO
+    // box-split anchor whose own box is dims-only (fweight=0 · has ftotalprice) from being
+    // dropped from ยอดเก็บจริง / ใบวางบิล (money review 2026-07-03). FORWARDER_SIBLING_SELECT
+    // carries these columns; a narrower caller-select reads 0 → falls back to weight-only.
+    money: (row) => {
+      const r = row as Record<string, unknown>;
+      return (
+        num(r.ftotalprice) + num(r.ftransportprice) + num(r.fpriceupdate) +
+        num(r.fshippingservice) + num(r.pricecrate) + num(r.ftransportpricechnthb) + num(r.priceother)
+      );
+    },
   });
   return (countable.length > 0 ? countable : rows)
     .slice()
