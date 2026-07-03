@@ -37,6 +37,8 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
+import { forwarderCoverUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "./_shared/cover-thumb";
 import { cancelOwnForwarder } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import { Explain } from "@/components/ui/tooltip";
@@ -163,21 +165,15 @@ function TagPro({ id }: { id: string | null }) {
 // keep working without a churn of import-path changes.
 export { calPriceForwarderSumCompany };
 
-// Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437.
+// Legacy `convertIMGCHN($url,$size)` — function.php L1414-1437. Now delegates
+// to the centralized `forwarderCoverUrl()` (lib/legacy-image.ts): the empty
+// fallback is the neutral Pacred no-cover placeholder instead of the legacy
+// "PCS Cargo Shop" logo (brand leak the owner flagged 2026-07-03), and a
+// `pcscargo.co.th` cover is re-pointed at the Supabase mirror (no host leak).
+// Re-exported so existing importers (forwarder-interactivity, page.tsx) keep
+// the same signature.
 export function convertIMGCHN(url: string | null, size: string): string {
-  if (!url || url === "") {
-    return "/legacy/pcs/shops/default.png";
-  }
-  let u = url
-    .replace("?x-oss-process=style/alsy", "")
-    .replace("?x-oss-process=style/tbsy", "")
-    .replace("_250x250.jpg", "");
-  if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) return u;
-    return u + size;
-  }
-  u = `https://pcscargo.co.th/member/images/shops/${u}`;
-  return u;
+  return forwarderCoverUrl(url, size);
 }
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
@@ -477,13 +473,11 @@ export function ForwarderRowView({
           className="image-popup-vertical-fit shrink-0 block"
           href={convertIMGCHN(row.fcover, "")}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <CoverThumb
             className="h-12 w-12 md:h-16 md:w-16 object-cover rounded-lg border border-border bg-surface-alt"
             src={convertIMGCHN(row.fcover, "_80x80.jpg")}
             width={80}
             height={80}
-            alt=""
           />
         </a>
 
