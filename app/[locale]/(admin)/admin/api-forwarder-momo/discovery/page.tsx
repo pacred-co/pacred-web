@@ -44,7 +44,7 @@ export default async function AdminMomoDiscoveryPage() {
       <PageHeader
         eyebrow="ADMIN · MOMO · DISCOVERY"
         title="คิวค้นเจอจาก MOMO Live"
-        subtitle="พัสดุที่ MOMO ทิ้งจากคิวปกติ — Live บอกว่ามาไทยแล้ว/มีตู้ แต่ยังไม่มีในระบบ → กดสร้างเข้าระบบได้ถูกต้อง (ร้านหายค้างเอง)"
+        subtitle="เทียบ MOMO Live ทุกสถานะ กับระบบ → แทรคที่ MOMO มี (ถึงโกดัง/กำลังส่งมาไทย/รอชำระ/ส่งแล้ว ฯลฯ) แต่ยังไม่มีในระบบ → กดสร้างเข้าระบบได้ถูกต้อง (ฝากสั่งซื้อหายค้างเอง)"
       />
 
       <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-[12px] leading-relaxed text-sky-900">

@@ -16,6 +16,7 @@ import {
   commitDiscoveredBatch,
 } from "@/actions/admin/momo-live-discovery";
 import type { DiscoveryRow, MomoLiveDiscoveryResult } from "@/lib/admin/momo-live-discovery";
+import { momoTypeToProductType, momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
 
 type ProductType = "1" | "2" | "3" | "4";
 type EditState = { userID: string; fShipBy: string; fProductsType: ProductType };
@@ -44,7 +45,10 @@ export function MomoDiscoveryClient() {
 
   function seed(rs: DiscoveryRow[]) {
     const e: Record<string, EditState> = {};
-    for (const r of rs) e[r.baseTracking] = { userID: r.memberCode, fShipBy: "", fProductsType: "1" };
+    // default ประเภท จากค่าจริงที่ MOMO ส่ง (general→ทั่วไป · tis→มอก. · fda→อย. · control→พิเศษ)
+    for (const r of rs) {
+      e[r.baseTracking] = { userID: r.memberCode, fShipBy: "", fProductsType: momoTypeToProductType(r.productType) };
+    }
     setEdits(e);
   }
 
@@ -136,8 +140,8 @@ export function MomoDiscoveryClient() {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-3">
         <p className="text-sm text-muted">
-          กด &quot;ค้นหาจาก MOMO Live&quot; เพื่อเข้าสู่ระบบ MOMO (บัญชีหลัก) แล้วเทียบกับระบบ PR —
-          หาแทรคที่ Live บอกว่ามาไทยแล้ว/มีตู้ แต่ยังไม่มีในระบบ
+          กด &quot;ค้นหาจาก MOMO Live&quot; เพื่อเข้าสู่ระบบ MOMO (บัญชีหลัก) แล้วเทียบ <b>ทุกสถานะ</b> กับระบบ PR —
+          หาแทรคที่ MOMO มี (ถึงโกดัง/กำลังส่งมาไทย/รอชำระ/ส่งแล้ว) แต่ยังไม่มีในระบบ (ไม่ซ้ำกับคิวปกติ)
         </p>
         <button
           type="button"
@@ -314,6 +318,9 @@ export function MomoDiscoveryClient() {
                           <option key={k} value={k}>{PRODUCT_LABELS[k]}</option>
                         ))}
                       </select>
+                      <div className="mt-1 text-[11px] text-muted">
+                        MOMO: <span className="font-medium text-foreground">{momoTypeLabel(r.productType)}</span>
+                      </div>
                     </td>
 
                     {/* commit */}

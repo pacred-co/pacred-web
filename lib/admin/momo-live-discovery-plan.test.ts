@@ -18,7 +18,11 @@ import {
   buildImportTrackRow,
   splitMemberCode,
   normalizeMemberCode,
+  momoTypeToProductType,
+  momoTypeLabel,
+  DISCOVERY_BOARDS,
 } from "@/lib/admin/momo-live-discovery-plan";
+import { MOMO_LIVE_STATUSES } from "@/lib/integrations/momo-web/types";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -166,6 +170,42 @@ check("sorts has-container candidates first", () => {
   const { candidates } = classifyDiscovery(parcels, new Set());
   assert.equal(candidates[0].baseTracking, "BBB222", "container-having first");
   assert.equal(candidates[1].baseTracking, "AAA111");
+});
+
+// ── (i) MOMO type → fProductsType mapping (owner flag: ประเภทไม่ควรทั่วไปหมด) ──
+check("momoTypeToProductType maps MOMO type → fProductsType (general/tis/fda/control)", () => {
+  assert.equal(momoTypeToProductType("general"), "1"); // ทั่วไป
+  assert.equal(momoTypeToProductType("tis"), "2"); // มอก.
+  assert.equal(momoTypeToProductType("fda"), "3"); // อย.
+  assert.equal(momoTypeToProductType("control"), "4"); // พิเศษ
+  assert.equal(momoTypeToProductType("FDA"), "3", "case-insensitive");
+  assert.equal(momoTypeToProductType("weird"), "1", "unknown → ทั่วไป");
+  assert.equal(momoTypeToProductType(""), "1");
+  assert.equal(momoTypeToProductType(null), "1");
+});
+
+check("momoTypeLabel renders a Thai chip label", () => {
+  assert.equal(momoTypeLabel("tis"), "มอก.");
+  assert.equal(momoTypeLabel("fda"), "อย.");
+  assert.equal(momoTypeLabel("general"), "ทั่วไป");
+  assert.equal(momoTypeLabel("xyz"), "xyz", "unknown → raw");
+  assert.equal(momoTypeLabel(""), "—");
+});
+
+// ── (j) discovery scans ALL boards (owner: "เอาของทุกสถานะมาเลย") ──
+check("DISCOVERY_BOARDS covers all MOMO live boards", () => {
+  assert.equal(DISCOVERY_BOARDS.length, MOMO_LIVE_STATUSES.length);
+  for (const b of MOMO_LIVE_STATUSES) assert.ok(DISCOVERY_BOARDS.includes(b), `includes ${b}`);
+});
+
+// ── (k) a candidate's fProductsType seeds from the REAL MOMO type, not hardcoded '1' ──
+check("classify carries the raw MOMO type through to the candidate", () => {
+  const c = classifyDiscovery(
+    [parcel({ tracking: "T1", weightKg: 5, quantity: 1, type: "fda" })],
+    new Set(),
+  ).candidates[0];
+  assert.equal(c.productType, "fda");
+  assert.equal(momoTypeToProductType(c.productType), "3", "→ อย. (not ทั่วไป)");
 });
 
 // local rounding mirrors the module (kept private there)

@@ -41,7 +41,7 @@
  * @see supabase/migrations/0235_shop_order_3stage_rederive.sql — the trigger that unsticks the shop
  */
 
-import type { MomoLiveParcel } from "@/lib/integrations/momo-web/types";
+import { MOMO_LIVE_STATUSES, type MomoLiveParcel } from "@/lib/integrations/momo-web/types";
 import {
   aggregateLiveMetricsByBase,
   baseTrackingOf,
@@ -65,15 +65,44 @@ function numOr0(v: unknown): number {
 }
 
 /**
- * The Live boards the discovery scan acts on. v1 = ONLY `sending_thai`
- * (กำลังส่งมาไทย) — the exact "มาไทยแล้ว มีตู้ แต่หายจากคิว" case (the partner API
- * dropped it here). Earlier boards (waiting/arrival_kodang) are still IN the partner
- * feed → they show in the normal Review & Commit queue, so surfacing them here would
- * duplicate it. Extend this array to also sweep wait_pay/sending/done if a
- * further-advanced parcel is ever found stuck (each commits at the China-side '3' cap
- * via the core's hasContainer logic — never a Thailand-side/billing status).
+ * The Live boards the discovery scan acts on — ALL 6 (owner/ภูม 2026-07-03: "เอาของทุก
+ * สถานะมาเลย · ยกเว็บ MOMO มาแปะที่ระบบ · จะได้เช็คว่าแทรคนี้จริงๆอยู่ถึงไหน"). The scan
+ * fetches every board, but the queue surfaces ONLY the parcels that are (a) weighted and
+ * (b) NOT already in tb_forwarder AND (c) NOT in the partner Review queue (momo_import_tracks) —
+ * i.e. the GENUINELY dropped/orphaned ones, at whatever status MOMO shows. Parcels still in
+ * the partner feed (waiting/arrival_kodang) are excluded so we don't duplicate the normal
+ * Review & Commit queue nor overwrite its rows. Every commit lands at the China-side '3'/'2'
+ * cap via the core's hasContainer logic — never a Thailand-side/billing status, whatever board.
  */
-export const DISCOVERY_BOARDS = ["sending_thai"] as const;
+export const DISCOVERY_BOARDS = MOMO_LIVE_STATUSES;
+
+/**
+ * MOMO product `type` → Pacred fProductsType. Pacred's legacy dropdown (review-client):
+ *   '1' ทั่วไป · '2' มอก. · '3' อย./น้ำยา · '4' พิเศษ.
+ * MOMO's `type` values seen on prod: general · tis (มอก.) · fda (อย.) · control (ควบคุม).
+ * The old default hardcoded '1' for every row (owner flag) — this maps the REAL MOMO type.
+ */
+const MOMO_TYPE_TO_PRODUCT: Record<string, "1" | "2" | "3" | "4"> = {
+  general: "1",
+  tis: "2", // มาตรฐาน มอก.
+  fda: "3", // อย.
+  control: "4", // สินค้าควบคุม → พิเศษ
+};
+export function momoTypeToProductType(momoType: string | null | undefined): "1" | "2" | "3" | "4" {
+  return MOMO_TYPE_TO_PRODUCT[(momoType ?? "").trim().toLowerCase()] ?? "1";
+}
+
+/** MOMO product `type` → readable Thai chip label (unknown → the raw string). */
+const MOMO_TYPE_LABEL: Record<string, string> = {
+  general: "ทั่วไป",
+  tis: "มอก.",
+  fda: "อย.",
+  control: "ควบคุม",
+};
+export function momoTypeLabel(momoType: string | null | undefined): string {
+  const t = (momoType ?? "").trim().toLowerCase();
+  return MOMO_TYPE_LABEL[t] ?? (t || "—");
+}
 
 /** Normalize a Live memberCode → the PR#### form tb_users.userID uses. */
 export function normalizeMemberCode(raw: string | null | undefined): string {

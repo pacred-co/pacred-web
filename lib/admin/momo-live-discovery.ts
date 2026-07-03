@@ -85,6 +85,35 @@ async function chunkedForwarderBaseSet(
 }
 
 /**
+ * Add every tracking present in momo_import_tracks (the partner Review queue) to the
+ * suppress set — so a parcel the partner feed still holds is never re-surfaced by the
+ * all-boards discovery scan (nor overwritten by a materialize). Fail-open per chunk on a
+ * read error (the per-commit re-check + materialize upsert-on-conflict remain the guards).
+ */
+async function addPartnerFeedTrackings(
+  admin: SupabaseClient,
+  lookupKeys: string[],
+  set: Set<string>,
+): Promise<void> {
+  const CHUNK = 200;
+  for (let i = 0; i < lookupKeys.length; i += CHUNK) {
+    const slice = lookupKeys.slice(i, i + CHUNK);
+    const { data, error } = await admin
+      .from("momo_import_tracks")
+      .select("momo_tracking_no")
+      .in("momo_tracking_no", slice);
+    if (error) {
+      console.error("[momo-live-discovery] momo_import_tracks lookup failed", { code: error.code });
+      continue; // fail-open: the materialize upsert + commit claim still prevent a dup
+    }
+    for (const r of (data ?? []) as Array<{ momo_tracking_no: string | null }>) {
+      const t = (r.momo_tracking_no ?? "").trim();
+      if (t) set.add(baseTrackingOf(t));
+    }
+  }
+}
+
+/**
  * Run the discovery scan. Best-effort per board (a failed board is recorded, not fatal);
  * if the MOMO login itself fails, `scrapeError` is set and `rows` is empty.
  */
@@ -143,6 +172,14 @@ export async function runMomoLiveDiscovery(
     lookupKeys.add(baseTrackingOf(t));
   }
   const existingBaseTrackings = await chunkedForwarderBaseSet(admin, Array.from(lookupKeys));
+
+  // ── 2b. ALSO exclude anything already in the partner Review queue (momo_import_tracks).
+  //    Scanning all boards means we'd otherwise re-surface parcels the partner feed still
+  //    has (waiting/arrival_kodang) — those belong to the normal Review & Commit flow, and
+  //    materializing over them would clobber the partner row. Suppress every tracking present
+  //    in momo_import_tracks (committed → already has a tb_forwarder row anyway; uncommitted →
+  //    the Review queue owns it). So discovery = the GENUINELY orphaned parcels only. ──
+  await addPartnerFeedTrackings(admin, Array.from(lookupKeys), existingBaseTrackings);
 
   // ── 3. Pure diff → commit-eligible candidates ──
   const { candidates, alreadyInSystem, skippedNoWeight, baseTrackingsSeen } = classifyDiscovery(
