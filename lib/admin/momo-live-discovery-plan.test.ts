@@ -20,6 +20,8 @@ import {
   normalizeMemberCode,
   momoTypeToProductType,
   momoTypeLabel,
+  pickSuggestedCarrier,
+  payMethodForCarrier,
   DISCOVERY_BOARDS,
 } from "@/lib/admin/momo-live-discovery-plan";
 import { MOMO_LIVE_STATUSES } from "@/lib/integrations/momo-web/types";
@@ -206,6 +208,35 @@ check("classify carries the raw MOMO type through to the candidate", () => {
   ).candidates[0];
   assert.equal(c.productType, "fda");
   assert.equal(momoTypeToProductType(c.productType), "3", "→ อย. (not ทั่วไป)");
+});
+
+// ── (l) delivery: pickSuggestedCarrier prefers the saved carrier when eligible ──
+check("pickSuggestedCarrier prefers the saved carrier when eligible, else first, else ''", () => {
+  const eligible = [{ id: "2" }, { id: "13" }, { id: "16" }];
+  // saved carrier IS eligible → keep it (the customer's choice wins)
+  assert.equal(pickSuggestedCarrier("13", eligible), "13");
+  // saved carrier NOT eligible for this province → fall to the first eligible
+  assert.equal(pickSuggestedCarrier("45", eligible), "2");
+  // no saved carrier → first eligible
+  assert.equal(pickSuggestedCarrier("", eligible), "2");
+  assert.equal(pickSuggestedCarrier(null, eligible), "2");
+  // no eligible carriers at all (no address) → "" (admin picks manually)
+  assert.equal(pickSuggestedCarrier("2", []), "");
+  assert.equal(pickSuggestedCarrier("", []), "");
+});
+
+// ── (m) delivery: payMethodForCarrier — BKK-origin → ต้นทาง · upcountry → COD ──
+check("payMethodForCarrier derives ต้นทาง('1')/COD('2') from the carrier (money rule)", () => {
+  // Flash (2) / J&T (24) / self-pickup (PCS) = pay-at-origin → '1' ต้นทาง (BKK band)
+  assert.equal(payMethodForCarrier("2"), "1");
+  assert.equal(payMethodForCarrier("24"), "1");
+  assert.equal(payMethodForCarrier("PCS"), "1");
+  // an upcountry private carrier (13 ธนามัย, 45 เอ็มพอร์ท) → '2' ปลายทาง COD
+  assert.equal(payMethodForCarrier("13"), "2");
+  assert.equal(payMethodForCarrier("45"), "2");
+  // empty/unknown → '2' (legacy default fall-through — matches derivePayMethod)
+  assert.equal(payMethodForCarrier(""), "2");
+  assert.equal(payMethodForCarrier(null), "2");
 });
 
 // local rounding mirrors the module (kept private there)

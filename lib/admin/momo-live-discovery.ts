@@ -23,18 +23,24 @@ import {
   classifyDiscovery,
   normalizeMemberCode,
   buildImportTrackRow,
+  pickSuggestedCarrier,
+  payMethodForCarrier,
   type DiscoveryCandidate,
+  type DiscoveryDelivery,
+  type DeliveryAddressOption,
 } from "@/lib/admin/momo-live-discovery-plan";
+import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 
 /** A discovery candidate enriched with system context for the queue UI. */
-export type DiscoveryRow = DiscoveryCandidate & {
-  /** memberCode resolves to a real tb_users row → safe to commit. */
-  userIdValid: boolean;
-  /** linked ฝากสั่งซื้อ hno (this tracking is a tb_order line) or null. */
-  linkedHno: string | null;
-  /** the linked order's current hstatus (display: shows it's stuck) or null. */
-  linkedHstatus: string | null;
-};
+export type DiscoveryRow = DiscoveryCandidate &
+  DiscoveryDelivery & {
+    /** memberCode resolves to a real tb_users row → safe to commit. */
+    userIdValid: boolean;
+    /** linked ฝากสั่งซื้อ hno (this tracking is a tb_order line) or null. */
+    linkedHno: string | null;
+    /** the linked order's current hstatus (display: shows it's stuck) or null. */
+    linkedHstatus: string | null;
+  };
 
 export type MomoLiveDiscoveryResult = {
   rows: DiscoveryRow[];
@@ -140,6 +146,163 @@ async function scrapeDiscoveryBoards(
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// Delivery resolution (owner/ภูม 2026-07-03 · reuse the auto-commit SOT)
+//
+// For each customer surface: their saved delivery addresses (a picker the admin
+// can view/edit) + a suggested {address, carrier, payMethod} pre-resolved the same
+// way resolveAutoCommitDelivery does (saved carrier ∘ default-address ∘ province
+// eligibility ∘ derivePayMethod). fail-soft: no saved address → empty list + blank
+// suggestion → the commit core writes EMPTY_ADDRESS; the admin fills it later.
+// ════════════════════════════════════════════════════════════
+
+const BLANK_DELIVERY: DiscoveryDelivery = {
+  addresses: [],
+  suggestedAddressId: null,
+  suggestedFShipBy: "",
+  suggestedPayMethod: "2",
+};
+
+type AddressRow = {
+  addressid: number;
+  addressname: string | null;
+  addressprovince: string | null;
+  addressdistrict: string | null;
+  addresszipcode: string | null;
+};
+
+/**
+ * Resolve delivery context for a set of customers in a few batched round-trips:
+ *   1. tb_address_main → each customer's DEFAULT address id.
+ *   2. tb_address (addressstatus="1") → all their active saved addresses.
+ *   3. tb_users.userShipBy → the saved carrier (to seed the suggestion).
+ * Then, per customer, PRE-COMPUTE the eligible carriers for each address
+ * (getShipByOptionsForAddress — the reused legacy rule) and the suggested
+ * {address, carrier, payMethod}. All reads fail-soft: a probe error → that
+ * customer gets BLANK_DELIVERY (the admin fills it at commit).
+ */
+async function resolveDeliveryByUser(
+  admin: SupabaseClient,
+  userIds: string[],
+): Promise<Map<string, DiscoveryDelivery>> {
+  const out = new Map<string, DiscoveryDelivery>();
+  if (userIds.length === 0) return out;
+
+  // 1. Default address id per user (tb_address_main).
+  const defaultByUser = new Map<string, number>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const slice = userIds.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("tb_address_main")
+      .select("userid, addressid")
+      .in("userid", slice);
+    if (error) {
+      console.error("[momo-live-discovery] tb_address_main probe failed", { code: error.code });
+      continue; // fail-soft
+    }
+    for (const r of (data ?? []) as Array<{ userid: string | null; addressid: number | null }>) {
+      const u = (r.userid ?? "").trim().toUpperCase();
+      if (u && r.addressid && !defaultByUser.has(u)) defaultByUser.set(u, r.addressid);
+    }
+  }
+
+  // 2. All active saved addresses per user (tb_address, addressstatus="1").
+  const addressesByUser = new Map<string, AddressRow[]>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const slice = userIds.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("tb_address")
+      .select("userid, addressid, addressname, addressprovince, addressdistrict, addresszipcode")
+      .in("userid", slice)
+      .eq("addressstatus", "1");
+    if (error) {
+      console.error("[momo-live-discovery] tb_address probe failed", { code: error.code });
+      continue; // fail-soft
+    }
+    for (const r of (data ?? []) as Array<AddressRow & { userid: string | null }>) {
+      const u = (r.userid ?? "").trim().toUpperCase();
+      if (!u || !r.addressid) continue;
+      const list = addressesByUser.get(u) ?? [];
+      list.push({
+        addressid: r.addressid,
+        addressname: r.addressname,
+        addressprovince: r.addressprovince,
+        addressdistrict: r.addressdistrict,
+        addresszipcode: r.addresszipcode,
+      });
+      addressesByUser.set(u, list);
+    }
+  }
+
+  // 3. Saved carrier per user (tb_users.userShipBy — camelCase on prod).
+  const carrierByUser = new Map<string, string>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const slice = userIds.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("tb_users")
+      .select('userID, "userShipBy"')
+      .in("userID", slice);
+    if (error) {
+      console.error("[momo-live-discovery] tb_users userShipBy probe failed", { code: error.code });
+      continue; // fail-soft
+    }
+    for (const r of (data ?? []) as Array<{ userID: string | null; userShipBy: string | null }>) {
+      const u = (r.userID ?? "").trim().toUpperCase();
+      const c = (r.userShipBy ?? "").trim();
+      // only a plausible carrier (≤10 chars = the fShipBy cap) seeds the suggestion.
+      if (u && c && c.length <= 10) carrierByUser.set(u, c);
+    }
+  }
+
+  // 4. Per user — build the address options (with eligible carriers) + the suggestion.
+  for (const userID of new Set(userIds)) {
+    const addrRows = addressesByUser.get(userID) ?? [];
+    if (addrRows.length === 0) {
+      out.set(userID, { ...BLANK_DELIVERY });
+      continue;
+    }
+    const savedCarrier = carrierByUser.get(userID) ?? "";
+    const defaultId = defaultByUser.get(userID) ?? null;
+
+    const options: DeliveryAddressOption[] = addrRows.map((a) => {
+      const province = (a.addressprovince ?? "").trim();
+      const zip = (a.addresszipcode ?? "").trim();
+      const carriers = getShipByOptionsForAddress({
+        zip,
+        province,
+        amphoe: a.addressdistrict,
+        userID,
+      });
+      const labelParts = [
+        (a.addressname ?? "").trim() || "(ไม่มีชื่อ)",
+        province || "—",
+        zip || "",
+      ].filter(Boolean);
+      return {
+        addressID: a.addressid,
+        label: labelParts.join(" · "),
+        province,
+        zip,
+        carriers: carriers.map((c) => ({ id: c.id, name: c.name })),
+      };
+    });
+
+    // seed the address: the default (when it's among the active rows) else the first.
+    const seededAddress =
+      (defaultId != null && options.find((o) => o.addressID === defaultId)) || options[0];
+    const seededCarrier = pickSuggestedCarrier(savedCarrier, seededAddress.carriers);
+
+    out.set(userID, {
+      addresses: options,
+      suggestedAddressId: seededAddress.addressID,
+      suggestedFShipBy: seededCarrier,
+      suggestedPayMethod: payMethodForCarrier(seededCarrier),
+    });
+  }
+
+  return out;
+}
+
 export async function runMomoLiveDiscovery(
   admin: SupabaseClient,
   sizePerBoard = 1000,
@@ -237,10 +400,19 @@ export async function runMomoLiveDiscovery(
     }
   }
 
+  // ── 4b. Resolve delivery (saved addresses + suggested carrier/COD) per customer.
+  //    Only for VALID members (an unknown userID has no addresses anyway) — batched.
+  const deliveryByUser = await resolveDeliveryByUser(
+    admin,
+    memberCodes.filter((m) => validMembers.has(m)),
+  );
+
   const rows: DiscoveryRow[] = candidates.map((c) => {
     const linkedHno = trackingToHno.get(c.baseTracking) ?? null;
+    const delivery = deliveryByUser.get(normalizeMemberCode(c.memberCode)) ?? BLANK_DELIVERY;
     return {
       ...c,
+      ...delivery,
       userIdValid: validMembers.has(normalizeMemberCode(c.memberCode)),
       linkedHno,
       linkedHstatus: linkedHno ? hnoToStatus.get(linkedHno) ?? null : null,

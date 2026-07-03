@@ -16,10 +16,20 @@ import {
   commitDiscoveredBatch,
 } from "@/actions/admin/momo-live-discovery";
 import type { DiscoveryRow, MomoLiveDiscoveryResult } from "@/lib/admin/momo-live-discovery";
-import { momoTypeToProductType, momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
+import {
+  momoTypeToProductType,
+  momoTypeLabel,
+  payMethodForCarrier,
+} from "@/lib/admin/momo-live-discovery-plan";
 
 type ProductType = "1" | "2" | "3" | "4";
-type EditState = { userID: string; fShipBy: string; fProductsType: ProductType };
+type EditState = {
+  userID: string;
+  /** the picked saved address (null = ไม่ระบุ → เซล/ลูกค้ากรอกภายหลัง). */
+  addressID: number | null;
+  fShipBy: string;
+  fProductsType: ProductType;
+};
 
 const PRODUCT_LABELS: Record<ProductType, string> = {
   "1": "ทั่วไป",
@@ -46,10 +56,33 @@ export function MomoDiscoveryClient() {
   function seed(rs: DiscoveryRow[]) {
     const e: Record<string, EditState> = {};
     // default ประเภท จากค่าจริงที่ MOMO ส่ง (general→ทั่วไป · tis→มอก. · fda→อย. · control→พิเศษ)
+    // default ที่อยู่ + ขนส่ง จากที่อยู่/ขนส่งที่ลูกค้าบันทึกไว้ (จับขนส่งตามจังหวัดให้เลย)
     for (const r of rs) {
-      e[r.baseTracking] = { userID: r.memberCode, fShipBy: "", fProductsType: momoTypeToProductType(r.productType) };
+      e[r.baseTracking] = {
+        userID: r.memberCode,
+        addressID: r.suggestedAddressId,
+        fShipBy: r.suggestedFShipBy,
+        fProductsType: momoTypeToProductType(r.productType),
+      };
     }
     setEdits(e);
+  }
+
+  /** Carriers eligible for the address currently picked on this row (empty when none). */
+  function carriersFor(r: DiscoveryRow, addressID: number | null): { id: string; name: string }[] {
+    return r.addresses.find((a) => a.addressID === addressID)?.carriers ?? [];
+  }
+
+  /**
+   * When the admin picks a different address, auto-select the FIRST carrier eligible for
+   * that address's province (owner rule: จับขนส่งตามจังหวัดให้เลย) — keeping the current
+   * carrier only if it's still eligible for the new address.
+   */
+  function onAddressChange(r: DiscoveryRow, addressID: number | null) {
+    const eligible = carriersFor(r, addressID);
+    const cur = (edits[r.baseTracking]?.fShipBy ?? "").trim();
+    const nextShipBy = cur && eligible.some((c) => c.id === cur) ? cur : eligible[0]?.id ?? "";
+    setEdit(r.baseTracking, { addressID, fShipBy: nextShipBy });
   }
 
   function load() {
@@ -78,8 +111,13 @@ export function MomoDiscoveryClient() {
       await alert("กรุณาระบุรหัสลูกค้า (PR####) ก่อนสร้าง");
       return;
     }
+    const addr = e.addressID != null ? r.addresses.find((a) => a.addressID === e.addressID) : null;
+    const pay = e.fShipBy.trim() ? payMethodForCarrier(e.fShipBy.trim()) : null;
     const ok = await confirm(
-      `สร้างรายการนำเข้าให้แทรคนี้?\n\nแทรค ${r.baseTracking}\nลูกค้า ${e.userID.trim()}\nน้ำหนัก ${num(r.weightKg)} กก. · ${num(r.cbm)} คิว · ${r.quantity} กล่อง\nตู้ ${r.container || "—"}`,
+      `สร้างรายการนำเข้าให้แทรคนี้?\n\nแทรค ${r.baseTracking}\nลูกค้า ${e.userID.trim()}\n` +
+        `น้ำหนัก ${num(r.weightKg)} กก. · ${num(r.cbm)} คิว · ${r.quantity} กล่อง\nตู้ ${r.container || "—"}\n` +
+        `ที่อยู่จัดส่ง ${addr ? addr.label : "ไม่ระบุ (กรอกภายหลัง)"}\n` +
+        `ขนส่ง ${e.fShipBy.trim() || "ยังไม่ระบุ"}${pay ? ` · ${pay === "2" ? "เก็บปลายทาง (COD)" : "ต้นทาง"}` : ""}`,
     );
     if (!ok) return;
     setBusy((b) => ({ ...b, [r.baseTracking]: true }));
@@ -88,6 +126,7 @@ export function MomoDiscoveryClient() {
       userID: e.userID.trim(),
       fShipBy: e.fShipBy.trim(),
       fProductsType: e.fProductsType,
+      addressID: e.addressID,
     });
     setBusy((b) => ({ ...b, [r.baseTracking]: false }));
     if (!res.ok) {
@@ -108,6 +147,7 @@ export function MomoDiscoveryClient() {
           userID: e.userID.trim(),
           fShipBy: e.fShipBy.trim(),
           fProductsType: e.fProductsType,
+          addressID: e.addressID,
         };
       });
     if (items.length === 0) {
@@ -205,7 +245,7 @@ export function MomoDiscoveryClient() {
         </div>
       ) : (
         <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border">
-          <table className="w-full min-w-[1080px] text-sm">
+          <table className="w-full min-w-[1320px] text-sm">
             <thead className="bg-muted/10 text-left text-[11px] uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-3 py-2">รูป</th>
@@ -213,14 +253,24 @@ export function MomoDiscoveryClient() {
                 <th className="px-3 py-2 text-right">น้ำหนัก · คิว · กล่อง</th>
                 <th className="px-3 py-2">ฝากสั่งซื้อ</th>
                 <th className="px-3 py-2">รหัสลูกค้า *</th>
+                <th className="px-3 py-2">ที่อยู่จัดส่ง</th>
                 <th className="px-3 py-2">ขนส่ง · ประเภท</th>
                 <th className="px-3 py-2 text-right">สร้าง</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((r) => {
-                const e = edits[r.baseTracking] ?? { userID: r.memberCode, fShipBy: "", fProductsType: "1" as ProductType };
+                const e =
+                  edits[r.baseTracking] ??
+                  ({
+                    userID: r.memberCode,
+                    addressID: r.suggestedAddressId,
+                    fShipBy: r.suggestedFShipBy,
+                    fProductsType: "1" as ProductType,
+                  } satisfies EditState);
                 const rowBusy = !!busy[r.baseTracking];
+                const eligible = carriersFor(r, e.addressID);
+                const pay = e.fShipBy.trim() ? payMethodForCarrier(e.fShipBy.trim()) : null;
                 return (
                   <tr key={r.baseTracking} className="align-top hover:bg-muted/5">
                     {/* thumbnail */}
@@ -301,18 +351,76 @@ export function MomoDiscoveryClient() {
                       )}
                     </td>
 
+                    {/* delivery address */}
+                    <td className="px-3 py-3">
+                      {r.addresses.length > 0 ? (
+                        <>
+                          <select
+                            value={e.addressID ?? ""}
+                            onChange={(ev) =>
+                              onAddressChange(r, ev.target.value ? Number(ev.target.value) : null)
+                            }
+                            className="block w-56 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                          >
+                            <option value="">— ไม่ระบุ (กรอกภายหลัง) —</option>
+                            {r.addresses.map((a) => (
+                              <option key={a.addressID} value={a.addressID}>
+                                {a.label}
+                              </option>
+                            ))}
+                          </select>
+                          {e.addressID != null && (
+                            <div className="mt-1 text-[11px] text-muted">
+                              {carriersFor(r, e.addressID).length} ขนส่งในจังหวัดนี้
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-muted">
+                          — ไม่มีที่อยู่บันทึกไว้ (เซล/ลูกค้ากรอกภายหลัง) —
+                        </span>
+                      )}
+                    </td>
+
                     {/* shipBy + productType */}
                     <td className="px-3 py-3">
-                      <input
-                        value={e.fShipBy}
-                        onChange={(ev) => setEdit(r.baseTracking, { fShipBy: ev.target.value })}
-                        className="mb-1 w-28 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                        placeholder="ขนส่ง (เว้นได้)"
-                      />
+                      {eligible.length > 0 ? (
+                        <select
+                          value={e.fShipBy}
+                          onChange={(ev) => setEdit(r.baseTracking, { fShipBy: ev.target.value })}
+                          className="mb-1 block w-40 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        >
+                          <option value="">— เลือกขนส่ง —</option>
+                          {eligible.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          value={e.fShipBy}
+                          onChange={(ev) => setEdit(r.baseTracking, { fShipBy: ev.target.value })}
+                          className="mb-1 w-28 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                          placeholder="ขนส่ง (เว้นได้)"
+                        />
+                      )}
+                      {/* COD / ต้นทาง chip — read-only, derived from the carrier (money rule) */}
+                      {pay && (
+                        <div className="mb-1">
+                          {pay === "2" ? (
+                            <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-medium text-orange-800">
+                              💰 เก็บปลายทาง (COD)
+                            </span>
+                          ) : (
+                            <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                              ต้นทาง
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <select
                         value={e.fProductsType}
                         onChange={(ev) => setEdit(r.baseTracking, { fProductsType: ev.target.value as ProductType })}
-                        className="block w-28 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        className="block w-40 rounded-lg border border-border bg-background px-2 py-1 text-xs"
                       >
                         {(Object.keys(PRODUCT_LABELS) as ProductType[]).map((k) => (
                           <option key={k} value={k}>{PRODUCT_LABELS[k]}</option>

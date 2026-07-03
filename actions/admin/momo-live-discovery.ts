@@ -29,6 +29,7 @@ import {
   type MomoLiveDiscoveryResult,
 } from "@/lib/admin/momo-live-discovery";
 import type { DiscoveryCandidate } from "@/lib/admin/momo-live-discovery-plan";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { commitMomoRowToForwarder } from "./momo-commit";
 
 const DISCOVERY_ROLES = ["super", "ops", "warehouse"] as const;
@@ -58,6 +59,12 @@ const commitItemSchema = z.object({
   userID: z.string().trim().regex(/^PR\d+$/i, "รหัสลูกค้าต้องเป็น PR####").max(20),
   fShipBy: z.string().trim().max(10).optional().default(""),
   fProductsType: z.enum(["1", "2", "3", "4"]).optional().default("1"),
+  // ที่อยู่จัดส่ง (owner/ภูม 2026-07-03): the customer's saved address the admin picked.
+  // null/omitted → the commit core's tb_address_main fallback (or EMPTY_ADDRESS).
+  addressID: z.number().int().positive().nullable().optional(),
+  // payMethod — '1'=ต้นทาง · '2'=ปลายทาง (COD). DERIVED server-side from the carrier
+  // below (derivePayMethod) so the money rule (upcountry → COD) can't be free-typed.
+  payMethod: z.enum(["1", "2"]).optional(),
 });
 type CommitDiscoveredInput = z.input<typeof commitItemSchema>;
 
@@ -99,12 +106,19 @@ async function commitOne(
   if ("error" in mat) {
     return { tracking: d.tracking, ok: false, error: mat.error };
   }
+  // 💰 payMethod is DERIVED from the carrier server-side (not the client's raw value) so the
+  // money rule holds: BKK-origin carrier → '1' ต้นทาง · upcountry private carrier → '2'
+  // ปลายทาง COD (owner/ภูม: "ขนส่งต่างจังหวัดเป็นเก็บเงินปลายทางหมด"). Only carried when a
+  // carrier is chosen — an empty carrier omits payMethod → the core's '1' legacy default.
+  const payMethod = d.fShipBy ? derivePayMethod(d.fShipBy) : undefined;
   const res = await commitMomoRowToForwarder({
     rowId: mat.rowId,
     userID: d.userID,
     fShipBy: d.fShipBy,
     fProductsType: d.fProductsType,
     fAmount: candidate.quantity,
+    addressID: d.addressID ?? null,
+    ...(payMethod ? { payMethod } : {}),
   });
   if (!res.ok) {
     return { tracking: d.tracking, ok: false, error: res.error ?? "commit ไม่สำเร็จ" };

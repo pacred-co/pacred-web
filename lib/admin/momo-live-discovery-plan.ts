@@ -46,6 +46,7 @@ import {
   aggregateLiveMetricsByBase,
   baseTrackingOf,
 } from "@/lib/integrations/momo-web/live-parcel-metrics";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 
 /** Round to 2dp (weight — tb_forwarder numeric(14,2)). */
 function r2(n: number): number {
@@ -152,6 +153,64 @@ export type DiscoveryCandidate = {
   /** The warehouse-phase dates from Live (kodang/exported/…) for the synthetic raw. */
   statusDate: Record<string, string>;
 };
+
+/**
+ * One of the customer's saved delivery addresses — the picker the admin chooses from
+ * per discovery row. `carriers` is the province/zip-eligible carrier list PRE-COMPUTED
+ * server-side (getShipByOptionsForAddress) so the client never imports a server-only
+ * module to recompute on address-change (owner/ภูม 2026-07-03: "ช่องบริษัทขนส่งจะจับจาก
+ * เลขไปรษณีย์ว่าอยู่จังหวัดไหน และเลือกบริษัทขนส่งในจังหวัดนั้นให้เลย").
+ */
+export type DeliveryAddressOption = {
+  addressID: number;
+  /** "ชื่อ · จังหวัด · zip" — a human label for the <select>. */
+  label: string;
+  province: string;
+  zip: string;
+  /** The carriers eligible for THIS address (id + Thai name) — the reused legacy rule. */
+  carriers: Array<{ id: string; name: string }>;
+};
+
+/**
+ * Delivery fields added to each discovery row — the customer's saved addresses + the
+ * suggested {address, carrier, payMethod} pre-resolved from their SET data (mirrors
+ * resolveAutoCommitDelivery). All fail-soft: no saved address → empty list + blank
+ * suggestion (the commit core writes EMPTY_ADDRESS, the admin fills later at /review).
+ */
+export type DiscoveryDelivery = {
+  addresses: DeliveryAddressOption[];
+  /** the customer's default/eligible address to seed the picker (null → none saved). */
+  suggestedAddressId: number | null;
+  /** the seeded carrier (their saved carrier when eligible, else the address's first). */
+  suggestedFShipBy: string;
+  /** derivePayMethod(suggestedFShipBy) — '1' ต้นทาง (BKK) / '2' ปลายทาง COD (ตจว). */
+  suggestedPayMethod: "1" | "2";
+};
+
+/**
+ * Pick the carrier to SEED for an address: prefer the customer's saved carrier when it's
+ * eligible for that address's province (their choice wins), else the first eligible option,
+ * else "" (no eligible carrier / no address → admin picks manually). Pure — mirrors the
+ * resolveAutoCommitDelivery eligibility gate (auto-commit-momo.ts) minus the DB.
+ */
+export function pickSuggestedCarrier(
+  savedCarrier: string | null | undefined,
+  eligible: ReadonlyArray<{ id: string }>,
+): string {
+  const saved = (savedCarrier ?? "").trim();
+  if (saved && eligible.some((o) => o.id === saved)) return saved;
+  return eligible[0]?.id ?? "";
+}
+
+/**
+ * derivePayMethod re-exported through the plan module so the client can compute the
+ * COD/ต้นทาง chip on carrier-change WITHOUT importing a server-only module. '1'=ต้นทาง
+ * (BKK/ปริมณฑล origin) · '2'=ปลายทาง COD (ต่างจังหวัด — the upcountry rule). The province
+ * coupling is EMERGENT from carrier-eligibility ∘ this map (see pay-method.ts).
+ */
+export function payMethodForCarrier(fShipBy: string | null | undefined): "1" | "2" {
+  return derivePayMethod(fShipBy);
+}
 
 export type DiscoveryClassification = {
   candidates: DiscoveryCandidate[];
