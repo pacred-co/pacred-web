@@ -61,12 +61,14 @@ import {
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
   adminPickForwarderAddress,
+  adminUpdateForwarderAddressDetails,
   adminSplitForwarderBoxes,
 } from "@/actions/admin/forwarders-field-edits";
 import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
+import { nameShipBy } from "@/lib/freight/shipping-methods";
 import {
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
@@ -201,6 +203,20 @@ const SHIPBY_LABEL: Record<string, string> = {
   PCSF: "PRF เหมาๆ (ส่งฟรีในเขต)",
   PCSE: "PRE Express (ส่งด่วน)",
 };
+
+/**
+ * Friendly carrier label for a stored fshipby (owner/ภูม 2026-07-03: "ทำไมขึ้นเลข 2").
+ * A numeric external-courier code (e.g. "2" = Flash) must show its NAME, not the raw code.
+ * Order: the PCS-family rebrand labels → the full legacy nameShipBy() map (1-47) → the raw
+ * value (a custom carrier name the admin typed · nameShipBy returns "ไม่พบข้อมูล" there).
+ */
+function carrierLabel(code: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  if (!c) return "—";
+  if (SHIPBY_LABEL[c]) return SHIPBY_LABEL[c];
+  const n = nameShipBy(c);
+  return n === "ไม่พบข้อมูล" ? c : n;
+}
 
 type Props = {
   fId:            number;            // tb_forwarder.id — primary key for all writers
@@ -473,7 +489,7 @@ export function ForwarderInlineEdits(p: Props) {
         label="บริษัทขนส่ง"
         editing={editShipBy}
         setEditing={setEditShipBy}
-        display={p.fshipby || "—"}
+        display={carrierLabel(p.fshipby)}
       >
         {(close) => (
           <>
@@ -1039,7 +1055,7 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
         label="บริษัทขนส่ง"
         editing={editing}
         setEditing={setEditing}
-        display={fshipby ? (SHIPBY_LABEL[fshipby] ?? <span className="break-words">{fshipby}</span>) : "—"}
+        display={<span className="break-words">{carrierLabel(fshipby)}</span>}
       >
         {(close) => (
           <>
@@ -1079,21 +1095,34 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
  * Confirm-before-mutate (§0f). The address SNAPSHOT changes only; the carrier stays as its
  * own edit (บริษัทขนส่ง แก้ไข) — pick a matching carrier separately if the province changed.
  */
+type DeliveryAddr = {
+  name: string; lastname: string; addressno: string; subdistrict: string;
+  district: string; province: string; zipcode: string; tel: string; tel2: string; note: string;
+};
+
 export function EditDeliveryAddressField({
   fId,
   fshipby,
   addresses,
+  current,
 }: {
   fId: number;
   fshipby: string | null;
   addresses: { addressID: number; label: string; province: string }[];
+  /** the order's CURRENT snapshot address (tb_forwarder.fAddress*) — seeds the inline editor. */
+  current: DeliveryAddr;
 }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
+  // mode: 'pick' = เลือกจากที่อยู่ลูกค้า · 'manual' = แก้ไขเอง (พิมพ์)
+  const [mode, setMode] = useState<"pick" | "manual">(addresses.length > 0 ? "pick" : "manual");
   const [sel, setSel] = useState<string>(addresses[0]?.addressID ? String(addresses[0].addressID) : "");
+  const [form, setForm] = useState<DeliveryAddr>(current);
   const isPcs = (fshipby ?? "").trim() === "PCS";
+  const set = (k: keyof DeliveryAddr) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  async function onSave(close: () => void) {
+  async function onPickSave(close: () => void) {
     const addressId = Number(sel);
     if (!Number.isInteger(addressId) || addressId <= 0) {
       run(() => Promise.resolve({ ok: false, error: "กรุณาเลือกที่อยู่" }), () => {});
@@ -1101,51 +1130,92 @@ export function EditDeliveryAddressField({
     }
     const picked = addresses.find((a) => a.addressID === addressId);
     if (!(await confirm(
-      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${picked?.label ?? `#${addressId}`}\n\n(ดึง snapshot ที่อยู่ของลูกค้ามาใส่ในออเดอร์นี้)`,
+      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${picked?.label ?? `#${addressId}`}\n\n• ดึงที่อยู่ลูกค้ามาใส่ออเดอร์นี้\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
     ))) return;
     run(() => adminPickForwarderAddress({ fId, addressId }), close);
   }
+  async function onManualSave(close: () => void) {
+    if (!(await confirm(
+      `บันทึกที่อยู่จัดส่งที่แก้ไข ?\n\n${form.name} ${form.lastname} · ${form.province} ${form.zipcode}\n\n(บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ · แก้ได้)`,
+    ))) return;
+    run(() => adminUpdateForwarderAddressDetails({ fId, ...form }), close);
+  }
+  async function onWarehouse(close: () => void) {
+    if (!(await confirm(
+      `เปลี่ยนเป็น "รับเองที่โกดัง Pacred" ?\n\n• บริษัทขนส่ง → รับเองโกดัง · ค่าส่งในไทย = ฿0\n• ที่อยู่จัดส่งจะเป็นที่อยู่โกดัง Pacred`,
+    ))) return;
+    run(() => adminUpdateForwarderShipBy({ fId, fShipBy: "PCS" }), close);
+  }
+
+  const inp = "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
   return (
     <div className="mt-1.5">
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
       {!editing ? (
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="text-xs font-medium text-sky-600 hover:underline"
-        >
-          ✏️ เลือก/แก้ไขที่อยู่จัดส่ง
+        <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-sky-600 hover:underline">
+          ✏️ แก้ไข / เลือกที่อยู่จัดส่ง
         </button>
-      ) : isPcs ? (
-        <div className="space-y-1 text-left">
-          <p className="text-[11px] text-amber-700">
-            ℹ️ ออเดอร์นี้เป็นแบบ <b>รับเองที่โกดัง Pacred</b> — ไม่มีที่อยู่จัดส่ง (เปลี่ยนบริษัทขนส่งก่อนถ้าต้องการส่งถึงบ้าน)
-          </p>
-          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
-        </div>
-      ) : addresses.length === 0 ? (
-        <div className="space-y-1 text-left">
-          <p className="text-[11px] text-muted">ลูกค้ายังไม่มีที่อยู่จัดส่งที่บันทึกไว้</p>
-          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
-        </div>
       ) : (
-        <div className="space-y-2 text-left">
-          <select className={selectCls} value={sel} onChange={(e) => setSel(e.target.value)}>
-            {addresses.map((a) => (
-              <option key={a.addressID} value={a.addressID}>{a.label}</option>
-            ))}
-          </select>
-          <p className="text-[11px] text-muted">
-            เลือกจากที่อยู่ที่ลูกค้าบันทึกไว้ ({addresses.length} ที่อยู่) · ระบบจะ snapshot มาใส่ในออเดอร์นี้
-          </p>
-          <div className="flex gap-2">
-            <button type="button" disabled={pending || !sel} className={btnSave} onClick={() => onSave(() => setEditing(false))}>
-              บันทึก
+        <div className="space-y-2 text-left rounded-lg border border-border bg-surface-alt/40 p-2.5">
+          {isPcs && (
+            <p className="text-[11px] text-amber-700">
+              ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือก/พิมพ์ที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
+            </p>
+          )}
+          {/* mode toggle */}
+          <div className="flex gap-1 text-xs">
+            {addresses.length > 0 && (
+              <button type="button" onClick={() => setMode("pick")}
+                className={`rounded-md px-2.5 py-1 font-medium ${mode === "pick" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
+                เลือกจากที่อยู่ลูกค้า ({addresses.length})
+              </button>
+            )}
+            <button type="button" onClick={() => setMode("manual")}
+              className={`rounded-md px-2.5 py-1 font-medium ${mode === "manual" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
+              แก้ไขเอง (พิมพ์)
             </button>
-            <button type="button" disabled={pending} className={btnCancel} onClick={() => setEditing(false)}>
-              ยกเลิก
+          </div>
+
+          {mode === "pick" && addresses.length > 0 ? (
+            <div className="space-y-1.5">
+              <select className={selectCls} value={sel} onChange={(e) => setSel(e.target.value)}>
+                {addresses.map((a) => <option key={a.addressID} value={a.addressID}>{a.label}</option>)}
+              </select>
+              <p className="text-[11px] text-muted">บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)</p>
+              <button type="button" disabled={pending || !sel} className={btnSave} onClick={() => onPickSave(() => setEditing(false))}>บันทึก</button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <input className={inp} placeholder="ชื่อ" value={form.name} onChange={set("name")} />
+                <input className={inp} placeholder="นามสกุล" value={form.lastname} onChange={set("lastname")} />
+              </div>
+              <input className={inp} placeholder="บ้านเลขที่ / ที่อยู่" value={form.addressno} onChange={set("addressno")} />
+              <div className="grid grid-cols-2 gap-1.5">
+                <input className={inp} placeholder="ตำบล/แขวง" value={form.subdistrict} onChange={set("subdistrict")} />
+                <input className={inp} placeholder="อำเภอ/เขต" value={form.district} onChange={set("district")} />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <input className={inp} placeholder="จังหวัด" value={form.province} onChange={set("province")} />
+                <input className={inp} placeholder="ไปรษณีย์" value={form.zipcode} onChange={set("zipcode")} maxLength={10} />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <input className={inp} placeholder="เบอร์โทร" value={form.tel} onChange={set("tel")} maxLength={10} />
+                <input className={inp} placeholder="เบอร์สำรอง" value={form.tel2} onChange={set("tel2")} />
+              </div>
+              <input className={inp} placeholder="หมายเหตุ" value={form.note} onChange={set("note")} />
+              <p className="text-[11px] text-muted">พิมพ์แก้ที่อยู่ได้ตรงนี้ · บริษัทขนส่ง + ค่าส่ง จับตามจังหวัดให้อัตโนมัติ (แก้ได้)</p>
+              <button type="button" disabled={pending} className={btnSave} onClick={() => onManualSave(() => setEditing(false))}>บันทึกที่อยู่</button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 border-t border-border pt-2">
+            <button type="button" disabled={pending || isPcs} className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              onClick={() => onWarehouse(() => setEditing(false))}>
+              🏢 รับเองที่โกดัง (ขนส่ง→รับเองโกดัง)
             </button>
+            <button type="button" disabled={pending} className={btnCancel} onClick={() => setEditing(false)}>ยกเลิก</button>
           </div>
         </div>
       )}
