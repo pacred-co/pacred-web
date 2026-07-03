@@ -81,6 +81,39 @@ import { ADDRESSES } from "@/components/seo/site";
 import { TAX_DOC_MODES, prefFromMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
+import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
+
+/** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
+const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
+
+/**
+ * Auto-suggest the carrier for a delivery address (owner/ภูม 2026-07-03 · "จับจากเลขไปรษณีย์
+ * ว่าจังหวัดไหน แล้วเลือกบริษัทขนส่งในจังหวัดนั้นให้เลย · แต่ยังแก้ได้"). Rules:
+ *   - Keep a PCS-family carrier if already set (Pacred's own delivery is valid anywhere).
+ *   - Else keep the current carrier if it's still eligible for the province.
+ *   - Else pick the first province-eligible carrier (getShipByOptionsForAddress).
+ *   - Else fall back to the current value (no eligible option → don't blank it).
+ * The result is ALWAYS staff-editable afterward via <EditShipByField>.
+ */
+function suggestCarrierForAddress(
+  current: string,
+  ctx: { zip: string; province: string; amphoe: string | null; userID: string },
+): string {
+  const c = (current ?? "").trim();
+  if (PCS_FAMILY.has(c)) return c;
+  const eligible = getShipByOptionsForAddress(ctx);
+  if (c && eligible.some((o) => o.id === c)) return c;
+  return eligible[0]?.id ?? c;
+}
+
+/** Re-price ftransportprice by carrier (mirrors adminUpdateForwarderShipBy · legacy L1595):
+ *  PCSF→0 · PCSE→max(คิว×120,50) · PCS→0 · external courier → unchanged (return null). */
+function repriceTransportForCarrier(carrier: string, fVolume: number): number | null {
+  if (carrier === "PCSF" || carrier === "PCS") return 0;
+  if (carrier === "PCSE") return Math.max(fVolume * 120, 50);
+  return null; // external courier — leave ftransportprice as-is
+}
 
 // Local resolveLegacyAdminId (same pattern as forwarders-edit.ts / pay-user.ts
 // — known consolidation TODO; kept local to avoid premature extraction).
@@ -116,22 +149,20 @@ export async function adminPickForwarderAddress(
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
-    // 1. Read the forwarder — need fshipby (guard) + userid (ownership of the address).
+    // 1. Read the forwarder — fshipby (current carrier) + userid (ownership) + fstatus/fvolume (re-price).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid, fshipby")
+      .select("id, userid, fshipby, fstatus, fvolume")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; userid: string; fshipby: string | null }>();
+      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null }>();
     if (fwdErr) {
       console.error(`[adminPickForwarderAddress tb_forwarder] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
-
-    // Legacy guard (L1721): PCS = รับเองที่โกดัง → ไม่มีที่อยู่จัดส่ง.
-    if ((fwd.fshipby ?? "").trim() === "PCS") {
-      return { ok: false, error: "รายการนี้เป็นแบบรับเองที่โกดัง (PCS) — เปลี่ยนที่อยู่จัดส่งไม่ได้" };
-    }
+    // NOTE: a PCS (รับเองที่โกดัง) row CAN be re-pointed to a delivery address now — picking a
+    // real address flips it OFF self-pickup (owner/ภูม 2026-07-03). The auto-carrier below sets a
+    // province carrier, so we no longer hard-block a PCS row here.
 
     // 2. Read the chosen address — MUST belong to the same customer + be active
     //    (ownership guard: addressid AND userid AND addressstatus='1').
@@ -153,7 +184,18 @@ export async function adminPickForwarderAddress(
     }
     if (!addr) return { ok: false, error: "ไม่พบที่อยู่ของลูกค้ารายนี้ (หรือถูกลบไปแล้ว)" };
 
-    // 3. Copy the SNAPSHOT into tb_forwarder.fAddress* (legacy L1737-1739).
+    // 2b. Auto-resolve the carrier by the NEW address province (owner/ภูม 2026-07-03) + re-price
+    //     the domestic leg per that carrier. Both stay staff-editable (<EditShipByField>).
+    const carrier = suggestCarrierForAddress((fwd.fshipby ?? "").trim(), {
+      zip:      (addr.addresszipcode ?? "").trim(),
+      province: (addr.addressprovince ?? "").trim(),
+      amphoe:   (addr.addressdistrict ?? "").trim() || null,
+      userID:   fwd.userid,
+    });
+    const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
+    const reprice = fStatusInt <= 5 ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0)) : null;
+
+    // 3. Copy the SNAPSHOT into tb_forwarder.fAddress* (legacy L1737-1739) + carrier + payMethod.
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update({
@@ -167,6 +209,8 @@ export async function adminPickForwarderAddress(
         faddressnote:        addr.addressnote ?? "",
         faddresstel:         addr.addresstel ?? "",
         faddresstel2:        addr.addresstel2 ?? "",
+        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethod(carrier) } : {}),
+        ...(reprice != null ? { ftransportprice: reprice } : {}),
         adminidupdate:       legacyAdminId,
       })
       .eq("id", d.fId);
@@ -179,6 +223,89 @@ export async function adminPickForwarderAddress(
       addressId: d.addressId,
       userid:    fwd.userid,
       to:        `${addr.addressname ?? ""} ${addr.addresslastname ?? ""} · ${addr.addressprovince ?? ""}`,
+      carrier, reprice,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
+// ── adminUpdateForwarderAddressDetails — inline free-text edit of the delivery address ──
+// owner/ภูม 2026-07-03: staff must be able to EDIT the address text in-place (ที่อยู่เป็นก้อน
+// เดียวกัน แก้ไม่ได้). Updates ONLY the tb_forwarder.fAddress* snapshot columns from free text,
+// then re-resolves the carrier by the (possibly new) province + re-prices the domestic leg
+// (still editable). No tb_address write (this is the order's own snapshot, not the address book).
+const addressDetailsSchema = z.object({
+  fId:          z.number().int().positive(),
+  name:         z.string().trim().max(120).default(""),
+  lastname:     z.string().trim().max(120).default(""),
+  addressno:    z.string().trim().max(255).default(""),
+  subdistrict:  z.string().trim().max(120).default(""),
+  district:     z.string().trim().max(120).default(""),
+  province:     z.string().trim().max(120).default(""),
+  zipcode:      z.string().trim().max(10).default(""),
+  tel:          z.string().trim().max(10).default(""),
+  tel2:         z.string().trim().max(20).default(""),
+  note:         z.string().trim().max(500).default(""),
+});
+export type AdminUpdateForwarderAddressDetailsInput = z.input<typeof addressDetailsSchema>;
+
+export async function adminUpdateForwarderAddressDetails(
+  rawInput: AdminUpdateForwarderAddressDetailsInput,
+): Promise<AdminActionResult> {
+  const parsed = addressDetailsSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, userid, fshipby, fstatus, fvolume")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderAddressDetails read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    // Re-resolve the carrier by the (edited) province + re-price the domestic leg (editable).
+    const carrier = suggestCarrierForAddress((fwd.fshipby ?? "").trim(), {
+      zip: d.zipcode, province: d.province, amphoe: d.district || null, userID: fwd.userid,
+    });
+    const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
+    const reprice = fStatusInt <= 5 ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0)) : null;
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({
+        faddressname:        d.name,
+        faddresslastname:    d.lastname,
+        faddressno:          d.addressno,
+        faddresssubdistrict: d.subdistrict,
+        faddressdistrict:    d.district,
+        faddressprovince:    d.province,
+        faddresszipcode:     d.zipcode,
+        faddresstel:         d.tel,
+        faddresstel2:        d.tel2,
+        faddressnote:        d.note,
+        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethod(carrier) } : {}),
+        ...(reprice != null ? { ftransportprice: reprice } : {}),
+        adminidupdate:       legacyAdminId,
+      })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderAddressDetails update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกที่อยู่ไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_address_details", "tb_forwarder", String(d.fId), {
+      userid: fwd.userid, province: d.province, carrier, reprice,
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);

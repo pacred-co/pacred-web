@@ -464,11 +464,11 @@ async function tryRenderTbForwarder(
   }
 
   // ── ภูม 2026-07-03: saved-address list for the inline "แก้ไขที่อยู่จัดส่ง" picker ──
-  // Staff can re-pick from the customer's saved tb_address (like the ship-by edit).
-  // Only relevant for a delivery carrier (self-pickup has no delivery address). The
-  // pick action (adminPickForwarderAddress) re-verifies ownership + snapshots.
+  // Staff can re-pick from the customer's saved tb_address (like the ship-by edit) OR type a
+  // new one OR switch to รับเองที่โกดัง. Fetched for EVERY row (incl. self-pickup PCS rows —
+  // picking a real address flips it off self-pickup). The actions re-verify ownership.
   const savedAddresses: { addressID: number; label: string; province: string }[] = [];
-  if (!isSelfPickup) {
+  {
     const { data: addrList, error: addrListErr } = await admin
       .from("tb_address")
       .select("addressid, addressname, addresslastname, addressprovince, addresszipcode")
@@ -1039,7 +1039,18 @@ async function tryRenderTbForwarder(
                   </>
                 )}
               </div>
-              <EditDeliveryAddressField fId={r.id} fshipby={r.fshipby} addresses={savedAddresses} />
+              <EditDeliveryAddressField
+                fId={r.id}
+                fshipby={r.fshipby}
+                addresses={savedAddresses}
+                current={{
+                  name: r.faddressname ?? "", lastname: r.faddresslastname ?? "",
+                  addressno: r.faddressno ?? "", subdistrict: r.faddresssubdistrict ?? "",
+                  district: r.faddressdistrict ?? "", province: r.faddressprovince ?? "",
+                  zipcode: r.faddresszipcode ?? "", tel: r.faddresstel ?? "",
+                  tel2: r.faddresstel2 ?? "", note: r.faddressnote ?? "",
+                }}
+              />
             </div>
             <p className="text-foreground"><b className="font-semibold">เลขพัสดุในไทย : </b>{r.ftrackingth ?? "—"}</p>
           </div>
