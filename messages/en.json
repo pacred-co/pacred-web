@@ -2659,8 +2659,8 @@
         "description": "Less-than-container imports from China — consolidated freight at lower cost, door-to-door by Pacred Shipping."
       },
       "customsClearance": {
-        "title": "Customs Clearance · Stuck-at-Customs Recovery",
-        "description": "Customs clearance under every Incoterm and port, including stuck-at-customs recovery — road, sea, air. 14 years with Pacred Shipping."
+        "title": "Customs Clearance Suvarnabhumi · Stuck-at-Customs Recovery",
+        "description": "Licensed Thai customs broker & clearance agent at Suvarnabhumi — air/sea/truck, DHL/FedEx/UPS held cargo & stuck-at-customs release, import duty + VAT. From THB 2,800, ~1 day."
       },
       "exportWorldwide": {
         "title": "Worldwide Export",
@@ -7040,6 +7040,39 @@
     "h1Stuck": "Held at Customs",
     "h1ClearanceClose": ")",
     "h1Locations": "Suvarnabhumi · Klong Toey · Laem Chabang",
+    "introParagraph": "Pacred Shipping is a licensed Thai customs broker and clearance agent handling customs clearance for air, sea and truck freight at every airport and seaport in Thailand — Suvarnabhumi, Don Mueang, Bangkok Port (Klong Toey), Laem Chabang and Lat Krabang ICD. As your customs broker we handle the full customs formalities: HS-code classification, import duty and VAT, permits, and DHL/FedEx/UPS cargo held at customs. Most shipments clear in about one day, from THB 2,800, backed by 14 years of licensed experience.",
+    "seoDepth": {
+      "eyebrow": "Customs clearance guide",
+      "h2": "Licensed Customs Broker in Thailand — Import & Export Clearance",
+      "defineH3": "What is a customs broker, and what do they do?",
+      "defineBody": "A licensed customs broker (ตัวแทนออกของ) is a company authorised by Thai Customs to file import and export declarations and to handle the customs formalities, duty and permits on your behalf. Pacred is a licensed broker — so we don't just move your cargo, we clear it through customs from start to finish.",
+      "importExportH3": "Customs clearance for import and export — air, sea & truck",
+      "importExportBody": "Pacred handles both directions of customs clearance. For imports, we file your import declaration, classify the HS code, calculate duty and VAT, apply Form E or other FTA privileges where eligible, and release your goods. For exports, we prepare the export declaration and the documents your buyer's country requires. Whether your shipment moves by air (Suvarnabhumi, Don Mueang), by sea (Bangkok Port, Laem Chabang), or by truck across the border, a licensed broker manages the formalities end to end.",
+      "docsH3": "Documents you need for customs clearance",
+      "docsBody": "For most shipments you need: (1) Commercial Invoice, (2) Packing List, (3) Bill of Lading (sea) or Air Waybill (air), and (4) any Form E / Form D or import permit that applies to your goods (FDA, TISI, etc.). If your paperwork is incomplete, send us what you have — we'll tell you exactly what's missing and help you obtain the required permits before the goods arrive, so nothing gets stuck at the port.",
+      "dutyVatH3": "Import duty and VAT — how they're calculated",
+      "dutyVatBody": "Thai import duty is charged on the CIF value (goods cost + insurance + freight) at the rate for your goods' HS code, which can range from 0% to over 30% depending on the product. VAT of 7% is then applied to the CIF value plus the duty. Because the HS code drives the rate, a mis-classification can make you overpay. Pacred helps you get the classification right and estimates the total landed cost — duty plus VAT — before you import, so there are no surprises.",
+      "faqH2": "Customs clearance FAQ",
+      "faq": [
+        { "q": "How long does customs clearance in Thailand take?", "a": "With complete documents, air freight usually clears in about 1 day and sea freight in roughly 1–2 days. Goods that need permits (FDA/TISI) or a physical inspection can take longer — we tell you the realistic timeline upfront." },
+        { "q": "How much does customs clearance / a customs broker cost?", "a": "Our customs clearance service starts from THB 2,800 per shipment. The final fee depends on the goods, the mode (air/sea/truck), and any permits required — we give a clear quote before you commit, with no hidden costs." },
+        { "q": "What documents do I need to clear my goods?", "a": "The core set is the Commercial Invoice, Packing List, and the Bill of Lading (sea) or Air Waybill (air). Depending on the goods you may also need a Form E (ASEAN–China FTA) or an import permit (FDA/TISI). Send us what you have and we'll tell you exactly what's missing." },
+        { "q": "How are import duty and VAT calculated in Thailand?", "a": "Import duty is charged on the CIF value (cost + insurance + freight) at the rate for your goods' HS code. VAT of 7% is then charged on the CIF value plus the duty. A correct HS code matters — a wrong one can make you overpay. We help classify your goods and estimate the total before import." },
+        { "q": "What is a customs broker, and how is it different from a freight forwarder?", "a": "A licensed customs broker (ตัวแทนออกของ) is authorised to file your import/export declaration and handle the customs formalities and duty on your behalf. A freight forwarder mainly arranges transport. Pacred is a licensed broker, so we can clear your goods through customs — not just move them." },
+        { "q": "My package is stuck at Thai customs / held for duty (DHL, FedEx, UPS) — what do I do?", "a": "When a courier parcel is held at customs for duty or documents, the carrier often can't resolve it for you. As a licensed broker we handle DHL/FedEx/UPS cargo held at Thai customs — we assess the duty, prepare the paperwork, and release the shipment. Send us the tracking number and held-notice to start." },
+        { "q": "Which airports and ports can Pacred clear goods at?", "a": "We clear air, sea and truck freight at every major Thai gateway — Suvarnabhumi and Don Mueang airports, Bangkok Port (Klong Toey), Laem Chabang Port, and the Lat Krabang ICD." },
+        { "q": "I'm importing from China for the first time — how do I start?", "a": "Just contact us via LINE or phone with a photo of your goods and any documents you have. We'll help you register with Thai Customs if needed, estimate the duty and VAT, and handle the full clearance from THB 2,800 — so first-time importers don't have to learn the process." }
+      ],
+      "relatedH3": "Related Pacred services",
+      "links": {
+        "customsOverview": "Customs clearance service overview",
+        "importChina": "Import from China (cargo & FCL/LCL)",
+        "export": "Export & worldwide freight",
+        "chinaShopping": "China shopping / buy-for-me",
+        "yuanTransfer": "Yuan transfer & pay-on-behalf",
+        "knowledge": "Customs clearance & import knowledge base"
+      }
+    },
     "scopeBannerAriaLabel": "Chat on LINE with Pacred Shipping — free clearance consult",
     "scopeBannerSrOnly": "Chat on LINE with Pacred Shipping",
     "scopeBannerServiceBefore": "Shipping & Customs Clearance —",
@@ -7053,10 +7086,10 @@
     "heroBullet5": "Free consultation with customs specialists with 14+ years of experience",
     "heroBullet6": "Licensed customs broker (Shipping License) and registered shipping association member",
     "heroBullet7": "Guaranteed low pricing, transparent — no hidden charges",
-    "modeEyebrow": "Shipping Clearance — Held Goods",
-    "modeH2Before": "Clearance Service:",
-    "modeH2Highlight": "Held at Customs",
-    "modeH2After": "Air · Sea · By Truck — All Ports, Clear Pricing",
+    "modeEyebrow": "Customs Clearance · Customs Broker Thailand",
+    "modeH2Before": "Customs Clearance in Thailand:",
+    "modeH2Highlight": "Licensed Customs Broker",
+    "modeH2After": "— Air · Sea · Truck, all airports & ports (incl. held-at-customs release)",
     "modeH2Mobile": "No hidden fees",
     "stepsEyebrow": "5 STEPS · Easy Contact — Cleared in 1 Hour",
     "stepsH2Before": "Simple Clearance Process",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMessages, useTranslations } from "next-intl";
+import { useLocale, useMessages, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { HERO_IMGS, HERO_CONTENT_KEYS } from "@/lib/booking-data";
 import type { TabMode, SeaMode } from "@/types/booking";
@@ -35,8 +35,19 @@ const BG_OVERRIDES_DESKTOP: Record<string, string> = {
   fcl:     "/images/bannerdesktop/bannershipdesktop01.png",
 };
 
+// English-locale banner overrides (ปอน 2026-07-03) — when the site is in EN, the
+// customs hero uses the English-baked artwork instead of the Thai one. Only keys
+// present here are swapped; anything else falls back to the Thai banner above.
+const BG_OVERRIDES_MOBILE_EN: Record<string, string> = {
+  customs: "/images/bannermobile/clearmobile6en.png",
+};
+const BG_OVERRIDES_DESKTOP_EN: Record<string, string> = {
+  customs: "/images/bannerdesktop/cleardesktop008en.png",
+};
+
 export function BookingHero({ activeTab, seaMode, forceDefault = false, customTitle, customHighlight, customBgMobile, customBgDesktop }: BookingHeroProps) {
   const t = useTranslations("bookingCalc.hero");
+  const locale = useLocale();
   // Raw messages for the sub-line emptiness guard below. A plain t(subKey) on a
   // message containing rich tags (<hl>/<em>, e.g. customsSub) throws
   // FORMATTING_ERROR ("variable hl was not provided") — so read the raw string
@@ -61,8 +72,10 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
     : activeTab;
 
   const fallbackBg = HERO_IMGS[imgKey] ?? HERO_IMGS.default;
-  const bgMobile = BG_OVERRIDES_MOBILE[imgKey] ?? fallbackBg;
-  const bgDesktop = BG_OVERRIDES_DESKTOP[imgKey] ?? fallbackBg;
+  const isEn = locale === "en";
+  // EN swaps only where an English banner exists (customs); else falls back to Thai.
+  const bgMobile = (isEn ? BG_OVERRIDES_MOBILE_EN[imgKey] : undefined) ?? BG_OVERRIDES_MOBILE[imgKey] ?? fallbackBg;
+  const bgDesktop = (isEn ? BG_OVERRIDES_DESKTOP_EN[imgKey] : undefined) ?? BG_OVERRIDES_DESKTOP[imgKey] ?? fallbackBg;
   const keys = HERO_CONTENT_KEYS[contentKey] ?? HERO_CONTENT_KEYS.default;
   const rawSub = rawMessages.bookingCalc?.hero?.[keys.subKey] ?? "";
 

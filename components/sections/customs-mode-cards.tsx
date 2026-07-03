@@ -11,8 +11,6 @@ import {
   Headphones,
   Sparkles,
   ArrowRight,
-  Lock,
-  ChevronDown,
   MapPin,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -134,11 +132,6 @@ export function CustomsModeCards() {
   const initialActiveIdx = Math.max(0, MODES.findIndex((m) => m.featured));
   const [activeIdx, setActiveIdx] = useState(initialActiveIdx);
 
-  // Per-card "เงื่อนไข เพิ่มเติม" collapse state (mobile only · keyed by mode).
-  // Like the warehouse cards: the details (services + partners) hide behind a
-  // toggle on mobile so the 2-up cards stay compact; always shown on desktop.
-  const [openTerms, setOpenTerms] = useState<Record<string, boolean>>({});
-
   return (
     <div className="relative">
       <div className="grid grid-cols-2 gap-3 pt-2 pb-3 md:grid-cols-3 md:gap-4 md:pt-3 md:pb-2 md:items-stretch">
@@ -153,7 +146,6 @@ export function CustomsModeCards() {
           // instead of turning red (owner 2026-06-16).
           const active        = i === activeIdx;
           const isFeatured    = false;
-          const showTerms     = !!openTerms[c.mode];
           return (
             <article
               key={c.mode}
@@ -246,36 +238,27 @@ export function CustomsModeCards() {
                   <h3 className={`text-[13px] font-black leading-[1.15] tracking-tight text-[#111827] dark:text-white line-clamp-2${isRecommended ? " flex-1 min-w-0" : ""}`}>
                     {c.title}
                   </h3>
-                  {/* price + the "เพิ่มเติม / ย่อ" toggle appended right after it (ปอน
-                      2026-06-21 "เหลือแค่ เพิ่มเติม · เอาไปต่อท้ายราคา · มือถือ"). The
-                      toggle reveals ports/specs/details below; desktop always shows them. */}
+                  {/* price only — the mobile "เพิ่มเติม/ย่อ" toggle was removed (ปอน
+                      2026-07-03 "ให้การ์ดกางไว้เลย · ไม่ต้องมีปุ่มเพิ่มเติม"): the card
+                      details are always shown now. */}
                   <div className={`flex items-baseline flex-wrap gap-x-1.5 gap-y-0 leading-none${isRecommended ? " shrink-0 justify-end" : ""}`}>
                     <span className="inline-flex items-baseline gap-1">
                       <span className="text-[22px] font-black tracking-tight leading-none text-primary-600">{c.price}</span>
                       <span className="text-[12px] font-black text-primary-600">{t("baht")}</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setOpenTerms((prev) => ({ ...prev, [c.mode]: !prev[c.mode] }))}
-                      aria-expanded={showTerms}
-                      className="inline-flex items-center gap-0.5 text-[11px] font-normal text-slate-500 dark:text-white/55 active:opacity-60 transition-opacity"
-                    >
-                      {showTerms ? "ย่อ" : "เพิ่มเติม"}
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showTerms ? "rotate-180" : ""}`} strokeWidth={2} />
-                    </button>
                   </div>
                 </div>
 
                 {/* Ports / จุดให้บริการ — moved here from the banner (ปอน 2026-06-21
-                    "เอาพวกนี้เข้ามาใส่ในเงื่อนไข"). Collapsed on mobile · always desktop. */}
-                <div className={`items-start gap-1.5 text-[11.5px] md:text-[12px] leading-snug text-foreground/85 ${showTerms ? "flex" : "hidden md:flex"}`}>
+                    "เอาพวกนี้เข้ามาใส่ในเงื่อนไข"). Always shown (ปอน 2026-07-03). */}
+                <div className="flex items-start gap-1.5 text-[11.5px] md:text-[12px] leading-snug text-foreground/85">
                   <MapPin className="w-3.5 h-3.5 mt-px shrink-0 text-primary-600" strokeWidth={2.5} />
                   <span>{c.ports}</span>
                 </div>
 
-                {/* Spec row — 3 mini cards · hidden on collapsed mobile (folds in
-                    with the details so the card stays short), always on desktop. */}
-                <div className={`grid grid-cols-3 gap-1.5 md:gap-2 ${showTerms ? "" : "hidden md:grid"}`}>
+                {/* Spec row — 3 mini cards. On mobile: AIR (featured) only — hidden on
+                    รถ/เรือ (ปอน 2026-07-03 "เอาก้อนนี้ออก เฉพาะ รถ เรือ") · always on desktop. */}
+                <div className={`grid-cols-3 gap-1.5 md:gap-2 ${isRecommended ? "grid" : "hidden md:grid"}`}>
                   {c.stats.map((s) => {
                     const SIcon = s.icon;
                     return (
@@ -314,10 +297,9 @@ export function CustomsModeCards() {
                   })}
                 </div>
 
-                {/* Details (services + partners) — mobile: collapsed behind the
-                    "เงื่อนไข เพิ่มเติม" toggle · desktop: always shown. `contents`
-                    is layout-transparent, so desktop renders exactly as before. */}
-                <div className={showTerms ? "contents" : "hidden md:contents"}>
+                {/* Details (services + partners) — always shown on both viewports
+                    (ปอน 2026-07-03 "ให้การ์ดกางไว้เลย"). `contents` is layout-transparent. */}
+                <div className="contents">
                   {/* Services — compact 3 bullets */}
                   <ul
                     className={[
@@ -392,7 +374,6 @@ export function CustomsModeCards() {
                       : "bg-primary-600 text-white hover:bg-primary-700",
                   ].join(" ")}
                 >
-                  <Lock className="w-3 h-3" strokeWidth={2.6} />
                   {t("requestPrice", { mode: t(`mode_${c.slug}`) })}
                   <ArrowRight className="w-3 h-3" strokeWidth={2.6} />
                 </Link>
