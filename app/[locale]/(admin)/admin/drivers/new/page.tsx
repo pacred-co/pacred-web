@@ -270,9 +270,17 @@ function buildStops(
     const hasRealAddress = [f.faddressno, f.faddressprovince, f.faddressdistrict]
       .some((v) => (v ?? "").trim() !== "");
     const addrMissing = !hasRealAddress;
+    // FOLD the userid into the key when there's no real address (addrMissing) OR the row still
+    // carries the self-pickup PLACEHOLDER name ("รับที่โกดัง Pacred"). A MOMO/commit row often
+    // has the DEPOT address written into faddress* (โทร 0224213325 · ชื่อ placeholder), so its
+    // fields are non-empty (hasRealAddress=true) yet it's the SAME depot for every customer →
+    // grouping by address alone MERGES different customers into one card (owner/ภูม 2026-07-03
+    // "ทำไมรหัสลูกค้าปนกันอีก"). Folding userid keeps one card per customer; a real address the
+    // seller filled (nameIsPlaceholder=false) still groups by physical destination as legacy does.
+    const foldByCustomer = addrMissing || nameIsPlaceholder;
     const key = [
       f.fshipby ?? "",
-      addrMissing ? `__wh__${userid}` : "",
+      foldByCustomer ? `__wh__${userid}` : "",
       f.faddressname ?? "", f.faddresslastname ?? "",
       f.faddressno ?? "", f.faddresssubdistrict ?? "",
       f.faddressdistrict ?? "", f.faddressprovince ?? "", f.faddresszipcode ?? "",

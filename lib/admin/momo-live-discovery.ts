@@ -30,6 +30,7 @@ import {
   type DeliveryAddressOption,
 } from "@/lib/admin/momo-live-discovery-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
+import { isFreeShippingZip } from "@/lib/bkk-zip";
 
 /** A discovery candidate enriched with system context for the queue UI. */
 export type DiscoveryRow = DiscoveryCandidate &
@@ -273,6 +274,13 @@ async function resolveDeliveryByUser(
         amphoe: a.addressdistrict,
         userID,
       });
+      // BKK-metro / ปริมณฑล (เหมาๆ zone): getShipByOptionsForAddress returns Flash-ONLY (a legacy
+      // dropdown-HIDING quirk, NOT "Flash is the carrier"). The real zone carrier is เหมาๆ (PCSF).
+      // Prepend it so discovery offers + defaults to เหมาๆ — same as /admin/forwarders/[fNo]
+      // (suggestCarrierForAddress · owner/ภูม 2026-07-03 "ทำไมขึ้นเลข 2").
+      const carrierOpts = isFreeShippingZip(zip)
+        ? [{ id: "PCSF", name: "PRF เหมาๆ (ส่งฟรีในเขต)" }, ...carriers.map((c) => ({ id: c.id, name: c.name }))]
+        : carriers.map((c) => ({ id: c.id, name: c.name }));
       const labelParts = [
         (a.addressname ?? "").trim() || "(ไม่มีชื่อ)",
         province || "—",
@@ -283,14 +291,17 @@ async function resolveDeliveryByUser(
         label: labelParts.join(" · "),
         province,
         zip,
-        carriers: carriers.map((c) => ({ id: c.id, name: c.name })),
+        carriers: carrierOpts,
       };
     });
 
     // seed the address: the default (when it's among the active rows) else the first.
     const seededAddress =
       (defaultId != null && options.find((o) => o.addressID === defaultId)) || options[0];
-    const seededCarrier = pickSuggestedCarrier(savedCarrier, seededAddress.carriers);
+    // เหมาๆ zone → default to เหมาๆ (PCSF) · else prefer the customer's saved carrier if eligible.
+    const seededCarrier = isFreeShippingZip(seededAddress.zip)
+      ? "PCSF"
+      : pickSuggestedCarrier(savedCarrier, seededAddress.carriers);
 
     out.set(userID, {
       addresses: options,
