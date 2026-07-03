@@ -182,7 +182,11 @@ function flattenOrders(orders: RawOrder[]): MomoLiveParcel[] {
           statusId: num(vt.status) || statusId,
           statusText,
           shipBy: str(vt.ship_by) || str(order.ship_by),
-          type: str(ct.type) || str(order.type),
+          // ประเภทสินค้า (ทั่วไป/มอก./อย./ควบคุม) — the ORDER-level `type` is the
+          // authoritative one MOMO's UI shows (VERIFIED prod 2026-07-03: tracking
+          // 100029558416 has order.type="tis"[มอก.] while cn_track.type="general").
+          // Read order.type FIRST; fall back to the cn_track type only if empty.
+          type: str(order.type) || str(ct.type),
           imageUrl: img,
           qrCode: str(order.qr_code),
           statusDate: (vt.status_date && typeof vt.status_date === "object" ? vt.status_date : {}) as Record<
@@ -196,24 +200,62 @@ function flattenOrders(orders: RawOrder[]): MomoLiveParcel[] {
   return out;
 }
 
+/**
+ * MOMO Live BOARD key → the REAL `status` query param the API expects. VERIFIED against
+ * api.momocargo.com 2026-07-03 (the order.status.status values in the `all` feed):
+ *   sending_thai · success(=จัดส่งให้แล้ว) · arrival_kodang · prepare_send(=กำลังนำส่ง).
+ * Our board keys `done`/`sending` did NOT match the API (both returned 0 → "จัดส่งให้แล้ว"
+ * showed 0 พัสดุ on /live · ภูม 2026-07-03). Map them to the API's real param.
+ * waiting/wait_pay keep their key (currently 0-row; the real param is unverified but harmless).
+ */
+const STATUS_API_PARAM: Record<MomoLiveStatus, string> = {
+  waiting: "waiting",
+  arrival_kodang: "arrival_kodang",
+  sending_thai: "sending_thai",
+  wait_pay: "wait_pay",
+  sending: "prepare_send", // กำลังนำส่ง — API key is prepare_send, NOT "sending"
+  done: "success", // จัดส่งให้แล้ว — API key is success, NOT "done"
+};
+
+/** Unwrap the MOMO list envelope (bare array OR { data:[...] } paginated). */
+function rowsOfEnvelope(j: { data?: RawOrder[] | { data?: RawOrder[] } } | null): RawOrder[] {
+  const d = j?.data;
+  return Array.isArray(d)
+    ? d
+    : Array.isArray((d as { data?: RawOrder[] } | undefined)?.data)
+      ? (d as { data: RawOrder[] }).data
+      : [];
+}
+
 /** Fetch one status board → normalized parcels (cost-free). */
 export async function fetchMomoLiveList(
   status: MomoLiveStatus = "sending_thai",
   size = 200,
 ): Promise<MomoLiveParcel[]> {
+  const apiStatus = STATUS_API_PARAM[status] ?? status;
   const j = (await authedGet(
-    `/api/shop_orders/user/get/order/list/v2/1/${size}/all/${status}/all/asc/all`,
+    `/api/shop_orders/user/get/order/list/v2/1/${size}/all/${apiStatus}/all/asc/all`,
   )) as { data?: RawOrder[] | { data?: RawOrder[] } };
-  // MOMO returns the rows EITHER as a bare array (small pages) OR wrapped in a
-  // paginated envelope { data:[...], total_page, current_page, total_data }
-  // (larger pages). Handle both.
-  const d = j?.data;
-  const rows: RawOrder[] = Array.isArray(d)
-    ? d
-    : Array.isArray((d as { data?: RawOrder[] } | undefined)?.data)
-      ? (d as { data: RawOrder[] }).data
-      : [];
-  return flattenOrders(rows);
+  return flattenOrders(rowsOfEnvelope(j));
+}
+
+/**
+ * Fetch EVERY parcel in ONE call (`status=all`) — the COMPLETE mirror across all statuses.
+ * VERIFIED 2026-07-03: `all` returns 159 orders / 311 parcels (every board at once), while
+ * the per-board params miss success/prepare_send. Used by the discovery scan so it never
+ * misses a status (ภูม: "เอาของทุกสถานะมาเลย"). Each parcel keeps its own statusText.
+ */
+export async function fetchMomoLiveAllInOne(size = 1000): Promise<MomoLiveParcel[]> {
+  const j = (await authedGet(
+    `/api/shop_orders/user/get/order/list/v2/1/${size}/all/all/all/asc/all`,
+  )) as { data?: RawOrder[] | { data?: RawOrder[] } };
+  return flattenOrders(rowsOfEnvelope(j));
+}
+
+/** `fetchMomoLiveAllInOne` after forcing a FRESH login (reclaim the single MOMO session). */
+export async function fetchMomoLiveAllInOneFresh(size = 1000): Promise<MomoLiveParcel[]> {
+  await getToken(true);
+  return fetchMomoLiveAllInOne(size);
 }
 
 /**

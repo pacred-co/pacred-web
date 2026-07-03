@@ -63,6 +63,7 @@ import {
   EditDateCloseField,
   EditCoverField,
   EditTaxDocModeField,
+  EditDeliveryAddressField,
 } from "./forwarder-inline-edits";
 // 2026-06-11 (Lane B · doc-choice visibility) — show the customer's tax-doc
 // choice (ใบกำกับ/ใบขน/ไม่รับเอกสาร) + the juristic-WHT signal at a glance.
@@ -456,6 +457,35 @@ async function tryRenderTbForwarder(
     } else {
       // No saved tb_address → try the registered company address (juristic).
       deliveryAddrCorp = await loadJuristicCorporateAddress(admin, r.userid);
+    }
+  }
+
+  // ── ภูม 2026-07-03: saved-address list for the inline "แก้ไขที่อยู่จัดส่ง" picker ──
+  // Staff can re-pick from the customer's saved tb_address (like the ship-by edit).
+  // Only relevant for a delivery carrier (self-pickup has no delivery address). The
+  // pick action (adminPickForwarderAddress) re-verifies ownership + snapshots.
+  const savedAddresses: { addressID: number; label: string; province: string }[] = [];
+  if (!isSelfPickup) {
+    const { data: addrList, error: addrListErr } = await admin
+      .from("tb_address")
+      .select("addressid, addressname, addresslastname, addressprovince, addresszipcode")
+      .eq("userid", r.userid)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: true });
+    if (addrListErr) {
+      console.error("[forwarder detail] saved-address list failed", { code: addrListErr.code, userid: r.userid });
+    }
+    for (const a of (addrList ?? []) as Array<{
+      addressid: number; addressname: string | null; addresslastname: string | null;
+      addressprovince: string | null; addresszipcode: string | null;
+    }>) {
+      const province = (a.addressprovince ?? "").trim();
+      const nm = `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim();
+      savedAddresses.push({
+        addressID: a.addressid,
+        province,
+        label: [nm || "(ไม่มีชื่อ)", province || "—", (a.addresszipcode ?? "").trim()].filter(Boolean).join(" · "),
+      });
     }
   }
 
@@ -974,6 +1004,7 @@ async function tryRenderTbForwarder(
                   </>
                 )}
               </div>
+              <EditDeliveryAddressField fId={r.id} fshipby={r.fshipby} addresses={savedAddresses} />
             </div>
             <p className="text-foreground"><b className="font-semibold">เลขพัสดุในไทย : </b>{r.ftrackingth ?? "—"}</p>
           </div>
