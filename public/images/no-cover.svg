@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="ไม่มีรูป">
+  <rect width="160" height="160" rx="14" fill="#F1F3F5"/>
+  <g fill="none" stroke="#B0B7BF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 62 80 44 116 62 116 104 80 122 44 104 Z"/>
+    <path d="M44 62 80 80 116 62"/>
+    <path d="M80 80 80 122"/>
+  </g>
+  <text x="80" y="146" font-family="'Prompt','Segoe UI',sans-serif" font-size="14" fill="#98A2AE" text-anchor="middle">ไม่มีรูป</text>
+</svg>

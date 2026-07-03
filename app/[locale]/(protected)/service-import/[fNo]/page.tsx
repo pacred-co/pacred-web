@@ -4,7 +4,8 @@ import { Link } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { legacyMemberUrl, forwarderCoverUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "../_shared/cover-thumb";
 import { code128SvgDataUrl } from "@/lib/barcode";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
@@ -305,24 +306,10 @@ function TagPro({ id }: { id: string | null }) {
   );
 }
 
-// Legacy `convertIMGCHN($url,$size)` — function.php L1414+. The cover
-// photo URL/filename → displayable URL.
-function convertIMGCHN(url: string | null): string {
-  if (!url || url === "") return "/legacy/pcs/shops/default.png";
-  const u = url
-    .replace("?x-oss-process=style/alsy", "")
-    .replace("?x-oss-process=style/tbsy", "")
-    .replace("_250x250.jpg", "");
-  if (u.includes("/")) {
-    // Old data may store full legacy URLs — re-resolve through the
-    // Supabase mirror so customer-visible URLs never leak the legacy host.
-    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
-    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
-    return u;
-  }
-  // a bare filename — legacy stores forwarder covers under images/shops/
-  return legacyMemberUrl(`images/shops/${u}`);
-}
+// The cover photo URL/filename → displayable URL is now resolved via the
+// centralized `forwarderCoverUrl()` (imported from @/lib/legacy-image) — see
+// `coverUrl` below. The former local `convertIMGCHN` was removed (its empty
+// fallback was the leaky "PCS Cargo Shop" logo).
 
 // calPriceForwarderSumCompany — shared in @/lib/forwarder/calc-company-total (imported above).
 
@@ -612,7 +599,7 @@ export default async function ServiceImportDetailPage({
   const { data: allAddrs, error: allAddrsErr } = await admin
     .from("tb_address")
     .select(
-      "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
+      "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
     )
     .eq("userid", memberCode)
     .eq("addressstatus", "1");
@@ -635,6 +622,8 @@ export default async function ServiceImportDetailPage({
     addressdistrict: string | null;
     addressprovince: string | null;
     addresszipcode: string | null;
+    addresstel: string | null;
+    addresstel2: string | null;
   }>).slice();
   // Sort: main first, then by addressid asc (the legacy ORDER BY).
   let mainIdx = -1;
@@ -858,6 +847,20 @@ export default async function ServiceImportDetailPage({
   // (the inline edit is even blocked for it), so overriding at display keeps
   // old + new orders uniform on Pacred — no prod-data migration needed.
   const isSelfPickup = fShipBy === "PCS";
+
+  // ── Empty-snapshot fallback (owner 2026-07-03 — "ที่อยู่ลูกค้าไม่ขึ้น
+  // ทั้งๆ ที่เขา set ไว้ใน profile") ─────────────────────────────────────
+  // A MOMO/auto-created tb_forwarder row carries EMPTY faddress* snapshot
+  // columns, so the delivery address rendered blank even though the customer
+  // has a saved profile address. When the snapshot is empty, FALL BACK to the
+  // customer's DEFAULT profile address (tb_address_main default = sorted[0],
+  // which is main-first then lowest addressid — already fetched above for the
+  // "แก้ไข ที่อยู่จัดส่ง" edit form) for DISPLAY only. DOES NOT overwrite the
+  // stored snapshot; the inline edit form still lets them change/save it.
+  // Snapshot WINS when present (any real name OR province in the columns).
+  const snapshotAddressEmpty =
+    !(row.faddressprovince ?? "").trim() && !(row.faddressname ?? "").trim();
+  const defaultProfileAddress = sorted[0] ?? null;
   const displayAddress = isSelfPickup
     ? {
         name: "รับที่โกดัง Pacred",
@@ -870,17 +873,30 @@ export default async function ServiceImportDetailPage({
         tel: CONTACT.phoneCompanyDisplay,
         tel2: "",
       }
-    : {
-        name: row.faddressname,
-        lastname: row.faddresslastname,
-        no: row.faddressno,
-        subdistrict: row.faddresssubdistrict,
-        district: row.faddressdistrict,
-        province: row.faddressprovince,
-        zipcode: row.faddresszipcode,
-        tel: row.faddresstel,
-        tel2: row.faddresstel2,
-      };
+    : snapshotAddressEmpty && defaultProfileAddress
+      ? {
+          // DISPLAY-ONLY fallback → the customer's default profile address.
+          name: defaultProfileAddress.addressname,
+          lastname: defaultProfileAddress.addresslastname,
+          no: defaultProfileAddress.addressno,
+          subdistrict: defaultProfileAddress.addresssubdistrict,
+          district: defaultProfileAddress.addressdistrict,
+          province: defaultProfileAddress.addressprovince,
+          zipcode: defaultProfileAddress.addresszipcode,
+          tel: defaultProfileAddress.addresstel,
+          tel2: defaultProfileAddress.addresstel2,
+        }
+      : {
+          name: row.faddressname,
+          lastname: row.faddresslastname,
+          no: row.faddressno,
+          subdistrict: row.faddresssubdistrict,
+          district: row.faddressdistrict,
+          province: row.faddressprovince,
+          zipcode: row.faddresszipcode,
+          tel: row.faddresstel,
+          tel2: row.faddresstel2,
+        };
   const fAmount = row.famount;
   const fWeight = Number(row.fweight ?? 0);
   const fVolume = Number(row.fvolume ?? 0);
@@ -1079,12 +1095,11 @@ export default async function ServiceImportDetailPage({
     }
   }
 
-  // forwarder.php L2103-2109 — cover image resolution.
-  const coverUrl = (() => {
-    if (!row.fcover) return "/legacy/pcs/shops/default.png";
-    if (/https|http/.test(row.fcover)) return row.fcover;
-    return convertIMGCHN(row.fcover);
-  })();
+  // forwarder.php L2103-2109 — cover image resolution. Centralized in
+  // `forwarderCoverUrl()`: empty → the neutral Pacred no-cover placeholder
+  // (was the "PCS Cargo Shop" logo · brand leak flagged 2026-07-03) and a
+  // `pcscargo.co.th` URL → the Supabase mirror instead of leaking the host.
+  const coverUrl = forwarderCoverUrl(row.fcover);
 
   // Physical journey done-state is driven by the per-stage date stamps
   // (set by the warehouse scan), NOT the fstatus integer — see computeSteps.
@@ -1575,10 +1590,8 @@ export default async function ServiceImportDetailPage({
                                 className="image-popup-vertical-fit el-link mt-2 inline-block"
                                 href={coverUrl}
                               >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
+                                <CoverThumb
                                   src={coverUrl}
-                                  alt=""
                                   className="w-full max-w-[200px] rounded-lg border border-border object-cover"
                                 />
                               </a>

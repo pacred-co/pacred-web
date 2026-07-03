@@ -4,7 +4,8 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { forwarderCoverUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "../_shared/cover-thumb";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
 import { ImportViewTabs } from "../import-view-tabs";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -200,19 +201,13 @@ function numberFormat(n: number, decimals: number): string {
   });
 }
 
-// Legacy `convertIMGCHN`-equivalent fCover resolution as forwarder-table.php
-// L1028-1033 does inline: a http(s) URL is used as-is; '' → the default
-// shops image; a bare filename → images/shops/<file>.
+// Legacy `convertIMGCHN`-equivalent fCover resolution (forwarder-table.php
+// L1028-1033) — centralized in `forwarderCoverUrl()`: '' → the neutral Pacred
+// no-cover placeholder (was the "PCS Cargo Shop" logo · brand leak flagged by
+// the owner 2026-07-03), a `pcscargo.co.th` URL → the Supabase mirror, a bare
+// filename → images/shops/<file>.
 function resolveCover(fCover: string | null): string {
-  if (fCover && /https|http/.test(fCover)) {
-    // Old data may store full legacy URLs — re-resolve through the
-    // Supabase mirror so customer-visible URLs never leak the legacy host.
-    const legacyMatch = fCover.match(/pcscargo\.co\.th\/member\/(.+)$/);
-    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
-    return fCover;
-  }
-  if (!fCover || fCover === "") return "/legacy/pcs/shops/default.png";
-  return legacyMemberUrl(`images/shops/${fCover}`);
+  return forwarderCoverUrl(fCover);
 }
 
 type ForwarderRow = {
@@ -969,10 +964,8 @@ export default async function ForwarderTablePage({
                                                   className="image-popup-vertical-fit el-link"
                                                   href={cover}
                                                 >
-                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                  <img
+                                                  <CoverThumb
                                                     src={cover}
-                                                    alt=""
                                                     className="w-5 h-5 md:w-6 md:h-6 rounded object-cover border border-border"
                                                   />
                                                 </a>

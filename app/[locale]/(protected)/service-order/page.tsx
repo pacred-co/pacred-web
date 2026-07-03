@@ -524,7 +524,7 @@ function OrderCard({
   } else if (cover !== "") {
     hCover = legacyMemberUrl(`images/shops/${cover}`);
   } else {
-    hCover = "/legacy/pcs/shops/default.png";
+    hCover = "/images/no-cover.svg";
   }
 
   const itemTitle = (row.htitle ?? "") + moreItems;

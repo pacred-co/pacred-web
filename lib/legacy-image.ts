@@ -50,6 +50,57 @@ export function legacyMemberUrl(relativePath: string): string {
 }
 
 /**
+ * The single Pacred-branded / neutral no-cover placeholder.
+ *
+ * Customer-facing surfaces MUST use this when a forwarder/shop cover is
+ * missing — NEVER `/legacy/pcs/shops/default.png` (that file is the legacy
+ * "PCS Cargo Shop" logo → a brand leak the customer would see; owner flagged
+ * 2026-07-03 "ทำไมยังมีรูป pcs cargo … โชว์ลูกค้า"). This is a plain box glyph
+ * with a "ไม่มีรูป" label — no PCS branding. Keep this the ONE constant so a
+ * future no-cover surface can't re-introduce the leak.
+ *
+ * Also used as the `onError` degradation target: if a real cover URL fails to
+ * load (e.g. a stale `pcscargo.co.th` legacy host that is blocked or
+ * decommissioned during the brand split), the `<img>` swaps to this instead of
+ * showing a broken image or leaking the failed host. See `<CoverThumb>`.
+ */
+export const NO_COVER_IMAGE = "/images/no-cover.svg";
+
+/**
+ * Resolve a forwarder/shop cover column (`tb_forwarder.fcover`) to a
+ * renderable URL — the faithful `convertIMGCHN()` logic (function.php
+ * L1414-1437) with the brand-leak fallback swapped to {@link NO_COVER_IMAGE}.
+ *
+ * Rules (matching the legacy):
+ *   - empty            → the neutral no-cover placeholder (was the PCS logo)
+ *   - a legacy host URL (`pcscargo.co.th/member/<p>`) → re-point at the
+ *     Supabase mirror so the customer-visible URL never leaks the legacy host
+ *   - any other absolute URL / path-with-slash → used as-is (+ optional size)
+ *   - a bare filename  → the Supabase mirror `images/shops/<file>`
+ *
+ * @param cover  Raw `fcover` value (filename | full URL | empty | null)
+ * @param size   Optional legacy size suffix appended to slash-bearing URLs
+ *               (e.g. `"_80x80.jpg"` for the thumbnail variant · `""` for full)
+ */
+export function forwarderCoverUrl(cover: string | null | undefined, size = ""): string {
+  const v = (cover ?? "").trim();
+  if (!v) return NO_COVER_IMAGE;
+  const u = v
+    .replace("?x-oss-process=style/alsy", "")
+    .replace("?x-oss-process=style/tbsy", "")
+    .replace("_250x250.jpg", "");
+  if (u.includes("/")) {
+    // Old data may store full legacy URLs — re-resolve through the Supabase
+    // mirror so customer-visible URLs never leak the legacy host.
+    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
+    return u + size;
+  }
+  // a bare filename — legacy stores forwarder covers under images/shops/
+  return legacyMemberUrl(`images/shops/${u}`);
+}
+
+/**
  * Resolve a customer profile-picture column (`tb_users.userPicture`) to a
  * renderable URL, handling the filename-vs-URL ambiguity.
  *
