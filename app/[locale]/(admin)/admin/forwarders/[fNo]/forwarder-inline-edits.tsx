@@ -60,6 +60,7 @@ import {
   adminAddForwarderImage,
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
+  adminPickForwarderAddress,
 } from "@/actions/admin/forwarders-field-edits";
 import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
@@ -1062,6 +1063,91 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
           </>
         )}
       </EditableRow>
+    </div>
+  );
+}
+
+/**
+ * ที่อยู่จัดส่ง — เลือกจากที่อยู่ที่ลูกค้าบันทึกไว้ (ภูม 2026-07-03 · "แก้ไขที่อยู่หน้านี้ได้เลย
+ * ดึงจากที่อยู่ในโปรไฟล์ลูกค้า · ถ้ามีหลายที่อยู่กดเลือกได้ เหมือนตอนเลือกบริษัทขนส่ง").
+ *
+ * Reuses adminPickForwarderAddress (PCS L1737 · ownership+active-guarded · snapshots the
+ * chosen tb_address into tb_forwarder.fAddress*). NO new write path. Guards:
+ *   - fshipby='PCS' (รับเองโกดัง) → ไม่มีที่อยู่จัดส่ง → ปุ่มโชว์หมายเหตุ (action ก็ปฏิเสธ)
+ *   - ไม่มีที่อยู่บันทึกไว้ → หมายเหตุ + ลิงก์ให้ลูกค้าเพิ่มที่อยู่
+ * Confirm-before-mutate (§0f). The address SNAPSHOT changes only; the carrier stays as its
+ * own edit (บริษัทขนส่ง แก้ไข) — pick a matching carrier separately if the province changed.
+ */
+export function EditDeliveryAddressField({
+  fId,
+  fshipby,
+  addresses,
+}: {
+  fId: number;
+  fshipby: string | null;
+  addresses: { addressID: number; label: string; province: string }[];
+}) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [sel, setSel] = useState<string>(addresses[0]?.addressID ? String(addresses[0].addressID) : "");
+  const isPcs = (fshipby ?? "").trim() === "PCS";
+
+  async function onSave(close: () => void) {
+    const addressId = Number(sel);
+    if (!Number.isInteger(addressId) || addressId <= 0) {
+      run(() => Promise.resolve({ ok: false, error: "กรุณาเลือกที่อยู่" }), () => {});
+      return;
+    }
+    const picked = addresses.find((a) => a.addressID === addressId);
+    if (!(await confirm(
+      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${picked?.label ?? `#${addressId}`}\n\n(ดึง snapshot ที่อยู่ของลูกค้ามาใส่ในออเดอร์นี้)`,
+    ))) return;
+    run(() => adminPickForwarderAddress({ fId, addressId }), close);
+  }
+
+  return (
+    <div className="mt-1.5">
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-xs font-medium text-sky-600 hover:underline"
+        >
+          ✏️ เลือก/แก้ไขที่อยู่จัดส่ง
+        </button>
+      ) : isPcs ? (
+        <div className="space-y-1 text-left">
+          <p className="text-[11px] text-amber-700">
+            ℹ️ ออเดอร์นี้เป็นแบบ <b>รับเองที่โกดัง Pacred</b> — ไม่มีที่อยู่จัดส่ง (เปลี่ยนบริษัทขนส่งก่อนถ้าต้องการส่งถึงบ้าน)
+          </p>
+          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
+        </div>
+      ) : addresses.length === 0 ? (
+        <div className="space-y-1 text-left">
+          <p className="text-[11px] text-muted">ลูกค้ายังไม่มีที่อยู่จัดส่งที่บันทึกไว้</p>
+          <button type="button" className={btnCancel} onClick={() => setEditing(false)}>ปิด</button>
+        </div>
+      ) : (
+        <div className="space-y-2 text-left">
+          <select className={selectCls} value={sel} onChange={(e) => setSel(e.target.value)}>
+            {addresses.map((a) => (
+              <option key={a.addressID} value={a.addressID}>{a.label}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-muted">
+            เลือกจากที่อยู่ที่ลูกค้าบันทึกไว้ ({addresses.length} ที่อยู่) · ระบบจะ snapshot มาใส่ในออเดอร์นี้
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={pending || !sel} className={btnSave} onClick={() => onSave(() => setEditing(false))}>
+              บันทึก
+            </button>
+            <button type="button" disabled={pending} className={btnCancel} onClick={() => setEditing(false)}>
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
