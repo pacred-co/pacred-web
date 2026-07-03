@@ -68,9 +68,10 @@ const VOL_EPS = 0.000001;
  * OR a note (กระสอบรวม / ยังไม่ปิดตู้). Only a real code means the container has closed
  * and is shipping to TH, so an early fstatus on such a row is STALE. Prefix-anchored
  * (not substring) so a note that happens to contain "SEA"/"EK" isn't mis-read as a
- * container.
+ * container. NOTE: local (NOT exported) — a "use server" file may only export async
+ * functions (Next 16); this stays internal to the action, so no `export`.
  */
-export function isRealContainerCode(container: string | null | undefined): boolean {
+function isRealContainerCode(container: string | null | undefined): boolean {
   const c = (container ?? "").trim().toUpperCase();
   if (!c) return false;
   return /^(GZS|GZE|GZA|EK)/.test(c);
