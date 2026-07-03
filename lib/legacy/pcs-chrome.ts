@@ -20,6 +20,7 @@
  */
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -72,6 +73,12 @@ export type PcsChromeData = {
   userID: string;
   userName: string;
   userLastName: string;
+  /** Greeting/display name — COMPANY for a juristic customer, else the person
+   *  (resolveBillingIdentity SOT). Sidebar + top-bar read this; userName/
+   *  userLastName stay the contact person for other consumers. 2026-07-03. */
+  displayName: string;
+  /** Contact-person name shown as a sub-line when displayName=company. "" else. */
+  contactName: string;
   userEmail: string;
   userPicture: string;
   coID: string;
@@ -144,6 +151,8 @@ const EMPTY_CHROME: PcsChromeData = {
   userID: "",
   userName: "",
   userLastName: "",
+  displayName: "",
+  contactName: "",
   userEmail: "",
   userPicture: PCS_DEFAULT_AVATAR,
   coID: "",
@@ -342,7 +351,7 @@ async function loadPcsChromeDataUncached(
     ] = await Promise.all([
       admin
         .from("tb_users")
-        .select("userName, userLastName, userEmail, userPicture, coID, adminIDSale, adminIDCS")
+        .select("userName, userLastName, userEmail, userPicture, coID, userCompany, adminIDSale, adminIDCS")
         .eq("userID", uid)
         .maybeSingle<{
           userName: string | null;
@@ -350,6 +359,7 @@ async function loadPcsChromeDataUncached(
           userEmail: string | null;
           userPicture: string | null;
           coID: string | null;
+          userCompany: string | null;
           adminIDSale: string | null;
           adminIDCS: string | null;
         }>(),
@@ -411,7 +421,14 @@ async function loadPcsChromeDataUncached(
         .order("id", { ascending: false })
         .limit(20),  // Sprint-8b: cap legacy keyword strip at 20 (was unbounded — full table scan + serialise on every nav)
       admin.from("tb_rate_custom_cbm").select("*", { count: "exact", head: true }).eq("userid", uid),
-      admin.from("tb_corporate").select("*", { count: "exact", head: true }).eq("userid", uid),
+      // Fetch the corp NAME (not just a count) so the sidebar/top-bar greeting
+      // shows the COMPANY for a juristic customer (was leaking the contact
+      // person). Also drives vipCorporate (row exists → true). 2026-07-03.
+      admin
+        .from("tb_corporate")
+        .select("corporatename, corporatenumber")
+        .eq("userid", uid)
+        .maybeSingle<{ corporatename: string | null; corporatenumber: string | null }>(),
       // The customer's uploaded avatar (profiles.avatar_url · keyed by
       // member_code = the PR code). The customer uploads it via
       // actions/profile-avatar.ts → this column; the sidebar user-pill should
@@ -426,10 +443,31 @@ async function loadPcsChromeDataUncached(
     ]);
     const keywordRows = (keywordRes.data ?? []) as { keyword: string | null }[];
 
+    // Resolve the greeting name via the shared billing-identity SOT: COMPANY
+    // for a juristic customer, else the person. The sidebar/top-bar read
+    // displayName; userName/userLastName stay the person (other consumers).
+    const chromeIdentity = resolveBillingIdentity({
+      userCompany: userRow.data?.userCompany,
+      userName: userRow.data?.userName,
+      userLastName: userRow.data?.userLastName,
+      corp: corpRes.data
+        ? {
+            corporatename: corpRes.data.corporatename,
+            corporatenumber: corpRes.data.corporatenumber,
+            corporateaddress: null,
+          }
+        : null,
+    });
+
     return {
       userID: uid,
       userName: userRow.data?.userName ?? "",
       userLastName: userRow.data?.userLastName ?? "",
+      displayName: chromeIdentity.name || `${userRow.data?.userName ?? ""} ${userRow.data?.userLastName ?? ""}`.trim(),
+      contactName:
+        chromeIdentity.isJuristic && chromeIdentity.personName && chromeIdentity.personName !== chromeIdentity.name
+          ? chromeIdentity.personName
+          : "",
       userEmail: (userRow.data?.userEmail ?? "").toLowerCase(),
       userPicture:
         profileRow.data?.avatar_url && profileRow.data.avatar_url.trim()
@@ -456,7 +494,7 @@ async function loadPcsChromeDataUncached(
       sales,
       cs,
       vipSvip: (svipRes.count ?? 0) > 0,
-      vipCorporate: (corpRes.count ?? 0) > 0,
+      vipCorporate: !!corpRes.data,
     };
   } catch {
     return { ...EMPTY_CHROME, sales: { ...SALES_FALLBACK } };

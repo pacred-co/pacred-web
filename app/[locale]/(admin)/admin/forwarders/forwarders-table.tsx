@@ -149,6 +149,8 @@ export type Row = {
   customer: {
     userid: string;
     name: string;
+    /** Contact-person sub-line when name=company (juristic). "" otherwise. */
+    contact_name: string;
     phone: string;
     // Wave 18-B — VIP/SVIP/SaleAdmin badge inputs (legacy badgeVIP3 +
     // badgeAdminSale at forwarder.php L589).
@@ -995,6 +997,11 @@ export function ForwardersTable({
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>
+                        {r.customer?.contact_name && (
+                          <div className="truncate max-w-[140px] text-muted text-[11px]" title={r.customer.contact_name}>
+                            ผู้ติดต่อ: {r.customer.contact_name}
+                          </div>
+                        )}
                         <div className="text-muted text-[11px]">{r.customer?.phone}</div>
                         {/* Wave 18-B — VIP/SVIP/SaleAdmin badges (port of
                             legacy badgeVIP3 + badgeAdminSale · L589). */}

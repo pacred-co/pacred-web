@@ -30,6 +30,7 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { logAdminExport } from "../export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
@@ -301,9 +302,22 @@ export async function exportCustomersAll(
     const birthday = formatBirthday(r.userBirthday);
     const fb = (r.userFacebook ?? "").trim();
     const corp = juristicByMember.get(r.userID) ?? null;
-    const personalName = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim();
-    const companyName = (corp?.companyName ?? "").trim();
-    const displayName = personalName || companyName || "—";
+    // Primary name via the shared SOT (2026-07-03) — COMPANY for a juristic
+    // customer, so the CSV fullName matches the on-screen list. The dedicated
+    // juristic_company / juristic_tax_id columns still carry the corp detail.
+    const identity = resolveBillingIdentity({
+      userCompany: r.userCompany,
+      userName: r.userName,
+      userLastName: r.userLastName,
+      corp: corp
+        ? { corporatename: corp.companyName ?? null, corporatenumber: corp.taxId ?? null, corporateaddress: null }
+        : null,
+    });
+    const displayName = identity.name || "—";
+    const contactName =
+      identity.isJuristic && identity.personName && identity.personName !== identity.name
+        ? identity.personName
+        : "";
     const isJuristic = r.userCompany === "1" || juristicByMember.has(r.userID);
     const status = deriveStatus(r);
     const vip = isVipCoid(r.coID);
@@ -312,6 +326,7 @@ export async function exportCustomersAll(
     return {
       userID: r.userID,
       fullName: displayName,
+      contactName,
       type: isJuristic ? "นิติบุคคล" : "บุคคล",
       status,
       tel: r.userTel ?? "",

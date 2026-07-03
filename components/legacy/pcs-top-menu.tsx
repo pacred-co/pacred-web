@@ -224,7 +224,7 @@ export async function PcsTopMenu({ data }: { data: PcsChromeData }) {
                         <img src={data.userPicture} alt="" />
                       </span>
                       <span className="user-name">
-                        {data.userID} {countText(data.userName, 13)}
+                        {data.userID} {countText(data.displayName || data.userName, 13)}
                       </span>{" "}
                       <i className="ft-chevron-down"></i>
                     </a>

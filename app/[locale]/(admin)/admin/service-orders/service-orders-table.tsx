@@ -63,6 +63,8 @@ export type ServiceOrderRow = {
   adminidupdate: string | null;
   userid: string;
   customerName: string | null;
+  /** Contact-person sub-line when customerName=company (juristic). "" = none. */
+  contactName: string;
   isJuristic: boolean;   // CUSTTAG — บุคคล/นิติ
   creditLimit: number;   // CUSTTAG — วงเงินเครดิต (>0 = ลูกค้าเครดิต)
   creditDays: number;    // CUSTTAG — เทอม (วัน)
@@ -399,6 +401,11 @@ export function ServiceOrdersTable({
                         {r.customerName && (
                           <div className="truncate max-w-[140px] text-[11px] text-muted" title={r.customerName}>
                             {r.customerName}
+                          </div>
+                        )}
+                        {r.contactName && (
+                          <div className="truncate max-w-[140px] text-[11px] text-muted" title={r.contactName}>
+                            ผู้ติดต่อ: {r.contactName}
                           </div>
                         )}
                         {/* CUSTTAG (owner 2026-06-25) — credit pill so staff see เครดิต on the shop-order row */}

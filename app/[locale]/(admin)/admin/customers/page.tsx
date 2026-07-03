@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
@@ -464,13 +465,31 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const tableRows: CustomerTableRow[] = rows.map((r) => {
     const birthday = formatBirthday(r.userBirthday);
     const fb = (r.userFacebook ?? "").trim();
-    // Display name: prefer the personal name (userName + userLastName). For a
-    // juristic customer whose personal name is empty (e.g. PR047 — registered
-    // as a company, no contact name captured), fall back to the company name
-    // from tb_corporate so the row shows the company instead of a bare "—".
-    const personalName = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim();
-    const companyName = (juristicByMember.get(r.userID)?.companyName ?? "").trim();
-    const displayName = personalName || companyName || "—";
+    // Display name via the shared billing-identity SOT (2026-07-03): for a
+    // juristic customer the COMPANY name is primary (was leaking the contact
+    // person when both existed); the contact person moves to a "ผู้ติดต่อ"
+    // sub-line. `juristicByMember` already carries the tb_corporate fields, so
+    // no extra query. Personal customers unchanged (name = person).
+    const corpBundle = juristicByMember.get(r.userID) ?? null;
+    const identity = resolveBillingIdentity({
+      userCompany: r.userCompany,
+      userName: r.userName,
+      userLastName: r.userLastName,
+      corp: corpBundle
+        ? {
+            corporatename: corpBundle.companyName ?? null,
+            corporatenumber: corpBundle.taxId ?? null,
+            corporateaddress: null,
+          }
+        : null,
+    });
+    const displayName = identity.name || "—";
+    // Sub-line only when the company name is showing AND a distinct contact
+    // person exists (don't repeat the same string).
+    const contactName =
+      identity.isJuristic && identity.personName && identity.personName !== displayName
+        ? identity.personName
+        : "";
     return {
       userID: r.userID,
       avatarUrl: avatarByUser[r.userID] ?? null,
@@ -479,6 +498,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       creditDays: Number(r.userCreditDate ?? 0),
       status: deriveStatus(r),
       fullName: displayName,
+      contactName,
       tel: r.userTel ?? "",
       email: r.userEmail ?? "",
       address: summarizeAddress(addressByUser.get(r.userID)),
@@ -562,6 +582,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           rows={tableRows.map((r): CsvRow => ({
             userID: r.userID,
             fullName: r.fullName,
+            contactName: r.contactName,
             type: r.isJuristic ? "นิติบุคคล" : "บุคคล",
             status: r.status,
             tel: r.tel,
@@ -581,6 +602,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           cols={[
             { key: "userID",           label: "รหัสสมาชิก" },
             { key: "fullName",         label: "ชื่อ-นามสกุล" },
+            { key: "contactName",      label: "ผู้ติดต่อ" },
             { key: "type",             label: "ประเภท" },
             { key: "status",           label: "สถานะ" },
             { key: "tel",              label: "เบอร์โทร" },

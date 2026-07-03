@@ -18,10 +18,13 @@ export function PcsLeftMenuUserPill({
   userID,
   userPicture,
   fullName,
+  contactName,
 }: {
   userID: string;
   userPicture: string;
   fullName?: string;
+  /** Contact-person sub-line (juristic → fullName=company). "" = hidden. */
+  contactName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -42,6 +45,9 @@ export function PcsLeftMenuUserPill({
           <span className="block text-sm font-semibold text-foreground">{userID}</span>
           {fullName ? (
             <span className="block truncate text-[12px] text-muted">{fullName}</span>
+          ) : null}
+          {contactName ? (
+            <span className="block truncate text-[11px] text-muted">ผู้ติดต่อ: {contactName}</span>
           ) : null}
         </span>
         <ChevronDown

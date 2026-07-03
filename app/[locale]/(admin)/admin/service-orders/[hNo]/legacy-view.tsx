@@ -33,6 +33,7 @@
 
 import type React from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
@@ -288,7 +289,23 @@ export async function renderLegacyServiceOrderView(hno: string) {
   // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane — reflect the
   // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
-  const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
+  // Juristic-aware header name via the shared SOT: COMPANY for a นิติบุคคล
+  // (corporateName already loaded above), else the person. The tax-doc default
+  // (further down) already uses the company; this fixes the visible header that
+  // was leaking the contact person. 2026-07-03.
+  const headerIdentity = resolveBillingIdentity({
+    userCompany: u?.userCompany,
+    userName: u?.userName,
+    userLastName: u?.userLastName,
+    corp: corporateName
+      ? { corporatename: corporateName, corporatenumber: null, corporateaddress: null }
+      : null,
+  });
+  const customerName = headerIdentity.name || "—";
+  const headerContactName =
+    headerIdentity.isJuristic && headerIdentity.personName && headerIdentity.personName !== headerIdentity.name
+      ? headerIdentity.personName
+      : "";
   const userAvatar = await resolveLegacyUrl(u?.userPicture, "profile").catch(() => null);
   const addr = [r.haddressno, r.haddresssubdistrict ? `ต.${r.haddresssubdistrict}` : "", r.haddressdistrict ? `อ.${r.haddressdistrict}` : "", r.haddressprovince ? `จ.${r.haddressprovince}` : "", r.haddresszipcode]
     .filter(Boolean).join(" ");
@@ -546,6 +563,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
               <Link href={`/admin/customers/${encodeURIComponent(r.userid)}`} className="block truncate font-semibold text-primary-600 hover:underline">
                 {customerName}
               </Link>
+              {headerContactName && (
+                <p className="truncate text-[11px] text-muted">ผู้ติดต่อ: {headerContactName}</p>
+              )}
               <p className="text-xs text-muted">รหัสสมาชิก: {r.userid}</p>
             </div>
           </div>

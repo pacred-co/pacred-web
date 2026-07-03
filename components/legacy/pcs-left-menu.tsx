@@ -79,7 +79,8 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
         <PcsLeftMenuUserPill
           userID={data.userID}
           userPicture={data.userPicture}
-          fullName={`${data.userName} ${data.userLastName}`.trim()}
+          fullName={data.displayName || `${data.userName} ${data.userLastName}`.trim()}
+          contactName={data.contactName}
         />
       </div>
 

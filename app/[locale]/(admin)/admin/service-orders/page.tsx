@@ -37,6 +37,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
@@ -176,6 +177,7 @@ type RawUserRow = {
 
 type RawCorpRow = {
   userid: string;
+  corporatename: string | null;
 };
 
 export default async function AdminServiceOrdersPage({
@@ -357,19 +359,25 @@ export default async function AdminServiceOrdersPage({
   // ── 3rd query: tb_corporate to flag นิติบุคคล customers ──────────
   // (Legacy badgeVIP2 reads this — function.php L567-596.)
   let corporateUserIds = new Set<string>();
+  // Company name per juristic userid (2026-07-03) — the list "ชื่อลูกค้า" shows
+  // the COMPANY (was leaking the contact person). Same batched query, widened.
+  const corpNameByUser = new Map<string, string>();
   if (uniqueUserIds.length > 0) {
     const { data: corpRows, error: corpErr } = await admin
       .from("tb_corporate")
-      .select("userid")
+      .select("userid, corporatename")
       .in("userid", uniqueUserIds);
     if (corpErr) {
       console.error("[/admin/service-orders] tb_corporate join failed", {
         error: corpErr.message,
       });
     }
-    corporateUserIds = new Set(
-      ((corpRows ?? []) as unknown as RawCorpRow[]).map((c) => c.userid),
-    );
+    const corpList = (corpRows ?? []) as unknown as RawCorpRow[];
+    corporateUserIds = new Set(corpList.map((c) => c.userid));
+    for (const c of corpList) {
+      const nm = (c.corporatename ?? "").trim();
+      if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+    }
   }
 
   // ── Resolve cover image URLs in parallel ─────────────────────────
@@ -381,10 +389,23 @@ export default async function AdminServiceOrdersPage({
   // ── Shape into ServiceOrderRow for the table ─────────────────────
   const rows: ServiceOrderRow[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
-    // tb_users uses camelCase columns (CLAUDE.md exception).
-    const name = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || null
-      : null;
+    // tb_users uses camelCase columns (CLAUDE.md exception). Juristic-aware
+    // name via the shared SOT: COMPANY for a นิติบุคคล, else the person
+    // (was leaking the contact person for a company). 2026-07-03.
+    const corpName = corpNameByUser.get(r.userid) ?? null;
+    const identity = resolveBillingIdentity({
+      userCompany: user?.userCompany,
+      userName: user?.userName,
+      userLastName: user?.userLastName,
+      corp: corpName
+        ? { corporatename: corpName, corporatenumber: null, corporateaddress: null }
+        : null,
+    });
+    const name = user ? identity.name || null : null;
+    const contactName =
+      identity.isJuristic && identity.personName && identity.personName !== identity.name
+        ? identity.personName
+        : "";
     const coid = user?.coID ?? null;
     const isVip = !isGeneralCoid(coid);
     return {
@@ -418,6 +439,7 @@ export default async function AdminServiceOrdersPage({
       adminidupdate: r.adminidupdate,
       userid: r.userid,
       customerName: name,
+      contactName,
       isJuristic: user?.userCompany === "1" || corporateUserIds.has(r.userid),
       creditLimit: Number(user?.userCreditValue ?? 0),
       creditDays: Number(user?.userCreditDate ?? 0),

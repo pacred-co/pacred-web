@@ -112,20 +112,54 @@ export async function adminSearchCustomers(
     return { ok: false, error: error.message };
   }
 
-  const rows: CustomerPickerRow[] = ((data ?? []) as unknown as LegacyUserRow[]).map((u) => ({
-    ID:           u.userID,
-    member_code:  u.userID,
-    account_type: u.userCompany === "1" ? "juristic" : "personal",
-    status:       deriveStatus(u),
-    first_name:   u.userName,
-    last_name:    u.userLastName,
-    // Legacy tb_users has no company-name column on the user row — the
-    // juristic name lives in a separate corporate table not in scope
-    // here; the picker falls back to first/last name when this is null.
-    company_name: null,
-    phone:        u.userTel,
-    email:        u.userEmail,
-  }));
+  const users = (data ?? []) as unknown as LegacyUserRow[];
+
+  // Batch-resolve the juristic company name (2026-07-03). The corp name lives
+  // in tb_corporate keyed by userid = member_code; ONE select-in for the
+  // matched userids (never N+1) so the picker shows the COMPANY for a นิติบุคคล
+  // instead of the contact person. The <CustomerPicker> component already
+  // prefers company_name when account_type==="juristic", so this backend fill
+  // lights up every picker consumer with no component change.
+  const corpNameByUser = new Map<string, string>();
+  const userIds = users.map((u) => u.userID).filter(Boolean);
+  if (userIds.length > 0) {
+    const { data: corps, error: corpsErr } = await admin
+      .from("tb_corporate")
+      .select("userid, corporatename, corporatenumber")
+      .in("userid", userIds);
+    if (corpsErr) {
+      // Non-fatal: fall back to person names (the picker still works).
+      console.error("[adminSearchCustomers tb_corporate] failed", {
+        code: corpsErr.code,
+        message: corpsErr.message,
+      });
+    } else {
+      for (const c of (corps ?? []) as { userid: string; corporatename: string | null }[]) {
+        const nm = (c.corporatename ?? "").trim();
+        if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+      }
+    }
+  }
+
+  const rows: CustomerPickerRow[] = users.map((u) => {
+    const corpName = corpNameByUser.get(u.userID) ?? null;
+    // Union juristic signal: userCompany='1' OR a tb_corporate row exists —
+    // matches resolveBillingIdentity so a migrated corp that lost userCompany
+    // still resolves as juristic.
+    const isJuristic = u.userCompany === "1" || corpName !== null;
+    return {
+      ID:           u.userID,
+      member_code:  u.userID,
+      account_type: isJuristic ? "juristic" : "personal",
+      status:       deriveStatus(u),
+      first_name:   u.userName,
+      last_name:    u.userLastName,
+      // Company name for juristic (the picker prefers it) — null for a person.
+      company_name: corpName,
+      phone:        u.userTel,
+      email:        u.userEmail,
+    };
+  });
 
   return {
     ok: true,

@@ -67,6 +67,9 @@ export type CustomerTableRow = {
   creditDays: number;
   status: DerivedStatus;
   fullName: string;
+  /** Contact-person name shown as a sub-line ONLY when it differs from fullName
+   *  (i.e. juristic → fullName=company, contactName=person). "" = no sub-line. */
+  contactName: string;
   tel: string;
   email: string;
   address: string;
@@ -222,7 +225,12 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-foreground">{r.fullName}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground">
+                        <div>{r.fullName}</div>
+                        {r.contactName && (
+                          <div className="text-[11px] font-normal text-muted-foreground">ผู้ติดต่อ: {r.contactName}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs">
                         <div>{r.tel || "—"}</div>
                         <div className="text-muted">{r.email || "—"}</div>
@@ -359,6 +367,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
           <Field label="รหัสสมาชิก"><span className="font-mono">{r.userID}</span></Field>
           <Field label="ชื่อ">{r.fullName || "—"}</Field>
+          {r.contactName && <Field label="ผู้ติดต่อ">{r.contactName}</Field>}
           <Field label="ประเภท">{r.isJuristic ? "นิติบุคคล" : "บุคคล"}</Field>
           <Field label="สถานะ"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span></Field>
           <Field label="เบอร์โทร">{r.tel || "—"}</Field>

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
@@ -735,18 +736,37 @@ async function tryRenderTbForwarder(
   // (Single-row batch: the 1% only fires if THIS row's total ≥ ฿1,000, matching
   // computeForwarderDebitBatch's batch-≥1000 gate — faithful to pay-users.php.)
   let collectIsCorporate = (r.fusercompany ?? "").trim() === "1";
-  if (!collectIsCorporate) {
+  // Also fetch the corp NAME (2026-07-03) so the "จาก :" header shows the
+  // COMPANY for a juristic customer (was leaking the contact person). Single
+  // maybeSingle keyed by userid — unconditional so a fusercompany='1' row still
+  // resolves its company name.
+  let corpCompanyName: string | null = null;
+  {
     const { data: corpRow, error: corpErr } = await admin
       .from("tb_corporate")
-      .select("id")
+      .select("id, corporatename")
       .eq("userid", r.userid)
       .limit(1)
-      .maybeSingle<{ id: number | string }>();
+      .maybeSingle<{ id: number | string; corporatename: string | null }>();
     if (corpErr) {
       console.error(`[tb_corporate collect-check] failed`, { code: corpErr.code, message: corpErr.message, userid: r.userid });
     }
-    if (corpRow) collectIsCorporate = true;
+    if (corpRow) {
+      collectIsCorporate = true;
+      const nm = (corpRow.corporatename ?? "").trim();
+      if (nm) corpCompanyName = nm;
+    }
   }
+  // Resolve the display identity via the shared SOT — COMPANY name for a
+  // juristic customer, contact person kept for the sub-line.
+  const customerIdentity = resolveBillingIdentity({
+    userCompany: u?.userCompany ?? r.fusercompany,
+    userName: u?.userName,
+    userLastName: u?.userLastName,
+    corp: corpCompanyName
+      ? { corporatename: corpCompanyName, corporatenumber: null, corporateaddress: null }
+      : null,
+  });
   // ภูม 2026-06-23 — aggregate the WHOLE shipment (all sibling trackings), the
   // SAME row set the รายการสินค้า table sums, so ยอดเก็บจริง matches it. Was a
   // money bug: this computed on the ONE landed row (฿410) while the items table
@@ -986,8 +1006,17 @@ async function tryRenderTbForwarder(
                 ) : (
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-alt text-muted"><UserIcon className="h-3.5 w-3.5" /></span>
                 )}
-                คุณ{u?.userName ?? ""} {u?.userLastName ?? ""}
+                {customerIdentity.isJuristic
+                  ? customerIdentity.name
+                  : `คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`}
               </Link>
+              {customerIdentity.isJuristic &&
+                customerIdentity.personName &&
+                customerIdentity.personName !== customerIdentity.name && (
+                  <span className="ml-1.5 text-[11px] text-muted align-middle">
+                    (ผู้ติดต่อ: คุณ{customerIdentity.personName})
+                  </span>
+                )}
               {/* owner 2026-06-24: ต้องบอกชัดทุกลูกค้าว่าเป็นนิติบุคคลหรือบุคคลธรรมดา
                   (ใช้ tb_users.userCompany หรือ tb_corporate ที่ผูกกับ userid) */}
               {(u?.userCompany === "1" || collectIsCorporate) ? (

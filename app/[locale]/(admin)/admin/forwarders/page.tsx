@@ -27,6 +27,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -331,6 +332,8 @@ export type Row = {
   customer: {
     userid: string;
     name: string;
+    /** Contact-person sub-line when name=company (juristic). "" otherwise. */
+    contact_name: string;
     phone: string;
     // Wave 18-B — VIP/SVIP/SaleAdmin badge inputs
     coid: string;              // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc
@@ -1120,6 +1123,9 @@ export async function fetchForwarderList(
   // นิติ membership  = ≥1 row in tb_corporate with matching userid.
   let svipUserIds = new Set<string>();
   let corporateUserIds = new Set<string>();
+  // Company name per juristic userid (2026-07-03) — the header/list shows the
+  // COMPANY (was leaking the contact person). Same batched corp query, widened.
+  const corpNameByUser = new Map<string, string>();
   if (uniqueUserIds.length > 0) {
     const [userRowsRes, svipRowsRes, corpRowsRes] = await Promise.all([
       admin
@@ -1134,7 +1140,7 @@ export async function fetchForwarderList(
         .in("userid", uniqueUserIds),
       admin
         .from("tb_corporate")
-        .select("userid")
+        .select("userid, corporatename, corporatenumber")
         .in("userid", uniqueUserIds),
     ]);
     usersByUserId = new Map(
@@ -1145,19 +1151,36 @@ export async function fetchForwarderList(
         .map((r) => r.userid)
         .filter(Boolean),
     );
-    corporateUserIds = new Set(
-      ((corpRowsRes.data ?? []) as unknown as { userid: string }[])
-        .map((r) => r.userid)
-        .filter(Boolean),
-    );
+    const corpRows = (corpRowsRes.data ?? []) as unknown as {
+      userid: string;
+      corporatename: string | null;
+    }[];
+    corporateUserIds = new Set(corpRows.map((r) => r.userid).filter(Boolean));
+    for (const c of corpRows) {
+      const nm = (c.corporatename ?? "").trim();
+      if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+    }
   }
 
   // Shape into our Row type for the table.
   let rows: Row[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
-    const name = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
-      : "";
+    // Juristic-aware name via the shared SOT: COMPANY for a นิติบุคคล, else the
+    // person (was leaking the contact person for a company). 2026-07-03.
+    const corpName = corpNameByUser.get(r.userid) ?? null;
+    const identity = resolveBillingIdentity({
+      userCompany: user?.userCompany,
+      userName: user?.userName,
+      userLastName: user?.userLastName,
+      corp: corpName
+        ? { corporatename: corpName, corporatenumber: null, corporateaddress: null }
+        : null,
+    });
+    const name = user ? identity.name : "";
+    const contactName =
+      identity.isJuristic && identity.personName && identity.personName !== identity.name
+        ? identity.personName
+        : "";
     // Wave 18-B — fpallet column is empty-string-by-default in legacy; treat
     // both null and "" as "no location set".
     const pallet = r.fpallet && r.fpallet.trim() !== "" ? r.fpallet.trim() : null;
@@ -1217,6 +1240,7 @@ export async function fetchForwarderList(
         ? {
             userid: user.userID,
             name,
+            contact_name: contactName,
             phone: user.userTel ?? "",
             coid: user.coID ?? "",
             is_svip: svipUserIds.has(user.userID),
