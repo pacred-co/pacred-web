@@ -60,8 +60,8 @@ export async function generateMetadata({
   // `name` + OG/Twitter title — only the <title> tag is forced.
   const absoluteTitle =
     locale === "en"
-      ? "Customs Clearance & Customs Broker Thailand | Pacred"
-      : "เคลียร์สินค้า พิธีการศุลกากร ตัวแทนออกของ | Pacred Shipping";
+      ? "Customs Clearance Suvarnabhumi & Held-at-Customs Release | Pacred"
+      : "บริการ Shipping เคลียร์สินค้า(ติดด่าน) สุวรรณภูมิ คลองเตย แหลมฉบัง Pacred Shipping";
   return {
     ...base,
     title: { absolute: absoluteTitle },
@@ -1153,7 +1153,6 @@ export default async function CustomsClearancePage({
                 the 4 not-yet-built service routes are intentionally NOT linked). */}
             <h3 className="mt-8 md:mt-10 text-[15px] md:text-[19px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.relatedH3")}</h3>
             <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[13px] md:text-[14.5px] font-bold">
-              <li><Link href="/services/customs-clearance" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.customsOverview")}</Link></li>
               <li><Link href="/services/import-china" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.importChina")}</Link></li>
               <li><Link href="/services/export-worldwide" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.export")}</Link></li>
               <li><Link href="/services/china-shopping" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.chinaShopping")}</Link></li>
