@@ -1,5 +1,17 @@
+// Canonical production domain is pacred.co.th. NEXT_PUBLIC_SITE_URL (set in
+// Vercel) is authoritative; the default below is the safety net so a missing
+// env var never silently canonicalises the whole site to the wrong domain.
+if (
+  !process.env.NEXT_PUBLIC_SITE_URL &&
+  process.env.NODE_ENV === "production"
+) {
+  console.warn(
+    "[seo] NEXT_PUBLIC_SITE_URL is not set — canonical/hreflang/sitemap are falling back to https://pacred.co.th",
+  );
+}
+
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co"
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co.th"
 ).replace(/\/$/, "");
 
 export const SITE_NAME = "Pacred";

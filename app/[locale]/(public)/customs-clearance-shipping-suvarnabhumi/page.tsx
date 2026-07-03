@@ -32,7 +32,7 @@ import { KnowledgeNewsBlock } from "@/components/sections/knowledge-news-block";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
-import { breadcrumbSchema, serviceSchema } from "@/components/seo/schemas";
+import { breadcrumbSchema, serviceSchema, faqPageSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { CONTACT, STAFF, LINE_OA } from "@/components/seo/site";
 
@@ -249,6 +249,11 @@ export default async function CustomsClearancePage({
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const t = await getTranslations({ locale, namespace: NS });
   const tp = await getTranslations({ locale, namespace: "customsClearancePage" });
+
+  // FAQ items power BOTH the visible accordion and the FAQPage JSON-LD from ONE
+  // source, so the structured data can never drift from the rendered text
+  // (Google requires FAQ markup to match visible on-page content). ปอน 2026-07-03.
+  const faqItems = (tp.raw("seoDepth.faq") as Array<{ q: string; a: string }>) ?? [];
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const svcLabel  = typedLocale === "th" ? "บริการ" : "Services";
   const here      = "customs-clearance-shipping-suvarnabhumi";
@@ -286,6 +291,11 @@ export default async function CustomsClearancePage({
             ],
             typedLocale,
           ),
+          // FAQPage rich result — only emitted when the visible FAQ accordion has
+          // items (structured data must match on-page content). ปอน 2026-07-03.
+          ...(faqItems.length
+            ? [faqPageSchema(faqItems.map((f) => ({ question: f.q, answer: f.a })))]
+            : []),
         ]}
       />
       <NavBar />
@@ -1084,6 +1094,72 @@ export default async function CustomsClearancePage({
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ═══════ 10.5 Broad-term SEO depth + FAQ (ปอน 2026-07-03) ═══════
+             Topical depth top competitors rank on — broker definition ·
+             import/export split · documents checklist · duty+VAT (CIF)
+             explainer — plus a real FAQ block wired to FAQPage JSON-LD.
+             Broadens the page off the already-won Suvarnabhumi niche onto
+             เคลียร์สินค้า / พิธีการศุลกากร / ตัวแทนออกของ. Natural prose,
+             no keyword stuffing (per SEO workflow + adversarial critic). */}
+        <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <Tag className="w-3.5 h-3.5" strokeWidth={2.6} />
+              {tp("seoDepth.eyebrow")}
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              {tp("seoDepth.h2")}
+            </h2>
+
+            <div className="mt-5 md:mt-7 grid gap-4 md:gap-5 md:grid-cols-2">
+              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.03] p-4 md:p-5">
+                <h3 className="text-[15px] md:text-[18px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.defineH3")}</h3>
+                <p className="mt-2 text-[13px] md:text-[14.5px] leading-[1.7] font-medium text-muted">{tp("seoDepth.defineBody")}</p>
+              </div>
+              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.03] p-4 md:p-5">
+                <h3 className="text-[15px] md:text-[18px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.importExportH3")}</h3>
+                <p className="mt-2 text-[13px] md:text-[14.5px] leading-[1.7] font-medium text-muted">{tp("seoDepth.importExportBody")}</p>
+              </div>
+              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.03] p-4 md:p-5">
+                <h3 className="text-[15px] md:text-[18px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.docsH3")}</h3>
+                <p className="mt-2 text-[13px] md:text-[14.5px] leading-[1.7] font-medium text-muted">{tp("seoDepth.docsBody")}</p>
+              </div>
+              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.03] p-4 md:p-5">
+                <h3 className="text-[15px] md:text-[18px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.dutyVatH3")}</h3>
+                <p className="mt-2 text-[13px] md:text-[14.5px] leading-[1.7] font-medium text-muted">{tp("seoDepth.dutyVatBody")}</p>
+              </div>
+            </div>
+
+            {/* FAQ — visible accordion; mirrored into FAQPage JSON-LD (same source) */}
+            <h2 className="mt-8 md:mt-12 text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              {tp("seoDepth.faqH2")}
+            </h2>
+            <div className="mt-4 md:mt-5 divide-y divide-black/[0.07] dark:divide-white/10 rounded-2xl border border-black/[0.07] dark:border-white/10 overflow-hidden">
+              {faqItems.map((f, i) => (
+                <details key={i} className="group bg-white/40 dark:bg-white/[0.02] open:bg-primary-50/40 dark:open:bg-white/[0.04]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 md:px-5 py-3.5 md:py-4 text-[13.5px] md:text-[15.5px] font-bold text-[#111827] dark:text-white marker:content-none [&::-webkit-details-marker]:hidden">
+                    <span>{f.q}</span>
+                    <span aria-hidden className="shrink-0 text-primary-600 text-xl leading-none transition-transform duration-200 group-open:rotate-45">+</span>
+                  </summary>
+                  <div className="px-4 md:px-5 pb-4 md:pb-5 -mt-0.5 text-[13px] md:text-[14.5px] leading-[1.75] font-medium text-muted">{f.a}</div>
+                </details>
+              ))}
+            </div>
+
+            {/* Related services — contextual internal links (existing routes only;
+                the 4 not-yet-built service routes are intentionally NOT linked). */}
+            <h3 className="mt-8 md:mt-10 text-[15px] md:text-[19px] font-black tracking-[-0.02em] text-[#111827] dark:text-white">{tp("seoDepth.relatedH3")}</h3>
+            <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[13px] md:text-[14.5px] font-bold">
+              <li><Link href="/services/customs-clearance" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.customsOverview")}</Link></li>
+              <li><Link href="/services/import-china" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.importChina")}</Link></li>
+              <li><Link href="/services/export-worldwide" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.export")}</Link></li>
+              <li><Link href="/services/china-shopping" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.chinaShopping")}</Link></li>
+              <li><Link href="/services/yuan-transfer" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.yuanTransfer")}</Link></li>
+              <li><Link href="/knowledge" className="text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline">{tp("seoDepth.links.knowledge")}</Link></li>
+            </ul>
           </div>
         </section>
 
