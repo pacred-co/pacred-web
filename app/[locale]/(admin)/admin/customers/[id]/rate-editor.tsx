@@ -30,6 +30,7 @@ import {
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { SellFloorCbmConfig, SellFloorKgConfig } from "@/lib/admin/sell-floor-config";
+import { DEFAULT_COMPARISON } from "@/lib/quote/cargo-promo-packages";
 import { QuoteTab } from "./quote-tab";
 import { QuoteHistoryTab } from "./quote-history-tab";
 
@@ -455,6 +456,16 @@ export function CustomerRateEditor({
 }
 
 // ── rate grid for one warehouse ───────────────────────────────────────────
+// Product-type rows collapsed to 2 (ปอน 2026-07-04): ทั่วไป/อย./มอก. share ONE
+// rate — an edit mirrors into product columns 1·2·3 — and พิเศษ (4) stays its own.
+// Display-only + non-destructive: the DB still stores all 4 per-product columns and
+// the resolver reads per-product, so columns 2·3 keep their loaded value until the
+// merged row is actually edited. ราคาขั้นต่ำ is identical for every product → one floor.
+const RATE_ROWS: { label: string; products: ProductId[] }[] = [
+  { label: "ทั่วไป · อย. · มอก.", products: ["1", "2", "3"] },
+  { label: "พิเศษ", products: ["4"] },
+];
+
 function RateGrid({
   wh, values, setVal, pending, floorMatrix,
 }: {
@@ -478,37 +489,42 @@ function RateGrid({
           </tr>
         </thead>
         <tbody>
-          {PRODUCTS.map((p) => (
-            <tr key={p.id} className="border-t border-border">
-              <td className="px-3 py-2 font-medium">{p.label}</td>
-              {(["kg", "cbm"] as const).flatMap((meas) =>
-                (["1", "2"] as TransportId[]).map((t) => {
-                  const k = vKey(wh, meas, t, p.id);
-                  const raw = values.get(k) ?? "";
-                  const floor = floorMatrix[wh][meas][t][p.id];
-                  const n = parseFloat(raw.replace(/,/g, ""));
-                  const isBelow = Number.isFinite(n) && n > 0 && floor != null && n < floor;
-                  return (
-                    <td key={k} className="px-2 py-1.5 text-right">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={raw}
-                        disabled={pending}
-                        onChange={(e) => setVal(k, e.target.value)}
-                        className={`w-20 rounded-md border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 ${
-                          isBelow
-                            ? "border-red-400 text-red-600 bg-red-50 focus:ring-red-400/40"
-                            : "border-border focus:ring-primary-500/40 focus:border-primary-500"
-                        }`}
-                      />
-                      <span className="block text-[11px] text-muted mt-0.5">ขั้นต่ำ {floor}</span>
-                    </td>
-                  );
-                }),
-              )}
-            </tr>
-          ))}
+          {RATE_ROWS.map((row) => {
+            const rep = row.products[0]; // representative column (ทั่วไป) drives the display
+            return (
+              <tr key={rep} className="border-t border-border">
+                <td className="px-3 py-2 font-medium">{row.label}</td>
+                {(["kg", "cbm"] as const).flatMap((meas) =>
+                  (["1", "2"] as TransportId[]).map((t) => {
+                    const k = vKey(wh, meas, t, rep);
+                    const raw = values.get(k) ?? "";
+                    const floor = floorMatrix[wh][meas][t][rep];
+                    const n = parseFloat(raw.replace(/,/g, ""));
+                    const isBelow = Number.isFinite(n) && n > 0 && floor != null && n < floor;
+                    return (
+                      <td key={k} className="px-2 py-1.5 text-right">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={raw}
+                          disabled={pending}
+                          // Mirror the edit into every product column in this group
+                          // (ทั่วไป·อย·มอก share one rate).
+                          onChange={(e) => row.products.forEach((p) => setVal(vKey(wh, meas, t, p), e.target.value))}
+                          className={`w-20 rounded-md border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 ${
+                            isBelow
+                              ? "border-red-400 text-red-600 bg-red-50 focus:ring-red-400/40"
+                              : "border-border focus:ring-primary-500/40 focus:border-primary-500"
+                          }`}
+                        />
+                        <span className="block text-[11px] text-muted mt-0.5">ขั้นต่ำ {floor}</span>
+                      </td>
+                    );
+                  }),
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -537,7 +553,7 @@ function ComparisonTab({
   const t = useTranslations("customerRateComparison");
   const { confirm, dialogs } = useConfirmDialogs();
   const [pending, start] = useTransition();
-  const [draft, setDraft] = useState(value > 0 ? String(value) : "150");
+  const [draft, setDraft] = useState(value > 0 ? String(value) : String(DEFAULT_COMPARISON));
 
   function save() {
     const v = Number(draft.replace(/,/g, "").trim());
@@ -606,14 +622,14 @@ function ComparisonTab({
       </div>
 
       <div className="space-y-2">
-        <label className="block text-[12px] font-medium text-foreground">{t("inputLabel")}</label>
+        <label className="block text-[12px] font-medium text-foreground">{t("inputLabel", { def: DEFAULT_COMPARISON })}</label>
         <input
           type="text"
           inputMode="decimal"
           value={draft}
           disabled={pending}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="150"
+          placeholder={String(DEFAULT_COMPARISON)}
           className="w-40 rounded-md border border-border px-3 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
         />
         <p className="text-[11px] text-muted">{t("hint")}</p>

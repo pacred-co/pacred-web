@@ -8161,7 +8161,7 @@
     "currentOn": "Comparison pricing enabled",
     "currentOff": "This customer is priced normally (max price)",
     "valueLabel": "Comparison value (kg/CBM)",
-    "inputLabel": "Comparison value used for shipping price (default 150)",
+    "inputLabel": "Comparison value used for shipping price (default {def})",
     "hint": "Lower value → bills by volume (CBM) more often (cheaper) · comparison customers are exempt from the \"max price\" rule",
     "setBtn": "Set comparison",
     "editBtn": "Edit comparison",

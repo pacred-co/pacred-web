@@ -14,7 +14,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Copy, Printer, Check, Link2 } from "lucide-react";
+import { Copy, Printer, Check, Link2, RotateCcw, FileCheck2 } from "lucide-react";
 import { calcFreight, calcQuoteTotals, round2 } from "@/lib/quote/cargo-quote-calc";
 import {
   CARGO_PROMO_PACKAGES, CUSTOMS_ADDON, DEFAULT_COMPARISON, MIN_CHARGE, MODE_LABEL,
@@ -24,9 +24,10 @@ import {
 // Shared render + serializers — the admin card AND the public /q/[token] page
 // render byte-identically from the same QuoteModel (mirrors receipt-paper.tsx).
 import {
-  QuoteCard, buildQuoteText, buildPrintHtml,
+  buildQuoteText, buildPrintHtml,
   type QuoteModel, type View, type DisplayLine, type CompareRow,
 } from "@/components/quote/quote-paper";
+import { EditableQuoteCard } from "@/components/quote/editable-quote-card";
 import { saveQuotationForShare } from "@/actions/admin/save-quotation";
 
 const JURISTIC_WHT = 0.01;
@@ -96,25 +97,24 @@ export function QuoteTab({
     setRatePerKg(String(eff.kg));
   }
 
-  // doc / buyer (advanced)
+  // doc / buyer SEED values — the ใบเสนอราคา/ใบประเมิน card is now inline-editable,
+  // so these only SEED the auto-model; the rep's inline edits live in `overrides`.
   const today = useMemo(() => new Date(), []);
   const ymd = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
-  const [refNo, setRefNo] = useState(`QT-${userid}-${ymd}`);
-  const [validUntil, setValidUntil] = useState(() => { const d = new Date(today); d.setDate(d.getDate() + 7); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }); });
+  const refNoSeed = `QT-${userid}-${ymd}`;
+  const validUntilSeed = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() + 7); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }); }, [today]);
   // Buyer block seeded from the resolved billing identity: for a juristic
   // customer `customerName` is already the COMPANY name, and the tax id +
-  // registered address are pre-filled (were blank → rep typed them by hand).
-  const [buyerName, setBuyerName] = useState(customerName || "");
-  const [buyerTaxId, setBuyerTaxId] = useState(buyerTaxIdInit);
-  const [buyerAddress, setBuyerAddress] = useState(buyerAddressInit);
-  const [buyerPhone, setBuyerPhone] = useState(buyerPhoneInit);
-  const [salesName, setSalesName] = useState("");
-  const [salesTel, setSalesTel] = useState("");
-  const [extraNote, setExtraNote] = useState("");
+  // registered address are pre-filled.
+  const buyerNameSeed = customerName || "";
   const [copied, setCopied] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  // public share-link state (mirror of `copied` — the link is the receipt /r/[token] twin)
-  const [linking, setLinking] = useState(false);
+  // "ออกเอกสาร" gate (ปอน 2026-07-04) — the export buttons + the share-link only
+  // appear AFTER the rep issues the document, which persists ONE customer_quotations
+  // row (= 1 ครั้ง in ประวัติ). Any later edit reverts to un-issued so what the rep
+  // copies/prints/sends always matches the snapshot recorded in history.
+  const [issued, setIssued] = useState(false);
+  const [issuing, setIssuing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -126,7 +126,7 @@ export function QuoteTab({
     yiwuTruckSurchargePerCbm: 0, isYiwuTruck: false, minCharge: MIN_CHARGE, // surcharge folded into the rate
   }), [cbm, kg, comparison, ratePerCbm, ratePerKg]);
 
-  const model: QuoteModel = useMemo(() => {
+  const autoModel: QuoteModel = useMemo(() => {
     const compareRows: CompareRow[] = WAREHOUSE_KEYS.map((w) => ({
       warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
       truck: rateFor(pkg, effLicensed, w, "truck"), ship: rateFor(pkg, effLicensed, w, "ship"),
@@ -138,34 +138,65 @@ export function QuoteTab({
       lines.push({
         desc: `ค่าขนส่งนำเข้า LCL จีน-ไทย · ${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]} · คิดตาม${basisTxt}`,
         qtyLabel: `${QTY(freight.chargeableQty)} ${freight.basis === "kg" ? "กก." : "คิว"}`,
-        price: freight.rateUsed, amount: freight.freightBeforeSurcharge, vat: issueTax, whtApplicable: true,
+        price: freight.rateUsed, amount: freight.freightBeforeSurcharge, vat: issueTax, whtApplicable: true, discount: 0,
       });
       const topUp = freight.freightTotal > 0 ? round2(freight.freightTotal - freight.freightBeforeSurcharge) : 0;
-      if (topUp > 0) lines.push({ desc: `ปรับเป็นค่าขั้นต่ำ ${MIN_CHARGE} บาท / shipment`, qtyLabel: "-", price: topUp, amount: topUp, vat: issueTax, whtApplicable: true });
+      if (topUp > 0) lines.push({ desc: `ปรับเป็นค่าขั้นต่ำ ${MIN_CHARGE} บาท / shipment`, qtyLabel: "-", price: topUp, amount: topUp, vat: issueTax, whtApplicable: true, discount: 0 });
       for (const i of [...customs].sort((a, b) => a - b)) {
         const c = CUSTOMS_ADDON.costs[i];
         if (!c) continue;
-        lines.push({ desc: c.label, qtyLabel: c.note ?? "1", price: c.amount, amount: c.amount, vat: issueTax && c.vat, whtApplicable: c.vat });
+        lines.push({ desc: c.label, qtyLabel: c.note ?? "1", price: c.amount, amount: c.amount, vat: issueTax && c.vat, whtApplicable: c.vat, discount: 0 });
       }
     }
     const whtRate = juristic ? JURISTIC_WHT : 0;
     const totals = calcQuoteTotals(lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), whtRate);
 
     return {
-      view, refNo, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil,
-      buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel,
+      view, service, refNo: refNoSeed, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil: validUntilSeed,
+      buyerName: buyerNameSeed, buyerTaxId: buyerTaxIdInit, buyerAddress: buyerAddressInit, buyerPhone: buyerPhoneInit, salesName: "", salesTel: "",
       packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
       juristic, compareRows,
-      routeLabel: `${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]}`,
+      routeLabel: `${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]}${freight.density != null ? ` · คิดตาม ${freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)"}` : ""}`,
       density: freight.density, basisLabel: freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)",
       comparison: num(comparison) > 0 ? num(comparison) : DEFAULT_COMPARISON,
       lines, totals, showCustomsInfo,
-      conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: extraNote.trim(),
+      conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
     };
-  }, [view, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNo, validUntil, buyerName, buyerTaxId, buyerAddress, buyerPhone, salesName, salesTel, extraNote, today, userid, showCustomsInfo]);
+  }, [view, service, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
+    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo]);
 
-  const calcEmpty = view === "calc" && model.lines.length === 0;
+  // The rep's inline edits — a field-level override merged over the auto-model.
+  // Calc-derived fields (lines · compareRows · route · package · conditions) are
+  // dropped when a calc INPUT changes so they regenerate; text edits (buyer ·
+  // meta · notes) survive. (ปอน 2026-07-04 — PEAK-style editable ใบเสนอราคา.)
+  const [overrides, setOverrides] = useState<Partial<QuoteModel>>({});
+  const calcKey = `${view}|${pkg.id}|${effLicensed}|${warehouse}|${mode}|${cbm}|${kg}|${comparison}|${[...customs].sort((a, b) => a - b).join(",")}|${issueTax}|${juristic}|${ratePerCbm}|${ratePerKg}|${showCustomsInfo}`;
+  const [prevCalcKey, setPrevCalcKey] = useState(calcKey);
+  if (calcKey !== prevCalcKey) {
+    setPrevCalcKey(calcKey);
+    setIssued(false); // changing a calc input means the issued snapshot is stale
+    setOverrides((o) => {
+      const next = { ...o };
+      delete next.lines; delete next.compareRows; delete next.routeLabel;
+      delete next.basisLabel; delete next.packageLabel; delete next.conditions;
+      return next;
+    });
+  }
+
+  // Effective model = seed ⊕ edits, with totals recomputed from the effective lines.
+  const merged = { ...autoModel, ...overrides } as QuoteModel;
+  const model: QuoteModel = {
+    ...merged,
+    totals: merged.view === "calc"
+      ? calcQuoteTotals(merged.lines.map((l) => ({ label: l.desc, amount: l.amount, vat: l.vat, whtApplicable: l.whtApplicable })), juristic ? JURISTIC_WHT : 0)
+      : merged.totals,
+  };
+  // An inline edit both records the override AND un-issues (the recorded snapshot
+  // no longer matches the doc → the rep must re-issue to log/send the new version).
+  const patchModel = (p: Partial<QuoteModel>) => { setOverrides((o) => ({ ...o, ...p })); setIssued(false); };
+  const hasEdits = Object.keys(overrides).length > 0;
+  const docEmpty = model.view === "calc" ? model.lines.length === 0 : model.compareRows.length === 0;
+  const docTitle = model.view === "calc" ? "ใบเสนอราคา" : "ใบประเมินราคา";
 
   async function copyText() {
     try { await navigator.clipboard.writeText(buildQuoteText(model)); setActionMsg(null); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -184,30 +215,38 @@ export function QuoteTab({
   // rep sends to the customer (who opens /q/[token] WITHOUT login). Mirrors how
   // the receipt /r/[token] link works: the saved row's id is wrapped in an
   // unguessable HMAC token; the public page re-renders the STORED payload.
-  async function shareLink() {
-    setLinking(true);
+  // ออกเอกสาร — persist the current snapshot as ONE customer_quotations row (= 1
+  // ครั้ง in ประวัติ) and reveal the export buttons. Does NOT auto-copy (that's the
+  // separate คัดลอกลิงก์ button, which re-uses this URL → no double-count).
+  async function issueQuote() {
+    if (docEmpty || issuing) return;
+    setIssuing(true);
     setActionMsg(null);
     try {
       const res = await saveQuotationForShare({ userid, refNo: model.refNo, payload: model });
       if (!res.ok || !res.data?.token) {
-        setActionMsg(res.ok ? "สร้างลิงก์ไม่สำเร็จ" : `สร้างลิงก์ไม่สำเร็จ — ${res.error}`);
+        setActionMsg(res.ok ? "ออกเอกสารไม่สำเร็จ" : `ออกเอกสารไม่สำเร็จ — ${res.error}`);
         return;
       }
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const url = `${origin}/q/${res.data.token}`;
-      setShareUrl(url);
-      try {
-        await navigator.clipboard.writeText(url);
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2500);
-      } catch {
-        // Clipboard blocked — still show the URL so the rep can copy it manually.
-        setActionMsg("คัดลอกลิงก์อัตโนมัติไม่ได้ — คัดลอกลิงก์ด้านล่างด้วยมือ");
-      }
+      setShareUrl(`${origin}/q/${res.data.token}`);
+      setIssued(true);
     } catch {
-      setActionMsg("สร้างลิงก์ไม่สำเร็จ — ลองใหม่อีกครั้ง");
+      setActionMsg("ออกเอกสารไม่สำเร็จ — ลองใหม่อีกครั้ง");
     } finally {
-      setLinking(false);
+      setIssuing(false);
+    }
+  }
+
+  // Copy the link of the ALREADY-issued snapshot (no re-save → not counted again).
+  async function copyLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      setActionMsg("คัดลอกลิงก์อัตโนมัติไม่ได้ — คัดลอกลิงก์ด้านล่างด้วยมือ");
     }
   }
 
@@ -284,9 +323,10 @@ export function QuoteTab({
         </div>
       )}
 
-      {/* Advanced (collapsed — keeps the main UI clean) */}
+      {/* Advanced (collapsed) — calc-engine settings only; the document text is
+          edited inline on the card below (กดที่ข้อความบนใบได้เลย). */}
       <details className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2">
-        <summary className="cursor-pointer text-[12px] font-semibold text-foreground">ตัวเลือกเพิ่มเติม (เรท · บริการใบขน · VAT · ข้อมูลเอกสาร)</summary>
+        <summary className="cursor-pointer text-[12px] font-semibold text-foreground">ตัวเลือกการคำนวณ (เรท · บริการใบขน · VAT)</summary>
         <div className="mt-2 space-y-3">
           {view === "calc" && (
             <div className="flex flex-wrap items-end gap-3">
@@ -310,37 +350,43 @@ export function QuoteTab({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Field label="เลขที่เอกสาร" v={refNo} on={setRefNo} cls={inputCls} />
-            <Field label="ใช้ได้ถึง" v={validUntil} on={setValidUntil} cls={inputCls} />
-            <Field label="ชื่อลูกค้า / บริษัท" v={buyerName} on={setBuyerName} cls={inputCls} />
-            <Field label="เลขผู้เสียภาษีลูกค้า" v={buyerTaxId} on={setBuyerTaxId} cls={inputCls} />
-            <Field label="ที่อยู่ลูกค้า" v={buyerAddress} on={setBuyerAddress} cls={inputCls} />
-            <Field label="โทรลูกค้า" v={buyerPhone} on={setBuyerPhone} cls={inputCls} />
-            <Field label="ผู้ติดต่อ (Sale)" v={salesName} on={setSalesName} cls={inputCls} />
-            <Field label="โทร Sale" v={salesTel} on={setSalesTel} cls={inputCls} />
-          </div>
-          <label className="block"><span className="block text-[12px] font-semibold mb-1">หมายเหตุเพิ่มเติม</span><textarea value={extraNote} onChange={(e) => setExtraNote(e.target.value)} rows={2} placeholder="เช่น โปรพิเศษ / เงื่อนไขเฉพาะลูกค้ารายนี้" className={inputCls} /></label>
+          <p className="rounded-md bg-surface-alt/40 px-2.5 py-1.5 text-[11px] text-muted">ℹ️ ข้อมูลเอกสาร (เลขที่ · วันที่ · ลูกค้า · ผู้ติดต่อ · รายการ · หมายเหตุ) แก้ไขได้โดย<b className="text-foreground">กดที่ข้อความบนใบด้านล่างได้เลย</b></p>
         </div>
       </details>
 
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted">แคปการ์ดด้านล่าง หรือกดปุ่มเพื่อคัดลอก/พิมพ์เป็นไฟล์ส่งลูกค้า</p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={copyText} disabled={calcEmpty} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-surface-alt disabled:opacity-50">
-            {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}{copied ? "คัดลอกแล้ว" : "คัดลอกเป็นข้อความ"}
-          </button>
-          <button type="button" onClick={shareLink} disabled={calcEmpty || linking} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 text-primary-700 px-3 py-1.5 text-[12px] font-semibold hover:bg-primary-100 disabled:opacity-50">
-            {linkCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
-            {linking ? "กำลังสร้างลิงก์…" : linkCopied ? "คัดลอกลิงก์แล้ว" : "คัดลอกลิงก์ให้ลูกค้า"}
-          </button>
-          <button type="button" onClick={printQuote} disabled={calcEmpty} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-3 py-1.5 text-[12px] font-semibold hover:bg-primary-700 disabled:opacity-50">
-            <Printer className="w-3.5 h-3.5" /> พิมพ์ / บันทึก PDF
-          </button>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+          <span>กดที่ข้อความบนใบเพื่อแก้ไข · กด “เพิ่มรายการ” เพื่อเพิ่มบรรทัด · แล้วกด “ออก{docTitle}” เพื่อบันทึก+ส่งลูกค้า</span>
+          {hasEdits && (
+            <button type="button" onClick={() => setOverrides({})} className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-100">
+              <RotateCcw className="w-3 h-3" /> รีเซ็ตการแก้ไข
+            </button>
+          )}
         </div>
+        {!issued ? (
+          <button type="button" onClick={issueQuote} disabled={docEmpty || issuing} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-4 py-2 text-[13px] font-bold shadow-sm hover:bg-primary-700 disabled:opacity-50">
+            <FileCheck2 className="w-4 h-4" /> {issuing ? "กำลังออกเอกสาร…" : `ออก${docTitle}`}
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+              <Check className="w-3 h-3" /> ออก{docTitle}แล้ว · บันทึกในประวัติ
+            </span>
+            <button type="button" onClick={copyText} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-surface-alt">
+              {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}{copied ? "คัดลอกแล้ว" : "คัดลอกเป็นข้อความ"}
+            </button>
+            <button type="button" onClick={copyLink} className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 text-primary-700 px-3 py-1.5 text-[12px] font-semibold hover:bg-primary-100">
+              {linkCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+              {linkCopied ? "คัดลอกลิงก์แล้ว" : "คัดลอกลิงก์ให้ลูกค้า"}
+            </button>
+            <button type="button" onClick={printQuote} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-3 py-1.5 text-[12px] font-semibold hover:bg-primary-700">
+              <Printer className="w-3.5 h-3.5" /> พิมพ์ / บันทึก PDF
+            </button>
+          </div>
+        )}
       </div>
-      {shareUrl && (
+      {issued && shareUrl && (
         <div className="rounded-lg border border-primary-200 bg-primary-50/60 px-3 py-2 text-[12px] text-primary-900 flex flex-wrap items-center gap-2">
           <span className="font-semibold whitespace-nowrap">🔗 ลิงก์ให้ลูกค้า (เปิดดูได้โดยไม่ต้องล็อกอิน):</span>
           <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="font-mono break-all underline hover:text-primary-700">{shareUrl}</a>
@@ -348,17 +394,9 @@ export function QuoteTab({
       )}
       {actionMsg && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">{actionMsg}</div>}
 
-      {calcEmpty ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">กรอกปริมาตร/น้ำหนัก หรือเลือกบริการเสริม เพื่อสร้างใบเสนอราคา</div>
-      ) : (
-        <QuoteCard model={model} />
-      )}
+      <EditableQuoteCard model={model} onChange={patchModel} />
     </div>
   );
-}
-
-function Field({ label, v, on, cls }: { label: string; v: string; on: (s: string) => void; cls: string }) {
-  return <label className="block"><span className="block text-[11px] text-muted mb-0.5">{label}</span><input type="text" value={v} onChange={(e) => on(e.target.value)} className={cls} /></label>;
 }
 
 // ── QuoteCard + buildQuoteText + buildPrintHtml → extracted to

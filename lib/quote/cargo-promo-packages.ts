@@ -158,8 +158,10 @@ export const MODE_LABEL: Record<QuoteMode, string> = {
 };
 
 // ── Calculator defaults (owner ปอน 2026-06-21) ────────────────────────────
-/** ค่าเทียบ — kg ต่อ 1 คิว เส้นแบ่ง บิล KG vs CBM (1 CBM ไม่เกินกี่ กก.). */
-export const DEFAULT_COMPARISON = 250;
+/** ค่าเทียบ — kg ต่อ 1 คิว เส้นแบ่ง บิล KG vs CBM (1 CBM ไม่เกินกี่ กก.).
+ *  Default 350 (ปอน 2026-07-04) — ใช้ในเครื่องมือใบเสนอราคาเมื่อลูกค้ายังไม่มี
+ *  userComparisonValue เฉพาะตัว (บิลจริงยังอ่าน tb_users.userComparisonValue ต่อคน). */
+export const DEFAULT_COMPARISON = 350;
 /** ค่าขั้นต่ำต่อ shipment (บาท). */
 export const MIN_CHARGE = 25;
 /** อี้อู เฉพาะทางรถ — บาท/คิว ที่พับเข้าราคารถ-อี้อู (owner ปอน: +600 · 4,900→5,500). */

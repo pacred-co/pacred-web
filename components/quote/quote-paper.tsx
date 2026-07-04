@@ -38,7 +38,10 @@ const BAHT = (n: number) => n.toLocaleString("th-TH");
 const QTY = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 3 });
 
 export type View = "compare" | "calc";
-export type DisplayLine = { desc: string; qtyLabel: string; price: number; amount: number; vat: boolean; whtApplicable: boolean };
+// `amount` = the net line total (qty × price − discount) already folded in — the
+// totals engine reads `amount`, so `discount` is display-only breakdown metadata.
+// Optional so older stored payloads (no discount) round-trip as 0.
+export type DisplayLine = { desc: string; qtyLabel: string; price: number; amount: number; vat: boolean; whtApplicable: boolean; discount?: number };
 export type CompareRow = { warehouse: string; isYiwu: boolean; truck: PackageRate; ship: PackageRate };
 
 /**
@@ -48,6 +51,9 @@ export type CompareRow = { warehouse: string; isYiwu: boolean; truck: PackageRat
  */
 export type QuoteModel = {
   view: View;
+  /** Service category (cargo · freight · clearance) — categorises the saved quote
+   *  for ประวัติ filtering. Optional so older stored payloads round-trip. */
+  service?: string;
   refNo: string; customerCode: string; dateLabel: string; validUntil: string;
   buyerName: string; buyerTaxId: string; buyerAddress: string; buyerPhone: string;
   salesName: string; salesTel: string;
@@ -243,7 +249,7 @@ function LineItems({ model }: { model: QuoteModel }) {
                 <td className="px-2 py-1.5">{i + 1}. {l.desc}</td>
                 <td className="px-2 py-1.5 text-right font-mono text-slate-500 whitespace-nowrap">{l.qtyLabel}</td>
                 <td className="px-2 py-1.5 text-right font-mono">{THB(l.price)}</td>
-                <td className="px-2 py-1.5 text-right font-mono text-slate-500">0.00</td>
+                <td className="px-2 py-1.5 text-right font-mono text-slate-500">{THB(l.discount ?? 0)}</td>
                 <td className="px-2 py-1.5 text-center text-[10.5px] text-slate-500">{l.vat ? "7%" : "ไม่มี"}</td>
                 <td className="px-2 py-1.5 text-right font-mono font-semibold">{THB(inclVat)}</td>
                 <td className="px-2 py-1.5 text-center text-[10.5px] text-slate-400">{model.juristic && l.whtApplicable ? "1%" : "-"}</td>
