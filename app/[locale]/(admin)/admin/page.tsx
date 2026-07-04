@@ -589,6 +589,9 @@ type RowShape = {
   deadline?: string | null;       // กรุณาชำระเงินก่อน (hDatePayment · shop2)
   updateDate?: string | null;     // อัปเดต — status-date (hDateN / fDateStatusN)
   updateAdmin?: string | null;    // adminIDUpdate
+  // usersActive (ลูกค้าที่ยังไม่ได้ใช้งาน) cells:
+  shopUserLabel?: string | null;  // ซื้อสินค้าเพื่อ (shopUser)
+  channelLabel?: string | null;   // รู้จักเราจาก (channel)
 };
 
 // VIP-tier badge (legacy badgeVIP2): show the coID as a tier badge unless it's the
@@ -635,6 +638,16 @@ const FWD_STATUS: Record<string, { label: string; tone: StatusTone }> = {
 const FWD_SHIPBY: Record<string, string> = {
   PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express", PCS: "รับเองโกดัง",
   "1": "KERRY", "2": "ไปรษณีย์", "3": "Flash", "4": "J&T", "5": "Best Express", "6": "Ninja", "7": "DHL",
+};
+
+// ซื้อสินค้าเพื่อ (tb_users.shopUser · legacy shopUserName · function.php:2181).
+const SHOP_USER_LABEL: Record<string, string> = { "1": "ซื้อไปใช้เอง", "2": "ซื้อไปขาย" };
+// รู้จักเราจาก (tb_users.channel · legacy channelUserName · function.php:2189).
+const CHANNEL_LABEL: Record<string, string> = {
+  "1": "ค้นหาโดยใช้ Google", "2": "โฆษณาทาง Facebook หรือ Instagram", "3": "โฆษณาทาง Youtube",
+  "4": "โฆษณา Banner จากเว็บไซต์อื่นๆ", "5": "โฆษณาทาง Tiktok", "6": "โฆษณาทาง Twitter",
+  "7": "เพื่อนหรือคนรู้จักแนะนำ", "8": "ผู้ใช้งานแนะนำ", "9": "กระทู้ Pantip หรือบทความจากเว็บไซต์ต่างๆ",
+  "10": "การจัดบูธ อบรมสัมนา",
 };
 
 type RawUserRow = {
@@ -1014,16 +1027,36 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         console.warn(`[list_unused_customers] failed (soft-fail · returning empty map)`, error);
       }
       const rows = (data ?? []) as unknown as RawUserListRow[];
-      return rows.map((u) => ({
-        id: String(u.ID),
-        created_at: u.userRegistered ?? "",
-        member_code: u.userID,
-        customer_name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
-        amount: 0,
-        detail: `${u.userTel ?? "—"}${u.userEmail ? ` · ${u.userEmail}` : ""}`,
-        link: `/admin/customers/${u.userID}`,
-        status: "registered",
-      }));
+      // 2nd lookup — the RPC doesn't return ซื้อเพื่อ / รู้จักจาก / โน้ต / VIP / เซล; pull from tb_users.
+      type UsrExtra = { userID: string; shopUser: string | null; channel: string | null; userNote: string | null; coID: string | null; adminIDSale: string | null };
+      const extraMap = new Map<string, UsrExtra>();
+      const uids = rows.map((u) => u.userID).filter(Boolean);
+      if (uids.length > 0) {
+        const { data: ex, error: exErr } = await admin
+          .from("tb_users")
+          .select("userID,shopUser,channel,userNote,coID,adminIDSale")
+          .in("userID", uids);
+        if (exErr) console.warn(`[tb_users usersActive extra] failed (soft-fail)`, exErr);
+        for (const e of (ex ?? []) as unknown as UsrExtra[]) extraMap.set(e.userID, e);
+      }
+      return rows.map((u) => {
+        const ex = extraMap.get(u.userID);
+        return {
+          id: String(u.ID),
+          created_at: u.userRegistered ?? "",
+          member_code: u.userID,
+          customer_name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+          amount: 0,
+          detail: `${u.userTel ?? "—"}${u.userEmail ? ` · ${u.userEmail}` : ""}`,
+          link: `/admin/customers/${u.userID}`,
+          status: "registered",
+          shopUserLabel: ex?.shopUser ? (SHOP_USER_LABEL[ex.shopUser] ?? "—") : "—",
+          channelLabel: ex?.channel ? (CHANNEL_LABEL[ex.channel] ?? "—") : "—",
+          note: (ex?.userNote ?? "").trim() || null,
+          vip: vipTierBadge(ex?.coID),
+          saleRep: (ex?.adminIDSale ?? "").trim() || null,
+        };
+      });
     }
 
     default:
@@ -1410,9 +1443,62 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
   );
 }
 
+// ── ลูกค้าที่ยังไม่ได้ใช้งาน (usersActive) — legacy 6-col table ───────────────
+// วันที่สมัคร · ซื้อสินค้าเพื่อ · รู้จักเราจาก · รหัสสมาชิก · ชื่อ-นามสกุล · โน้ต
+function UsersActiveTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีลูกค้าใหม่ที่ยังไม่ใช้งาน</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <div className="px-3 pt-3 text-xs text-muted">แสดงล่าสุด · <Link href="/admin/customers" className="text-primary-600 hover:underline">ไปยังทุกรายการ</Link></div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 whitespace-nowrap">วันที่สมัครสมาชิก</th>
+            <th className="px-3 py-3">ซื้อสินค้าเพื่อ</th>
+            <th className="px-3 py-3">รู้จักเราจาก</th>
+            <th className="px-3 py-3">รหัสสมาชิก</th>
+            <th className="px-3 py-3">ชื่อ-นามสกุล</th>
+            <th className="px-3 py-3">โน้ต</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            return (
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 text-xs">{r.shopUserLabel ?? "—"}</td>
+                <td className="px-3 py-3 text-xs whitespace-normal max-w-[200px]">{r.channelLabel ?? "—"}</td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  {r.vip ? <> <MiniBadge text={r.vip} tone="bg-violet-100 text-violet-700" /></> : null}
+                  {r.saleRep ? <> <MiniBadge text={`Sale : ${r.saleRep}`} tone="bg-emerald-100 text-emerald-700" /></> : null}
+                </td>
+                <td className="px-3 py-3 text-xs text-foreground">
+                  <Link href={r.link} className="hover:underline">คุณ{r.customer_name}</Link>
+                  <div className="text-[11px] text-muted" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                </td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-normal max-w-[220px]">{r.note ?? "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Active tab content table ───────────────────────────────────────────────
 
 function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
+  // ลูกค้าที่ยังไม่ได้ใช้งาน renders the legacy 6-col users table.
+  if (tab === "inactiveCustomers") {
+    return <UsersActiveTable rows={rows} />;
+  }
   // ฝากสั่งซื้อ tabs render the legacy 8-col shop table (owner 2026-07-04).
   if (tab === "shop1" || tab === "shop2" || tab === "shop3" || tab === "shop4") {
     return <ShopTabTable rows={rows} />;
@@ -1478,7 +1564,7 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                       </Link>{" "}
                       <span className="text-foreground">{r.customer_name}</span>
                       <p className="mt-1 text-xs text-muted" dangerouslySetInnerHTML={{ __html: r.detail }} />
-                      {tab !== "inactiveCustomers" && r.amount > 0 && (
+                      {r.amount > 0 && (
                         <p className="mt-1 text-sm font-bold text-red-600">
                           ยอดเงิน: ฿{formatTHB(r.amount)}
                         </p>
