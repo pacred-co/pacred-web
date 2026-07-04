@@ -576,6 +576,7 @@ type RowShape = {
   shipByTh?: string | null;       // ขนส่งไทย (nameShipBy)
   address?: string | null;        // ที่อยู่ส่งสินค้า (fullAddress)
   transportInfo?: string | null;  // ยอดค้างชำระ line2 — ขนส่ง + Kg/CBM
+  payMethod?: string | null;      // ฝากโอน วิธีการชำระ (payType)
 };
 
 // Legacy Bootstrap badge tones → Tailwind pill classes (shared by the tailored tables).
@@ -878,7 +879,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "payment": {
       const { data, error } = await admin
         .from("tb_payment")
-        .select("id,paydate,paystatus,paytype,payyuan,paythb,userid,imagesslip")
+        .select("id,paydate,paystatus,paytype,payyuan,paythb,userid,imagesslip,paydetail")
         .eq("paystatus", "1")
         .order("paydate", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -890,21 +891,31 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       const paySlipMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip");
       return rows.map((r) => {
         const u = users.get(r.userid);
-        const channelLabel =
-          r.paytype === "1" ? "Alipay"
-          : r.paytype === "2" ? "WeChat"
-          : r.paytype === "3" ? "Bank"
-          : (r.paytype ?? "—");
+        // วิธีการชำระ — legacy payment.php payType labels (function.php).
+        const payMethod =
+          r.paytype === "1" ? "จ่ายผ่านเว็บไซต์จีน"
+          : r.paytype === "2" ? "โอนเข้าบัญชี Alipay ร้านค้าจีน"
+          : "อื่นๆ";
         const slipU = paySlipMap[String(r.id)] ?? null;
+        const note = (r.paydetail ?? "").trim();
+        // รายละเอียด = payDetail note (legacy); fall back to ¥ + slip status.
+        const detail = note
+          ? escapeHtmlInline(note)
+          : `¥${Number(r.payyuan ?? 0).toFixed(2)} · <span class="${slipU ? "text-emerald-600" : "text-amber-600"}">${slipU ? "📎 แนบสลิปแล้ว" : "— ไม่มีสลิป"}</span>`;
         return {
           id: String(r.id),
           created_at: r.paydate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.paythb ?? 0),
-          detail: `<span class="font-semibold text-foreground">โอนหยวน</span> · ${escapeHtmlInline(channelLabel)} · ¥${Number(r.payyuan ?? 0).toFixed(2)} · <span class="${slipU ? "text-emerald-600" : "text-amber-600"}">${slipU ? "📎 แนบสลิปแล้ว" : "— ไม่มีสลิป"}</span>`,
+          detail,
           link: `/admin/yuan-payments/${r.id}`,
           status: r.paystatus ?? "1",
+          slipUrl: slipU,
+          orderNo: `#${r.id}`,
+          payMethod,
+          statusLabel: "รอดำเนินการ",
+          statusTone: "warning",
         };
       });
     }
@@ -978,7 +989,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
 type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null };
 type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null };
-type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null };
+type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null; paydetail: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
 // sales_payouts (rebuilt schema · the one tab without a legacy equivalent).
@@ -1240,6 +1251,67 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
   );
 }
 
+// ── ฝากโอน (payment) tab — legacy 9-col table (CEO/payment.php) ─────────────
+// วันที่สร้าง · เลขที่ออเดอร์ · ชื่อ-นามสกุล · รายละเอียด · วิธีการชำระ · ยอดรวม · สถานะ · อัปเดต · ตัวเลือก
+function PaymentTabTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีรายการในหมวดนี้</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
+            <th className="px-3 py-3">เลขที่ออเดอร์</th>
+            <th className="px-3 py-3">ชื่อ-นามสกุล</th>
+            <th className="px-3 py-3">รายละเอียด</th>
+            <th className="px-3 py-3">วิธีการชำระ</th>
+            <th className="px-3 py-3 text-right whitespace-nowrap">ยอดรวม (บาท)</th>
+            <th className="px-3 py-3">สถานะ</th>
+            <th className="px-3 py-3 whitespace-nowrap">อัปเดต</th>
+            <th className="px-3 py-3">ตัวเลือก</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            return (
+              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{r.orderNo ?? "—"}</td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="text-xs text-foreground max-w-[280px] whitespace-normal" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                </td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-normal max-w-[160px]">{r.payMethod ?? "—"}</td>
+                <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
+                <td className="px-3 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
+                </td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? created.toLocaleDateString("th-TH") : "—"}
+                </td>
+                <td className="px-3 py-3">
+                  <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
+                    <Eye className="w-3 h-3" /> ดู / แก้ไข
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Active tab content table ───────────────────────────────────────────────
 
 function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
@@ -1250,6 +1322,10 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
   // ฝากนำเข้า tabs render the legacy 9-col forwarder table.
   if (tab === "forwarder1" || tab === "forwarder5" || tab === "forwarderC" || tab === "forwarder6" || tab === "forwarder62") {
     return <ForwarderTabTable rows={rows} />;
+  }
+  // ฝากโอน tab renders the legacy 9-col payment table.
+  if (tab === "payment") {
+    return <PaymentTabTable rows={rows} />;
   }
   if (rows.length === 0) {
     return (
