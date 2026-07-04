@@ -790,6 +790,10 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           link: `/admin/wallet/${r.id}`,
           status: r.status ?? "1",
           slipUrl,
+          statusLabel: "รอดำเนินการ",
+          statusTone: "warning" as const,
+          vip: vipTierBadge(u?.coID),
+          saleRep: (u?.adminIDSale ?? "").trim() || null,
         };
       }));
       // ภูม 2026-06-30 — รวมสลิป "ใบวางบิล" (เซลแนบ · รอบัญชีตรวจ) เข้าคิว "ชำระเงิน"
@@ -988,31 +992,32 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // Phase C decides whether to retire the tab or re-wire it.
     // TODO Phase C — see file header.
     case "payShop": {
-      // NOTE (verified live against prod 2026-06-22): sales_payouts has NO
-      // `amount` column (it's `amount_total`) and NO `profile_id` (so the
-      // `profiles!profile_id` embed threw PGRST200). Both errored the query →
-      // the tab silently showed nothing. The real customer link is via
-      // team_leader_id (a STAFF, not the customer) so there's no customer name
-      // to resolve here; we omit it (the table is empty on prod regardless —
-      // this just makes the query NON-ERRORING). TODO Phase C — see file header.
+      // เบิกเงินค่าสินค้า — legacy tb_shop_pay_h WHERE status='1' (faithful · payShopPCS.php).
+      // ผู้ทำรายการ = adminidcreate (this is a SHOP disbursement — no customer link).
+      // (Repointed off the empty rebuilt `sales_payouts` twin · owner 2026-07-05 · §0e.)
       const { data, error } = await admin
-        .from("sales_payouts")
-        .select(`id, amount_total, status, created_at`)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
+        .from("tb_shop_pay_h")
+        .select("id,date,amount,status,imagesslip,adminidcreate")
+        .eq("status", "1")
+        .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
-        console.warn(`[sales_payouts list] failed (soft-fail · returning empty rows)`, error);
+        console.warn(`[tb_shop_pay_h list] failed (soft-fail · returning empty rows)`, error);
       }
-      return ((data ?? []) as unknown as RawPayoutRow[]).map((r) => ({
+      const payRows = (data ?? []) as unknown as { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; adminidcreate: string | null }[];
+      const slipMap = await resolveLegacyUrlMap(payRows.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip");
+      return payRows.map((r) => ({
         id: String(r.id),
-        created_at: r.created_at,
-        member_code: null,
-        customer_name: "—",
-        amount: Number(r.amount_total ?? 0),
-        detail: "เบิกค่าคอม / commission",
-        link: `/admin/sales-payouts/${r.id}`,
-        status: r.status,
+        created_at: r.date ?? "",
+        member_code: (r.adminidcreate ?? "").trim() || "—",  // ผู้ทำรายการ (admin)
+        customer_name: "",
+        amount: Number(r.amount ?? 0),
+        detail: "เบิกเงินค่าสินค้า",
+        link: `/admin/accounting`,
+        status: r.status ?? "1",
+        slipUrl: slipMap[String(r.id)] ?? null,
+        statusLabel: "รอดำเนินการ",
+        statusTone: "warning" as const,
       }));
     }
 
@@ -1071,11 +1076,6 @@ type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: str
 type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null; fnote: string | null; adminidupdate: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null; paydetail: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
-
-// sales_payouts (rebuilt schema · the one tab without a legacy equivalent).
-// Real cols: amount_total (NOT amount) + team_leader_id (a STAFF, not the
-// customer · no profile_id, no customer-name join here).
-type RawPayoutRow       = { id: string; amount_total: number | string | null; status: string; created_at: string };
 
 // ── Cards ──────────────────────────────────────────────────────────────────
 
@@ -1492,12 +1492,135 @@ function UsersActiveTable({ rows }: { rows: RowShape[] }) {
   );
 }
 
+// ── ถอนเงิน (withdraw) — legacy 7-col table (withdrawUser.php) ───────────────
+// ลำดับ · วันที่ทำรายการ · ชื่อ-นามสกุล · สถานะรายการ · สลิป · ยอดเงินที่ถอน · ตัวเลือก
+function WithdrawTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีรายการถอนเงิน</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 w-[50px] text-center">ลำดับ</th>
+            <th className="px-3 py-3 whitespace-nowrap">วันที่ทำรายการ</th>
+            <th className="px-3 py-3">ชื่อ-นามสกุล</th>
+            <th className="px-3 py-3">สถานะรายการ</th>
+            <th className="px-3 py-3">สลิป</th>
+            <th className="px-3 py-3 text-right whitespace-nowrap">ยอดเงินที่ถอน</th>
+            <th className="px-3 py-3">ตัวเลือก</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            return (
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
+                <td className="px-3 py-3 text-center text-xs font-mono">{i + 1}</td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  {r.vip ? <> <MiniBadge text={r.vip} tone="bg-violet-100 text-violet-700" /></> : null}
+                  {r.saleRep ? <> <MiniBadge text={`Sale : ${r.saleRep}`} tone="bg-emerald-100 text-emerald-700" /></> : null}
+                  <div className="text-foreground text-xs mt-0.5">คุณ{r.customer_name}</div>
+                </td>
+                <td className="px-3 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
+                </td>
+                <td className="px-3 py-3">
+                  {r.slipUrl ? (
+                    <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" title="เปิดสลิป">
+                      <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
+                    </a>
+                  ) : <span className="text-xs text-muted">— ไม่มีสลิป</span>}
+                </td>
+                <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
+                <td className="px-3 py-3">
+                  <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
+                    <Eye className="w-3 h-3" /> ดู / แก้ไข
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── เบิกเงินค่าสินค้า (payShop) — legacy 6-col (payShopPCS.php · tb_shop_pay_h) ──
+// วันที่ทำรายการ · ผู้ทำรายการ · จำนวนเงิน · สลิป · สถานะทำรายการ · ตัวเลือก
+function PayShopTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีรายการเบิกเงินค่าสินค้า</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 whitespace-nowrap">วันที่ทำรายการ</th>
+            <th className="px-3 py-3">ผู้ทำรายการ</th>
+            <th className="px-3 py-3 text-right whitespace-nowrap">จำนวนเงิน</th>
+            <th className="px-3 py-3">สลิป</th>
+            <th className="px-3 py-3">สถานะทำรายการ</th>
+            <th className="px-3 py-3">ตัวเลือก</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            return (
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 text-xs font-mono">{r.member_code ?? "—"}</td>
+                <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
+                <td className="px-3 py-3">
+                  {r.slipUrl ? (
+                    <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" title="เปิดสลิป">
+                      <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
+                    </a>
+                  ) : <span className="text-xs text-muted">— ไม่มีสลิป</span>}
+                </td>
+                <td className="px-3 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
+                </td>
+                <td className="px-3 py-3">
+                  <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
+                    <Eye className="w-3 h-3" /> ดำเนินการ
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Active tab content table ───────────────────────────────────────────────
 
 function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
   // ลูกค้าที่ยังไม่ได้ใช้งาน renders the legacy 6-col users table.
   if (tab === "inactiveCustomers") {
     return <UsersActiveTable rows={rows} />;
+  }
+  // ถอนเงิน renders the legacy 7-col withdraw table.
+  if (tab === "withdraw") {
+    return <WithdrawTable rows={rows} />;
+  }
+  // เบิกเงินค่าสินค้า renders the legacy 6-col shop-disbursement table.
+  if (tab === "payShop") {
+    return <PayShopTable rows={rows} />;
   }
   // ฝากสั่งซื้อ tabs render the legacy 8-col shop table (owner 2026-07-04).
   if (tab === "shop1" || tab === "shop2" || tab === "shop3" || tab === "shop4") {
