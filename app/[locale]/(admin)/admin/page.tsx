@@ -41,6 +41,7 @@ import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
+import { relativeTimeTh } from "@/lib/utils/relative-time";
 
 export const dynamic = "force-dynamic";
 
@@ -577,7 +578,26 @@ type RowShape = {
   address?: string | null;        // ที่อยู่ส่งสินค้า (fullAddress)
   transportInfo?: string | null;  // ยอดค้างชำระ line2 — ขนส่ง + Kg/CBM
   payMethod?: string | null;      // ฝากโอน วิธีการชำระ (payType)
+  // Rich legacy-cell fields (shop/forwarder rows · owner 2026-07-04 · shopTableAll.php):
+  vip?: string | null;            // VIP/tier badge (coID · badgeVIP2)
+  saleRep?: string | null;        // Sale : {adminIDSale}
+  ipc?: string | null;            // IPC : {adminIDCreate}
+  promo?: string | null;          // โปรโมชั่น (promoID · tagPro)
+  note?: string | null;           // หมายเหตุ (hNote / fNote)
+  noteVisibility?: "admin" | "both" | null; // แอดมินเท่านั้น / ทั้งลูกค้าและแอดมิน
+  noteDate?: string | null;       // note timestamp
+  deadline?: string | null;       // กรุณาชำระเงินก่อน (hDatePayment · shop2)
+  updateDate?: string | null;     // อัปเดต — status-date (hDateN / fDateStatusN)
+  updateAdmin?: string | null;    // adminIDUpdate
 };
+
+// VIP-tier badge (legacy badgeVIP2): show the coID as a tier badge unless it's the
+// general customer pool (PR/PCS/GENERAL/empty).
+function vipTierBadge(coid: string | null | undefined): string | null {
+  const c = (coid ?? "").trim().toUpperCase();
+  if (!c || c === "PR" || c === "PCS" || c === "GENERAL") return null;
+  return c;
+}
 
 // Legacy Bootstrap badge tones → Tailwind pill classes (shared by the tailored tables).
 type StatusTone = "warning" | "danger" | "primary" | "info" | "success" | "secondary";
@@ -777,7 +797,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop3: "3", shop4: "4" };
       const { data, error } = await admin
         .from("tb_header_order")
-        .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid,hcover,hcount")
+        .select("id,hno,hstatus,htotalpriceuser,hdate,hdate2,hdate3,hdate4,hdate5,htitle,userid,hcover,hcount,coid,adminidsale,adminidcreate,adminidupdate,promoid,hnote,hnoteuser,hnoteuserread,hnotedate,hdatepayment")
         .eq("hstatus", statusMap[tab])
         .order("hdate", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -793,6 +813,14 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         const itemCount = Number(r.hcount ?? 0);
         const title = (r.htitle ?? "").trim() || "ไม่มีชื่อสินค้า";
         const st = SHOP_STATUS[r.hstatus ?? "1"] ?? SHOP_STATUS["1"];
+        // อัปเดต column shows the status-date for the row's current hStatus (legacy switch).
+        const updDate =
+          r.hstatus === "2" ? r.hdate2
+          : r.hstatus === "3" ? r.hdate3
+          : r.hstatus === "4" ? r.hdate4
+          : r.hstatus === "5" ? r.hdate5
+          : r.hdate;
+        const noteTxt = (r.hnote ?? "").trim();
         return {
           id: String(r.id),
           created_at: r.hdate ?? "",
@@ -807,6 +835,16 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           orderNo: r.hno ?? null,
           statusLabel: st.label,
           statusTone: st.tone,
+          vip: vipTierBadge(r.coid),
+          saleRep: (r.adminidsale ?? "").trim() || null,
+          ipc: (r.adminidcreate ?? "").trim() || null,
+          promo: (String(r.promoid ?? "").trim() && String(r.promoid) !== "0") ? String(r.promoid) : null,
+          note: noteTxt || null,
+          noteVisibility: noteTxt ? (String(r.hnoteuser) === "1" ? "admin" : "both") : null,
+          noteDate: (String(r.hnotedate ?? "").trim() && String(r.hnotedate) !== "0") ? String(r.hnotedate) : null,
+          deadline: r.hstatus === "2" && r.hdatepayment ? String(r.hdatepayment) : null,
+          updateDate: updDate ?? null,
+          updateAdmin: (r.adminidupdate ?? "").trim() || null,
         };
       });
     }
@@ -824,7 +862,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "forwarder62": {
       let q = admin
         .from("tb_forwarder")
-        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,fvolume,userid,fcabinetnumber,fcredit,fcover,ftrackingchn,ftrackingth,fshipby,faddressname,faddresslastname,faddressno,faddresssubdistrict,faddressdistrict,faddressprovince,faddresszipcode")
+        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,fvolume,userid,fcabinetnumber,fcredit,fcover,ftrackingchn,ftrackingth,fshipby,faddressname,faddresslastname,faddressno,faddresssubdistrict,faddressdistrict,faddressprovince,faddresszipcode,fnote,adminidupdate")
         .order("fdate", { ascending: false, nullsFirst: false })
         .limit(50);
       if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
@@ -870,6 +908,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           shipByTh: r.fshipby ? (FWD_SHIPBY[r.fshipby] ?? r.fshipby) : null,
           address: addr || null,
           transportInfo: `${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg / ${Number(r.fvolume ?? 0).toFixed(3)} CBM`,
+          note: (r.fnote ?? "").trim() || null,
+          noteVisibility: (r.fnote ?? "").trim() ? "both" as const : null,
+          updateAdmin: (r.adminidupdate ?? "").trim() || null,
         };
       });
     }
@@ -987,8 +1028,8 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 // ── Raw row types ──────────────────────────────────────────────────────────
 
 type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
-type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null };
-type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null };
+type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; hdate2: string | null; hdate3: string | null; hdate4: string | null; hdate5: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null; coid: string | null; adminidsale: string | null; adminidcreate: string | null; adminidupdate: string | null; promoid: string | number | null; hnote: string | null; hnoteuser: string | number | null; hnoteuserread: string | number | null; hnotedate: string | null; hdatepayment: string | null };
+type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null; fnote: string | null; adminidupdate: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null; paydetail: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
@@ -1105,6 +1146,44 @@ function UserStatCard({
   );
 }
 
+// Small inline badge (legacy badge-pill).
+function MiniBadge({ text, tone }: { text: string; tone: string }) {
+  return <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>{text}</span>;
+}
+
+// หมายเหตุ block (legacy shopTableAll.php:38-52 / forwarderTableAll) — visibility badge
+// + red note bar + note date + "ผ่านมา" relative time. Shared by shop + forwarder rows.
+function NoteBlock({ r }: { r: RowShape }) {
+  if (!r.note) return null;
+  return (
+    <div className="mt-1 space-y-0.5">
+      {r.noteVisibility === "admin"
+        ? <MiniBadge text="แอดมินเท่านั้น" tone="bg-amber-100 text-amber-700" />
+        : <MiniBadge text="ทั้งลูกค้าและแอดมิน" tone="bg-cyan-100 text-cyan-700" />}
+      <div className="rounded bg-red-600 text-white px-1.5 py-0.5 text-[11px] max-w-[320px] whitespace-normal break-words">หมายเหตุ : {r.note}</div>
+      {r.noteDate ? (
+        <div className="text-[11px] text-muted">{r.noteDate} · ผ่านมา <span className="text-red-600">{relativeTimeTh(r.noteDate)}</span></div>
+      ) : null}
+    </div>
+  );
+}
+
+// อัปเดต cell (legacy: status-date + "ผ่านมา" + adminIDUpdate). Shared shop + forwarder.
+function UpdateCell({ r }: { r: RowShape }) {
+  const d = r.updateDate ?? r.created_at;
+  return (
+    <div className="text-xs text-muted whitespace-nowrap">
+      {d ? (
+        <>
+          <div>{new Date(d).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</div>
+          <div>ผ่านมา <span className="text-red-600">{relativeTimeTh(d)}</span></div>
+        </>
+      ) : "—"}
+      {r.updateAdmin ? <div className="text-foreground/70 mt-0.5">{r.updateAdmin}</div> : null}
+    </div>
+  );
+}
+
 // ── Shop tabs (ฝากสั่งซื้อ) — legacy 8-col table (oop/shopTableAll.php) ──────
 // วันที่สร้าง · รหัสสมาชิก · เลขที่ออเดอร์ · ข้อมูลสินค้า · ราคารวม · สถานะ · อัปเดต · ตัวเลือก
 function ShopTabTable({ rows }: { rows: RowShape[] }) {
@@ -1115,7 +1194,7 @@ function ShopTabTable({ rows }: { rows: RowShape[] }) {
     <div className="overflow-x-auto scrollbar-x-visible">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
             <th className="px-3 py-3">รหัสสมาชิก</th>
             <th className="px-3 py-3">เลขที่ออเดอร์</th>
@@ -1126,39 +1205,49 @@ function ShopTabTable({ rows }: { rows: RowShape[] }) {
             <th className="px-3 py-3">ตัวเลือก</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody>
           {rows.map((r) => {
             const created = r.created_at ? new Date(r.created_at) : null;
             const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            const deadline = r.deadline ? new Date(r.deadline) : null;
             return (
-              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+              // zebra striping (สีสลับ · owner "ไม่ให้ลายตา")
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                   {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  {r.vip ? <> <MiniBadge text={r.vip} tone="bg-violet-100 text-violet-700" /></> : null}
+                  {r.saleRep ? <> <MiniBadge text={`Sale : ${r.saleRep}`} tone="bg-emerald-100 text-emerald-700" /></> : null}
                   <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">{r.orderNo ?? "—"}</Link>
+                  {r.ipc ? <div className="mt-0.5"><MiniBadge text={`IPC : ${r.ipc}`} tone="bg-blue-100 text-blue-700" /></div> : null}
+                  {r.promo ? <div className="mt-0.5"><MiniBadge text={`โปร ${r.promo}`} tone="bg-pink-100 text-pink-700" /></div> : null}
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-start gap-2">
                     {r.slipUrl ? (
                       <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="รูปสินค้า">
-                        <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
+                        <SlipImage src={r.slipUrl} pdfMode="tile" className="h-14 w-14 rounded-lg border border-border object-cover bg-surface-alt" />
                       </a>
                     ) : null}
-                    <p className="text-xs text-foreground min-w-0" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                    <div className="min-w-0">
+                      <p className="text-xs text-foreground" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                      {deadline ? (
+                        <div className="mt-1 text-[11px]">กรุณาชำระเงินก่อน <span className="text-red-600 font-medium">{deadline.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</span> น.</div>
+                      ) : null}
+                      <NoteBlock r={r} />
+                    </div>
                   </div>
                 </td>
                 <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
                 <td className="px-3 py-3">
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
                 </td>
-                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? created.toLocaleDateString("th-TH") : "—"}
-                </td>
+                <td className="px-3 py-3"><UpdateCell r={r} /></td>
                 <td className="px-3 py-3">
                   <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
                     <Eye className="w-3 h-3" /> ดูรายละเอียด
@@ -1183,7 +1272,7 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
     <div className="overflow-x-auto scrollbar-x-visible">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
             <th className="px-3 py-3">รหัสลูกค้า</th>
             <th className="px-3 py-3">รายละเอียด</th>
@@ -1195,12 +1284,12 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
             <th className="px-3 py-3">ตัวเลือก</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody>
           {rows.map((r) => {
             const created = r.created_at ? new Date(r.created_at) : null;
             const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
             return (
-              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                   {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
                 </td>
@@ -1215,7 +1304,10 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
                         <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
                       </a>
                     ) : null}
-                    <p className="text-xs text-foreground min-w-0" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                    <div className="min-w-0">
+                      <p className="text-xs text-foreground" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                      <NoteBlock r={r} />
+                    </div>
                   </div>
                 </td>
                 <td className="px-3 py-3 text-right whitespace-nowrap">
@@ -1234,9 +1326,7 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
                 <td className="px-3 py-3">
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
                 </td>
-                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? created.toLocaleDateString("th-TH") : "—"}
-                </td>
+                <td className="px-3 py-3"><UpdateCell r={r} /></td>
                 <td className="px-3 py-3">
                   <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
                     <Eye className="w-3 h-3" /> ดูรายละเอียด
@@ -1261,7 +1351,7 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
     <div className="overflow-x-auto scrollbar-x-visible">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
             <th className="px-3 py-3">เลขที่ออเดอร์</th>
             <th className="px-3 py-3">ชื่อ-นามสกุล</th>
@@ -1273,12 +1363,12 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
             <th className="px-3 py-3">ตัวเลือก</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody>
           {rows.map((r) => {
             const created = r.created_at ? new Date(r.created_at) : null;
             const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
             return (
-              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+              <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                   {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
                 </td>
@@ -1295,9 +1385,7 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
                 <td className="px-3 py-3">
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
                 </td>
-                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? created.toLocaleDateString("th-TH") : "—"}
-                </td>
+                <td className="px-3 py-3"><UpdateCell r={r} /></td>
                 <td className="px-3 py-3">
                   <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
                     <Eye className="w-3 h-3" /> ดู / แก้ไข
@@ -1338,7 +1426,7 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+          <tr className="border-b-2 border-border bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-4 py-3 w-[60px]">ลำดับ</th>
             <th className="px-4 py-3 w-[140px]">วันที่สร้าง</th>
             <th className="px-4 py-3">ข้อมูลรายการ</th>
