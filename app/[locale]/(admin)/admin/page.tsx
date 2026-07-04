@@ -566,9 +566,16 @@ type RowShape = {
   //    docs/research/dashboard-tabstrip-fidelity-2026-07-04.md). Optional: only a
   //    tab-group that renders its TAILORED legacy table populates these; tabs still
   //    on the generic 4-col table leave them undefined (no regression).
-  orderNo?: string | null;        // เลขที่ออเดอร์ (hNo) / เลขที่รายการ
+  orderNo?: string | null;        // เลขที่ออเดอร์ (hNo) / เลขที่รายการ / #fNo
   statusLabel?: string;           // real status text (legacy badge label)
   statusTone?: StatusTone;        // legacy badge color
+  // ฝากนำเข้า (forwarder) 9-col cells (forwarderTableAll.php):
+  trackingChn?: string | null;    // เลขพัสดุ (จีน)
+  cabinet?: string | null;        // เลขตู้ (fCabinetNumber)
+  trackingTh?: string | null;     // เลขพัสดุ (ไทย)
+  shipByTh?: string | null;       // ขนส่งไทย (nameShipBy)
+  address?: string | null;        // ที่อยู่ส่งสินค้า (fullAddress)
+  transportInfo?: string | null;  // ยอดค้างชำระ line2 — ขนส่ง + Kg/CBM
 };
 
 // Legacy Bootstrap badge tones → Tailwind pill classes (shared by the tailored tables).
@@ -590,6 +597,23 @@ const SHOP_STATUS: Record<string, { label: string; tone: StatusTone }> = {
   "4": { label: "รอร้านจีนจัดส่ง", tone: "primary" },
   "5": { label: "สำเร็จ",         tone: "success" },
   "6": { label: "ยกเลิกออเดอร์",   tone: "danger" },
+};
+
+// ฝากนำเข้า tb_forwarder.fStatus → legacy statusForwarderAll2 label+tone.
+const FWD_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  "1": { label: "รอเข้าโกดังจีน",   tone: "secondary" },
+  "2": { label: "ถึงโกดังจีน",      tone: "info" },
+  "3": { label: "กำลังส่งมาไทย",    tone: "primary" },
+  "4": { label: "ถึงไทยแล้ว",       tone: "info" },
+  "5": { label: "รอชำระเงินนำเข้า", tone: "danger" },
+  "6": { label: "เตรียมส่ง",        tone: "primary" },
+  "7": { label: "ส่งแล้ว",          tone: "success" },
+};
+
+// ขนส่งไทย code → name (compact subset of legacy nameShipBy · function.php).
+const FWD_SHIPBY: Record<string, string> = {
+  PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express", PCS: "รับเองโกดัง",
+  "1": "KERRY", "2": "ไปรษณีย์", "3": "Flash", "4": "J&T", "5": "Best Express", "6": "Ninja", "7": "DHL",
 };
 
 type RawUserRow = {
@@ -799,7 +823,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "forwarder62": {
       let q = admin
         .from("tb_forwarder")
-        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,userid,fcabinetnumber,fcredit,fcover,ftrackingchn")
+        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,fvolume,userid,fcabinetnumber,fcredit,fcover,ftrackingchn,ftrackingth,fshipby,faddressname,faddresslastname,faddressno,faddresssubdistrict,faddressdistrict,faddressprovince,faddresszipcode")
         .order("fdate", { ascending: false, nullsFirst: false })
         .limit(50);
       if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
@@ -822,20 +846,29 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : r.ftransporttype === "3" ? "✈️ แอร์"
           : r.ftransporttype ?? "—";
         const fno = r.fidorco ?? String(r.id);
-        const track = (r.ftrackingchn ?? "").trim();
-        const cab = (r.fcabinetnumber ?? "").trim();
+        const st = FWD_STATUS[r.fstatus ?? "1"] ?? FWD_STATUS["1"];
+        const addr = [r.faddressname, r.faddresslastname, r.faddressno, r.faddresssubdistrict, r.faddressdistrict, r.faddressprovince, r.faddresszipcode]
+          .map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
         return {
           id: String(r.id),
           created_at: r.fdate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.ftotalprice ?? 0),
-          detail: `<span class="font-semibold text-foreground">#${escapeHtmlInline(fno)}</span> · ${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg` +
-            (track ? ` · 🔖 ${escapeHtmlInline(track)}` : "") +
-            (cab ? ` · 📦 ตู้ ${escapeHtmlInline(cab)}` : ""),
+          // รายละเอียด column (legacy: "เลขที่รายการ #ID" + "ฝากนำเข้า" badge).
+          detail: `เลขที่รายการ <span class="font-semibold text-foreground">#${escapeHtmlInline(fno)}</span> · <span class="text-red-600 font-medium">ฝากนำเข้า</span>`,
           link: `/admin/forwarders/${r.id}`,
           status: r.fstatus ?? "1",
           slipUrl: fcoverMap[String(r.id)] ?? null,
+          orderNo: `#${fno}`,
+          statusLabel: st.label,
+          statusTone: st.tone,
+          trackingChn: (r.ftrackingchn ?? "").trim() || null,
+          cabinet: (r.fcabinetnumber ?? "").trim() || null,
+          trackingTh: (r.ftrackingth ?? "").trim() || null,
+          shipByTh: r.fshipby ? (FWD_SHIPBY[r.fshipby] ?? r.fshipby) : null,
+          address: addr || null,
+          transportInfo: `${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg / ${Number(r.fvolume ?? 0).toFixed(3)} CBM`,
         };
       });
     }
@@ -944,7 +977,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 
 type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
 type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null };
-type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null };
+type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
@@ -1129,12 +1162,94 @@ function ShopTabTable({ rows }: { rows: RowShape[] }) {
   );
 }
 
+// ── Forwarder tabs (ฝากนำเข้า) — legacy 9-col table (oop/forwarderTableAll.php) ──
+// วันที่สร้าง · รหัสลูกค้า · รายละเอียด · ยอดค้างชำระ · เลขพัสดุ(จีน) · เลขพัสดุ(ไทย) · สถานะ · อัปเดต · ตัวเลือก
+function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีรายการในหมวดนี้</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
+            <th className="px-3 py-3">รหัสลูกค้า</th>
+            <th className="px-3 py-3">รายละเอียด</th>
+            <th className="px-3 py-3 text-right whitespace-nowrap">ยอดค้างชำระ</th>
+            <th className="px-3 py-3">เลขพัสดุ (จีน)</th>
+            <th className="px-3 py-3">เลขพัสดุ (ไทย)</th>
+            <th className="px-3 py-3">สถานะ</th>
+            <th className="px-3 py-3 whitespace-nowrap">อัปเดต</th>
+            <th className="px-3 py-3">ตัวเลือก</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            return (
+              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-start gap-2">
+                    {r.slipUrl ? (
+                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="รูปสินค้า">
+                        <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
+                      </a>
+                    ) : null}
+                    <p className="text-xs text-foreground min-w-0" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-right whitespace-nowrap">
+                  <div className="font-bold text-red-600 tabular-nums">฿{formatTHB(r.amount)}</div>
+                  {r.transportInfo ? <div className="text-[11px] text-muted mt-0.5">{r.transportInfo}</div> : null}
+                </td>
+                <td className="px-3 py-3 text-xs">
+                  {r.trackingChn ? <div className="font-mono">{r.trackingChn}</div> : <span className="text-muted">—</span>}
+                  {r.cabinet ? <div className="text-[11px] text-muted mt-0.5">เลขตู้: {r.cabinet}</div> : null}
+                </td>
+                <td className="px-3 py-3 text-xs">
+                  {r.shipByTh ? <div className="font-medium">{r.shipByTh}</div> : null}
+                  {r.trackingTh ? <div className="font-mono text-[11px]">{r.trackingTh}</div> : null}
+                  {r.address ? <div className="text-[11px] text-muted mt-0.5 max-w-[240px] whitespace-normal">{r.address}</div> : (!r.shipByTh && !r.trackingTh ? <span className="text-muted">—</span> : null)}
+                </td>
+                <td className="px-3 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
+                </td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? created.toLocaleDateString("th-TH") : "—"}
+                </td>
+                <td className="px-3 py-3">
+                  <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
+                    <Eye className="w-3 h-3" /> ดูรายละเอียด
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Active tab content table ───────────────────────────────────────────────
 
 function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
   // ฝากสั่งซื้อ tabs render the legacy 8-col shop table (owner 2026-07-04).
   if (tab === "shop1" || tab === "shop2" || tab === "shop3" || tab === "shop4") {
     return <ShopTabTable rows={rows} />;
+  }
+  // ฝากนำเข้า tabs render the legacy 9-col forwarder table.
+  if (tab === "forwarder1" || tab === "forwarder5" || tab === "forwarderC" || tab === "forwarder6" || tab === "forwarder62") {
+    return <ForwarderTabTable rows={rows} />;
   }
   if (rows.length === 0) {
     return (
