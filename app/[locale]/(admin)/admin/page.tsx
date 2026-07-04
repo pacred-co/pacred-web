@@ -642,6 +642,8 @@ type RawUserRow = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  coID: string | null;          // VIP tier (badgeVIP2)
+  adminIDSale: string | null;   // sales rep (badgeAdminSale)
 };
 
 /**
@@ -658,7 +660,7 @@ async function loadUsersByUserId(
   if (unique.length === 0) return new Map();
   const { data, error } = await admin
     .from("tb_users")
-    .select("userID,userName,userLastName,userTel")
+    .select("userID,userName,userLastName,userTel,coID,adminIDSale")
     .in("userID", unique);
   if (error) {
     console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
@@ -797,7 +799,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop3: "3", shop4: "4" };
       const { data, error } = await admin
         .from("tb_header_order")
-        .select("id,hno,hstatus,htotalpriceuser,hdate,hdate2,hdate3,hdate4,hdate5,htitle,userid,hcover,hcount,coid,adminidsale,adminidcreate,adminidupdate,promoid,hnote,hnoteuser,hnoteuserread,hnotedate,hdatepayment")
+        .select("id,hno,hstatus,htotalpriceuser,hdate,hdate2,hdate3,hdate4,hdate5,htitle,userid,hcover,hcount,adminidcreate,adminidupdate,hnote,hnoteuser,hnoteuserread,hnotedate,hdatepayment")
         .eq("hstatus", statusMap[tab])
         .order("hdate", { ascending: false, nullsFirst: false })
         .limit(50);
@@ -835,10 +837,10 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           orderNo: r.hno ?? null,
           statusLabel: st.label,
           statusTone: st.tone,
-          vip: vipTierBadge(r.coid),
-          saleRep: (r.adminidsale ?? "").trim() || null,
+          vip: vipTierBadge(u?.coID),
+          saleRep: (u?.adminIDSale ?? "").trim() || null,
           ipc: (r.adminidcreate ?? "").trim() || null,
-          promo: (String(r.promoid ?? "").trim() && String(r.promoid) !== "0") ? String(r.promoid) : null,
+          promo: null,
           note: noteTxt || null,
           noteVisibility: noteTxt ? (String(r.hnoteuser) === "1" ? "admin" : "both") : null,
           noteDate: (String(r.hnotedate ?? "").trim() && String(r.hnotedate) !== "0") ? String(r.hnotedate) : null,
@@ -911,6 +913,8 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           note: (r.fnote ?? "").trim() || null,
           noteVisibility: (r.fnote ?? "").trim() ? "both" as const : null,
           updateAdmin: (r.adminidupdate ?? "").trim() || null,
+          vip: vipTierBadge(u?.coID),
+          saleRep: (u?.adminIDSale ?? "").trim() || null,
         };
       });
     }
@@ -957,6 +961,8 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           payMethod,
           statusLabel: "รอดำเนินการ",
           statusTone: "warning",
+          vip: vipTierBadge(u?.coID),
+          saleRep: (u?.adminIDSale ?? "").trim() || null,
         };
       });
     }
@@ -1028,7 +1034,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 // ── Raw row types ──────────────────────────────────────────────────────────
 
 type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
-type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; hdate2: string | null; hdate3: string | null; hdate4: string | null; hdate5: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null; coid: string | null; adminidsale: string | null; adminidcreate: string | null; adminidupdate: string | null; promoid: string | number | null; hnote: string | null; hnoteuser: string | number | null; hnoteuserread: string | number | null; hnotedate: string | null; hdatepayment: string | null };
+type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; hdate2: string | null; hdate3: string | null; hdate4: string | null; hdate5: string | null; htitle: string | null; userid: string; hcover: string | null; hcount: number | string | null; adminidcreate: string | null; adminidupdate: string | null; hnote: string | null; hnoteuser: string | number | null; hnoteuserread: string | number | null; hnotedate: string | null; hdatepayment: string | null };
 type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; fvolume: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null; fcover: string | null; ftrackingchn: string | null; ftrackingth: string | null; fshipby: string | null; faddressname: string | null; faddresslastname: string | null; faddressno: string | null; faddresssubdistrict: string | null; faddressdistrict: string | null; faddressprovince: string | null; faddresszipcode: string | null; fnote: string | null; adminidupdate: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string; imagesslip: string | null; paydetail: string | null };
 type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
@@ -1295,6 +1301,8 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  {r.vip ? <> <MiniBadge text={r.vip} tone="bg-violet-100 text-violet-700" /></> : null}
+                  {r.saleRep ? <> <MiniBadge text={`Sale : ${r.saleRep}`} tone="bg-emerald-100 text-emerald-700" /></> : null}
                   <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
                 </td>
                 <td className="px-3 py-3">
@@ -1375,6 +1383,8 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
                 <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{r.orderNo ?? "—"}</td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  {r.vip ? <> <MiniBadge text={r.vip} tone="bg-violet-100 text-violet-700" /></> : null}
+                  {r.saleRep ? <> <MiniBadge text={`Sale : ${r.saleRep}`} tone="bg-emerald-100 text-emerald-700" /></> : null}
                   <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
                 </td>
                 <td className="px-3 py-3">
