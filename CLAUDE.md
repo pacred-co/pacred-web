@@ -3,6 +3,22 @@
 
 ---
 
+# 📊 2026-07-05 (ภูม) — Admin dashboard `/admin` → legacy PCS fidelity (ALL 14 tabs · columns+data+zebra+counts) + coid งานหาย fix → Poom-pacred · 🔴 เดฟ review · read FIRST
+
+> **🏁 SESSION CLOSE (ภูม: "เซฟ Poom-pacred · เดฟเอาไปตรวจ · ภูมิทำต่อพรุ่งนี้").** Branch **Poom-pacred = `5ce43b15`** (= HEAD · pushed · clean · local==origin · 0-behind dave). resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · `cd <nested-root>` ก่อนเสมอ — cwd reset บ่อย). localhost/.env.local = **DEV** · prod = เดฟ · push เฉพาะ Poom-pacred. **1 file · no migration · 8 commits `41f24f0a`→`5ce43b15`.**
+>
+> **🎯 งาน (owner via ภูม · "พี่ป๊อปทำงานผ่านหน้านี้ทั้งวัน · ทำให้เหมือน PCS เป๊ะ ครบทุกหน้า ไม่ตกหล่น"):** ทำ tab-strip ของ `/admin` (CEO dashboard · `app/[locale]/(admin)/admin/page.tsx`) ให้เหมือน legacy. **ต้นตอ:** legacy มี**คอลัมน์เฉพาะต่อแท็บ** (6 layouts) · เราใช้**ตาราง 4-col generic ตัวเดียวทุกแท็บ** (ยัดทุกอย่างลง `detail` HTML). blueprint ครบ 14 แท็บ: [`docs/research/dashboard-tabstrip-fidelity-2026-07-04.md`](docs/research/dashboard-tabstrip-fidelity-2026-07-04.md).
+>
+> **✅ เสร็จครบ 14 แท็บ (legacy src `pcs-admin/include/pages/home/Cargo/CEO/*` + `oop/shopTableAll.php`/`forwarderTableAll.php`):** ShopTabTable(8-col) · ForwarderTabTable(9) · PaymentTabTable(9) · UsersActiveTable(6) · WithdrawTable(7) · PayShopTable(6 · **repoint sales_payouts[ว่าง]→`tb_shop_pay_h` list+count §0e**) · topup(=generic 4-col ตรง legacy อยู่แล้ว) + shared **MiniBadge/NoteBlock/UpdateCell** + **zebra สีสลับ** (owner "ไม่ลายตา"). Rich cells: VIP(coID) · Sale(adminIDSale) · IPC(adminidcreate) · **หมายเหตุ**(hnote/fnote + visibility badge + ผ่านมา) · กำหนดชำระ(hdatepayment · shop2) · อัปเดต(status-date + `relativeTimeTh` ผ่านมา + adminIDUpdate). VIP+Sale ดึงจาก **tb_users join** (เพิ่ม coID/adminIDSale ใน `loadUsersByUserId`). SHOP_STATUS/FWD_STATUS/FWD_SHIPBY/SHOP_USER_LABEL/CHANNEL_LABEL maps จาก legacy function.php.
+>
+> **🔧 correctness:** **forwarder6/62** — เดิม เตรียมส่ง=`fstatus'4'`(ผิด · past-session error) · ตอนนี้แยก `fstatus=6` ตาม open driver-item (เตรียมส่ง=ไม่มีคนขับ · กำลังจัดส่ง=มี open driver-item) ทั้ง **fetch + badge counts** (fanout ดึง fstatus6-ids + open-driver-fids มา partition) → **DB-verified 15+2=17**. + payShop count repoint ด้วย.
+>
+> **🔴 2 บั๊กที่เจอ+แก้ (บทเรียน · จากรีบ push โดยไม่เช็ค render):** (1) **coid งานหาย** — เพิ่ม `coid/adminidsale/promoid` ใน shop select แต่ 3 คอลัมน์นี้**ไม่มีบน tb_header_order** (อยู่บน tb_users/promo-join) → query พังทั้งอัน → 4 แท็บ shop ว่างทั้งที่ badge บอกมีของ (ภูม catch) → probe DB เจอ → เอา VIP/sale จาก tb_users แทน · verify shop2=2/shop4=4 rows. (2) tsc no-overlap + lint bare-destructure. **→ ตั้งแต่นั้น probe DB ยืนยันทุก query คืนแถวจริงก่อน push ทุกอัน** (tsc ไม่จับ column ที่ไม่มี = runtime soft-fail เป็นว่าง). **learning: dashboard money-page · verify DATA ไม่ใช่แค่ tsc.**
+>
+> **🔴 NEXT (ภูมิ พรุ่งนี้ · เดฟ review):** **(1) browser-verify สด 14 แท็บ** (ผม login admin ไม่ได้ · verify แค่ query คืนแถว · หน้าตา render ต้องกดจริง — โดยเฉพาะ ฝากสั่งซื้อ→รอชำระเงินสินค้า ที่เคยว่าง). (2) minor follow-up: forwarder VIP/Sale badge (มี note/update แล้ว) · avatar รูปใน usersActive/payment (skip ไว้). (3) dev server หนัก — /admin compile ครั้งแรก ~40-60วิ (dev เท่านั้น · อย่ารัน tsc หนักตอน dev เปิด = แย่ง CPU).
+
+---
+
 # 💳 2026-07-02 (เดฟ · integrator) — checkout/payment/receipt fixes + wallet direct-cut settle + /admin/incidents "แก้หมด" + cart UX + รวมงานน้อง → ALL BRANCHES · read FIRST
 
 > **🏁 STATE. main = dave-pacred = InwPond007 = `2f866e2d`** (release branches ที่ verified tip · main→Vercel prod) · **Poom-pacred 1-ahead** (ภูม push ต่อ · integrate next session). gate ทุก commit: build 0 (NODE_OPTIONS=8192 · direct-node OOM ที่ 4096 · อ่าน BUILD_EXIT จาก log) · tsc 0 · adversarial money-review PASS. 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`) · `.env.local`=PROD. **mig 0240 (ภูม `momo_box_detail`) applied prod+dev · NEXT FREE = 0241.** ⚠️ "use server" exports async ONLY. 📌 **ห้ามรัน `next build` ตอน preview `next start` (config `pacred-web-prod`) เปิดอยู่** → ทับ `.next` → server crash "module factory not available" (bit me · crashed owner page) → stop preview ก่อน build เสมอ.
