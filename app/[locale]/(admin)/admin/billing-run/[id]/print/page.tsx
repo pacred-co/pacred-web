@@ -22,6 +22,10 @@ import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
+// Paginate 13 item rows per page — the SAME value the ใบเสร็จ uses
+// (lib/receipt/load-receipt-document.ts) so both documents break identically.
+const ROWS_PER_PAGE = 13;
+
 export default async function BillingRunPrintPage({
   params,
 }: {
@@ -52,6 +56,16 @@ export default async function BillingRunPrintPage({
     fweight:   it.forwarder?.fweight ?? 0,
     fvolume:   it.forwarder?.fvolume ?? 0,
     amount:    it.amount_thb,
+  }));
+
+  // Chunk the rows into pages of ROWS_PER_PAGE so a long bill lays out across
+  // A4 pages (the summary renders only on the last page). The summary money on
+  // the paper stays the FULL-bill total (header.* below) — the pages only
+  // carry the item-row subset, never a re-summed total.
+  const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  const pages = Array.from({ length: pageCount }, (_, p) => ({
+    pageNumber: p + 1,
+    rows: rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE),
   }));
 
   const qrDataUrl = await QRCode.toDataURL(`${SITE_URL}/billing-run/${invoiceId}`, {
@@ -91,7 +105,7 @@ export default async function BillingRunPrintPage({
         netThaiWord={readThaiBaht(header.net_payable)}
         note={header.note_for_customer}
         issuedBy={header.issued_by}
-        items={rows}
+        pages={pages}
         qrDataUrl={qrDataUrl}
       />
     </>

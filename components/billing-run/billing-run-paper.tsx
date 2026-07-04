@@ -46,7 +46,12 @@ export type BillingRunPaperRow = {
   amount:      number;
 };
 
-export type BillingRunPaperProps = {
+/**
+ * Everything identical across every page + both sides of a bill (the summary
+ * money is ALWAYS the full-bill total, computed upstream — NOT a per-page sum).
+ * NOTE: does NOT carry the item rows — those are paginated (`pages`).
+ */
+export type BillingRunCommonProps = {
   docNo:         string;
   issuerAddress: string;
   dateIssued:    string;
@@ -68,19 +73,32 @@ export type BillingRunPaperProps = {
   netThaiWord:   string;
   note:          string;
   issuedBy:      string;
-  items:         BillingRunPaperRow[];
   qrDataUrl:     string;
+};
+
+/** Props for the full `<BillingRunPaper>` wrapper — items pre-chunked into pages. */
+export type BillingRunPaperProps = BillingRunCommonProps & {
+  pages: Array<{ pageNumber: number; rows: BillingRunPaperRow[] }>;
 };
 
 function BillingRunPage({
   label,
   qrDataUrl,
+  rows,
+  pageNumber,
+  pageCount,
   ...p
-}: BillingRunPaperProps & { label: string }) {
+}: BillingRunCommonProps & {
+  label:      string;
+  rows:       BillingRunPaperRow[];
+  pageNumber: number;
+  pageCount:  number;
+}) {
   const isOriginal = label === "ต้นฉบับ";
   const titleColor = isOriginal ? "#FFA30A" : "#5F5D5A";
   const tintBg     = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
   const showWht    = p.whtAmount > 0;
+  const isLast     = pageNumber === pageCount;
 
   return (
     <div
@@ -145,12 +163,23 @@ function BillingRunPage({
               <MetaLine k="เลขที่เอกสาร :" v={p.docNo} />
               <MetaLine k="วันที่ออก :" v={p.dateIssued} />
               <MetaLine k="ครบกำหนดชำระ :" v={p.dateDue} strong />
+              {/* หน้า X/N — only when the bill spans >1 page (mirrors the ใบเสร็จ
+                  meta-box). Lives here so it appears on EVERY page. */}
+              {pageCount > 1 && <MetaLine k="หน้า :" v={`${pageNumber}/${pageCount}`} />}
             </div>
           </div>
         </div>
 
-        {/* ── ITEMS TABLE — Pacred 11-col cargo table (same as the receipt) ── */}
-        <div style={{ height: "182px", overflow: "visible", borderTop: "1px solid #d8dade", paddingTop: "1.5mm" }}>
+        {/* ── ITEMS TABLE — Pacred 11-col cargo table (same as the receipt) ──
+            2026-07-04: was a FIXED height:"182px" — a 25-row bill grew taller
+            than 182px and SPILLED OUT, colliding with the summary block below
+            (owner report · /admin/billing-run/47/print). Now the items area
+            FLEX-GROWS to fill the space above the bottom summary (flex:1
+            minHeight:0), and the caller chunks the rows ROWS_PER_PAGE per page
+            (=13, same as the ใบเสร็จ) so a long bill lays out across pages with
+            the summary on the last page only. The separate flex:1 spacer below
+            is removed (this area is the grower now). */}
+        <div style={{ flex: 1, minHeight: 0, overflow: "visible", borderTop: "1px solid #d8dade", paddingTop: "1.5mm" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", background: tintBg, tableLayout: "fixed" }}>
             <thead>
               <tr>
@@ -168,15 +197,15 @@ function BillingRunPage({
               </tr>
             </thead>
             <tbody>
-              {p.items.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
                   <td colSpan={11} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
                     ไม่พบรายการ
                   </td>
                 </tr>
               ) : (
-                p.items.map((row) => (
-                  <tr key={row.no} style={{ background: "#fff" }}>
+                rows.map((row) => (
+                  <tr key={row.no} style={{ background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <td style={tdC}>{row.no}</td>
                     <td style={tdMonoC}>#{row.fid}</td>
                     <td style={tdMono}>{row.tracking}</td>
@@ -195,12 +224,17 @@ function BillingRunPage({
           </table>
         </div>
 
-        {/* ── SPACER pushes summary to bottom ─────────── */}
-        <div style={{ flex: 1 }} />
+        {/* ── (spacer removed 2026-07-04 — the items area above is now the
+              flex-grower that pushes the summary to the bottom of the page) ── */}
 
-        {/* ── SUMMARY + PAYMENT + REMARK + CERTIFIED ─────── */}
+        {/* ── SUMMARY + PAYMENT + REMARK + CERTIFIED (last page only) ──────
+            On a multi-page bill the summary/payment/remark/certified block
+            must render only on the LAST page (mirrors the ใบเสร็จ). The money
+            here is ALWAYS the full-bill total (p.total / p.netPayable / etc.,
+            computed upstream over ALL items) — never a per-page subset. */}
         {/* Peak section dividers (ภูม flag): thin full-width rules separate each
             band — สรุป · การชำระเงิน · หมายเหตุ · รับรอง — like the ใบเสร็จ. */}
+        {isLast && (
         <div style={{ borderTop: "1px solid #d8dade" }}>
           {/* SUMMARY 2-col */}
           <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", paddingTop: "2mm" }}>
@@ -335,6 +369,7 @@ function BillingRunPage({
             </div>
           </div>
         </div>
+        )}
 
       </div>
     </div>
@@ -401,7 +436,8 @@ function SumLine({ k, v, red }: { k: string; v: string; red?: boolean }) {
  * Reuses the receipt's `.receipt-page`/`.subpage` CSS verbatim (one-page-fit
  * math, @page 5mm, screen drop-shadow paper, .receipt-fit mobile mode).
  */
-export function BillingRunPaper(props: BillingRunPaperProps) {
+export function BillingRunPaper({ pages, ...common }: BillingRunPaperProps) {
+  const pageCount = Math.max(1, pages.length);
   return (
     <>
       <style>{`
@@ -425,8 +461,26 @@ export function BillingRunPaper(props: BillingRunPaperProps) {
         .subpage { display: flex; flex-direction: column; }
       `}</style>
 
-      <BillingRunPage label="ต้นฉบับ" {...props} />
-      <BillingRunPage label="สำเนา" {...props} />
+      {pages.map((pg) => (
+        <BillingRunPage
+          key={`orig-${pg.pageNumber}`}
+          label="ต้นฉบับ"
+          {...common}
+          rows={pg.rows}
+          pageNumber={pg.pageNumber}
+          pageCount={pageCount}
+        />
+      ))}
+      {pages.map((pg) => (
+        <BillingRunPage
+          key={`copy-${pg.pageNumber}`}
+          label="สำเนา"
+          {...common}
+          rows={pg.rows}
+          pageNumber={pg.pageNumber}
+          pageCount={pageCount}
+        />
+      ))}
     </>
   );
 }
