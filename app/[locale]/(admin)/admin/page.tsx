@@ -562,6 +562,34 @@ type RowShape = {
   // Owner 2026-06-21: show a slip thumbnail inline on the queue so the admin sees
   // at a glance that a slip is attached + it renders (signed URL · null = no slip).
   slipUrl?: string | null;
+  // ── Legacy-fidelity per-tab columns (owner 2026-07-04 ·
+  //    docs/research/dashboard-tabstrip-fidelity-2026-07-04.md). Optional: only a
+  //    tab-group that renders its TAILORED legacy table populates these; tabs still
+  //    on the generic 4-col table leave them undefined (no regression).
+  orderNo?: string | null;        // เลขที่ออเดอร์ (hNo) / เลขที่รายการ
+  statusLabel?: string;           // real status text (legacy badge label)
+  statusTone?: StatusTone;        // legacy badge color
+};
+
+// Legacy Bootstrap badge tones → Tailwind pill classes (shared by the tailored tables).
+type StatusTone = "warning" | "danger" | "primary" | "info" | "success" | "secondary";
+const STATUS_TONE_CLASS: Record<StatusTone, string> = {
+  warning:   "bg-amber-100 text-amber-700",
+  danger:    "bg-red-100 text-red-700",
+  primary:   "bg-blue-100 text-blue-700",
+  info:      "bg-cyan-100 text-cyan-700",
+  success:   "bg-emerald-100 text-emerald-700",
+  secondary: "bg-slate-100 text-slate-700",
+};
+
+// ฝากสั่งซื้อ tb_header_order.hStatus → legacy statusOrderBadgeAll (function.php:504).
+const SHOP_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  "1": { label: "รอดำเนินการ",   tone: "warning" },
+  "2": { label: "รอชำระเงิน",     tone: "danger" },
+  "3": { label: "สั่งสินค้า",      tone: "info" },
+  "4": { label: "รอร้านจีนจัดส่ง", tone: "primary" },
+  "5": { label: "สำเร็จ",         tone: "success" },
+  "6": { label: "ยกเลิกออเดอร์",   tone: "danger" },
 };
 
 type RawUserRow = {
@@ -739,16 +767,21 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         const u = users.get(r.userid);
         const itemCount = Number(r.hcount ?? 0);
         const title = (r.htitle ?? "").trim() || "ไม่มีชื่อสินค้า";
+        const st = SHOP_STATUS[r.hstatus ?? "1"] ?? SHOP_STATUS["1"];
         return {
           id: String(r.id),
           created_at: r.hdate ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
           amount: Number(r.htotalpriceuser ?? 0),
-          detail: `<span class="font-semibold text-foreground">${escapeHtmlInline(r.hno ?? "—")}</span> · ${escapeHtmlInline(title)}${itemCount > 0 ? ` · ${itemCount} รายการ` : ""}`,
+          // ข้อมูลสินค้า column (hNo moved to its own เลขที่ออเดอร์ column, legacy-faithful).
+          detail: `<span class="font-semibold text-foreground">${escapeHtmlInline(title)}</span>${itemCount > 1 ? ` · และอีก ${itemCount - 1} รายการ` : ""}`,
           link: r.hno ? `/admin/service-orders/${encodeURIComponent(r.hno)}` : "/admin/service-orders",
           status: r.hstatus ?? "1",
           slipUrl: coverMap[String(r.id)] ?? null,
+          orderNo: r.hno ?? null,
+          statusLabel: st.label,
+          statusTone: st.tone,
         };
       });
     }
@@ -1028,9 +1061,81 @@ function UserStatCard({
   );
 }
 
+// ── Shop tabs (ฝากสั่งซื้อ) — legacy 8-col table (oop/shopTableAll.php) ──────
+// วันที่สร้าง · รหัสสมาชิก · เลขที่ออเดอร์ · ข้อมูลสินค้า · ราคารวม · สถานะ · อัปเดต · ตัวเลือก
+function ShopTabTable({ rows }: { rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return <div className="p-12 text-center text-sm text-muted">ไม่มีรายการในหมวดนี้</div>;
+  }
+  return (
+    <div className="overflow-x-auto scrollbar-x-visible">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-3 py-3 whitespace-nowrap">วันที่สร้าง</th>
+            <th className="px-3 py-3">รหัสสมาชิก</th>
+            <th className="px-3 py-3">เลขที่ออเดอร์</th>
+            <th className="px-3 py-3">ข้อมูลสินค้า</th>
+            <th className="px-3 py-3 text-right whitespace-nowrap">ราคารวม (บาท)</th>
+            <th className="px-3 py-3">สถานะ</th>
+            <th className="px-3 py-3 whitespace-nowrap">อัปเดต</th>
+            <th className="px-3 py-3">ตัวเลือก</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r) => {
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const tone = r.statusTone ? STATUS_TONE_CLASS[r.statusTone] : "bg-amber-100 text-amber-700";
+            return (
+              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors align-top">
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
+                  <div className="text-foreground text-xs mt-0.5">{r.customer_name}</div>
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">{r.orderNo ?? "—"}</Link>
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-start gap-2">
+                    {r.slipUrl ? (
+                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="รูปสินค้า">
+                        <SlipImage src={r.slipUrl} pdfMode="tile" className="h-12 w-12 rounded-lg border border-border object-cover bg-surface-alt" />
+                      </a>
+                    ) : null}
+                    <p className="text-xs text-foreground min-w-0" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
+                <td className="px-3 py-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}>{r.statusLabel ?? "รอดำเนินการ"}</span>
+                </td>
+                <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
+                  {created ? created.toLocaleDateString("th-TH") : "—"}
+                </td>
+                <td className="px-3 py-3">
+                  <Link href={r.link} className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md whitespace-nowrap">
+                    <Eye className="w-3 h-3" /> ดูรายละเอียด
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Active tab content table ───────────────────────────────────────────────
 
 function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
+  // ฝากสั่งซื้อ tabs render the legacy 8-col shop table (owner 2026-07-04).
+  if (tab === "shop1" || tab === "shop2" || tab === "shop3" || tab === "shop4") {
+    return <ShopTabTable rows={rows} />;
+  }
   if (rows.length === 0) {
     return (
       <div className="p-12 text-center text-sm text-muted">

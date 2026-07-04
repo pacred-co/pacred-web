@@ -21,7 +21,7 @@
 ## 🟢 ACTIVE — being worked on now
 | Dev | Feature | Key files / tables / migration# | Branch | Started | Notes |
 |---|---|---|---|---|---|
-| _(none claimed — add your row before starting)_ | | | | | |
+| **ภูม** | **Admin dashboard tab-strip → legacy PCS fidelity** — ทำ 14 แท็บ (`/admin` CEO dashboard) ให้เหมือน legacy เป๊ะ: ชื่อ/ลำดับ/count + **คอลัมน์ตารางเฉพาะต่อแท็บ** (ตอนนี้ใช้ 4-col generic ทุกแท็บ · legacy = 6 layouts: users 6 / wallet 4-7 / payShop 6 / shop 8 / forwarder 9 / payment 9) | `app/[locale]/(admin)/admin/page.tsx` (~1600 บรรทัด · money-dashboard) · no mig | Poom-pacred | 2026-07-04 | owner-directed · legacy src `pcs-admin/include/pages/home/Cargo/CEO/*` · ⚠️ shared high-traffic file — ping ก่อนแตะ |
 
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |
