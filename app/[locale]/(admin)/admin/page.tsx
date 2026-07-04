@@ -60,8 +60,8 @@ type TabKey =
   | "forwarder1"          // tb_forwarder fstatus='1' (รอเข้าโกดังจีน)
   | "forwarder5"          // tb_forwarder fstatus='5' (รอชำระเงิน)
   | "forwarderC"          // tb_forwarder fcredit='1'
-  | "forwarder6"          // tb_forwarder fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
-  | "forwarder62"         // tb_forwarder fstatus='6' (เตรียมส่ง / กำลังจัดส่ง)
+  | "forwarder6"          // tb_forwarder fstatus='6' NOT in an open driver batch (เตรียมส่ง)
+  | "forwarder62"         // tb_forwarder fstatus='6' WITH an open driver-item (กำลังจัดส่ง)
   | "payment"             // tb_payment paystatus='1' (รอตรวจสอบ)
   | "inactiveCustomers";  // tb_users useractive='0'
 
@@ -173,7 +173,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     yuanPending,
     shop1Count, shop2Count, shop3Count, shop4Count,
     forwarder1Count, forwarder5Count, forwarderCreditCount,
-    forwarder6Count, forwarder62Count,
+    fstatus6IdsRes, openDriverFidsRes,
     containersInTransitRows,
   ] = await unstable_cache(
     async () => {
@@ -223,7 +223,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Keep the rebuilt-app read; on prod the table is empty so the badge = 0.
     // TODO Phase C: decide whether to retire this tab or wire it to a real
     // legacy commission table (tb_user_sales_admin_pay status='1' looks closest).
-    admin.from("sales_payouts").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    admin.from("tb_shop_pay_h").select("id", { count: "exact", head: true }).eq("status", "1"),
     // tb_payment paystatus '1' = pending (รอตรวจสอบ).
     admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("paystatus", "1"),
     // ฝากสั่งซื้อ tabs.
@@ -235,10 +235,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "1"),
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5"),
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fcredit", "1"),
-    // forwarder6 = "เตรียมส่ง" tab → legacy fstatus='4' (ถึงไทยแล้ว · need to deliver).
-    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "4"),
-    // forwarder62 = "กำลังจัดส่ง" tab → legacy fstatus='6' (เตรียมส่ง / on-truck).
-    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "6"),
+    // เตรียมส่ง(6) / กำลังจัดส่ง(62) — partition fstatus=6 by open driver-item (legacy
+    // forwarder6.php = fStatus6 NOT-with-open-driver · forwarder62.php = fStatus6 WITH
+    // open driver-item [fdiStatus '' / '1' = assigned, not delivered]). Fetch the id
+    // sets → compute the two counts after the fan-out.
+    admin.from("tb_forwarder").select("id").eq("fstatus", "6").limit(50_000),
+    admin.from("tb_forwarder_driver_item").select("fid").or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null").limit(50_000),
     // Active containers — DISTINCT fcabinetnumber from tb_forwarder where
     // pre-arrival (fstatus 1..3). Pull rows (PostgREST has no COUNT DISTINCT).
     admin.from("tb_forwarder")
@@ -313,6 +315,15 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     .eq("slip_status", "pending");
   const billSlipPending = billSlipPendingRes.count ?? 0;
 
+  // เตรียมส่ง(6) vs กำลังจัดส่ง(62) — partition fstatus=6 by whether the row is in an
+  // OPEN driver batch (fdistatus '' / '1' = assigned, not delivered).
+  const openDriverFidSet = new Set(
+    ((openDriverFidsRes.data ?? []) as { fid: number }[]).map((r) => r.fid),
+  );
+  const fstatus6Ids = ((fstatus6IdsRes.data ?? []) as { id: number }[]).map((r) => r.id);
+  const forwarder62Val = fstatus6Ids.filter((id) => openDriverFidSet.has(id)).length;
+  const forwarder6Val = fstatus6Ids.length - forwarder62Val;
+
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
     topup:              (walletDepositsPending.count ?? 0) + billSlipPending,
@@ -325,8 +336,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwarder1:         forwarder1Count.count ?? 0,
     forwarder5:         forwarder5Count.count ?? 0,
     forwarderC:         forwarderCreditCount.count ?? 0,
-    forwarder6:         forwarder6Count.count ?? 0,
-    forwarder62:        forwarder62Count.count ?? 0,
+    forwarder6:         forwarder6Val,
+    forwarder62:        forwarder62Val,
     payment:            yuanPending.count ?? 0,
     inactiveCustomers:  inactiveUsers,
   };
@@ -887,13 +898,25 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
       else if (tab === "forwarder5")  q = q.eq("fstatus", "5");
       else if (tab === "forwarderC")  q = q.eq("fcredit", "1");
-      else if (tab === "forwarder6")  q = q.eq("fstatus", "4");
-      else                            q = q.eq("fstatus", "6");
+      else                            q = q.eq("fstatus", "6"); // forwarder6 + forwarder62 = fstatus 6
       const { data, error } = await q;
       if (error) {
         console.warn(`[tb_forwarder list] failed (soft-fail · returning empty rows)`, error);
       }
-      const rows = (data ?? []) as unknown as RawForwarderRow[];
+      let rows = (data ?? []) as unknown as RawForwarderRow[];
+      // เตรียมส่ง(6) vs กำลังจัดส่ง(62) — partition fstatus=6 by open driver-item (fdistatus ''/'1').
+      if (tab === "forwarder6" || tab === "forwarder62") {
+        const { data: dItems, error: dErr } = await admin
+          .from("tb_forwarder_driver_item")
+          .select("fid")
+          .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null")
+          .limit(50_000);
+        if (dErr) console.warn(`[forwarder6/62 driver-partition] failed (soft-fail)`, dErr);
+        const driverSet = new Set(((dItems ?? []) as { fid: number }[]).map((r) => r.fid));
+        rows = tab === "forwarder62"
+          ? rows.filter((r) => driverSet.has(Number(r.id)))
+          : rows.filter((r) => !driverSet.has(Number(r.id)));
+      }
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       const fcoverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.fcover })), "cover");
       return rows.map((r) => {
