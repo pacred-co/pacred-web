@@ -24,6 +24,10 @@ import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 // 2026-06-11 (Lane B · doc-choice visibility) — per-row tax-document badge.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
+// 2026-07-06 (ภูม · legacy fidelity) — reuse the shared admin SHIP_BY_LABEL SOT
+// (actions/admin/reports-profit-types = a NON-"use server" pure const module,
+// safe to import into this client component) so the TH-carrier label never drifts.
+import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 
 /**
  * 2026-06-17 (ภูม flag · "fvolume = total, ไม่ ×กล่อง") — total parcel CBM for
@@ -42,6 +46,15 @@ function cbmTotal(
     ? volume_cbm
     : volume_cbm * (amount_count || 1);
 }
+
+// 2026-07-06 (ภูม · legacy fidelity) — faithful nameProductsType (legacy
+// pcs-admin/include/function.php L640): 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ.
+const PRODUCTS_TYPE_LABEL: Record<string, string> = {
+  "1": "ทั่วไป",
+  "2": "มอก.",
+  "3": "อย.",
+  "4": "พิเศษ",
+};
 
 /**
  * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
@@ -98,6 +111,10 @@ export type Row = {
   fcredit: string;
   paydeposit: string | null;
   note: string | null;
+  /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
+  products_type: string | null;
+  /** 2026-07-06 — legacy fshipby · TH-delivery carrier · nameShipBy label */
+  ship_by: string | null;
   detail: string | null;
   cover: string | null;
   /**
@@ -1103,6 +1120,13 @@ export function ForwardersTable({
                                 {r.detail}
                               </div>
                             )}
+                            {/* ประเภท — legacy forwarder.php L622 shows the product
+                                type (nameProductsType) in the รายละเอียด cell. */}
+                            {r.products_type && r.products_type.trim() !== "" && (
+                              <div className="text-[11px] text-muted mt-0.5">
+                                ประเภท : {PRODUCTS_TYPE_LABEL[r.products_type] ?? r.products_type}
+                              </div>
+                            )}
                             <div className="mt-1 flex flex-wrap gap-1 items-center">
                               {/* Block 1: admin OR users (mutually exclusive · only when no refOrder) */}
                               {block1Label && (
@@ -1125,6 +1149,17 @@ export function ForwardersTable({
                                   ("ใส่มาทำไม"). It's redundant with the tracking
                                   shown + the cabinet, and still searchable. */}
                             </div>
+                            {/* หมายเหตุ — legacy forwarder.php L635 renders fNote
+                                in a red bg-danger/text-white block so ops can't
+                                miss it. Conditional (empty note → nothing, exactly
+                                like legacy `if($row['fNote']!='')`). We show the
+                                admin-visible text only; fnoteuser/fnotedate aren't
+                                fetched in the list. */}
+                            {r.note && r.note.trim() !== "" && (
+                              <div className="mt-1 rounded bg-red-600 px-1.5 py-0.5 text-[11px] leading-snug text-white">
+                                หมายเหตุ : {r.note}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1239,7 +1274,14 @@ export function ForwardersTable({
                           </>
                         ) : r.tracking_chn && r.tracking_chn !== "-" ? (
                           <>
-                            <div className="font-mono text-[11px]">{r.tracking_chn}</div>
+                            {/* เลขพัสดุจีน — legacy forwarder.php L650 wraps the
+                                tracking in bg-danger/text-white (the red highlight
+                                ops scan for). Faithful to PCS. */}
+                            <div className="font-mono text-[11px]">
+                              <span className="inline-block rounded bg-red-600 px-1 text-white">
+                                {r.tracking_chn}
+                              </span>
+                            </div>
                             <div className="mt-0.5">
                               <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
                                 {modeLabel[r.transport_type] ?? r.transport_type}
@@ -1298,8 +1340,15 @@ export function ForwardersTable({
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2.5 font-mono text-[11px]">
-                        {r.tracking_th && r.tracking_th !== "-" ? r.tracking_th : <span className="text-muted">—</span>}
+                      <td className="px-2 py-2.5 text-[11px]">
+                        {/* ขนส่งไทย — legacy forwarder.php L656 shows nameShipBy
+                            (the TH-delivery carrier) above the TH tracking number. */}
+                        {r.ship_by && r.ship_by.trim() !== "" && (
+                          <div className="text-muted mb-0.5">{SHIP_BY_LABEL[r.ship_by] ?? r.ship_by}</div>
+                        )}
+                        <div className="font-mono">
+                          {r.tracking_th && r.tracking_th !== "-" ? r.tracking_th : <span className="text-muted">—</span>}
+                        </div>
                       </td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
                         {fmtDate(r.date_status2)}

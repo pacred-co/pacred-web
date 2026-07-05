@@ -248,6 +248,9 @@ type RawForwarderRow = {
   fpallet: string | null;             // warehouse pallet location code (e.g. "A-3")
   fcabinet_locked: boolean | null;    // #259 Option B — cabinet manual-lock flag
   tax_doc_pref: string | null;        // Lane B — ใบกำกับ/ใบขน/ไม่รับเอกสาร (mig 0127)
+  // 2026-07-06 (ภูม · legacy fidelity) — extra list-cell fields (legacy forwarder.php)
+  fshipby: string | null;             // TH-delivery carrier code · nameShipBy()
+  fproductstype: string | null;       // product type · nameProductsType() 1-4
 };
 
 type RawUserRow = {
@@ -291,6 +294,10 @@ export type Row = {
   fcredit: string;             // '1' = credit order
   paydeposit: string | null;   // '1' = paid · null/'' = ยอดค้างชำระ remaining
   note: string | null;
+  /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
+  products_type: string | null;
+  /** 2026-07-06 — legacy fshipby · TH-delivery carrier code · nameShipBy label */
+  ship_by: string | null;
   detail: string | null;
   cover: string | null;        // product thumbnail filename (fcover) — bare
   coverUrl: string | null;     // Wave 13 — server-resolved signed Supabase URL
@@ -944,7 +951,11 @@ export async function fetchForwarderList(
       "fcabinet_locked," +
       // 2026-06-11 (Lane B · doc-choice visibility) — the customer's tax-document
       // choice for the new "เอกสาร" column (idx_tb_forwarder_tax_doc_pref · 0127).
-      "tax_doc_pref",
+      "tax_doc_pref," +
+      // 2026-07-06 (ภูม · legacy fidelity) — TH-delivery carrier (nameShipBy) +
+      // product type (nameProductsType) for the list cells, like legacy
+      // forwarder.php L622 (ประเภท) / L656 (nameShipBy above เลขพัสดุไทย).
+      "fshipby,fproductstype",
       // count:exact only on the common path (no post-fetch shrink) so the
       // pager total matches the rendered rows; the search/6.1 views compute
       // total from the JS-filtered length instead.
@@ -1213,6 +1224,8 @@ export async function fetchForwarderList(
       fcredit: r.fcredit ?? "0",
       paydeposit: r.paydeposit,
       note: r.fnote,
+      products_type: r.fproductstype,
+      ship_by: r.fshipby,
       detail: r.fdetail,
       cover: r.fcover,
       coverUrl: null,            // filled in after the URL-resolve step below
