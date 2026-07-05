@@ -24,6 +24,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { PageHeader } from "@/components/admin/page-header";
 import { EXCEPTION_TYPE_LABEL, type ExceptionType } from "@/lib/admin/forwarder-exception-types";
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import { AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -91,15 +96,27 @@ export default async function ForwarderExceptionsPage({
   const userIds = [...new Set(rows.map((r) => (r.userid ?? "").trim()).filter(Boolean))];
   const nameByUser: Record<string, string> = {};
   if (userIds.length > 0) {
+    // นิติบุคคล → company name (not the contact person). Two batched .in() reads.
+    const corpNames = await fetchCorporateNameMap(admin, userIds);
     const { data: users, error: uErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (uErr) {
       console.error(`[forwarder exceptions tb_users] failed`, { code: uErr.code, message: uErr.message });
     } else {
-      for (const u of (users ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
-        nameByUser[u.userID] = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+      for (const u of (users ?? []) as {
+        userID: string;
+        userName: string | null;
+        userLastName: string | null;
+        userCompany: string | null;
+      }[]) {
+        nameByUser[u.userID] = resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name;
       }
     }
   }

@@ -50,6 +50,7 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
+import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -287,9 +288,9 @@ export async function adminAddCartUser(
 
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName")
+        .select("userID, userName, userLastName, userCompany")
         .eq("userID", userid)
-        .maybeSingle<{ userID: string; userName: string; userLastName: string }>();
+        .maybeSingle<{ userID: string; userName: string; userLastName: string; userCompany: string | null }>();
       if (customerErr) {
         console.error(`[tb_users list] failed`, { code: customerErr.code, message: customerErr.message });
       }
@@ -298,7 +299,21 @@ export async function adminAddCartUser(
         return { ok: true, data: { exists: false, displayName: null } };
       }
 
-      const displayName = `${customer.userName} ${customer.userLastName}`.trim();
+      // นิติบุคคล → company name (not the contact person). Single-user corp lookup.
+      const { data: corp, error: corpErr } = await admin
+        .from("tb_corporate")
+        .select("corporatename")
+        .eq("userid", userid)
+        .maybeSingle<{ corporatename: string | null }>();
+      if (corpErr) {
+        console.warn(`[adminAddCartUser tb_corporate] failed (soft-fail · person name shown)`, { code: corpErr.code, message: corpErr.message });
+      }
+      const displayName = resolveBillingIdentity({
+        userCompany: customer.userCompany,
+        userName: customer.userName,
+        userLastName: customer.userLastName,
+        corp: corpRowFromName(corp?.corporatename ?? undefined),
+      }).name;
 
       // Light-touch audit — record the lookup so we can see which staff
       // viewed which customer cart (matches legacy session-context).

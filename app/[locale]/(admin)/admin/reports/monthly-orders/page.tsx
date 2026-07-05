@@ -38,6 +38,7 @@ import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
 } from "@/lib/legacy-status-map";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,7 @@ type LegacyUser = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
 };
 
 type FRow = {
@@ -102,9 +104,18 @@ type YRow = {
   user: LegacyUser | null;
 };
 
-function userDisplayName(u: LegacyUser | null): string {
+// Juristic-aware customer display: นิติบุคคล customers show the company name
+// (not the contact person) when a tb_corporate name is present. `corpNames` is
+// the batched Map<userid, corporatename> (fetchCorporateNameMap · no N+1).
+function userDisplayName(u: LegacyUser | null, corpNames?: Map<string, string>): string {
   if (!u) return "—";
-  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
+  const name = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpNames?.get(u.userID)),
+  }).name;
+  return name || "—";
 }
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
@@ -133,7 +144,7 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName")
+    .select("userID, userName, userLastName, userCompany")
     .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
@@ -226,6 +237,9 @@ export default async function MonthlyOrdersReport({
     ...yRaw.map((r) => r.userid),
   ];
   const userMap = await fetchUsersByUserId(admin, allUserIds);
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // customers show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, allUserIds);
 
   // ── 3) Merge into render rows. ──
   const forwarders: FRow[] = fRaw.map((r) => ({
@@ -289,7 +303,7 @@ export default async function MonthlyOrdersReport({
       amount:  r.total_price,
       created: r.created_at,
       member:  r.userid,
-      name:    userDisplayName(r.user),
+      name:    userDisplayName(r.user, corpNames),
       extra:   TRANSPORT_LABEL[r.transport_type] ?? r.transport_type,
     })),
     ...orders.map((r) => ({
@@ -299,7 +313,7 @@ export default async function MonthlyOrdersReport({
       amount:  r.total_thb,
       created: r.created_at,
       member:  r.userid,
-      name:    userDisplayName(r.user),
+      name:    userDisplayName(r.user, corpNames),
       extra:   `${r.item_count} ชิ้น`,
     })),
     ...yuan.map((r) => ({
@@ -309,7 +323,7 @@ export default async function MonthlyOrdersReport({
       amount:  r.thb_amount,
       created: r.created_at,
       member:  r.userid,
-      name:    userDisplayName(r.user),
+      name:    userDisplayName(r.user, corpNames),
       extra:   `${PAYTYPE_LABEL[r.paytype ?? ""] ?? "—"} · ¥${r.yuan_amount.toFixed(2)}`,
     })),
   ];
@@ -412,7 +426,7 @@ export default async function MonthlyOrdersReport({
                       <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">{r.f_no}</Link>
                     </td>
                     <td className="px-3 py-2 text-xs">
-                      {userDisplayName(r.user)}
+                      {userDisplayName(r.user, corpNames)}
                       <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_price)}</td>
@@ -447,7 +461,7 @@ export default async function MonthlyOrdersReport({
                       <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
                     </td>
                     <td className="px-3 py-2 text-xs">
-                      {userDisplayName(r.user)}
+                      {userDisplayName(r.user, corpNames)}
                       <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_thb)}</td>
@@ -479,7 +493,7 @@ export default async function MonthlyOrdersReport({
                 {yuan.slice(0, 100).map((r) => (
                   <tr key={r.id} className="border-t border-border">
                     <td className="px-3 py-2 text-xs">
-                      {userDisplayName(r.user)}
+                      {userDisplayName(r.user, corpNames)}
                       <p className="font-mono text-[11px] text-muted">{r.userid}</p>
                     </td>
                     <td className="px-3 py-2 text-[11px]">{PAYTYPE_LABEL[r.paytype ?? ""] ?? "—"}</td>

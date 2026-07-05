@@ -29,6 +29,11 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import AddInvoiceForm, { type CandidateRow } from "./add-form";
 
 export const dynamic = "force-dynamic";
@@ -152,13 +157,21 @@ export default async function AddForwarderInvoicePage({
     );
   }
 
+  // ── Company-name map (batched · N+1-free) — juristic customers show the
+  //    COMPANY name, not the contact person, in this receipt picker. ─────────
+  const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
   // ── Materialise candidate rows ───────────────────────────
   const candidates: CandidateRow[] = eligible.map((r) => {
     const u = usersById.get(r.userid);
     const outstanding = calcForwarderOutstanding(r);
-    const name = u
-      ? [u.userName, u.userLastName].filter(Boolean).join(" ").trim() || r.userid
-      : r.userid;
+    const identity = resolveBillingIdentity({
+      userCompany: r.fusercompany != null ? String(r.fusercompany) : null,
+      userName: u?.userName ?? null,
+      userLastName: u?.userLastName ?? null,
+      corp: corpRowFromName(corpNames.get(r.userid)),
+    });
+    const name = identity.name || r.userid;
     return {
       id:              r.id,
       userid:          r.userid,

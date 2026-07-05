@@ -5,6 +5,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAccWithdrawAll } from "@/actions/admin/export/acc-withdraw";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 /**
  * Admin > "ถอนเงิน โอนโดยตรง" — a FAITHFUL 1:1 TRANSCRIPTION of
@@ -212,6 +217,7 @@ type WithdrawRow = {
   // tb_users
   username: string;
   userlastname: string;
+  usercompany: string | null; // '1' = นิติบุคคล
 };
 
 type SP = {
@@ -289,28 +295,36 @@ export default async function AdminAccountingWithdrawPage({
   );
   const userById = new Map<
     string,
-    { username: string; userlastname: string }
+    { username: string; userlastname: string; usercompany: string | null }
   >();
   if (userIds.length > 0) {
     const usersRes = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     for (const u of (usersRes.data ?? []) as Array<{
       userID: string;
       userName: string;
       userLastName: string;
+      userCompany: string | null;
     }>) {
       userById.set(u.userID, {
         username: u.userName,
         userlastname: u.userLastName,
+        usercompany: u.userCompany,
       });
     }
   }
 
+  // ── Juristic → company-name map (batched, N+1-free) ─────────────
+  // นิติบุคคล customers show the COMPANY name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Assemble rows in legacy order (wh.date ASC) ─────────────────
   const rows: WithdrawRow[] = walletRows.map((w) => {
-    const u = userById.get(w.userid) ?? { username: "", userlastname: "" };
+    const u =
+      userById.get(w.userid) ??
+      { username: "", userlastname: "", usercompany: null };
     return {
       date: w.date,
       dateslip: w.dateslip,
@@ -320,6 +334,7 @@ export default async function AdminAccountingWithdrawPage({
       userid: w.userid,
       username: u.username,
       userlastname: u.userlastname,
+      usercompany: u.usercompany,
     };
   });
 
@@ -371,6 +386,14 @@ export default async function AdminAccountingWithdrawPage({
     { key: "userid",          label: "รหัสสมาชิก" },
     { key: "customer",        label: "ชื่อ-นามสกุล" },
   ];
+  // Juristic (นิติบุคคล) customers show the COMPANY name, not the contact person.
+  const displayName = (row: WithdrawRow) =>
+    resolveBillingIdentity({
+      userCompany: row.usercompany,
+      userName: row.username,
+      userLastName: row.userlastname,
+      corp: corpRowFromName(corpNames.get(row.userid)),
+    }).name;
   const csvRows: CsvRow[] = pageRows.map((row) => ({
     date: row.date ?? "",
     dateslip: row.dateslip ?? "",
@@ -380,7 +403,7 @@ export default async function AdminAccountingWithdrawPage({
     amount_refunded: numberFormat2(row.amount),
     service_fee: numberFormat2(0),
     userid: row.userid,
-    customer: `${row.username} ${row.userlastname}`.trim(),
+    customer: displayName(row),
   }));
 
   return (
@@ -669,11 +692,10 @@ export default async function AdminAccountingWithdrawPage({
                                           {row.userid}
                                         </Link>
                                       </td>
-                                      {/* 9 — ชื่อ-นามสกุล
+                                      {/* 9 — ชื่อ-นามสกุล/ชื่อบริษัท
+                                          (juristic → company name)
                                           acc-withdraw.php L211 */}
-                                      <td>
-                                        {row.username} {row.userlastname}
-                                      </td>
+                                      <td>{displayName(row)}</td>
                                     </tr>
                                   ))}
                                 </tbody>

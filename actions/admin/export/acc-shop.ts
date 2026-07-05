@@ -39,6 +39,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import type { CsvRow } from "@/components/admin/csv-button";
 
 // Safety cap for the "export all filtered" path (mirrors the other exports).
@@ -220,11 +225,14 @@ export async function exportAccShopAll(
         .filter(Boolean),
     ),
   );
-  const userById = new Map<string, { username: string; userlastname: string }>();
+  const userById = new Map<
+    string,
+    { username: string; userlastname: string; usercompany: string | null }
+  >();
   if (userIds.length > 0) {
     const usersRes = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (usersRes.error) {
       console.error("[exportAccShopAll tb_users] failed", {
@@ -236,10 +244,18 @@ export async function exportAccShopAll(
       userID: string;
       userName: string;
       userLastName: string;
+      userCompany: string | null;
     }>) {
-      userById.set(u.userID, { username: u.userName, userlastname: u.userLastName });
+      userById.set(u.userID, {
+        username: u.userName,
+        userlastname: u.userLastName,
+        usercompany: u.userCompany,
+      });
     }
   }
+
+  // ── Juristic → company-name map (batched, N+1-free) ──────────────────────
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // ── Assemble in legacy order (GROUP BY hNo + ORDER BY wh.date ASC) ────────
   const seenHnos = new Set<string>();
@@ -250,7 +266,15 @@ export async function exportAccShopAll(
     const h = headerByHno.get(hno);
     if (!h) continue; // legacy `ho.hNo<>''` drops unjoined rows
     seenHnos.add(hno);
-    const u = userById.get(h.userid) ?? { username: "", userlastname: "" };
+    const u =
+      userById.get(h.userid) ??
+      { username: "", userlastname: "", usercompany: null };
+    const identity = resolveBillingIdentity({
+      userCompany: u.usercompany,
+      userName: u.username,
+      userLastName: u.userlastname,
+      corp: corpRowFromName(corpNames.get(h.userid)),
+    });
 
     const amount = Number(w.amount);
     const htotalpricechn = Number(h.htotalpricechn);
@@ -281,7 +305,7 @@ export async function exportAccShopAll(
           }
         : {}),
       member_code: h.userid,
-      customer_name: `${u.username} ${u.userlastname}`.trim(),
+      customer_name: identity.name,
     });
 
     if (rows.length >= EXPORT_CAP) break;

@@ -31,6 +31,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -416,18 +417,26 @@ export default async function CreateDriverBatchPage({
   const custIds = [...new Set(eligible.map((r) => (r.userid ?? "").trim()).filter(Boolean))];
   const customerById = new Map<string, { name: string; tel: string }>();
   if (custIds.length > 0) {
-    const { data: custRows, error: custErr } = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
-      .in("userID", custIds);
+    const [{ data: custRows, error: custErr }, corpNames] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userTel, userCompany")
+        .in("userID", custIds),
+      fetchCorporateNameMap(admin, custIds),
+    ]);
     if (custErr) {
       console.error("/admin/drivers/new: customer name lookup failed", {
         code: custErr.code, message: custErr.message,
       });
     }
-    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null }[]) {
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userCompany: string | null }[]) {
       customerById.set(u.userID, {
-        name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(),
+        name: resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name,
         tel:  (u.userTel ?? "").trim(),
       });
     }

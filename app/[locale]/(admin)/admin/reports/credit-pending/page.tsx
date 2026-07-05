@@ -35,6 +35,7 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -77,6 +78,7 @@ type RawUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 type Row = {
@@ -150,7 +152,7 @@ export default async function CreditPendingReport({
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userTel,userCompany")
       .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
@@ -158,6 +160,9 @@ export default async function CreditPendingReport({
       userMap = new Map((usersRaw ?? []).map((u) => [u.userID, u as RawUser]));
     }
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // credit-pending rows show the company, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, useridList);
 
   // 3) Shape rows + compute outstanding.
   const rows: Row[] = forwarders.map((r) => {
@@ -176,7 +181,14 @@ export default async function CreditPendingReport({
       paydeposit: r.paydeposit,
       customer: {
         userid: r.userid,
-        name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+        name: u
+          ? resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(r.userid)),
+            }).name
+          : "",
         member_code: r.userid,  // legacy uses userid (e.g. PR10843) as the customer code
         phone: u?.userTel ?? "",
       },

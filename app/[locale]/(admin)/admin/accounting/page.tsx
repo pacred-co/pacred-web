@@ -54,6 +54,11 @@ import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
 } from "@/lib/legacy-status-map";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +68,10 @@ type LegacyUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  // Juristic (นิติบุคคล) identity — populated by fetchUsersByUserId so the
+  // display name resolves to the COMPANY, not the contact person.
+  userCompany: string | null;
+  corporateName: string | null;
 };
 
 // Per-row shapes after legacy → display normalisation.
@@ -118,15 +127,26 @@ function sumCol<T extends Record<string, unknown>>(data: T[] | null, col: keyof 
 function thb(n: number) {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
+// Juristic (นิติบุคคล) customers must show the COMPANY name, not the contact
+// person. The company name is carried ON the user object (populated by
+// fetchUsersByUserId) so every call site resolves identity identically.
 function userDisplayName(u: LegacyUser | null) {
   if (!u) return "—";
-  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
+  return (
+    resolveBillingIdentity({
+      userCompany: u.userCompany,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      corp: corpRowFromName(u.corporateName ?? undefined),
+    }).name || "—"
+  );
 }
 
 /**
  * 2nd-query helper: batch-load tb_users rows for the userid set on the page,
  * return a Map for O(1) lookup. Mirrors the Wave 3 P0 #1 pattern in
- * `/admin/forwarders/page.tsx`.
+ * `/admin/forwarders/page.tsx`. Also batches a tb_corporate company-name
+ * lookup (ONE `.in()` query) so juristic rows show the company name.
  */
 async function fetchUsersByUserId(
   admin: ReturnType<typeof createAdminClient>,
@@ -137,14 +157,29 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel")
+    .select("userID, userName, userLastName, userTel, userCompany")
     .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
     return map;
   }
-  for (const u of (data ?? []) as LegacyUser[]) {
-    map.set(u.userID, u);
+  // Batched company-name lookup (N+1-free) for the same userid set.
+  const corpNames = await fetchCorporateNameMap(admin, unique);
+  for (const u of (data ?? []) as Array<{
+    userID: string;
+    userName: string | null;
+    userLastName: string | null;
+    userTel: string | null;
+    userCompany: string | null;
+  }>) {
+    map.set(u.userID, {
+      userID: u.userID,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      userTel: u.userTel,
+      userCompany: u.userCompany,
+      corporateName: corpNames.get(u.userID) ?? null,
+    });
   }
   return map;
 }

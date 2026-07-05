@@ -6,6 +6,7 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportAccForwarderAll } from "@/actions/admin/export/acc-forwarder";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
 /**
  * Admin > "รายงานฝากนำเข้า" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -620,6 +621,18 @@ export default async function AdminAccountingForwarderPage({
     const walletPayUser = isCompany ? fTotalPrice - fTotalPrice * 0.01 : fTotalPrice;
     const corpNumber =
       r.corporatenumber && r.corporatenumber !== "" ? r.corporatenumber : "";
+    // Juristic (นิติบุคคล) customers must display the COMPANY name, not the
+    // contact person. Reuse the tb_corporate row already fetched in Pass 4.
+    const identity = resolveBillingIdentity({
+      userCompany: r.fusercompany,
+      userName: r.username,
+      userLastName: r.userlastname,
+      corp: {
+        corporatename: r.corporatename,
+        corporatenumber: r.corporatenumber,
+        corporateaddress: r.corporateaddress,
+      },
+    });
     return {
       pay_date: r.date ? String(r.date).slice(0, 10) : "",
       create_date: r.fdate ? String(r.fdate).slice(0, 10) : "",
@@ -637,9 +650,7 @@ export default async function AdminAccountingForwarderPage({
         : {}),
       member_code: r.userid,
       tax_id: corpNumber || "-",
-      name: corpNumber
-        ? r.corporatename ?? ""
-        : `${r.username} ${r.userlastname}`.trim(),
+      name: identity.name,
       receipt_no: r.rid ?? "",
     };
   });
@@ -1177,12 +1188,23 @@ export default async function AdminAccountingForwarderPage({
                                             : "-"}
                                         </td>
                                         {/* 15 — ชื่อ-นามสกุล/ชื่อบริษัท
+                                            (juristic → company name)
                                             acc-forwarder.php L331-338 */}
                                         <td>
-                                          {row.corporatenumber &&
-                                          row.corporatenumber !== ""
-                                            ? row.corporatename ?? ""
-                                            : `${row.username} ${row.userlastname}`}
+                                          {
+                                            resolveBillingIdentity({
+                                              userCompany: row.fusercompany,
+                                              userName: row.username,
+                                              userLastName: row.userlastname,
+                                              corp: {
+                                                corporatename: row.corporatename,
+                                                corporatenumber:
+                                                  row.corporatenumber,
+                                                corporateaddress:
+                                                  row.corporateaddress,
+                                              },
+                                            }).name
+                                          }
                                         </td>
                                         {/* 16 — เลขใบเสร็จ (rID) → link to
                                             legacy printReceipt.php?id=<rID>

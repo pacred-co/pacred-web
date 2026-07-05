@@ -36,6 +36,7 @@ import {
 } from "@/components/admin/page-top-menubar";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   daysAgoIso,
   todayIso,
@@ -94,6 +95,7 @@ type RawUser = {
   userID:       string;
   userName:     string | null;
   userLastName: string | null;
+  userCompany:  string | null;
 };
 
 type RawHeader = {
@@ -180,10 +182,11 @@ export default async function ShopRefundHistoryPage({
     new Set(hsRows.map((r) => r.userid).filter(Boolean)),
   );
   const userByUid = new Map<string, RawUser>();
+  const corpNames = await fetchCorporateNameMap(admin, userids);
   if (userids.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName")
+      .select("userID,userName,userLastName,userCompany")
       .in("userID", userids);
     if (userErr) {
       console.error(
@@ -195,6 +198,16 @@ export default async function ShopRefundHistoryPage({
       userByUid.set(u.userID, u);
     }
   }
+  // นิติบุคคล → company name (not the contact person) · display-only.
+  const customerNameOf = (u: RawUser | undefined): string =>
+    u
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name
+      : "";
 
   // ── Join: tb_header_order via reforder=hno ─────────────────────
   const hnos = Array.from(
@@ -371,9 +384,7 @@ export default async function ShopRefundHistoryPage({
                 <tbody>
                   {hsRows.map((r) => {
                     const u = userByUid.get(r.userid);
-                    const customerName = u
-                      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
-                      : "";
+                    const customerName = customerNameOf(u);
                     const o = r.reforder ? orderByHno.get(r.reforder) : undefined;
                     const a = r.adminid ? adminByAdminId.get(r.adminid) : undefined;
                     const adminName = a

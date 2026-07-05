@@ -27,6 +27,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { nowDate } from "@/lib/datetime-helpers";
 import {
   shopUserLabel,
@@ -80,6 +81,7 @@ type UserRow = {
   shopUser: string | null;
   channel: string | null;
   adminIDSale: string | null;
+  userCompany: string | null;
 };
 
 type SP = {
@@ -115,7 +117,7 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
   const usersQ = admin
     .from("tb_users")
     .select(
-      "userID, userName, userLastName, userStatus, userRegistered, userTel, userEmail, coID, shopUser, channel, adminIDSale",
+      "userID, userName, userLastName, userStatus, userRegistered, userTel, userEmail, coID, shopUser, channel, adminIDSale, userCompany",
     )
     .gte("userRegistered", `${signupFrom} 00:00:00`)
     .lte("userRegistered", `${signupTo} 23:59:59`)
@@ -131,6 +133,17 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
     });
   }
   const users = (usersData ?? []) as UserRow[];
+
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // customers show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, users.map((u) => u.userID));
+  const displayNameOf = (u: UserRow): string =>
+    resolveBillingIdentity({
+      userCompany: u.userCompany,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      corp: corpRowFromName(u.userID ? corpNames.get(u.userID) : undefined),
+    }).name;
 
   // ── 2) Per-service aggregates (filtered by the order-create window) ───────
   const applyOrderWindow = !ignoreOrderWindow;
@@ -204,7 +217,7 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
   // ── CSV ───────────────────────────────────────────────────────────────────
   const csvRows = rows.map((r) => ({
     userid: r.uid,
-    fullname: `${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim(),
+    fullname: displayNameOf(r.u),
     registered: r.u.userRegistered ?? "",
     shopUser: shopUserLabel(r.u.shopUser),
     channel: channelUserLabel(r.u.channel),
@@ -401,7 +414,7 @@ export default async function UserAllReport({ searchParams }: { searchParams: Pr
                         <span className="ml-1 text-[11px] text-red-600">(ถูกลบ)</span>
                       )}
                       <div className="mt-0.5 text-muted">
-                        {`${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim() || "—"}
+                        {displayNameOf(r.u) || "—"}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-[11px] text-muted">

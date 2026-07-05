@@ -22,6 +22,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportRecentlyActiveAll } from "@/actions/admin/export/customers-recently-active";
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +84,16 @@ export default async function RecentlyActiveCustomersPage({
     console.error(`[tb_users list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
   }
   const rows = (rowsRaw ?? []) as Row[];
+
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, rows.map((r) => r.userID));
+  const displayName = (r: Row): string =>
+    resolveBillingIdentity({
+      userCompany: r.userCompany,
+      userName: r.userName,
+      userLastName: r.userLastName,
+      corp: corpRowFromName(corpNames.get(r.userID)),
+    }).name;
 
   const activeCount = rows.filter((r) => r.userLastLogin).length;
   const dormant30d = rows.filter((r) => {
@@ -141,7 +156,7 @@ export default async function RecentlyActiveCustomersPage({
               const days = daysSince(r.userLastLogin);
               return {
                 userID: r.userID,
-                fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim(),
+                fullName: displayName(r),
                 type: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
                 tel: r.userTel ?? "",
                 email: r.userEmail ?? "",
@@ -214,7 +229,7 @@ export default async function RecentlyActiveCustomersPage({
             ) : (
               pageRows.map((r) => {
                 const isJuristic = r.userCompany === "1";
-                const name = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—";
+                const name = displayName(r) || "—";
                 const days = daysSince(r.userLastLogin);
                 return (
                   <tr key={r.userID} className="border-t border-border hover:bg-surface-alt/30">

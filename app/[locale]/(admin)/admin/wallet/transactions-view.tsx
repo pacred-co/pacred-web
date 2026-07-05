@@ -21,6 +21,7 @@ import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -100,6 +101,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -188,15 +190,21 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   // 2nd query — merge customer names from tb_users.
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
+  let corpNames = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: usersRaw, error: usersRawErr } = await admin
-      .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
-      .in("userID", userIds);
+    const [usersRes, corpRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID,userName,userLastName,userCompany,userTel")
+        .in("userID", userIds),
+      fetchCorporateNameMap(admin, userIds),
+    ]);
+    const { data: usersRaw, error: usersRawErr } = usersRes;
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+    corpNames = corpRes;
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -367,7 +375,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                 {groupedRows.map((g) => {
                   if (g.kind === "single") {
                     return (
-                      <TxRow key={g.row.id} row={g.row} userMap={userMap} slipUrlMap={slipUrlMap} />
+                      <TxRow key={g.row.id} row={g.row} userMap={userMap} corpNames={corpNames} slipUrlMap={slipUrlMap} />
                     );
                   }
                   // Consolidated "เติม-แล้วจ่าย" group: ONE payment row (the
@@ -379,6 +387,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                       key={parent.id}
                       row={parent}
                       userMap={userMap}
+                      corpNames={corpNames}
                       slipUrlMap={slipUrlMap}
                       groupContext={{ siblings, ledgerCount: 1 + siblings.length }}
                     />
@@ -436,11 +445,13 @@ function SlipCell({ row, slipUrlMap }: { row: WhsRow; slipUrlMap: Record<string,
 function TxRow({
   row,
   userMap,
+  corpNames,
   slipUrlMap,
   groupContext,
 }: {
   row: WhsRow;
   userMap: Map<string, URow>;
+  corpNames: Map<string, string>;
   slipUrlMap: Record<string, string | null>;
   groupContext?: { siblings: WhsRow[]; ledgerCount: number };
 }) {
@@ -450,7 +461,12 @@ function TxRow({
   const amount = Number(row.amount ?? 0);
   const isNeg = amount < 0;
   const customerName = u
-    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || row.userid
+    ? resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(row.userid ? corpNames.get(row.userid) : undefined),
+      }).name || row.userid
     : row.userid ?? "—";
   const isGroup = !!groupContext;
 

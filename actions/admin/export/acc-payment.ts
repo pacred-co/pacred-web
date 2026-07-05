@@ -24,6 +24,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path. A single month of yuan
 // transfers is far below this; 10,000 bounds the in-memory build while
@@ -149,11 +154,14 @@ export async function exportAccPaymentAll(
         .filter(Boolean),
     ),
   );
-  const userById = new Map<string, { username: string; userlastname: string }>();
+  const userById = new Map<
+    string,
+    { username: string; userlastname: string; usercompany: string | null }
+  >();
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportAccPaymentAll] tb_users query failed`, {
@@ -166,13 +174,18 @@ export async function exportAccPaymentAll(
       userID: string;
       userName: string;
       userLastName: string;
+      userCompany: string | null;
     }>) {
       userById.set(u.userID, {
         username: u.userName,
         userlastname: u.userLastName,
+        usercompany: u.userCompany,
       });
     }
   }
+
+  // ── Juristic → company-name map (batched, N+1-free) ───────────────
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // ── Assemble in legacy order (wh.date ASC); drop unmatched events ─
   const rows: AccPaymentExportRow[] = [];
@@ -180,7 +193,15 @@ export async function exportAccPaymentAll(
     const pid = Number(w.reforder);
     const p = payRowsById.get(pid);
     if (!p) continue;
-    const u = userById.get(p.userid) ?? { username: "", userlastname: "" };
+    const u =
+      userById.get(p.userid) ??
+      { username: "", userlastname: "", usercompany: null };
+    const identity = resolveBillingIdentity({
+      userCompany: u.usercompany,
+      userName: u.username,
+      userLastName: u.userlastname,
+      corp: corpRowFromName(corpNames.get(p.userid)),
+    });
     const payyuan = Number(p.payyuan);
     const payrate = Number(p.payrate);
     const payratecost = Number(p.payratecost);
@@ -204,7 +225,7 @@ export async function exportAccPaymentAll(
           }
         : {}),
       member_code: p.userid,
-      customer_name: `${u.username} ${u.userlastname}`.trim(),
+      customer_name: identity.name,
     });
   }
 

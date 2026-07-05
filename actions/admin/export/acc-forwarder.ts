@@ -22,6 +22,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path. 10,000 comfortably covers a
 // single month's cleared forwarder revenue in one file while bounding the
@@ -273,6 +274,19 @@ export async function exportAccForwarderAll(
     const walletPayUser = isCompany ? fTotalPrice - fTotalPrice * 0.01 : fTotalPrice;
 
     const corpNumber = cp?.corporatenumber && cp.corporatenumber !== "" ? cp.corporatenumber : "";
+    // Juristic → company name (reuse the Pass-4 tb_corporate row).
+    const identity = resolveBillingIdentity({
+      userCompany: f.fusercompany,
+      userName: u.username,
+      userLastName: u.userlastname,
+      corp: cp
+        ? {
+            corporatename: cp.corporatename,
+            corporatenumber: cp.corporatenumber,
+            corporateaddress: null,
+          }
+        : null,
+    });
 
     rows.push({
       pay_date: w.date ? String(w.date).slice(0, 10) : "",
@@ -289,7 +303,7 @@ export async function exportAccForwarderAll(
       ...(showMoney ? { service_fee: numberFormat2(walletPayUser - fCostTotalPrice) } : {}),
       member_code: f.userid,
       tax_id: corpNumber || "-",
-      name: corpNumber ? cp?.corporatename ?? "" : `${u.username} ${u.userlastname}`.trim(),
+      name: identity.name,
       receipt_no: ridByFid.get(f.id) ?? "",
     });
   }

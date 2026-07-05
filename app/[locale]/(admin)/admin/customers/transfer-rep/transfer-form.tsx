@@ -28,6 +28,10 @@ export type CustomerLite = {
   userlastname: string | null;
   usertel:      string | null;
   adminidsale:  string | null;
+  // Pre-resolved company-aware display name (server-side · นิติบุคคล →
+  // company name, else person name). Optional so callers that don't provide
+  // it fall back to the person name below.
+  displayname?: string | null;
 };
 
 export type TbAdminLite = {
@@ -48,7 +52,9 @@ const BTN_SECONDARY =
   "rounded-lg border border-border bg-white text-foreground px-4 py-2 text-sm hover:bg-surface-alt disabled:opacity-50 disabled:cursor-not-allowed";
 
 function customerLabel(c: CustomerLite): string {
-  const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
+  // Prefer the server-resolved company-aware display name (นิติบุคคล → company)
+  // and fall back to the person name for rows without it.
+  const name = (c.displayname ?? "").trim() || `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
   return `${c.userid} · ${name || c.usertel || "(ไม่มีชื่อ)"}`;
 }
 

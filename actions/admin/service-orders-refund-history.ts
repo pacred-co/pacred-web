@@ -31,6 +31,11 @@ import {
   refundHistoryRange,
   DEFAULT_REFUND_WINDOW_DAYS,
 } from "@/lib/admin/refund-history-helpers";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // ────────────────────────────────────────────────────────────────
 // Result types
@@ -145,12 +150,12 @@ export async function listRefundHistory(
   const userids = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
   const userByUid = new Map<
     string,
-    { userName: string | null; userLastName: string | null }
+    { userName: string | null; userLastName: string | null; userCompany: string | null }
   >();
   if (userids.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName")
+      .select("userID,userName,userLastName,userCompany")
       .in("userID", userids);
     if (userErr) {
       console.error("[/admin/service-orders/refunds] tb_users join failed", {
@@ -162,10 +167,14 @@ export async function listRefundHistory(
       userID:       string;
       userName:     string | null;
       userLastName: string | null;
+      userCompany:  string | null;
     }>) {
-      userByUid.set(u.userID, { userName: u.userName, userLastName: u.userLastName });
+      userByUid.set(u.userID, { userName: u.userName, userLastName: u.userLastName, userCompany: u.userCompany });
     }
   }
+
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userids as string[]);
 
   // ── Step 3: join tb_header_order for the order title ────────────
   const hnos = Array.from(
@@ -229,7 +238,12 @@ export async function listRefundHistory(
   const rows: RefundHistoryRow[] = raw.map((r) => {
     const u = userByUid.get(r.userid);
     const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || null
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+        }).name || null
       : null;
     const o = r.reforder ? orderByHno.get(r.reforder) : undefined;
     const a = r.adminid ? adminByAdminId.get(r.adminid) : undefined;

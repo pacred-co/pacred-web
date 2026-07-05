@@ -148,6 +148,57 @@ export function resolveBillingIdentity(input: {
   return { isJuristic, name, taxId, registeredAddress, personName };
 }
 
+/**
+ * Batched tb_corporate → company-name lookup (2026-07-04).
+ *
+ * THE reusable, N+1-free way for any admin list surface to resolve juristic
+ * display names: ONE `.in(userIds)` query, returns a Map<userid, corporatename>
+ * (only companies that carry a non-blank name land in the map). Every list page
+ * that shows a customer identity should pull this + feed resolveBillingIdentity
+ * so นิติบุคคล rows show the company, not the contact person (owner directive:
+ * the leak was the contact person appearing where a company name belongs).
+ *
+ * `admin` is the service-role client (createAdminClient()). Kept structurally
+ * typed (PromiseLike so a PostgREST builder satisfies it) so this plain module
+ * needn't import the Supabase client type. Soft-fails to an empty map on error —
+ * a corp-lookup failure must never blank a list.
+ */
+export async function fetchCorporateNameMap(
+  // Typed loosely as `{ from(table): any }` on purpose: passing the full Supabase
+  // client here (its schema generics are enormous) into a precise structural type
+  // triggers TS2589 "type instantiation excessively deep" at call sites. `from`
+  // returns `any` so no deep structural comparison happens; the result shape is
+  // re-asserted below. (createAdminClient() satisfies this trivially.)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: { from: (table: string) => any },
+  userIds: (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(userIds.filter((x): x is string => !!x)));
+  const map = new Map<string, string>();
+  if (unique.length === 0) return map;
+  const res = (await admin
+    .from("tb_corporate")
+    .select("userid, corporatename")
+    .in("userid", unique)) as {
+    data: { userid: string; corporatename: string | null }[] | null;
+    error: unknown;
+  };
+  if (res.error) {
+    console.warn("[fetchCorporateNameMap] failed (soft-fail · person name shown)", res.error);
+    return map;
+  }
+  for (const c of res.data ?? []) {
+    const nm = (c.corporatename ?? "").trim();
+    if (c.userid && nm) map.set(c.userid, nm);
+  }
+  return map;
+}
+
+/** A tb_corporate row shape for resolveBillingIdentity, built from a name-only map. */
+export function corpRowFromName(name: string | undefined): CorporateIdentityRow | null {
+  return name ? { corporatename: name, corporatenumber: null, corporateaddress: null } : null;
+}
+
 /** Convert-to-juristic field map (legacy update-corporate POST). */
 export const convertToJuristicSchema = z.object({
   userid:          z.string().trim().min(1).max(20),

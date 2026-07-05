@@ -31,6 +31,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path.
 const EXPORT_CAP = 10000;
@@ -66,6 +71,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -118,7 +124,7 @@ export async function exportQaChnWhOver2dAll(): Promise<{
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userCompany,userTel")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportQaChnWhOver2dAll tb_users] failed`, {
@@ -133,11 +139,19 @@ export async function exportQaChnWhOver2dAll(): Promise<{
 
   const now = nowMs();
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // SAME row mapping + column keys as the page's CsvButton.
   const rows: CsvRow[] = fwdRows.map((r) => {
     const u = r.userid ? userMap.get(r.userid) : undefined;
     const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+        }).name || (r.userid ?? "")
       : r.userid ?? "";
     const daysWaiting = r.fdate
       ? Math.floor((now - new Date(r.fdate).getTime()) / (24 * 60 * 60 * 1000))

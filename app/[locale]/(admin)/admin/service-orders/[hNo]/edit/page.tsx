@@ -62,6 +62,7 @@ import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { MarkArrivedChinaButton } from "@/components/admin/mark-arrived-china-button";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
 import { CostInlineEdit } from "../cost-inline-edit";
+import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 import { canViewCost } from "@/lib/admin/money-visibility";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
@@ -186,7 +187,7 @@ type HRow = {
 };
 type URow = {
   userID: string; userName: string | null; userLastName: string | null;
-  userTel: string | null; userEmail: string | null;
+  userTel: string | null; userEmail: string | null; userCompany: string | null;
 };
 type ORow = {
   id: number; cprovider: string | null; cnameshop: string | null; ctitle: string | null;
@@ -239,13 +240,28 @@ export default async function AdminServiceOrderEditPage({
 
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
-    .select("userID,userName,userLastName,userTel,userEmail")
+    .select("userID,userName,userLastName,userTel,userEmail,userCompany")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userErr) {
     console.error(`[tb_users edit lookup] failed`, { code: userErr.code, message: userErr.message });
   }
   const u = userRaw as unknown as URow | null;
+
+  // นิติบุคคล → show the registered company name (not the contact person) on the
+  // header. One tb_corporate lookup for this single customer (display-only · §0e).
+  let corpRow: CorporateIdentityRow | null = null;
+  if (u?.userID) {
+    const { data: corpRaw, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("corporatename,corporatenumber,corporateaddress")
+      .eq("userid", u.userID)
+      .maybeSingle<CorporateIdentityRow>();
+    if (corpErr) {
+      console.error(`[tb_corporate edit lookup] failed`, { code: corpErr.code, message: corpErr.message });
+    }
+    corpRow = corpRaw ?? null;
+  }
 
   // Customer's saved address book (tb_address) — for the address re-pick
   // panel (legacy update_hAddress). lowercase columns.
@@ -446,7 +462,12 @@ export default async function AdminServiceOrderEditPage({
     }));
 
   const status = autoExpired ? "6" : (r.hstatus ?? "1");
-  const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
+  const customerName = resolveBillingIdentity({
+    userCompany: u?.userCompany,
+    userName: u?.userName,
+    userLastName: u?.userLastName,
+    corp: corpRow,
+  }).name || "—";
 
   // 2026-06-09 E4 — heartbeat lock (legacy updateLock.php · faithful port). The
   // current admin's legacy adminID drives the banner copy + the per-admin grant

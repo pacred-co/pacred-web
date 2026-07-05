@@ -42,6 +42,7 @@ import { CntActionButtons } from "./action-buttons";
 import { CntSlipUploadForm } from "./slip-upload-form";
 import { CntCostEditor, type CntCostRow } from "./cnt-cost-editor";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
 };
 
 /**
@@ -203,15 +205,21 @@ export default async function CntHsDetailPage({
   // 4. Resolve customer names for the forwarders
   const userIds = Array.from(new Set(forwarders.map((f) => f.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
+  let corpNames = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: usersRaw, error: usersRawErr } = await admin
-      .from("tb_users")
-      .select("userID,userName,userLastName")
-      .in("userID", userIds);
+    const [usersRes, corpRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID,userName,userLastName,userCompany")
+        .in("userID", userIds),
+      fetchCorporateNameMap(admin, userIds),
+    ]);
+    const { data: usersRaw, error: usersRawErr } = usersRes;
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+    corpNames = corpRes;
   }
 
   // Group forwarders by cabinet for the table layout
@@ -485,7 +493,12 @@ export default async function CntHsDetailPage({
                             href={`/admin/customers/${encodeURIComponent(f.userid)}`}
                             className="text-primary-700 hover:underline"
                           >
-                            {`${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || f.userid}
+                            {resolveBillingIdentity({
+                              userCompany: u?.userCompany,
+                              userName: u?.userName,
+                              userLastName: u?.userLastName,
+                              corp: corpRowFromName(corpNames.get(f.userid)),
+                            }).name || f.userid}
                           </Link>
                         ) : (
                           "—"

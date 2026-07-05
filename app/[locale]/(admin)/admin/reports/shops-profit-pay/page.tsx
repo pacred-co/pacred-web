@@ -65,6 +65,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { CsvButton } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -161,6 +162,7 @@ type RawUser = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
 };
 
 type Row = RawHeaderOrder & {
@@ -285,7 +287,7 @@ export default async function AdminReportShopsProfitPayPage({
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       // Soft-fail per §0c — stale customer name shouldn't 500 the report.
@@ -294,6 +296,9 @@ export default async function AdminReportShopsProfitPayPage({
       for (const u of (usersData ?? []) as unknown as RawUser[]) userMap.set(u.userID, u);
     }
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // customers show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // 4) Shape rows + compute profit math.
   // Pure map — no in-loop accumulators (react-hooks/immutability rule).
@@ -317,7 +322,14 @@ export default async function AdminReportShopsProfitPayPage({
       pricePCS:  hasCost ? pricePCS : NaN,
       profit,
       vat,
-      customer:  u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+      customer:  u
+        ? resolveBillingIdentity({
+            userCompany: u.userCompany,
+            userName: u.userName,
+            userLastName: u.userLastName,
+            corp: corpRowFromName(o.userid ? corpNames.get(o.userid) : undefined),
+          }).name
+        : "",
     };
   });
 

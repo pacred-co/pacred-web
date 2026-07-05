@@ -22,6 +22,11 @@ import { logger } from "@/lib/logger";
 import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { SHIP_BY_LABEL, TRANSPORT_TYPE_LABEL } from "./reports-profit-types";
 import { LEGACY_FORWARDER_STATUS, type LegacyForwarderCode } from "@/lib/legacy-status-map";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import type {
   PaymentBoardRow,
   PaymentBoardFilters,
@@ -109,6 +114,9 @@ export async function listPaymentStatus(
       for (const u of (us ?? []) as UserRow[]) userMap.set(u.userID, u);
     }
 
+    // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+    const corpNames = await fetchCorporateNameMap(admin, ids);
+
     const term = (filters.q ?? "").trim().toLowerCase();
     const rows: PaymentBoardRow[] = [];
     let totalOwed = 0;
@@ -117,7 +125,15 @@ export async function listPaymentStatus(
     for (const r of fwd) {
       const uid = (r.userid ?? "").trim();
       const u = userMap.get(uid);
-      const name = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || uid || "—";
+      const name =
+        (u
+          ? resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(uid)),
+            }).name
+          : "") || uid || "—";
       const owed = calcForwarderOutstanding(r);
       const sold = Number(r.ftotalprice ?? 0);
       const cost = Number(r.fcosttotalprice ?? 0);

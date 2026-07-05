@@ -26,6 +26,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "../export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 const ROLES = ["ops", "sales_admin", "accounting"] as const;
 
@@ -100,12 +105,20 @@ export async function exportRecentlyActiveAll(filter: {
   }
   const data = (rowsRaw ?? []) as Row[];
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, data.map((r) => r.userID));
+
   // ── identical CSV value mapping to the page's CsvButton ──
   const rows: RecentlyActiveExportRow[] = data.map((r) => {
     const days = daysSince(r.userLastLogin);
     return {
       userID: r.userID,
-      fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim(),
+      fullName: resolveBillingIdentity({
+        userCompany: r.userCompany,
+        userName: r.userName,
+        userLastName: r.userLastName,
+        corp: corpRowFromName(corpNames.get(r.userID)),
+      }).name,
       type: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
       tel: r.userTel ?? "",
       email: r.userEmail ?? "",

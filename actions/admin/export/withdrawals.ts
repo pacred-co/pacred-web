@@ -25,6 +25,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors leads EXPORT_CAP).
 const EXPORT_CAP = 10000;
@@ -53,6 +58,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -102,7 +108,7 @@ export async function exportWithdrawalsAll(
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userCompany,userTel")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportWithdrawalsAll tb_users] failed`, {
@@ -115,11 +121,19 @@ export async function exportWithdrawalsAll(
     );
   }
 
+  // ── Juristic → company-name map (batched, N+1-free) ───────────────
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // Same row mapping + column keys as the page's CsvButton.
   const rows: CsvRow[] = whs.map((r) => {
     const u = r.userid ? userMap.get(r.userid) : undefined;
     const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+        }).name
       : "";
     const row: CsvRow = {
       id: r.id,

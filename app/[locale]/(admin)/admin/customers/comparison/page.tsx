@@ -4,6 +4,11 @@ import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCustomersComparisonAll } from "@/actions/admin/export/customers-comparison";
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import { ComparisonTable, type ComparisonRow, type CustomerPick } from "./comparison-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -81,6 +86,9 @@ export default async function AdminCustomerComparisonPage() {
   const userRows = (rowsRaw ?? []) as UserRow[];
   const userIds = userRows.map((r) => r.userID);
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Main address per visible customer (lowest active addressid) ───────
   type AddressRow = {
     addressid: number;
@@ -109,7 +117,13 @@ export default async function AdminCustomerComparisonPage() {
 
   const rows: ComparisonRow[] = userRows.map((r) => ({
     userID: r.userID,
-    fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—",
+    fullName:
+      resolveBillingIdentity({
+        userCompany: r.userCompany,
+        userName: r.userName,
+        userLastName: r.userLastName,
+        corp: corpRowFromName(corpNames.get(r.userID)),
+      }).name || "—",
     isJuristic: r.userCompany === "1",
     tel: r.userTel ?? "",
     email: r.userEmail ?? "",
@@ -131,7 +145,7 @@ export default async function AdminCustomerComparisonPage() {
   {
     const { data: candRaw, error: candErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, coID")
+      .select("userID, userName, userLastName, userCompany, coID")
       .neq("userComparison", "1")
       .neq("userStatus", "0")
       .order("userID", { ascending: false })
@@ -139,10 +153,24 @@ export default async function AdminCustomerComparisonPage() {
     if (candErr) {
       console.error(`[comparison candidate list] failed`, { code: candErr.code, message: candErr.message });
     }
-    for (const c of (candRaw ?? []) as { userID: string; userName: string | null; userLastName: string | null; coID: string | null }[]) {
+    const candRows = (candRaw ?? []) as {
+      userID: string;
+      userName: string | null;
+      userLastName: string | null;
+      userCompany: string | null;
+      coID: string | null;
+    }[];
+    // นิติบุคคล → company name for the picker too. One batched .in() lookup.
+    const candCorpNames = await fetchCorporateNameMap(admin, candRows.map((c) => c.userID));
+    for (const c of candRows) {
       picks.push({
         userID: c.userID,
-        fullName: `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim(),
+        fullName: resolveBillingIdentity({
+          userCompany: c.userCompany,
+          userName: c.userName,
+          userLastName: c.userLastName,
+          corp: corpRowFromName(candCorpNames.get(c.userID)),
+        }).name,
         coID: (c.coID ?? "").trim(),
       });
     }

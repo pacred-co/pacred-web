@@ -27,6 +27,7 @@ import { Link } from "@/i18n/navigation";
 import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { Star, Camera } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,7 @@ type LegacyUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 type Forwarder = {
@@ -70,9 +72,18 @@ function fmtDate(iso: string | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function userDisplayName(u: LegacyUser | null | undefined): string {
+// Juristic-aware customer display: นิติบุคคล customers show the company name
+// (not the contact person) when a tb_corporate name is present. `corpNames` =
+// batched Map<userid, corporatename> (fetchCorporateNameMap · no N+1).
+function userDisplayName(u: LegacyUser | null | undefined, corpNames?: Map<string, string>): string {
   if (!u) return "—";
-  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
+  const name = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpNames?.get(u.userID)),
+  }).name;
+  return name || "—";
 }
 
 function clampRatingMin(raw: string | undefined): number | null {
@@ -124,7 +135,7 @@ export default async function AdminDeliveryFeedbackPage({
     userIds.length > 0
       ? admin
           .from("tb_users")
-          .select("userID, userName, userLastName, userTel")
+          .select("userID, userName, userLastName, userTel, userCompany")
           .in("userID", userIds)
       : Promise.resolve({ data: [] as LegacyUser[], error: null }),
     fids.length > 0
@@ -150,6 +161,9 @@ export default async function AdminDeliveryFeedbackPage({
   for (const u of (usersRes.data ?? []) as LegacyUser[]) {
     usersById.set(u.userID, u);
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // customers show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
   const fwdsById = new Map<number, Forwarder>();
   for (const f of (fwdsRes.data ?? []) as Forwarder[]) {
     fwdsById.set(f.id, f);
@@ -198,7 +212,7 @@ export default async function AdminDeliveryFeedbackPage({
     return {
       created_at: fmtDate(r.created_at),
       userid: r.userid,
-      customer_name: userDisplayName(u),
+      customer_name: userDisplayName(u, corpNames),
       phone: u?.userTel ?? "",
       forwarder_id: r.fid,
       tracking_th: f?.ftrackingth ?? "",
@@ -340,7 +354,7 @@ export default async function AdminDeliveryFeedbackPage({
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/40 align-top">
                   <td className="px-3 py-3 text-xs">
                     <div className="font-mono">{r.userid}</div>
-                    <div>{userDisplayName(u)}</div>
+                    <div>{userDisplayName(u, corpNames)}</div>
                     {u?.userTel && <div className="text-muted">{u.userTel}</div>}
                   </td>
                   <td className="px-3 py-3 text-xs">

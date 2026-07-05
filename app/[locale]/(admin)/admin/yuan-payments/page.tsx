@@ -33,6 +33,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportYuanPaymentsAll } from "@/actions/admin/export/yuan-payments";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 import { Explain } from "@/components/ui/tooltip";
 
@@ -88,6 +89,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -196,15 +198,21 @@ export default async function AdminYuanPaymentsPage({
   // 2nd query — merge customer names from tb_users
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
+  let corpNames = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: usersRaw, error: usersRawErr } = await admin
-      .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
-      .in("userID", userIds);
+    const [usersRes, corpRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID,userName,userLastName,userCompany,userTel")
+        .in("userID", userIds),
+      fetchCorporateNameMap(admin, userIds),
+    ]);
+    const { data: usersRaw, error: usersRawErr } = usersRes;
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+    corpNames = corpRes;
   }
 
   // Lane C 2026-06-02 — pre-compute sort hrefs for each header. Click on
@@ -352,7 +360,12 @@ export default async function AdminYuanPaymentsPage({
           rows={rows.map((r) => {
             const u = r.userid ? userMap.get(r.userid) : undefined;
             const fullName = u
-              ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+              ? resolveBillingIdentity({
+                  userCompany: u.userCompany,
+                  userName: u.userName,
+                  userLastName: u.userLastName,
+                  corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+                }).name
               : "";
             const row: CsvRow = {
               id: r.id,
@@ -446,7 +459,12 @@ export default async function AdminYuanPaymentsPage({
                   const u = r.userid ? userMap.get(r.userid) : undefined;
                   const status = r.paystatus ?? "1";
                   const customerName = u
-                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
+                    ? resolveBillingIdentity({
+                        userCompany: u.userCompany,
+                        userName: u.userName,
+                        userLastName: u.userLastName,
+                        corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+                      }).name || r.userid
                     : r.userid ?? "—";
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">

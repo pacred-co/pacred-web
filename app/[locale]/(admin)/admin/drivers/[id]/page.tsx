@@ -21,6 +21,7 @@ import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2,
@@ -217,15 +218,23 @@ export default async function AdminDriverBatchDetailPage({
   );
   const custNameById = new Map<string, string>();
   if (custIds.length > 0) {
-    const { data: custRows, error: custErr } = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName")
-      .in("userID", custIds);
+    const [{ data: custRows, error: custErr }, corpNames] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userCompany")
+        .in("userID", custIds),
+      fetchCorporateNameMap(admin, custIds),
+    ]);
     if (custErr) {
       console.error(`/admin/drivers/${id}: customer name lookup failed`, custErr);
     }
-    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
-      const name = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }[]) {
+      const name = resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(u.userID)),
+      }).name;
       if (name) custNameById.set(u.userID, name);
     }
   }

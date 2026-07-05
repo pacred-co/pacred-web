@@ -95,6 +95,13 @@ import { TbForwarderDriverAssignPanel, type DriverAssignmentState } from "../tb-
 // (ใบกำกับ/ใบขน/ไม่รับเอกสาร) was loaded into the query but never rendered (dead
 // read). Surface it as a badge + the juristic-WHT signal in the header.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
+// 2026-07-04 — นิติบุคคล display name: show the registered company name (not the
+// contact person) for the account identity across this edit page.
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -293,6 +300,16 @@ export default async function AdminForwarderEditPage({
     userComparisonValue: number | string | null;
   } | null;
 
+  // 2026-07-04 — resolve the account-holder DISPLAY identity (นิติบุคคล → company
+  // name, not the contact person). ONE batched .in() lookup on tb_corporate.
+  const corpNames = await fetchCorporateNameMap(admin, [r.userid]);
+  const billingIdentity = resolveBillingIdentity({
+    userCompany: u?.userCompany,
+    userName: u?.userName,
+    userLastName: u?.userLastName,
+    corp: corpRowFromName(corpNames.get(r.userid)),
+  });
+
   // Wallet balance for the payment panel (display only — action re-reads).
   const { data: walletRow, error: walletErr } = await admin
     .from("tb_wallet")
@@ -367,7 +384,8 @@ export default async function AdminForwarderEditPage({
       ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
-  const customerName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || r.userid;
+  // นิติบุคคล → company name (billingIdentity.name); else person full name.
+  const customerName = billingIdentity.name || r.userid;
   // 2026-06-08 ภูม flag (URL 404 bug · 21,694 rows on prod = 45%):
   // tb_forwarder.fidorco often contains literal `/` (e.g. "MODPK301890160035-1/2"
   // · "รถ 790A/116"). Using fidorco verbatim in the URL turns the path into
@@ -910,7 +928,12 @@ export default async function AdminForwarderEditPage({
             <TbForwarderPaymentPanel
               fId={r.id}
               userId={r.userid}
-              customerName={`คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()}
+              customerName={
+                // นิติบุคคล → company name (no คุณ- honorific); else คุณ<person>.
+                billingIdentity.isJuristic
+                  ? billingIdentity.name
+                  : `คุณ${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim()
+              }
               amountEstimate={Number(r.ftotalprice ?? 0)}
               walletBalance={walletBalance}
               isCredit={(r.fcredit ?? "").trim() === "1"}

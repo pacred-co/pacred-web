@@ -36,6 +36,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors the other surfaces).
 const EXPORT_CAP = 10000;
@@ -96,11 +101,21 @@ export async function exportQaNewClientNoContactAll(): Promise<{
   const truncated = all.length > EXPORT_CAP;
   const userRows = truncated ? all.slice(0, EXPORT_CAP) : all;
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const userIds = userRows.map((u) => u.userID);
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   const now = Date.now();
 
   // SAME row mapping + column keys as the page's <thead>.
   const rows: CsvRow[] = userRows.map((u) => {
-    const fullName = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+    const fullName =
+      resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(u.userID)),
+      }).name || "—";
     const daysSinceReg = u.userRegistered
       ? Math.floor(
           (now - new Date(u.userRegistered).getTime()) / (24 * 60 * 60 * 1000),

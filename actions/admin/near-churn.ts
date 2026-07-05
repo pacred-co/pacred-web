@@ -25,6 +25,11 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -147,6 +152,7 @@ export async function getNearChurnReport(opts: {
     userID: string | null;
     userName: string | null;
     userLastName: string | null;
+    userCompany: string | null;
     userTel: string | null;
     userEmail: string | null;
     userActive: string | null;
@@ -158,7 +164,7 @@ export async function getNearChurnReport(opts: {
     const slice = inactiveUserids.slice(i, i + CHUNK);
     const { data: chunkRaw, error: usrErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel, userEmail, userActive, adminIDSale")
+      .select("userID, userName, userLastName, userCompany, userTel, userEmail, userActive, adminIDSale")
       .in("userID", slice);
     if (usrErr) {
       console.error("[near-churn tb_users chunk] failed", {
@@ -170,6 +176,9 @@ export async function getNearChurnReport(opts: {
       if (u.userID) usersById.set(u.userID, u);
     }
   }
+
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, inactiveUserids);
 
   // ── 4. Enrich + apply userActive filter ──
   const now = Date.now();
@@ -188,7 +197,12 @@ export async function getNearChurnReport(opts: {
     const daysSinceLast = Math.floor((now - new Date(lastDate).getTime()) / 86_400_000);
     const row: NearChurnRow = {
       userid,
-      fullName:       `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+      fullName:       resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(userid)),
+      }).name || "—",
       userTel:        u.userTel,
       userEmail:      u.userEmail,
       userActive:     u.userActive,

@@ -32,6 +32,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { LEGACY_ORDER_STATUS, legacyOrderStatusThai, type LegacyOrderCode } from "@/lib/legacy-status-map";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors the 10000 convention).
 const EXPORT_CAP = 10000;
@@ -53,6 +58,7 @@ type RawUserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -120,7 +126,7 @@ export async function exportServiceOrderNotesAll(
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userCompany,userTel")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportServiceOrderNotesAll tb_users] failed`, {
@@ -133,12 +139,20 @@ export async function exportServiceOrderNotesAll(
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // SAME row mapping + column keys as the page's CsvButton (= the <thead>).
   const rows: CsvRow[] = noteRows.map((r) => {
     const updated = r.hdateupdate ?? r.hnotedate ?? r.hdate;
     const u = userMap.get(r.userid);
     const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name
       : "";
     return {
       updated: updated ? String(updated).slice(0, 10) : "",

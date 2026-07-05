@@ -25,6 +25,7 @@ import { Link } from "@/i18n/navigation";
 import { BarChart3, ArrowLeft, User } from "lucide-react";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportMomoHistoryAll } from "@/actions/admin/export/momo-history";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -131,19 +132,31 @@ async function loadHistory(
   }
 
   // JOIN with tb_users to get customer name (best-effort · keep "—" if not found).
+  // นิติบุคคล — batch tb_corporate so a company shows the COMPANY name, not the
+  // contact person (owner directive · N+1-free).
   const prCodes = [...byUser.values()].map((u) => u.guessedPr);
   if (prCodes.length > 0) {
-    const { data: users, error: uErr } = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
-      .in("userID", prCodes);
+    const [usersRes, corpNames] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userCompany, userTel")
+        .in("userID", prCodes),
+      fetchCorporateNameMap(admin, prCodes),
+    ]);
+    const { data: users, error: uErr } = usersRes;
     if (uErr) {
       console.warn("[momo history · tb_users lookup]", uErr.message);
     } else {
       const userMap = new Map<string, { name: string; tel: string }>();
       for (const u of (users ?? [])) {
         userMap.set(u.userID, {
-          name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+          name:
+            resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(u.userID)),
+            }).name || "—",
           tel:  u.userTel ?? "—",
         });
       }

@@ -38,6 +38,11 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +83,7 @@ type RawUser = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -171,7 +177,7 @@ export default async function PendingPaymentsReport({
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userCompany,userTel")
       .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
@@ -180,6 +186,9 @@ export default async function PendingPaymentsReport({
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, useridList);
+
   const rows: Row[] = raw.map((r) => {
     const u = r.userid ? userMap.get(r.userid) : undefined;
     return {
@@ -187,7 +196,14 @@ export default async function PendingPaymentsReport({
       customer: r.userid
         ? {
             userid: r.userid,
-            name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+            name: u
+              ? resolveBillingIdentity({
+                  userCompany: u.userCompany,
+                  userName: u.userName,
+                  userLastName: u.userLastName,
+                  corp: corpRowFromName(corpNames.get(r.userid)),
+                }).name
+              : "",
             phone: u?.userTel ?? "",
           }
         : null,

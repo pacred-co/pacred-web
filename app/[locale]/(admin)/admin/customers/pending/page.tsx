@@ -25,6 +25,11 @@ import { exportCustomersPendingAll } from "@/actions/admin/export/customers-pend
 import { TbCustomerBulkBar, TbCustomerRowCheckbox, TbCustomerRejectButton } from "./tb-bulk-bar";
 import { getCrmReps, getCrmCsReps } from "@/actions/admin/crm";
 import type { CrmRep, CrmCsRep } from "@/lib/admin/crm-types";
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import { AssignRepCell } from "./assign-rep-cell";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +88,17 @@ export default async function AdminCustomersPendingPage({
   const rows = ((customers ?? []) as Row[]);
   const total = count ?? 0;
 
+  // นิติบุคคล → company name (the "ชื่อ / บริษัท" column); else the person. The
+  // corp row exists from signup even while approval is pending. One batched .in().
+  const corpNames = await fetchCorporateNameMap(admin, rows.map((r) => r.userID));
+  const displayName = (c: Row): string =>
+    resolveBillingIdentity({
+      userCompany: c.userCompany,
+      userName: c.userName,
+      userLastName: c.userLastName,
+      corp: corpRowFromName(corpNames.get(c.userID)),
+    }).name;
+
   // Assignable sales + CS pools — loaded ONCE here, passed to each row's
   // AssignRepCell (reuses the CRM actions; no new assignment logic). Only
   // fetched when the operator can actually assign (saves 2 queries otherwise).
@@ -114,7 +130,7 @@ export default async function AdminCustomersPendingPage({
   ];
   const csvRows: CsvRow[] = rows.map((c) => ({
     userID: c.userID,
-    name: `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim() || "—",
+    name: displayName(c) || "—",
     tel: c.userTel ?? "—",
     email: c.userEmail || "—",
     type: c.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
@@ -199,7 +215,8 @@ export default async function AdminCustomersPendingPage({
               )}
               {rows.map((c) => {
                 const isJuristic = c.userCompany === "1";
-                const personalName = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim() || "—";
+                // "ชื่อ / บริษัท": company name for นิติบุคคล, else the person.
+                const personalName = displayName(c) || "—";
                 const date = c.userRegistered
                   ? new Date(c.userRegistered).toLocaleDateString("th-TH", {
                       day: "numeric",

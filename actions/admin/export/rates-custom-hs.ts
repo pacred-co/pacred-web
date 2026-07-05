@@ -30,6 +30,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path.
 const EXPORT_CAP = 10000;
@@ -45,6 +50,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
   coID: string | null;
 };
@@ -99,7 +105,7 @@ export async function exportRatesCustomHsAll(
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel,coID")
+      .select("userID,userName,userLastName,userCompany,userTel,coID")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportRatesCustomHsAll tb_users] failed`, {
@@ -112,11 +118,19 @@ export async function exportRatesCustomHsAll(
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // SAME row mapping + column keys as the page's CsvButton.
   const rows: CsvRow[] = history.map((h) => {
     const u = userMap.get(h.userid);
     const name = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(h.userid)),
+        }).name
       : "";
     const row: CsvRow = {
       userid: h.userid ?? "",

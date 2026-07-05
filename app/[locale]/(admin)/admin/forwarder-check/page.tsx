@@ -51,6 +51,11 @@ import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportForwarderCheckAll } from "@/actions/admin/export/forwarder-check";
 import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
+import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
 } from "./forwarder-check-table";
@@ -237,6 +242,10 @@ export default async function AdminForwarderCheckPage({
     ((userRes.data ?? []) as unknown as UserRawRow[]).map((u) => [u.userID, u]),
   );
 
+  // Juristic display-name resolve (2026-07-04) — นิติบุคคล rows must show the
+  // registered company name, not the contact person. ONE batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
   // ── Step 4: Tab counts ──────────────────────────────────────────────────
   // ทั้งหมด = `queue.length` (already loaded).
   // เครดิต = count of distinct queue.fid where corresponding user has
@@ -295,7 +304,12 @@ export default async function AdminForwarderCheckPage({
     const user = usersById.get(r.userid);
     const queueRow = queueByFid.get(r.id);
     const customerName = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: user.userCompany,
+          userName: user.userName,
+          userLastName: user.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name
       : "";
     const customerCompany = user?.userCompany === "1" ? 1 : 0;
     const fiAmount = importByFid.get(r.id) ?? 0;

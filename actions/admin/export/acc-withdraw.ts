@@ -31,6 +31,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 import type { CsvRow } from "@/components/admin/csv-button";
 
 // Safety cap for the "export all filtered" path (mirrors withdrawals EXPORT_CAP).
@@ -71,6 +76,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
 };
 
 /** Active filters the page passes through (the resolved date range). */
@@ -129,7 +135,7 @@ export async function exportAccWithdrawAll(
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[exportAccWithdrawAll tb_users] failed`, {
@@ -142,12 +148,19 @@ export async function exportAccWithdrawAll(
     }
   }
 
+  // Juristic → company-name map (batched, N+1-free).
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // SAME row mapping + column keys as the page's CsvButton.
   const rows: CsvRow[] = walletRows.map((w) => {
     const u = userMap.get(w.userid);
-    const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
-      : "";
+    // Juristic (นิติบุคคล) customers show the COMPANY name, not the person.
+    const customerName = resolveBillingIdentity({
+      userCompany: u?.userCompany ?? null,
+      userName: u?.userName ?? null,
+      userLastName: u?.userLastName ?? null,
+      corp: corpRowFromName(corpNames.get(w.userid)),
+    }).name;
     const amount = Number(w.amount);
     const row: CsvRow = {
       date: w.date ?? "",

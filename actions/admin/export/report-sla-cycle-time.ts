@@ -40,6 +40,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 import { type DateRange, dayStartIso, dayEndIso } from "@/lib/admin/reports/types";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors reports-sla LIMIT).
 const EXPORT_CAP = 10000;
@@ -87,6 +92,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
 };
 
 /** Parse an ISO/Postgres timestamp → epoch ms, or null if unusable. */
@@ -180,9 +186,11 @@ export async function exportSlaStuckAll(
   );
   const userMap = new Map<string, string>();
   if (userIds.length > 0) {
+    // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+    const corpNames = await fetchCorporateNameMap(admin, userIds);
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds)
       .limit(EXPORT_CAP);
     if (usersErr) {
@@ -192,7 +200,12 @@ export async function exportSlaStuckAll(
       });
     }
     for (const u of (usersRaw ?? []) as unknown as URow[]) {
-      const name = [u.userName, u.userLastName].filter(Boolean).join(" ");
+      const name = resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(u.userID)),
+      }).name;
       userMap.set(u.userID, name);
     }
   }

@@ -33,6 +33,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
 import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -112,6 +113,7 @@ type RawUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 type Row = RawHeaderOrder & {
@@ -211,7 +213,7 @@ export default async function AdminReportShopPage({
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userTel, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
@@ -219,6 +221,9 @@ export default async function AdminReportShopPage({
       for (const u of (usersData ?? []) as RawUser[]) userMap.set(u.userID, u);
     }
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // rows show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // 3) 2-pass tb_order aggregate SUM(camount) per hno (legacy "จำนวนชิ้น").
   const hnos = Array.from(new Set(headers.map((h) => h.hno).filter(Boolean)));
@@ -255,7 +260,14 @@ export default async function AdminReportShopPage({
       amount_total: amountByHno.get(h.hno) ?? 0,
       price_total: priceTotal,
       customer: {
-        name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+        name: u
+          ? resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(h.userid)),
+            }).name
+          : "",
         phone: u?.userTel ?? "",
       },
     };

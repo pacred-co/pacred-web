@@ -23,6 +23,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import type { CsvRow } from "@/components/admin/csv-button";
 import { logAdminExport } from "@/actions/admin/export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path. ~1,460 real payments live in
 // tb_payment so 10,000 comfortably covers any filter slice in one file while
@@ -94,6 +99,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -167,7 +173,7 @@ export async function exportYuanPaymentsAll(
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userCompany,userTel")
       .in("userID", userIds);
     if (usersErr) {
       console.error("[exportYuanPaymentsAll] tb_users join failed:", usersErr.message);
@@ -177,10 +183,20 @@ export async function exportYuanPaymentsAll(
     );
   }
 
+  // ── Juristic → company-name map (batched, N+1-free) ───────────────
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Column-identical mapping to the page's CsvButton rows ──
   const rows: CsvRow[] = payRows.map((r) => {
     const u = r.userid ? userMap.get(r.userid) : undefined;
-    const fullName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
+    const fullName = u
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+        }).name
+      : "";
     const row: CsvRow = {
       id: r.id,
       paydate: r.paydate ?? "",

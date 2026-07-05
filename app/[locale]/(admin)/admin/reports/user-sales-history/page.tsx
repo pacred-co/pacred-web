@@ -31,6 +31,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -169,6 +170,10 @@ export default async function UserSalesHistoryEntry({
 
   const userids = users.map((u) => u.userID);
 
+  // Juristic display: resolve นิติบุคคล customers to their company name (not
+  // the contact person) via ONE batched tb_corporate lookup (no N+1).
+  const corpNames = await fetchCorporateNameMap(admin, userids);
+
   // ── 2) Aggregate revenue/dates per user (parallel fetches) ──────
   // For each of the three revenue tables, fetch the slim columns we need
   // for ONLY these users, then bucket in TS. Counted statuses match the
@@ -215,7 +220,13 @@ export default async function UserSalesHistoryEntry({
   for (const u of users) {
     aggMap.set(u.userID, {
       userid: u.userID,
-      fullname: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+      fullname:
+        resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name || "—",
       phone: u.userTel ?? "",
       email: u.userEmail ?? "",
       registered_at: u.userRegistered,

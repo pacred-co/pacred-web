@@ -6,6 +6,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportAccPaymentAll } from "@/actions/admin/export/acc-payment";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 /**
  * Admin > "รายงานฝากโอนหยวน/ชำระเงิน" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -226,6 +231,7 @@ type PaymentRow = {
   // tb_users
   username: string;
   userlastname: string;
+  usercompany: string | null; // '1' = นิติบุคคล
 };
 
 type SP = {
@@ -348,24 +354,31 @@ export default async function AdminAccountingPaymentPage({
   );
   const userById = new Map<
     string,
-    { username: string; userlastname: string }
+    { username: string; userlastname: string; usercompany: string | null }
   >();
   if (userIds.length > 0) {
     const usersRes = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     for (const u of (usersRes.data ?? []) as Array<{
       userID: string;
       userName: string;
       userLastName: string;
+      userCompany: string | null;
     }>) {
       userById.set(u.userID, {
         username: u.userName,
         userlastname: u.userLastName,
+        usercompany: u.userCompany,
       });
     }
   }
+
+  // ── Pass 4: tb_corporate → company-name map (batched, N+1-free) ──
+  // Juristic (นิติบุคคล) customers must display the COMPANY name, not the
+  // contact person. ONE `.in()` query via the shared helper.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // ── Assemble rows in legacy order (wh.date ASC) ─────────────────
   // The legacy LEFT JOIN keeps wallet rows whose payment is NOT
@@ -378,7 +391,9 @@ export default async function AdminAccountingPaymentPage({
     const pid = Number(w.reforder);
     const p = payRowsById.get(pid);
     if (!p) continue;
-    const u = userById.get(p.userid) ?? { username: "", userlastname: "" };
+    const u =
+      userById.get(p.userid) ??
+      { username: "", userlastname: "", usercompany: null };
     rows.push({
       date: w.date,
       reforder: w.reforder,
@@ -390,6 +405,7 @@ export default async function AdminAccountingPaymentPage({
       userid: p.userid,
       username: u.username,
       userlastname: u.userlastname,
+      usercompany: u.usercompany,
     });
   }
 
@@ -563,6 +579,12 @@ export default async function AdminAccountingPaymentPage({
                                 rows={pageRows.map((row): CsvRow => {
                                   const sumUser = row.payyuan * row.payrate;
                                   const sumCost = row.payyuan * row.payratecost;
+                                  const identity = resolveBillingIdentity({
+                                    userCompany: row.usercompany,
+                                    userName: row.username,
+                                    userLastName: row.userlastname,
+                                    corp: corpRowFromName(corpNames.get(row.userid)),
+                                  });
                                   return {
                                     paid_date: row.date ?? "",
                                     created_date: row.paydate ?? "",
@@ -585,8 +607,7 @@ export default async function AdminAccountingPaymentPage({
                                         }
                                       : {}),
                                     member_code: row.userid,
-                                    customer_name:
-                                      `${row.username} ${row.userlastname}`.trim(),
+                                    customer_name: identity.name,
                                   };
                                 })}
                                 fetchAll={async () => {
@@ -814,10 +835,20 @@ export default async function AdminAccountingPaymentPage({
                                             {row.userid}
                                           </Link>
                                         </td>
-                                        {/* 12 — ชื่อ-นามสกุล
+                                        {/* 12 — ชื่อ-นามสกุล/ชื่อบริษัท
+                                            (juristic → company name)
                                             acc-payment.php L231 */}
                                         <td>
-                                          {row.username} {row.userlastname}
+                                          {
+                                            resolveBillingIdentity({
+                                              userCompany: row.usercompany,
+                                              userName: row.username,
+                                              userLastName: row.userlastname,
+                                              corp: corpRowFromName(
+                                                corpNames.get(row.userid),
+                                              ),
+                                            }).name
+                                          }
                                         </td>
                                       </tr>
                                     );

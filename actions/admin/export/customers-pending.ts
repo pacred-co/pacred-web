@@ -31,6 +31,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path.
 const EXPORT_CAP = 10000;
@@ -82,13 +87,21 @@ export async function exportCustomersPendingAll(): Promise<{
   const truncated = all.length > EXPORT_CAP;
   const queue = truncated ? all.slice(0, EXPORT_CAP) : all;
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, queue.map((c) => c.userID));
+
   // SAME row mapping + column keys as the page's CsvButton.
   const rows: CsvRow[] = queue.map((c) => {
-    const personalName =
-      `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim() || "—";
+    const displayName =
+      resolveBillingIdentity({
+        userCompany: c.userCompany,
+        userName: c.userName,
+        userLastName: c.userLastName,
+        corp: corpRowFromName(corpNames.get(c.userID)),
+      }).name || "—";
     return {
       userID: c.userID,
-      name: personalName,
+      name: displayName,
       tel: c.userTel ?? "—",
       email: c.userEmail || "—",
       type: c.userCompany === "1" ? "นิติบุคคล" : "บุคคล",

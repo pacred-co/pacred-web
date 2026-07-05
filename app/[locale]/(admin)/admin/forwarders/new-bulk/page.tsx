@@ -34,6 +34,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
 import { AdminForwarderNewBulkForm } from "./bulk-form";
 import type {
   CustomerOption,
@@ -81,21 +82,27 @@ export default async function AdminForwarderNewBulkPage({
       userLastName: string | null;
       userTel: string | null;
       coID: string | null;
+      userCompany: string | null;
     };
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel, coID")
+      .select("userID, userName, userLastName, userTel, coID, userCompany")
       .eq("userID", candidate)
       .maybeSingle<UserRowShape>();
     if (userRowErr) {
       console.error(`[tb_users bulk preset] failed`, { code: userRowErr.code, message: userRowErr.message });
     }
     if (userRow) {
+      // Juristic display: resolve the preset customer's company name (นิติบุคคล)
+      // so the picker shows the company, not the contact person.
+      const corpNames = await fetchCorporateNameMap(admin, [userRow.userID]);
       presetUser = {
         userID:       userRow.userID,
         userName:     userRow.userName,
         userLastName: userRow.userLastName,
         userTel:      userRow.userTel,
+        userCompany:  userRow.userCompany,
+        corporatename: corpNames.get(userRow.userID) ?? null,
       };
       presetCoid = userRow.coID;
       const [{ data: addrRows }, { data: mainRow }] = await Promise.all([

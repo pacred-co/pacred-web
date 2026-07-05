@@ -43,6 +43,7 @@ import {
   type TransportId,
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -153,9 +154,17 @@ export default async function RateChangeHistoryReport({
     if (uErr) {
       console.error(`[rate-change-history tb_users] failed`, { code: uErr.code, message: uErr.message });
     }
+    // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+    // customers show the company name, not the contact person.
+    const corpNames = await fetchCorporateNameMap(admin, userIds);
     type U = { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null };
     for (const u of (uRaw ?? []) as unknown as U[]) {
-      const full = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+      const full = resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(u.userID)),
+      }).name;
       nameOf.user.set(u.userID, full || u.userID);
     }
   }

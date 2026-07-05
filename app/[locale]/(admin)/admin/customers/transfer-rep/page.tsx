@@ -23,6 +23,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   TransferRepForm,
   type CustomerLite,
@@ -49,7 +50,7 @@ export default async function TransferSalesRepPage({
     // mig 0113 renamed these tb_users cols to quoted camelCase → a lowercase SELECT
     // 400s and the form renders EMPTY. Alias camelCase→lowercase so the rows keep the
     // keys transfer-form.tsx reads (userid/username/…), no consumer change. (verified prod)
-    .select("userid:userID, username:userName, userlastname:userLastName, usertel:userTel, adminidsale:adminIDSale")
+    .select("userid:userID, username:userName, userlastname:userLastName, usertel:userTel, adminidsale:adminIDSale, usercompany:userCompany")
     .eq("userStatus", "1")
     .order("userRegistered", { ascending: false })
     .limit(100);
@@ -74,7 +75,25 @@ export default async function TransferSalesRepPage({
   if (customersRawErr) {
     console.error(`[tb_users list] failed`, { code: customersRawErr.code, message: customersRawErr.message });
   }
-  const customers = (customersRaw ?? []) as unknown as CustomerLite[];
+  type CustomerRaw = CustomerLite & { usercompany: string | null };
+  const customersRawRows = (customersRaw ?? []) as unknown as CustomerRaw[];
+
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // customers show the company name in the picker, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, customersRawRows.map((c) => c.userid));
+  const customers: CustomerLite[] = customersRawRows.map((c) => ({
+    userid: c.userid,
+    username: c.username,
+    userlastname: c.userlastname,
+    usertel: c.usertel,
+    adminidsale: c.adminidsale,
+    displayname: resolveBillingIdentity({
+      userCompany: c.usercompany,
+      userName: c.username,
+      userLastName: c.userlastname,
+      corp: corpRowFromName(corpNames.get(c.userid)),
+    }).name,
+  }));
 
   // Active admins from tb_admin for the target dropdown.
   const { data: adminsRaw, error: adminsRawErr } = await admin

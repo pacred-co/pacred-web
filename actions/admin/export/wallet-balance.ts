@@ -22,6 +22,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "../export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the unpaginated "ทั้งหมด" pull. tb_wallet has ~9k rows, so
 // 10,000 comfortably covers the full base in one file while bounding memory.
@@ -44,6 +49,7 @@ type UserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   coID: string | null;
   userStatus: string | null;
 };
@@ -96,7 +102,7 @@ export async function exportWalletBalanceAll(
       ? Promise.resolve(new Map<string, UserRow>())
       : admin
           .from("tb_users")
-          .select("userID,userName,userLastName,coID,userStatus")
+          .select("userID,userName,userLastName,userCompany,coID,userStatus")
           .in("userID", userIds)
           .then(({ data, error }) => {
             if (error) console.error("[exportWalletBalanceAll] tb_users failed:", error.message);
@@ -118,10 +124,20 @@ export async function exportWalletBalanceAll(
           }),
   ]);
 
+  // ── Juristic → company-name map (batched, N+1-free) ───────────────
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Map to CSV rows — SAME keys/value-mapping as the page CsvButton.
   const rows: CsvRow[] = walletRows.map((r) => {
     const u = userMap.get(r.userid);
-    const fullName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
+    const fullName = u
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name
+      : "";
     const cb = cbMap.get(r.userid) ?? 0;
     const wt = Number(r.wallettotal ?? 0);
     const isSuspended = u?.userStatus === "0";

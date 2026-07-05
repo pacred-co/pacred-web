@@ -24,6 +24,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { GuideNote } from "@/components/ui/guide-note";
+import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
 import { AdminWalletAddForm, type CustomerLite } from "./form";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,14 @@ export default async function AdminWalletAddPage({
     console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });
   }
   const recent = (recentRaw ?? []) as unknown as CustomerLite[];
+
+  // นิติบุคคล — resolve company names for the picker (preset + recent) in ONE
+  // batched tb_corporate lookup so a juristic customer shows the COMPANY, not
+  // the contact person (owner directive · N+1-free · soft-fails to person name).
+  const pickerUserIds = [preset?.userid, ...recent.map((c) => c.userid)];
+  const corpNames = await fetchCorporateNameMap(admin, pickerUserIds);
+  if (preset) preset.corporatename = corpNames.get(preset.userid) ?? null;
+  for (const c of recent) c.corporatename = corpNames.get(c.userid) ?? null;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

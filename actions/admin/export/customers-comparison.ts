@@ -21,6 +21,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all" path. The CPS segment is small (low
 // hundreds), so 10,000 covers it in one file with margin; `truncated` flags
@@ -115,10 +120,19 @@ export async function exportCustomersComparisonAll(): Promise<{
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Same column mapping as the page's CsvButton (12 cols) ─────────────────
   const rows: CsvRow[] = userRows.map((r) => ({
     userID: r.userID,
-    fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—",
+    fullName:
+      resolveBillingIdentity({
+        userCompany: r.userCompany,
+        userName: r.userName,
+        userLastName: r.userLastName,
+        corp: corpRowFromName(corpNames.get(r.userID)),
+      }).name || "—",
     isJuristic: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
     tel: r.userTel ?? "",
     email: r.userEmail ?? "",

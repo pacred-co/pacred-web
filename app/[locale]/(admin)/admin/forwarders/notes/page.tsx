@@ -34,6 +34,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportForwarderNotesAll } from "@/actions/admin/export/forwarder-notes";
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +76,7 @@ type UserLite = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 export default async function ForwarderNotesPage({
@@ -124,10 +130,13 @@ export default async function ForwarderNotesPage({
   // Pass 2 — batch tb_users lookup for the customer panel column.
   const useridList = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean)));
   let userMap: Record<string, UserLite> = {};
+  // นิติบุคคล → company name (not the contact person). One more batched .in().
+  let corpNames = new Map<string, string>();
   if (useridList.length > 0) {
+    corpNames = await fetchCorporateNameMap(admin, useridList);
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userTel, userCompany")
       .in("userID", useridList);
     if (usersErr) {
       console.error(`[tb_users notes-join] failed`, { code: usersErr.code, message: usersErr.message });
@@ -136,11 +145,23 @@ export default async function ForwarderNotesPage({
     }
   }
 
+  // Resolve the DISPLAY identity per user (company for juristic, else person).
+  const displayNameByUser = (userid: string): string => {
+    const u = userMap[userid];
+    if (!u) return "";
+    return resolveBillingIdentity({
+      userCompany: u.userCompany,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      corp: corpRowFromName(corpNames.get(userid)),
+    }).name;
+  };
+
   // CSV rows for the currently-displayed page (cols mirror the <thead>; the
   // export-all action re-runs the EXACT same filtered query unpaginated).
   const csvRows: CsvRow[] = pageRows.map((r) => {
     const u = userMap[r.userid];
-    const customerName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
+    const customerName = displayNameByUser(r.userid);
     const updated = r.fdateadminstatus ?? r.fdate;
     return {
       updated: updated ? String(updated).slice(0, 10) : "",
@@ -233,7 +254,7 @@ export default async function ForwarderNotesPage({
                 {pageRows.map((r) => {
                   const updated = r.fdateadminstatus ?? r.fdate;
                   const u = userMap[r.userid];
-                  const customerName = u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
+                  const customerName = displayNameByUser(r.userid);
                   const displayFNo = r.fidorco ?? `#${r.id}`;
                   return (
                     <tr key={r.id} className="border-t border-border align-top">

@@ -21,6 +21,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportQaNewClientNoContactAll } from "@/actions/admin/export/qa-new-client-no-contact";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,17 @@ export default async function NewClientNoContactPage({
 
   const rows = (rowsRaw ?? []) as unknown as URow[];
 
+  // นิติบุคคล → company name (not the contact person) · display-only. One
+  // batched tb_corporate lookup for the rows on this page.
+  const corpNames = await fetchCorporateNameMap(admin, rows.map((u) => u.userID));
+  const displayNameOf = (u: URow): string =>
+    resolveBillingIdentity({
+      userCompany: u.userCompany,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      corp: corpRowFromName(corpNames.get(u.userID)),
+    }).name || "—";
+
   const now = nowMs();
 
   // CSV columns mirror the <thead> labels 1:1 (skip the empty action column).
@@ -101,7 +113,7 @@ export default async function NewClientNoContactPage({
 
   // On-screen (paginated) rows → flat CsvRow[] (same mapping as the table).
   const csvRows: CsvRow[] = rows.map((u) => {
-    const fullName = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+    const fullName = displayNameOf(u);
     const daysSinceReg = u.userRegistered
       ? Math.floor((now - new Date(u.userRegistered).getTime()) / (24 * 60 * 60 * 1000))
       : 0;
@@ -181,8 +193,7 @@ export default async function NewClientNoContactPage({
               </thead>
               <tbody>
                 {rows.map((u) => {
-                  const fullName =
-                    `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
+                  const fullName = displayNameOf(u);
                   const daysSinceReg = u.userRegistered
                     ? Math.floor((now - new Date(u.userRegistered).getTime()) / (24 * 60 * 60 * 1000))
                     : 0;

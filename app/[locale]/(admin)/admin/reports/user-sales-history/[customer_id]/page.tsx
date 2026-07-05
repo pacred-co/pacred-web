@@ -33,6 +33,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -195,6 +196,10 @@ export default async function UserSalesHistoryDrillIn({
   if (!userRaw) notFound();
   const u = userRaw as unknown as URow;
 
+  // Juristic display: resolve นิติบุคคล to the company name via one batched
+  // tb_corporate lookup (single id · consistent with the list page · no N+1).
+  const corpNames = await fetchCorporateNameMap(admin, [u.userID]);
+
   // Parallel fetch — newest first, plenty for the top-100 merge.
   // Soft-fail per query (timeline is best-effort drill-in, not a load-bearing dashboard).
   const [
@@ -302,8 +307,14 @@ export default async function UserSalesHistoryDrillIn({
   events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const timeline = events.slice(0, MAX_EVENTS);
 
-  const fullname = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
-  const isJuristic = u.userCompany === "1";
+  const billing = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpNames.get(u.userID)),
+  });
+  const fullname = billing.name || "—";
+  const isJuristic = billing.isJuristic;
 
   // Lifetime totals (same status gates as the list page · sales-by-rep view)
   const lifetimeForwarderRevenue = fws

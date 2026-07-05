@@ -12,6 +12,7 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
 import { DocumentHistoryTable, type DocRow } from "./document-history-table";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +63,10 @@ export default async function DocumentHistoryPage({
     ...((ftaxRes.data ?? []) as TaxRow[]).map((r) => r.userid),
     ...((staxRes.data ?? []) as TaxRow[]).map((r) => r.userid),
   ].filter((u): u is string => !!u)));
-  const userMap = new Map<string, { name: string; juristic: boolean }>();
+  const userMap = new Map<string, { name: string; juristic: boolean; company: string }>();
+  // Batched company-name lookup (N+1-free) — juristic customers show the
+  // COMPANY name, not the contact person, when no doc-time snapshot exists.
+  const corpNames = await fetchCorporateNameMap(admin, userids);
   for (let i = 0; i < userids.length; i += 300) {
     const chunk = userids.slice(i, i + 300);
     const { data: us, error: usErr } = await admin
@@ -71,11 +75,27 @@ export default async function DocumentHistoryPage({
       .in("userID", chunk);
     if (usErr) { console.error("[document-history tb_users] failed", { code: usErr.code, message: usErr.message }); continue; }
     for (const u of (us ?? []) as { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }[]) {
-      userMap.set(u.userID, { name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(), juristic: u.userCompany === "1" });
+      const company = corpNames.get(u.userID) ?? "";
+      userMap.set(u.userID, {
+        name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim(),
+        // juristic = userCompany flag OR a company row exists (widest correct set).
+        juristic: u.userCompany === "1" || company !== "",
+        company,
+      });
     }
   }
-  const custName = (uid: string | null, fb?: string | null) =>
-    (uid ? userMap.get(uid)?.name : "") || (fb ?? "") || (uid ?? "—");
+  // DISPLAY name — juristic customers show the company name (the doc-time
+  // buyer_name snapshot `fb` wins first, then the live company name), never the
+  // contact person. Non-juristic show the person. (juristic FLAG logic is
+  // unchanged — see custJur.)
+  const custName = (uid: string | null, fb?: string | null) => {
+    const u = uid ? userMap.get(uid) : undefined;
+    const juristic = (u?.juristic ?? undefined) ?? false;
+    if (juristic) {
+      return (fb ?? "") || (u?.company ?? "") || (u?.name ?? "") || (uid ?? "—");
+    }
+    return (u?.name ?? "") || (fb ?? "") || (uid ?? "—");
+  };
   const custJur = (uid: string | null, fb?: boolean | null) =>
     (uid ? userMap.get(uid)?.juristic : undefined) ?? !!fb;
 

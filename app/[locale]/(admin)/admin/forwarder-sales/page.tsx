@@ -6,6 +6,7 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -162,26 +163,38 @@ export default async function AdminForwarderSalesPage({
   }
 
   // ── 4. Optional: customer name via tb_users (camelCase: userID) ──
-  type UserRow = { userID: string; userName: string | null; userLastName: string | null };
+  type UserRow = { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null };
   const userIds = Array.from(new Set([...fwdById.values()].map((f) => f.userid).filter((v): v is string => !!v)));
   let userByID = new Map<string, UserRow>();
+  let corpNames = new Map<string, string>();
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error("[tb_users names] failed", { code: usersErr.code, message: usersErr.message });
     }
     userByID = new Map(((usersRaw ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]));
+    // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+    // customers show the company name, not the contact person.
+    corpNames = await fetchCorporateNameMap(admin, userIds);
   }
 
   // ── 5. Assemble rows ──
   const rows: ReportRow[] = srRows.map((r) => {
     const f = fwdById.get(r.fid);
     const u = f?.userid ? userByID.get(f.userid) : null;
+    const displayName = u
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name
+      : "";
     const customer = u
-      ? [u.userID, u.userName, u.userLastName].filter(Boolean).join(" ").trim() || u.userID
+      ? [u.userID, displayName].filter(Boolean).join(" ").trim() || u.userID
       : f?.userid ?? null;
     return {
       id:            r.id,

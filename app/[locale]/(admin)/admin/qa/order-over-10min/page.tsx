@@ -27,6 +27,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaOrderOver10MinAll } from "@/actions/admin/export/qa-order-over-10min";
 
 const CSV_COLS = [
@@ -64,6 +65,7 @@ type URow = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 /** Helpers — wrap Date.now() so Next 16 / React 19 `react-hooks/purity`
@@ -106,23 +108,33 @@ export default async function AdminQaOrderOver10MinPage({
 
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userTel,userCompany")
       .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
+  // นิติบุคคล → company name (not the contact person) · display-only. Falls
+  // back to the userid when the customer row/name is missing.
+  const customerNameOf = (u: URow | undefined, uid: string | null | undefined): string =>
+    (u
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(u.userID)),
+        }).name
+      : "") || (uid ?? "");
 
   // Map the on-screen (paginated) rows → flat CsvRow[] mirroring the <thead>.
   const csvRows: CsvRow[] = rows.map((r) => {
     const u = r.userid ? userMap.get(r.userid) : undefined;
-    const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || (r.userid ?? "")
-      : r.userid ?? "";
+    const customerName = customerNameOf(u, r.userid);
     const ageMin = minutesSince(r.hdate);
     const ageLabel =
       ageMin >= 60 * 24
@@ -215,9 +227,7 @@ export default async function AdminQaOrderOver10MinPage({
               <tbody>
                 {rows.map((r) => {
                   const u = r.userid ? userMap.get(r.userid) : undefined;
-                  const customerName = u
-                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
-                    : r.userid ?? "—";
+                  const customerName = customerNameOf(u, r.userid) || "—";
                   const ageMin = minutesSince(r.hdate);
                   const ageLabel =
                     ageMin >= 60 * 24

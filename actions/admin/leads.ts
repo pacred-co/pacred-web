@@ -34,6 +34,11 @@ import { logAdminExport } from "./export-log";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { pickLeastLoadedCsRep } from "@/lib/admin/assign-cs-rep";
 import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
+import {
   LEAD_CALL_STATUSES,
   type LeadCallStatus,
   type LeadQueueFilter,
@@ -67,6 +72,7 @@ type TbUserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
   userActive: string | null;
   adminIDSale: string | null;
@@ -88,12 +94,20 @@ function toRow(
   u: TbUserRow,
   orderCount: number,
   call: { status: string | null; called_at: string | null } | undefined,
+  corpName: string | undefined,
 ): LeadQueueRow {
   const callStatus =
     call?.status && isValidStatus(call.status) ? call.status : null;
   return {
     userid: u.userID,
-    name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+    // นิติบุคคล → company name (not the contact person).
+    name:
+      resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpName),
+      }).name || "—",
     tel: (u.userTel ?? "").trim(),
     rep: (u.adminIDSale ?? "").trim(),
     cs: (u.adminIDCS ?? "").trim(),
@@ -134,7 +148,7 @@ export async function getLeadQueue(
     const orderCountByUser = new Map<string, number>();
 
     const userSelect =
-      "userID, userName, userLastName, userTel, userActive, adminIDSale, adminIDCS, userRegistered";
+      "userID, userName, userLastName, userCompany, userTel, userActive, adminIDSale, adminIDCS, userRegistered";
 
     if (segment === "big-pcs") {
       // 1) FULL-BASE ranking via the 0173 RPC (GROUP BY userid over ALL
@@ -406,8 +420,11 @@ export async function getLeadQueue(
       }
     }
 
+    // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+    const corpNames = await fetchCorporateNameMap(admin, visibleIds);
+
     let rows = users.map((u) =>
-      toRow(u, orderCountByUser.get(u.userID) ?? 0, latestCallByUser.get(u.userID)),
+      toRow(u, orderCountByUser.get(u.userID) ?? 0, latestCallByUser.get(u.userID), corpNames.get(u.userID)),
     );
 
     // Call-state filter (applied after the join).

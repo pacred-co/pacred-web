@@ -33,6 +33,7 @@ import {
   type CustomerSearchResult,
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
+import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 
 // Mirror single form — copied verbatim from legacy optionHShipByCart().
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
@@ -94,9 +95,20 @@ const TAX_DOC_OPTIONS = [
   { value: "customs",     label: "📜 ใบขนสินค้า",  hint: "ส่งออกเอง" },
 ];
 
+// Juristic-aware display name for a picked customer — นิติบุคคล shows the
+// company name (not the contact person) when it's known.
+function customerDisplayName(c: CustomerOption): string {
+  return resolveBillingIdentity({
+    userCompany: c.userCompany,
+    userName: c.userName,
+    userLastName: c.userLastName,
+    corp: corpRowFromName(c.corporatename ?? undefined),
+  }).name;
+}
+
 function customerShortLabel(c: CustomerOption | null): string {
   if (!c) return "—";
-  const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
+  const name = customerDisplayName(c);
   return `${c.userID} · ${name || c.userTel || "(ไม่มีชื่อ)"}`;
 }
 
@@ -207,7 +219,14 @@ export function AdminForwarderNewBulkForm({
   async function pickCustomer(rowKey: string, picked: CustomerSearchResult) {
     const coid = (picked.coID ?? "").trim().slice(0, 10) || "-";
     updateRow(rowKey, {
-      customer: { userID: picked.userID, userName: picked.userName, userLastName: picked.userLastName, userTel: picked.userTel },
+      customer: {
+        userID: picked.userID,
+        userName: picked.userName,
+        userLastName: picked.userLastName,
+        userTel: picked.userTel,
+        userCompany: picked.userCompany,
+        corporatename: picked.corporatename,
+      },
       coid,
       addressLoading: true,
       addressId: null,
@@ -631,7 +650,7 @@ function BulkRow({
                           className="block w-full px-2.5 py-1.5 text-left text-xs hover:bg-primary-50"
                         >
                           <span className="font-mono text-[11px] text-primary-700">{u.userID}</span>
-                          <span className="ml-1.5">{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                          <span className="ml-1.5">{customerDisplayName(u) || "(ไม่มีชื่อ)"}</span>
                           {u.userTel && <span className="ml-1.5 text-[11px] text-muted">{u.userTel}</span>}
                         </button>
                       ))

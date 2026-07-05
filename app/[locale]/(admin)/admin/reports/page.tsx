@@ -50,6 +50,7 @@ import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
 } from "@/lib/legacy-status-map";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,7 @@ type LegacyUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 type FRow = {
@@ -209,9 +211,18 @@ function thb(n: number) {
 function profileName(p: Profile) {
   return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "—";
 }
-function userDisplayName(u: LegacyUser | null) {
+// Juristic-aware customer display: นิติบุคคล customers show the company name
+// (not the contact person) when a tb_corporate name is present. `corpNames` is
+// the batched Map<userid, corporatename> (fetchCorporateNameMap · no N+1).
+function userDisplayName(u: LegacyUser | null, corpNames?: Map<string, string>) {
   if (!u) return "—";
-  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
+  const name = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpNames?.get(u.userID)),
+  }).name;
+  return name || "—";
 }
 
 /**
@@ -230,7 +241,7 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel")
+    .select("userID, userName, userLastName, userTel, userCompany")
     .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
@@ -391,6 +402,11 @@ export default async function AdminReportsPage({
   let tabTotal = 0, tabCount = 0;
   let statusBreakdown: Record<string, number> = {};
 
+  // Juristic display: Map<userid, corporatename> for the active tab's users,
+  // populated once per tab via ONE batched tb_corporate lookup (no N+1). Fed
+  // to userDisplayName so นิติบุคคล rows show the company, not the person.
+  let corpNames = new Map<string, string>();
+
   if (tab === "forwarder") {
     // Legacy: tb_forwarder + 2-pass tb_users join.
     let q = admin
@@ -417,6 +433,7 @@ export default async function AdminReportsPage({
     };
     const raw = (data ?? []) as unknown as Raw[];
     const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    corpNames = await fetchCorporateNameMap(admin, raw.map((r) => r.userid));
     forwarderRows = raw.map((r) => ({
       id: r.id,
       f_no: String(r.id),                  // legacy displays the raw id as "ออเดอร์ #<id>"
@@ -464,6 +481,7 @@ export default async function AdminReportsPage({
     };
     const raw = (data ?? []) as unknown as Raw[];
     const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    corpNames = await fetchCorporateNameMap(admin, raw.map((r) => r.userid));
     shopRows = raw.map((r) => ({
       id: r.id,
       h_no: r.hno,
@@ -504,6 +522,7 @@ export default async function AdminReportsPage({
     };
     const raw = (data ?? []) as unknown as Raw[];
     const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    corpNames = await fetchCorporateNameMap(admin, raw.map((r) => r.userid));
     yuanRows = raw.map((r) => ({
       id: r.id,
       channel: r.paytype,
@@ -585,6 +604,7 @@ export default async function AdminReportsPage({
     };
     const raw = (data ?? []) as unknown as Raw[];
     const usersByUserId = await fetchUsersByUserId(admin, raw.map((r) => r.userid));
+    corpNames = await fetchCorporateNameMap(admin, raw.map((r) => r.userid));
     walletRows = raw.map((r) => ({
       id: r.id,
       type: r.type,
@@ -615,7 +635,7 @@ export default async function AdminReportsPage({
   const forwarderCsv: CsvRow[] = forwarderRows.map((r) => ({
     เลขที่: r.f_no,
     รหัสสมาชิก: r.user?.userID ?? "",
-    ชื่อ: userDisplayName(r.user),
+    ชื่อ: userDisplayName(r.user, corpNames),
     เบอร์: r.user?.userTel ?? "",
     คลัง: r.source_warehouse,
     ขนส่ง: TRANSPORT_LABEL[r.transport_type] ?? r.transport_type,
@@ -631,7 +651,7 @@ export default async function AdminReportsPage({
   const shopCsv: CsvRow[] = shopRows.map((r) => ({
     เลขที่: r.h_no,
     รหัสสมาชิก: r.user?.userID ?? "",
-    ชื่อ: userDisplayName(r.user),
+    ชื่อ: userDisplayName(r.user, corpNames),
     เบอร์: r.user?.userTel ?? "",
     รายการ: r.title ?? "",
     ชิ้น: r.item_count,
@@ -643,7 +663,7 @@ export default async function AdminReportsPage({
 
   const yuanCsv: CsvRow[] = yuanRows.map((r) => ({
     รหัสสมาชิก: r.user?.userID ?? "",
-    ชื่อ: userDisplayName(r.user),
+    ชื่อ: userDisplayName(r.user, corpNames),
     เบอร์: r.user?.userTel ?? "",
     ช่องทาง: r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "",
     ปลายทาง: r.recipient_detail ?? "",
@@ -670,7 +690,7 @@ export default async function AdminReportsPage({
 
   const paymentCsv: CsvRow[] = walletRows.map((r) => ({
     รหัสสมาชิก: r.user?.userID ?? "",
-    ชื่อ: userDisplayName(r.user),
+    ชื่อ: userDisplayName(r.user, corpNames),
     เบอร์: r.user?.userTel ?? "",
     ประเภท: WALLET_TYPE_LABEL[r.type] ?? `type ${r.type}`,
     จำนวน: r.amount,
@@ -947,7 +967,7 @@ export default async function AdminReportsPage({
               </td>
               <td className="px-4 py-3 text-xs">
                 <div className="font-mono">{r.user?.userID ?? "—"}</div>
-                <div>{userDisplayName(r.user)}</div>
+                <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.source_warehouse} / {TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}</td>
@@ -981,7 +1001,7 @@ export default async function AdminReportsPage({
               </td>
               <td className="px-4 py-3 text-xs">
                 <div className="font-mono">{r.user?.userID ?? "—"}</div>
-                <div>{userDisplayName(r.user)}</div>
+                <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.title ?? "—"}</td>
@@ -1009,7 +1029,7 @@ export default async function AdminReportsPage({
             <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
               <td className="px-4 py-3 text-xs">
                 <div className="font-mono">{r.user?.userID ?? "—"}</div>
-                <div>{userDisplayName(r.user)}</div>
+                <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "—"}</td>
@@ -1073,7 +1093,7 @@ export default async function AdminReportsPage({
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
                 <td className="px-4 py-3 text-xs">
                   <div className="font-mono">{r.user?.userID ?? "—"}</div>
-                  <div>{userDisplayName(r.user)}</div>
+                  <div>{userDisplayName(r.user, corpNames)}</div>
                   <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{WALLET_TYPE_LABEL[r.type] ?? `type ${r.type}`}</td>

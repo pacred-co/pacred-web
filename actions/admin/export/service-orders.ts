@@ -23,6 +23,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 const EXPORT_CAP = 10000;
 
@@ -91,6 +96,7 @@ type RawUserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   coID: string | null;
   adminIDSale: string | null;
 };
@@ -151,7 +157,7 @@ export async function exportServiceOrdersAll(
   if (uniqueUserIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,coID,adminIDSale")
+      .select("userID,userName,userLastName,userCompany,coID,adminIDSale")
       .in("userID", uniqueUserIds);
     if (userErr) {
       console.error("[exportServiceOrdersAll] tb_users join failed", {
@@ -181,12 +187,20 @@ export async function exportServiceOrdersAll(
     );
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
   // ── Shape into CSV rows — IDENTICAL keys/values/money math to the page's
   //    CsvButton mapping (see service-orders/page.tsx L596-621).
   const rows: CsvRow[] = raw.map((r): CsvRow => {
     const user = usersByUserId.get(r.userid);
     const name = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || null
+      ? resolveBillingIdentity({
+          userCompany: user.userCompany,
+          userName: user.userName,
+          userLastName: user.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name || null
       : null;
     const coid = user?.coID ?? null;
     const isVip = !isGeneralCoid(coid);

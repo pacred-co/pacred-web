@@ -23,6 +23,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "../export-log";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all" path. The credit segment is small (members
 // granted a credit line), so 10,000 comfortably covers it in one file while
@@ -162,6 +167,9 @@ export async function exportCustomersCreditAll(): Promise<{
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
+
   // ── Project to the SAME columns the page CsvButton emits ──────────────
   const rows: CreditExportRow[] = userRows.map((r) => {
     const limit = Number(r.userCreditValue ?? 0);
@@ -169,7 +177,13 @@ export async function exportCustomersCreditAll(): Promise<{
     const remaining = limit - outstanding;
     return {
       userID: r.userID,
-      fullName: `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—",
+      fullName:
+        resolveBillingIdentity({
+          userCompany: r.userCompany,
+          userName: r.userName,
+          userLastName: r.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userID)),
+        }).name || "—",
       isJuristic: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
       tel: r.userTel ?? "",
       email: r.userEmail ?? "",

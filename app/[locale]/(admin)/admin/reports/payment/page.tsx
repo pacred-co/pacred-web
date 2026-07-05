@@ -34,6 +34,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -102,6 +103,7 @@ type RawUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 type Row = RawPayment & {
@@ -193,7 +195,7 @@ export default async function AdminReportPaymentPage({
   if (userIds.length > 0) {
     const { data: usersData, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userTel, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
@@ -201,6 +203,9 @@ export default async function AdminReportPaymentPage({
       for (const u of (usersData ?? []) as RawUser[]) userMap.set(u.userID, u);
     }
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // rows show the company name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // 3) Shape rows.
   const rows: Row[] = payments.map((p) => {
@@ -208,7 +213,14 @@ export default async function AdminReportPaymentPage({
     return {
       ...p,
       customer: {
-        name: u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "",
+        name: u
+          ? resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(p.userid)),
+            }).name
+          : "",
         phone: u?.userTel ?? "",
       },
     };

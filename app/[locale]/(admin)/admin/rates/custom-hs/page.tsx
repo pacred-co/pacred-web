@@ -35,6 +35,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportRatesCustomHsAll } from "@/actions/admin/export/rates-custom-hs";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,7 @@ type URow = {
   userLastName: string | null;
   userTel: string | null;
   coID: string | null;
+  userCompany: string | null;
 };
 
 type SP = { userid?: string; q?: string; page?: string };
@@ -163,32 +165,51 @@ export default async function CustomHsRatesPage({
   // Join customer names for the history list
   const userIds = Array.from(new Set(history.map((h) => h.userid).filter(Boolean)));
   let userMap = new Map<string, URow>();
+  const historyCorpNames = await fetchCorporateNameMap(admin, userIds);
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel,coID")
+      .select("userID,userName,userLastName,userTel,coID,userCompany")
       .in("userID", userIds);
     if (usersRawErr) {
       console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
   }
+  // นิติบุคคล → company name (not the contact person) · display-only.
+  const historyNameOf = (u: URow | undefined): string =>
+    resolveBillingIdentity({
+      userCompany: u?.userCompany,
+      userName: u?.userName,
+      userLastName: u?.userLastName,
+      corp: u ? corpRowFromName(historyCorpNames.get(u.userID)) : null,
+    }).name || "—";
 
   // Drill-in: show full matrix for one customer (latest rates by joining children to their LATEST crhsid)
   const selectedUserid = sp.userid?.trim().toUpperCase() ?? null;
   let selectedUser: URow | null = null;
+  let selectedCorp: CorporateIdentityRow | null = null;
   let selectedKg: KgRow[] = [];
   let selectedCbm: CbmRow[] = [];
   if (selectedUserid) {
-    const [{ data: u }, { data: k }, { data: c }] = await Promise.all([
-      admin.from("tb_users").select("userID,userName,userLastName,userTel,coID").eq("userID", selectedUserid).maybeSingle(),
+    const [{ data: u }, { data: corp }, { data: k }, { data: c }] = await Promise.all([
+      admin.from("tb_users").select("userID,userName,userLastName,userTel,coID,userCompany").eq("userID", selectedUserid).maybeSingle(),
+      admin.from("tb_corporate").select("corporatename,corporatenumber,corporateaddress").eq("userid", selectedUserid).maybeSingle<CorporateIdentityRow>(),
       admin.from("tb_hs_rate_custom_kg").select("id,userid,sourcewarehouse,rtransporttype,rproductstype,rkg,adminidupdate,crhsid").eq("userid", selectedUserid).order("crhsid", { ascending: false }).limit(500),
       admin.from("tb_hs_rate_custom_cbm").select("id,userid,sourcewarehouse,rtransporttype,rproductstype,rcbm,adminidupdate,crhsid").eq("userid", selectedUserid).order("crhsid", { ascending: false }).limit(500),
     ]);
     selectedUser = (u as unknown as URow | null) ?? null;
+    selectedCorp = corp ?? null;
     selectedKg = (k ?? []) as unknown as KgRow[];
     selectedCbm = (c ?? []) as unknown as CbmRow[];
   }
+  // นิติบุคคล → company name (not the contact person) · display-only.
+  const selectedName = resolveBillingIdentity({
+    userCompany: selectedUser?.userCompany,
+    userName: selectedUser?.userName,
+    userLastName: selectedUser?.userLastName,
+    corp: selectedCorp,
+  }).name;
 
   // (kg/cbm latest-per-cell collapse moved into buildHsCellMatrix, which
   // also produces the shape the edit form needs.)
@@ -204,7 +225,7 @@ export default async function CustomHsRatesPage({
   ];
   const csvRows: CsvRow[] = history.map((h) => {
     const u = userMap.get(h.userid);
-    const name = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—";
+    const name = historyNameOf(u);
     return {
       userid: h.userid,
       name,
@@ -285,7 +306,7 @@ export default async function CustomHsRatesPage({
                       <tr key={h.id} className="border-t border-border hover:bg-surface-alt/30">
                         <td className="px-3 py-2 font-mono">{h.userid}</td>
                         <td className="px-3 py-2">
-                          {`${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || "—"}
+                          {historyNameOf(u)}
                         </td>
                         <td className="px-3 py-2 text-muted">{u?.userTel ?? "—"}</td>
                         <td className="px-3 py-2 font-mono text-xs">
@@ -336,7 +357,7 @@ export default async function CustomHsRatesPage({
                 <span className="font-mono text-primary-600">{selectedUserid}</span>
                 {selectedUser && (
                   <span className="ml-2 text-sm text-muted font-normal">
-                    {`${selectedUser.userName ?? ""} ${selectedUser.userLastName ?? ""}`.trim() || ""}
+                    {selectedName}
                   </span>
                 )}
               </h2>
@@ -366,7 +387,7 @@ export default async function CustomHsRatesPage({
           {selectedUser ? (
             <HsRateEditForm
               userid={selectedUserid}
-              customerLabel={`${selectedUserid} · ${`${selectedUser.userName ?? ""} ${selectedUser.userLastName ?? ""}`.trim() || "—"}`}
+              customerLabel={`${selectedUserid} · ${selectedName || "—"}`}
               cells={buildHsCellMatrix(selectedKg, selectedCbm)}
             />
           ) : (

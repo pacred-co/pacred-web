@@ -31,6 +31,7 @@ import {
   type CustomerGroup,
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
+import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 
 // Clean member-type categories — same 7 buckets /admin/customers uses in its
 // "ตามประเภท" menu (ภูม flag round 10). Replaces the raw tb_co dropdown which
@@ -150,9 +151,20 @@ function guessWarehouseFromTracking(tracking: string): WarehouseCode | null {
   return null;
 }
 
+// Juristic-aware display name for a picked/listed customer — นิติบุคคล shows
+// the company name (not the contact person) when it's known.
+function customerDisplayName(c: CustomerOption): string {
+  return resolveBillingIdentity({
+    userCompany: c.userCompany,
+    userName: c.userName,
+    userLastName: c.userLastName,
+    corp: corpRowFromName(c.corporatename ?? undefined),
+  }).name;
+}
+
 function customerLabel(c: CustomerOption | null | undefined): string {
   if (!c) return "—";
-  const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
+  const name = customerDisplayName(c);
   return `${c.userID} · ${name || c.userTel || "(ไม่มีชื่อ)"}`;
 }
 
@@ -708,7 +720,7 @@ export function AdminForwarderNewForm({
                           >
                             <span className="font-mono text-primary-600">{u.userID}</span>
                             <span className="mx-1.5 text-muted">·</span>
-                            <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                            <span>{customerDisplayName(u) || "(ไม่มีชื่อ)"}</span>
                             {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
                           </button>
                         ))
@@ -731,7 +743,7 @@ export function AdminForwarderNewForm({
                           >
                             <span className="font-mono text-primary-600">{u.userID}</span>
                             <span className="mx-1.5 text-muted">·</span>
-                            <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                            <span>{customerDisplayName(u) || "(ไม่มีชื่อ)"}</span>
                             {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
                             {u.coID && <span className="ml-2 rounded bg-surface-alt px-1.5 text-[11px] text-muted">{u.coID}</span>}
                           </button>

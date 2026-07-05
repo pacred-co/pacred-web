@@ -6,6 +6,11 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportAccShopAll } from "@/actions/admin/export/acc-shop";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 /**
  * Admin > "รายงานฝากสั่งซื้อสินค้า" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -251,6 +256,7 @@ type ShopRow = {
   // tb_users
   username: string;
   userlastname: string;
+  usercompany: string | null; // '1' = นิติบุคคล
 };
 
 type SP = {
@@ -435,24 +441,30 @@ export default async function AdminAccountingShopPage({
   );
   const userById = new Map<
     string,
-    { username: string; userlastname: string }
+    { username: string; userlastname: string; usercompany: string | null }
   >();
   if (userIds.length > 0) {
     const usersRes = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", userIds);
     for (const u of (usersRes.data ?? []) as Array<{
       userID: string;
       userName: string;
       userLastName: string;
+      userCompany: string | null;
     }>) {
       userById.set(u.userID, {
         username: u.userName,
         userlastname: u.userLastName,
+        usercompany: u.userCompany,
       });
     }
   }
+
+  // ── Juristic → company-name map (batched, N+1-free) ─────────────
+  // นิติบุคคล customers show the COMPANY name, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // ── Assemble rows in legacy order ───────────────────────────────
   // Legacy GROUP BY ho.hNo + ORDER BY wh.date ASC: collapse wallet
@@ -467,7 +479,9 @@ export default async function AdminAccountingShopPage({
     const h = headerByHno.get(hno);
     if (!h) continue; // legacy `ho.hNo<>''` drops unjoined rows
     seenHnos.add(hno);
-    const u = userById.get(h.userid) ?? { username: "", userlastname: "" };
+    const u =
+      userById.get(h.userid) ??
+      { username: "", userlastname: "", usercompany: null };
     rows.push({
       date: w.date,
       amount: Number(w.amount),
@@ -483,6 +497,7 @@ export default async function AdminAccountingShopPage({
       userid: h.userid,
       username: u.username,
       userlastname: u.userlastname,
+      usercompany: u.usercompany,
     });
   }
 
@@ -562,7 +577,12 @@ export default async function AdminAccountingShopPage({
           }
         : {}),
       member_code: row.userid,
-      customer_name: `${row.username} ${row.userlastname}`.trim(),
+      customer_name: resolveBillingIdentity({
+        userCompany: row.usercompany,
+        userName: row.username,
+        userLastName: row.userlastname,
+        corp: corpRowFromName(corpNames.get(row.userid)),
+      }).name,
     };
   });
 
@@ -945,10 +965,20 @@ export default async function AdminAccountingShopPage({
                                             {row.userid}
                                           </Link>
                                         </td>
-                                        {/* 11 — ชื่อ-นามสกุล
+                                        {/* 11 — ชื่อ-นามสกุล/ชื่อบริษัท
+                                            (juristic → company name)
                                             acc-shop.php L259 */}
                                         <td>
-                                          {row.username} {row.userlastname}
+                                          {
+                                            resolveBillingIdentity({
+                                              userCompany: row.usercompany,
+                                              userName: row.username,
+                                              userLastName: row.userlastname,
+                                              corp: corpRowFromName(
+                                                corpNames.get(row.userid),
+                                              ),
+                                            }).name
+                                          }
                                         </td>
                                       </tr>
                                     );

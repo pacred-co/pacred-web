@@ -31,6 +31,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportServiceOrderNotesAll } from "@/actions/admin/export/service-order-notes";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ type RawUserRow = {
   userName:     string | null;
   userLastName: string | null;
   userTel:      string | null;
+  userCompany:  string | null;
 };
 
 export default async function ServiceOrderNotesPage({
@@ -117,10 +119,11 @@ export default async function ServiceOrderNotesPage({
   // tb_users so we resolve via a keyed Map).
   const uniqueUserIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean)));
   const usersByUserId = new Map<string, RawUserRow>();
+  const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
   if (uniqueUserIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
+      .select("userID,userName,userLastName,userTel,userCompany")
       .in("userID", uniqueUserIds);
     if (userErr) {
       console.error(`[service-orders/notes tb_users join] failed`, {
@@ -131,6 +134,16 @@ export default async function ServiceOrderNotesPage({
       usersByUserId.set(u.userID, u);
     }
   }
+  // นิติบุคคล → company name (not the contact person) · display-only.
+  const displayNameOf = (user: RawUserRow | undefined): string =>
+    user
+      ? resolveBillingIdentity({
+          userCompany: user.userCompany,
+          userName: user.userName,
+          userLastName: user.userLastName,
+          corp: corpRowFromName(corpNames.get(user.userID)),
+        }).name
+      : "";
 
   // CSV columns mirror the <thead> 1:1 (multi-line note cell flattened into two
   // columns — staff note / customer note).
@@ -148,9 +161,7 @@ export default async function ServiceOrderNotesPage({
   const csvRows: CsvRow[] = rows.map((r) => {
     const updated = r.hdateupdate ?? r.hnotedate ?? r.hdate;
     const user = usersByUserId.get(r.userid);
-    const customerName = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
-      : "";
+    const customerName = displayNameOf(user);
     return {
       updated: updated ? String(updated).slice(0, 10) : "",
       hno: r.hno,
@@ -242,9 +253,7 @@ export default async function ServiceOrderNotesPage({
                   {rows.map((r) => {
                     const updated = r.hdateupdate ?? r.hnotedate ?? r.hdate;
                     const user = usersByUserId.get(r.userid);
-                    const customerName = user
-                      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
-                      : "";
+                    const customerName = displayNameOf(user);
                     const staffNote = (r.hnote ?? "").trim();
                     const userNote  = (r.hnoteuser ?? "").trim();
                     return (

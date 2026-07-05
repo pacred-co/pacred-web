@@ -52,6 +52,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { DriverItemActionButtons } from "./action-buttons";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -303,15 +304,23 @@ export default async function DriverWorkPage({
   );
   const customerNameById = new Map<string, string>();
   if (custIds.length > 0) {
-    const { data: custRows, error: custErr } = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName")
-      .in("userID", custIds);
+    const [{ data: custRows, error: custErr }, corpNames] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID, userName, userLastName, userCompany")
+        .in("userID", custIds),
+      fetchCorporateNameMap(admin, custIds),
+    ]);
     if (custErr) {
       console.error(`[drivers/work] customer name lookup failed`, { code: custErr.code, message: custErr.message });
     }
-    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null }[]) {
-      const name = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
+    for (const u of (custRows ?? []) as { userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }[]) {
+      const name = resolveBillingIdentity({
+        userCompany: u.userCompany,
+        userName: u.userName,
+        userLastName: u.userLastName,
+        corp: corpRowFromName(corpNames.get(u.userID)),
+      }).name;
       if (name) customerNameById.set(u.userID, name);
     }
   }

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import CartRowActions, { CartRowRemove } from "./cart-row-actions";
 import CartSubmitButton from "./cart-submit-button";
+import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 
 /**
  * Admin > "รถเข็นสินค้า" — CS staff add-to-customer-cart surface.
@@ -154,15 +155,31 @@ export default async function AdminCartPage({
   let customerName = "";
   let customerCoId = "";
   if (viewingCustomer && targetUserId) {
-    const { data: custRow, error: custErr } = await admin
-      .from("tb_users")
-      .select("userName, userLastName, coID")
-      .eq("userID", targetUserId)
-      .maybeSingle<{ userName: string | null; userLastName: string | null; coID: string | null }>();
+    const [{ data: custRow, error: custErr }, { data: corpRow, error: corpErr }] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userName, userLastName, coID, userCompany")
+        .eq("userID", targetUserId)
+        .maybeSingle<{ userName: string | null; userLastName: string | null; coID: string | null; userCompany: string | null }>(),
+      admin
+        .from("tb_corporate")
+        .select("corporatename, corporatenumber, corporateaddress")
+        .eq("userid", targetUserId)
+        .maybeSingle<CorporateIdentityRow>(),
+    ]);
     if (custErr) {
       console.error(`[tb_users lookup] failed`, { code: custErr.code, message: custErr.message });
     }
-    customerName = `${custRow?.userName ?? ""} ${custRow?.userLastName ?? ""}`.trim();
+    if (corpErr) {
+      console.error(`[tb_corporate lookup] failed`, { code: corpErr.code, message: corpErr.message });
+    }
+    // นิติบุคคล → company name (not the contact person) · display-only.
+    customerName = resolveBillingIdentity({
+      userCompany: custRow?.userCompany,
+      userName: custRow?.userName,
+      userLastName: custRow?.userLastName,
+      corp: corpRow ?? null,
+    }).name;
     customerCoId = (custRow?.coID ?? "").trim();
   }
 

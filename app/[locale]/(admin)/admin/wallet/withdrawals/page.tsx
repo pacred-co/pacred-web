@@ -28,6 +28,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportWithdrawalsAll } from "@/actions/admin/export/withdrawals";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
 
@@ -76,6 +77,7 @@ type URow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -125,15 +127,21 @@ export default async function AdminWithdrawalsQueuePage({
   // Merge customer names.
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
+  let corpNames = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: usersRaw, error: usersErr } = await admin
-      .from("tb_users")
-      .select("userID,userName,userLastName,userTel")
-      .in("userID", userIds);
+    const [usersRes, corpRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select("userID,userName,userLastName,userCompany,userTel")
+        .in("userID", userIds),
+      fetchCorporateNameMap(admin, userIds),
+    ]);
+    const { data: usersRaw, error: usersErr } = usersRes;
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
+    corpNames = corpRes;
   }
 
   const statusTabs: { key: string; label: string }[] = [
@@ -196,7 +204,12 @@ export default async function AdminWithdrawalsQueuePage({
               rows={rows.map((r) => {
                 const u = r.userid ? userMap.get(r.userid) : undefined;
                 const customerName = u
-                  ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+                  ? resolveBillingIdentity({
+                      userCompany: u.userCompany,
+                      userName: u.userName,
+                      userLastName: u.userLastName,
+                      corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+                    }).name
                   : "";
                 const row: CsvRow = {
                   id: r.id,
@@ -268,7 +281,12 @@ export default async function AdminWithdrawalsQueuePage({
                     const u = r.userid ? userMap.get(r.userid) : undefined;
                     const amount = Number(r.amount ?? 0);
                     const customerName = u
-                      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || r.userid
+                      ? resolveBillingIdentity({
+                          userCompany: u.userCompany,
+                          userName: u.userName,
+                          userLastName: u.userLastName,
+                          corp: corpRowFromName(r.userid ? corpNames.get(r.userid) : undefined),
+                        }).name || r.userid
                       : r.userid ?? "—";
                     const rowStatus = r.status ?? "1";
                     return (

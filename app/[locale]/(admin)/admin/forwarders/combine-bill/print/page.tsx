@@ -46,6 +46,14 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { CONTACT, ADDRESSES, SITE_NAME, SITE_LEGAL_NAME, SITE_LEGAL_NAME_TH, TAX_ID } from "@/components/seo/site";
+// 2026-07-04 — นิติบุคคล consignee = registered company name (tb_corporate), not
+// the contact person. The legacy code used userName as the "company name" which
+// is actually the contact person.
+import {
+  fetchCorporateNameMap,
+  resolveBillingIdentity,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -285,6 +293,16 @@ export default async function CombineBillPrintPage({
   }
   const user = userData ?? null;
 
+  // ── Resolve the consignee DISPLAY identity (นิติบุคคล → registered company
+  //    name; else the contact person). ONE batched .in() on tb_corporate. ──
+  const corpNames = await fetchCorporateNameMap(admin, [header.userid]);
+  const consigneeIdentity = resolveBillingIdentity({
+    userCompany: user?.userCompany,
+    userName: user?.userName,
+    userLastName: user?.userLastName,
+    corp: corpRowFromName(corpNames.get(header.userid)),
+  });
+
   // ── Aggregates (legacy printBill.php L200-273 tfoot totals) ──
   const totalWeight = orderedForwarders.reduce(
     (s, f) => s + Number(f.fweight ?? 0),
@@ -300,13 +318,10 @@ export default async function CombineBillPrintPage({
   );
 
   // Consignee full name (legacy printBill.php L39 builds CONCAT in SQL).
-  // V-C2 logic: prefer bill-to override on rebuilt forwarders table; but
-  // since we're reading legacy tb_forwarder here (no override column),
-  // fall back to the address-name + user-name pair.
-  const consigneeName =
-    user?.userCompany === "1" && user?.userName
-      ? user.userName // company name (legacy `usercompany`=1 = juristic)
-      : `คุณ ${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim();
+  // นิติบุคคล → registered company name (no คุณ- honorific); else คุณ<person>.
+  const consigneeName = consigneeIdentity.isJuristic
+    ? consigneeIdentity.name
+    : `คุณ ${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim();
 
   const fullShipAddress = [
     `คุณ ${header.faddressname ?? ""} ${header.faddresslastname ?? ""}`.trim(),

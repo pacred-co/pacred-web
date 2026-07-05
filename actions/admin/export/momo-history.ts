@@ -26,6 +26,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path. The page itself caps the raw
 // track read at 50_000 rows (.range(0, 49_999)); the aggregated per-customer
@@ -126,9 +131,11 @@ export async function exportMomoHistoryAll(
   // SAME tb_users join the page does (best-effort customer name/tel).
   const prCodes = [...byUser.values()].map((u) => u.guessedPr);
   if (prCodes.length > 0) {
+    // Juristic → company-name map (batched, N+1-free) keyed on the guessed PR.
+    const corpNames = await fetchCorporateNameMap(admin, prCodes);
     const { data: users, error: uErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userCompany, userTel")
       .in("userID", prCodes);
     if (uErr) {
       console.warn("[exportMomoHistoryAll · tb_users lookup]", uErr.message);
@@ -138,10 +145,17 @@ export async function exportMomoHistoryAll(
         userID: string;
         userName: string | null;
         userLastName: string | null;
+        userCompany: string | null;
         userTel: string | null;
       }>) {
         userMap.set(u.userID, {
-          name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+          name:
+            resolveBillingIdentity({
+              userCompany: u.userCompany,
+              userName: u.userName,
+              userLastName: u.userLastName,
+              corp: corpRowFromName(corpNames.get(u.userID)),
+            }).name || "—",
           tel: u.userTel ?? "—",
         });
       }

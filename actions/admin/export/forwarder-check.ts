@@ -38,6 +38,11 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors leads EXPORT_CAP).
 const EXPORT_CAP = 10000;
@@ -190,6 +195,9 @@ export async function exportForwarderCheckAll(
     );
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
   // NOTE: the page also joins tb_forwarder_import2 (partial-import amount) +
   // tb_promotion (promo badge) for its on-screen cells, but NEITHER is a CSV
   // column, so the export omits both joins (dead weight for the file). The
@@ -227,7 +235,12 @@ export async function exportForwarderCheckAll(
     const user = usersById.get(r.userid);
     const queueRow = queueByFid.get(r.id);
     const customerName = user
-      ? `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: user.userCompany,
+          userName: user.userName,
+          userLastName: user.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name
       : "";
     const customerCompany = user?.userCompany === "1" ? 1 : 0;
     const outstanding = calcForwarderOutstanding(r);

@@ -25,6 +25,7 @@ import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportWalletBalanceAll } from "@/actions/admin/export/wallet-balance";
+import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
@@ -39,6 +40,7 @@ type UserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   coID: string | null;
   userStatus: string | null;
 };
@@ -101,12 +103,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
 
   // ── Batch-join tb_users + tb_cash_back for the rows on screen.
   const userIds = walletRows.map((r) => r.userid);
-  const [userMap, cbMap] = await Promise.all([
+  const [userMap, cbMap, corpNames] = await Promise.all([
     userIds.length === 0
       ? Promise.resolve(new Map<string, UserRow>())
       : admin
           .from("tb_users")
-          .select("userID,userName,userLastName,coID,userStatus")
+          .select("userID,userName,userLastName,userCompany,coID,userStatus")
           .in("userID", userIds)
           .then(({ data }) => new Map(((data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]))),
     userIds.length === 0
@@ -122,6 +124,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
             }
             return m;
           }),
+    fetchCorporateNameMap(admin, userIds),
   ]);
 
   return (
@@ -180,7 +183,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
             rows={walletRows.map((r) => {
               const u = userMap.get(r.userid);
               const fullName = u
-                ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+                ? resolveBillingIdentity({
+                    userCompany: u.userCompany,
+                    userName: u.userName,
+                    userLastName: u.userLastName,
+                    corp: corpRowFromName(corpNames.get(r.userid)),
+                  }).name
                 : "";
               const cb = cbMap.get(r.userid) ?? 0;
               const wt = Number(r.wallettotal ?? 0);
@@ -250,7 +258,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                 {walletRows.map((r, idx) => {
                   const u = userMap.get(r.userid);
                   const fullName = u
-                    ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—"
+                    ? resolveBillingIdentity({
+                        userCompany: u.userCompany,
+                        userName: u.userName,
+                        userLastName: u.userLastName,
+                        corp: corpRowFromName(corpNames.get(r.userid)),
+                      }).name || "—"
                     : "—";
                   const cb = cbMap.get(r.userid) ?? 0;
                   const wt = Number(r.wallettotal ?? 0);

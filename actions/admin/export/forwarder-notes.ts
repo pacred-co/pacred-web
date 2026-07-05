@@ -35,6 +35,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { CsvRow } from "@/components/admin/csv-button";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path (mirrors page intent).
 const EXPORT_CAP = 10000;
@@ -57,6 +62,7 @@ type UserLite = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
 };
 
@@ -118,7 +124,7 @@ export async function exportForwarderNotesAll(
   if (useridList.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userCompany, userTel")
       .in("userID", useridList);
     if (usersErr) {
       console.error(`[exportForwarderNotesAll tb_users] failed`, {
@@ -131,11 +137,19 @@ export async function exportForwarderNotesAll(
     }
   }
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, useridList);
+
   // SAME row mapping + column keys as the page's CsvButton (= the <thead>).
   const rows: CsvRow[] = fwdRows.map((r) => {
     const u = userMap.get(r.userid);
     const customerName = u
-      ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim()
+      ? resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpRowFromName(corpNames.get(r.userid)),
+        }).name
       : "";
     const updated = r.fdateadminstatus ?? r.fdate;
     return {

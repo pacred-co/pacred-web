@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
 import { ClosingMonthPicker } from "./closing-month-picker";
 
 // P0-21 (2026-05-30 sitting-E) — Pivot the month-end closing report off
@@ -71,9 +72,19 @@ function isJuristicReceipt(r: ReceiptRow): boolean {
 }
 
 // Personal customer name = "userName userLastName" from tb_users.
-// Juristic display name = recompname (snapshot from receipt).
-function customerLabel(r: ReceiptRow, u: UserLite | null): string {
-  if (isJuristicReceipt(r) && r.recompname) return r.recompname;
+// Juristic display name = recompname (the at-issuance snapshot on the receipt,
+// which is the authoritative buyer name and MUST win). When the snapshot is
+// blank on a juristic receipt, fall back to the live tb_corporate company name
+// (never the contact person) so a company never shows a person here.
+function customerLabel(
+  r: ReceiptRow,
+  u: UserLite | null,
+  corpName?: string,
+): string {
+  if (isJuristicReceipt(r)) {
+    if (r.recompname) return r.recompname;
+    if (corpName) return corpName;
+  }
   if (!u) return "—";
   return `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—";
 }
@@ -135,6 +146,10 @@ export default async function ClosingReportPage({
     }
   }
 
+  // Live tb_corporate company-name fallback (batched, N+1-free) — used only
+  // when a juristic receipt's recompname snapshot is blank.
+  const corpNames = await fetchCorporateNameMap(admin, uniqUserIds);
+
   // ── Step 3: bucket ──────────────────────────────────────────────
   const juristicRows = receipts.filter(isJuristicReceipt);
   const personalRows = receipts.filter((r) => !isJuristicReceipt(r));
@@ -173,7 +188,7 @@ export default async function ClosingReportPage({
     return {
       rid:                    r.rid,
       refid:                  r.refid,
-      customer:               customerLabel(r, u),
+      customer:               customerLabel(r, u, corpNames.get(r.userid)),
       member_code:            r.userid,
       account_type:           isJuristicReceipt(r) ? "บริษัท" : "บุคคลทั่วไป",
       tax_id:                 r.recompnumber ?? "",
@@ -302,7 +317,9 @@ export default async function ClosingReportPage({
                     <td className="px-3 py-2.5 font-mono text-primary-600">{r.rid}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-muted">{r.refid}</td>
                     <td className="px-3 py-2.5">
-                      <div className="font-medium">{customerLabel(r, u)}</div>
+                      <div className="font-medium">
+                        {customerLabel(r, u, corpNames.get(r.userid))}
+                      </div>
                       {isJuristicReceipt(r) && (
                         <div className="text-[11px] text-muted">บริษัท</div>
                       )}

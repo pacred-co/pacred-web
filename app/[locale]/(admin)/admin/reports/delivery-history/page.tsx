@@ -43,6 +43,7 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,7 @@ type LegacyUser = {
   userName: string | null;
   userLastName: string | null;
   userTel: string | null;
+  userCompany: string | null;
 };
 
 // The selectable status-filter options (label + the fstatus codes each covers).
@@ -131,9 +133,18 @@ function deliveryStamp(r: ForwarderRow): string | null {
   return r.fdatestatus7 ?? r.fdatestatus6 ?? r.fdate ?? null;
 }
 
-function userDisplayName(u: LegacyUser | null | undefined): string {
+// Juristic-aware CUSTOMER (account-holder) display: นิติบุคคล customers show
+// the company name (not the contact person) when a tb_corporate name is
+// present. `corpNames` = batched Map<userid, corporatename> (no N+1). This is
+// the account holder — NOT the delivery recipient (recipientName · untouched).
+function userDisplayName(u: LegacyUser | null | undefined, corpNames?: Map<string, string>): string {
   if (!u) return "";
-  return [u.userName, u.userLastName].filter(Boolean).join(" ");
+  return resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpNames?.get(u.userID)),
+  }).name;
 }
 
 function recipientName(r: ForwarderRow): string {
@@ -207,7 +218,7 @@ export default async function AdminDeliveryHistoryPage({
   if (userIds.length > 0) {
     const { data: usersRaw, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userTel")
+      .select("userID, userName, userLastName, userTel, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error("[admin delivery-history users join] failed", {
@@ -219,6 +230,9 @@ export default async function AdminDeliveryHistoryPage({
       usersById.set(u.userID, u);
     }
   }
+  // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+  // account holders show the company, not the contact person.
+  const corpNames = await fetchCorporateNameMap(admin, userIds);
 
   // ── 3) compute amounts + stats ──
   const amountById = new Map<number, number>();
@@ -237,7 +251,7 @@ export default async function AdminDeliveryHistoryPage({
       id: r.id,
       delivery_date: fmtDate(deliveryStamp(r)),
       userid: r.userid ?? "",
-      customer_name: userDisplayName(u),
+      customer_name: userDisplayName(u, corpNames),
       phone: u?.userTel ?? "",
       recipient: recipientName(r),
       cabinet: r.fcabinetnumber ?? "",
@@ -362,7 +376,7 @@ export default async function AdminDeliveryHistoryPage({
             {rows.map((r) => {
               const u = r.userid ? usersById.get(r.userid) : undefined;
               const recipient = recipientName(r);
-              const name = userDisplayName(u);
+              const name = userDisplayName(u, corpNames);
               return (
                 <tr
                   key={r.id}

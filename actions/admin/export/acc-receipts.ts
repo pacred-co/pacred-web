@@ -26,6 +26,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import type { ReceiptTab } from "@/actions/admin/accounting-receipts";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 // Safety cap for the "export all filtered" path. 10,000 comfortably covers a
 // month-window receipt slice in one file while bounding the in-memory build.
@@ -71,13 +76,25 @@ function defaultDateRange(): { from: string; to: string } {
 
 function customerLabel(
   recompname: string | null,
-  u: { userName: string | null; userLastName: string | null } | undefined,
+  u:
+    | { userName: string | null; userLastName: string | null; userCompany: string | null }
+    | undefined,
+  corpName: string | undefined,
   userid: string,
 ): string {
+  // The receipt's own captured company name wins (billing-run parity: the doc
+  // already stamped its buyer name).
   const rec = (recompname ?? "").trim();
   if (rec) return rec;
   if (!u) return userid;
-  const name = [u.userName, u.userLastName].filter(Boolean).join(" ").trim();
+  // Else resolve the DISPLAY identity — a juristic customer shows the company
+  // name (from tb_corporate), not the contact person.
+  const name = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: corpRowFromName(corpName),
+  }).name;
   return name || userid;
 }
 
@@ -170,11 +187,14 @@ export async function exportReceiptsAll(
 
   // IN-batch users join (same hydration as getReceiptList).
   const uniqUserIds = Array.from(new Set(receipts.map((r) => r.userid).filter(Boolean)));
-  const userMap = new Map<string, { userName: string | null; userLastName: string | null }>();
+  const userMap = new Map<
+    string,
+    { userName: string | null; userLastName: string | null; userCompany: string | null }
+  >();
   if (uniqUserIds.length > 0) {
     const { data: userRows, error: uErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .in("userID", uniqUserIds);
     if (uErr) {
       console.error(`[exportReceiptsAll] tb_users IN-batch failed`, {
@@ -186,10 +206,18 @@ export async function exportReceiptsAll(
       userID: string;
       userName: string | null;
       userLastName: string | null;
+      userCompany: string | null;
     }>) {
-      userMap.set(u.userID, { userName: u.userName, userLastName: u.userLastName });
+      userMap.set(u.userID, {
+        userName: u.userName,
+        userLastName: u.userLastName,
+        userCompany: u.userCompany,
+      });
     }
   }
+
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, uniqUserIds);
 
   // Per-row item counts via tb_receipt_item IN-batch (same as getReceiptList).
   const ridList = receipts.map((r) => r.rid).filter(Boolean);
@@ -217,7 +245,7 @@ export async function exportReceiptsAll(
     return {
       rid: r.rid,
       refid: r.refid ?? "",
-      customer: customerLabel(r.recompname, userMap.get(r.userid), r.userid),
+      customer: customerLabel(r.recompname, userMap.get(r.userid), corpNames.get(r.userid), r.userid),
       userid: r.userid,
       corporate: r.corporatetype === "1" ? "นิติบุคคล" : "ทั่วไป",
       rdate: r.rdate ? r.rdate.slice(0, 10) : "",

@@ -33,6 +33,11 @@ import {
   foldByUser,
   emptyBucket,
 } from "../user-all/_lib/aggregate";
+import {
+  resolveBillingIdentity,
+  fetchCorporateNameMap,
+  corpRowFromName,
+} from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -126,6 +131,16 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
   }
   const users = (usersData ?? []) as UserRow[];
 
+  // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
+  const corpNames = await fetchCorporateNameMap(admin, users.map((u) => u.userID));
+  const displayName = (u: UserRow): string =>
+    resolveBillingIdentity({
+      userCompany: u.userCompany,
+      userName: u.userName,
+      userLastName: u.userLastName,
+      corp: corpRowFromName(u.userID ? corpNames.get(u.userID) : undefined),
+    }).name;
+
   // ── 2) Lifetime per-service aggregates (legacy status filters) ────────────
   // ฝากสั่งซื้อ — hstatus<>6.
   const { data: shopData, error: shopErr } = await admin
@@ -206,7 +221,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
     total: r.total,
     sale: r.u.adminIDSale ?? "",
     userid: r.uid,
-    fullname: `${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim(),
+    fullname: displayName(r.u),
   }));
   const csvCols = [
     { key: "registered", label: "วันที่สมัครสมาชิก" },
@@ -379,7 +394,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
                         {r.uid}
                       </Link>
                       <div className="mt-0.5 text-muted">
-                        {`${r.u.userName ?? ""} ${r.u.userLastName ?? ""}`.trim() || "—"}
+                        {displayName(r.u) || "—"}
                       </div>
                     </td>
                   </tr>

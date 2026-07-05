@@ -32,6 +32,7 @@
  *   tb_settings       — hratecostdefault (เรทสั่งซื้อ/ต้นทุน), rsdefault (sale), rpdefault (โอน)
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { unstable_cache } from "next/cache";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
@@ -668,6 +669,11 @@ type RawUserRow = {
   userTel: string | null;
   coID: string | null;          // VIP tier (badgeVIP2)
   adminIDSale: string | null;   // sales rep (badgeAdminSale)
+  // นิติบุคคล display (owner 2026-07-04) — the dashboard tab rows must show the
+  // COMPANY name for a juristic customer, not the contact person (was leaking
+  // "PEA PEA" for a company). Batched via the same .in() as the user rows.
+  userCompany: string | null;   // '1' = นิติบุคคล
+  corporatename: string | null; // tb_corporate.corporatename (company display name)
 };
 
 /**
@@ -675,6 +681,10 @@ type RawUserRow = {
  * tb_users query. Returns an empty Map if no ids. PostgREST `.in()` is
  * the only reliable join — the legacy FK is by `userid` text not a
  * proper relational FK (same constraint as /admin/forwarders rewrite).
+ *
+ * Also batches tb_corporate (2026-07-04) in ONE more .in() so nameOf() can show
+ * the COMPANY name for a นิติบุคคล (owner: dashboard leaked the contact person).
+ * NOT N+1 — two parallel .in() queries, then a merge.
  */
 async function loadUsersByUserId(
   admin: ReturnType<typeof createAdminClient>,
@@ -682,20 +692,51 @@ async function loadUsersByUserId(
 ): Promise<Map<string, RawUserRow>> {
   const unique = Array.from(new Set(userIds.filter(Boolean)));
   if (unique.length === 0) return new Map();
-  const { data, error } = await admin
-    .from("tb_users")
-    .select("userID,userName,userLastName,userTel,coID,adminIDSale")
-    .in("userID", unique);
-  if (error) {
-    console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, error);
+  const [usersRes, corpRes] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select("userID,userName,userLastName,userTel,coID,adminIDSale,userCompany")
+      .in("userID", unique),
+    admin
+      .from("tb_corporate")
+      .select("userid, corporatename")
+      .in("userid", unique),
+  ]);
+  if (usersRes.error) {
+    console.warn(`[tb_users list] failed (soft-fail · returning empty map)`, usersRes.error);
   }
-  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]));
+  if (corpRes.error) {
+    console.warn(`[tb_corporate list] failed (soft-fail · person name shown)`, corpRes.error);
+  }
+  const corpNameByUser = new Map<string, string>();
+  for (const c of (corpRes.data ?? []) as { userid: string; corporatename: string | null }[]) {
+    const nm = (c.corporatename ?? "").trim();
+    if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+  }
+  return new Map(
+    ((usersRes.data ?? []) as unknown as Omit<RawUserRow, "corporatename">[]).map((u) => [
+      u.userID,
+      { ...u, corporatename: corpNameByUser.get(u.userID) ?? null } as RawUserRow,
+    ]),
+  );
 }
 
+/**
+ * Juristic-aware customer name for a dashboard row — the COMPANY name for a
+ * นิติบุคคล, else the person. Owner 2026-07-04 (was leaking the contact person
+ * on the "รอชำระเงินนำเข้า"/tab rows). Uses the shared resolveBillingIdentity SOT.
+ */
 function nameOf(u: RawUserRow | undefined): string {
   if (!u) return "—";
-  const n = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
-  return n || "—";
+  const identity = resolveBillingIdentity({
+    userCompany: u.userCompany,
+    userName: u.userName,
+    userLastName: u.userLastName,
+    corp: u.corporatename
+      ? { corporatename: u.corporatename, corporatenumber: null, corporateaddress: null }
+      : null,
+  });
+  return identity.name || "—";
 }
 
 /**
@@ -1058,22 +1099,43 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // 2nd lookup — the RPC doesn't return ซื้อเพื่อ / รู้จักจาก / โน้ต / VIP / เซล; pull from tb_users.
       type UsrExtra = { userID: string; shopUser: string | null; channel: string | null; userNote: string | null; coID: string | null; adminIDSale: string | null };
       const extraMap = new Map<string, UsrExtra>();
+      // นิติบุคคล display (owner 2026-07-04) — company name for a company row.
+      const corpNameByUser = new Map<string, string>();
       const uids = rows.map((u) => u.userID).filter(Boolean);
       if (uids.length > 0) {
-        const { data: ex, error: exErr } = await admin
-          .from("tb_users")
-          .select("userID,shopUser,channel,userNote,coID,adminIDSale")
-          .in("userID", uids);
-        if (exErr) console.warn(`[tb_users usersActive extra] failed (soft-fail)`, exErr);
-        for (const e of (ex ?? []) as unknown as UsrExtra[]) extraMap.set(e.userID, e);
+        const [exRes, corpRes] = await Promise.all([
+          admin
+            .from("tb_users")
+            .select("userID,shopUser,channel,userNote,coID,adminIDSale")
+            .in("userID", uids),
+          admin
+            .from("tb_corporate")
+            .select("userid, corporatename")
+            .in("userid", uids),
+        ]);
+        if (exRes.error) console.warn(`[tb_users usersActive extra] failed (soft-fail)`, exRes.error);
+        if (corpRes.error) console.warn(`[tb_corporate usersActive] failed (soft-fail · person name)`, corpRes.error);
+        for (const e of (exRes.data ?? []) as unknown as UsrExtra[]) extraMap.set(e.userID, e);
+        for (const c of (corpRes.data ?? []) as { userid: string; corporatename: string | null }[]) {
+          const nm = (c.corporatename ?? "").trim();
+          if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+        }
       }
       return rows.map((u) => {
         const ex = extraMap.get(u.userID);
+        const identity = resolveBillingIdentity({
+          userCompany: u.userCompany,
+          userName: u.userName,
+          userLastName: u.userLastName,
+          corp: corpNameByUser.has(u.userID)
+            ? { corporatename: corpNameByUser.get(u.userID)!, corporatenumber: null, corporateaddress: null }
+            : null,
+        });
         return {
           id: String(u.ID),
           created_at: u.userRegistered ?? "",
           member_code: u.userID,
-          customer_name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
+          customer_name: identity.name || "—",
           amount: 0,
           detail: `${u.userTel ?? "—"}${u.userEmail ? ` · ${u.userEmail}` : ""}`,
           link: `/admin/customers/${u.userID}`,

@@ -39,6 +39,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
 import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
+import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import type {
   CrmRep,
   CrmRepsResult,
@@ -462,8 +463,8 @@ export async function getCustomer360(input: {
     const repLegacyId = (user.adminIDSale ?? "").trim() || null;
     const csLegacyId = (user.adminIDCS ?? "").trim() || null;
 
-    // ── Parallel: order count · wallet balance · latest call · rep/CS names ──
-    const [ordersRes, walletRes, callRes, repNameRes, csNameRes] = await Promise.all([
+    // ── Parallel: order count · wallet balance · latest call · rep/CS names · corp ──
+    const [ordersRes, walletRes, callRes, repNameRes, csNameRes, corpRes] = await Promise.all([
       admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("userid", userid),
       admin
         .from("tb_wallet")
@@ -497,6 +498,12 @@ export async function getCustomer360(input: {
               adminNickname: string | null;
             }>()
         : Promise.resolve({ data: null, error: null }),
+      // นิติบุคคล → company name (not the contact person).
+      admin
+        .from("tb_corporate")
+        .select("corporatename")
+        .eq("userid", userid)
+        .maybeSingle<{ corporatename: string | null }>(),
     ]);
 
     if (ordersRes.error) {
@@ -514,6 +521,9 @@ export async function getCustomer360(input: {
     if (csNameRes.error) {
       console.error("[crm 360:csName] failed", { code: csNameRes.error.code, message: csNameRes.error.message });
     }
+    if (corpRes.error) {
+      console.error("[crm 360:corp] failed", { code: corpRes.error.code, message: corpRes.error.message });
+    }
 
     const walletRaw = walletRes.data?.wallettotal;
     const walletBalance =
@@ -528,7 +538,13 @@ export async function getCustomer360(input: {
         linked: true,
         matchedBy: matchedBy ?? "manual",
         userid: user.userID,
-        name: `${user.userName ?? ""} ${user.userLastName ?? ""}`.trim() || "—",
+        name:
+          resolveBillingIdentity({
+            userCompany: user.userCompany,
+            userName: user.userName,
+            userLastName: user.userLastName,
+            corp: corpRowFromName(corpRes.data?.corporatename ?? undefined),
+          }).name || "—",
         tel: (user.userTel ?? "").trim() || null,
         isCompany: (user.userCompany ?? "").trim() === "1",
         repLegacyId,

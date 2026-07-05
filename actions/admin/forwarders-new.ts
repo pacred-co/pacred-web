@@ -54,6 +54,7 @@ import { ADDRESSES } from "@/components/seo/site";
 // (the modal silently defaulted to no-doc). Display/selection only.
 import { modeFromPref, prefFromMode } from "@/lib/tax/tax-doc-mode";
 import { GENERAL_COID_VALUES, isGeneralCoid } from "@/lib/forwarder/coid";
+import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -93,6 +94,11 @@ export type CustomerOption = {
   userName:     string | null;
   userLastName: string | null;
   userTel:      string | null;
+  // Juristic display (2026-07-04): so the customer PICKER can show the company
+  // name for นิติบุคคล, not the contact person. Optional — callers that don't
+  // populate them fall back to the person name client-side.
+  userCompany?:   string | null;
+  corporatename?: string | null;
 };
 
 export async function fetchUsersByCoid(
@@ -109,7 +115,7 @@ export async function fetchUsersByCoid(
 
       const { data, error } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userTel")
+        .select("userID, userName, userLastName, userTel, userCompany")
         .eq("coID", safeCoid)
         .eq("userStatus", "1")
         .order("userID", { ascending: true })
@@ -117,7 +123,15 @@ export async function fetchUsersByCoid(
 
       if (error) return { ok: false, error: error.message };
 
-      return { ok: true, data: { users: (data ?? []) as unknown as CustomerOption[] } };
+      const users = (data ?? []) as unknown as CustomerOption[];
+      // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
+      // customers show the company name in the picker, not the contact person.
+      const corpNames = await fetchCorporateNameMap(admin, users.map((u) => u.userID));
+      for (const u of users) {
+        const nm = corpNames.get(u.userID);
+        if (nm) u.corporatename = nm;
+      }
+      return { ok: true, data: { users } };
     },
   );
 }
@@ -151,7 +165,7 @@ export async function searchCustomers(
 
       const { data, error } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userTel, coID")
+        .select("userID, userName, userLastName, userTel, coID, userCompany")
         .or(
           `userID.ilike.%${code}%,userName.ilike.%${raw}%,userLastName.ilike.%${raw}%,userTel.ilike.%${raw}%`,
         )
@@ -160,9 +174,17 @@ export async function searchCustomers(
         .limit(30);
 
       if (error) return { ok: false, error: error.message };
+      const rows = (data ?? []) as unknown as CustomerSearchResult[];
+      // Juristic display: batched tb_corporate name lookup (no N+1) so the
+      // picker shows the company name for นิติบุคคล, not the contact person.
+      const corpNames = await fetchCorporateNameMap(admin, rows.map((r) => r.userID));
+      for (const r of rows) {
+        const nm = corpNames.get(r.userID);
+        if (nm) r.corporatename = nm;
+      }
       return {
         ok: true,
-        data: { customers: (data ?? []) as unknown as CustomerSearchResult[] },
+        data: { customers: rows },
       };
     },
   );
@@ -213,7 +235,20 @@ export async function fetchUsersByGroup(
     ["ops", "accounting", "super"],
     async () => {
       const admin = createAdminClient();
-      const SELECT = "userID, userName, userLastName, userTel, coID";
+      const SELECT = "userID, userName, userLastName, userTel, coID, userCompany";
+
+      // Juristic display: enrich a result page with tb_corporate company names
+      // (batched · no N+1) so นิติบุคคล customers show the company in the picker.
+      const withCorpNames = async (
+        users: CustomerSearchResult[],
+      ): Promise<CustomerSearchResult[]> => {
+        const corpNames = await fetchCorporateNameMap(admin, users.map((u) => u.userID));
+        for (const u of users) {
+          const nm = corpNames.get(u.userID);
+          if (nm) u.corporatename = nm;
+        }
+        return users;
+      };
 
       // freight — no tb_users flag exists; the universal search backstops.
       if (group === "freight") {
@@ -243,11 +278,11 @@ export async function fetchUsersByGroup(
           const vips = ((all ?? []) as unknown as CustomerSearchResult[])
             .filter((u) => isVipCoidValue(u.coID))
             .slice(0, 500);
-          return { ok: true, data: { users: vips } };
+          return { ok: true, data: { users: await withCorpNames(vips) } };
         }
         return {
           ok: true,
-          data: { users: (data ?? []) as unknown as CustomerSearchResult[] },
+          data: { users: await withCorpNames((data ?? []) as unknown as CustomerSearchResult[]) },
         };
       }
 
@@ -270,7 +305,7 @@ export async function fetchUsersByGroup(
       if (error) return { ok: false, error: error.message };
       return {
         ok: true,
-        data: { users: (data ?? []) as unknown as CustomerSearchResult[] },
+        data: { users: await withCorpNames((data ?? []) as unknown as CustomerSearchResult[]) },
       };
     },
   );

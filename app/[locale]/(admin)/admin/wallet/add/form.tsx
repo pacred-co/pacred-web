@@ -20,11 +20,15 @@ export type CustomerLite = {
   userlastname: string | null;
   usertel:      string | null;
   useremail:    string | null;
+  /** นิติบุคคล — the registered company name resolved from tb_corporate (2026-07-04).
+   *  When set, the picker shows the COMPANY name (owner: company, not contact person). */
+  corporatename?: string | null;
 };
 
 function labelCustomer(c: CustomerLite | null | undefined): string {
   if (!c) return "—";
-  const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
+  const company = (c.corporatename ?? "").trim();
+  const name = company || `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
   return `${c.userid} · ${name || c.usertel || c.useremail || "(ไม่มีชื่อ)"}`;
 }
 

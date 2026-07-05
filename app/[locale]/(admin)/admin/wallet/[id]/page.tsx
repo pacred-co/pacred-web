@@ -77,6 +77,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { EditDateSlipForm, EditAmountForm, ApproveRejectForm } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,7 @@ type UserRow = {
   userID: string;
   userName: string | null;
   userLastName: string | null;
+  userCompany: string | null;
   userTel: string | null;
   userEmail: string | null;
   userPicture: string | null;
@@ -214,6 +216,7 @@ export default async function AdminWalletDetail({
   // ── Parallel reads for the rest of the page ──
   const [
     { data: userRaw, error: userErr },
+    { data: corpRaw, error: corpErr },
     { data: walletRaw, error: walletErr },
     { data: cbRaw, error: cbErr },
     { data: allWallets, error: allWalletsErr },
@@ -222,8 +225,13 @@ export default async function AdminWalletDetail({
   ] = await Promise.all([
     admin
       .from("tb_users")
-      .select("userID,userName,userLastName,userTel,userEmail,userPicture")
+      .select("userID,userName,userLastName,userCompany,userTel,userEmail,userPicture")
       .eq("userID", row.userid)
+      .maybeSingle(),
+    admin
+      .from("tb_corporate")
+      .select("corporatename,corporatenumber,corporateaddress")
+      .eq("userid", row.userid)
       .maybeSingle(),
     admin
       .from("tb_wallet")
@@ -250,6 +258,7 @@ export default async function AdminWalletDetail({
       .eq("userid", row.userid),
   ]);
   if (userErr) console.error(`[tb_users list] failed`, { code: userErr.code, message: userErr.message });
+  if (corpErr) console.error(`[tb_corporate list] failed`, { code: corpErr.code, message: corpErr.message });
   if (walletErr) console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
   if (cbErr) console.error(`[tb_cash_back list] failed`, { code: cbErr.code, message: cbErr.message });
   if (allWalletsErr)
@@ -260,6 +269,11 @@ export default async function AdminWalletDetail({
     console.error(`[tb_wallet_hs linked] failed`, { code: linkedErr.code, message: linkedErr.message });
 
   const user = userRaw as unknown as UserRow | null;
+  const corp = (corpRaw as unknown as {
+    corporatename: string | null;
+    corporatenumber: string | null;
+    corporateaddress: string | null;
+  } | null) ?? null;
   const walletTotalUser = Number((walletRaw as { wallettotal: number | null } | null)?.wallettotal ?? 0);
   const cbTotalUser = Number((cbRaw as { cbtotal: number | null } | null)?.cbtotal ?? 0);
   const walletTotalAll = (allWallets ?? []).reduce(
@@ -379,7 +393,13 @@ export default async function AdminWalletDetail({
   const status = row.status ?? "1";
   const isPending = status === "1";
   const userid = row.userid;
-  const customerName = `${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim() || "—";
+  const customerName =
+    resolveBillingIdentity({
+      userCompany: user?.userCompany,
+      userName: user?.userName,
+      userLastName: user?.userLastName,
+      corp,
+    }).name || "—";
   const userAvatar = await resolveLegacyUrl(user?.userPicture ?? null, "profile-thumb");
 
   // Wave 19 BUG #4: type-aware labels for breadcrumb + page title.
