@@ -769,7 +769,11 @@ export function ForwardersTable({
                 so secondary cells read comfortably; key identity cells (รหัสลูกค้า ·
                 ออเดอร์# · ยอดค้างชำระ) step UP to text-sm, the smallest detail chips
                 stay text-[11px] = floor. Size now encodes importance, not just weight. */}
-            <table className="w-full text-xs">
+            {/* legacy table-bordered — full gridlines on every cell (owner 2026-07-06
+                "ตีเส้นตารางให้เหมือน PCS"). Scoped to the MAIN table's direct
+                thead-th / tbody-td so the nested sibling-detail table (below) keeps
+                its own styling. */}
+            <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
