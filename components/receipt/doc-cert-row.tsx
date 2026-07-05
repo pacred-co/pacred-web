@@ -78,7 +78,7 @@ export function DocCertRow({
   return (
     <div style={{ display: "flex", gap, alignItems: "stretch", flex: 1 }}>
       {showLabel && (
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start", minWidth: "14mm" }}>
           <DocSectionLabel section="certify" />
         </div>
       )}
@@ -149,7 +149,10 @@ export function DocCertRow({
               style={{ width: boxHeight, height: boxHeight, display: "block" }}
             />
           </div>
-          <div style={{ borderTop: LINE, paddingTop: "2px" }}>
+          {/* QR box has NO signing line (owner 2026-07-06: "QR ไม่ต้องใส่ขีดเส้นใต้").
+              Keep the same paddingTop spacer so its height still lines up with the
+              signature/stamp boxes that DO carry a bottom line. */}
+          <div style={{ paddingTop: "2px" }}>
             <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
           </div>
         </div>

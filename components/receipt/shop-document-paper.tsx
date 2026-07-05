@@ -311,7 +311,7 @@ function ShopDocumentPage({
              the same <DocCertRow> as the ใบเสร็จ so it matches every doc.
              No QR on this surface (shop doc has no public token view). ────── */}
         <div style={{ display: "flex", gap: "4mm" }}>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start", minWidth: "14mm" }}>
             <DocSectionLabel section="certify" />
           </div>
           <DocCertRow

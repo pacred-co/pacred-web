@@ -301,12 +301,15 @@ function BillingRunPage({
                     <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{BILL_ACCOUNT.accountType} {BILL_ACCOUNT.accountNo}</p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BILL_ACCOUNT.accountName}</p>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>
+                  {/* owner 2026-07-06: label + value were spread across a too-wide
+                      column (big gap). Cap the width + push right so each row reads
+                      as a tight "label : value" pair aligned under the สรุป amounts. */}
+                  <div style={{ width: "62mm", marginLeft: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm", marginBottom: "1px" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>กรุณาชำระภายใน :</p>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#b45309" }}>{p.dateDue}</p>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ยอดที่ต้องชำระ :</p>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{fmt2(p.netPayable)} บาท</p>
                     </div>
@@ -334,7 +337,7 @@ function BillingRunPage({
               ผู้วางบิล · ผู้อนุมัติ · ตราประทับ(ผู้ขาย) · ผู้รับวางบิล(ขีดเซ็น) ·
               ตราประทับ(ลูกค้า) · QR-last. Same <DocCertRow> as the ใบเสร็จ. */}
           <div style={{ display: "flex", gap: "2mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start", minWidth: "14mm" }}>
               <DocSectionLabel section="certify" />
             </div>
             <DocCertRow

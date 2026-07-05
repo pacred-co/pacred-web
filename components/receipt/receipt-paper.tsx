@@ -635,7 +635,7 @@ export function ReceiptPage({
               <div id="certified" style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "2mm" }}>
                   {/* Heading (left) */}
-                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start", minWidth: "14mm" }}>
                     <DocSectionLabel section="certify" />
                   </div>
                   <DocCertRow
