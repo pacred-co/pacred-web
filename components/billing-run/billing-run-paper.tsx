@@ -328,7 +328,7 @@ function BillingRunPage({
             </div>
           </div>
 
-          {/* CERTIFIED — 4 boxes: QR · ผู้วางบิล · ตราประทับ · ผู้รับวางบิล */}
+          {/* CERTIFIED — 6 boxes (match ใบเสร็จ · owner 2026-07-05): QR · ผู้วางบิล · ผู้อนุมัติ · ตราประทับผู้ขาย · ผู้รับ · ตราประทับลูกค้า */}
           <div style={{ display: "flex", gap: "2mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
               <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
@@ -345,6 +345,18 @@ function BillingRunPage({
             {/* ผู้วางบิล (ผู้ขาย) */}
             <div style={{ flex: 1, textAlign: "center" }}>
               <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้วางบิล (ผู้ขาย)</p>
+              <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
+                <Image src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายมือชื่อ" width={70} height={28} unoptimized style={{ width: "20mm", height: "auto" }} />
+              </div>
+              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
+                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{p.dateIssued}</p>
+              </div>
+            </div>
+
+            {/* ผู้อนุมัติเอกสาร (ผู้ขาย) — added 2026-07-05 to match the ใบเสร็จ 6-box cert row */}
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
               <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
                 <Image src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายมือชื่อ" width={70} height={28} unoptimized style={{ width: "20mm", height: "auto" }} />
               </div>
@@ -371,6 +383,15 @@ function BillingRunPage({
               <div style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
               <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
                 <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{p.buyerName}</p>
+              </div>
+            </div>
+
+            {/* ตราประทับ (ลูกค้า) — added 2026-07-05 (was missing vs the ใบเสร็จ) */}
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ลูกค้า)</p>
+              <div style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
+              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
+                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
               </div>
             </div>
           </div>
