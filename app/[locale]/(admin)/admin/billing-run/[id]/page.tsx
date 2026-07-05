@@ -8,7 +8,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { getInvoiceDetail } from "@/actions/admin/billing-run";
+import { getInvoiceDetail, getBillingRunDuplicateWarnings } from "@/actions/admin/billing-run";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { isGodRole } from "@/lib/admin/god-role";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
@@ -86,6 +86,17 @@ export default async function BillingRunDetailPage({
   const slipSignedUrls = (
     await Promise.all(slipPaths.map((p) => getSignedBucketUrl("slips", p)))
   ).filter((u): u is string => !!u);
+
+  // Step-3 "ตรวจสลิปซ้ำ" (owner spec §2) — read-only warning of OTHER already-paid
+  // bills for the SAME customer + SAME total (possible เวียนเทียน). Only fetched
+  // for the accounting viewer on an still-open bill (the only context that can
+  // settle); DISPLAY-only, no mutation. Fail-soft: any error → no warning shown
+  // (the settle action itself remains the hard guard).
+  let dupWarnings: Array<{ id: number; doc_no: string; total_thb: number; paid_at: string | null }> = [];
+  if (canSettle && header.status === "issued") {
+    const dupRes = await getBillingRunDuplicateWarnings(invoiceId);
+    if (dupRes.ok) dupWarnings = dupRes.data!.matches;
+  }
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -269,6 +280,9 @@ export default async function BillingRunDetailPage({
         docNo={header.doc_no}
         status={header.status}
         totalThb={header.total_thb}
+        netPayable={header.net_payable}
+        whtAmount={header.wht_amount}
+        isJuristic={header.is_juristic}
         customerId={header.userid}
         canSettle={canSettle}
         slipSignedUrls={slipSignedUrls}
@@ -276,6 +290,7 @@ export default async function BillingRunDetailPage({
         slipReviewedAt={header.slip_reviewed_at}
         slipUploadedBy={header.slip_uploaded_by}
         slipUploadedAt={header.slip_uploaded_at}
+        dupWarnings={dupWarnings}
       />
     </main>
   );
