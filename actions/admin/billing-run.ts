@@ -950,6 +950,91 @@ export async function getInvoiceDetail(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 4b. DUP-slip WARNING (READ-ONLY · display gate for the 3-step slip review)
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Read-only "เวียนเทียน" (recycled slip) warning for the ใบวางบิล 3-step slip
+ * review (step 3 · owner spec §2 "ตรวจสลิปซ้ำ"). Purely DISPLAY — it mutates
+ * nothing and changes NO money/WHT logic; it just surfaces OTHER billing-run
+ * invoices for the SAME customer + SAME face total that are already `paid`, so
+ * accounting can eyeball a possible double-submitted slip before the final
+ * ออกใบเสร็จ (markBillingRunPaid). Mirrors the legacy dup rule (same customer +
+ * same amount + already-settled) but scoped to tb_forwarder_invoice (the wallet
+ * findDuplicateSlips targets a different table). No new juristic threshold.
+ *
+ * The real settle guard is still markBillingRunPaid (gated super/accounting +
+ * the round-1 latch); this is the on-screen check the human runs first.
+ */
+export async function getBillingRunDuplicateWarnings(
+  invoiceId: number,
+): Promise<
+  AdminActionResult<{
+    matches: Array<{ id: number; doc_no: string; total_thb: number; paid_at: string | null }>;
+  }>
+> {
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+  return withAdmin<{
+    matches: Array<{ id: number; doc_no: string; total_thb: number; paid_at: string | null }>;
+  }>(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async () => {
+      const admin = createAdminClient();
+
+      // (a) resolve THIS invoice's customer + face total (never mutate).
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, userid, total_thb")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; userid: string | null; total_thb: number | string }>();
+      if (curErr) {
+        console.error("[getBillingRunDuplicateWarnings current] failed", {
+          code: curErr.code, message: curErr.message,
+        });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      // No customer or zero total → nothing to compare against.
+      if (!cur.userid || Number(cur.total_thb) <= 0) {
+        return { ok: true, data: { matches: [] } };
+      }
+
+      // (b) OTHER invoices, same customer + same face total, already settled.
+      const { data: dupRaw, error: dupErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, total_thb, paid_at")
+        .eq("userid", cur.userid)
+        .eq("total_thb", cur.total_thb)
+        .eq("status", "paid")
+        .neq("id", invoiceId)
+        .order("paid_at", { ascending: false })
+        .limit(10);
+      if (dupErr) {
+        // Fail-VISIBLE: a check we can't complete surfaces as an error so the
+        // human re-verifies, never silently returns "no dup".
+        console.error("[getBillingRunDuplicateWarnings dup] failed", {
+          code: dupErr.code, message: dupErr.message,
+        });
+        return { ok: false, error: dupErr.message };
+      }
+
+      const matches = ((dupRaw ?? []) as Array<{
+        id: number; doc_no: string; total_thb: number | string; paid_at: string | null;
+      }>).map((r) => ({
+        id: r.id,
+        doc_no: r.doc_no,
+        total_thb: Number(r.total_thb),
+        paid_at: r.paid_at,
+      }));
+
+      return { ok: true, data: { matches } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 5. CREATE invoice — mint doc-no + INSERT header + N items (race-safe retry)
 // ────────────────────────────────────────────────────────────────────────
 

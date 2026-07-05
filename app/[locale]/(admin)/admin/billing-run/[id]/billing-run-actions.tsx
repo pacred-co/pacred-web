@@ -33,6 +33,12 @@ type Props = {
   docNo: string;
   status: "issued" | "paid" | "cancelled";
   totalThb: number;
+  /** ยอดชำระสุทธิ (หลังหัก WHT) — บุคคล = totalThb · นิติ = totalThb − wht. */
+  netPayable: number;
+  /** หัก ณ ที่จ่าย 1% (0 = บุคคลธรรมดา / ไม่เข้าเกณฑ์). */
+  whtAmount: number;
+  /** true = นิติบุคคล (หัก ณ ที่จ่าย 1%). */
+  isJuristic: boolean;
   customerId: string;
   /** true = viewer is accounting/super → may settle (ตัดจ่าย). Sales = false. */
   canSettle: boolean;
@@ -44,6 +50,12 @@ type Props = {
   slipReviewedAt: string | null;
   slipUploadedBy: string | null;
   slipUploadedAt: string | null;
+  /**
+   * Step-3 "ตรวจสลิปซ้ำ" — OTHER already-paid bills for the same customer + same
+   * total (possible เวียนเทียน). DISPLAY-only; drives an extra confirm, never
+   * blocks the gated settle action.
+   */
+  dupWarnings: Array<{ id: number; doc_no: string; total_thb: number; paid_at: string | null }>;
 };
 
 const inputCls =
@@ -76,8 +88,9 @@ function fmtDateTime(iso: string | null): string {
 }
 
 export function BillingRunActions({
-  invoiceId, docNo, status, totalThb, customerId,
+  invoiceId, docNo, status, totalThb, netPayable, whtAmount, isJuristic, customerId,
   canSettle, slipSignedUrls, slipStatus, slipReviewedAt, slipUploadedBy, slipUploadedAt,
+  dupWarnings,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -102,6 +115,22 @@ export function BillingRunActions({
   const hasPendingSlip = slipStatus === "pending";
   const round1Done = !!slipReviewedAt;
   const round1Pending = hasPendingSlip && !round1Done; // ต้องตรวจรอบ 1 ก่อนตัดจ่าย
+
+  // Step-3 ตรวจสลิปซ้ำ (เวียนเทียน) — ถ้าพบใบที่จ่ายแล้ว ยอดตรงกัน ลูกค้าคนเดียวกัน
+  // ต้องยืนยันชัดเจนก่อนออกใบเสร็จ (markBillingRunPaid). DISPLAY-only.
+  const hasDup = dupWarnings.length > 0;
+  const [dupAck, setDupAck] = useState(false);
+
+  // 3-step tracker state (ordered per owner spec §2):
+  //   1) ตรวจยอด/เวลา/วันที่  = ตรวจสลิป รอบ 1 (reviewBillingRunSlipRound1)
+  //   2) ออกเลขบิล (ห้ามซ้ำ · บุคคล=ปกติ · นิติ=หัก ณ ที่จ่าย 1%) — เลขบิลถูกออกตอน
+  //      สร้างใบวางบิลแล้ว (docNo) → ขั้นนี้ = ยืนยัน/แสดง WHT ให้บัญชีเห็นชัด
+  //   3) ตรวจสลิปซ้ำ → ออกใบเสร็จ (markBillingRunPaid)
+  const step1Done = round1Done || !hasPendingSlip; // ไม่มีสลิป pending = ข้ามรอบ 1 (จ่ายนอกระบบ)
+  const step1Active = round1Pending;
+  const step2Active = step1Done && !step1Active;
+  // ขั้น 3 เปิดเมื่อผ่านขั้น 1 (ตรวจสลิปแล้ว หรือ ไม่มีสลิป pending)
+  const step3Active = step1Done;
 
   async function onSlipPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -174,8 +203,22 @@ export function BillingRunActions({
   function onMarkPaid(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+
+    // ขั้น 3 — ตรวจสลิปซ้ำ: ถ้าพบใบจ่ายแล้วยอดตรงกัน (เวียนเทียน) ต้องกดยอมรับ
+    // ความเสี่ยงก่อน (checkbox) แล้วจึงยืนยันอีกชั้น (§0f confirm-before-mutate).
+    if (hasDup && !dupAck) {
+      setMsg({
+        kind: "err",
+        text: `⚠️ พบใบวางบิลที่จ่ายแล้ว ยอดตรงกัน (${dupWarnings.map((d) => d.doc_no).join(", ")}) — กรุณาติ๊กยืนยัน "ตรวจสลิปซ้ำแล้ว" ในขั้นที่ 3 ก่อนออกใบเสร็จ`,
+      });
+      return;
+    }
+
     const verb = hasPendingSlip ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "บันทึกการรับชำระ";
-    if (!confirm(`${verb} ${docNo} จำนวน ฿${thbFmt(totalThb)}?`)) return;
+    const dupNote = hasDup
+      ? `\n\n⚠️ เตือน: พบใบที่จ่ายแล้วยอดตรงกัน (${dupWarnings.map((d) => d.doc_no).join(", ")}) — ยืนยันว่าตรวจสลิปซ้ำแล้ว?`
+      : "";
+    if (!confirm(`${verb} ${docNo} จำนวน ฿${thbFmt(totalThb)}?${dupNote}`)) return;
 
     startTransition(async () => {
       const res = await markBillingRunPaid({
@@ -319,14 +362,80 @@ export function BillingRunActions({
       {/* ตรวจ 2 รอบ + ตัดจ่าย — ACCOUNTING only (canSettle) */}
       {canSettle ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
-          {/* 2-round note (เฉพาะตอนมีสลิปรอตรวจ) */}
-          {hasPendingSlip && (
-            <div className={`rounded-lg border px-3 py-1.5 text-[11px] ${round1Done ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
-              {round1Done
-                ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย"
-                : "ขั้นที่ 1: ตรวจสลิป (รอบ 1) ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+          {/* ── ขั้นตอนตรวจสลิป 3 ขั้น (owner spec §2) ─────────────────────── */}
+          <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 space-y-2.5">
+            <h4 className="text-sm font-bold text-emerald-900">🧾 ตรวจสลิป 3 ขั้น ก่อนออกใบเสร็จ</h4>
+
+            {/* ขั้น 1 — ตรวจยอด/เวลา/วันที่ (= ตรวจสลิป รอบ 1) */}
+            <div className={`rounded-lg border px-3 py-2 text-[12px] ${step1Done ? "border-emerald-200 bg-emerald-50 text-emerald-800" : step1Active ? "border-sky-300 bg-sky-50 text-sky-800" : "border-border bg-surface-alt/40 text-muted"}`}>
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">
+                  {step1Done ? "✓" : "1"}
+                </span>
+                <span>ขั้น 1 · ตรวจยอด / เวลา / วันที่</span>
+              </div>
+              <p className="mt-0.5 pl-7 text-[11px]">
+                {!hasPendingSlip
+                  ? "ไม่มีสลิปรอตรวจ (จ่ายนอกระบบ) — ข้ามไปบันทึกการรับชำระได้เลย"
+                  : step1Done
+                    ? `ตรวจสลิป รอบ 1 แล้ว${slipReviewedAt ? ` · ${fmtDateTime(slipReviewedAt)}` : ""}`
+                    : "กด “ตรวจสลิป รอบ 1” ด้านล่าง เพื่อยืนยันยอด/เวลา/วันที่บนสลิป"}
+              </p>
             </div>
-          )}
+
+            {/* ขั้น 2 — ออกเลขบิล (ห้ามซ้ำ) + WHT บุคคล/นิติ */}
+            <div className={`rounded-lg border px-3 py-2 text-[12px] ${step2Active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-surface-alt/40 text-muted"}`}>
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">2</span>
+                <span>ขั้น 2 · เลขบิล (ไม่ซ้ำ) + หัก ณ ที่จ่าย</span>
+              </div>
+              <div className="mt-1 pl-7 space-y-0.5 text-[11px]">
+                <div>เลขบิล: <span className="font-mono font-semibold">{docNo}</span> · ประเภท: <span className="font-semibold">{isJuristic ? "นิติบุคคล" : "บุคคลธรรมดา"}</span></div>
+                {whtAmount > 0 ? (
+                  <div className="text-red-700">
+                    หัก ณ ที่จ่าย 1% = ฿{thbFmt(whtAmount)} → ยอดชำระสุทธิ <span className="font-semibold">฿{thbFmt(netPayable)}</span>
+                    <span className="text-muted"> (จากยอดรวม ฿{thbFmt(totalThb)})</span>
+                  </div>
+                ) : (
+                  <div>บุคคลธรรมดา — ไม่มีหัก ณ ที่จ่าย · ยอดชำระ <span className="font-semibold">฿{thbFmt(totalThb)}</span></div>
+                )}
+              </div>
+            </div>
+
+            {/* ขั้น 3 — ตรวจสลิปซ้ำ (เวียนเทียน) → ออกใบเสร็จ */}
+            <div className={`rounded-lg border px-3 py-2 text-[12px] ${hasDup ? "border-red-300 bg-red-50 text-red-800" : step3Active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-surface-alt/40 text-muted"}`}>
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">3</span>
+                <span>ขั้น 3 · ตรวจสลิปซ้ำ → ออกใบเสร็จ</span>
+              </div>
+              {hasDup ? (
+                <div className="mt-1 pl-7 space-y-1.5 text-[11px]">
+                  <div className="font-semibold">⚠️ พบใบวางบิลที่จ่ายแล้ว ยอดตรงกัน (ลูกค้า {customerId}) — อาจเป็นสลิปเวียนเทียน:</div>
+                  <ul className="space-y-0.5">
+                    {dupWarnings.map((d) => (
+                      <li key={d.id}>
+                        • <span className="font-mono font-semibold">{d.doc_no}</span> · ฿{thbFmt(d.total_thb)}
+                        {d.paid_at ? <> · จ่าย {fmtDateTime(d.paid_at)}</> : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-1 flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dupAck}
+                      onChange={(e) => setDupAck(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
+                    />
+                    <span className="font-semibold">ตรวจสลิปซ้ำแล้ว — ยืนยันว่าไม่ใช่สลิปเวียนเทียน จึงออกใบเสร็จได้</span>
+                  </label>
+                </div>
+              ) : (
+                <p className="mt-0.5 pl-7 text-[11px]">
+                  ไม่พบใบที่จ่ายแล้วยอดตรงกันของลูกค้ารายนี้ · กดออกใบเสร็จได้เลย (บันทึกการรับชำระด้านล่าง)
+                </p>
+              )}
+            </div>
+          </div>
 
           {round1Pending ? (
             /* รอบ 1: ตรวจสลิป / ปฏิเสธ (ยังตัดจ่ายไม่ได้) */
@@ -398,10 +507,11 @@ export function BillingRunActions({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="submit"
-                  disabled={pending}
+                  disabled={pending || (hasDup && !dupAck)}
+                  title={hasDup && !dupAck ? "ติ๊กยืนยัน ‘ตรวจสลิปซ้ำแล้ว’ ในขั้นที่ 3 ก่อน" : undefined}
                   className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {pending ? "กำลังบันทึก..." : `${hasPendingSlip ? "อนุมัติ + ตัดจ่าย" : "บันทึกการรับชำระ"} ฿${thbFmt(totalThb)}`}
+                  {pending ? "กำลังบันทึก..." : `${hasPendingSlip ? "อนุมัติ + ตัดจ่าย" : "ออกใบเสร็จ · บันทึกการรับชำระ"} ฿${thbFmt(totalThb)}`}
                 </button>
                 {hasPendingSlip && (
                   <button
