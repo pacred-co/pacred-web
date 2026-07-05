@@ -30,7 +30,7 @@ import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer } from "lucide-react";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -417,7 +417,8 @@ export default async function AdminDriversPage({
                         {STATUS_LABEL[fdstatus]}
                       </span>
                     </td>
-                    {/* ตัวเลือก — ดูรายละเอียด / พิมพ์ใบค้นหาสินค้า / ลบรายการ (legacy 3-button) */}
+                    {/* ตัวเลือก — ดูรายละเอียด / บิลหาสินค้า (คลัง) / บิลจัดส่ง (คนขับ) / ลบรายการ.
+                        พี่ป๊อป spec 2026-07-06 #7 — the 2 split logistics documents. */}
                     <td className="px-3 py-3 text-center whitespace-nowrap">
                       <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
                         <Link
@@ -427,11 +428,18 @@ export default async function AdminDriversPage({
                           ดูรายละเอียด
                         </Link>
                         <Link
+                          href={`/admin/drivers/${r.id}/picking-list`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                        >
+                          <ClipboardList className="h-3 w-3" /> บิลหาสินค้า
+                        </Link>
+                        <Link
                           href={`/admin/drivers/${r.id}/print`}
                           target="_blank"
                           className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
                         >
-                          <Printer className="h-3 w-3" /> พิมพ์ใบค้นหาสินค้า
+                          <Printer className="h-3 w-3" /> บิลจัดส่ง
                         </Link>
                         {/* ลบรายการ (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ */}
                         {fdstatus === "1" && agg.doneCount === 0 && (

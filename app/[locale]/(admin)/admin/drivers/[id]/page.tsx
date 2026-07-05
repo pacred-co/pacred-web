@@ -24,7 +24,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
@@ -538,16 +538,25 @@ export default async function AdminDriverBatchDetailPage({
               Google นำทาง (ทุกจุด)
             </a>
           )}
-          {/* re-sweep #12 — driver A4 picking slip (faithful port of
-              legacy printDriver.php). Opens in a new tab so the driver
-              keeps the batch detail open while printing. */}
+          {/* พี่ป๊อป spec 2026-07-06 #7 — the two split logistics documents.
+              Opens in new tabs so the batch detail stays open while printing.
+              • บิลหาสินค้า (Picking List) → คลัง หยิบของตามตำแหน่งจัดเก็บ
+              • บิลจัดส่ง (Delivery Note) → คนขับ ส่งตามที่อยู่ (printDriver.php) */}
+          <Link
+            href={`/admin/drivers/${batch.id}/picking-list`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 text-xs font-medium hover:bg-amber-100"
+          >
+            <ClipboardList className="h-3.5 w-3.5" />
+            พิมพ์บิลหาสินค้า (คลัง)
+          </Link>
           <Link
             href={`/admin/drivers/${batch.id}/print`}
             target="_blank"
             className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 border border-primary-200 text-primary-700 px-3 py-1.5 text-xs font-medium hover:bg-primary-100"
           >
             <Printer className="h-3.5 w-3.5" />
-            พิมพ์ใบส่งสินค้า
+            พิมพ์บิลจัดส่ง (คนขับ)
           </Link>
           {isOpsOverride && (
             <BatchManage

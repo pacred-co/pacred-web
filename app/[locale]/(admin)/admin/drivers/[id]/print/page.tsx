@@ -1,7 +1,15 @@
 /**
- * /admin/drivers/[id]/print — driver A4 picking slip ("ใบส่งสินค้า").
+ * /admin/drivers/[id]/print — driver A4 "บิลจัดส่ง / Delivery Note".
  * Faithful port of legacy PCS Cargo `member/pcs-admin/printDriver.php`
  * (248 LOC · D1 / ADR-0017).
+ *
+ * ── The DRIVER's document (พี่ป๊อป spec 2026-07-06 · BUILD item #7) ────
+ * This is one of TWO split logistics documents. It is the DRIVER's copy:
+ * ordered by customer/address (userID ASC), with the ship-to string and a
+ * per-recipient "ผู้รับสินค้า" sign line — everything the driver needs to
+ * DELIVER. Its sibling — the warehouse "บิลหาสินค้า / Picking List"
+ * (`../picking-list`) — is grouped by storage location so the assembler
+ * can FIND the goods first. Same parcel set, different job.
  *
  * ── What the legacy printDriver.php does ─────────────────────────────
  * Given a driver-run id (`$_GET['id']` = tb_forwarder_driver.ID), it
@@ -254,11 +262,18 @@ export default async function DriverPickingSlipPrintPage({
           >
             ← กลับรายละเอียดรอบ
           </Link>
+          <Link
+            href={`/admin/drivers/${batch.id}/picking-list`}
+            target="_blank"
+            className="text-primary-600 hover:underline"
+          >
+            บิลหาสินค้า (คลัง) →
+          </Link>
           <span className="text-xs text-gray-500">
-            ใบส่งสินค้า · รอบ #{batch.id} · {totalTrackings} แทรคกิ้ง
+            บิลจัดส่ง · รอบ #{batch.id} · {totalTrackings} แทรคกิ้ง
           </span>
         </div>
-        <PrintButton label="🖨 พิมพ์ใบส่งสินค้า" />
+        <PrintButton label="🖨 พิมพ์บิลจัดส่ง" />
       </div>
 
       <main className="print-area mx-auto max-w-[800px] p-6 space-y-4">
@@ -276,7 +291,8 @@ export default async function DriverPickingSlipPrintPage({
             </p>
           </div>
           <div className="text-right text-xs space-y-0.5">
-            <h2 className="text-xl font-bold">ใบส่งสินค้า</h2>
+            <h2 className="text-xl font-bold">บิลจัดส่ง</h2>
+            <p className="text-[11px] text-gray-500">Delivery Note (คนขับ)</p>
             <p className="text-gray-700">
               <span className="text-gray-500">ชื่อเรื่อง:</span>{" "}
               {batch.fdname ?? `รอบ #${batch.id}`}
