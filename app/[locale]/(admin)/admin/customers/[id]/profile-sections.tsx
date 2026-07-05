@@ -34,7 +34,6 @@ import {
   adminUpdateUserPricing,
   adminUpdateUserPurchaser,
   adminUpdateCorporate,
-  adminConvertToJuristic,
   adminUploadCorporateDoc,
   adminRemoveCorporateDoc,
   adminSetCorporateStatus,
@@ -1383,74 +1382,13 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 4b) Convert บุคคล → นิติบุคคล (owner 2026-06-26) — for PERSONAL customers
+// 4b) Convert บุคคล → นิติบุคคล — MOVED to the profile header (owner 2026-07-05).
+//   The upgrade now lives in <UpgradeJuristicPopup> (a no-PIN header popup that
+//   reuses the canonical ConvertToJuristicFormBody + inline doc upload). The old
+//   PIN-gated <ConvertToJuristic> SectionShell was removed here to avoid two
+//   entry points; adminConvertToJuristic from actions/admin/customer-profile is
+//   no longer called from the UI (kept as a server action).
 // ──────────────────────────────────────────────────────────────────────────
-export function ConvertToJuristic({ userid }: { userid: string }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ corporatenumber: "", corporatename: "", corporateaddress: "" });
-
-  function submit() {
-    setError(null);
-    start(async () => {
-      const res = await adminConvertToJuristic({ userid, ...form });
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
-  const valid = form.corporatename.trim() !== "" && /^\d{13}$/.test(form.corporatenumber) && form.corporateaddress.trim() !== "";
-
-  return (
-    <SectionShell
-      title="ประเภทลูกค้า: บุคคลธรรมดา"
-      action={
-        !open ? (
-          <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
-            <Plus className="w-3.5 h-3.5" /> อัปเกรดเป็นนิติบุคคล
-          </button>
-        ) : null
-      }
-    >
-      <div className="p-4 space-y-3 text-sm">
-        {error && <ErrBox msg={error} />}
-        {!open ? (
-          <p className="text-muted">
-            ลูกค้ารายนี้เป็น <b>บุคคลธรรมดา</b> — ถ้าต้องการออกใบกำกับภาษี/เป็นนิติบุคคล กด
-            <b> “อัปเกรดเป็นนิติบุคคล”</b> แล้วกรอกข้อมูลบริษัท + แนบเอกสาร (ภพ.20 / หนังสือรับรอง / บัตรกรรมการ)
-            ในกล่อง “เอกสารนิติบุคคล” ที่จะปรากฏ.
-          </p>
-        ) : (
-          <>
-            <Field label="ชื่อบริษัท">
-              <input type="text" value={form.corporatename} disabled={pending} maxLength={300}
-                onChange={(e) => setForm((f) => ({ ...f, corporatename: e.target.value }))} className={inputCls} />
-            </Field>
-            <Field label="เลขผู้เสียภาษี (13 หลัก)">
-              <input type="text" inputMode="numeric" value={form.corporatenumber} disabled={pending} maxLength={13}
-                onChange={(e) => setForm((f) => ({ ...f, corporatenumber: e.target.value.replace(/\D/g, "") }))} className={`${inputCls} font-mono`} />
-            </Field>
-            <Field label="ที่อยู่บริษัท">
-              <textarea value={form.corporateaddress} disabled={pending} rows={2} maxLength={2000}
-                onChange={(e) => setForm((f) => ({ ...f, corporateaddress: e.target.value }))} className={inputCls} />
-            </Field>
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-              กดยืนยัน = ตั้งลูกค้าเป็น <b>นิติบุคคล</b> (สถานะ “รอตรวจสอบ”) → แนบเอกสาร + กดอนุมัติได้ในกล่องด้านล่าง
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setOpen(false)}>ยกเลิก</Button>
-              <Button type="button" size="sm" disabled={pending || !valid} onClick={submit}>
-                <Save className="size-4" /> {pending ? "กำลังบันทึก..." : "ยืนยันอัปเกรดเป็นนิติบุคคล"}
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-    </SectionShell>
-  );
-}
 
 // ──────────────────────────────────────────────────────────────────────────
 // 4c) Corporate document gallery (owner 2026-06-26) — multi-doc + verify

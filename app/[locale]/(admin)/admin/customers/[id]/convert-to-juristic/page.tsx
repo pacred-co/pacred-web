@@ -21,7 +21,8 @@ export default async function ConvertToJuristicPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["super", "manager", "accounting", "qa", "ops", "sales_admin"]);
+  // 2026-07-05 (owner) — +`sales` (Cargo Sales Staff) · matches JURISTIC_ROLES.
+  await requireAdmin(["super", "manager", "accounting", "qa", "ops", "sales_admin", "sales"]);
 
   const { id } = await params;
   const userid = id.toUpperCase();

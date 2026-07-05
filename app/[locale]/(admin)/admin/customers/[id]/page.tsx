@@ -37,7 +37,10 @@ export default async function AdminCustomerDetailPage({
 }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Customer detail =
   // full PII (corporate, addresses, wallet). ops + sales + accounting.
-  await requireAdmin(["ops", "sales_admin", "accounting"]);
+  // 2026-07-05 (owner) — added `sales` (Cargo Sales Staff) so the CS/Sales
+  // staff tier can reach the profile + self-serve the บุคคล→นิติ upgrade with
+  // NO PIN (the comment already said "sales"; the code had only sales_admin).
+  await requireAdmin(["ops", "sales_admin", "sales", "accounting"]);
 
   const { id } = await params;
   const sp = await searchParams;
