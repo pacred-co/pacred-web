@@ -167,6 +167,14 @@ function calcRowCost(dimension: number | null, rate: number): number {
   return Math.round(v * rate * 100) / 100;
 }
 
+// Sanity backstop (owner 2026-07-05 · the GZE260627-1 −฿328M fire): a whole
+// container's real cost is at most a few hundred-k THB (MOMO ~2,500/CBM ×
+// tens of CBM). A total above this = a basis/rate error — the classic one is a
+// per-CBM rate (e.g. 4,700) applied to KG weight (66,150 kg × 4,700 = ฿310M).
+// We REJECT the apply before writing rather than persist garbage that then
+// shows as a catastrophic negative กำไรตู้.
+const CONTAINER_COST_SANITY_MAX = 5_000_000;
+
 // ─────────────────────────────────────────────────────────────────────
 // adminReportCntCustomRate — report-cnt.php L912-993
 //   UPSERT tb_cost_container + bulk-update tb_forwarder.fcosttotalprice
@@ -253,17 +261,33 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
       p4: fProductsType4,
     };
 
-    let updated = 0;
+    // Pass 1 — compute the per-row cost plan (carrier basis wins over the modal
+    // toggle; unknown wh → modal default) + a sanity backstop BEFORE any write.
+    const plan: Array<{ id: number; cost: number; frefprice: string }> = [];
+    let plannedTotal = 0;
     for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null; fwarehousename: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
       const wh = r.fwarehousename ?? "";
       const basis = VALID_WH.has(wh) ? costBasisMode(wh as WarehouseDigit) : mode; // carrier wins; unknown wh → modal default
       const dim = basis === "weight" ? r.fweight : r.fvolume;
       const cost = calcRowCost(dim, rate);
+      plannedTotal += cost;
+      plan.push({ id: r.id, cost, frefprice: basis === "weight" ? "1" : "2" });
+    }
+    // Sanity backstop — refuse an absurd total (a basis/rate error) instead of
+    // persisting garbage that reads as a −hundreds-of-millions กำไรตู้.
+    if (plannedTotal > CONTAINER_COST_SANITY_MAX) {
+      return {
+        ok: false,
+        error: `ต้นทุนรวมที่คำนวณได้สูงผิดปกติ (฿${plannedTotal.toLocaleString("th-TH", { maximumFractionDigits: 0 })}) — น่าจะคิดหน่วยผิด (เรทต่อ "คิว" ไปคูณกับ "น้ำหนัก(กก.)"). ตรวจสอบเรท + หน่วย (คิว/น้ำหนัก) ก่อนบันทึก`,
+      };
+    }
+    let updated = 0;
+    for (const p of plan) {
       const { error: updErr } = await admin
         .from("tb_forwarder")
-        .update({ fcosttotalprice: cost, frefprice: basis === "weight" ? "1" : "2" })
-        .eq("id", r.id);
+        .update({ fcosttotalprice: p.cost, frefprice: p.frefprice })
+        .eq("id", p.id);
       if (!updErr) updated += 1;
     }
 
