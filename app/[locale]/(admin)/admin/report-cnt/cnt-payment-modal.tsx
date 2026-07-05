@@ -118,12 +118,10 @@ export function CntPaymentModal({ open, onClose, selected }: Props) {
       aria-modal="true"
       aria-labelledby="cnt-payment-modal-title"
     >
-      {/* Backdrop */}
-      <button
-        type="button"
-        aria-label="ปิด"
-        onClick={() => { if (!pending) onClose(); }}
-        className="absolute inset-0 bg-black/50 cursor-default"
+      {/* Backdrop — click does NOT close (owner 2026-07-05) */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/50"
       />
 
       {/* Dialog */}

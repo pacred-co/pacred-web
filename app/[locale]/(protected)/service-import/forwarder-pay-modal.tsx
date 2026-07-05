@@ -245,10 +245,9 @@ export function ForwarderPayModal({
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — backdrop click does NOT close (owner 2026-07-05) */}
       <div
         className="fixed inset-0 z-[1050] bg-black/50 backdrop-blur-sm animate-in fade-in"
-        onClick={onClose}
         aria-hidden
       />
       {/* Dialog */}

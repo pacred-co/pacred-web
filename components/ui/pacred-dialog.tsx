@@ -31,9 +31,10 @@ import { useTranslations } from "next-intl";
 // PacredDialog — the standard modal shell
 // ──────────────────────────────────────────────────────────────
 // Native `<dialog>` element opened via ref.current.showModal() / closed
-// via ref.current.close(). Backdrop click closes; Esc closes; explicit X
-// in header closes. Tailwind chrome (rounded · border · shadow ·
-// backdrop:bg-black/40 · max-h-[90vh] · overflow-y-auto in body).
+// via ref.current.close(). Backdrop click does NOT close, Esc does NOT close
+// (owner directive 2026-07-05) — close ONLY via the explicit ✕ in the header
+// or a cancel/save button in the footer. Tailwind chrome (rounded · border ·
+// shadow · backdrop:bg-black/40 · max-h-[90vh] · overflow-y-auto in body).
 
 export function PacredDialog({
   dialogRef,
@@ -50,13 +51,8 @@ export function PacredDialog({
   onClose?: () => void;
 }) {
   const t = useTranslations("pacredDialog");
-  function handleDialogClick(e: React.MouseEvent<HTMLDialogElement>) {
-    // Native <dialog> backdrop emits a click with target === dialog.
-    if (e.target === dialogRef.current) {
-      dialogRef.current?.close();
-      onClose?.();
-    }
-  }
+  // Owner directive 2026-07-05: modals must NOT close on outside/backdrop click
+  // or on ESC — the user resolves via the explicit ✕ / cancel / save buttons.
 
   const widthClass =
     size === "lg" ? "w-[min(960px,95vw)]" : "w-[min(560px,95vw)]";
@@ -64,7 +60,7 @@ export function PacredDialog({
   return (
     <dialog
       ref={dialogRef}
-      onClick={handleDialogClick}
+      onCancel={(e) => e.preventDefault()}
       onClose={onClose}
       className={`rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 max-h-[90vh] ${widthClass}`}
     >
@@ -187,9 +183,9 @@ export function useConfirmDialogs() {
   const dialogs = (
     <dialog
       ref={dialogRef}
-      onClick={(e) => {
-        if (e.target === dialogRef.current) close(false);
-      }}
+      // Owner directive 2026-07-05: no backdrop-click close, no ESC close —
+      // the user resolves via the explicit cancel / confirm buttons below.
+      onCancel={(e) => e.preventDefault()}
       onClose={() => {
         resolveRef.current?.(false);
         resolveRef.current = null;

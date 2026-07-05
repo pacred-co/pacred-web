@@ -129,10 +129,9 @@ export function ConfirmDialogHost() {
           setReq(null);
         }
       }}
-      onClick={(e) => {
-        // Backdrop click (target === dialog) cancels.
-        if (e.target === dialogRef.current) done({ ok: false });
-      }}
+      // Owner directive 2026-07-05: no backdrop-click close, no ESC close —
+      // the user resolves via the explicit cancel / confirm buttons below.
+      onCancel={(e) => e.preventDefault()}
       className="m-auto w-[min(440px,92vw)] rounded-2xl border border-gray-200 bg-white p-0 shadow-[0_24px_60px_rgba(0,0,0,0.28)] backdrop:bg-black/50 backdrop:backdrop-blur-[2px] dark:border-border dark:bg-surface"
     >
       {req && (

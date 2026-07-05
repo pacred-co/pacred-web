@@ -555,7 +555,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
   const callLead = callOpenId != null ? leads.find((l) => l.id === callOpenId) ?? null : null;
   const closeCallModal = () => { setCallOpenId(null); setHandoffOpenId(null); setCloseOpenId(null); setPrQuery(""); setPrResults([]); };
   const callOutcomeModal = callLead ? (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6" onClick={closeCallModal}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-white shadow-xl dark:bg-surface" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div className="min-w-0">
@@ -920,7 +920,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
 
       {/* ── Import POPUP ── */}
       {importOpen ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={closeImport}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
           <div className="w-full max-w-4xl rounded-2xl border border-border bg-white shadow-xl dark:bg-surface" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <h2 className="flex items-center gap-2 text-base font-black text-foreground"><FileSpreadsheet className="h-5 w-5 text-primary-600" /> นำเข้ารายชื่อลูกค้า (CSV)</h2>

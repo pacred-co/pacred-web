@@ -165,10 +165,7 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
       aria-modal="true"
       aria-label="ตรวจสลิปเทียบยอดเงินฝาก"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={(e) => {
-        // Click on backdrop closes — but not while a write is in-flight.
-        if (e.target === e.currentTarget && !pending) onClose();
-      }}
+      // backdrop click does NOT close (owner 2026-07-05)
     >
       <div className="grid w-full max-w-6xl grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-0 overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface shadow-2xl max-h-[90vh]">
         {/* Slip pane (left) */}

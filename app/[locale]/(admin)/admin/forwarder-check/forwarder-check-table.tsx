@@ -746,9 +746,7 @@ export function ForwarderCheckTable({
           aria-modal="true"
           aria-labelledby="bill-confirm-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !pending) setConfirmingBill(false);
-          }}
+          // backdrop click does NOT close (owner 2026-07-05)
         >
           <div className="w-full max-w-md rounded-2xl border border-border bg-white p-5 shadow-xl">
             <h2 id="bill-confirm-title" className="text-lg font-semibold text-foreground">

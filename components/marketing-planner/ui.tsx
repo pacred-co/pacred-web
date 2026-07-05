@@ -248,7 +248,7 @@ export function Modal({ open, onClose, title, children, footer, size = "md" }: {
   if (!open) return null;
   const w = size === "xl" ? "max-w-5xl" : size === "lg" ? "max-w-3xl" : size === "sm" ? "max-w-md" : "max-w-xl";
   return (
-    <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:p-6">
       <div className={cx("relative my-2 w-full rounded-2xl bg-white shadow-xl dark:bg-surface sm:my-6", w)} onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-2xl border-b border-border bg-white px-5 py-3.5 dark:bg-surface">
           <h3 className="text-base font-bold text-foreground">{title}</h3>

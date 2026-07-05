@@ -223,7 +223,6 @@ export function ClearanceBanner() {
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center p-5"
           style={{ background: "rgba(17,24,39,0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div className="bg-white rounded-[24px] w-full max-w-[900px] max-h-[90vh] overflow-y-auto relative px-[18px] py-[30px] md:p-10 shadow-[0_20px_60px_rgba(0,0,0,0.2)]">
 

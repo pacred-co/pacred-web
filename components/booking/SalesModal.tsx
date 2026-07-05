@@ -26,7 +26,7 @@ export function SalesModal({ open, onClose, cards }: SalesModalProps) {
   return (
     <div
       className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[999999] flex items-center justify-center p-5"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      // backdrop click does NOT close (owner 2026-07-05)
     >
       <div className="bg-white rounded-3xl w-full max-w-[900px] p-10 relative animate-[pfIn_0.2s_ease]">
         <button

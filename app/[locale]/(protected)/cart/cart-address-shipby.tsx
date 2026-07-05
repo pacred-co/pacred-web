@@ -334,9 +334,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal();
-          }}
+          // backdrop click does NOT close (owner 2026-07-05)
           role="dialog"
           aria-modal="true"
         >
@@ -445,9 +443,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
       {maomaoOpen && eligible && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) dismissMaomao();
-          }}
+          // backdrop click does NOT close (owner 2026-07-05)
           role="dialog"
           aria-modal="true"
         >

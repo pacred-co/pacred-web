@@ -710,7 +710,7 @@ const STICKY_TINT: Record<MomoBadgeColor, string> = {
 /** In-page image viewer (พี่ป๊อป: กดดูรูปในหน้า ไม่เปิดแท็บใหม่). */
 function ImageLightbox({ images, onClose }: { images: string[]; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-bold">รูปสินค้า ({images.length})</span>

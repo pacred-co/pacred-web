@@ -91,12 +91,7 @@ export function EditAddressModal({
         createPortal(
           <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
             {/* Backdrop */}
-            <button
-              type="button"
-              aria-label={t("close")}
-              onClick={() => setOpen(false)}
-              className="absolute inset-0 bg-black/50"
-            />
+            <div className="absolute inset-0 bg-black/50" aria-hidden />
 
             {/* Panel — bottom-sheet on mobile, centred card on sm+ */}
             <div

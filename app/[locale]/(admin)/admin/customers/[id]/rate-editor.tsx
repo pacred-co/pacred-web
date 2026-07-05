@@ -244,12 +244,12 @@ export function CustomerRateEditor({
       </button>
 
       {open && (
-        // Modal overlay — click backdrop to close; the card stops propagation.
+        // Modal overlay — backdrop click does NOT close (owner 2026-07-05);
+        // close only via the ✕ / cancel buttons.
         <div
           // z-[80] sits ABOVE the admin chrome — the sticky top bar is z-[60]
           // and the sidebar logo z-[70]; at z-50 they covered the modal header.
           className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/40 p-4"
-          onClick={() => setOpen(false)}
           role="dialog"
           aria-modal="true"
         >

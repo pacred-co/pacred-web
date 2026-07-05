@@ -116,9 +116,8 @@ export function CostRevealProvider({
 
       <dialog
         ref={dialogRef}
-        onClick={(e) => {
-          if (e.target === dialogRef.current) dialogRef.current?.close();
-        }}
+        // backdrop click + ESC do NOT close (owner 2026-07-05); close via ยกเลิก.
+        onCancel={(e) => e.preventDefault()}
         className="rounded-xl p-0 border border-gray-200 shadow-xl backdrop:bg-black/50 w-[min(380px,95vw)]"
       >
         <form onSubmit={onSubmit} className="p-5">

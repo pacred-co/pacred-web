@@ -134,9 +134,7 @@ export function CostRateModal({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+          // backdrop click does NOT close (owner 2026-07-05)
         >
           <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-3 text-white">

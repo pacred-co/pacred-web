@@ -130,16 +130,13 @@ export function WarehouseHistoryRelinkModal({
     });
   }
 
-  // Close on backdrop click — native <dialog> emits a "click" with
-  // target===dialog when the user clicks the backdrop area.
-  function handleDialogClick(e: React.MouseEvent<HTMLDialogElement>) {
-    if (e.target === dialogRef.current) onClose();
-  }
+  // Owner directive 2026-07-05: backdrop click + ESC do NOT close — the user
+  // resolves via the ✕ / cancel buttons inside the modal.
 
   return (
     <dialog
       ref={dialogRef}
-      onClick={handleDialogClick}
+      onCancel={(e) => e.preventDefault()}
       onClose={onClose}
       style={{
         width: "min(960px, 95vw)",

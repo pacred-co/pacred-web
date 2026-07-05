@@ -158,7 +158,7 @@ export function CreditLinePanel({ credit, walletBalance }: Props) {
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          onClick={() => !pending && setConfirmOpen(false)}
+          // backdrop click does NOT close (owner 2026-07-05)
         >
           <div
             className="w-full max-w-sm rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-lg"

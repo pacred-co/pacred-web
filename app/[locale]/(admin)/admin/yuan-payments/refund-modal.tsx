@@ -108,9 +108,7 @@ export function YuanRefundModal({ open, onClose, yuanPayment }: Props) {
       aria-modal="true"
       aria-label="คืนเงินฝากโอนหยวน — แนบสลิป"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !pending) onClose();
-      }}
+      // backdrop click does NOT close (owner 2026-07-05)
     >
       <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">

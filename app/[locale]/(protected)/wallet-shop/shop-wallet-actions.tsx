@@ -119,7 +119,7 @@ function Modal({
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      // backdrop click does NOT close (owner 2026-07-05)
     >
       <div className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white dark:bg-surface shadow-2xl border border-border max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white dark:bg-surface border-b border-border px-5 py-3 flex items-center justify-between">
