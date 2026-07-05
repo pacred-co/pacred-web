@@ -47,6 +47,8 @@ import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
 import { AdminToolsPinGate } from "./admin-tools-gate";
+import { PricingTeamEditor } from "./pricing-team-editor";
+import { UpgradeJuristicPopup } from "./upgrade-juristic-popup";
 // CRM depth (2026-06-08) — tags + activity timeline panels.
 import { getTags } from "@/actions/admin/customer-tags";
 import { getCustomerActivity } from "@/actions/admin/customer-activity";
@@ -58,11 +60,9 @@ import {
   NoteEditor,
   SaleRepEditor,
   CsRepEditor,
-  ExtraRepEditor,
   ComparisonEditor,
   CreditLineEditor,
   CorporateEditor,
-  ConvertToJuristic,
   CorporateDocGallery,
   type CorporateDocView,
   AddressManager,
@@ -643,16 +643,19 @@ export async function renderLegacyCustomerView(
               />
               <SaleRepEditor compact userid={u.userID} currentRep={u.adminIDSale} admins={salesAdmins} />
               <CsRepEditor compact userid={u.userID} currentRep={u.adminIDCS} admins={csAdmins} />
-              {/* ทีม Pricing (owner 2026-07-02) — ผู้สั่งซื้อ + ล่ามจีน + pricing = ทีมเดียว.
-                  จัดกลุ่มใต้หัวเดียว (ไม่แยกเป็น 3 ก้อนลอยๆ) = "งานนี้ทีม Pricing ใครดูต่อ"
-                  ตามงานหลังบ้าน. คงผู้รับผิดชอบ 3 บทบาทไว้เพื่อจ่ายค่าคอมถูกคน (บางงาน
-                  คนอื่นในทีมทำ · commission เดิม). §0g self-explaining · §0h ≥11px. */}
-              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-1">
-                <span className="text-[11px] font-semibold text-amber-800">ทีม Pricing</span>
-                <ExtraRepEditor compact kind="interpreter" userid={u.userID} currentRep={u.adminIDInterpreter} admins={activeAdmins} />
-                <ExtraRepEditor compact kind="pricing" userid={u.userID} currentRep={u.adminIDPricing} admins={activeAdmins} />
-                <ExtraRepEditor compact kind="purchaser" userid={u.userID} currentRep={u.adminIDPurchaser} admins={activeAdmins} />
-              </div>
+              {/* ทีม Pricing (owner 2026-07-05) — ย่อเหลือ "ช่องเดียว": เลือกคน → เลือกบทบาท
+                  (ล่าม/สั่งซื้อ/Pricing) → assign. คงผู้รับผิดชอบ 3 บทบาทไว้ในข้อมูล (เขียน
+                  ทีละคอลัมน์ผ่าน action เดิม) เพื่อจ่ายค่าคอมถูกคน. §0g self-explaining · §0h ≥11px. */}
+              <PricingTeamEditor
+                userid={u.userID}
+                interpreter={u.adminIDInterpreter}
+                purchaser={u.adminIDPurchaser}
+                pricing={u.adminIDPricing}
+                admins={activeAdmins}
+              />
+              {/* อัพเกรดเป็นนิติบุคคล (owner 2026-07-05) — เฉพาะลูกค้า "บุคคล" · เซล/CS ทำเองได้
+                  ไม่ต้องปลดล็อกรหัส · เปิด popup กรอกข้อมูล + แนบเอกสารในตัว. */}
+              {!isJuristic ? <UpgradeJuristicPopup userid={u.userID} /> : null}
             </div>
           </div>
           {/* Action buttons — moved into the name row (right-aligned · FB-style)
@@ -1151,16 +1154,21 @@ export async function renderLegacyCustomerView(
       />
 
       {/* Juristic company info + multi-doc (owner 2026-06-26):
-          - PERSONAL → ปุ่มอัปเกรดเป็นนิติบุคคล (สร้าง tb_corporate + ตั้ง userCompany='1')
           - นิติบุคคล → แก้ข้อมูลบริษัท + กล่องเอกสารนิติ (ภพ.20/หนังสือรับรอง/บัตรกรรมการ/
-            อื่นๆ · อัปได้หลายไฟล์) + ตรวจ/อนุมัติ. */}
+            อื่นๆ · อัปได้หลายไฟล์) + ตรวจ/อนุมัติ.
+          - PERSONAL → การอัปเกรดย้ายไปไว้ที่ปุ่ม "อัพเกรดเป็นนิติบุคคล" บนหัวโปรไฟล์
+            (owner 2026-07-05 · เซล/CS ทำเองได้ ไม่ต้องปลดล็อกรหัส). */}
       {isJuristic ? (
         <div className="space-y-5">
           <CorporateEditor userid={u.userID} corp={corp} />
           <CorporateDocGallery userid={u.userID} docs={corpDocViews} status={corp?.corporatestatus ?? null} />
         </div>
       ) : (
-        <ConvertToJuristic userid={u.userID} />
+        <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3 text-xs text-muted">
+          ลูกค้ารายนี้เป็น <b>บุคคลธรรมดา</b> — ถ้าต้องการอัปเกรดเป็นนิติบุคคล กดปุ่ม{" "}
+          <b className="text-primary-600">“อัพเกรดเป็นนิติบุคคล”</b> ที่ส่วนหัวโปรไฟล์ด้านบน
+          (กรอกข้อมูลบริษัท + แนบเอกสารในตัว · ไม่ต้องใส่ PIN).
+        </div>
       )}
 
       {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).

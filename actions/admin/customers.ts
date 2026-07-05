@@ -166,7 +166,10 @@ export async function adminUpdateUserIdentity(
 // tb_corporate is all-lowercase (NOT in the 0113 camelCase batch):
 //   id · userid · corporatenumber · corporatename · corporateaddress ·
 //   corporatestatus.
-const JURISTIC_ROLES = ["super", "manager", "ops", "accounting", "qa", "sales_admin"] as const;
+// 2026-07-05 (owner) — added `sales` (Cargo Sales Staff) so a Sales/CS staffer
+// can self-serve the บุคคล→นิติ upgrade + verify from the profile header with NO
+// PIN (matches the profile-page role set: ops/sales_admin/sales/accounting + god).
+const JURISTIC_ROLES = ["super", "manager", "ops", "accounting", "qa", "sales_admin", "sales"] as const;
 
 const verifyJuristicSchema = z.object({ userid: z.string().trim().min(1).max(20) });
 const rejectJuristicSchema = z.object({

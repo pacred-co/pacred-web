@@ -14,18 +14,37 @@ const ERROR_LABEL: Record<string, string> = {
   tax_id_already_used: "เลขผู้เสียภาษีนี้ถูกใช้กับบัญชีอื่นแล้ว",
 };
 
-export function ConvertToJuristicForm({
+/**
+ * The convert-to-juristic form BODY — the fields + validation + submit logic,
+ * with NO page chrome. Extracted (owner 2026-07-05) so the SAME form powers
+ * both the dedicated /convert-to-juristic page AND the in-header upgrade popup
+ * (app/.../[id]/legacy-view + upgrade-juristic-popup.tsx) — one submit path,
+ * no duplicated logic. Uses the canonical actions/admin/customers
+ * adminConvertToJuristic (idempotent re-convert · tax-id clash guard · customer
+ * notification · mark_verified). Gated JURISTIC_ROLES = super/manager/ops/
+ * accounting/qa/sales_admin/sales — sales/CS reach it with NO PIN.
+ *
+ * @param onSuccess — optional callback fired after a successful convert (the
+ *   popup uses it to reveal the doc-upload step; the page leaves it undefined
+ *   and shows its own success card).
+ * @param compact — tighter layout for the popup (drops the outer card border).
+ */
+export function ConvertToJuristicFormBody({
   userid,
   prefilledTaxId,
   prefilledCompanyName,
   prefilledCompanyAddress,
   hasExistingDraft,
+  onSuccess,
+  compact = false,
 }: {
   userid:                   string;
   prefilledTaxId:           string;
   prefilledCompanyName:     string;
   prefilledCompanyAddress:  string;
   hasExistingDraft:         boolean;
+  onSuccess?:               () => void;
+  compact?:                 boolean;
 }) {
   const router = useRouter();
   const [taxId,    setTaxId]    = useState(prefilledTaxId);
@@ -34,7 +53,6 @@ export function ConvertToJuristicForm({
   const [markVerified, setMarkVerified] = useState(true);
   const [confirm,  setConfirm]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
-  const [done,     setDone]     = useState(false);
   const [pending,  startTransition] = useTransition();
 
   // Cheap client-side validation that mirrors the zod schema, so users
@@ -58,33 +76,21 @@ export function ConvertToJuristicForm({
         mark_verified:   markVerified,
       });
       if (res.ok) {
-        setDone(true);
         router.refresh();
+        onSuccess?.();
       } else {
         setError(ERROR_LABEL[res.error] ?? res.error);
       }
     });
   }
 
-  if (done) {
-    return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-3">
-        <h2 className="text-xl font-bold text-green-800">เปลี่ยนเป็นนิติบุคคลเรียบร้อย</h2>
-        <p className="text-sm text-green-700">
-          ลูกค้าจะได้รับ notification ทันที — ใบเสร็จและใบกำกับภาษีจะออกในชื่อบริษัทตั้งแต่บัดนี้
-        </p>
-        <div className="flex justify-center gap-2 pt-2">
-          <Button type="button" onClick={() => router.push(`/admin/customers/${userid}`)}>
-            ดูโปรไฟล์ลูกค้า
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const shell = compact
+    ? "space-y-4"
+    : "rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm space-y-4";
 
   return (
-    <section className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm space-y-4">
-      <h2 className="font-bold text-sm">ข้อมูลบริษัทใหม่</h2>
+    <section className={shell}>
+      {!compact && <h2 className="font-bold text-sm">ข้อมูลบริษัทใหม่</h2>}
 
       {hasExistingDraft && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
@@ -178,5 +184,54 @@ export function ConvertToJuristicForm({
         {pending ? "กำลังเปลี่ยน..." : "เปลี่ยนเป็นนิติบุคคล"}
       </Button>
     </section>
+  );
+}
+
+/**
+ * Page wrapper — the dedicated /convert-to-juristic page keeps its own success
+ * card (a full-page "done" state + a link back to the profile). Delegates the
+ * form itself to ConvertToJuristicFormBody so the logic lives in ONE place.
+ */
+export function ConvertToJuristicForm({
+  userid,
+  prefilledTaxId,
+  prefilledCompanyName,
+  prefilledCompanyAddress,
+  hasExistingDraft,
+}: {
+  userid:                   string;
+  prefilledTaxId:           string;
+  prefilledCompanyName:     string;
+  prefilledCompanyAddress:  string;
+  hasExistingDraft:         boolean;
+}) {
+  const router = useRouter();
+  const [done, setDone] = useState(false);
+
+  if (done) {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-3">
+        <h2 className="text-xl font-bold text-green-800">เปลี่ยนเป็นนิติบุคคลเรียบร้อย</h2>
+        <p className="text-sm text-green-700">
+          ลูกค้าจะได้รับ notification ทันที — ใบเสร็จและใบกำกับภาษีจะออกในชื่อบริษัทตั้งแต่บัดนี้
+        </p>
+        <div className="flex justify-center gap-2 pt-2">
+          <Button type="button" onClick={() => router.push(`/admin/customers/${userid}`)}>
+            ดูโปรไฟล์ลูกค้า
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ConvertToJuristicFormBody
+      userid={userid}
+      prefilledTaxId={prefilledTaxId}
+      prefilledCompanyName={prefilledCompanyName}
+      prefilledCompanyAddress={prefilledCompanyAddress}
+      hasExistingDraft={hasExistingDraft}
+      onSuccess={() => setDone(true)}
+    />
   );
 }

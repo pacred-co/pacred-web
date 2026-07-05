@@ -51,7 +51,10 @@ import {
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // Role gate for every write here (per task brief).
-const WRITE_ROLES = ["super", "accounting", "sales_admin", "ops"] as const;
+// 2026-07-05 (owner) — added `sales` (Cargo Sales Staff) so the Sales/CS staff
+// tier can edit the profile (incl. upload นิติ docs + assign the ทีม Pricing reps)
+// with NO PIN — matches the profile-page gate ops/sales_admin/sales/accounting + god.
+const WRITE_ROLES = ["super", "accounting", "sales_admin", "sales", "ops"] as const;
 
 // ── resolve the acting admin's legacy adminID (for audit columns) ─────────
 // Mirrors the helper in customer-rate.ts. tb_address.adminid + the rep
