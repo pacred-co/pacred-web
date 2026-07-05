@@ -58,6 +58,7 @@ const totalsSchema = z
 const payloadSchema = z
   .object({
     view: z.enum(["compare", "calc"]),
+    service: z.string().max(40).optional(),
     refNo: z.string().min(1).max(120),
     customerCode: z.string().max(40).optional().default(""),
     dateLabel: z.string(),
@@ -149,6 +150,8 @@ export type QuoteHistoryRow = {
   token: string;
   createdAt: string;
   view: "compare" | "calc";
+  /** Service category (cargo · freight · clearance) — for the ประวัติ filter. */
+  service: string;
   buyerName: string;
   packageLabel: string;
   grandTotal: number;
@@ -191,6 +194,8 @@ export async function listCustomerQuotations(
           token: signQuoteToken(Number(r.id)),
           createdAt: String(r.created_at ?? ""),
           view: p.view === "calc" ? "calc" : "compare",
+          // Older payloads have no `service` — every quote before this was cargo.
+          service: String(p.service || "cargo"),
           buyerName: String(p.buyerName ?? ""),
           packageLabel: String(p.packageLabel ?? ""),
           grandTotal: num(totals.grandTotal),
