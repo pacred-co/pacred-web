@@ -17,7 +17,7 @@
 
 import type { ReactNode } from "react";
 import {
-  CONTACT, SOCIAL, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, SITE_LEGAL_NAME, TAX_ID, SITE_URL,
+  CONTACT, SOCIAL, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, SITE_LEGAL_NAME, TAX_ID, SITE_URL, DOC_SIGNATORY,
 } from "@/components/seo/site";
 import { Phone, Mail, Globe, User } from "lucide-react";
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
@@ -317,24 +317,31 @@ function MetaRow({ k, v, last }: { k: string; v: ReactNode; last?: boolean }) {
 function CertifiedRow({ customerName, dateLabel, salesName, refNo, qrDataUrl }: { customerName: string; dateLabel: string; salesName: string; refNo: string; qrDataUrl?: string }) {
   return (
     <div className="border-t border-slate-200 pt-3">
-      <p className="mb-2 text-[11px] font-bold text-slate-800">✍ รับรอง</p>
-      <div className={`grid grid-cols-2 gap-3 ${qrDataUrl ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+      <p className="mb-2 text-[11px] font-bold text-slate-800">✍️ รับรอง</p>
+      <div className={`grid grid-cols-2 gap-3 ${qrDataUrl ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
+        <CertBox title="ผู้ออกเอกสาร (ผู้ขาย)" name={salesName || DOC_SIGNATORY.name} date={dateLabel}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={DOC_SIGNATORY.signature} alt="ลายเซ็น" className="h-8 w-auto object-contain" />
+        </CertBox>
+        <CertBox title="ผู้อนุมัติเอกสาร (ผู้ขาย)" name={DOC_SIGNATORY.name} date={dateLabel}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={DOC_SIGNATORY.signature} alt="ลายเซ็น" className="h-8 w-auto object-contain" />
+        </CertBox>
+        <CertBox title="ตราประทับ (ผู้ขาย)">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/pacred-stamp-tight.png" alt="ตราประทับ" className="h-11 w-auto object-contain opacity-90" />
+        </CertBox>
+        {/* ผู้รับเอกสาร = a SIGNING LINE (empty space + bottom line), not a box */}
+        <CertBox title="ผู้รับเอกสาร (ลูกค้า)" name={customerName || " "} dashedLine />
+        {/* ตราประทับ (ลูกค้า) = an empty dashed SQUARE for the customer stamp */}
+        <CertBox title="ตราประทับ (ลูกค้า)"><div className="h-11 w-full rounded border border-dashed border-slate-300" /></CertBox>
+        {/* QR — MOVED TO LAST so it never crowds the ลายเซ็น headers */}
         {qrDataUrl && (
           <CertBox title="สแกนเพื่อเปิดด้วยเว็บไซต์">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrDataUrl} alt={`QR ${refNo}`} className="h-12 w-12 object-contain" />
           </CertBox>
         )}
-        <CertBox title="ผู้ออกเอกสาร (ผู้ขาย)" name={salesName || "Sales Pacred"} date={dateLabel}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายเซ็น" className="h-8 w-auto object-contain" />
-        </CertBox>
-        <CertBox title="ผู้อนุมัติเอกสาร (ผู้ขาย)" name="Account Pacred" date={dateLabel}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/pacred-stamp-tight.png" alt="ตราประทับ" className="h-11 w-auto object-contain opacity-90" />
-        </CertBox>
-        <CertBox title="ผู้รับเอกสาร (ลูกค้า)" name={customerName || " "} dashedLine />
-        <CertBox title="ตราประทับ (ลูกค้า)"><div className="h-11 w-full rounded border border-dashed border-slate-300" /></CertBox>
       </div>
     </div>
   );
@@ -415,19 +422,35 @@ export function buildPrintHtml(m: QuoteModel): string {
         <td>${BAHT(r.truck.cbm)}<small>/คิว</small> · ${BAHT(r.truck.kg)}<small>/กก.</small><br><span class="mut">${esc(r.truck.days)}${r.isYiwu ? " +2–3 วัน" : ""}</span></td>
         <td>${BAHT(r.ship.cbm)}<small>/คิว</small> · ${BAHT(r.ship.kg)}<small>/กก.</small><br><span class="mut">${esc(r.ship.days)}</span></td></tr>`)
       .join("");
-    body = `<table class="items"><thead><tr><th>โกดัง</th><th>ทางรถ 🚛</th><th>ทางเรือ 🚢</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body = `<table class="items"><colgroup><col style="width:120px"><col><col></colgroup><thead><tr><th>โกดัง</th><th>ทางรถ 🚛</th><th>ทางเรือ 🚢</th></tr></thead><tbody>${rows}</tbody></table>`;
     if (m.showCustomsInfo) {
-      body += `<div class="box" style="margin-top:8px"><p class="b">📦 ${esc(CUSTOMS_ADDON.title)}</p><table class="cost">${CUSTOMS_ADDON.costs.map((c) => `<tr><td>${esc(c.label)}</td><td class="r b">${BAHT(c.amount)}</td><td class="mut">${esc(c.note ?? "")}</td></tr>`).join("")}</table><p class="b red">✅ ${esc(CUSTOMS_ADDON.summary)}</p></div>`;
+      body += `<div class="box blk" style="margin-top:8px"><p class="b">📦 ${esc(CUSTOMS_ADDON.title)}</p><table class="cost">${CUSTOMS_ADDON.costs.map((c) => `<tr><td>${esc(c.label)}</td><td class="r b">${BAHT(c.amount)}</td><td class="mut">${esc(c.note ?? "")}</td></tr>`).join("")}</table><p class="b red">✅ ${esc(CUSTOMS_ADDON.summary)}</p></div>`;
     }
   } else {
-    const rows = m.lines.map((l, i) => `<tr><td>${i + 1}. ${esc(l.desc)}</td><td class="c">${esc(l.qtyLabel)}</td><td class="r">${THB(l.price)}</td><td class="r b">${THB(l.amount)}</td><td class="c mut">${l.vat ? "7%" : "-"}</td></tr>`).join("");
-    const whtRows = t.whtAmount > 0 ? `<tr><td>หัก ณ ที่จ่าย 1%</td><td class="r">${THB(t.whtAmount)}</td></tr><tr class="net"><td>ยอดชำระสุทธิ</td><td class="r">${THB(t.netPayable)} บาท</td></tr>` : "";
-    body = `<div class="mut" style="font-size:9px;margin-bottom:4px">${esc(m.routeLabel)}${m.density != null ? ` · ความหนาแน่น ${QTY(round2(m.density))} กก./คิว → บิลตาม ${esc(m.basisLabel)}` : ""}</div>
-      <table class="items"><thead><tr><th>รายการ</th><th class="c" style="width:80px">จำนวน</th><th class="r" style="width:80px">ราคา/หน่วย</th><th class="r" style="width:90px">จำนวนเงิน</th><th class="c" style="width:34px">VAT</th></tr></thead><tbody>${rows}</tbody></table>
-      <table class="sum"><tr><td class="mut">มูลค่าไม่มี/ยกเว้นภาษี</td><td class="r">${THB(t.subtotalNoVat)}</td></tr>
-        <tr><td class="mut">มูลค่าที่คำนวณภาษี</td><td class="r">${THB(t.subtotalVat)}</td></tr>
-        <tr><td class="mut">ภาษีมูลค่าเพิ่ม 7%</td><td class="r">${THB(t.vatAmount)}</td></tr>
-        <tr class="gt"><td>รวมเป็นเงิน</td><td class="r">${THB(t.grandTotal)} บาท</td></tr>${whtRows}</table>`;
+    // 7-col items table — same columns + alignment as the on-screen <LineItems> so
+    // the printed PDF and the web preview agree exactly (ปอน 2026-07-05).
+    const rows = m.lines
+      .map((l, i) => {
+        const inclVat = round2(l.amount + (l.vat ? l.amount * 0.07 : 0));
+        const wht = m.juristic && l.whtApplicable ? "1%" : "-";
+        return `<tr><td>${i + 1}. ${esc(l.desc)}</td><td class="num">${esc(l.qtyLabel)}</td><td class="num">${THB(l.price)}</td><td class="num">${THB(l.discount ?? 0)}</td><td class="mid mut">${l.vat ? "7%" : "ไม่มี"}</td><td class="num b">${THB(inclVat)}</td><td class="mid mut">${wht}</td></tr>`;
+      })
+      .join("");
+    const routeRow = m.routeLabel
+      ? `<tr><td colspan="7" class="mut" style="font-size:9px;padding-top:6px;border:none">${esc(m.routeLabel)}${m.density != null ? ` · คิดตาม ${esc(m.basisLabel)}` : ""}</td></tr>`
+      : "";
+    const whtRows = t.whtAmount > 0
+      ? `<tr><td class="k">หัก ณ ที่จ่าย 1%</td><td class="v">${THB(t.whtAmount)}</td></tr><tr class="net"><td>ยอดชำระสุทธิ</td><td class="v">${THB(t.netPayable)} บาท</td></tr>`
+      : "";
+    body = `${m.density != null ? `<div class="mut" style="font-size:9px;margin-bottom:4px">ความหนาแน่น ${QTY(round2(m.density))} กก./คิว → บิลตาม ${esc(m.basisLabel)}</div>` : ""}
+      <table class="items">
+        <colgroup><col><col style="width:70px"><col style="width:72px"><col style="width:62px"><col style="width:40px"><col style="width:86px"><col style="width:40px"></colgroup>
+        <thead><tr><th>คำอธิบาย</th><th class="num">จำนวน</th><th class="num">ราคา</th><th class="num">ส่วนลด</th><th class="mid">VAT</th><th class="num">มูลค่ารวมภาษี</th><th class="mid">WHT</th></tr></thead>
+        <tbody>${routeRow}${rows}</tbody></table>
+      <div class="sumwrap"><table class="sum"><tr><td class="k">มูลค่าไม่มี/ยกเว้นภาษี</td><td class="v">${THB(t.subtotalNoVat)}</td></tr>
+        <tr><td class="k">มูลค่าที่คำนวณภาษี 7%</td><td class="v">${THB(t.subtotalVat)}</td></tr>
+        <tr><td class="k">ภาษีมูลค่าเพิ่ม 7%</td><td class="v">${THB(t.vatAmount)}</td></tr>
+        <tr class="gt"><td>รวมเป็นเงิน</td><td class="v">${THB(t.grandTotal)} บาท</td></tr>${whtRows}</table></div>`;
   }
 
   const juristicNote = m.juristic ? `<div class="blue">ลูกค้านิติบุคคล — หัก ณ ที่จ่าย 1% จากค่าบริการ${m.view === "calc" ? " (คำนวณในยอดสุทธิแล้ว)" : ""}</div>` : "";
@@ -442,20 +465,43 @@ export function buildPrintHtml(m: QuoteModel): string {
 body{font-size:11px;color:#1a1a1a;padding:24px}.doc{max-width:760px;margin:0 auto}
 .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b30000;padding-bottom:10px;margin-bottom:12px}
 .top img{height:44px}.ti{font-size:22px;font-weight:800;color:#b30000;text-align:right}.bs{font-size:9px;color:#666}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;break-inside:avoid}
 .box{border:0.5px solid #ccc;border-radius:4px;padding:7px 9px;line-height:1.5}.box .t{font-weight:700;color:#333}
-.mut{color:#777}.mono{font-family:monospace}.b{font-weight:700}.r{text-align:right}.c{text-align:center}.red{color:#b30000}
+.mut{color:#777}.mono{font-family:monospace;font-variant-numeric:tabular-nums}.b{font-weight:700}.r{text-align:right}.c{text-align:center}.red{color:#b30000}
 table{width:100%;border-collapse:collapse}small{font-size:8px;color:#777}
-.items{margin:6px 0;font-size:10.5px}.items th{background:#1a1a1a;color:#fff;padding:5px 8px;text-align:left;font-size:9.5px}.items td{border:0.5px solid #ddd;padding:5px 8px;vertical-align:top}
+/* Item table — a tidy even grid: text-left คำอธิบาย, right-aligned numerics with
+   fixed column widths so header + body columns line up exactly (PEAK look). The
+   header uses the SAME horizontal padding as the body so every column edge aligns. */
+.items{margin:6px 0;font-size:10.5px;table-layout:fixed}
+.items th{background:#fbeaea;color:#7a1010;padding:6px 8px;font-size:9.5px;font-weight:700;border:0.5px solid #efd1d1;vertical-align:middle;line-height:1.3}
+.items td{border:0.5px solid #e5e5e5;padding:5px 8px;vertical-align:top;line-height:1.45;word-wrap:break-word;overflow-wrap:anywhere}
+.items thead{display:table-header-group}        /* repeat header when the table flows onto page 2 */
+.items tr{break-inside:avoid}                    /* keep each row whole — flows top-to-bottom, fills the page */
+/* Header default = left (matches คำอธิบาย body); numerics right; VAT/WHT centered —
+   header alignment tracks body alignment so nothing looks ragged (PEAK grid). */
+.items th{text-align:left}
+.items td.num,.items th.num{text-align:right;font-family:monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.items td.mid,.items th.mid{text-align:center;white-space:nowrap}
 .cost td{padding:4px 0;border-top:0.5px solid #eee;font-size:10px}
-.sum{width:300px;margin-left:auto;font-size:11px;margin-top:6px}.sum td{padding:4px 8px;border:0.5px solid #eee}
-.sum .gt td{border-top:1px solid #999;font-weight:800;color:#b30000;font-size:14px}.sum .net td{background:#1a1a1a;color:#fff;font-weight:800;font-size:13px}
-.h{font-size:11px;font-weight:800;margin:10px 0 3px}ul{padding-left:18px;margin:3px 0}li{margin:1.5px 0}.lk{color:#b30000}
-.amber{background:#fffbeb;border:0.5px solid #fde68a;border-radius:4px;padding:7px 9px;margin:8px 0;white-space:pre-wrap}
-.blue{background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:4px;padding:6px 9px;margin:8px 0;font-weight:600}
-.pay{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid #eee;margin-top:10px;padding-top:8px;font-size:10px;color:#555}
-.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px}.sign .s{border:0.5px solid #ccc;border-radius:4px;min-height:54px;padding:5px;text-align:center;font-size:8px;color:#888;display:flex;flex-direction:column;justify-content:flex-end}
-@page{size:A4;margin:12mm}@media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+/* Summary — let the wrapper FLOW (no break-inside:avoid) so it starts right after
+   the items on page 1 instead of jumping whole to page 2 and leaving a gap. Only
+   the small .sum table itself is kept un-split so a single total row never breaks. */
+.sumwrap{margin-top:6px}
+.sum{width:300px;margin-left:auto;font-size:11px;break-inside:avoid}.sum td{padding:4px 8px;border:0.5px solid #eee}
+.sum td.k{color:#777}.sum td.v{text-align:right;font-family:monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sum .gt td{border-top:1px solid #999;font-weight:800;color:#b30000;font-size:14px}.sum .net td{background:#fbeaea;color:#7a1010;font-weight:800;font-size:13px;border-color:#efd1d1}
+.h{font-size:11px;font-weight:800;margin:8px 0 3px}ul{padding-left:18px;margin:3px 0}li{margin:1.5px 0}.lk{color:#b30000}
+.blk{break-inside:avoid}                         /* the customs cost box stays whole (small) */
+/* Small note callouts stay whole (they're short) — but the .pay/.sign blocks below
+   are allowed to FLOW so they finish page 1 tightly and don't jump whole to page 2. */
+.amber{background:#fffbeb;border:0.5px solid #fde68a;border-radius:4px;padding:7px 9px;margin:8px 0;white-space:pre-wrap;break-inside:avoid}
+.blue{background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:4px;padding:6px 9px;margin:8px 0;font-weight:600;break-inside:avoid}
+.pay{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:10px;color:#555}
+.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;break-inside:avoid}.sign .s{border:0.5px solid #ccc;border-radius:4px;min-height:54px;padding:5px;text-align:center;font-size:8px;color:#888;display:flex;flex-direction:column;justify-content:flex-end}
+/* Real page numbering — the print engine stamps "หน้า X/N" in the top margin so a
+   long bill fills page 1 then continues; a short bill prints one full page. */
+@page{size:A4;margin:14mm 12mm;@top-right{content:"หน้า " counter(page) "/" counter(pages);font-family:'Sarabun',sans-serif;font-size:9px;color:#999}}
+@media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body><div class="doc">
   <div class="top"><img src="${origin}${QUOTE_LOGO}" alt="Pacred"><div><div class="ti">ใบเสนอราคา</div><div class="bs r">Quotation</div></div></div>
   <div class="grid">

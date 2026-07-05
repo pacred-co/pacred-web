@@ -30,6 +30,8 @@ import {
   DOC_SIGNATORY,
 } from "@/components/seo/site";
 import { fmt2, fmt5, fmt0 } from "@/components/receipt/receipt-paper";
+import { DocSectionLabel } from "@/components/receipt/doc-section-label";
+import { DocCertRow } from "@/components/receipt/doc-cert-row";
 import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
 
 // ใบวางบิล = freight/cargo billing (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE per the
@@ -247,7 +249,7 @@ function BillingRunPage({
             {/* LEFT: charge breakdown + Thai words */}
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: "4mm" }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
+                <DocSectionLabel section="summary" />
                 <div style={{ flex: 1 }}>
                   <SumLine k="ค่าขนส่งรายการ" v={`${fmt2(p.subtotal)} บาท`} />
                   {p.maoFee > 0 && <SumLine k="+ ค่าส่งเหมาๆ (PRF)" v={`${fmt2(p.maoFee)} บาท`} />}
@@ -292,7 +294,7 @@ function BillingRunPage({
           <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm", minHeight: "13mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: "4mm" }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>การชำระเงิน</p>
+                <DocSectionLabel emoji="💵" text="การชำระเงิน" />
                 <div style={{ flex: 1, display: "flex", gap: "6mm" }}>
                   <div style={{ minWidth: "44mm" }}>
                     <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{BILL_ACCOUNT.bankName}</p>
@@ -316,7 +318,7 @@ function BillingRunPage({
 
           {/* REMARK — staff note + 50-ทวิ instruction */}
           <div style={{ display: "flex", gap: "4mm", marginBottom: "1.5mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
-            <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827", minWidth: "14mm" }}>หมายเหตุ</p>
+            <DocSectionLabel section="remark" style={{ minWidth: "14mm" }} />
             <div style={{ flex: 1 }}>
               {p.note && <p style={{ margin: 0, fontSize: "10px", color: "#374151", whiteSpace: "pre-wrap" }}>{p.note}</p>}
               {showWht && (
@@ -328,72 +330,24 @@ function BillingRunPage({
             </div>
           </div>
 
-          {/* CERTIFIED — 6 boxes (match ใบเสร็จ · owner 2026-07-05): QR · ผู้วางบิล · ผู้อนุมัติ · ตราประทับผู้ขาย · ผู้รับ · ตราประทับลูกค้า */}
+          {/* CERTIFIED — the SHARED ✍️ รับรอง cert row (root-fix 2026-07-05):
+              ผู้วางบิล · ผู้อนุมัติ · ตราประทับ(ผู้ขาย) · ผู้รับวางบิล(ขีดเซ็น) ·
+              ตราประทับ(ลูกค้า) · QR-last. Same <DocCertRow> as the ใบเสร็จ. */}
           <div style={{ display: "flex", gap: "2mm", borderTop: "1px solid #e5e7eb", paddingTop: "2mm" }}>
             <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
-              <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
+              <DocSectionLabel section="certify" />
             </div>
-
-            {/* QR */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>สแกนเพื่อเปิดด้วยเว็บไซต์</p>
-              <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
-                <Image src={qrDataUrl} alt={`QR ${p.docNo}`} width={120} height={120} unoptimized style={{ width: "18mm", height: "18mm", display: "block" }} />
-              </div>
-            </div>
-
-            {/* ผู้วางบิล (ผู้ขาย) */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้วางบิล (ผู้ขาย)</p>
-              <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
-                <Image src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายมือชื่อ" width={70} height={28} unoptimized style={{ width: "20mm", height: "auto" }} />
-              </div>
-              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
-                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{p.dateIssued}</p>
-              </div>
-            </div>
-
-            {/* ผู้อนุมัติเอกสาร (ผู้ขาย) — added 2026-07-05 to match the ใบเสร็จ 6-box cert row */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
-              <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "flex-end" }}>
-                <Image src="/legacy/pcs/assets/images/theme/sin-wandee.jpg" alt="ลายมือชื่อ" width={70} height={28} unoptimized style={{ width: "20mm", height: "auto" }} />
-              </div>
-              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
-                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{p.dateIssued}</p>
-              </div>
-            </div>
-
-            {/* ตราประทับ (ผู้ขาย) */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ผู้ขาย)</p>
-              <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
-                <Image src="/images/pacred-stamp-tight.png" alt="ตราประทับ" width={106} height={58} unoptimized style={{ width: "auto", height: "18mm" }} />
-              </div>
-              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
-              </div>
-            </div>
-
-            {/* ผู้รับวางบิล (ลูกค้า) */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้รับวางบิล (ลูกค้า)</p>
-              <div style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
-              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{p.buyerName}</p>
-              </div>
-            </div>
-
-            {/* ตราประทับ (ลูกค้า) — added 2026-07-05 (was missing vs the ใบเสร็จ) */}
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ลูกค้า)</p>
-              <div style={{ height: "18mm", border: "0.5px solid #d1d5db" }}></div>
-              <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
-              </div>
-            </div>
+            <DocCertRow
+              qrDataUrl={qrDataUrl}
+              qrAlt={`QR ${p.docNo}`}
+              customerName={p.buyerName}
+              signatoryName={DOC_SIGNATORY.name}
+              dateIssued={p.dateIssued}
+              approverName={DOC_SIGNATORY.name}
+              issuerLabel="ผู้วางบิล (ผู้ขาย)"
+              receiverLabel="ผู้รับวางบิล (ลูกค้า)"
+              boxHeight="18mm"
+            />
           </div>
         </div>
         )}

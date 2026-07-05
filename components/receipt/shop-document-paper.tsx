@@ -37,6 +37,8 @@ import {
   CONTACT,
   ADDRESSES,
 } from "@/components/seo/site";
+import { DocSectionLabel } from "./doc-section-label";
+import { DocCertRow } from "./doc-cert-row";
 import type { PrintDoc } from "@/app/[locale]/(admin)/admin/service-orders/print/shop-document-types";
 import { computeShopDocument } from "@/app/[locale]/(admin)/admin/service-orders/print/shop-document-data";
 import {
@@ -276,7 +278,7 @@ function ShopDocumentPage({
         {/* ── SUMMARY — Thai-word LEFT · big total box RIGHT ───────────── */}
         <div style={{ display: "flex", gap: "6mm", marginBottom: "2mm", alignItems: "flex-end" }}>
           <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
+            <DocSectionLabel section="summary" />
             <p style={{ margin: "2px 0 0", fontSize: "10px", color: "#374151" }}>
               ({convert(grandTotalRaw)})
             </p>
@@ -295,7 +297,8 @@ function ShopDocumentPage({
         </div>
 
         {/* ── REMARK ───────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: "3mm" }}>
+        <div style={{ display: "flex", gap: "4mm", marginBottom: "3mm" }}>
+          <DocSectionLabel section="remark" style={{ minWidth: "14mm" }} />
           <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>
             {isReceipt
               ? "*ใบเสร็จรับเงินฉบับนี้จะสมบูรณ์ เมื่อได้รับเงินเรียบร้อยแล้ว"
@@ -303,34 +306,19 @@ function ShopDocumentPage({
           </p>
         </div>
 
-        {/* ── CERTIFIED — issuer stamp/sign + customer receive box ──────── */}
+        {/* ── CERTIFIED — the SHARED ✍️ รับรอง cert row (root-fix 2026-07-05).
+             Was a 2-box hand-roll (issuer stamp + customer receive); now uses
+             the same <DocCertRow> as the ใบเสร็จ so it matches every doc.
+             No QR on this surface (shop doc has no public token view). ────── */}
         <div style={{ display: "flex", gap: "4mm" }}>
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
-            <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
+            <DocSectionLabel section="certify" />
           </div>
-          {/* ผู้ออกเอกสาร */}
-          <CertBox label="ผู้ออกเอกสาร (ผู้ขาย)">
-            <div style={{ display: "flex", justifyContent: "center", height: "18mm", alignItems: "center" }}>
-              <Image
-                src="/images/pacred-stamp-tight.png"
-                alt="ตราประทับ Pacred"
-                width={106}
-                height={58}
-                unoptimized
-                style={{ width: "auto", height: "16mm" }}
-              />
-            </div>
-            <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-              <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{SITE_LEGAL_NAME_TH}</p>
-            </div>
-          </CertBox>
-          {/* ผู้รับเอกสาร */}
-          <CertBox label="ผู้รับเอกสาร (ลูกค้า)">
-            <div style={{ height: "18mm", border: "0.5px solid #d1d5db" }} />
-            <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-              <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{customerName || "-"}</p>
-            </div>
-          </CertBox>
+          <DocCertRow
+            customerName={customerName || "-"}
+            dateIssued={isReceipt ? (doc.datePay || "") : (doc.datePayExp || "")}
+            boxHeight="18mm"
+          />
         </div>
 
       </div>
@@ -404,11 +392,3 @@ function cellStyle(align: "left" | "right" | "center"): React.CSSProperties {
   };
 }
 
-function CertBox({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ flex: 1, textAlign: "center" }}>
-      <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>{label}</p>
-      {children}
-    </div>
-  );
-}

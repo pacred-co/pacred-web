@@ -37,6 +37,8 @@ import {
   BANK,
   DOC_SIGNATORY,
 } from "@/components/seo/site";
+import { DocSectionLabel } from "./doc-section-label";
+import { DocCertRow } from "./doc-cert-row";
 
 // ── Shared render types (single source of truth) ─────────────
 
@@ -498,7 +500,7 @@ export function ReceiptPage({
               <div id="amountInfo" style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "4mm" }}>
                   <div>
-                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>สรุป</p>
+                    <DocSectionLabel section="summary" />
                   </div>
                   <div style={{ flex: 1 }}>
                     {maoFee > 0 && (
@@ -566,7 +568,7 @@ export function ReceiptPage({
                   <div className="paymentGroup" style={{ display: "flex", gap: "4mm" }}>
                     {/* Heading */}
                     <div>
-                      <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>ชำระเงิน</p>
+                      <DocSectionLabel section="payment" />
                     </div>
                     <div className="contentPayment" style={{ flex: 1, display: "flex", gap: "6mm" }}>
                       {/* LEFT: date + total */}
@@ -615,7 +617,7 @@ export function ReceiptPage({
               <div id="remark">
                 <div style={{ display: "flex", gap: "4mm" }}>
                   <div>
-                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>หมายเหตุ</p>
+                    <DocSectionLabel section="remark" />
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>
@@ -626,109 +628,25 @@ export function ReceiptPage({
               </div>
             </div>
 
-            {/* CERTIFIED — 6 boxes in one row */}
+            {/* CERTIFIED — the SHARED ✍️ รับรอง cert row (root-fix 2026-07-05):
+                boxes = ผู้ออก · ผู้อนุมัติ · ตราประทับ(ผู้ขาย) · ผู้รับ(ขีดเซ็น) ·
+                ตราประทับ(ลูกค้า) · QR-last. One <DocCertRow> for every paper. */}
             <div style={{ display: "flex", gap: "4mm" }}>
               <div id="certified" style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "2mm" }}>
-
-                  {/* Heading */}
+                  {/* Heading (left) */}
                   <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: "14mm" }}>
-                    <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>รับรอง</p>
+                    <DocSectionLabel section="certify" />
                   </div>
-
-                  {/* Box 1: QR */}
-                  <div className="certifiedBox qrCode" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
-                      สแกนเพื่อเปิดด้วยเว็บไซต์
-                    </p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "center" }}>
-                      <Image
-                        src={qrDataUrl}
-                        alt={`QR เปิดใบเสร็จ ${rid}`}
-                        width={120}
-                        height={120}
-                        unoptimized
-                        style={{ width: "18mm", height: "13mm", display: "block" }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Box 2: ผู้ออกเอกสาร (ผู้ขาย) */}
-                  <div className="certifiedBox userCreate" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้ออกเอกสาร (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "flex-end" }}>
-                      <Image
-                        src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
-                        alt="ลายมือชื่อ"
-                        width={70}
-                        height={28}
-                        unoptimized
-                        style={{ width: "20mm", height: "auto" }}
-                      />
-                    </div>
-                    <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{DOC_SIGNATORY.name}</p>
-                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
-                    </div>
-                  </div>
-
-                  {/* Box 3: ผู้อนุมัติเอกสาร (ผู้ขาย) */}
-                  <div className="certifiedBox userApprove" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้อนุมัติเอกสาร (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "flex-end" }}>
-                      <Image
-                        src="/legacy/pcs/assets/images/theme/sin-wandee.jpg"
-                        alt="ลายมือชื่อ"
-                        width={70}
-                        height={28}
-                        unoptimized
-                        style={{ width: "20mm", height: "auto" }}
-                      />
-                    </div>
-                    <div className="detail" style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>
-                        {DOC_SIGNATORY.name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>{rDateCreate}</p>
-                    </div>
-                  </div>
-
-                  {/* Box 4: ตราประทับ (ผู้ขาย) */}
-                  <div className="certifiedBox merchantStamp" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ผู้ขาย)</p>
-                    <div className="image" style={{ display: "flex", justifyContent: "center", height: "13mm", alignItems: "center" }}>
-                      <Image
-                        src="/images/pacred-stamp-tight.png"
-                        alt="ตราประทับ"
-                        width={106}
-                        height={58}
-                        unoptimized
-                        style={{ width: "auto", height: "13mm" }}
-                      />
-                    </div>
-                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
-                    </div>
-                  </div>
-
-                  {/* Box 5: ผู้รับเอกสาร (ลูกค้า) */}
-                  <div className="certifiedBox received" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ผู้รับเอกสาร (ลูกค้า)</p>
-                    <div className="emptyBoxRemainingSignature" style={{ height: "13mm", border: "0.5px solid #d1d5db" }}></div>
-                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "9px", fontWeight: "bold", color: "#111827" }}>{customerName}</p>
-                    </div>
-                  </div>
-
-                  {/* Box 6: ตราประทับ (ลูกค้า) */}
-                  <div className="certifiedBox stamp" style={{ flex: 1, textAlign: "center" }}>
-                    <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "bold", color: "#374151" }}>ตราประทับ (ลูกค้า)</p>
-                    <div className="stampBox" style={{ height: "13mm", border: "0.5px solid #d1d5db" }}></div>
-                    <div style={{ borderTop: "0.5px solid #374151", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "8px", color: "#6b7280" }}>&nbsp;</p>
-                    </div>
-                  </div>
-
+                  <DocCertRow
+                    qrDataUrl={qrDataUrl}
+                    qrAlt={`QR เปิดใบเสร็จ ${rid}`}
+                    customerName={customerName}
+                    signatoryName={DOC_SIGNATORY.name}
+                    dateIssued={rDateCreate}
+                    approverName={DOC_SIGNATORY.name}
+                    boxHeight="13mm"
+                  />
                 </div>
               </div>
             </div>
