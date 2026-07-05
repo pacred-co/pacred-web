@@ -27,10 +27,16 @@ import {
   SITE_LEGAL_NAME,
   TAX_ID,
   CONTACT,
-  BANK,
   DOC_SIGNATORY,
 } from "@/components/seo/site";
 import { fmt2, fmt5, fmt0 } from "@/components/receipt/receipt-paper";
+import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
+
+// ใบวางบิล = freight/cargo billing (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE per the
+// 3-account routing SOT (lib/payment/bank-accounts.ts). owner 2026-07-05: the bill
+// must show the SERVICE account 204-1-55856-6, NOT the static site.ts BANK (which
+// was LOGISTICS 225-2-91144-0). (A ใบกำกับ bill would route to TRADING — future.)
+const BILL_ACCOUNT = PACRED_BANK_ACCOUNTS.service;
 
 export type BillingRunPaperRow = {
   no:          number;
@@ -289,9 +295,9 @@ function BillingRunPage({
                 <p style={{ margin: 0, fontSize: "11px", fontWeight: "bold", color: "#111827" }}>การชำระเงิน</p>
                 <div style={{ flex: 1, display: "flex", gap: "6mm" }}>
                   <div style={{ minWidth: "44mm" }}>
-                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>ธ.กสิกรไทย</p>
-                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>ออมทรัพย์ {BANK.accountNumber}</p>
-                    <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BANK.accountName}</p>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{BILL_ACCOUNT.bankName}</p>
+                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{BILL_ACCOUNT.accountType} {BILL_ACCOUNT.accountNo}</p>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BILL_ACCOUNT.accountName}</p>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>

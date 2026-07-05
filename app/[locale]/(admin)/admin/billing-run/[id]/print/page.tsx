@@ -22,9 +22,12 @@ import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-// Paginate 13 item rows per page — the SAME value the ใบเสร็จ uses
-// (lib/receipt/load-receipt-document.ts) so both documents break identically.
-const ROWS_PER_PAGE = 13;
+// Paginate to FILL an A4 page before spilling to the next (owner 2026-07-05:
+// "ดันจนใบแรกเต็มก่อน ค่อยไปจบใบที่สอง" — PEAK-style). The ใบวางบิล rows are compact
+// (single-line cargo rows) so ~24 fit per page; 13 (the ใบเสร็จ value) left the
+// page half-empty. The last page still keeps the summary block (flex-grow on the
+// items box pushes it to the bottom).
+const ROWS_PER_PAGE = 24;
 
 export default async function BillingRunPrintPage({
   params,
