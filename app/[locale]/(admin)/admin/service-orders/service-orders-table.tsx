@@ -256,7 +256,7 @@ export function ServiceOrdersTable({
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs min-w-[1100px]">
+            <table className="w-full text-xs min-w-[1100px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
@@ -341,13 +341,16 @@ export function ServiceOrdersTable({
                   const sDate = statusDate(r);
                   const isPrinted = r.hprintbill === "1";
                   const isInvoicePrinted = r.hprintbill2 === "1";
-                  const adminCreatedBadge = r.adminidcreate && r.adminidcreate !== "";
-                  // Legacy badgeAdminIP — "ฝากสั่ง : admin_X" when admin created.
-                  const sourceLabel = adminCreatedBadge
-                    ? `ฝากสั่ง: ${r.adminidcreate}`
-                    : "ฝากสั่งจาก: users";
-                  const sourceBadgeCls = adminCreatedBadge
-                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                  // Legacy badgeAdminIP (function.php L2934) — "IPC : X" (ล่ามจีนที่เปิดออเดอร์),
+                  // prefers adminIDIP then adminIDCreate. badge-purchasing = purple.
+                  // "customer" = ออเดอร์ที่ลูกค้าเปิดเอง (ไม่มีล่าม) → treat as no-IPC → "ฝากสั่งจาก: users"
+                  // (Pacred data stores 'customer' where legacy left adminIDCreate empty).
+                  const ipInterp = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
+                  const ipCreator = r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
+                  const ipcAdmin = ipInterp || ipCreator;
+                  const sourceLabel = ipcAdmin ? `IPC : ${ipcAdmin}` : "ฝากสั่งจาก: users";
+                  const sourceBadgeCls = ipcAdmin
+                    ? "bg-purple-50 text-purple-700 border-purple-200"
                     : "bg-gray-50 text-gray-600 border-gray-200";
 
                   return (
