@@ -32,6 +32,7 @@ import { Link } from "@/i18n/navigation";
 import { Truck } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
+import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 type StopItem = {
@@ -75,28 +76,6 @@ type Stop = {
 };
 
 type DriverOption = { member_code: string; display: string };
-
-// ลำดับส่ง — faithful port of legacy `$arrPositF` (forwarder-driver.php L725): the
-// BKK + ปริมณฑล districts laid out in DRIVING-ROUTE order (โกดัง สมุทรสาคร → ใกล้ → ไกล).
-// A stop's ลำดับส่ง = its district's index here; the stop list is SORTED by it so the
-// driver runs one efficient loop instead of zig-zagging. A district not in the list
-// defaults to 69 (sorts to the end) — exactly like legacy `else echo '69'`.
-const DISTRICT_ROUTE_ORDER: readonly string[] = [
-  "หนองแขม", "บางแค", "ภาษีเจริญ", "ธนบุรี", "บางกอกใหญ่", "บางกอกน้อย", "คลองสาน", "สัมพันธวงศ์",
-  "ป้อมปราบศัตรูพ่าย", "พระนคร", "สาทร", "ปทุมวัน", "ราชเทวี", "ดุสิต", "พญาไท", "ดินแดง", "ห้วยขวาง",
-  "วัฒนา", "คลองเตย", "พระโขนง", "ยานนาวา", "บางคอแหลม", "บางรัก", "ทวีวัฒนา", "ตลิ่งชัน", "บางใหญ่",
-  "ไทรน้อย", "บางบัวทอง", "เมืองนนทบุรี", "ปากเกร็ด", "บางกรวย", "จตุจักร", "บางพลัด", "บางซื่อ",
-  "หลักสี่", "ดอนเมือง", "สายไหม", "บางเขน", "ลาดพร้าว", "วังทองหลาง", "สวนหลวง", "บางกะปิ", "สะพานสูง",
-  "บึงกุ่ม", "คันนายาว", "มีนบุรี", "คลองสามวา", "บางบอน", "จอมทอง", "บางขุนเทียน", "ราษฎร์บูรณะ",
-  "ทุ่งครุ", "พระประแดง", "พระสมุทรเจดีย์", "เมืองสมุทรปราการ", "บางนา", "ลาดกระบัง", "ประเวศ", "หนองจอก",
-  "บางเสาธง", "บางบ่อ", "บางพลี", "เมืองปทุมธานี", "กระทุ่มแบน", "เมืองสมุทรสาคร", "พุทธมณฑล", "สามพราน",
-];
-const DISTRICT_ORDER_NOT_FOUND = 69; // legacy default
-const routeOrderMap = new Map(DISTRICT_ROUTE_ORDER.map((d, i) => [d, i]));
-function routeOrderOf(district: string | null | undefined): number {
-  const d = (district ?? "").trim();
-  return routeOrderMap.has(d) ? routeOrderMap.get(d)! : DISTRICT_ORDER_NOT_FOUND;
-}
 
 export function CreateBatchForm({
   groups,

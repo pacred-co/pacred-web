@@ -24,7 +24,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
@@ -557,6 +557,16 @@ export default async function AdminDriverBatchDetailPage({
           >
             <Printer className="h-3.5 w-3.5" />
             พิมพ์บิลจัดส่ง (คนขับ)
+          </Link>
+          {/* พี่ป๊อป spec 2026-07-06 · §จัดส่ง — route-ordered delivery-address
+              stickers (peel & slap on the carton · sorted near→far by district). */}
+          <Link
+            href={`/admin/drivers/${batch.id}/stickers`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 text-sky-700 px-3 py-1.5 text-xs font-medium hover:bg-sky-100"
+          >
+            <Tag className="h-3.5 w-3.5" />
+            พิมพ์สติกเกอร์ที่อยู่ (เรียงตามเส้นทาง)
           </Link>
           {isOpsOverride && (
             <BatchManage
