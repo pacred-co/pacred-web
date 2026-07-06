@@ -28,9 +28,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getInvoiceList } from "@/actions/admin/billing-run";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CntListTable, type CntListRow } from "../report-cnt/cnt-list-table";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
@@ -304,7 +303,7 @@ export default async function BillingRunListPage({
   if (!res.ok) {
     return (
       <main className="p-6 lg:p-8 space-y-4">
-        <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
+        <AccountingMenubar activeHref="/admin/accounting" />
         <PageHeader eyebrow="ADMIN · รายรับ → ใบวางบิล" title="ใบวางบิล (Billing-Run)" />
 
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
@@ -352,7 +351,7 @@ export default async function BillingRunListPage({
       <title>ใบวางบิล | PR Admin</title>
 
       {/* PEAK-style accounting top menubar (ระบบบัญชี chrome) */}
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/billing-run" />
+      <AccountingMenubar activeHref="/admin/billing-run" />
 
       <div className="px-4 md:px-6 lg:px-8 space-y-5">
         <div className="pt-4">
@@ -399,7 +398,7 @@ export default async function BillingRunListPage({
                 className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors whitespace-nowrap ${tabToneCls(t.tone, active)}`}
               >
                 <span>{t.label}</span>
-                <span className={`rounded-full px-1.5 text-xs font-medium ${active ? "bg-white/20" : "bg-surface-alt text-muted"}`}>
+                <span className={`inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold ${active ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>
                   {count}
                 </span>
               </Link>

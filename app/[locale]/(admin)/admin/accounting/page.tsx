@@ -46,10 +46,10 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
-import { CARGO_MENUBAR, ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
+import { ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
 import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
@@ -698,7 +698,7 @@ export default async function AdminAccountingPage({
           URLs are TODO placeholders (legacy `acc-system-cargo.php` parity
           — owner brief 2026-05-20 night). activeHref="/admin/accounting"
           so "หน้าหลัก" lights up on this dashboard. */}
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
+      <AccountingMenubar activeHref="/admin/accounting" />
 
       {/* Tab nav */}
       <div className="flex flex-wrap border-b border-border gap-0">
@@ -744,6 +744,11 @@ export default async function AdminAccountingPage({
             netCurrent={sForwarder + sYuan + sShop}
             netPrev={sPrevNet}
             hasComparison={Boolean(dateFrom && dateTo) && sPrevNet > 0}
+            breakdown={[
+              { label: "ฝากนำเข้า", value: sForwarder },
+              { label: "ฝากโอนหยวน", value: sYuan },
+              { label: "ฝากสั่งซื้อ", value: sShop },
+            ]}
           />
 
           {/* T-P5 pipeline cards — what's in flight (future revenue) */}
@@ -819,13 +824,8 @@ export default async function AdminAccountingPage({
             </div>
           </div>
 
-          {/* Existing net-revenue card — kept as bottom recap */}
-          <div className="rounded-2xl border border-primary-200 bg-primary-50 p-5">
-            <p className="text-xs text-muted font-medium">รายรับสุทธิ (ฝากนำเข้า + ฝากโอน + ฝากสั่ง)</p>
-            <p className="mt-1 text-3xl font-bold font-mono text-primary-700">
-              {thb(sForwarder + sYuan + sShop)}
-            </p>
-          </div>
+          {/* (ลบการ์ด "รายรับสุทธิ" ซ้ำออก · 2026-07-06 — OwnerHero ด้านบนโชว์แล้ว
+              พร้อม breakdown → กันซ้ำ · จัดวางคลีนขึ้น) */}
           <div className="grid sm:grid-cols-2 gap-3 text-xs">
             <div className="rounded-xl border border-border bg-white p-4 space-y-2">
               <p className="font-semibold text-muted uppercase tracking-wide text-[11px]">ลิงก์ด่วน</p>
@@ -1079,7 +1079,7 @@ function SumCard({ label, value, tone = "green" }: { label: string; value: numbe
 // T-P5: Hero "net revenue" card with comparison to previous same-length window.
 // Falls back to a simpler card (no delta) if `hasComparison` is false — that
 // happens when the date filter isn't a closed window (all-time view).
-function OwnerHero({ netCurrent, netPrev, hasComparison }: { netCurrent: number; netPrev: number; hasComparison: boolean }) {
+function OwnerHero({ netCurrent, netPrev, hasComparison, breakdown }: { netCurrent: number; netPrev: number; hasComparison: boolean; breakdown: Array<{ label: string; value: number }> }) {
   const deltaAbs = netCurrent - netPrev;
   const deltaPct = netPrev > 0 ? ((netCurrent - netPrev) / netPrev) * 100 : null;
   const trendColor =
@@ -1094,25 +1094,38 @@ function OwnerHero({ netCurrent, netPrev, hasComparison }: { netCurrent: number;
     :                     "→";
 
   return (
-    <div className="rounded-3xl border border-primary-300 bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/30 dark:to-surface p-6 shadow-md">
-      <p className="text-xs font-semibold text-primary-700 uppercase tracking-widest">รายรับสุทธิ {hasComparison ? "ในช่วงที่เลือก" : "(ทั้งหมด)"}</p>
-      <p className="mt-2 text-5xl font-bold font-mono text-primary-700">
-        ฿{netCurrent.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-      </p>
-      {hasComparison && (
-        <p className={`mt-3 text-sm font-medium ${trendColor}`}>
-          {trendIcon} {deltaAbs >= 0 ? "+" : ""}฿{deltaAbs.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-          {deltaPct !== null && (
-            <> ({deltaAbs >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)</>
-          )}
-          <span className="text-muted font-normal"> เทียบช่วงเดียวกันก่อนหน้า (รวม ฿{netPrev.toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
+    <div className="rounded-3xl border border-primary-300 bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/30 dark:to-surface p-6 shadow-md flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      {/* LEFT — รายรับสุทธิ ตัวเลขใหญ่ + trend */}
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-primary-700 uppercase tracking-widest">รายรับสุทธิ {hasComparison ? "ในช่วงที่เลือก" : "(ทั้งหมด)"}</p>
+        <p className="mt-2 text-4xl sm:text-5xl font-bold font-mono text-primary-700 tabular-nums">
+          ฿{netCurrent.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
         </p>
-      )}
-      {!hasComparison && (
-        <p className="mt-3 text-xs text-muted">
-          เลือกช่วงเวลา (ทั้ง &ldquo;ตั้งแต่&rdquo; และ &ldquo;ถึง&rdquo;) เพื่อดูเทียบกับช่วงก่อนหน้า
-        </p>
-      )}
+        {hasComparison ? (
+          <p className={`mt-2 text-sm font-medium ${trendColor}`}>
+            {trendIcon} {deltaAbs >= 0 ? "+" : ""}฿{deltaAbs.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            {deltaPct !== null && (
+              <> ({deltaAbs >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)</>
+            )}
+            <span className="text-muted font-normal"> เทียบช่วงก่อนหน้า (฿{netPrev.toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-muted">
+            เลือกช่วงเวลา (&ldquo;ตั้งแต่&rdquo; + &ldquo;ถึง&rdquo;) เพื่อดูเทียบกับช่วงก่อนหน้า
+          </p>
+        )}
+      </div>
+      {/* RIGHT — แยกตามแหล่งรายรับ (เติมพื้นที่ให้สมดุล) */}
+      <div className="grid grid-cols-3 gap-2 lg:gap-3 shrink-0 lg:min-w-[340px]">
+        {breakdown.map((b) => (
+          <div key={b.label} className="rounded-xl border border-primary-100 bg-white/70 dark:bg-surface/60 px-3 py-2.5 text-center">
+            <p className="text-[11px] text-muted leading-tight">{b.label}</p>
+            <p className="mt-1 text-sm font-bold font-mono text-primary-700 tabular-nums">
+              ฿{b.value.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1230,108 +1243,89 @@ function RevenueTrendChart({ data }: { data: Array<{ d: string; v: number }> }) 
   const total  = data.reduce((s, p) => s + p.v, 0);
   const avg    = total / data.length;
   const peakP  = data.reduce((best, p) => (p.v > best.v ? p : best), data[0]!);
-  // viewBox: 1 unit per day horizontally, 100 vertical
-  const W = data.length * 10;
-  const H = 100;
-  const barW = 6;
-  const fmt = (n: number) =>
-    n.toLocaleString("th-TH", { maximumFractionDigits: 0 });
-  // Highlight ticks: 1st, mid, last
-  const ticks = [data[0]!, data[Math.floor(data.length / 2)]!, data[data.length - 1]!];
+  const activeDays = data.filter((p) => p.v > 0).length;
+  const fmt = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+  const thaiDay = (iso: string) => {
+    // "YYYY-MM-DD" → "D ม.ค." (readable, never cramped like a stretched SVG label)
+    const MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+    const [, m, d] = iso.split("-");
+    return `${Number(d)} ${MO[Number(m) - 1] ?? m}`;
+  };
+  const midP = data[Math.floor(data.length / 2)]!;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm">
+      {/* header — title + 3 clean stat pills */}
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div>
-          <h2 className="text-sm font-bold text-gray-900">
-            📈 รายได้ {data.length} วันย้อนหลัง
-          </h2>
+          <h2 className="text-base font-bold text-foreground">📈 รายได้ {data.length} วันย้อนหลัง</h2>
           <p className="text-[11px] text-muted mt-0.5">
             ฝากนำเข้า (ส่งแล้ว) + ฝากโอนหยวน (สำเร็จ) + ฝากสั่งซื้อ (สำเร็จ)
           </p>
         </div>
-        <div className="flex gap-4 text-xs">
-          <div>
-            <p className="text-[11px] text-muted">รวม {data.length} วัน</p>
-            <p className="font-bold text-primary-700">฿{fmt(total)}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted">เฉลี่ย/วัน</p>
-            <p className="font-bold text-emerald-700">฿{fmt(avg)}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted">วันสูงสุด ({peakP.d.slice(5)})</p>
-            <p className="font-bold text-blue-700">฿{fmt(peakP.v)}</p>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: "รวมทั้งช่วง", value: `฿${fmt(total)}`, cls: "border-primary-200 bg-primary-50 text-primary-700" },
+            { label: "เฉลี่ย/วัน", value: `฿${fmt(avg)}`, cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+            { label: `วันสูงสุด · ${thaiDay(peakP.d)}`, value: `฿${fmt(peakP.v)}`, cls: "border-blue-200 bg-blue-50 text-blue-700" },
+          ].map((s) => (
+            <div key={s.label} className={`rounded-lg border px-3 py-1.5 ${s.cls}`}>
+              <p className="text-[11px] leading-none opacity-80">{s.label}</p>
+              <p className="text-sm font-bold leading-tight mt-0.5 tabular-nums">{s.value}</p>
+            </div>
+          ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full h-32" preserveAspectRatio="none">
-        {/* baseline */}
-        <line x1={0} y1={H} x2={W} y2={H} stroke="#e5e7eb" strokeWidth="0.4" />
-        {/* avg line */}
+
+      {/* chart — CSS flexbox bars (fully responsive · no SVG stretch distortion) */}
+      <div className="relative h-40 rounded-lg bg-surface-alt/30 px-1 pt-1">
+        {/* ค่าเฉลี่ย dashed reference line */}
         {avg > 0 && (
-          <line
-            x1={0}
-            y1={H - (avg / maxV) * H}
-            x2={W}
-            y2={H - (avg / maxV) * H}
-            stroke="#10b981"
-            strokeWidth="0.4"
-            strokeDasharray="1.5 1.5"
-          />
+          <div
+            className="pointer-events-none absolute inset-x-1 border-t border-dashed border-emerald-400/80"
+            style={{ bottom: `${Math.min(98, (avg / maxV) * 100)}%` }}
+          >
+            <span className="absolute -top-4 right-0 rounded bg-emerald-50 px-1 text-[11px] font-medium text-emerald-700">
+              เฉลี่ย ฿{fmt(avg)}
+            </span>
+          </div>
         )}
-        {data.map((p, i) => {
-          const h = (p.v / maxV) * H;
-          const x = i * 10 + (10 - barW) / 2;
-          const y = H - h;
-          const isPeak = p.d === peakP.d && p.v > 0;
-          return (
-            <g key={p.d}>
-              <rect
-                x={x}
-                y={y}
-                width={barW}
-                height={h}
-                fill={isPeak ? "#3b82f6" : "#B30000"}
-                opacity={p.v > 0 ? 0.85 : 0.15}
-                rx="0.6"
+        <div className="flex h-full items-end gap-[2px]">
+          {data.map((p) => {
+            const pct = (p.v / maxV) * 100;
+            const isPeak = p.d === peakP.d && p.v > 0;
+            return (
+              <div
+                key={p.d}
+                className="group relative flex h-full flex-1 items-end"
+                title={`${thaiDay(p.d)} — ฿${fmt(p.v)}`}
               >
-                <title>
-                  {p.d} — ฿{fmt(p.v)}
-                </title>
-              </rect>
-            </g>
-          );
-        })}
-        {/* x-axis tick labels (3 marks) */}
-        {ticks.map((t) => {
-          const idx = data.findIndex((d) => d.d === t.d);
-          const x = idx * 10 + 5;
-          return (
-            <text
-              key={t.d}
-              x={x}
-              y={H + 14}
-              fontSize="6"
-              fill="#6b7280"
-              textAnchor="middle"
-            >
-              {t.d.slice(5)}
-            </text>
-          );
-        })}
-      </svg>
-      <p className="text-[11px] text-muted mt-1 flex items-center gap-3">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block w-2 h-2 bg-[#B30000] rounded-sm"></span> รายวัน
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block w-2 h-2 bg-[#3b82f6] rounded-sm"></span> วันสูงสุด
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block w-3 border-t border-dashed border-emerald-500"></span> ค่าเฉลี่ย
-        </span>
-      </p>
+                <div
+                  className={`w-full rounded-t transition-colors ${
+                    p.v > 0 ? (isPeak ? "bg-blue-500" : "bg-primary-600 group-hover:bg-primary-500") : "bg-gray-200/70"
+                  }`}
+                  style={{ height: p.v > 0 ? `${Math.max(pct, 3)}%` : "3px" }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* x-axis — first · mid · last (HTML → always crisp, never cut off) */}
+      <div className="mt-1.5 flex justify-between text-[11px] text-muted">
+        <span>{thaiDay(data[0]!.d)}</span>
+        <span>{thaiDay(midP.d)}</span>
+        <span>{thaiDay(data[data.length - 1]!.d)}</span>
+      </div>
+
+      {/* legend */}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary-600"></span> รายวัน</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500"></span> วันสูงสุด</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-emerald-500"></span> ค่าเฉลี่ย</span>
+        <span className="ml-auto">มีรายรับ {activeDays}/{data.length} วัน</span>
+      </div>
     </div>
   );
 }

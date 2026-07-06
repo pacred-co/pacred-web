@@ -1,8 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, getAdminRoles, hasRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
   type CustomsDeclarationStatus,
@@ -136,7 +136,7 @@ export default async function CargoDeclarationsPage() {
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/cargo-declarations" />
+      <AccountingMenubar activeHref="/admin/accounting/cargo-declarations" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · CARGO</p>
@@ -161,7 +161,7 @@ export default async function CargoDeclarationsPage() {
               </p>
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">เลขที่</th>
@@ -221,7 +221,7 @@ export default async function CargoDeclarationsPage() {
               <p className="p-8 text-center text-xs text-muted">ไม่มีออเดอร์ที่รอสร้างใบขน</p>
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">ออเดอร์</th>

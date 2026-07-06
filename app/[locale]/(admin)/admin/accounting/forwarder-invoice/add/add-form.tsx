@@ -182,7 +182,7 @@ export default function AddInvoiceForm({
 
       {/* Candidates table — multi-row checkbox grouped by customer */}
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible mb-4">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
               <th className="px-3 py-2 text-center font-medium w-10">เลือก</th>

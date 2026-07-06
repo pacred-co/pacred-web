@@ -14,8 +14,8 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { getShopDisbursementHistory } from "@/actions/admin/shop-disbursement";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportShopDisbursementHistoryAll } from "@/actions/admin/export/shop-disbursement-history";
@@ -83,7 +83,7 @@ export default async function AdminShopDisbursementHistoryPage() {
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/shop-disbursement/history" />
+      <AccountingMenubar activeHref="/admin/shop-disbursement/history" />
       <main className="space-y-5 p-6 lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -119,7 +119,7 @@ export default async function AdminShopDisbursementHistoryPage() {
         )}
 
         <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-black/10">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="bg-gray-50 text-xs text-gray-600">
               <tr>
                 <th className="px-3 py-2 text-left">วันที่ทำรายการ</th>

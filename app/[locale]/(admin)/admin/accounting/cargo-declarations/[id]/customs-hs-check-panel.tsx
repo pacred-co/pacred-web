@@ -49,7 +49,7 @@ export function CustomsHsCheckPanel({ lines }: { lines: HsCheckLine[] }) {
         <p className="text-[11px] text-emerald-700">✅ ทุกรายการมีพิกัด · ไม่พบรายการที่ติดอากร / Form-E / ของควบคุม</p>
       ) : flagged.length > 0 ? (
         <div className="overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="text-left text-[11px] uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-2 py-1.5">#</th>

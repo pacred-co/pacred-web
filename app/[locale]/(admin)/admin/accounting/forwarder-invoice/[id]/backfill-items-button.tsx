@@ -276,7 +276,7 @@ export default function BackfillItemsButton({
             </div>
 
             <div className="max-h-96 overflow-y-auto border border-slate-200 rounded">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-slate-100 sticky top-0">
                   <tr>
                     <th className="px-2 py-1 text-left w-10">เลือก</th>

@@ -214,7 +214,7 @@ export default async function AdminFreightInvoicesListPage({
             </Link>
           </div>
         ) : (
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[760px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-3 py-2">เลขที่</th>

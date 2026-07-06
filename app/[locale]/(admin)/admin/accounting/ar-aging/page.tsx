@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import {
@@ -69,7 +69,7 @@ export default async function AdminARAgingPage() {
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ar-aging" />
+      <AccountingMenubar activeHref="/admin/accounting/ar-aging" />
       <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
         <header className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -151,7 +151,7 @@ export default async function AdminARAgingPage() {
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[900px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
@@ -214,7 +214,7 @@ export default async function AdminARAgingPage() {
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[600px] text-sm">
+              <table className="w-full min-w-[600px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>

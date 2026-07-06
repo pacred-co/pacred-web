@@ -282,7 +282,7 @@ export default async function AdminFreightInvoiceDetailPage({
         {lines.length === 0 ? (
           <p className="px-4 pb-4 text-xs text-muted">ยังไม่มีรายการสินค้า — เพิ่มจากหน้างานขนส่งก่อนออกใบแจ้งหนี้</p>
         ) : (
-          <table className="w-full text-sm min-w-[560px]">
+          <table className="w-full text-sm min-w-[560px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-3 py-2 w-8">#</th>
@@ -317,7 +317,7 @@ export default async function AdminFreightInvoiceDetailPage({
           {payments.length === 0 ? (
             <p className="px-4 pb-4 text-xs text-muted">ยังไม่มีการชำระเงิน</p>
           ) : (
-            <table className="w-full text-sm min-w-[560px]">
+            <table className="w-full text-sm min-w-[560px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-2">วันที่</th>

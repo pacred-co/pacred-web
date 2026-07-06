@@ -132,7 +132,7 @@ export function ReceiptsVoidTable({
       )}
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-slate-100 text-slate-700">
             <tr>
               <th className="px-3 py-2 text-left font-medium w-10">

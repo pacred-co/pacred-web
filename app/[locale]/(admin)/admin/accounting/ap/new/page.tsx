@@ -9,10 +9,10 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { Link } from "@/i18n/navigation";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+
 import { ApCreateForm } from "./ap-create-form";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export default async function NewApRequestPage() {
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ap" />
+      <AccountingMenubar activeHref="/admin/accounting/ap" />
       <main className="space-y-5 p-6 lg:p-8">
         <PageHeader
           eyebrow="ADMIN · ACCOUNTING · AP"

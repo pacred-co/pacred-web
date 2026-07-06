@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import {
   getQuoteComparison,
   type QuoteWarehouse,
@@ -116,7 +116,7 @@ export default async function AdminQuoteComparePage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/quote-compare" />
+      <AccountingMenubar activeHref="/admin/accounting/quote-compare" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · SALES · CEO</p>
@@ -260,7 +260,7 @@ export default async function AdminQuoteComparePage({
                 />
               </div>
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full min-w-[800px] text-sm">
+                <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">Carrier</th>
