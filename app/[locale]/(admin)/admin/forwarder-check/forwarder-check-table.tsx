@@ -71,7 +71,8 @@ export type ForwarderCheckRow = {
   price_crate: number;                 // priceCrate
   transport_price_chn_thb: number;     // fTransportPriceCHNTHB
   price_other: number;                 // priceOther
-  ship_by: string;                     // fShipBy → "PCS" / vendor labels
+  ship_by: string;                     // fShipBy raw code — "PCS" / "2" / "PCSF" (logic)
+  ship_by_label: string;               // SHIP_BY_LABEL[fShipBy] — carrier name (display)
   pay_method: string | null;           // payMethod — '2' = ปลายทาง
   address_district: string | null;
   address_province: string | null;
@@ -100,6 +101,14 @@ export type ForwarderCheckRow = {
 // ────────────────────────────────────────────────────────────
 // Static label maps — mirror /admin/forwarders patterns
 // ────────────────────────────────────────────────────────────
+
+// legacy nameProductsType (function.php) — ประเภทสินค้า
+const PRODUCTS_TYPE_LABEL: Record<string, string> = {
+  "1": "ทั่วไป",
+  "2": "มอก.",
+  "3": "อย.",
+  "4": "พิเศษ",
+};
 
 const STATUS_BADGE: Record<string, string> = {
   "1":  "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -558,6 +567,14 @@ export function ForwarderCheckTable({
                             {r.fno_cargo && (
                               <div className="text-[11px] font-mono text-muted mt-0.5">{r.fno_cargo}</div>
                             )}
+                            {/* ประเภท (legacy nameProductsType · forwarder-check.php L283/425) */}
+                            {r.products_type && (
+                              <div className="mt-0.5">
+                                <span className="rounded border border-border bg-surface-alt/60 px-1.5 py-0.5 text-[11px] text-muted">
+                                  ประเภท: {PRODUCTS_TYPE_LABEL[r.products_type] ?? r.products_type}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -598,7 +615,7 @@ export function ForwarderCheckTable({
                       </td>
 
                       <td className="px-2 py-2.5">
-                        <div className="text-[11px] font-medium">{r.ship_by || "—"}</div>
+                        <div className="text-[11px] font-medium">{r.ship_by_label || r.ship_by || "—"}</div>
                         {r.pay_method === "2" && (
                           <div className="text-[11px] bg-red-100 text-red-700 px-1 rounded inline-block mt-0.5">ปลายทาง</div>
                         )}

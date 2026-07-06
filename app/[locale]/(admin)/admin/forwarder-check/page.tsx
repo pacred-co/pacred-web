@@ -46,6 +46,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -373,6 +374,7 @@ export default async function AdminForwarderCheckPage({
       transport_price_chn_thb: Number(r.ftransportpricechnthb ?? 0),
       price_other: Number(r.priceother ?? 0),
       ship_by: r.fshipby ?? "",
+      ship_by_label: SHIP_BY_LABEL[r.fshipby ?? ""] ?? (r.fshipby ?? ""),
       pay_method: r.paymethod,
       address_district: r.faddressdistrict,
       address_province: r.faddressprovince,
