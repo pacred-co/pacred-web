@@ -3326,6 +3326,7 @@
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",
       "driverWork": "Driver work-list (mobile)",
+      "driverMonitor": "Live delivery monitor",
       "combineBill": "Combine bills",
       "billingRun": "Billing-run (credit-term)",
       "tranTh": "TH-transport batches"

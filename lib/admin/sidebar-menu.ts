@@ -1211,6 +1211,8 @@ const wrapClassWarehouse: MenuItem = {
       badge: "driverItems",
       children: [
         { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
+        // พี่ป๊อป spec 2026-07-06 §3 — จอมอนิเตอร์ "กำลังจัดส่ง" real-time board.
+        { labelKey: "forwarder.driverMonitor", href: "/admin/drivers/monitor", icon: "MonitorSpeaker" },
         { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
         blockExtThaiTransport,
       ],

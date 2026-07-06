@@ -30,7 +30,7 @@ import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList } from "lucide-react";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -248,6 +248,15 @@ export default async function AdminDriversPage({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* พี่ป๊อป spec 2026-07-06 §3 — จอมอนิเตอร์ "กำลังจัดส่ง" (real-time
+              driver board · รูป/เบอร์/ชื่อเล่น + ความคืบหน้า). §0d reach. */}
+          <Link
+            href="/admin/drivers/monitor"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[44px]"
+          >
+            <MonitorSpeaker className="h-4 w-4" />
+            จอมอนิเตอร์ (กำลังจัดส่ง)
+          </Link>
           <CsvButton
             rows={csvRows}
             cols={csvCols}

@@ -37,6 +37,7 @@ import {
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
   Rocket, PanelLeft, Users2, Undo2, MessagesSquare, LayoutGrid,
+  MonitorSpeaker,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -157,6 +158,9 @@ const ICONS: Record<string, LucideIcon> = {
   // (extension.serviceDashboard · /admin/dashboard/services). Icon name
   // referenced from sidebar-menu.ts → must be in this map or it'd blank-spacer.
   LayoutGrid,
+  // 2026-07-06 (พี่ป๊อป spec §3) — จอมอนิเตอร์ "กำลังจัดส่ง" leaf
+  // (forwarder.driverMonitor · /admin/drivers/monitor).
+  MonitorSpeaker,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
