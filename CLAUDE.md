@@ -3,6 +3,24 @@
 
 ---
 
+# 📦 2026-07-06 (ภูม) — `/admin/forwarders` (ฝากนำเข้า) list → legacy PCS fidelity (ตีเส้นตาราง + แสดงข้อมูลเป๊ะ) → Poom-pacred · 🔴 เดฟ review · read FIRST
+
+> **🏁 SESSION CLOSE (ภูม: "เซฟ Poom-pacred · เดฟเอาไปตรวจ · ภูมิทำต่อพรุ่งนี้").** Branch **Poom-pacred = `794cfe08`** (= HEAD · pushed · clean · local==origin). Gate เขียวทุก commit: **tsc 0 · lint 0** (`rm -f .next/dev/types/validator.ts` ก่อน · อ่าน exit จริง ห้าม `| tail` · `cd /c/Users/Admin/pacred-web/pacred-web` ก่อนทุก git/node — cwd reset บ่อย). localhost/.env.local = **DEV** · prod = เดฟ · push เฉพาะ Poom-pacred. **2 files · no migration · 2 commits `1e03bc1d`(gridlines)→`794cfe08`(data-display).**
+>
+> **🎯 งาน (ภูม · "หน้าฝากนำเข้าของเรา `/admin/forwarders` เอาให้เหมือน legacy `pcscargo.co.th/member/pcs-admin/forwarder/` เป๊ะๆ เหมือนที่ทำ Dashboard `/admin` — หน้าตา/การจัดวาง/การแสดงข้อมูล/การตีเส้นตาราง").** วิเคราะห์: คอลัมน์ตรง legacy อยู่แล้ว · gap = (1) เส้นตาราง (2) การแสดงข้อมูลบางฟิลด์.
+>
+> **✅ ทำแล้ว (เทียบ legacy `forwarder.php` list-mode L571-712 · §0b อ่าน source จริงก่อนเคลม):**
+> - **ตีเส้นตารางเต็ม** (`1e03bc1d`) — legacy `table-bordered` = เส้นทุก cell. ทำ scoped `[&>thead>tr>th]:border [&>tbody>tr>td]:border` เฉพาะ **main table** (line 772) · **sub-table ที่ nested ไม่แตะ** (กัน over-scope) · คง status row-tint.
+> - **4 การแสดงข้อมูลตาม legacy** (`794cfe08` · `forwarders-table.tsx`): (1) **เลขพัสดุจีน = แดง** (L650 `bg-danger text-white` → `bg-red-600 text-white`) · (2) **หมายเหตุ (fNote) บล็อกแดง** ในรายละเอียด (L635 · conditional `r.note`) · (3) **ประเภท : ทั่วไป/มอก./อย./พิเศษ** (L622 · label จาก `pcs-admin/include/function.php` L640 nameProductsType ตัวจริง — ไม่ใช่ตัว drift ในโค้ด) · (4) **ขนส่งไทย (nameShipBy)** เหนือเลขพัสดุไทย (L656 · reuse `SHIP_BY_LABEL` จาก `actions/admin/reports-profit-types` = SOT เดียว ไม่สร้างซ้ำ).
+>
+> **🔧 fetch (`page.tsx`):** เพิ่ม `fshipby,fproductstype` ใน select + RawForwarderRow + Row + mapping. **§0e coid-guard:** probe DB ยืนยัน 2 คอลัมน์นี้ **มีจริง** ก่อน → query เต็มยังคืน **166 แถวครบ** (fshipby: PCS:104/PCSF:8/PCSE:3/2:1 = SHIP_BY_LABEL cover 100% · fproductstype ทั้งหมด "1"=ทั่วไป).
+>
+> **🔎 verify:** gate tsc 0 · lint 0 · DB 166 rows · **DOM computed-style สด** (screenshot MCP บั๊ก `clip.scale` → เช็ค DOM แทน · แม่นกว่า): red tracking = `lab(48.4 77.4 61.5)` = แดงจริง+ตัวขาว · carrier "Pacred เหมาๆ (PRF)" ขึ้นถูก · ประเภท ×49 แถว · หน้าโหลดครบ 166 + ยอดรวม ไม่มี error. **⚠️ หมายเหตุ (fNote) DEV มี 0 แถว → เห็นจริงตอน prod เท่านั้น** (โค้ด conditional ถูก · faithful).
+>
+> **🔴 NEXT (เดฟ review · ภูม พรุ่งนี้):** ถ้าภูม/พี่ป๊อป เปิดดูแล้วเจอจุดอื่น "ไม่เหมือน" อีก (เช่น sub-table แตกกล่องอยากได้ tracking แดงด้วย · nameShipBy บน sub-table · print/detail fidelity) → เก็บต่อ. Legacy source = `C:\xampp\htdocs\pcscargo\member\pcs-admin\forwarder.php` (list-mode) + `include/function.php` (nameShipBy L185 / nameProductsType L640).
+
+---
+
 # 📊 2026-07-05 (ภูม) — Admin dashboard `/admin` → legacy PCS fidelity (ALL 14 tabs · columns+data+zebra+counts) + coid งานหาย fix → Poom-pacred · 🔴 เดฟ review · read FIRST
 
 > **🏁 SESSION CLOSE (ภูม: "เซฟ Poom-pacred · เดฟเอาไปตรวจ · ภูมิทำต่อพรุ่งนี้").** Branch **Poom-pacred = `5ce43b15`** (= HEAD · pushed · clean · local==origin · 0-behind dave). resume: `git -C <root> fetch && git pull origin Poom-pacred`. Gate เขียวทุก commit: **tsc 0 · lint 0** (อ่าน exit จริง · `cd <nested-root>` ก่อนเสมอ — cwd reset บ่อย). localhost/.env.local = **DEV** · prod = เดฟ · push เฉพาะ Poom-pacred. **1 file · no migration · 8 commits `41f24f0a`→`5ce43b15`.**
