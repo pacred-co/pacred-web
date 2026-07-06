@@ -26,6 +26,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportWalletBalanceAll } from "@/actions/admin/export/wallet-balance";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
@@ -43,6 +44,7 @@ type UserRow = {
   userCompany: string | null;
   coID: string | null;
   userStatus: string | null;
+  userPicture: string | null;
 };
 
 export type BalanceViewProps = {
@@ -108,7 +110,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
       ? Promise.resolve(new Map<string, UserRow>())
       : admin
           .from("tb_users")
-          .select("userID,userName,userLastName,userCompany,coID,userStatus")
+          .select("userID,userName,userLastName,userCompany,coID,userStatus,userPicture")
           .in("userID", userIds)
           .then(({ data }) => new Map(((data ?? []) as unknown as UserRow[]).map((u) => [u.userID, u]))),
     userIds.length === 0
@@ -126,6 +128,12 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
           }),
     fetchCorporateNameMap(admin, userIds),
   ]);
+
+  // Legacy wallet.php L175-177 — avatar photo in ชื่อ-นามสกุล (userPicture → "profile" bucket signed URL).
+  const avatarByUser = await resolveLegacyUrlMap(
+    walletRows.map((r) => ({ id: r.userid, filename: userMap.get(r.userid)?.userPicture ?? null })),
+    "profile",
+  );
 
   return (
     <>
@@ -239,16 +247,16 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-3 py-3 w-12">ลำดับ</th>
                   <BalanceSortTh label="รหัสสมาชิก"     field="userid"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <th className="px-3 py-3">ชื่อ-นามสกุล</th>
-                  <BalanceSortTh label="ยอดเงินคงเหลือ" field="wallettotal" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <th className="px-3 py-3 text-right">
                     <Explain align="right" label="Cash Back" def="เงินคืน/แต้มสะสมของลูกค้า — แยกจากยอดในกระเป๋า ใช้เป็นส่วนลดได้ตามเงื่อนไข" />
                   </th>
+                  <BalanceSortTh label="ยอดเงินคงเหลือ" field="wallettotal" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   <th className="px-3 py-3">
                     <Explain label="สถานะ" def="ใช้งาน = บัญชีลูกค้าปกติ · ระงับ = บัญชีถูกระงับ ใช้กระเป๋าเงินไม่ได้จนกว่าจะปลดระงับ" />
                   </th>
@@ -257,6 +265,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
               <tbody>
                 {walletRows.map((r, idx) => {
                   const u = userMap.get(r.userid);
+                  const avatarUrl = avatarByUser[r.userid];
                   const fullName = u
                     ? resolveBillingIdentity({
                         userCompany: u.userCompany,
@@ -270,7 +279,7 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                   const isSuspended = u?.userStatus === "0";
                   const statusKey = isSuspended ? "suspended" : "active";
                   return (
-                    <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
+                    <tr key={r.userid} className="hover:bg-surface-alt/30">
                       <td className="px-3 py-3 text-xs text-muted">{idx + 1}</td>
                       <td className="px-3 py-3">
                         <Link
@@ -285,7 +294,28 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-3 py-3 text-sm text-foreground">{fullName}</td>
+                      <td className="px-3 py-3 text-sm text-foreground">
+                        <div className="flex items-center gap-2">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarUrl}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-alt text-[11px] font-semibold text-muted">
+                              {(fullName.replace(/^คุณ\s*/, "")[0] ?? "?").toUpperCase()}
+                            </span>
+                          )}
+                          <span>{fullName}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-xs text-purple-600">
+                        {cb > 0
+                          ? `฿${cb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                          : <span className="text-muted">—</span>}
+                      </td>
                       <td className="px-3 py-3 text-right">
                         <div className={`flex items-center justify-end gap-1 font-mono text-base font-bold ${wt < 0 ? "text-rose-600" : "text-foreground"}`}>
                           <span>฿{wt.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
@@ -301,11 +331,6 @@ export async function WalletBalanceView({ q, sort, dir, page = 1 }: BalanceViewP
                             บันทึกการชำระ + แนบสลิป →
                           </Link>
                         )}
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono text-xs text-purple-600">
-                        {cb > 0
-                          ? `฿${cb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                          : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-3 py-3">
                         <span
