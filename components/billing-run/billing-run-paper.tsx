@@ -32,13 +32,18 @@ import {
 import { fmt2, fmt5, fmt0 } from "@/components/receipt/receipt-paper";
 import { DocSectionLabel } from "@/components/receipt/doc-section-label";
 import { DocCertRow } from "@/components/receipt/doc-cert-row";
-import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
 
 // ใบวางบิล = freight/cargo billing (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE per the
 // 3-account routing SOT (lib/payment/bank-accounts.ts). owner 2026-07-05: the bill
 // must show the SERVICE account 204-1-55856-6, NOT the static site.ts BANK (which
 // was LOGISTICS 225-2-91144-0). (A ใบกำกับ bill would route to TRADING — future.)
-const BILL_ACCOUNT = PACRED_BANK_ACCOUNTS.service;
+// Resolved through the SHARED resolver with the SAME inputs the receipt uses
+// (receipt-paper.tsx RECEIPT_ACCOUNT) so bill + receipt show the SAME account.
+const BILL_ACCOUNT = resolvePaymentAccount({
+  issuesTaxInvoice: false,
+  isDomesticDeliveryLeg: false,
+});
 
 export type BillingRunPaperRow = {
   no:          number;
@@ -260,7 +265,10 @@ function BillingRunPage({
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px", marginTop: "2px" }}>
                     <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ยอดชำระสุทธิ</p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "55mm", textAlign: "right" }}>
-                      {p.netThaiWord}บาทถ้วน
+                      {/* p.netThaiWord = readThaiBaht(net_payable) — already a
+                          COMPLETE baht-text (…บาทถ้วน / …สตางค์). Render it bare;
+                          appending "บาทถ้วน" here double-suffixed it (owner 2026-07-06). */}
+                      {p.netThaiWord}
                     </p>
                   </div>
                 </div>
@@ -348,6 +356,7 @@ function BillingRunPage({
               dateIssued={p.dateIssued}
               approverName={DOC_SIGNATORY.name}
               issuerLabel="ผู้วางบิล (ผู้ขาย)"
+              approverLabel="ผู้อนุมัติวางบิล (ผู้ขาย)"
               receiverLabel="ผู้รับวางบิล (ลูกค้า)"
               boxHeight="18mm"
             />

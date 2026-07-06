@@ -18,16 +18,17 @@ import { getInvoiceDetail } from "@/actions/admin/billing-run";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { SITE_URL, ADDRESSES } from "@/components/seo/site";
 import { BillingRunPaper, type BillingRunPaperRow } from "@/components/billing-run/billing-run-paper";
+import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-// Paginate to FILL an A4 page before spilling to the next (owner 2026-07-05:
-// "ดันจนใบแรกเต็มก่อน ค่อยไปจบใบที่สอง" — PEAK-style). The ใบวางบิล rows are compact
-// (single-line cargo rows) so ~24 fit per page; 13 (the ใบเสร็จ value) left the
-// page half-empty. The last page still keeps the summary block (flex-grow on the
-// items box pushes it to the bottom).
-const ROWS_PER_PAGE = 24;
+// Paginate identically to the ใบเสร็จ (receipt) so the SAME order breaks onto the
+// same number of pages on both docs — shared constant DOC_ROWS_PER_PAGE (=13, the
+// largest value that fits both papers' footers; see lib/receipt/rows-per-page.ts).
+// The last page still keeps the summary block (flex-grow on the items box pushes
+// it to the bottom, so a short bill's summary sits at the page bottom, not mid-page).
+const ROWS_PER_PAGE = DOC_ROWS_PER_PAGE;
 
 export default async function BillingRunPrintPage({
   params,

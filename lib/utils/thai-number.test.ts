@@ -125,6 +125,41 @@ console.log("\nreadThaiBaht: floating point edge");
 // 0.1 + 0.2 = 0.30000000000000004 — must round to 30 satang
 assertEq("0.1 + 0.2 → สามสิบสตางค์", readThaiBaht(0.1 + 0.2), "สามสิบสตางค์");
 
+// ── SINGLE-SUFFIX invariant (owner 2026-07-06 · the "ขาดคำ" / doubled-word bug) ──
+// readThaiBaht already emits the COMPLETE ending. Money-doc papers must render it
+// bare — appending "บาทถ้วน" (the old bug) produced "…สตางค์บาทถ้วน" on a satang
+// amount and "…บาทถ้วนบาทถ้วน" on a whole amount. These assertions pin that the
+// helper's own output carries exactly ONE valid ending — so a bare render is
+// correct and a caller that appends another "บาทถ้วน" is provably wrong.
+console.log("\nreadThaiBaht: single-suffix invariant (no double บาทถ้วน / สตางค์)");
+function countOcc(hay: string, needle: string): number {
+  return hay.split(needle).length - 1;
+}
+{
+  // whole amount → ends in บาทถ้วน exactly once · never contains สตางค์
+  const whole = readThaiBaht(49999);
+  assertEq("whole ends with บาทถ้วน", whole.endsWith("บาทถ้วน"), true);
+  assertEq("whole has exactly one 'ถ้วน'", countOcc(whole, "ถ้วน"), 1);
+  assertEq("whole has no 'สตางค์'", whole.includes("สตางค์"), false);
+  // The double-suffix bug would make this: `whole + "บาทถ้วน"`.endsWith("ถ้วนบาทถ้วน")
+  assertEq("appending บาทถ้วน would DOUBLE it (guard)", (whole + "บาทถ้วน").includes("ถ้วนบาทถ้วน"), true);
+}
+{
+  // satang amount (the receipt case 49,999.54) → ends in สตางค์ · has NO ถ้วน
+  const satang = readThaiBaht(49999.54);
+  assertEq("satang ends with สตางค์", satang.endsWith("สตางค์"), true);
+  assertEq("satang has no 'ถ้วน'", satang.includes("ถ้วน"), false);
+  assertEq("satang has exactly one 'สตางค์'", countOcc(satang, "สตางค์"), 1);
+  // The double-suffix bug produced "…ห้าสิบสี่สตางค์บาทถ้วน" — satang followed by บาทถ้วน
+  assertEq("appending บาทถ้วน would garble it (guard)", (satang + "บาทถ้วน").includes("สตางค์บาทถ้วน"), true);
+}
+{
+  // zero → ศูนย์บาทถ้วน exactly once
+  const zero = readThaiBaht(0);
+  assertEq("zero = ศูนย์บาทถ้วน", zero, "ศูนย์บาทถ้วน");
+  assertEq("zero has exactly one 'ถ้วน'", countOcc(zero, "ถ้วน"), 1);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -355,7 +355,10 @@ function PeakFreightReceiptPage({
               <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.5, borderTopColor: COLORS.border, paddingTop: 2 }}>
                 <Text style={{ fontSize: 8, fontWeight: "bold", color: COLORS.muted }}>จำนวนเงินทั้งสิ้น</Text>
                 <Text style={{ fontSize: 8, color: COLORS.foreground, flex: 1, textAlign: "right" }}>
-                  {readThaiBaht(grandTotal)}บาทถ้วน
+                  {/* readThaiBaht already emits the complete ending
+                      (…บาทถ้วน / …สตางค์) — render bare, no appended suffix
+                      (owner 2026-07-06 · was double-suffixed). */}
+                  {readThaiBaht(grandTotal)}
                 </Text>
               </View>
             </View>

@@ -50,6 +50,10 @@ export type DocCertRowProps = {
   /** Label of the first seller signature box. Default "ผู้ออกเอกสาร (ผู้ขาย)"
    *  (ใบวางบิล passes "ผู้วางบิล (ผู้ขาย)" · quote passes its own). */
   issuerLabel?: string;
+  /** Label of the middle approver signature box. Default "ผู้อนุมัติเอกสาร (ผู้ขาย)"
+   *  (ใบวางบิล passes "ผู้อนุมัติวางบิล (ผู้ขาย)" so the three seller boxes read
+   *  ผู้วางบิล / ผู้อนุมัติวางบิล consistently, instead of the generic เอกสาร). */
+  approverLabel?: string;
   /** Label of the customer receive box. Default "ผู้รับเอกสาร (ลูกค้า)". */
   receiverLabel?: string;
   /** Box body height. Receipt uses 13mm, ใบวางบิล/shop use 18mm. Default 13mm. */
@@ -69,6 +73,7 @@ export function DocCertRow({
   dateIssued,
   approverName,
   issuerLabel = "ผู้ออกเอกสาร (ผู้ขาย)",
+  approverLabel = "ผู้อนุมัติเอกสาร (ผู้ขาย)",
   receiverLabel = "ผู้รับเอกสาร (ลูกค้า)",
   boxHeight = "13mm",
   showLabel = false,
@@ -89,9 +94,11 @@ export function DocCertRow({
         <SignFooter name={signatoryName} date={dateIssued} />
       </SignBox>
 
-      {/* 2 · ผู้อนุมัติเอกสาร (ผู้ขาย) — signature box (optional) */}
+      {/* 2 · ผู้อนุมัติ (ผู้ขาย) — signature box (optional). Label is per-doc
+             (approverLabel) so a ใบวางบิล reads "ผู้อนุมัติวางบิล" to match its
+             ผู้วางบิล/ผู้รับวางบิล boxes, while a ใบเสร็จ keeps "ผู้อนุมัติเอกสาร". */}
       {showApprover && (
-        <SignBox label="ผู้อนุมัติเอกสาร (ผู้ขาย)">
+        <SignBox label={approverLabel}>
           <SignImage boxHeight={boxHeight} />
           <SignFooter name={approverName || signatoryName} date={dateIssued} />
         </SignBox>

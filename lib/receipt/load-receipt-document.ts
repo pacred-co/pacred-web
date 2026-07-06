@@ -20,6 +20,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { resolveReceiptFrozenTotals } from "@/lib/receipt/receipt-frozen-totals";
+import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
 import { ADDRESSES } from "@/components/seo/site";
 import type {
   ReceiptCommonProps,
@@ -452,8 +453,9 @@ export async function loadReceiptDocument(
   // components/seo/site.ts ADDRESSES.office). The cutover is retired.
   const issuerAddress = ADDRESSES.office.full;
 
-  // ── 9. Pagination — 13 rows per page (legacy `$rowsPerPage = 13`) ──
-  const ROWS_PER_PAGE = 13;
+  // ── 9. Pagination — shared with the ใบวางบิล so an order breaks pages
+  // identically on both docs (legacy `$rowsPerPage = 13`; see rows-per-page.ts). ──
+  const ROWS_PER_PAGE = DOC_ROWS_PER_PAGE;
   const pageCount = Math.max(1, Math.ceil(computedItems.length / ROWS_PER_PAGE));
   const pages: ReceiptPageData[] = [];
   for (let p = 0; p < pageCount; p++) {
