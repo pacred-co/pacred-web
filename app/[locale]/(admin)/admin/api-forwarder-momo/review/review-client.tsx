@@ -521,7 +521,7 @@ export function ReviewGridClient({
             </span>
           </header>
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs border-collapse min-w-[1100px]">
+            <table className="w-full text-xs border-collapse min-w-[1100px] [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt sticky top-0 z-10">
                 <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="text-left px-3 py-3 border-b border-border w-8">#</th>
@@ -801,7 +801,7 @@ export function ReviewGridClient({
             </h3>
           </header>
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs border-collapse">
+            <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt">
                 <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="text-left px-3 py-2.5 border-b border-border">Tracking</th>

@@ -98,9 +98,15 @@ export default async function AdminMomoReviewPage() {
       userGroupRaw && userCodeRaw ? `${userGroupRaw}${userCodeRaw}` : null;
 
     // 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก raw → ให้ตาราง review ตรวจง่ายขึ้น.
-    // (raw มี kg/cbm/width/length/height เป็นตัวเลข · 0 = MOMO ยังไม่ได้ชั่ง.)
-    const numFromRaw = (k: string): number =>
-      raw && typeof raw === "object" && typeof raw[k] === "number" ? (raw[k] as number) : 0;
+    // (raw มี kg/cbm/width/length/height · 0 = MOMO ยังไม่ได้ชั่ง.)
+    // 2026-07-06 (ภูม · prod ไม่ขึ้น น้ำหนัก/dims) — coerce string→number ด้วย.
+    // เดิมเช็ค typeof==="number" เท่านั้น → ถ้า MOMO บาง sync เก็บใน raw เป็น
+    // "51" (string) แทน 51 (number) จะได้ 0 (prod ว่าง · dev ขึ้น). Number() ครอบทั้งคู่.
+    const numFromRaw = (k: string): number => {
+      if (!raw || typeof raw !== "object") return 0;
+      const n = Number((raw as Record<string, unknown>)[k]);
+      return Number.isFinite(n) ? n : 0;
+    };
 
     return {
       id:                row.id as string,

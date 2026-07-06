@@ -25,7 +25,8 @@ import {
 /** One aggregated sack = a group of momo_import_tracks rows sharing momo_sack_no. */
 export type DerivedSack = {
   sack_no: string;             // momo_sack_no (the group key)
-  container: string | null;    // representative momo_container_no
+  container: string | null;    // real ตู้ GZS/GZE when closed, else the MOMO routing batch
+  container_is_real: boolean;  // true = real cabinet (GZS/GZE) · false = routing batch (รอปิดตู้)
   transport_type: string | null; // DERIVED from the container name ('1'/'2'/'3')
   parcels: number;             // count(*) of momo_import_tracks rows in the sack
   qty: number;                 // sum(quantity)

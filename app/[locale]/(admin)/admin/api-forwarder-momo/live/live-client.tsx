@@ -313,7 +313,7 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
               </div>
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
-                <table className="w-full text-[12px] border-collapse">
+                <table className="w-full text-[12px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt">
                     <tr className="whitespace-nowrap">
                       <th className="text-left px-2 py-2 border-b font-semibold">รหัสลูกค้า</th>

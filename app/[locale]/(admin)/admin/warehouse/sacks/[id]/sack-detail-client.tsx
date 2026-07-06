@@ -37,11 +37,20 @@ export function SackDetailClient({
               <span className="inline-flex items-center gap-1">
                 <Truck className="h-4 w-4" /> {transportTypeLabel(sack.transport_type)}
               </span>
-              {sack.container && (
-                <span className="inline-flex items-center gap-1">
-                  <Package className="h-4 w-4" /> ตู้ {sack.container}
-                </span>
-              )}
+              {sack.container &&
+                (sack.container_is_real ? (
+                  <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                    <Package className="h-4 w-4" /> ตู้ {sack.container}
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+                    title={`รอบขนส่ง MOMO: ${sack.container} · ยังไม่ปิดตู้เข้าเลขตู้จริง (GZS/GZE)`}
+                  >
+                    <Package className="h-4 w-4" /> {sack.container}
+                    <span className="text-amber-600">· รอเลขตู้จริง</span>
+                  </span>
+                ))}
               {sack.status && (
                 <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
                   {sackStatusLabel(sack.status)}
