@@ -43,6 +43,7 @@ import {
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 import { isThShippingCostMissing } from "@/lib/forwarder/domestic-shipping";
+import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import {
   isBillableForwarder,
@@ -2348,6 +2349,326 @@ export async function listBillingRunPendingSlips(): Promise<
         uploadedAt: r.slip_uploaded_at,
       }));
       return { ok: true, data: { rows } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 9. CONSOLIDATION VIEW (pop-spec #3 · owner 2026-07-06)
+// ────────────────────────────────────────────────────────────────────────
+//
+// The accounting "รวมวางบิล — ตู้ที่ตรวจแล้ว" screen. Two workflows on ONE page:
+//   แบบ 1 (per-customer): combine ALL of a customer's ready containers into ONE
+//          bill — done by the existing /add form (this page just links to it).
+//   แบบ 2 (batch): tick MANY customers → issue one bill per ticked customer, all
+//          at once, via createBatchBillingRunInvoices (which CALLS the money path
+//          createBillingRunInvoice, never re-implements it).
+//
+// Owner rule (verbatim): "ต้องเป็นตู้ที่เราตรวจมาแล้วอย่างดีจนครบ และ ทุกตู้ด้วย" →
+// a customer is auto-tickable ONLY when EVERY container of their ready rows is
+// completeness=ครบ (getContainerCompletenessBatch · isComplete) AND no row has a
+// ฿0 import transport (has_zero_transport) or a still-฿0 domestic leg
+// (has_th_ship_missing). Customers with any ขาด/฿0/no-TH-cost are SHOWN but flagged
+// "ตรวจก่อน — วางบิลเดี่ยว" and NOT auto-ticked (they must be billed via the /add
+// form where the per-row overrides + confirms live).
+//
+// ZERO new money math — every ฿ comes from listEligibleForwarders (which already
+// runs calcForwarderGross + computeForwarderDebitBatch). This helper only ROLLS UP
+// those per-row numbers per customer + attaches the completeness signal.
+
+export type ConsolidationCandidateRow = {
+  userid: string;
+  display_name: string;
+  is_juristic: boolean;
+  tax_id: string;
+  /** # of billable (unbilled) ready forwarder rows for this customer. */
+  ready_count: number;
+  /** Σ (calcForwarderGross + เหมาๆ) of the billable rows — the bill's face total
+   *  BEFORE the 4 admin adjustments (chn/th/other/discount), which the batch action
+   *  passes as 0. Purely for the accounting preview + the batch confirm total. */
+  ready_total_thb: number;
+  /** Distinct cabinet numbers that are fully checked (ครบ) among this customer's ready rows. */
+  complete_containers: number;
+  /** Distinct cabinet numbers still incomplete (ขาด) among this customer's ready rows. */
+  incomplete_containers: number;
+  /** A billable row has ฿0 import transport SELL (ftotalprice<=0) → under-charge risk. */
+  has_zero_transport: boolean;
+  /** A billable row's domestic leg cost (ค่าส่งไทย) is still ฿0 while a leg applies. */
+  has_th_ship_missing: boolean;
+  /** TRUE ⇔ ready_count>0 AND every cabinet ครบ AND !zero-transport AND !th-ship-missing.
+   *  Only these are auto-ticked by "เลือกทั้งหมด" + billable via the batch action. */
+  is_fully_ready: boolean;
+};
+
+/**
+ * Read-only rollup for the consolidation view. For EACH customer with billable
+ * ready rows, reuses listEligibleForwarders() (the same eligibility + money engine
+ * the single-customer form uses) then folds the rows into a per-customer summary +
+ * the fully-checked (ครบ/ขาด) container signal from getContainerCompletenessBatch.
+ *
+ * No mutation. No new pricing math. Bounded — caps the customer fan-out to keep the
+ * page snappy (accounting reviews the ready cohort, not the whole history).
+ */
+export async function listConsolidationCandidates(): Promise<
+  AdminActionResult<{ rows: ConsolidationCandidateRow[] }>
+> {
+  return withAdmin<{ rows: ConsolidationCandidateRow[] }>(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async () => {
+      const admin = createAdminClient();
+
+      // (1) Which customers have ready rows + their display info — reuse the
+      // existing aggregate (same billable predicate the /add form uses).
+      const custRes = await listEligibleCustomers();
+      if (!custRes.ok) return { ok: false, error: custRes.error };
+      const customers = custRes.data!.rows;
+      if (customers.length === 0) return { ok: true, data: { rows: [] } };
+
+      // (2) Per-customer: pull the billable forwarder rows via the SAME action the
+      // single form calls (identical money numbers + the th_ship_missing flag).
+      // Bounded fan-out — cap the number of customers rolled up so the page stays
+      // responsive (the surface is a review queue, not a full report). Rows we cap
+      // out still appear in the /add customer dropdown.
+      const CAP = 300;
+      const scoped = customers.slice(0, CAP);
+
+      const perCustomer = await Promise.all(
+        scoped.map((c) => listEligibleForwarders(c.userid)),
+      );
+
+      // Collect every billable forwarder id across all customers (unbilled only).
+      const billableByUser = new Map<string, EligibleForwarderRow[]>();
+      const allBillableIds: number[] = [];
+      scoped.forEach((c, i) => {
+        const res = perCustomer[i];
+        if (!res.ok) return; // skip a customer whose rows failed to load
+        const billable = res.data!.rows.filter((r) => !r.already_billed);
+        if (billable.length === 0) return;
+        billableByUser.set(c.userid, billable);
+        for (const r of billable) allBillableIds.push(r.id);
+      });
+
+      if (allBillableIds.length === 0) return { ok: true, data: { rows: [] } };
+
+      // (2b) forwarder id → cabinet (for the completeness grouping).
+      type FwdCab = { id: number; fcabinetnumber: string | null };
+      const cabById = new Map<number, string>();
+      const cabsSet = new Set<string>();
+      // Chunk the IN-list to stay under PostgREST URL limits on large cohorts.
+      for (let i = 0; i < allBillableIds.length; i += 500) {
+        const chunk = allBillableIds.slice(i, i + 500);
+        const { data: fwdRaw, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("id, fcabinetnumber")
+          .in("id", chunk);
+        if (fwdErr) {
+          console.error("[listConsolidationCandidates tb_forwarder cabinets] failed", {
+            code: fwdErr.code, message: fwdErr.message,
+          });
+          return { ok: false, error: fwdErr.message };
+        }
+        for (const f of ((fwdRaw ?? []) as FwdCab[])) {
+          const cab = (f.fcabinetnumber ?? "").trim();
+          cabById.set(f.id, cab);
+          if (cab && cab !== "0") cabsSet.add(cab);
+        }
+      }
+
+      // (2c) completeness per cabinet (ONE batch round-trip · the SOT).
+      const completeness = await getContainerCompletenessBatch(admin, Array.from(cabsSet));
+
+      // (3) Fold each customer's billable rows into a summary row.
+      const custByID = new Map(customers.map((c) => [c.userid, c]));
+      const rows: ConsolidationCandidateRow[] = [];
+      for (const [userid, billable] of billableByUser) {
+        const c = custByID.get(userid);
+        if (!c) continue;
+
+        // Σ face total = Σ (per-row GROSS outstanding) + Σ (per-row เหมาๆ anchor fee).
+        // These are the EXACT numbers listEligibleForwarders already computed — no
+        // new math. The batch action passes chn/th/other/discount = 0, so this IS
+        // the bill face (the WHT 1% + net are derived on the display/print surface).
+        let faceTotal = 0;
+        for (const r of billable) {
+          faceTotal += Math.round(r.outstanding_thb * 100) / 100;
+          faceTotal += Math.round((r.mao_fee_thb ?? 0) * 100) / 100;
+        }
+
+        // Per-cabinet completeness among THIS customer's ready rows.
+        const custCabs = new Set<string>();
+        for (const r of billable) {
+          const cab = cabById.get(r.id);
+          if (cab && cab !== "0") custCabs.add(cab);
+        }
+        let completeContainers = 0;
+        let incompleteContainers = 0;
+        for (const cab of custCabs) {
+          const comp = completeness[cab];
+          // No completeness entry (e.g. cabinet not scanned at all) → treat as
+          // incomplete (conservative — never auto-tick something unverified).
+          if (comp && comp.isComplete) completeContainers += 1;
+          else incompleteContainers += 1;
+        }
+
+        const hasZeroTransport = billable.some((r) => (Number(r.ftotalprice) || 0) <= 0);
+        const hasThShipMissing = billable.some((r) => r.th_ship_missing === true);
+
+        // Fully-ready = every container ครบ AND no ฿0-transport AND no missing TH leg.
+        const isFullyReady =
+          billable.length > 0 &&
+          incompleteContainers === 0 &&
+          !hasZeroTransport &&
+          !hasThShipMissing;
+
+        rows.push({
+          userid,
+          display_name:          c.display_name,
+          is_juristic:           c.is_juristic,
+          tax_id:                c.tax_id,
+          ready_count:           billable.length,
+          ready_total_thb:       Math.round(faceTotal * 100) / 100,
+          complete_containers:   completeContainers,
+          incomplete_containers: incompleteContainers,
+          has_zero_transport:    hasZeroTransport,
+          has_th_ship_missing:   hasThShipMissing,
+          is_fully_ready:        isFullyReady,
+        });
+      }
+
+      rows.sort((a, b) => {
+        // Fully-ready first (the ones the batch will bill), then by userid.
+        if (a.is_fully_ready !== b.is_fully_ready) return a.is_fully_ready ? -1 : 1;
+        return a.userid.localeCompare(b.userid);
+      });
+
+      return { ok: true, data: { rows } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 10. BATCH billing (แบบ 2) — one bill per ticked customer, all at once
+// ────────────────────────────────────────────────────────────────────────
+//
+// pop-spec #3 (owner 2026-07-06 · consolidation แบบ 2). For each ticked customer:
+// resolve their billable (unbilled · non-฿0-transport · non-th-ship-missing)
+// forwarder ids + the auto เหมาๆ Σ, then DELEGATE to createBillingRunInvoice with
+// default dates (today / +7) and the 4 adjustment fields = 0. NEVER duplicates the
+// money path — every ฿ + the WHT 1% + the doc-no mint + the audit trail come from
+// createBillingRunInvoice unchanged.
+//
+// Money-safety: this action does NO direct DB write of its own — it only calls
+// createBillingRunInvoice (the sole money writer) once per customer. It refuses a
+// customer with 0 billable ids, and it never sets allowUnmeasured/allowMissingThShip
+// (so a ฿0-transport or missing-TH-leg row is REJECTED by the guard, not silently
+// billed). Such customers must be billed via the single /add form (with the
+// per-row overrides + explicit confirms).
+
+export type BatchBillingResult = {
+  userid: string;
+  ok: boolean;
+  invoiceId?: number;
+  docNo?: string;
+  error?: string;
+  /** # of billable forwarder rows this customer's bill covered (0 = skipped). */
+  count: number;
+};
+
+export async function createBatchBillingRunInvoices(
+  input: { userids: string[] },
+): Promise<AdminActionResult<{ results: BatchBillingResult[]; created: number; failed: number }>> {
+  return withAdmin<{ results: BatchBillingResult[]; created: number; failed: number }>(
+    // Same role gate as createBillingRunInvoice (which each sub-call re-checks).
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async () => {
+      const raw = Array.isArray(input?.userids) ? input.userids : [];
+      // Sanitize + dedupe + bound the batch size.
+      const userids = Array.from(
+        new Set(
+          raw
+            .map((u) => (typeof u === "string" ? u.trim() : ""))
+            .filter((u) => u.length > 0 && u.length <= 20 && /^[A-Za-z0-9_-]+$/.test(u)),
+        ),
+      ).slice(0, 200);
+      if (userids.length === 0) {
+        return { ok: false, error: "กรุณาเลือกลูกค้าอย่างน้อย 1 ราย" };
+      }
+
+      const dateIssued = isoToday();
+      const dateDue = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+      })();
+
+      const results: BatchBillingResult[] = [];
+      // Sequential — createBillingRunInvoice mints a doc-no (serial); running the
+      // sub-calls in parallel would race the mint's 3-retry uniqueness loop.
+      for (const userid of userids) {
+        // Resolve this customer's billable ids via the SAME action the form uses.
+        const fwdRes = await listEligibleForwarders(userid);
+        if (!fwdRes.ok) {
+          results.push({ userid, ok: false, error: fwdRes.error, count: 0 });
+          continue;
+        }
+        const billable = fwdRes.data!.rows.filter((r) => !r.already_billed);
+        if (billable.length === 0) {
+          results.push({ userid, ok: false, error: "ไม่มีรายการที่ออกใบวางบิลได้", count: 0 });
+          continue;
+        }
+        const forwarderIds = billable.map((r) => r.id);
+        // Auto เหมาๆ Σ (once per shipment) — the SAME per-row anchor fee the form
+        // previews; createBillingRunInvoice recomputes the same when maoFeeThb is
+        // absent, but we pass it explicitly so the batch confirm total reconciles.
+        const maoFeeThb =
+          Math.round(
+            billable.reduce((s, r) => s + (r.mao_fee_thb ?? 0), 0) * 100,
+          ) / 100;
+
+        // DELEGATE to the money path. allowUnmeasured/allowMissingThShip default
+        // false → a ฿0-transport or missing-TH-leg row makes THIS customer's bill
+        // fail (surfaced in results · they go via the single form instead).
+        const created = await createBillingRunInvoice({
+          userid,
+          forwarderIds,
+          dateIssued,
+          dateDue,
+          deliveryChnThb: 0,
+          deliveryThThb: 0,
+          otherThb: 0,
+          discountThb: 0,
+          maoFeeThb,
+          noteForCustomer: "",
+          // Money-safety — NEVER waive the guards in the batch path. A ฿0-transport
+          // or missing-ค่าส่งไทย row REJECTS this customer's bill (surfaced in results
+          // · they go via the single /add form with the per-row overrides + confirms).
+          allowUnmeasured: false,
+          allowMissingThShip: false,
+          overrides: {},
+        });
+        if (created.ok) {
+          results.push({
+            userid,
+            ok: true,
+            invoiceId: created.data!.invoiceId,
+            docNo: created.data!.docNo,
+            count: forwarderIds.length,
+          });
+        } else {
+          results.push({ userid, ok: false, error: created.error, count: 0 });
+        }
+      }
+
+      const createdCount = results.filter((r) => r.ok).length;
+      const failedCount = results.length - createdCount;
+
+      revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
+      revalidatePath("/[locale]/(admin)/admin/billing-run/consolidate", "page");
+
+      return {
+        ok: true,
+        data: { results, created: createdCount, failed: failedCount },
+      };
     },
   );
 }
