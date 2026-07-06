@@ -34,11 +34,22 @@ import {
   SITE_LEGAL_NAME,
   TAX_ID,
   CONTACT,
-  BANK,
   DOC_SIGNATORY,
 } from "@/components/seo/site";
+import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
 import { DocSectionLabel } from "./doc-section-label";
 import { DocCertRow } from "./doc-cert-row";
+
+// ใบเสร็จ ฝากนำเข้า/freight (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE 204-1-55856-6,
+// resolved through the SHARED bank SOT (lib/payment/bank-accounts.ts) so the bill,
+// the receipt, AND the forwarder-invoice all show the SAME account for the same
+// order. Was hardcoded to the static site.ts BANK (LOGISTICS 225-2-91144-0) →
+// same order billed to SERVICE but receipted to LOGISTICS. A ใบกำกับ receipt would
+// resolve to TRADING (+ VAT 7%). Mirrors BILL_ACCOUNT in billing-run-paper.tsx.
+const RECEIPT_ACCOUNT = resolvePaymentAccount({
+  issuesTaxInvoice: false,
+  isDomesticDeliveryLeg: false,
+});
 
 // ── Shared render types (single source of truth) ─────────────
 
@@ -496,27 +507,47 @@ export function ReceiptPage({
           <div>
             {/* SUMMARY — 2 columns: amountInfo LEFT · big amount box RIGHT */}
             <div style={{ display: "flex", gap: "6mm", marginBottom: "1.5mm" }}>
-              {/* LEFT: สรุป + Thai words */}
+              {/* LEFT: สรุป — the SAME full breakdown as the ใบวางบิล (owner
+                  2026-07-06: the receipt summary was the OLD truncated form —
+                  it jumped straight to the total, hiding the base freight line).
+                  Now: ค่าขนส่งรายการ(base) → + ค่าส่งเหมาๆ(PRF) → รวมทั้งสิ้น(preTax)
+                  → หัก ณ ที่จ่าย(WHT) → the spelled-out NET the customer pays.
+                  base = preTax − เหมาๆ (preTax is the pre-WHT total incl เหมาๆ). */}
               <div id="amountInfo" style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "4mm" }}>
                   <div>
                     <DocSectionLabel section="summary" />
                   </div>
                   <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ค่าขนส่งรายการ</p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(preTax - maoFee)} บาท</p>
+                    </div>
                     {maoFee > 0 && (
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>รวมค่าส่งเหมาๆ (PRF)</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าส่งเหมาๆ (PRF)</p>
                         <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(maoFee)} บาท</p>
                       </div>
                     )}
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>มูลค่าไม่มีหรือยกเว้นภาษี</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px" }}>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>รวมทั้งสิ้น</p>
                       <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(preTax)} บาท</p>
                     </div>
+                    {showWht && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>หัก ณ ที่จ่าย 1%</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#b91c1c" }}>−{fmt2(whtAmount)} บาท</p>
+                      </div>
+                    )}
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินทั้งสิ้น</p>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>จำนวนเงินที่ชำระ</p>
+                      {/* grandTotalThaiWord = readThaiBaht(grandTotal) = the NET
+                          (post-WHT) — the same figure highlighted at RIGHT + on
+                          the ใบวางบิล. Rendered bare (readThaiBaht already ends in
+                          บาทถ้วน / สตางค์); the old "…บาทถ้วน" here double-suffixed
+                          it AND sat on the preTax row (value↔label mismatch). */}
                       <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "55mm", textAlign: "right" }}>
-                        {grandTotalThaiWord}บาทถ้วน
+                        {grandTotalThaiWord}
                       </p>
                     </div>
                   </div>
@@ -587,11 +618,11 @@ export function ReceiptPage({
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1px" }}>
                           <div style={{ display: "flex", gap: "4px", alignItems: "flex-start" }}>
                             <div className="bankNumber">
-                              <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>ธ.กสิกรไทย</p>
+                              <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{RECEIPT_ACCOUNT.bankName}</p>
                               <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>
-                                ออมทรัพย์ {BANK.accountNumber}
+                                {RECEIPT_ACCOUNT.accountType} {RECEIPT_ACCOUNT.accountNo}
                               </p>
-                              <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BANK.accountName}</p>
+                              <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{RECEIPT_ACCOUNT.accountName}</p>
                             </div>
                           </div>
                           <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(netPaid)} บาท</p>
