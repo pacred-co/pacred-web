@@ -1212,8 +1212,8 @@ const wrapClassWarehouse: MenuItem = {
         // surface) was only in the warehouse-role sidebar; super/CEO org-IA had
         // to reach it by URL. Mirror the warehouse-role entry (§0d reachability).
         { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
-        // 2026-07-06 (owner spec) — กระสอบรวม registry (read-only MOMO mirror · momo_import_tracks).
-        itemSacks,
+        // 2026-07-06 (ภูม) — กระสอบรวม ย้ายไปอยู่ใต้ "บริการนำเข้า" (wrapServiceImport)
+        // เพราะเป็นสินค้าที่นำเข้ามา · เอาออกจากกลุ่ม Warehouse ตรงนี้.
         // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
         // (faithful port of legacy `printAll.php`).
         { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -1259,6 +1259,9 @@ const wrapServiceImport: MenuItem = {
   children: [
     { labelKey: "serviceNav.importList", href: "/admin/forwarders", icon: "Package", badge: "forwarderArrived" },
     blockApiForwarderUpdate,
+    // 2026-07-06 (ภูม) — กระสอบรวม = สินค้าที่นำเข้ามา → ย้ายมาอยู่ใต้ "บริการนำเข้า"
+    // ต่อจาก "อัปเดตฝากนำเข้า" (ย้ายออกจากกลุ่ม Warehouse). read-only MOMO mirror.
+    itemSacks,
   ],
 };
 
