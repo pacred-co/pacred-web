@@ -1,7 +1,8 @@
 /**
  * Unit tests for the per-order purchaser scope rule (lib/admin/purchaser-scope.ts)
- * — owner ④ · mig 0241. The core rule that decides whether the ฝากสั่งซื้อ +
- * ฝากนำเข้า lists hard-scope a viewer to their OWN assigned orders.
+ * — owner ④ · re-keyed to the POSITION/WORKSPACE axis (mig 0242). The core rule
+ * that decides whether the ฝากสั่งซื้อ + ฝากนำเข้า lists hard-scope a viewer to
+ * their OWN assigned orders, now driven by (workspaceRole, roles).
  *
  * Run: tsx lib/admin/purchaser-scope.test.ts   (or `pnpm test:unit`)
  * Exits non-zero on any failure.
@@ -21,48 +22,53 @@ function ok(label: string, cond: boolean) {
 }
 const R = (...r: AdminRole[]) => r;
 
-// ── isPurchaserScoped — a purchaser-only viewer scopes to their own ──────────
-console.log("purchaser-scope: SCOPED (purchaser-only)");
-ok("['purchaser'] → scoped", isPurchaserScoped(R("purchaser")) === true);
+// ── isPurchaserScoped — the workspace decides, base role does NOT exempt ──────
+console.log("purchaser-scope: SCOPED (workspace=purchaser)");
+// (a) workspace=purchaser + base role sales → scoped (a plain operational role
+//     no longer exempts — the WORKSPACE decides · mig 0242).
+ok("(a) ws=purchaser + role=sales → scoped", isPurchaserScoped("purchaser", R("sales")) === true);
+ok("ws=purchaser + role=normies → scoped", isPurchaserScoped("purchaser", R("normies")) === false); // normies=god-nav, sees all
+ok("ws=purchaser + role=ops → scoped", isPurchaserScoped("purchaser", R("ops")) === true);
+ok("ws=purchaser + no roles → scoped", isPurchaserScoped("purchaser", R()) === true);
 
-console.log("purchaser-scope: NOT scoped (full-access roles see all)");
-ok("['purchaser_lead'] → not scoped", isPurchaserScoped(R("purchaser_lead")) === false);
-ok("['interpreter'] → not scoped", isPurchaserScoped(R("interpreter")) === false);
-ok("['ultra'] → not scoped", isPurchaserScoped(R("ultra")) === false);
-ok("['super'] → not scoped", isPurchaserScoped(R("super")) === false);
-ok("['normies'] → not scoped", isPurchaserScoped(R("normies")) === false);
-ok("['accounting'] → not scoped", isPurchaserScoped(R("accounting")) === false);
-ok("['ops'] → not scoped", isPurchaserScoped(R("ops")) === false);
-ok("['sales'] → not scoped", isPurchaserScoped(R("sales")) === false);
-ok("['warehouse'] → not scoped", isPurchaserScoped(R("warehouse")) === false);
+console.log("purchaser-scope: NOT scoped — god tiers always see all");
+// (b) workspace=purchaser + role=ultra → NOT scoped (god sees all).
+ok("(b) ws=purchaser + role=ultra → not scoped", isPurchaserScoped("purchaser", R("ultra")) === false);
+ok("ws=purchaser + role=super → not scoped", isPurchaserScoped("purchaser", R("super")) === false);
+ok("ws=purchaser + role=normies → not scoped", isPurchaserScoped("purchaser", R("normies")) === false);
 
-console.log("purchaser-scope: dual grants — the broader role wins (never down-scope)");
-ok("['purchaser','purchaser_lead'] → not scoped", isPurchaserScoped(R("purchaser", "purchaser_lead")) === false);
-ok("['purchaser','interpreter'] → not scoped", isPurchaserScoped(R("purchaser", "interpreter")) === false);
-ok("['purchaser','ultra'] → not scoped", isPurchaserScoped(R("purchaser", "ultra")) === false);
-ok("['purchaser','accounting'] → not scoped", isPurchaserScoped(R("purchaser", "accounting")) === false);
+console.log("purchaser-scope: NOT scoped — other workspaces");
+// (c) workspace=pricing + role=sales → NOT scoped.
+ok("(c) ws=pricing + role=sales → not scoped", isPurchaserScoped("pricing", R("sales")) === false);
+ok("ws=null + role=sales → not scoped", isPurchaserScoped(null, R("sales")) === false);
+ok("ws=null + no roles → not scoped", isPurchaserScoped(null, R()) === false);
+ok("ws=undefined → not scoped", isPurchaserScoped(undefined, undefined) === false);
 
-console.log("purchaser-scope: edge — no roles / unrelated roles");
-ok("[] → not scoped", isPurchaserScoped(R()) === false);
-ok("null → not scoped", isPurchaserScoped(null) === false);
-ok("undefined → not scoped", isPurchaserScoped(undefined) === false);
-ok("['pricing'] (non-purchaser) → not scoped", isPurchaserScoped(R("pricing")) === false);
+console.log("purchaser-scope: BACK-COMPAT — legacy raw purchaser role (no workspace)");
+// (f) legacy role=purchaser (no workspace) → scoped.
+ok("(f) ws=null + role=purchaser → scoped", isPurchaserScoped(null, R("purchaser")) === true);
+ok("ws=null + role=purchaser+ultra → not scoped (god wins)", isPurchaserScoped(null, R("purchaser", "ultra")) === false);
 
-// ── canReassignPurchaser — exactly {interpreter, purchaser_lead, ultra, super} ─
+// ── canReassignPurchaser ─────────────────────────────────────────────────────
 console.log("purchaser-scope: canReassignPurchaser — the allowed set");
-ok("interpreter can reassign", canReassignPurchaser(R("interpreter")) === true);
-ok("purchaser_lead can reassign", canReassignPurchaser(R("purchaser_lead")) === true);
-ok("ultra can reassign", canReassignPurchaser(R("ultra")) === true);
-ok("super can reassign", canReassignPurchaser(R("super")) === true);
+// (d) workspace=purchaser_lead → not scoped + canReassign true.
+ok("(d) ws=purchaser_lead → not scoped", isPurchaserScoped("purchaser_lead", R("sales")) === false);
+ok("(d) ws=purchaser_lead → canReassign", canReassignPurchaser("purchaser_lead", R("sales")) === true);
+// (e) role=interpreter → canReassign true.
+ok("(e) role=interpreter → canReassign", canReassignPurchaser(null, R("interpreter")) === true);
+ok("role=ultra → canReassign", canReassignPurchaser(null, R("ultra")) === true);
+ok("role=super → canReassign", canReassignPurchaser(null, R("super")) === true);
+ok("legacy role=purchaser_lead (no ws) → canReassign", canReassignPurchaser(null, R("purchaser_lead")) === true);
 
 console.log("purchaser-scope: canReassignPurchaser — the denied set");
-ok("plain purchaser CANNOT reassign", canReassignPurchaser(R("purchaser")) === false);
+ok("ws=purchaser + role=sales CANNOT reassign", canReassignPurchaser("purchaser", R("sales")) === false);
+ok("plain purchaser role CANNOT reassign", canReassignPurchaser(null, R("purchaser")) === false);
 // normies is god-NAV but the owner named an explicit reassign set → excluded.
-ok("normies CANNOT reassign (excluded despite god-nav)", canReassignPurchaser(R("normies")) === false);
-ok("accounting CANNOT reassign", canReassignPurchaser(R("accounting")) === false);
-ok("ops CANNOT reassign", canReassignPurchaser(R("ops")) === false);
-ok("[] CANNOT reassign", canReassignPurchaser(R()) === false);
-ok("null CANNOT reassign", canReassignPurchaser(null) === false);
+ok("normies CANNOT reassign (excluded despite god-nav)", canReassignPurchaser(null, R("normies")) === false);
+ok("accounting CANNOT reassign", canReassignPurchaser(null, R("accounting")) === false);
+ok("ops CANNOT reassign", canReassignPurchaser(null, R("ops")) === false);
+ok("ws=pricing + no roles CANNOT reassign", canReassignPurchaser("pricing", R()) === false);
+ok("null/undefined CANNOT reassign", canReassignPurchaser(null, null) === false);
 
 console.log(`\npurchaser-scope: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

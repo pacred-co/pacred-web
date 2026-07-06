@@ -11,11 +11,11 @@
  *   kind="shop"       → tb_header_order (key `hno`) — ฝากสั่งซื้อ
  *   kind="forwarder"  → tb_forwarder    (key `id`)  — ฝากนำเข้า
  *
- * Gate (owner ④): only those who may HAND OFF work may reassign —
- * interpreter + purchaser_lead + the true god roles (ultra/super). `normies`
- * is god-NAV but is deliberately EXCLUDED (owner named an explicit set), so we
- * re-check `canReassignPurchaser(ctx.roles)` in the body rather than trusting
- * isGodRole alone. A plain `purchaser` cannot reassign.
+ * Gate (owner ④): only those who may HAND OFF work may reassign — the
+ * `purchaser_lead` WORKSPACE (mig 0242) + the interpreter/purchaser_lead/ultra/
+ * super roles. `normies` is god-NAV but is deliberately EXCLUDED (owner named an
+ * explicit set), so we re-check `canReassignPurchaser(workspaceRole, roles)` in
+ * the body rather than trusting isGodRole alone. A plain `purchaser` cannot reassign.
  *
  * ⚠️ ASSIGNMENT-ONLY — this touches NOTHING but `adminidpurchaser` + the audit
  * log. No money / price / status / eligibility side-effect (§0e-safe).
@@ -27,7 +27,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canReassignPurchaser, PURCHASER_REASSIGN_ROLES } from "@/lib/admin/purchaser-scope";
+import { canReassignPurchaser } from "@/lib/admin/purchaser-scope";
+import { getStafferWorkspaceRole } from "@/lib/admin/positions";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 const assignSchema = z.object({
@@ -49,16 +50,23 @@ export async function assignOrderPurchaser(
   const { kind, orderNo, purchaserAdminId } = parsed.data;
   if (!orderNo) return { ok: false, error: "ไม่พบเลขออเดอร์" };
 
-  // withAdmin gates on the reassign-eligible list; god (ultra/super/normies)
-  // also passes via isGodRole. The body then re-checks the EXPLICIT set so a
-  // normies (god-nav) is refused — owner ④ named {interpreter, purchaser_lead,
-  // ultra, super} only.
+  // withAdmin is the OUTER gate (must hold ONE of these OR be god via isGodRole).
+  // It is deliberately WIDE — the same operational roles that reach the order
+  // list pages — because a หัวหน้าสั่งซื้อ (purchaser_lead) is now assigned via the
+  // POSITION axis (mig 0242) and may carry a plain base role (e.g. `sales`); a
+  // narrow role-only gate would show the reassign control on the page but reject
+  // the click. The REAL authorization is the body's canReassignPurchaser(
+  // workspaceRole, roles) — only the `purchaser_lead` WORKSPACE or role ∈
+  // {interpreter, purchaser_lead, ultra, super} passes; a plain sales/ops/normies
+  // is refused there. `adminId` from withAdmin === auth user.id === profiles.id,
+  // the key getStafferWorkspaceRole expects.
   return withAdmin(
-    [...PURCHASER_REASSIGN_ROLES.filter((r) => r === "interpreter" || r === "purchaser_lead")],
+    ["interpreter", "purchaser_lead", "sales", "ops", "accounting", "warehouse"],
     async ({ adminId, roles }) => {
-      if (!canReassignPurchaser(roles)) {
-        return { ok: false, error: "ไม่มีสิทธิ์มอบหมาย/เปลี่ยนผู้สั่งซื้อ" };
-      }
+    const actorWorkspaceRole = await getStafferWorkspaceRole(adminId);
+    if (!canReassignPurchaser(actorWorkspaceRole, roles)) {
+      return { ok: false, error: "ไม่มีสิทธิ์มอบหมาย/เปลี่ยนผู้สั่งซื้อ" };
+    }
 
       const admin = createAdminClient();
 

@@ -144,16 +144,21 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
  * compile + god-nav bypasses them) but are no longer assignable from the UI. To
  * bring a functional role back, add it here. The dropdowns map over this list;
  * ROLE_LABELS stays exhaustive so any legacy/inert grant still renders a label.
+ *
+ * 2026-07-06 (owner · mig 0242) — `purchaser` / `purchaser_lead` were REMOVED
+ * from this picker: the purchaser work-function moved OFF the money-tier role
+ * axis and ONTO the POSITION axis (the "ผู้สั่งซื้อ" / "หัวหน้าสั่งซื้อ" positions
+ * under biz_cs · admin_positions.workspace_role). Assign a purchaser by giving
+ * them a visibility role (e.g. normies) + the position, NOT the raw role. They
+ * stay in ADMIN_ROLES / ROLE_LABELS / the AdminRole union (workspace-role keys +
+ * back-compat with any existing raw grant) and in the DB CHECK (harmless
+ * still-allowed value) — just not offered in the money-tier dropdown. Safe:
+ * 0 admins currently hold either raw role.
  */
 export const ASSIGNABLE_ROLES = [
   "ultra",
   "super",
   "normies",
-  // 2026-07-06 (owner ④ · mig 0241) — the per-order purchaser roles are real
-  // functional roles the owner wants pickable so a super/ultra can staff the
-  // ผู้สั่งซื้อ workflow (unlike the retired 25 legacy function roles).
-  "purchaser",
-  "purchaser_lead",
 ] as const satisfies readonly AdminRoleEnum[];
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 

@@ -43,6 +43,7 @@ import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
+import { getStafferWorkspaceRole } from "@/lib/admin/positions";
 import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader, SectionHeading } from "@/components/admin/page-header";
@@ -208,9 +209,13 @@ export default async function AdminServiceOrdersPage({
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
-  const purchaserScoped = isPurchaserScoped(roles);
-  const canReassignPurchaserRole = canReassignPurchaser(roles);
+  // ── Per-order purchaser scope (owner ④ · workspace-driven · mig 0242) ────
+  // The purchaser work-function is assigned via the POSITION (workspace_role),
+  // not the money-tier role — resolve the viewer's workspace once. user.id is
+  // the profile id getStafferWorkspaceRole expects.
+  const viewerWorkspaceRole = await getStafferWorkspaceRole(user.id);
+  const purchaserScoped = isPurchaserScoped(viewerWorkspaceRole, roles);
+  const canReassignPurchaserRole = canReassignPurchaser(viewerWorkspaceRole, roles);
   // The viewer's own legacy tb_admin.adminID — the scope key. "" when they have
   // no legacy mirror (then a scoped purchaser sees nothing, which is correct:
   // orders are assigned by adminID, so a purchaser with no adminID has none).
