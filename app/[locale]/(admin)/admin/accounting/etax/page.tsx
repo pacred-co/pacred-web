@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getEtaxBundle, getShopEtaxBundle } from "@/actions/admin/etax-export";
 import { buildEtaxXml } from "@/lib/etax/build-xml";
@@ -119,7 +119,7 @@ export default async function AdminEtaxPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/etax" />
+      <AccountingMenubar activeHref="/admin/accounting/etax" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · e-Tax</p>

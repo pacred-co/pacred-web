@@ -22,9 +22,9 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { listConsolidationCandidates } from "@/actions/admin/billing-run";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+
 import { ConsolidateClient } from "./consolidate-client";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export default async function BillingRunConsolidatePage() {
     <main className="space-y-5">
       <title>รวมวางบิล — ตู้ที่ตรวจแล้ว | PR Admin</title>
 
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/billing-run" />
+      <AccountingMenubar activeHref="/admin/billing-run" />
 
       <div className="px-4 md:px-6 lg:px-8 space-y-5">
         <div className="pt-4">

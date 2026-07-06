@@ -14,11 +14,11 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import {
   getApDisbursement,
@@ -53,7 +53,7 @@ export default async function ApDisbursementDetailPage({
   if (error) {
     return (
       <>
-        <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ap" />
+        <AccountingMenubar activeHref="/admin/accounting/ap" />
         <main className="p-6 lg:p-8">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             โหลดรายละเอียดไม่สำเร็จ: {error}
@@ -79,7 +79,7 @@ export default async function ApDisbursementDetailPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ap" />
+      <AccountingMenubar activeHref="/admin/accounting/ap" />
       <main className="space-y-5 p-6 lg:p-8">
         <PageHeader
           eyebrow="ADMIN · ACCOUNTING · AP"

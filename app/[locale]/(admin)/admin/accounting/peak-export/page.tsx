@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getPeakExportBundle } from "@/actions/admin/peak-export";
 
@@ -130,7 +130,7 @@ export default async function AdminPeakExportPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/peak-export" />
+      <AccountingMenubar activeHref="/admin/accounting/peak-export" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · ส่งออก</p>

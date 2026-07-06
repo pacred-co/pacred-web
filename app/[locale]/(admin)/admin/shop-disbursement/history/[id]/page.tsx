@@ -23,8 +23,8 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { getShopDisbursementBatch } from "@/actions/admin/shop-disbursement";
 import { bankName } from "@/lib/admin/bank-names";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -63,7 +63,7 @@ export default async function AdminShopDisbursementBatchPage({
     if (res.error === "not_found") notFound();
     return (
       <>
-        <PageTopMenubar items={CARGO_MENUBAR} />
+        <AccountingMenubar />
         <main className="p-6 lg:p-8">
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             โหลดรายละเอียดไม่สำเร็จ: {res.error}
@@ -81,7 +81,7 @@ export default async function AdminShopDisbursementBatchPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} />
+      <AccountingMenubar />
       <main className="space-y-5 p-6 lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

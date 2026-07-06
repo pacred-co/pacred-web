@@ -46,10 +46,10 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
-import { CARGO_MENUBAR, ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
+import { ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
 import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
@@ -698,7 +698,7 @@ export default async function AdminAccountingPage({
           URLs are TODO placeholders (legacy `acc-system-cargo.php` parity
           — owner brief 2026-05-20 night). activeHref="/admin/accounting"
           so "หน้าหลัก" lights up on this dashboard. */}
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
+      <AccountingMenubar activeHref="/admin/accounting" />
 
       {/* Tab nav */}
       <div className="flex flex-wrap border-b border-border gap-0">

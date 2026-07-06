@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getNearChurnReport } from "@/actions/admin/near-churn";
 import { AlertCircle, Phone, MessageCircle, Mail } from "lucide-react";
@@ -67,7 +67,7 @@ export default async function AdminNearChurnPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/near-churn" />
+      <AccountingMenubar activeHref="/admin/accounting/near-churn" />
       <main className="p-6 lg:p-8 space-y-6 max-w-7xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CRM · WIN-BACK</p>

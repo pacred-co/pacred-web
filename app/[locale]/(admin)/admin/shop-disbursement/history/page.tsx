@@ -14,8 +14,8 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { getShopDisbursementHistory } from "@/actions/admin/shop-disbursement";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportShopDisbursementHistoryAll } from "@/actions/admin/export/shop-disbursement-history";
@@ -83,7 +83,7 @@ export default async function AdminShopDisbursementHistoryPage() {
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/shop-disbursement/history" />
+      <AccountingMenubar activeHref="/admin/shop-disbursement/history" />
       <main className="space-y-5 p-6 lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

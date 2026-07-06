@@ -1,8 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import {
   getMarginReport,
@@ -111,7 +111,7 @@ export default async function AdminMarginMonitorPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/margin-monitor" />
+      <AccountingMenubar activeHref="/admin/accounting/margin-monitor" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · CEO · MARGIN</p>

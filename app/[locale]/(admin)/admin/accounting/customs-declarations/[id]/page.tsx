@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
   CUSTOMS_DECLARATION_TYPE_LABEL,
@@ -194,7 +193,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/customs-declarations" />
+      <AccountingMenubar activeHref="/admin/accounting/customs-declarations" />
       <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

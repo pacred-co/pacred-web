@@ -20,9 +20,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
 import {
   listApDisbursements,
   groupByShipment,
@@ -96,7 +95,7 @@ export default async function AdminApLedgerPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/ap" />
+      <AccountingMenubar activeHref="/admin/accounting/ap" />
       <main className="space-y-5 p-6 lg:p-8">
         <PageHeader
           eyebrow="ADMIN · ACCOUNTING"

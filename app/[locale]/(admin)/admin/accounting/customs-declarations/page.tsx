@@ -1,8 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageTopMenubar } from "@/components/admin/page-top-menubar";
-import { CARGO_MENUBAR } from "@/lib/admin/accounting-menubar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { FileText, Anchor, CheckCircle2, Send, XCircle } from "lucide-react";
 
@@ -195,7 +195,7 @@ export default async function AdminCustomsDeclarationsPage({
 
   return (
     <>
-      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting/customs-declarations" />
+      <AccountingMenubar activeHref="/admin/accounting/customs-declarations" />
       <main className="p-6 lg:p-8 space-y-6 max-w-7xl">
         <header>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · ใบขนสินค้า</p>
