@@ -43,35 +43,69 @@ function tokenSecret(): string {
   return s;
 }
 
-/** HMAC-SHA256(secret, `receipt:{id}`) → first 128 bits as lowercase hex (32 chars). */
-function hmacFor(id: number): string {
+/**
+ * HMAC-SHA256(secret, `{docType}:{id}`) → first 128 bits as lowercase hex.
+ *
+ * `docType` is a domain-separation prefix so a token minted for one document
+ * kind can NEVER be replayed as another: a receipt token hashes `receipt:{id}`
+ * while a bill token hashes `bill:{id}`, so for the same numeric id the two
+ * hmacs differ and `verifyBillToken` rejects a receipt token (and vice-versa).
+ * Same secret, same discipline — only the hashed message is namespaced.
+ */
+function hmacFor(docType: "receipt" | "bill", id: number): string {
   return createHmac("sha256", tokenSecret())
-    .update(`receipt:${id}`)
+    .update(`${docType}:${id}`)
     .digest("hex")
     .slice(0, 32);
 }
 
 /** Build the public token `{id}-{32-hex-hmac}` for a receipt's numeric id. */
 export function signReceiptToken(id: number): string {
-  return `${id}-${hmacFor(id)}`;
+  return `${id}-${hmacFor("receipt", id)}`;
+}
+
+/** Build the public token `{id}-{32-hex-hmac}` for a billing-run invoice id. */
+export function signBillToken(id: number): string {
+  return `${id}-${hmacFor("bill", id)}`;
 }
 
 /**
- * Parse + verify a public token. Returns the receipt id when the hmac matches
- * (constant-time), or null for any malformed / forged / tampered token.
- *
- * The format is strict: `{digits}-{32 lowercase hex}`. Anything else → null,
- * so a probe like `/r/15118` or `/r/15118-deadbeef` never resolves.
+ * Parse + verify a `{docType}` token. Returns the id when the hmac matches
+ * (constant-time), or null for any malformed / forged / tampered / wrong-type
+ * token. The format is strict: `{digits}-{32 lowercase hex}`; anything else,
+ * or an id whose hmac was minted for a DIFFERENT docType, → null.
  */
-export function verifyReceiptToken(token: string): number | null {
+function verifyToken(docType: "receipt" | "bill", token: string): number | null {
   const m = /^(\d{1,18})-([0-9a-f]{32})$/.exec(token);
   if (!m) return null;
   const id = Number(m[1]);
   if (!Number.isSafeInteger(id) || id <= 0) return null;
 
-  const expected = Buffer.from(hmacFor(id), "hex");
+  const expected = Buffer.from(hmacFor(docType, id), "hex");
   const given = Buffer.from(m[2], "hex");
   if (expected.length !== given.length) return null;
   // Constant-time compare so a timing side-channel can't reveal the hmac.
   return timingSafeEqual(expected, given) ? id : null;
+}
+
+/**
+ * Verify a public RECEIPT token. Returns the receipt id when the hmac matches
+ * (constant-time), or null for any malformed / forged / tampered token — or a
+ * token that was minted for a different document kind (e.g. a bill token).
+ *
+ * A probe like `/r/15118` or `/r/15118-deadbeef` never resolves.
+ */
+export function verifyReceiptToken(token: string): number | null {
+  return verifyToken("receipt", token);
+}
+
+/**
+ * Verify a public BILL (ใบวางบิล) token. Returns the invoice id when the hmac
+ * matches (constant-time), or null for any malformed / forged / tampered token
+ * — or a token minted for a different document kind (e.g. a receipt token).
+ *
+ * A probe like `/b/42` or `/b/42-deadbeef` never resolves.
+ */
+export function verifyBillToken(token: string): number | null {
+  return verifyToken("bill", token);
 }

@@ -19,6 +19,7 @@ import { readThaiBaht } from "@/lib/utils/thai-number";
 import { SITE_URL, ADDRESSES } from "@/components/seo/site";
 import { BillingRunPaper, type BillingRunPaperRow } from "@/components/billing-run/billing-run-paper";
 import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
+import { signBillToken } from "@/lib/receipt/receipt-token";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +73,11 @@ export default async function BillingRunPrintPage({
     rows: rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE),
   }));
 
-  const qrDataUrl = await QRCode.toDataURL(`${SITE_URL}/billing-run/${invoiceId}`, {
+  // The QR now opens the LOGIN-FREE public bill page `/b/{token}` (mirrors the
+  // receipt's `/r/{token}`). The token is an unguessable HMAC capability link so
+  // a scanning customer opens their own bill without logging in (the old URL
+  // `/billing-run/{id}` was a login-gated protected route → landed on /login).
+  const qrDataUrl = await QRCode.toDataURL(`${SITE_URL}/b/${signBillToken(invoiceId)}`, {
     margin: 1,
     width: 240,
   });

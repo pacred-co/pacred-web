@@ -47,6 +47,8 @@ import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
 import { AdminToolsPinGate } from "./admin-tools-gate";
+import { ResetPwdButton } from "../reset-pwd-button";
+import { ReassignCodeButton } from "./reassign-code-button";
 import { PricingTeamEditor } from "./pricing-team-editor";
 import { UpgradeJuristicPopup } from "./upgrade-juristic-popup";
 // CRM depth (2026-06-08) — tags + activity timeline panels.
@@ -540,6 +542,12 @@ export async function renderLegacyCustomerView(
   // degrades to 0, but the action re-checks server-side so a wrong 0 here can
   // never bypass the real gate).
   const isSuperAdmin = isGodRole(adminRoles);
+
+  // "รันเลข PR ลูกค้าใหม่" is ULTRA-ONLY (re-keys the whole identity across 52+
+  // tables + auth). NOT isGodRole (that would admit super/normies) — strictly
+  // `ultra`. The server action re-asserts this; the UI flag just hides the
+  // button for non-ultra. (owner 2026-07-06)
+  const isUltraAdmin = adminRoles.includes("ultra");
 
   // Sell-rate floors — resolve the LIVE floors (business_config override ||
   // constant default) on the server and pass BOTH into the (client) rate editor
@@ -1170,6 +1178,23 @@ export async function renderLegacyCustomerView(
           (กรอกข้อมูลบริษัท + แนบเอกสารในตัว · ไม่ต้องใส่ PIN).
         </div>
       )}
+
+      {/* Account tools — รีเซ็ตรหัสผ่าน (existing) + รันเลข PR ลูกค้าใหม่ (ULTRA-ONLY,
+          next to it). The reassign re-keys the whole identity to the lowest
+          vacant PR gap, moves all data, frees the old code; login/receipts keep
+          working. Confirm-before-mutate is in each button (§0f). */}
+      <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3">
+        <p className="mb-2 text-xs font-semibold text-muted">เครื่องมือบัญชีลูกค้า</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <ResetPwdButton userid={u.userID} />
+          {isUltraAdmin ? (
+            <ReassignCodeButton
+              userid={u.userID}
+              customerName={`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || undefined}
+            />
+          ) : null}
+        </div>
+      </div>
 
       {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).
           Only for truly-empty (test/orphan) accounts; the panel shows the
