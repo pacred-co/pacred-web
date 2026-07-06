@@ -93,7 +93,7 @@ export async function exportForwarderNotesAll(
   let q = admin
     .from("tb_forwarder")
     .select("id, fidorco, fstatus, fnote, fnoteuser, fdate, fdateadminstatus, ftotalprice, ftrackingchn, ftrackingth, userid")
-    .or("fnote.neq.,fnoteuser.neq.")
+    .neq("fnote", "")
     .order("fdateadminstatus", { ascending: false, nullsFirst: false })
     .order("fdate", { ascending: false })
     .range(0, EXPORT_CAP); // 0..EXPORT_CAP = up to EXPORT_CAP+1 rows
@@ -109,9 +109,9 @@ export async function exportForwarderNotesAll(
     return { rows: [], truncated: false };
   }
 
-  // SAME both-empty post-filter the page applies.
+  // SAME post-filter the page applies — real admin note only (fNoteUser = flag).
   const filtered = ((rowsRaw ?? []) as RawForwarder[]).filter(
-    (r) => (r.fnote && r.fnote.trim()) || (r.fnoteuser && r.fnoteuser.trim()),
+    (r) => Boolean(r.fnote && r.fnote.trim()),
   );
   const truncated = filtered.length > EXPORT_CAP;
   const fwdRows = truncated ? filtered.slice(0, EXPORT_CAP) : filtered;
@@ -166,7 +166,7 @@ export async function exportForwarderNotesAll(
       tracking_chn: r.ftrackingchn ?? "",
       tracking_th: r.ftrackingth ?? "",
       note_admin: (r.fnote ?? "").trim(),
-      note_user: (r.fnoteuser ?? "").trim(),
+      note_user: r.fnoteuser === "1" ? "แอดมินเท่านั้น" : "ทั้งลูกค้าและแอดมิน",
     };
   });
 

@@ -507,7 +507,7 @@ export function CntListTable({
       </div>
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {canSelect && (
@@ -738,7 +738,7 @@ export function CntListTable({
                         className="inline-flex items-center gap-1 rounded-full bg-pink-100 text-pink-700 border border-pink-300 px-2 py-0.5 text-[11px] font-semibold"
                         title={`ยังขาด ${(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
-                        💗 ขาด {(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง
+                        ขาด {(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง
                       </span>
                     )}
                   </td>

@@ -109,7 +109,7 @@ export function NotPortageCombinePanel({ rows }: { rows: NotPortageRow[] }) {
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
             <tr>
               <th className="px-2 py-2 text-center">
@@ -143,7 +143,7 @@ export function NotPortageCombinePanel({ rows }: { rows: NotPortageRow[] }) {
                 <td className="px-2 py-2 text-center">{r.fstatus}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.ftransportprice.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
                 <td className="px-2 py-2">
-                  <Link href={`/admin/forwarders?q=${r.id}`} className="text-primary-600 hover:underline text-[11px]">ดู</Link>
+                  <Link href={`/admin/forwarders/${r.id}`} className="text-primary-600 hover:underline text-[11px]">ดู</Link>
                 </td>
               </tr>
             ))}

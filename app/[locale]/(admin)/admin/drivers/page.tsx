@@ -29,7 +29,7 @@ import { Explain } from "@/components/ui/tooltip";
 import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
-import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { formatThaiDate, formatThaiDateTime, formatThaiTime } from "@/lib/utils/thai-datetime";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -328,7 +328,7 @@ export default async function AdminDriversPage({
           list mode L269-348: ID · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
           ผู้สร้างรายการ · สถานะ · ตัวเลือก). No driver grouping — 1 row = 1 รอบ. */}
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white shadow-sm">
-        <table className="w-full text-sm border-collapse min-w-[1000px]">
+        <table className="w-full text-sm border-collapse min-w-[1000px] [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/60 text-left text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {/* legacy forwarder-driver.php list mode L157-166: ID / วันที่สร้าง / ชื่อรายการ /
@@ -380,15 +380,10 @@ export default async function AdminDriversPage({
                         #{r.id}
                       </Link>
                     </td>
-                    {/* วันที่สร้าง — date + ส่งก่อนเวลา (legacy DATE/TIME + ส่งก่อนเวลา) */}
+                    {/* วันที่สร้าง — legacy forwarder-driver.php L304-309: DATE line + TIME line */}
                     <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
                       {r.fddate && <div className="text-foreground/80">{formatThaiDate(r.fddate)}</div>}
-                      {r.endtime && (
-                        <div className={expired ? "text-rose-600 font-medium" : ""}>
-                          ส่งก่อน {formatThaiDateTime(r.endtime)}
-                          {expired ? " (เลย)" : ""}
-                        </div>
-                      )}
+                      {r.fddate && <div>{formatThaiTime(r.fddate)}</div>}
                     </td>
                     {/* ชื่อรายการ (+ inline meta: แทรคกิ้ง / กล่อง / จุดส่ง) */}
                     <td className="px-3 py-3">
@@ -399,8 +394,13 @@ export default async function AdminDriversPage({
                         {r.fdname ?? `รอบ #${r.id}`}
                       </Link>
                       <div className="mt-0.5 text-[11px] text-muted">
-                        จำนวนแทรคกิ้ง : {agg.itemCount} · จำนวนกล่อง : {agg.boxSum} · จำนวนจุดที่ส่ง : {r.fdamount ?? 0}
+                        จำนวนแทรคกิ้ง : {agg.itemCount}, จำนวนกล่อง : {agg.boxSum}, จำนวนจุดที่ส่ง : {r.fdamount ?? 0}
                       </div>
+                      {r.endtime && (
+                        <div className={`text-[11px] ${expired ? "text-rose-600 font-medium" : "text-muted"}`}>
+                          ส่งก่อนเวลา : {formatThaiDateTime(r.endtime)}{expired ? " (เลย)" : ""}
+                        </div>
+                      )}
                     </td>
                     {/* ผู้รับผิดชอบ (คนขับ = fdadminid) */}
                     <td className="px-3 py-3 text-xs">

@@ -72,6 +72,9 @@ export type ServiceOrderRow = {
   vipTier: string | null;
   isCorporate: boolean;
   salesRep: string | null;
+  isSvip: boolean;
+  isCps: boolean;
+  trackingNumbers: string[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -256,7 +259,7 @@ export function ServiceOrdersTable({
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs min-w-[1100px]">
+            <table className="w-full text-xs min-w-[1100px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
@@ -341,13 +344,16 @@ export function ServiceOrdersTable({
                   const sDate = statusDate(r);
                   const isPrinted = r.hprintbill === "1";
                   const isInvoicePrinted = r.hprintbill2 === "1";
-                  const adminCreatedBadge = r.adminidcreate && r.adminidcreate !== "";
-                  // Legacy badgeAdminIP — "ฝากสั่ง : admin_X" when admin created.
-                  const sourceLabel = adminCreatedBadge
-                    ? `ฝากสั่ง: ${r.adminidcreate}`
-                    : "ฝากสั่งจาก: users";
-                  const sourceBadgeCls = adminCreatedBadge
-                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                  // Legacy badgeAdminIP (function.php L2934) — "IPC : X" (ล่ามจีนที่เปิดออเดอร์),
+                  // prefers adminIDIP then adminIDCreate. badge-purchasing = purple.
+                  // "customer" = ออเดอร์ที่ลูกค้าเปิดเอง (ไม่มีล่าม) → treat as no-IPC → "ฝากสั่งจาก: users"
+                  // (Pacred data stores 'customer' where legacy left adminIDCreate empty).
+                  const ipInterp = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
+                  const ipCreator = r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
+                  const ipcAdmin = ipInterp || ipCreator;
+                  const sourceLabel = ipcAdmin ? `IPC : ${ipcAdmin}` : "ฝากสั่งจาก: users";
+                  const sourceBadgeCls = ipcAdmin
+                    ? "bg-purple-50 text-purple-700 border-purple-200"
                     : "bg-gray-50 text-gray-600 border-gray-200";
 
                   return (
@@ -390,6 +396,14 @@ export function ServiceOrdersTable({
                             {sourceLabel}
                           </span>
                         </div>
+                        {/* Legacy shops.php L475-479 — เลขพัสดุจีน (cShippingNumber) ใต้เลขออเดอร์ */}
+                        {r.trackingNumbers.length > 0 && (
+                          <div className="mt-0.5 text-[10px] leading-tight text-primary-600">
+                            {r.trackingNumbers.map((t) => (
+                              <div key={t}>{t}</div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2.5">
                         <Link
@@ -421,6 +435,17 @@ export function ServiceOrdersTable({
                           {r.isVip && r.vipTier && (
                             <span className="rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 text-[11px] font-semibold">
                               {r.vipTier}
+                            </span>
+                          )}
+                          {/* Legacy badgeVIP2 — SVIP (ราคาส่วนตัว) · CPS (คิดตามค่าเทียบ) */}
+                          {r.isSvip && (
+                            <span className="rounded-full bg-pink-50 text-pink-700 border border-pink-200 px-1.5 py-0.5 text-[11px] font-semibold" title="ลูกค้าคิดราคาแบบส่วนตัว">
+                              SVIP
+                            </span>
+                          )}
+                          {r.isCps && (
+                            <span className="rounded-full bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 text-[11px] font-semibold" title="ลูกค้าคิดราคาตามค่าเทียบ">
+                              CPS
                             </span>
                           )}
                           {r.isCorporate && (

@@ -629,7 +629,6 @@ export default async function AdminReportCntDetailPage({
           ) : (
             <div className="rounded-2xl border border-pink-300 bg-pink-50 dark:bg-pink-900/20 p-4 text-sm text-pink-800 dark:text-pink-200">
               <p className="font-semibold flex items-center gap-2">
-                <span className="text-lg">💗</span>
                 <span>
                   ขาด {Math.max(0, completeness.expected - completeness.scanned).toLocaleString()} กล่อง
                   {" "}(ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง

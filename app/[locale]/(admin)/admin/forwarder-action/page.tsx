@@ -273,7 +273,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
               <p className="p-12 text-center text-sm text-muted">ไม่มีรายการในคิวนี้</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">ID</th>
@@ -304,7 +304,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                         </td>
                         <td className="px-2 py-2">
                           <Link
-                            href={`/admin/orders?q=${r.hno as string}`}
+                            href={`/admin/service-orders/${r.hno as string}`}
                             className="text-primary-600 hover:underline text-[11px]"
                           >
                             ดู
@@ -572,7 +572,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
             <p className="p-12 text-center text-sm text-muted">ไม่มีรายการในคิวนี้</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
                   <tr>
                     <th className="px-2 py-2 text-left">ID</th>
@@ -625,7 +625,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                       <td className="px-2 py-2 max-w-[280px] truncate" title={(r.fnote as string) ?? ""}>{(r.fnote as string) ?? "-"}</td>
                       <td className="px-2 py-2 text-right">{Number(r.ftotalprice ?? 0).toFixed(2)}</td>
                       <td className="px-2 py-2">
-                        <Link href={`/admin/forwarders?q=${r.id as number}`} className="text-primary-600 hover:underline text-[11px]">
+                        <Link href={`/admin/forwarders/${r.id as number}`} className="text-primary-600 hover:underline text-[11px]">
                           ดู
                         </Link>
                       </td>

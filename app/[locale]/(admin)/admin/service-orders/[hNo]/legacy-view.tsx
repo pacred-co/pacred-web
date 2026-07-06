@@ -431,119 +431,6 @@ export async function renderLegacyServiceOrderView(hno: string) {
         </div>
       )}
 
-      {/* ── ฝากนำเข้าที่เชื่อมโยง (owner 2026-06-22) — when the goods became an import,
-          this shop order completes (สำเร็จ) + the work CONTINUES in the import below.
-          Lets staff jump straight to the active ฝากนำเข้า instead of wondering where
-          a "สำเร็จ" order went. ── */}
-      {linkedImports.length > 0 && (
-        <section className="rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 p-4 sm:p-5 shadow-sm space-y-2">
-          <h2 className="font-bold text-sm flex items-center gap-2">
-            🚢 ฝากนำเข้าที่เชื่อมโยง ({linkedImports.length})
-            {status === "5" && (
-              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[11px] px-2 py-0.5 font-medium">
-                ฝากสั่งซื้อสำเร็จ — ส่งต่อขั้นตอนนำเข้าแล้ว
-              </span>
-            )}
-          </h2>
-          <p className="text-xs text-muted">
-            สินค้าเข้าสู่ขั้นตอนฝากนำเข้าแล้ว — ติดตามสถานะการนำเข้าต่อได้ที่รายการด้านล่าง
-          </p>
-          <ul className="space-y-1.5">
-            {linkedImports.map((f) => {
-              const b = fstatusBadge(f.fstatus ?? "");
-              return (
-                <li key={f.id}>
-                  <a
-                    href={`/admin/forwarders/${f.id}`}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
-                  >
-                    <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
-                    <span className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${b.chip}`}>
-                      {b.label}
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {/* ── ร้านที่สั่ง · สถานะการมาถึงโกดังจีน (ภูม 2026-06-30) — โชว์แทรคกิ้งที่มี/
-          ที่ขาด + "X/Y ร้าน" ตรงนี้เลย ไม่ต้องกดอัพเดต/แก้ไข. สถานะออเดอร์จะขึ้น
-          สำเร็จ ก็ต่อเมื่อ "ทุกร้าน" ถึงครบ (กันเคส 1 ร้านถึงแล้วเด้งสำเร็จทั้งออเดอร์). ── */}
-      {shopArrivals.totalShops >= 1 && (
-        <section className={`rounded-2xl border p-4 sm:p-5 shadow-sm space-y-3 ${shopArrivals.allDone ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="font-bold text-sm">🏪 ร้านที่สั่ง ({shopArrivals.totalShops} ร้าน)</h2>
-            <span className={`rounded-full text-[11px] px-2.5 py-0.5 font-semibold border ${shopArrivals.allDone ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-amber-100 text-amber-800 border-amber-300"}`}>
-              {shopArrivals.allDone
-                ? `✓ ครบทุกร้านแล้ว (${shopArrivals.doneShops}/${shopArrivals.totalShops})`
-                : `มาถึงโกดังจีน ${shopArrivals.arrivedShops}/${shopArrivals.totalShops} · เหลืออีก ${shopArrivals.totalShops - shopArrivals.arrivedShops} ร้าน`}
-            </span>
-          </div>
-          {!shopArrivals.allDone && (
-            <p className="text-[11px] text-amber-800">
-              ยังมีร้านที่ของยังไม่เข้าโกดังจีน — สถานะจะคงไว้ที่ “รอร้านจีนจัดส่ง” จนกว่าจะครบทุกร้าน
-            </p>
-          )}
-          {/* จัดกลุ่มตามแทรคกิ้ง (ภูม 2026-07-01) — หลายร้านที่แชร์แทรคกิ้งเดียว
-              ยุบเป็นแถวเดียว · โชว์ รายการ/ชิ้น/¥รวม/ฝากนำเข้า #fNo เหมือนหน้า /edit. */}
-          <p className="text-[11px] text-muted">
-            📦 จัดกลุ่มตามแทรคกิ้ง ({shopTrackingGroups.length.toLocaleString()} แทรคกิ้ง · {shopArrivals.totalShops} ร้าน)
-          </p>
-          <ul className="space-y-1.5">
-            {shopTrackingGroups.map((g) => {
-              const pill = g.done
-                ? { t: "✓ ออกจากจีน/ได้ตู้", c: "bg-emerald-100 text-emerald-700 border-emerald-300" }
-                : g.arrived
-                  ? { t: "📦 ถึงโกดังจีนแล้ว", c: "bg-sky-100 text-sky-700 border-sky-300" }
-                  : g.tracking
-                    ? { t: "🚚 รอเข้าโกดังจีน", c: "bg-stone-100 text-stone-600 border-stone-300" }
-                    : { t: "⏳ ร้านยังไม่ส่ง", c: "bg-stone-100 text-stone-500 border-stone-300" };
-              const thbEst = rate > 0 ? g.subtotalCny * rate : null;
-              return (
-                <li key={g.tracking || "__none__"} className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-xs space-y-1.5">
-                  {/* แถวบน: แทรคกิ้ง + สถานะการมาถึง */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] text-foreground break-all min-w-0" title={g.tracking || "ยังไม่มีแทรคกิ้ง"}>
-                      {g.tracking ? g.tracking : <span className="italic text-muted">ยังไม่มีแทรคกิ้ง</span>}
-                    </span>
-                    <span className={`shrink-0 rounded-full border text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${pill.c}`}>{pill.t}</span>
-                  </div>
-                  {/* แถวล่าง: ร้าน + รายการ/ชิ้น + ¥รวม + ฝากนำเข้า #fNo */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {g.shops.length > 0 && (
-                      <span className="text-[11px] text-muted truncate max-w-[45%]" title={g.shops.join(" · ")}>🏪 {g.shops.join(" · ")}</span>
-                    )}
-                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums">
-                      {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
-                    </span>
-                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums font-semibold">
-                      ¥{cny(g.subtotalCny)}{thbEst != null && <span className="ml-1 font-normal text-muted">≈฿{thb(thbEst)}</span>}
-                    </span>
-                    {g.fNo != null && (
-                      <a
-                        href={`/admin/forwarders/${g.fNo}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
-                        title="เปิดรายการฝากนำเข้าของแทรคกิ้งนี้"
-                      >
-                        ฝากนำเข้า #{g.fNo}
-                      </a>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {/* ── B3: เอกสารของออเดอร์ (read-only doc registry) ── */}
-      <OrderDocumentsPanel docs={orderDocs} />
-
       {/* ── 2-column header: customer + price ── */}
       <div className="grid gap-5 lg:grid-cols-2">
         {/* LEFT — customer + inline edits */}
@@ -660,6 +547,123 @@ export async function renderLegacyServiceOrderView(hno: string) {
           มุมขวาบนของหน้า · top-of-page CTA cover นี้แล้ว) ── */}
       <ItemSummary items={editorItems} completed={status === "5"} />
 
+      {/* ── Pacred extras (ย้ายลงใต้ core · 2026-07-06 · legacy ไม่มีการ์ดพวกนี้)
+          ให้ ลูกค้า | ราคา | รายการสินค้า นำก่อน แล้วค่อยตามด้วยข้อมูลสถานะ/เอกสารเสริม
+          (สถานะการมาถึงโกดังจีน · ฝากนำเข้าที่เชื่อมโยง · ทะเบียนเอกสาร). ── */}
+
+      {/* ── ฝากนำเข้าที่เชื่อมโยง (owner 2026-06-22) — when the goods became an import,
+          this shop order completes (สำเร็จ) + the work CONTINUES in the import below.
+          Lets staff jump straight to the active ฝากนำเข้า instead of wondering where
+          a "สำเร็จ" order went. ── */}
+      {linkedImports.length > 0 && (
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 p-4 sm:p-5 shadow-sm space-y-2">
+          <h2 className="font-bold text-sm flex items-center gap-2">
+            🚢 ฝากนำเข้าที่เชื่อมโยง ({linkedImports.length})
+            {status === "5" && (
+              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 text-[11px] px-2 py-0.5 font-medium">
+                ฝากสั่งซื้อสำเร็จ — ส่งต่อขั้นตอนนำเข้าแล้ว
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-muted">
+            สินค้าเข้าสู่ขั้นตอนฝากนำเข้าแล้ว — ติดตามสถานะการนำเข้าต่อได้ที่รายการด้านล่าง
+          </p>
+          <ul className="space-y-1.5">
+            {linkedImports.map((f) => {
+              const b = fstatusBadge(f.fstatus ?? "");
+              return (
+                <li key={f.id}>
+                  <a
+                    href={`/admin/forwarders/${f.id}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 hover:border-blue-300"
+                  >
+                    <span className="font-mono text-xs truncate">{f.ftrackingchn || `#${f.id}`}</span>
+                    <span className={`inline-block rounded-full text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${b.chip}`}>
+                      {b.label}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* ── ร้านที่สั่ง · สถานะการมาถึงโกดังจีน (ภูม 2026-06-30) — โชว์แทรคกิ้งที่มี/
+          ที่ขาด + "X/Y ร้าน" ตรงนี้เลย ไม่ต้องกดอัพเดต/แก้ไข. สถานะออเดอร์จะขึ้น
+          สำเร็จ ก็ต่อเมื่อ "ทุกร้าน" ถึงครบ (กันเคส 1 ร้านถึงแล้วเด้งสำเร็จทั้งออเดอร์). ── */}
+      {shopArrivals.totalShops >= 1 && (
+        <section className={`rounded-2xl border p-4 sm:p-5 shadow-sm space-y-3 ${shopArrivals.allDone ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="font-bold text-sm">🏪 ร้านที่สั่ง ({shopArrivals.totalShops} ร้าน)</h2>
+            <span className={`rounded-full text-[11px] px-2.5 py-0.5 font-semibold border ${shopArrivals.allDone ? "bg-emerald-100 text-emerald-700 border-emerald-300" : "bg-amber-100 text-amber-800 border-amber-300"}`}>
+              {shopArrivals.allDone
+                ? `✓ ครบทุกร้านแล้ว (${shopArrivals.doneShops}/${shopArrivals.totalShops})`
+                : `มาถึงโกดังจีน ${shopArrivals.arrivedShops}/${shopArrivals.totalShops} · เหลืออีก ${shopArrivals.totalShops - shopArrivals.arrivedShops} ร้าน`}
+            </span>
+          </div>
+          {!shopArrivals.allDone && (
+            <p className="text-[11px] text-amber-800">
+              ยังมีร้านที่ของยังไม่เข้าโกดังจีน — สถานะจะคงไว้ที่ “รอร้านจีนจัดส่ง” จนกว่าจะครบทุกร้าน
+            </p>
+          )}
+          {/* จัดกลุ่มตามแทรคกิ้ง (ภูม 2026-07-01) — หลายร้านที่แชร์แทรคกิ้งเดียว
+              ยุบเป็นแถวเดียว · โชว์ รายการ/ชิ้น/¥รวม/ฝากนำเข้า #fNo เหมือนหน้า /edit. */}
+          <p className="text-[11px] text-muted">
+            📦 จัดกลุ่มตามแทรคกิ้ง ({shopTrackingGroups.length.toLocaleString()} แทรคกิ้ง · {shopArrivals.totalShops} ร้าน)
+          </p>
+          <ul className="space-y-1.5">
+            {shopTrackingGroups.map((g) => {
+              const pill = g.done
+                ? { t: "✓ ออกจากจีน/ได้ตู้", c: "bg-emerald-100 text-emerald-700 border-emerald-300" }
+                : g.arrived
+                  ? { t: "📦 ถึงโกดังจีนแล้ว", c: "bg-sky-100 text-sky-700 border-sky-300" }
+                  : g.tracking
+                    ? { t: "🚚 รอเข้าโกดังจีน", c: "bg-stone-100 text-stone-600 border-stone-300" }
+                    : { t: "⏳ ร้านยังไม่ส่ง", c: "bg-stone-100 text-stone-500 border-stone-300" };
+              const thbEst = rate > 0 ? g.subtotalCny * rate : null;
+              return (
+                <li key={g.tracking || "__none__"} className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-xs space-y-1.5">
+                  {/* แถวบน: แทรคกิ้ง + สถานะการมาถึง */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] text-foreground break-all min-w-0" title={g.tracking || "ยังไม่มีแทรคกิ้ง"}>
+                      {g.tracking ? g.tracking : <span className="italic text-muted">ยังไม่มีแทรคกิ้ง</span>}
+                    </span>
+                    <span className={`shrink-0 rounded-full border text-[11px] px-2 py-0.5 font-medium whitespace-nowrap ${pill.c}`}>{pill.t}</span>
+                  </div>
+                  {/* แถวล่าง: ร้าน + รายการ/ชิ้น + ¥รวม + ฝากนำเข้า #fNo */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {g.shops.length > 0 && (
+                      <span className="text-[11px] text-muted truncate max-w-[45%]" title={g.shops.join(" · ")}>🏪 {g.shops.join(" · ")}</span>
+                    )}
+                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums">
+                      {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
+                    </span>
+                    <span className="rounded bg-surface-alt/60 border border-border px-1.5 py-0.5 text-[11px] font-mono tabular-nums font-semibold">
+                      ¥{cny(g.subtotalCny)}{thbEst != null && <span className="ml-1 font-normal text-muted">≈฿{thb(thbEst)}</span>}
+                    </span>
+                    {g.fNo != null && (
+                      <a
+                        href={`/admin/forwarders/${g.fNo}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                        title="เปิดรายการฝากนำเข้าของแทรคกิ้งนี้"
+                      >
+                        ฝากนำเข้า #{g.fNo}
+                      </a>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* ── B3: เอกสารของออเดอร์ (read-only doc registry) ── */}
+      <OrderDocumentsPanel docs={orderDocs} />
+
       {/* 2026-06-09 (P2 · tax-invoice platform) — per-line COST + DECLARED
           capture (Pricing role). Separate control · calls ONLY the cost action
           (setShopOrderItemCost) · does NOT touch selling price / hStatus /
@@ -687,97 +691,133 @@ export async function renderLegacyServiceOrderView(hno: string) {
   );
 }
 
+/** Marketplace label (legacy nameProvider · function.php) — level-1 group header. */
+const PROVIDER_LABEL: Record<string, string> = {
+  "1": "1688",
+  "2": "Taobao",
+  "3": "Tmall",
+  "4": "Pacred Shops",
+  "5": "Nice",
+};
+
 /** Read-only item list for non-editable steps (3/4/5).
- *  2026-07-02 — grouped by ร้าน (cnameshop) into collapsible sections so
- *  a big multi-shop order is scannable at a glance (owner "แอดมินเข้าไปดูยากมาก").
- *  Matches the grouped look on /edit; reuses the same read-only columns. */
+ *  2026-07-06 — faithful to legacy shops/detail: 2-level grouping
+ *  มาร์เก็ตเพลส (nameProvider) → ร้าน (cnameshop), คอลัมน์
+ *  ลำดับ · ข้อมูลสินค้า · จำนวน · ราคาต่อชิ้น · ค่าขนส่งจีน · เพิ่ม/ลด เงิน · ราคารวม. */
 function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: boolean }) {
   if (items.length === 0) return null;
-
-  // Group preserving first-seen shop order (items already ordered by id).
-  const groups: { shop: string; rows: EditorItem[] }[] = [];
-  for (const it of items) {
-    const shop = (it.cnameshop ?? "").trim() || "— ไม่ระบุร้าน —";
-    let g = groups.find((x) => x.shop === shop);
-    if (!g) { g = { shop, rows: [] }; groups.push(g); }
-    g.rows.push(it);
-  }
 
   const lineOf = (it: EditorItem) =>
     it.crewallet === "1" ? 0 : roundUp2(it.camount * it.cprice + it.cshippingchn);
 
+  // 2-level grouping (มาร์เก็ตเพลส → ร้าน), preserving first-seen order.
+  type ShopGroup = { shop: string; rows: EditorItem[] };
+  type ProviderGroup = { provider: string; shops: ShopGroup[] };
+  const providers: ProviderGroup[] = [];
+  for (const it of items) {
+    const provider = (it.provider ?? "").trim() || "—";
+    const shop = (it.cnameshop ?? "").trim() || "— ไม่ระบุร้าน —";
+    let pg = providers.find((x) => x.provider === provider);
+    if (!pg) { pg = { provider, shops: [] }; providers.push(pg); }
+    let sg = pg.shops.find((x) => x.shop === shop);
+    if (!sg) { sg = { shop, rows: [] }; pg.shops.push(sg); }
+    sg.rows.push(it);
+  }
+
+  // Running ลำดับ in display order (provider → shop → row) — legacy $noRow++.
+  const seqById = new Map<number, number>();
+  let seq = 0;
+  for (const pg of providers) for (const sg of pg.shops) for (const it of sg.rows) seqById.set(it.id, ++seq);
+  const totalShops = providers.reduce((s, pg) => s + pg.shops.length, 0);
+
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-3">
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-4">
       <h3 className="font-bold text-sm">
-        รายการสินค้า ({items.length}) · {groups.length} ร้าน{completed ? " · สำเร็จ" : ""}
+        รายการสินค้า ({items.length}) · {totalShops} ร้าน{completed ? " · สำเร็จ" : ""}
       </h3>
-      <div className="space-y-2">
-        {groups.map((g) => {
-          const shopYuan = g.rows.reduce((s, it) => s + lineOf(it), 0);
-          return (
-            <details key={g.shop} open className="rounded-lg border border-border overflow-hidden">
-              <summary className="flex items-center justify-between gap-2 cursor-pointer select-none bg-surface-alt/60 px-3 py-2 text-xs">
-                <span className="font-semibold truncate">
-                  🏪 {g.shop}
-                  <span className="ml-1.5 text-muted font-normal">({g.rows.length} รายการ)</span>
-                </span>
-                <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
-                  รวม ¥{cny(shopYuan)}
-                </span>
-              </summary>
-              <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full min-w-[640px] text-xs">
-                  <thead className="bg-surface-alt/40 text-[11px] uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
-                      <th className="px-2 py-2 text-right w-16">จำนวน</th>
-                      <th className="px-2 py-2 text-right w-24">¥/ชิ้น</th>
-                      <th className="px-2 py-2 text-right w-24">ค่าส่งจีน</th>
-                      <th className="px-2 py-2 text-right w-28">รวม (¥)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.rows.map((it) => {
-                      const refunded = it.crewallet === "1";
-                      const line = lineOf(it);
-                      return (
-                        <tr key={it.id} className={`border-t border-border ${refunded ? "bg-red-50/40" : ""}`}>
-                          <td className="px-2 py-2">
-                            <div className="flex gap-2">
-                              {it.coverUrl ? (
-                                <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
-                                </a>
-                              ) : null}
-                              <div className="min-w-0">
-                                {it.curl ? (
-                                  <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
-                                    {it.ctitle || it.curl}
+      {providers.map((pg) => (
+        <div key={pg.provider} className="space-y-2">
+          {/* ── ป้ายมาร์เก็ตเพลส (legacy nameProvider · level-1) ── */}
+          <div className="rounded-lg bg-primary-50 dark:bg-primary-900/15 px-3 py-1.5 text-center text-sm font-bold text-primary-700 dark:text-primary-300">
+            {PROVIDER_LABEL[pg.provider] ?? (pg.provider === "—" ? "— ไม่ระบุแหล่ง —" : pg.provider)}
+          </div>
+          {pg.shops.map((g) => {
+            const shopYuan = g.rows.reduce((s, it) => s + lineOf(it), 0);
+            return (
+              <details key={g.shop} open className="rounded-lg border border-border overflow-hidden">
+                <summary className="flex items-center justify-between gap-2 cursor-pointer select-none bg-surface-alt/60 px-3 py-2 text-xs">
+                  <span className="font-semibold truncate">
+                    🏪 {g.shop}
+                    <span className="ml-1.5 text-muted font-normal">({g.rows.length} รายการ)</span>
+                  </span>
+                  <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
+                    รวม ¥{cny(shopYuan)}
+                  </span>
+                </summary>
+                <div className="overflow-x-auto scrollbar-x-visible">
+                  <table className="w-full min-w-[720px] text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                    <thead className="bg-surface-alt/40 text-[11px] uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-2 py-2 text-center w-10">ลำดับ</th>
+                        <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
+                        <th className="px-2 py-2 text-right w-14">จำนวน</th>
+                        <th className="px-2 py-2 text-right w-20">ราคาต่อชิ้น</th>
+                        <th className="px-2 py-2 text-right w-20">ค่าขนส่งจีน</th>
+                        <th className="px-2 py-2 text-right w-24">เพิ่ม/ลด เงิน</th>
+                        <th className="px-2 py-2 text-right w-24">ราคารวม (¥)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.rows.map((it) => {
+                        const refunded = it.crewallet === "1";
+                        const line = lineOf(it);
+                        const adj = it.cpriceupdate ?? 0;
+                        return (
+                          <tr key={it.id} className={refunded ? "bg-red-50/40" : ""}>
+                            <td className="px-2 py-2 text-center font-mono tabular-nums text-muted">{seqById.get(it.id)}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex gap-2">
+                                {it.coverUrl ? (
+                                  <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
                                   </a>
-                                ) : (
-                                  <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
-                                )}
-                                {(it.ccolor || it.csize) && (
-                                  <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
-                                )}
+                                ) : null}
+                                <div className="min-w-0">
+                                  {it.curl ? (
+                                    <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
+                                      {it.ctitle || it.curl}
+                                    </a>
+                                  ) : (
+                                    <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
+                                  )}
+                                  {(it.ccolor || it.csize) && (
+                                    <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
+                                  )}
+                                  {refunded && <span className="mt-0.5 inline-block rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-medium text-white">คืนเงิน</span>}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
-                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
-                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
-                          <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          );
-        })}
-      </div>
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">
+                              {adj > 0 ? <span className="text-green-600">+{cny(adj)}</span>
+                                : adj < 0 ? <span className="text-red-600">{cny(adj)}</span>
+                                : <span className="text-muted">—</span>}
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

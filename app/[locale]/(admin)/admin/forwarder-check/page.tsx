@@ -46,6 +46,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
@@ -92,6 +93,7 @@ type ForwarderRawRow = {
   fvolume: number | null;
   fweight: number | null;
   ftransporttype: string;
+  fproductstype: string | null;
   frefrate: number | null;
   frefprice: string;
   fdetail: string | null;
@@ -176,12 +178,17 @@ export default async function AdminForwarderCheckPage({
   // ── Step 1: Load the queue (tb_check_forwarder) ─────────────────────────
   // Default ordering: most recently added first (matches legacy
   // DataTables `order: [[1, 'desc']]` which sorts on the date column).
-  const queueRes = await admin
+  const { data: queueData, error: queueErr } = await admin
     .from("tb_check_forwarder")
     .select("fID, date, adminID")
     .order("date", { ascending: false, nullsFirst: false })
     .limit(500);
-  const queue = (queueRes.data ?? []) as unknown as CheckQueueRow[];
+  if (queueErr) {
+    console.error("[/admin/forwarder-check] tb_check_forwarder queue read failed", {
+      code: queueErr.code, message: queueErr.message,
+    });
+  }
+  const queue = (queueData ?? []) as unknown as CheckQueueRow[];
   const queueByFid = new Map<number, CheckQueueRow>(
     queue.map((q) => [q.fID, q]),
   );
@@ -215,11 +222,11 @@ export default async function AdminForwarderCheckPage({
   // (defensive — legacy did this to skip rows already billed but still
   // in the queue due to a race). The Wave 16 action cleans up such rows
   // before they show up, but legacy left them, so we honor that filter.
-  const forwarderRes = await admin
+  const { data: forwarderData, error: forwarderErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, fstatus, fidorco, ftrackingchn, fcabinetnumber, userid, " +
-        "famount, famountcount, fvolume, fweight, ftransporttype, frefrate, frefprice, " +
+        "famount, famountcount, fvolume, fweight, ftransporttype, fproductstype, frefrate, frefprice, " +
         "fdetail, fnote, fcover, " +
         "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
         "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
@@ -227,7 +234,12 @@ export default async function AdminForwarderCheckPage({
         "fshipby, paymethod, faddressdistrict, faddressprovince, faddresszipcode",
     )
     .in("id", fids);
-  const forwarders = ((forwarderRes.data ?? []) as unknown as ForwarderRawRow[])
+  if (forwarderErr) {
+    console.error("[/admin/forwarder-check] tb_forwarder read failed", {
+      code: forwarderErr.code, message: forwarderErr.message,
+    });
+  }
+  const forwarders = ((forwarderData ?? []) as unknown as ForwarderRawRow[])
     // Legacy `fStatus<5` filter — a row that's already billed but still
     // lingering in the queue shouldn't show up (race-defensive).
     .filter((r) => parseInt(r.fstatus, 10) < 5);
@@ -352,7 +364,7 @@ export default async function AdminForwarderCheckPage({
       amount_count: r.famountcount,
       volume_cbm: Number(r.fvolume ?? 0),
       weight_kg: Number(r.fweight ?? 0),
-      products_type: r.ftransporttype,
+      products_type: r.fproductstype ?? "",
       transport_type: r.ftransporttype,
       ref_rate: Number(r.frefrate ?? 0),
       ref_price: r.frefprice ?? "0",
@@ -362,6 +374,7 @@ export default async function AdminForwarderCheckPage({
       transport_price_chn_thb: Number(r.ftransportpricechnthb ?? 0),
       price_other: Number(r.priceother ?? 0),
       ship_by: r.fshipby ?? "",
+      ship_by_label: SHIP_BY_LABEL[r.fshipby ?? ""] ?? (r.fshipby ?? ""),
       pay_method: r.paymethod,
       address_district: r.faddressdistrict,
       address_province: r.faddressprovince,
