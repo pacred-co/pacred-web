@@ -1016,3 +1016,19 @@ Verify with `test -e node_modules/.pnpm/<pkg>@<ver>/node_modules/<pkg>/package.j
 **Why this matters next time:** on ANY machine switch / big `git merge` that jumps many commits, treat a dev `Cannot find module '<transitive-dep>'` 500 as **pnpm store corruption, not a code/dep bug**. Go straight to `rm -rf node_modules .next && pnpm install` instead of chasing individual packages with `pnpm add` (which won't repair an empty virtual-store dir). Pairs with the memory `dev_in_claude_worktree` (copy `.env.local` first) — this is its node_modules sibling.
 
 **Cross-links:** AGENTS.md §13 (worktree base is stale — resync before trusting it) · memory `dev_in_claude_worktree` · the dev-HMR stale-compile entry above (same family: the on-disk source was correct, the running artifact wasn't).
+
+## [2026-07-06] Gate ran in the MAIN repo, not the worktree → false-green tsc/eslint
+
+**Context:** editing `balance-view.tsx` inside the Claude worktree (`.claude/worktrees/adoring-chandrasekhar-0f8ad7`). Ran `cd /c/Users/Admin/pacred-web && node scripts/tsc-check.mjs` and got `TSC_EXIT=0` + eslint 0, then tried to commit.
+
+**Symptom:** `git add -A && git commit` reported "nothing to commit, working tree clean" — from the MAIN repo, which is a *different* checkout on a *different* branch. My file edits (made by the Edit tool to the worktree path) were never staged, and the tsc/eslint I "passed" had actually run against the main repo's UNEDITED copy of the file. When I re-ran tsc *inside the worktree*, it caught a real TS2322 (`string | null` not assignable to `img src`) that the main-repo run had missed. A false-green.
+
+**Root cause:** the Bash tool's cwd persists across calls. A `cd /c/Users/Admin/pacred-web` (done earlier for an unrelated command) left every later `git`/`node`/`npx` running in the MAIN repo. The Edit tool writes by absolute path (worktree), but the gate ran wherever cwd happened to be. Two working trees + persistent cwd = the gate validated the wrong file.
+
+**Fix / rule:** `cd` to the worktree root at the START of every gate/commit command block — never trust the persisted cwd. Pattern used for the rest of the session:
+`cd "/c/Users/Admin/pacred-web/.claude/worktrees/<name>" && rm -f .next/dev/types/validator.ts; node scripts/tsc-check.mjs > /tmp/tsc.log 2>&1; echo "TSC_EXIT=$?"`
+Also: a "nothing to commit, working tree clean" right after you edited a file is a red flag that you're in the wrong repo — check `git rev-parse --abbrev-ref HEAD` before believing it.
+
+**Why this matters next time:** a green gate is only meaningful if it ran against the tree you edited. On a multi-worktree machine, verify cwd == worktree before reading any exit code. This is the classic §11 "green build ≠ verified" trap wearing a wrong-directory costume — and it's a direct "ห้ามงานบัค งานหาย" risk (a type error would have shipped had I not re-run in the worktree).
+
+**Cross-links:** AGENTS.md §11 (gate discipline) + §13 (worktree base stale) · CLAUDE.md save-point note "cwd reset บ่อย · cd ก่อนทุก git/node".
