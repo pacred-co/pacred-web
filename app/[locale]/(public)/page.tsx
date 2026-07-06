@@ -7,6 +7,7 @@ import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
 import { OurService } from "@/components/sections/our-service";
+import { CountrySwitcher } from "@/components/sections/country-switcher";
 import { ProductCategories } from "@/components/sections/product-categories";
 import { PricingSection } from "@/components/sections/pricing-section";
 import { GuaranteeBanner } from "@/components/sections/guarantee-banner";
@@ -129,6 +130,9 @@ export default async function Home({
         </div>
         <Promotion />
         <OurService />
+        {/* Country switcher — moved up to lead the สั่งซื้อ / browse-order flow
+            (ปอน 2026-07-06 "เอาสลับประเทศเลื่อนขึ้นไปไว้ข้างบนสั่งซื้อ"). */}
+        <CountrySwitcher />
         <ProductCategories />
         <PricingSection />
         {/* เคลียร์ของติดด่าน heading — lifted from the customs page so the home

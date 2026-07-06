@@ -19,30 +19,13 @@ import {
 } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { WarehouseRateGroup, RouteImportGroup, FreightPortCards } from "@/components/sections/lcl-price-cards";
+import { CountryChips } from "@/components/sections/country-switcher";
 
 const LINE_URL = "/line";
 const HOTLINE = "062-603-0456";
 
 type Mode = "cargo" | "freight";
 type Term = "DDP" | "EXW" | "FOB";
-
-// ───────────── Country (data — labels resolved via i18n) ─────────────
-type Country = {
-  code: string;
-  nameKey: string;
-  flag: string;
-  active?: boolean;
-  locked?: boolean;
-  soon?: boolean;
-};
-
-const COUNTRIES: Country[] = [
-  { code: "cn", nameKey: "countryCn", flag: "🇨🇳", active: true, locked: true },
-  { code: "jp", nameKey: "countryJp", flag: "🇯🇵", soon: true },
-  { code: "kr", nameKey: "countryKr", flag: "🇰🇷", soon: true },
-  { code: "vn", nameKey: "countryVn", flag: "🇻🇳", soon: true },
-  { code: "us", nameKey: "countryUs", flag: "🇺🇸", soon: true },
-];
 
 // ───────────── China ports (Freight) ─────────────
 const PORTS = [
@@ -234,16 +217,9 @@ export function PricingSection({
         </div>
         )}
 
-        {/* ─── Country picker (hidden in the lclExpanded variant) ─── */}
-        {!lclExpanded && (
-        <div className="mx-auto mt-6 w-full max-w-[1120px]">
-          <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
-            {t("originCountry")}
-          </div>
-          {/* Country chips — clean modern pill selector */}
-          <CountryChips country={country} onSelect={setCountry} t={t} />
-        </div>
-        )}
+        {/* Country picker moved UP to a standalone <CountrySwitcher /> above the
+            ProductCategories (สั่งซื้อ) block — ปอน 2026-07-06. The freight-header
+            picker below stays. */}
 
         {/* Cargo / Freight mode toggle removed (owner 2026-06-16) — the homepage
             pricing now shows Cargo (Warehouse-to-Warehouse) only. `mode` is pinned
@@ -370,7 +346,7 @@ export function PricingSection({
                     <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
                       {t("originCountry")}
                     </div>
-                    <CountryChips country={country} onSelect={setCountry} t={t} />
+                    <CountryChips country={country} onSelect={setCountry} />
                   </div>
                 </header>
 
@@ -433,56 +409,6 @@ export function PricingSection({
 
 // ────────────────── Cargo group row (LCL or FCL with section header) ──────────────────
 type PricingT = ReturnType<typeof useTranslations<"pricing">>;
-
-// ────────────────── Country chip selector (shared: top PRICING picker + Freight header) ──────────────────
-// จีน = active · ที่เหลือ = "เร็วๆนี้" (disabled). Same component in both spots so
-// they always look + behave identically (ปอน 2026-06-21).
-function CountryChips({
-  country,
-  onSelect,
-  t,
-}: {
-  country: string;
-  onSelect: (code: string) => void;
-  t: PricingT;
-}) {
-  return (
-    <div className="flex overflow-x-auto gap-2 pb-1 -mx-[10px] px-[10px] md:mx-0 md:px-0 md:pb-0 md:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
-      {COUNTRIES.map((c) => {
-        const selected = country === c.code && c.active;
-        const disabled = c.soon || !c.active;
-        return (
-          <button
-            key={c.code}
-            type="button"
-            disabled={disabled}
-            onClick={() => !disabled && onSelect(c.code)}
-            suppressHydrationWarning
-            className={[
-              "inline-flex items-center gap-2 h-[42px] pl-3 pr-4 rounded-full border text-[13.5px] font-semibold transition-all duration-200 focus:outline-none whitespace-nowrap",
-              selected
-                ? "bg-primary-600 border-primary-600 text-white shadow-[0_4px_14px_rgba(179,0,0,0.35)]"
-                : disabled
-                  ? "bg-surface dark:bg-surface border-border/60 text-muted opacity-55 cursor-not-allowed"
-                  : "bg-white dark:bg-surface border-border hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30 text-[#111827] dark:text-foreground cursor-pointer",
-            ].join(" ")}
-          >
-            <span className="text-[18px] leading-none">{c.flag}</span>
-            <span>{t(c.nameKey)}</span>
-            {c.soon && (
-              <span className="ml-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-black/8 dark:bg-white/10 text-muted leading-none">
-                เร็วๆนี้
-              </span>
-            )}
-            {selected && (
-              <Check className="w-[14px] h-[14px] ml-0.5 shrink-0" strokeWidth={2.5} />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function CargoGroupRow({
   eyebrow, title, sub, cards, cols, t,
