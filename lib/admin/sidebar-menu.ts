@@ -215,6 +215,19 @@ const itemBarcodeRecordIntakeFlat: MenuItem = {
  *  re-gate every fstatus flip via the G5 transition matrix). 🔒 WHO holds
  *  the warehouse role = China-team RBAC sign-off (owner-blocked); the menu +
  *  pages ship built and role-gated. */
+/** 2026-07-06 (owner spec · foundation) — กระสอบรวม (consolidated-sack) registry.
+ *  READ-ONLY partner mirror: a "sack" is a GROUP of momo_import_tracks rows that
+ *  share momo_sack_no (the MOMO/กวางโจว partner data already synced on prod). No
+ *  new table — derived by aggregation (mirror-only; Pacred does not originate).
+ *  Physical-only (qty/weight/cbm — no money). Pacred creating its OWN sacks is a
+ *  future own-freight feature. Distinct from the own-warehouse worker-app sack
+ *  (blockWarehouseWorker → /admin/warehouse/worker/sacks). super/warehouse/ops (§0d). */
+const itemSacks: MenuItem = {
+  labelKey: "warehouse.sacks",
+  href: "/admin/warehouse/sacks",
+  icon: "Layers",
+};
+
 const blockWarehouseWorker: MenuItem = {
   labelKey: "warehouseWorker.title",
   icon: "Boxes",
@@ -1199,6 +1212,8 @@ const wrapClassWarehouse: MenuItem = {
         // surface) was only in the warehouse-role sidebar; super/CEO org-IA had
         // to reach it by URL. Mirror the warehouse-role entry (§0d reachability).
         { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
+        // 2026-07-06 (owner spec) — กระสอบรวม registry (read-only MOMO mirror · momo_import_tracks).
+        itemSacks,
         // re-sweep A2 #8/#17 — print all box labels for a scanned cabinet
         // (faithful port of legacy `printAll.php`).
         { labelKey: "warehouse.printLabels", href: "/admin/printAll", icon: "Printer" },
@@ -1442,6 +1457,8 @@ const menuOps: MenuSection[] = [
       blockApiForwarderUpdate,
       // 2026-06-09 (W10 · Theme 7 P1) — China-warehouse worker app (ops oversee).
       blockWarehouseWorker,
+      // 2026-07-06 (owner spec) — กระสอบรวม registry (read-only MOMO mirror · momo_import_tracks).
+      itemSacks,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -1611,6 +1628,8 @@ const menuWarehouse: MenuSection[] = [
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
       { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
+      // 2026-07-06 (owner spec) — กระสอบรวม registry (read-only MOMO mirror · momo_import_tracks).
+      itemSacks,
       // 2026-06-19 (owner · P6) — logistics-manager cross-department overview:
       // the whole cargo pipeline (by fstatus) + money lens + each dept's next
       // action + tool links. The "ศูนย์งานโลจิสติกส์" board for Win.

@@ -22,7 +22,8 @@ import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
-import { Explain, GUIDE } from "@/components/ui/tooltip";
+import { Explain } from "@/components/ui/tooltip";
+import { isWalletCredit } from "@/lib/wallet/wallet-hs";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -459,7 +460,10 @@ function TxRow({
   const rowStatus = row.status ?? "1";
   const type = row.type ?? "";
   const amount = Number(row.amount ?? 0);
-  const isNeg = amount < 0;
+  // Money OUT? Derived from `type` (SOT), NEVER the amount sign — tb_wallet_hs.amount
+  // is stored POSITIVE, so `amount < 0` matched nothing and every debit rendered as
+  // if it were incoming. Debits (order-payment/withdraw/import/yuan) now show red −.
+  const isNeg = !isWalletCredit(type);
   const customerName = u
     ? resolveBillingIdentity({
         userCompany: u.userCompany,
@@ -509,9 +513,6 @@ function TxRow({
         </td>
         <td className={`px-3 py-3 text-right font-mono text-sm font-bold ${isNeg ? "text-red-600" : "text-foreground"}`}>
           {isNeg ? "−" : ""}฿{Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-          {isNeg ? (
-            <Explain align="right" className="ml-1" def={GUIDE.wallet_negative} />
-          ) : null}
         </td>
         <td className="px-3 py-3 text-xs">
           {row.depositnamebank ? (

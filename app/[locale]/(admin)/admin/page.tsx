@@ -38,6 +38,7 @@ import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-reso
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
+import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
@@ -214,17 +215,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
-    // Pending queues (tab badge counts).
-    // topup badge counts the DEDUPED queue (owner 2026-06-21) — exclude the
-    // "เติม-แล้วจ่าย" pay-half (type='4' with reforder2 → it collapses into its topup
-    // row), so the badge matches the 1-row-per-payment list. `or` = NOT(type=4 AND reforder2 set).
-    // Also exclude type='3' (withdrawals are OUTGOING, not incoming money-in slips).
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0).neq("type", "3").or("type.neq.4,reforder2.is.null"),
-    // ถอนเงิน (withdraw) = legacy type='3' (withdrawUser.php). NOTE: tb_wallet_hs.amount
-    // is stored POSITIVE always (sign derived from `type` at display), so the old
-    // `.lt('amount',0)` matched ZERO rows — the tab was structurally always-empty. Key
-    // off `type` like legacy so pending withdrawals actually surface for accounting.
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").eq("type", "3"),
+    // Pending queues (tab badge counts). Both wallet queues route through the shared
+    // SOT filters (lib/wallet/wallet-hs.ts) so the dashboard tab + the sidebar badge
+    // always agree, and direction is keyed off `type` — NEVER the amount sign (amounts
+    // are stored POSITIVE, so the old `.lt('amount',0)` withdraw filter matched nothing).
+    pendingTopupFilter(admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })),
+    pendingWithdrawFilter(admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })),
     // payShop queue — repointed to the LIVE tb_shop_pay_h (real INSERT at
     // actions/admin/shop-disbursement.ts; the old rebuilt `sales_payouts` twin was 0-row).
     // Count + list both read tb_shop_pay_h status='1' (same source — no drift).
@@ -796,16 +792,16 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // ค่าอะไร · รูปไม่ขึ้น). Pull the note (what it's paying — F#/H#/service),
       // type + dateslip, AND resolve imagesslip → a SIGNED URL so the row shows a
       // real thumbnail (the bare filename was used as a broken href before).
-      let q = admin
+      const base = admin
         .from("tb_wallet_hs")
-        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder,reforder2")
-        .eq("status", "1")
+        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder,reforder2");
+      // Route the LIST through the SAME shared SOT filters as the badge/tabs
+      // (lib/wallet/wallet-hs.ts) so the list, the tab count, and the sidebar badge
+      // can never disagree. Direction is keyed off `type`, never the amount sign.
+      const filtered = tab === "topup" ? pendingTopupFilter(base) : pendingWithdrawFilter(base);
+      const { data, error } = await filtered
         .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
-      // topup = money-in slips (amount>0, exclude type='3' withdrawals) · withdraw = legacy
-      // type='3'. amount is stored POSITIVE so the old `.lt('amount',0)` never matched.
-      q = tab === "topup" ? q.gt("amount", 0).neq("type", "3") : q.eq("type", "3");
-      const { data, error } = await q;
       if (error) {
         console.warn(`[tb_wallet_hs list] failed (soft-fail · returning empty rows)`, error);
       }

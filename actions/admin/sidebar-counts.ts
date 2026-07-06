@@ -23,6 +23,7 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
+import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { type BadgeCounts, ADMIN_SIDEBAR_COUNTS_TAG } from "@/lib/admin/sidebar-menu";
 import { LIVE_INCIDENT_STATUSES } from "@/lib/validators/platform-incident";
 import { logger } from "@/lib/logger";
@@ -86,13 +87,16 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       cntUnpaid,
     ] = await Promise.all([
       // ── Wallet ────────────────────────────────────────────────
-      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_wallet_hs.
-      // status='1' = รออนุมัติ; deposit = amount > 0, withdraw = amount < 0
-      // (legacy stores withdrawals as a negative amount in the same table).
-      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
-        .eq("status", "1").gt("amount", 0),
-      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
-        .eq("status", "1").lt("amount", 0),
+      // status='1' = รออนุมัติ. Direction comes from `type`, NOT the amount sign
+      // (amounts are stored POSITIVE — an `amount<0` filter matched ZERO rows, so
+      // the withdraw badge used to be permanently 0). Route BOTH badges through the
+      // shared SOT filters so they always agree with the /admin dashboard tabs.
+      pendingTopupFilter(
+        admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
+      ),
+      pendingWithdrawFilter(
+        admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
+      ),
       // ── ฝากสั่งสินค้า (shop orders) ─────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_header_order.
       // hstatus 1=รอดำเนินการ · 2=รอชำระเงิน · 3=สั่งสินค้า.
