@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 export default async function BillingRunAddPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cabinet?: string }>;
+  searchParams: Promise<{ cabinet?: string; userid?: string }>;
 }) {
   // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles create the
   // billing doc (mark-paid stays accounting-only).
@@ -43,7 +43,17 @@ export default async function BillingRunAddPage({
   let preselectUserid = "";
   let preselectForwarderIds: number[] = [];
   let preselectNote: string | null = null;
-  const cabinetParam = (await searchParams).cabinet;
+  const sp = await searchParams;
+  const cabinetParam = sp.cabinet;
+  // pop-spec #3 — the consolidation view's "วางบิลเดี่ยว →" link opens this form
+  // pre-selected on the customer (แบบ 1: combine ALL their ready containers into one
+  // bill). The customer must be an eligible one; the client ticks all their unbilled
+  // rows by default (no forwarder preselect → all-unbilled). Cabinet param wins if both.
+  const useridParam = (sp.userid ?? "").trim();
+  if (!cabinetParam && useridParam && customers.some((c) => c.userid === useridParam)) {
+    preselectUserid = useridParam;
+    preselectNote = `👤 ลูกค้า ${useridParam} — ติ๊กรายการที่ยังไม่ออกใบวางบิลให้อัตโนมัติแล้ว (รวมทุกตู้เป็นใบเดียว) · ตรวจสอบแล้วกด "สร้างใบวางบิล"`;
+  }
   if (cabinetParam) {
     const cabinets = cabinetParam.split(",").map((c) => c.trim()).filter(Boolean);
     const t = await resolveCabinetBillingTarget(cabinets);
@@ -72,9 +82,14 @@ export default async function BillingRunAddPage({
             เลือกลูกค้า → เลือกรายการฝากนำเข้า (fStatus=5) → ตั้งวันครบกำหนด → ออกใบวางบิล
           </p>
         </div>
-        <Link href="/admin/billing-run" className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
-          ← กลับหน้ารายการ
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/billing-run/consolidate" className="text-sm text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline">
+            ← กลับไปหน้ารวมวางบิล
+          </Link>
+          <Link href="/admin/billing-run" className="text-sm text-muted hover:text-foreground underline-offset-2 hover:underline">
+            หน้ารายการ
+          </Link>
+        </div>
       </header>
 
       {!res.ok && (

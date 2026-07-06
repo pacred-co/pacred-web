@@ -376,6 +376,9 @@ export default async function BillingRunListPage({
                     });
                   }}
                 />
+                <Link href="/admin/billing-run/consolidate" className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100">
+                  🧾 รวมวางบิล (หลายราย)
+                </Link>
                 <Link href="/admin/billing-run/add" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                   + สร้างใบวางบิลใหม่
                 </Link>

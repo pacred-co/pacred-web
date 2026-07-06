@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   classifyDomesticZone,
   domesticShippingOptions,
+  isThShippingCostRequired,
+  isThShippingCostMissing,
 } from "./domestic-shipping";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
 
@@ -91,6 +93,32 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     parcels: [{ weightKg: 17, width: 55, length: 44, height: 31 }, { weightKg: 60, width: 55, length: 44, height: 31 }],
   });
   assert.ok(!options.some((o) => o.carrier === "2"), "a 60kg box in the set → Flash omitted (over cap)");
+}
+
+// ── ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) ──
+{
+  // required predicate — self-pickup ("PCS", any case) is the ONLY exempt carrier
+  assert.equal(isThShippingCostRequired("PCS"), false, "PCS self-pickup → no TH cost required");
+  assert.equal(isThShippingCostRequired("pcs"), false, "self-pickup case-insensitive");
+  assert.equal(isThShippingCostRequired(" PCS "), false, "self-pickup trims");
+  assert.equal(isThShippingCostRequired("PRF"), true, "เหมาๆ → TH cost required");
+  assert.equal(isThShippingCostRequired("2"), true, "Flash → TH cost required");
+  assert.equal(isThShippingCostRequired("24"), true, "J&T → TH cost required");
+  assert.equal(isThShippingCostRequired(""), true, "unset carrier → TH cost still owed (leg applies)");
+  assert.equal(isThShippingCostRequired(null), true, "null carrier → TH cost required");
+
+  // missing predicate — required AND ฿0/empty
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 0 }), true, "เหมาๆ ฿0 → missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: null }), true, "เหมาๆ null → missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: "" }), true, "เหมาๆ '' → missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: -5 }), true, "negative cost → missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 100 }), false, "เหมาๆ ฿100 → filled");
+  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: "350.50" }), false, "Flash string cost → filled");
+  // self-pickup is NEVER missing regardless of cost
+  assert.equal(isThShippingCostMissing({ fshipby: "PCS", ftransportprice: 0 }), false, "self-pickup ฿0 → not missing (exempt)");
+  assert.equal(isThShippingCostMissing({ fshipby: "PCS", ftransportprice: null }), false, "self-pickup null → not missing (exempt)");
+  // unset carrier + ฿0 → missing (must resolve)
+  assert.equal(isThShippingCostMissing({ fshipby: "", ftransportprice: 0 }), true, "unset carrier ฿0 → missing");
 }
 
 console.log("domestic-shipping.test.ts — all assertions passed");

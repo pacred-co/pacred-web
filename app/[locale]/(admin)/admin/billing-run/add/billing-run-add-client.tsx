@@ -64,6 +64,16 @@ function isZeroTransport(f: EligibleForwarderRow): boolean {
   return (Number(f.ftotalprice) || 0) <= 0;
 }
 
+/**
+ * ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3 · owner 2026-07-06) — a domestic delivery
+ * leg applies to this row but the in-Thailand cost (ค่าส่งไทย) is still ฿0. The
+ * server computes `th_ship_missing` (self-pickup exempt); the UI just reads it to
+ * badge + require a confirm before billing. Pure flag — no pricing change.
+ */
+function isThShipMissing(f: EligibleForwarderRow): boolean {
+  return f.th_ship_missing === true;
+}
+
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm " +
   "focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -110,6 +120,12 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const billableForwarders = useMemo(
     () => (eligible ?? []).filter((f) => !f.already_billed),
     [eligible],
+  );
+  // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — aggregate count of SELECTED rows still
+  // missing a TH-shipping cost, for the amber summary banner.
+  const missingThShipCount = useMemo(
+    () => (eligible ?? []).filter((f) => selectedIds.has(f.id) && isThShipMissing(f)).length,
+    [eligible, selectedIds],
   );
 
   // Per-row checked map (cleared on customer change)
@@ -274,10 +290,20 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       .filter((f) => selectedIds.has(f.id) && f.already_billed)
       .map((f) => f.id);
 
+    // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — SELECTED rows whose domestic leg
+    // cost is still ฿0. A positive per-line override is NOT the same thing (that
+    // corrects the bill face value, not the TH-leg cost) so it does NOT clear this.
+    const missingThShipIds = (eligible ?? [])
+      .filter((f) => selectedIds.has(f.id) && isThShipMissing(f))
+      .map((f) => f.id);
+
     // §0f confirm-before-mutate (money action · ออกเอกสารวางบิลจริง).
     const warn =
       (rebillIds.length > 0
         ? `🧾 มี ${rebillIds.length} รายการที่ "ออกใบวางบิลแล้ว" (${rebillIds.map((id) => `#${id}`).join(", ")}) — ออกใหม่จะได้ใบเพิ่มอีก 1 ใบ (ใบเก่าไม่ถูกยกเลิกอัตโนมัติ) · ถ้าใบเก่าผิดควรไปยกเลิกก่อน\n\n`
+        : "") +
+      (missingThShipIds.length > 0
+        ? `🚚 มี ${missingThShipIds.length} รายการที่ยังไม่กรอกค่าส่งไทย (${missingThShipIds.map((id) => `#${id}`).join(", ")})\nควรให้โกดัง/CS กรอกค่าส่งไทยก่อนวางบิล — ถ้าจะออกบิลทั้งที่ยังไม่มีค่าส่งไทย กดตกลง\n\n`
         : "") +
       (zeroIds.length > 0
         ? `⚠️ มี ${zeroIds.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ${zeroIds.map((id) => `#${id}`).join(", ")}\nควรตรวจสอบ/วัดที่โกดังก่อน — ถ้าจะออกบิลทั้งที่ค่าขนส่งเป็น ฿0 กดตกลง\n\n`
@@ -303,6 +329,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         maoFeeThb:        maoFee,
         noteForCustomer:  note,
         allowUnmeasured:  zeroIds.length > 0,
+        allowMissingThShip: missingThShipIds.length > 0,
         overrides,
       });
       if (res.ok) {
@@ -447,6 +474,16 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
           <p className="text-sm text-muted text-center py-6">ลูกค้านี้ไม่มีรายการที่สามารถออกใบวางบิลได้</p>
         )}
 
+        {/* ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — aggregate amber warning when any
+            selected row still lacks a TH-shipping cost. Soft flag (not a block) —
+            staff confirm before billing; give the warehouse/CS a heads-up to fill it. */}
+        {selectedUserid && !loadingFwd && missingThShipCount > 0 && (
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            🚚 มี <strong>{missingThShipCount}</strong> รายการที่เลือกไว้ <strong>ยังไม่กรอกค่าส่งไทย</strong> —
+            ควรให้โกดัง/CS กรอกค่าส่งในไทยก่อนวางบิล (ยังออกบิลได้ แต่ต้องยืนยัน)
+          </div>
+        )}
+
         {selectedUserid && !loadingFwd && visibleForwarders.length > 0 && (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
@@ -471,6 +508,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               <tbody>
                 {visibleForwarders.map((f) => {
                   const zeroTransport = isZeroTransport(f);
+                  const thShipMissing = isThShipMissing(f);
                   const selected = selectedIds.has(f.id);
                   // Match lineAmountOf exactly — a blank/cleared input means "use
                   // auto", so the chip must NOT read as edited (it would bill auto).
@@ -506,6 +544,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                           title="ค่านำเข้า/ขนส่งเป็น ฿0 — ยังไม่ได้วัด หรือยังไม่ตั้งราคา · อาจเก็บเงินขาด · ตรวจสอบก่อนออกบิล"
                         >
                           ⚠️ ค่าขนส่ง ฿0
+                        </span>
+                      )}
+                      {thShipMissing && (
+                        <span
+                          className="ml-1 inline-block rounded bg-amber-100 px-1 py-0.5 text-[11px] font-semibold text-amber-800 align-middle"
+                          title="ยังไม่กรอกค่าส่งในไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง) — ให้โกดัง/CS กรอกก่อนวางบิล"
+                        >
+                          🚚 ยังไม่กรอกค่าส่งไทย
                         </span>
                       )}
                       {f.already_billed && (
