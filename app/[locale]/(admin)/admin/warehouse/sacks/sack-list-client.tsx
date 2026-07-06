@@ -135,11 +135,20 @@ export function SackListClient({ sacks, filters }: { sacks: DerivedSack[]; filte
                 </span>
                 {statusPill(s.status)}
                 <span className="text-xs text-gray-500">{transportTypeLabel(s.transport_type)}</span>
-                {s.container && (
-                  <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">
-                    <Package className="h-3 w-3" /> ตู้ {s.container}
-                  </span>
-                )}
+                {s.container &&
+                  (s.container_is_real ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">
+                      <Package className="h-3 w-3" /> ตู้ {s.container}
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700"
+                      title={`รอบขนส่ง MOMO: ${s.container} · ยังไม่ปิดตู้เข้าเลขตู้จริง (GZS/GZE)`}
+                    >
+                      <Package className="h-3 w-3" /> {s.container}
+                      <span className="text-amber-600">· รอเลขตู้จริง</span>
+                    </span>
+                  ))}
                 {s.last_synced_at && (
                   <span className="ml-auto text-[11px] text-gray-400">
                     sync {formatThaiDateTime(s.last_synced_at)}

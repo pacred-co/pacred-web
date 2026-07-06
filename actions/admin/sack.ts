@@ -34,7 +34,7 @@ const LIST_COLS =
   "momo_sack_no, momo_container_no, container_batch_no, quantity, weight_kg, cbm, shipment_status, current_location, last_synced_at, momo_user_code";
 // Rows for one sack's detail — one card per parcel.
 const DETAIL_COLS =
-  "momo_tracking_no, momo_sack_no, momo_container_no, momo_user_code, momo_cg_no, weight_kg, cbm, quantity, shipment_status, current_location, last_synced_at";
+  "momo_tracking_no, momo_sack_no, momo_container_no, container_batch_no, momo_user_code, momo_cg_no, weight_kg, cbm, quantity, shipment_status, current_location, last_synced_at";
 
 // The per-fetch cap. A sack groups small parcels, so 5000 tagged rows is a wide
 // safety margin over the live ~33 tagged rows; PostgREST would otherwise page at 1000.
@@ -99,6 +99,44 @@ export async function listSacks(
 
     const rows = (data ?? []) as ListRow[];
 
+    // ── Resolve routing-batch → real ตู้ GZS/GZE ────────────────
+    // A sack's momo_container_no is the MOMO ROUTING BATCH (MO/PCS/PR-SEA·EK ·
+    // ไม่ใช่ตู้จริง). The REAL cabinet (GZS/GZE) lives in `momo_container_closed`,
+    // keyed by `momo_container_ref` (= raw.fid = the routing batch) → its
+    // `container_batch_no` (= raw.cid = "GZS260525-2"). When MOMO closes the
+    // container, that mapping appears; until then the routing batch is all we have.
+    // Build a { routingBatch → realCabinet } map so the list can show the real
+    // ตู้ GZS/GZE instead of the routing batch. ภูม 2026-07-06.
+    const routingBatches = Array.from(
+      new Set(
+        rows.map((r) => (r.momo_container_no ?? "").trim()).filter((v) => v.length > 0),
+      ),
+    );
+    const cabinetByBatch = new Map<string, string>();
+    if (routingBatches.length > 0) {
+      const { data: closedRows, error: closedErr } = await admin
+        .from("momo_container_closed")
+        .select("momo_container_ref, container_batch_no")
+        .in("momo_container_ref", routingBatches)
+        .not("container_batch_no", "is", null);
+      if (closedErr) {
+        // soft-fail — leave the map empty so we fall back to the routing batch.
+        console.error("[listSacks closed-map] failed", {
+          code: closedErr.code,
+          message: closedErr.message,
+        });
+      } else {
+        for (const cr of (closedRows ?? []) as Array<{
+          momo_container_ref: string | null;
+          container_batch_no: string | null;
+        }>) {
+          const ref = (cr.momo_container_ref ?? "").trim();
+          const cab = (cr.container_batch_no ?? "").trim();
+          if (ref && cab && !cabinetByBatch.has(ref)) cabinetByBatch.set(ref, cab);
+        }
+      }
+    }
+
     // Aggregate by momo_sack_no.
     const bySack = new Map<
       string,
@@ -108,6 +146,7 @@ export async function listSacks(
         weight: number;
         cbm: number;
         container: string | null;
+        containerIsReal: boolean;
         status: string | null;
         lastSynced: string | null;
       }
@@ -118,14 +157,28 @@ export async function listSacks(
       if (!key) continue;
       const cur =
         bySack.get(key) ??
-        { parcels: 0, qty: 0, weight: 0, cbm: 0, container: null, status: null, lastSynced: null };
+        {
+          parcels: 0, qty: 0, weight: 0, cbm: 0,
+          container: null, containerIsReal: false, status: null, lastSynced: null,
+        };
       cur.parcels += 1;
       cur.qty += Number(r.quantity) || 0;
       cur.weight += Number(r.weight_kg) || 0;
       cur.cbm += Number(r.cbm) || 0;
-      // representative container = the first non-empty momo_container_no seen.
-      if (!cur.container && r.momo_container_no && r.momo_container_no.trim()) {
-        cur.container = r.momo_container_no.trim();
+      // representative container — show the REAL ตู้ GZS/GZE when known:
+      //   1. container_batch_no on the row (rare — filled by the 0130 backfill), else
+      //   2. resolved via momo_container_closed (routingBatch → realCabinet), else
+      //   3. fall back to momo_container_no (the routing batch · ตู้ยังไม่ปิด).
+      // ภูม 2026-07-06.
+      const batchCab = (r.momo_container_no ?? "").trim();
+      const realCab =
+        (r.container_batch_no ?? "").trim() ||
+        (batchCab ? cabinetByBatch.get(batchCab) ?? "" : "");
+      if (realCab) {
+        cur.container = realCab;                     // ตู้จริง GZS/GZE ชนะเสมอ
+        cur.containerIsReal = true;
+      } else if (!cur.containerIsReal && !cur.container && batchCab) {
+        cur.container = batchCab;                     // fallback routing-batch (รอปิดตู้)
       }
       // representative status = first non-empty shipment_status, else current_location.
       if (!cur.status) {
@@ -143,6 +196,7 @@ export async function listSacks(
       .map(([sack_no, v]) => ({
         sack_no,
         container: v.container,
+        container_is_real: v.containerIsReal,
         transport_type: transportTypeOf(v.container),
         parcels: v.parcels,
         qty: v.qty,
@@ -182,6 +236,7 @@ export async function getSack(
       momo_tracking_no: string | null;
       momo_sack_no: string | null;
       momo_container_no: string | null;
+      container_batch_no: string | null;
       momo_user_code: string | null;
       momo_cg_no: string | null;
       weight_kg: number | null;
@@ -206,7 +261,8 @@ export async function getSack(
     }));
 
     // Computed header — the same aggregation the list does, for this one sack.
-    let container: string | null = null;
+    let routingBatch: string | null = null;
+    let onRowCabinet: string | null = null;  // a real GZS/GZE already on a row (0130 backfill)
     let status: string | null = null;
     let lastSynced: string | null = null;
     let qty = 0;
@@ -216,8 +272,11 @@ export async function getSack(
       qty += Number(r.quantity) || 0;
       weight += Number(r.weight_kg) || 0;
       cbm += Number(r.cbm) || 0;
-      if (!container && r.momo_container_no && r.momo_container_no.trim()) {
-        container = r.momo_container_no.trim();
+      if (!routingBatch && r.momo_container_no && r.momo_container_no.trim()) {
+        routingBatch = r.momo_container_no.trim();
+      }
+      if (!onRowCabinet && r.container_batch_no && r.container_batch_no.trim()) {
+        onRowCabinet = r.container_batch_no.trim();
       }
       if (!status) {
         const s = (r.shipment_status ?? "").trim() || (r.current_location ?? "").trim();
@@ -228,9 +287,38 @@ export async function getSack(
       }
     }
 
+    // Resolve the real ตู้ GZS/GZE (same order as the list):
+    //   1. on-row container_batch_no, else
+    //   2. momo_container_closed (routingBatch → realCabinet), else
+    //   3. fall back to the routing batch (ตู้ยังไม่ปิด). ภูม 2026-07-06.
+    let container: string | null = onRowCabinet || routingBatch;
+    let containerIsReal = !!onRowCabinet;
+    if (!containerIsReal && routingBatch) {
+      const { data: closedRow, error: closedErr } = await admin
+        .from("momo_container_closed")
+        .select("container_batch_no")
+        .eq("momo_container_ref", routingBatch)
+        .not("container_batch_no", "is", null)
+        .limit(1)
+        .maybeSingle();
+      if (closedErr) {
+        console.error("[getSack closed-map] failed", {
+          code: closedErr.code,
+          message: closedErr.message,
+        });
+      } else {
+        const cab = (closedRow?.container_batch_no ?? "").trim();
+        if (cab) {
+          container = cab;
+          containerIsReal = true;
+        }
+      }
+    }
+
     const sack: DerivedSack = {
       sack_no: key,
       container,
+      container_is_real: containerIsReal,
       transport_type: transportTypeOf(container),
       parcels: rows.length,
       qty,
