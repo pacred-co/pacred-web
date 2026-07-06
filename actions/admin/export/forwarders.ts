@@ -42,6 +42,7 @@ export type ForwarderExportFilter = {
   service?: string;
   container?: string;
   all?: string;
+  purchaser?: string;   // owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID)
 };
 
 // Mirror the page's resolveDateWindow() exactly so the export's date filter ==
@@ -94,20 +95,23 @@ export async function exportForwardersAll(
   filter: ForwarderExportFilter,
 ): Promise<{ rows: CsvRow[]; truncated: boolean }> {
   // Same role gate as the page (super/ops/accounting via requireAdmin(["ops",
-  // "accounting"])). super passes the ["ops","accounting"] check too.
+  // "accounting"])). super passes the ["ops","accounting"] check too. A
+  // `purchaser`-only viewer is NOT in this set → 404 here (they cannot export
+  // all · they only get their auto-scoped on-screen list).
   await requireAdmin(["ops", "accounting"]);
 
   const admin = createAdminClient();
   const dateWindow = resolveDateWindow(filter);
 
   // Reuse the EXACT page query — exportAll skips pagination + cover-URL work.
+  // owner ④ — honor a ?purchaser= filter so the export mirrors the on-screen list.
   const { rows: dataRows, forwarderErr } = await fetchForwarderList(
     admin,
     // ForwarderExportFilter is a subset of SearchParams (the result-affecting
     // fields); fetchForwarderList ignores the page-only/label-only extras.
     filter as SearchParams,
     dateWindow,
-    { exportAll: true },
+    { exportAll: true, purchaserScope: filter.purchaser?.trim() || null },
   );
 
   if (forwarderErr) {

@@ -72,6 +72,8 @@ export type ServiceOrdersExportFilter = {
   sort?: SortField;
   /** sort direction (same default as the page: "desc") */
   dir?: "asc" | "desc";
+  /** owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID). */
+  purchaser?: string;
 };
 
 type RawHeaderOrder = {
@@ -129,6 +131,11 @@ export async function exportServiceOrdersAll(
 
   if (filter.statusFilter) {
     q = q.eq("hstatus", filter.statusFilter);
+  }
+
+  // owner ④ — honor a ผู้สั่งซื้อ filter so the export mirrors the on-screen list.
+  if (filter.purchaser && filter.purchaser.trim() !== "") {
+    q = q.eq("adminidpurchaser", filter.purchaser.trim());
   }
 
   if (filter.effectiveFrom) q = q.gte("hdate", filter.effectiveFrom);
@@ -250,6 +257,7 @@ export async function exportServiceOrdersAll(
       keyword: filter.keyword ?? null,
       sort: currentSort,
       dir: currentDir,
+      purchaser: filter.purchaser ?? null,
     },
     rowCount: rows.length,
     truncated,

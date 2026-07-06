@@ -235,7 +235,12 @@ export async function listCsAdmins(): Promise<AdminActionResult<{ rows: SalesAdm
 // roles, so the dropdown lists every ACTIVE admin (adminStatusA='1'). Same
 // shape as listSalesAdmins/listCsAdmins so the UI components are interchangeable.
 export async function listActiveAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
-  return withAdmin<{ rows: SalesAdminOption[] }>([...WRITE_ROLES], async () => {
+  // 2026-07-06 (owner ④) — the ผู้สั่งซื้อ reassign UI on /admin/service-orders +
+  // /admin/forwarders needs this active-admin list for interpreter/purchaser_lead
+  // too (they can reassign). Read-only name list → safe to widen the gate.
+  return withAdmin<{ rows: SalesAdminOption[] }>(
+    [...WRITE_ROLES, "interpreter", "purchaser_lead"],
+    async () => {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("tb_admin")

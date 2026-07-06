@@ -52,6 +52,10 @@ export const ADMIN_ROLES = [
   // ONLY ultra/super/normies; the rest stay in this enum for back-compat with
   // the operational requireAdmin([...]) gates but are not assignable.
   "normies",
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles. Assignable so a
+  // super/ultra can grant "ผู้สั่งซื้อ" / "หัวหน้าสั่งซื้อ" from /admin/admins.
+  "purchaser",
+  "purchaser_lead",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   "manager",
   "ops",
@@ -98,6 +102,9 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
   ultra:                     "Ultra Admin Z (เห็นทุกอย่าง: ต้นทุน · กำไร · ยอดขาย)",
   super:                     "Super Admin (เห็นกำไร · ยอดขาย — ไม่เห็นต้นทุน)",
   normies:                   "Admin (เห็นยอดขาย — ไม่เห็นต้นทุน · ไม่เห็นกำไร)",
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles.
+  purchaser:                 "ผู้สั่งซื้อ (เห็นเฉพาะออเดอร์ที่ได้รับมอบหมาย)",
+  purchaser_lead:            "หัวหน้าสั่งซื้อ (เห็นงานสั่งซื้อทั้งหมด + มอบหมาย/เปลี่ยนผู้สั่งซื้อ)",
   // 2026-05-28 ดึก — Wave 26 · `manager` role from migration 0118.
   manager:                   "Cargo Manager (อนุมัติ cnt-payment + supervise)",
   ops:                       "Ops (forwarder/บริการคลังจีน)",
@@ -138,7 +145,16 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
  * bring a functional role back, add it here. The dropdowns map over this list;
  * ROLE_LABELS stays exhaustive so any legacy/inert grant still renders a label.
  */
-export const ASSIGNABLE_ROLES = ["ultra", "super", "normies"] as const satisfies readonly AdminRoleEnum[];
+export const ASSIGNABLE_ROLES = [
+  "ultra",
+  "super",
+  "normies",
+  // 2026-07-06 (owner ④ · mig 0241) — the per-order purchaser roles are real
+  // functional roles the owner wants pickable so a super/ultra can staff the
+  // ผู้สั่งซื้อ workflow (unlike the retired 25 legacy function roles).
+  "purchaser",
+  "purchaser_lead",
+] as const satisfies readonly AdminRoleEnum[];
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 /**

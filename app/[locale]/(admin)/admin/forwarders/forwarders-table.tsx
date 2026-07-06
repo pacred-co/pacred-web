@@ -28,6 +28,8 @@ import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 // (actions/admin/reports-profit-types = a NON-"use server" pure const module,
 // safe to import into this client component) so the TH-carrier label never drifts.
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
+import { PurchaserCell } from "@/components/admin/purchaser-cell";
+import type { SalesAdminOption } from "@/actions/admin/customer-profile";
 
 /**
  * 2026-06-17 (ภูม flag · "fvolume = total, ไม่ ×กล่อง") — total parcel CBM for
@@ -163,6 +165,9 @@ export type Row = {
   /** 2026-06-12 (พี่ป๊อป) — MOMO CG_NO (carrier sub-parcel id · from
    *  momo_import_tracks.raw.CG_NO, joined by tracking). null for non-MOMO rows. */
   cg_no: string | null;
+  /** owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order). */
+  assigned_purchaser_id: string;          // tb_admin.adminID · "" = ยังไม่มอบหมาย
+  assigned_purchaser_name: string | null; // resolved display name
   customer: {
     userid: string;
     name: string;
@@ -545,6 +550,8 @@ export function ForwardersTable({
   modeLabel,
   currentStatus,
   isUltra = false,
+  canReassignPurchaser = false,
+  purchaserAdmins = [],
 }: {
   rows: Row[];
   statusLabel: Record<string, string>;
@@ -563,6 +570,10 @@ export function ForwardersTable({
    * stay available to every role. Server-enforced too (source="bulk_manual").
    */
   isUltra?: boolean;
+  /** owner ④ — true for interpreter/purchaser_lead/ultra/super (server-gated too). */
+  canReassignPurchaser?: boolean;
+  /** owner ④ — active admins for the row reassign picker. */
+  purchaserAdmins?: SalesAdminOption[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -1036,6 +1047,15 @@ export function ForwardersTable({
                             saleAdmin={r.customer.sale_admin}
                           />
                         )}
+                        {/* owner ④ — assigned ผู้สั่งซื้อ + reassign control */}
+                        <PurchaserCell
+                          kind="forwarder"
+                          orderNo={String(r.id)}
+                          purchaserAdminId={r.assigned_purchaser_id}
+                          purchaserName={r.assigned_purchaser_name}
+                          canReassign={canReassignPurchaser}
+                          admins={purchaserAdmins}
+                        />
                         {/* CUSTTAG (owner 2026-06-25) — credit pill so staff see
                             "ลูกค้าเครดิต · เทอม Nวัน" on the order row → ติดตามให้จ่ายภายในเทอม. */}
                         {r.customer && r.customer.credit_limit > 0 && (
