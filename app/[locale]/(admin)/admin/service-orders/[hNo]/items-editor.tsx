@@ -29,6 +29,7 @@ import { Trash2, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveShopOrderItemsAndQuote } from "@/actions/admin/service-orders-shop-workflow";
 import { adminDeleteOrderItem } from "@/actions/admin/service-orders-governance";
+import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 
 // round_up(x, 2) — CEIL to 2dp (matches legacy round_up + lib roundUp).
 function roundUp2(v: number): number {
@@ -203,7 +204,10 @@ export function ShopItemsEditor({
   const grouped = useMemo(() => {
     const byProvider = new Map<string, Map<string, EditorItem[]>>();
     for (const it of items) {
-      const p = it.provider ?? "—";
+      // Derive the displayed platform from the authoritative curl link — the
+      // stored cprovider is sometimes mis-stored (a 1688 link tagged Taobao).
+      // Fall back to the stored code only when the URL is missing/unrecognized.
+      const p = detectProviderFromUrl(it.curl) ?? it.provider ?? "—";
       const shop = it.cnameshop ?? "—";
       if (!byProvider.has(p)) byProvider.set(p, new Map());
       const shops = byProvider.get(p)!;

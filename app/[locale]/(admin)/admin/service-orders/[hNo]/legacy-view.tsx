@@ -52,6 +52,7 @@ import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
+import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
 // 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
 // (the `pricing` role) — isolated from the selling-price/quote flow.
@@ -715,7 +716,10 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
   type ProviderGroup = { provider: string; shops: ShopGroup[] };
   const providers: ProviderGroup[] = [];
   for (const it of items) {
-    const provider = (it.provider ?? "").trim() || "—";
+    // Derive the displayed platform from the authoritative curl link — the
+    // stored cprovider is sometimes mis-stored (a 1688 link tagged Taobao).
+    // Fall back to the stored code only when the URL is missing/unrecognized.
+    const provider = detectProviderFromUrl(it.curl) ?? ((it.provider ?? "").trim() || "—");
     const shop = (it.cnameshop ?? "").trim() || "— ไม่ระบุร้าน —";
     let pg = providers.find((x) => x.provider === provider);
     if (!pg) { pg = { provider, shops: [] }; providers.push(pg); }

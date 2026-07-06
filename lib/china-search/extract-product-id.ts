@@ -42,3 +42,40 @@ export function extractProductId(url: string): string | null {
 
   return null;
 }
+
+/**
+ * Detect the marketplace platform CODE from a product URL — the same codes
+ * `tb_order.cprovider` stores ("1"=1688, "2"=Taobao, "3"=Tmall).
+ *
+ * The stored `cprovider` is sometimes MIS-STORED (a 1688 link tagged "2"), so
+ * order-detail surfaces derive the displayed platform from the authoritative
+ * `curl` instead. Returns null for unknown / non-marketplace hosts (or a bad
+ * URL) so callers can fall back to the stored code.
+ *
+ *   1688.com   → "1"   (tmall.1688.com would still read 1688-first below)
+ *   taobao.com → "2"
+ *   tmall.com  → "3"
+ *
+ * @example
+ *   detectProviderFromUrl("https://detail.1688.com/offer/123456.html") // "1"
+ *   detectProviderFromUrl("https://item.taobao.com/item.htm?id=123456") // "2"
+ *   detectProviderFromUrl("https://detail.tmall.com/item.htm?id=123456") // "3"
+ *   detectProviderFromUrl("https://example.com") // null
+ */
+export function detectProviderFromUrl(url: string | null | undefined): "1" | "2" | "3" | null {
+  if (!url) return null;
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  // Match on registrable domain (endsWith with a leading dot, or exact) so a
+  // subdomain like detail.1688.com / item.taobao.com resolves correctly and a
+  // lookalike host (e.g. not1688.com) does not.
+  const isHost = (domain: string): boolean => host === domain || host.endsWith(`.${domain}`);
+  if (isHost("1688.com")) return "1";
+  if (isHost("taobao.com")) return "2";
+  if (isHost("tmall.com")) return "3";
+  return null;
+}

@@ -10,7 +10,7 @@
  *   (or `pnpm test` to run alongside the rest of the suite)
  */
 
-import { extractProductId } from "./extract-product-id";
+import { extractProductId, detectProviderFromUrl } from "./extract-product-id";
 
 let failed = 0;
 let passed = 0;
@@ -155,6 +155,26 @@ group("(g) malformed / non-URL inputs", () => {
     null,
     "?id= shorter than 6 digits rejected",
   );
+});
+
+// ────────────────────────────────────────────────────────────
+// (h) detectProviderFromUrl — platform CODE from the authoritative link (BUG-6)
+// ────────────────────────────────────────────────────────────
+group("(h) detectProviderFromUrl", () => {
+  assertEq(detectProviderFromUrl("https://detail.1688.com/offer/808456582517.html"), "1", "1688 desktop → '1'");
+  assertEq(detectProviderFromUrl("https://m.1688.com/offer/777888999.html"),         "1", "1688 wireless → '1'");
+  assertEq(detectProviderFromUrl("https://item.taobao.com/item.htm?id=678901234567"), "2", "Taobao → '2'");
+  assertEq(detectProviderFromUrl("https://detail.tmall.com/item.htm?id=987654321098"), "3", "Tmall → '3'");
+  assertEq(detectProviderFromUrl("https://detail.m.tmall.com/item.htm?id=111"),        "3", "Tmall mobile → '3'");
+  // the BUG-6 case: a 1688 link (would be mis-stored as Taobao) resolves to 1688.
+  assertEq(detectProviderFromUrl("https://detail.1688.com/offer/123.html"),           "1", "mis-stored 1688 link → '1' (not stored code)");
+  // unknown / malformed → null (caller falls back to stored cprovider)
+  assertEq(detectProviderFromUrl("https://example.com/item/123456"),  null, "unknown host → null");
+  assertEq(detectProviderFromUrl("https://not1688.com/offer/1.html"), null, "lookalike host not1688.com → null");
+  assertEq(detectProviderFromUrl("not-a-url"),                        null, "garbage → null");
+  assertEq(detectProviderFromUrl(""),                                 null, "empty → null");
+  assertEq(detectProviderFromUrl(null),                               null, "null → null");
+  assertEq(detectProviderFromUrl(undefined),                          null, "undefined → null");
 });
 
 // ────────────────────────────────────────────────────────────
