@@ -23,6 +23,50 @@
 
 const EM_DASH = "—";
 
+/**
+ * Parse a DB timestamp as a UTC **instant**.
+ *
+ * The legacy `tb_*` datetimes are stored UTC but are frequently serialized
+ * WITHOUT a timezone marker (e.g. `"2026-07-06T03:40:00"` or
+ * `"2026-07-06 03:40:00"`). On a Bangkok (UTC+7) client, `new Date(bareString)`
+ * parses such strings as **local** time, shifting the instant by −7h — a
+ * just-placed order then reads "7 ชั่วโมงที่แล้ว".
+ *
+ * This helper treats a tz-less string as UTC:
+ *   - a space between date and time → `T`
+ *   - append `Z` so the engine parses it as a UTC instant
+ * If the input already carries a tz (trailing `Z` or a `±HH:MM` / `±HHMM`
+ * offset), or is a `Date` / number, it is used as-is.
+ *
+ * @example
+ *   parseDbInstant("2026-07-06T03:40:00")   // === "2026-07-06T03:40:00Z"
+ *   parseDbInstant("2026-07-06 03:40:00")   // === "2026-07-06T03:40:00Z"
+ *   parseDbInstant("2026-07-06T03:40:00Z")  // unchanged
+ *   parseDbInstant("2026-07-06T03:40:00+07:00") // unchanged
+ *   parseDbInstant(1751771000000)           // pass-through
+ */
+export function parseDbInstant(input: Date | string | number | null | undefined): Date | null {
+  if (input == null) return null;
+  if (input instanceof Date) return Number.isNaN(input.getTime()) ? null : input;
+  if (typeof input === "number") {
+    const d = new Date(input);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  let s = input.trim();
+  if (s === "") return null;
+
+  // Does the string already carry a timezone? — trailing Z, or a ±HH:MM /
+  // ±HHMM offset after the time portion (avoid matching the date's own
+  // hyphens by requiring a `:` or digit-run before the offset).
+  const hasTz = /[zZ]$/.test(s) || /\d[+-]\d{2}:?\d{2}$/.test(s);
+  if (!hasTz) {
+    s = s.replace(" ", "T") + "Z";
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Coerce the input to a valid Date, or null. */
 function toDate(input: Date | string | number | null | undefined): Date | null {
   if (input == null) return null;

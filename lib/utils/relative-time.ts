@@ -15,9 +15,14 @@
  *   relativeTimeTh(Date.now() - 3 * 60 * 60_000) // "3 ชั่วโมงที่แล้ว"
  */
 
+import { parseDbInstant } from "@/lib/utils/thai-datetime";
+
 export function relativeTimeTh(input: Date | string | number | null | undefined): string {
   if (input == null) return "—";
-  const then = typeof input === "string" || typeof input === "number" ? new Date(input) : input;
+  // Parse tz-less DB strings as UTC instants (legacy tb_* serializes without a
+  // tz marker) so a just-created order doesn't read "7 ชั่วโมงที่แล้ว".
+  const then = parseDbInstant(input);
+  if (!then) return "—";
   const ms = Date.now() - then.getTime();
 
   // Future or in the very recent past
@@ -55,7 +60,8 @@ export function relativeTimeTh(input: Date | string | number | null | undefined)
  */
 export function freshnessClass(input: Date | string | number | null | undefined): "fresh" | "recent" | "stale" | "very-old" | "unknown" {
   if (input == null) return "unknown";
-  const then = typeof input === "string" || typeof input === "number" ? new Date(input) : input;
+  const then = parseDbInstant(input);
+  if (!then) return "unknown";
   const ms = Date.now() - then.getTime();
 
   if (ms < 60 * 60_000)        return "fresh";       // < 1h

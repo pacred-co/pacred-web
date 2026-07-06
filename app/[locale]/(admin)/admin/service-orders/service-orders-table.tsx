@@ -8,6 +8,7 @@ import { confirm } from "@/components/ui/confirm";
 import { Explain } from "@/components/ui/tooltip";
 import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
 import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
+import { parseDbInstant } from "@/lib/utils/thai-datetime";
 
 /**
  * Service-orders list table — ภูม flag 2026-05-30 evening.
@@ -124,8 +125,11 @@ function fmtTimeOnly(iso: string | null | undefined): string {
 function relativeAgo(iso: string | null | undefined): string {
   if (!iso) return "";
   const now = Date.now();
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
+  // Legacy tb_* datetimes are UTC but often tz-less — parse as a UTC instant so
+  // a just-placed order doesn't read "7 ชม" on a Bangkok (UTC+7) client.
+  const thenDate = parseDbInstant(iso);
+  if (!thenDate) return "";
+  const then = thenDate.getTime();
   const diff = Math.max(0, now - then);
   const d = Math.floor(diff / 86_400_000);
   if (d > 0) return `${d} วัน`;

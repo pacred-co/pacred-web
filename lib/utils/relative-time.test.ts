@@ -29,6 +29,21 @@ console.log("relative-time helper");
   // String input accepted
   assert("ISO string accepted",                relativeTimeTh(new Date(now - 3 * 60_000).toISOString()) === "3 นาทีที่แล้ว");
 
+  // ── BUG-5: tz-less DB strings are UTC, must NOT read 7h old on Bangkok client ──
+  console.log("  tz-less DB strings (BUG-5)");
+  // A just-created order serialized tz-less ("YYYY-MM-DD HH:MM:SS", UTC) must
+  // read เพิ่งอัพเดท / a few seconds — never "7 ชั่วโมงที่แล้ว".
+  const bareNowSpace = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+  const bareNowT = new Date().toISOString().replace(/\.\d+Z$/, "");
+  const rSpace = relativeTimeTh(bareNowSpace);
+  const rT = relativeTimeTh(bareNowT);
+  assert("tz-less space 'now' → recent (not ชั่วโมง)", !rSpace.includes("ชั่วโมง"));
+  assert("tz-less 'T' 'now' → recent (not ชั่วโมง)",   !rT.includes("ชั่วโมง"));
+  assert("tz-less space 'now' → เพิ่ง/วินาที",         rSpace === "เพิ่งอัพเดท" || rSpace.includes("วินาที"));
+  // A tz-less string 3 min old → exactly "3 นาทีที่แล้ว" (parsed as UTC).
+  const bare3min = new Date(now - 3 * 60_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+  assert("tz-less space 3min → '3 นาทีที่แล้ว'",       relativeTimeTh(bare3min) === "3 นาทีที่แล้ว");
+
   // ── freshnessClass ──
   console.log("  freshnessClass");
   assert("null → 'unknown'",                   freshnessClass(null) === "unknown");
