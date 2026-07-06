@@ -9,8 +9,9 @@ import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-me
 import { PageHeader } from "@/components/admin/page-header";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
-import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { parsePage, parsePageSize, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { PageSizeSelect } from "@/components/admin/page-size-select";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCustomersAll } from "@/actions/admin/export/customers";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
@@ -171,7 +172,7 @@ const GROUP_CFG: Record<string, { label: string; col?: string }> = {
 // tb_corporate docs use fixed labels (หนังสือรับรองบริษัท / ภ.พ.20) resolved in
 // resolveLegacyCorpDocs above.
 
-export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string; page?: string }> }) {
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string; adminidsale?: string; page?: string; size?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
   // customer's member_code/name/phone/email + wallet balances via
   // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
@@ -211,8 +212,9 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   // PERF (2026-06-03): server-side pagination — fetch ONE page (50 rows) via
   // .range() + an exact count for the pager, instead of pulling 200 rows + all
   // their joins/doc-resolution every render. ?page=N drives the window.
+  const pageSize = parsePageSize(sp.size);
   const page = parsePage(sp.page);
-  const { from, to } = pageRange(page);
+  const { from, to } = pageRange(page, pageSize);
 
   // D1 Wave-2: read legacy tb_users (member-code identity = `userID`).
   let q = admin.from("tb_users")
@@ -248,8 +250,41 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   }
 
   if (sp.q) {
-    const term = sp.q.replace(/[\\%_,]/g, (m) => "\\" + m);
-    q = q.or(`userID.ilike.%${term}%,userTel.ilike.%${term}%,userName.ilike.%${term}%,userLastName.ilike.%${term}%`);
+    const raw = sp.q.trim();
+    const term = raw.replace(/[\\%_,]/g, (m) => "\\" + m);
+    // Digit-normalized tax number so "0105569001734" and "0105569 001734" /
+    // "0105569-001734" both match tb_corporate.corporatenumber.
+    const digits = raw.replace(/\D/g, "");
+    // Resolve matching JURISTIC customers from tb_corporate (tax-ID / company
+    // name) → their userids, and fold those into the SAME .or() so a tax-number
+    // or company-name search surfaces the juristic customer (root-fix: the
+    // owner couldn't find PR10366 who already held the tax_id). Same `q` builder
+    // → the exact count for the pager stays correct.
+    const corpOr = [`corporatename.ilike.%${term}%`];
+    if (digits) corpOr.push(`corporatenumber.ilike.%${digits}%`);
+    const { data: corpMatch, error: corpMatchErr } = await admin
+      .from("tb_corporate")
+      .select("userid")
+      .or(corpOr.join(","))
+      .limit(400);
+    if (corpMatchErr) {
+      console.error(`[tb_corporate search resolve] failed`, { code: corpMatchErr.code, message: corpMatchErr.message });
+    }
+    const corpUserIds = [
+      ...new Set(
+        ((corpMatch ?? []) as { userid: string | null }[])
+          .map((c) => (c.userid ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const orParts = [
+      `userID.ilike.%${term}%`,
+      `userTel.ilike.%${term}%`,
+      `userName.ilike.%${term}%`,
+      `userLastName.ilike.%${term}%`,
+    ];
+    if (corpUserIds.length > 0) orParts.push(`userID.in.(${corpUserIds.join(",")})`);
+    q = q.or(orParts.join(","));
   }
 
   const { data, error, count: totalCustomers } = await q;
@@ -565,7 +600,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         <form action="/admin/customers" className="flex gap-2">
           {group ? <input type="hidden" name="group" value={group} /> : null}
           {adminidsale ? <input type="hidden" name="adminidsale" value={adminidsale} /> : null}
-          <input name="q" defaultValue={sp.q} placeholder="ค้นหา รหัส / เบอร์ / ชื่อ" className="rounded-lg border border-border px-3 py-2 text-sm w-64" />
+          <input name="q" defaultValue={sp.q} placeholder="ค้นหา รหัส / เบอร์ / ชื่อ / เลขผู้เสียภาษี / ชื่อบริษัท" className="rounded-lg border border-border px-3 py-2 text-sm w-64" />
           <select name="type" defaultValue={sp.type ?? ""} className="rounded-lg border border-border px-3 py-2 text-sm">
             <option value="">ทุกประเภท</option>
             <option value="personal">บุคคล</option>
@@ -653,9 +688,21 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       ) : (
         <>
           <CustomersTable rows={tableRows} />
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <PageSizeSelect
+              basePath="/admin/customers"
+              current={pageSize}
+              params={{
+                type: typeof sp.type === "string" ? sp.type : undefined,
+                group: group ?? undefined,
+                adminidsale: adminidsale ?? undefined,
+                q: typeof sp.q === "string" ? sp.q : undefined,
+              }}
+            />
+          </div>
           <Pagination
             page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
+            pageSize={pageSize}
             total={totalCustomers ?? 0}
             basePath="/admin/customers"
             params={{
@@ -663,6 +710,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
               group: group ?? undefined,
               adminidsale: adminidsale ?? undefined,
               q: typeof sp.q === "string" ? sp.q : undefined,
+              size: pageSize !== DEFAULT_PAGE_SIZE ? String(sp.size ?? pageSize) : undefined,
             }}
           />
         </>

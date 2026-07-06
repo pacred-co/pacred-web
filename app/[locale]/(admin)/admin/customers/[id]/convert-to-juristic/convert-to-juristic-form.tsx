@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminConvertToJuristic } from "@/actions/admin/customers";
@@ -13,6 +13,31 @@ const ERROR_LABEL: Record<string, string> = {
   already_juristic:    "บัญชีนี้เป็นนิติบุคคลอยู่แล้ว",
   tax_id_already_used: "เลขผู้เสียภาษีนี้ถูกใช้กับบัญชีอื่นแล้ว",
 };
+
+/**
+ * Render a server error into a user-facing node. The tax-id clash comes back as
+ * `tax_id_already_used:<PR>:<company>` — surface the holder (PR as a link to
+ * their profile + the company name) so the admin gets an actionable next step
+ * instead of a dead-end. Everything else → the label map or the raw string.
+ */
+function renderError(raw: string): ReactNode {
+  if (raw.startsWith("tax_id_already_used")) {
+    const [, holder = "", company = ""] = raw.split(":");
+    if (holder) {
+      return (
+        <>
+          เลขผู้เสียภาษีนี้ถูกใช้โดย{" "}
+          <a href={`/admin/customers/${holder}`} className="font-semibold underline text-red-800">
+            {holder}
+          </a>
+          {company ? ` · ${company}` : ""} — เปิดบัญชีนั้น หรือรวม/ย้ายรหัสก่อน
+        </>
+      );
+    }
+    return ERROR_LABEL.tax_id_already_used;
+  }
+  return ERROR_LABEL[raw] ?? raw;
+}
 
 /**
  * The convert-to-juristic form BODY — the fields + validation + submit logic,
@@ -52,7 +77,7 @@ export function ConvertToJuristicFormBody({
   const [coAddr,   setCoAddr]   = useState(prefilledCompanyAddress);
   const [markVerified, setMarkVerified] = useState(true);
   const [confirm,  setConfirm]  = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
+  const [error,    setError]    = useState<ReactNode>(null);
   const [pending,  startTransition] = useTransition();
 
   // Cheap client-side validation that mirrors the zod schema, so users
@@ -79,7 +104,7 @@ export function ConvertToJuristicFormBody({
         router.refresh();
         onSuccess?.();
       } else {
-        setError(ERROR_LABEL[res.error] ?? res.error);
+        setError(renderError(res.error));
       }
     });
   }

@@ -664,6 +664,17 @@ export async function renderLegacyCustomerView(
               {/* อัพเกรดเป็นนิติบุคคล (owner 2026-07-05) — เฉพาะลูกค้า "บุคคล" · เซล/CS ทำเองได้
                   ไม่ต้องปลดล็อกรหัส · เปิด popup กรอกข้อมูล + แนบเอกสารในตัว. */}
               {!isJuristic ? <UpgradeJuristicPopup userid={u.userID} /> : null}
+              {/* รันเลข PR ลูกค้าใหม่ (ULTRA-ONLY · owner 2026-07-06) — surfaced here
+                  in the identity header (was buried ~550 lines down in the account
+                  tools) so it's reachable without scrolling (§0d). Same component +
+                  props + strict-ultra gate + the action's own ultra re-assertion —
+                  only the placement changed. */}
+              {isUltraAdmin ? (
+                <ReassignCodeButton
+                  userid={u.userID}
+                  customerName={`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || undefined}
+                />
+              ) : null}
             </div>
           </div>
           {/* Action buttons — moved into the name row (right-aligned · FB-style)
@@ -1179,20 +1190,13 @@ export async function renderLegacyCustomerView(
         </div>
       )}
 
-      {/* Account tools — รีเซ็ตรหัสผ่าน (existing) + รันเลข PR ลูกค้าใหม่ (ULTRA-ONLY,
-          next to it). The reassign re-keys the whole identity to the lowest
-          vacant PR gap, moves all data, frees the old code; login/receipts keep
-          working. Confirm-before-mutate is in each button (§0f). */}
+      {/* Account tools — รีเซ็ตรหัสผ่าน. (รันเลข PR ลูกค้าใหม่ was moved UP into the
+          identity header so ultra admins reach it without scrolling · §0d.)
+          Confirm-before-mutate is in the button (§0f). */}
       <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3">
         <p className="mb-2 text-xs font-semibold text-muted">เครื่องมือบัญชีลูกค้า</p>
         <div className="flex flex-wrap items-center gap-2">
           <ResetPwdButton userid={u.userID} />
-          {isUltraAdmin ? (
-            <ReassignCodeButton
-              userid={u.userID}
-              customerName={`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || undefined}
-            />
-          ) : null}
         </div>
       </div>
 

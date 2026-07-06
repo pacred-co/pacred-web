@@ -659,18 +659,25 @@ export async function adminConvertToJuristic(
     if (existing && before.userCompany === "1") return { ok: false, error: "already_juristic" };
 
     // Block duplicate tax_id collisions (another customer must not own it).
+    // On clash, NAME the holder (PR code + company) so the admin gets an
+    // actionable next step instead of a dead-end — encoded as
+    // `tax_id_already_used:<PR>:<company>` (PR + company are admin-visible).
     const { data: clash, error: clashErr } = await admin
       .from("tb_corporate")
-      .select("userid")
+      .select("userid, corporatename")
       .eq("corporatenumber", d.tax_id)
       .neq("userid", userid)
       .limit(1)
-      .maybeSingle<{ userid: string }>();
+      .maybeSingle<{ userid: string; corporatename: string | null }>();
     if (clashErr) {
       console.error(`[adminConvertToJuristic clash check] failed`, { userid, code: clashErr.code, message: clashErr.message });
       return { ok: false, error: clashErr.message };
     }
-    if (clash) return { ok: false, error: "tax_id_already_used" };
+    if (clash) {
+      const holder = (clash.userid ?? "").trim();
+      const company = (clash.corporatename ?? "").trim();
+      return { ok: false, error: `tax_id_already_used:${holder}:${company}` };
+    }
 
     const newStatus = d.mark_verified ? CORP_STATUS.VERIFIED : CORP_STATUS.PENDING;
 
