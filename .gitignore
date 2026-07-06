@@ -61,3 +61,6 @@ _backup-dup-profiles.json
 
 # scratch / extraction temp artifacts (config backups, PDF/xlsx text dumps)
 .tmp-*
+
+# PR-reassign data-op backups (PII · keep local only)
+reassign-*-backup-*.json

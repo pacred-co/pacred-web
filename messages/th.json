@@ -3195,6 +3195,8 @@
       "ultra": "Ultra Admin Z",
       "super": "ผู้ดูแลระบบสูงสุด",
       "normies": "Normies (ทั่วไป)",
+      "purchaser": "ผู้สั่งซื้อ",
+      "purchaserLead": "หัวหน้าสั่งซื้อ",
       "manager": "ผู้จัดการ Cargo",
       "ops": "ฝ่ายปฏิบัติการ Cargo",
       "accounting": "ฝ่ายบัญชี",

@@ -31,6 +31,8 @@ import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
+import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
@@ -144,6 +146,8 @@ export type SearchParams = {
   mode?: string;        // transport mode chip ('1'/'2'/'3')
   create?: string;      // Wave 11 — 'user'|'system'|'admin' (legacy ?create=)
   all?: string;         // Wave 18-B — '1' = escape default 30-day window
+  nofilter?: string;    // clears the role default-queue redirect
+  purchaser?: string;   // owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID)
 };
 
 // Wave 18-B — Default date window helpers (port of legacy `forwarder.php`
@@ -251,6 +255,7 @@ type RawForwarderRow = {
   // 2026-07-06 (ภูม · legacy fidelity) — extra list-cell fields (legacy forwarder.php)
   fshipby: string | null;             // TH-delivery carrier code · nameShipBy()
   fproductstype: string | null;       // product type · nameProductsType() 1-4
+  adminidpurchaser: string | null;    // owner ④ — assigned ผู้สั่งซื้อ (tb_admin.adminID)
 };
 
 type RawUserRow = {
@@ -336,6 +341,9 @@ export type Row = {
   length_cm: number | null;
   height_cm: number | null;
   cg_no: string | null;
+  // owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order).
+  assigned_purchaser_id: string;          // tb_admin.adminID · "" = ยังไม่มอบหมาย
+  assigned_purchaser_name: string | null; // resolved display name
   customer: {
     userid: string;
     name: string;
@@ -364,9 +372,31 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // forwarder.search + forwarder.listAll leaves). Without "warehouse" here
   // the page 404'd via requireAdmin's notFound() on any non-super warehouse
   // login — sidebar showed the link, click landed on 404.
-  const { roles } = await requireAdmin(["ops", "accounting", "warehouse"]);
+  // 2026-07-06 (owner ④ · mig 0241) — `purchaser` + `purchaser_lead` reach this
+  // list too. A `purchaser`-only viewer is HARD-SCOPED to their own assigned
+  // orders (isPurchaserScoped); others see all + a ผู้สั่งซื้อ filter.
+  const { user, roles } = await requireAdmin([
+    "ops",
+    "accounting",
+    "warehouse",
+    "purchaser",
+    "purchaser_lead",
+  ]);
 
   const sp = await searchParams;
+
+  // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
+  const purchaserScoped = isPurchaserScoped(roles);
+  const canReassignPurchaserRole = canReassignPurchaser(roles);
+  const admin0 = createAdminClient();
+  const ownAdminId = await resolvePurchaserAdminId(admin0, user.email);
+  let purchaserAdmins: SalesAdminOption[] = [];
+  if (canReassignPurchaserRole) {
+    const res = await listActiveAdmins();
+    if (res.ok) purchaserAdmins = res.data?.rows ?? [];
+  }
+  const purchaserFilter = purchaserScoped ? undefined : sp.purchaser?.trim() || undefined;
+  const purchaserScope = purchaserScoped ? ownAdminId : purchaserFilter ?? null;
 
   // G6 — default queue filter per role. When a staffer lands on
   // /admin/forwarders without any filter params, redirect them into
@@ -397,14 +427,14 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     admin,
     sp,
     dateWindow,
-    { page },
+    { page, purchaserScope },
   );
 
   // ─── Per-tab counts (head queries against tb_forwarder) ──────────────
   // We run these in parallel; each returns the count for that status
   // code (scoped to the SAME date window as the data query so the badges
   // reflect what's on screen · Wave 18-B fidelity backfill).
-  const counts = await loadStatusCounts(admin, dateWindow);
+  const counts = await loadStatusCounts(admin, dateWindow, purchaserScope);
 
   const filterOpts: { v: string | undefined; l: string; n: number }[] = [
     { v: undefined, l: "ทั้งหมด", n: counts.total },
@@ -534,6 +564,42 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           as the CSV-export buttons (see the wrapper around <CsvButton> below).
           One row: search on the left, "CSV หน้านี้" + "CSV ทั้งหมด" on the
           right. Staff scan + filter + export in one glance. */}
+
+      {/* owner ④ — ผู้สั่งซื้อ filter (non-scoped viewers only; a scoped
+          purchaser is already locked to their own). GET form preserves the
+          key filters via hidden inputs; "" = ทั้งหมด. */}
+      {!purchaserScoped && canReassignPurchaserRole && purchaserAdmins.length > 0 && (
+        <form method="GET" action="/admin/forwarders" className="flex items-center gap-2">
+          {sp.status && <input type="hidden" name="status" value={sp.status} />}
+          {sp.q && <input type="hidden" name="q" value={sp.q} />}
+          {sp.create && <input type="hidden" name="create" value={sp.create} />}
+          {sp.mode && <input type="hidden" name="mode" value={sp.mode} />}
+          {sp.date_from && <input type="hidden" name="date_from" value={sp.date_from} />}
+          {sp.date_to && <input type="hidden" name="date_to" value={sp.date_to} />}
+          {sp.all && <input type="hidden" name="all" value={sp.all} />}
+          <label className="text-[11px] text-muted">ผู้สั่งซื้อ:</label>
+          <select
+            name="purchaser"
+            defaultValue={purchaserFilter ?? ""}
+            aria-label="กรองตามผู้สั่งซื้อ"
+            className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs"
+          >
+            <option value="">ผู้สั่งซื้อทั้งหมด</option>
+            {purchaserAdmins.map((a) => (
+              <option key={a.adminID} value={a.adminID}>
+                {a.name}
+                {a.nickname ? ` (${a.nickname})` : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded border border-border bg-white px-2 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            กรอง
+          </button>
+        </form>
+      )}
 
       {forwarderErr && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -808,6 +874,9 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
               service,
               container,
               all: sp.all,
+              // owner ④ — a scoped purchaser can't reach this action (404); a
+              // non-scoped viewer's ?purchaser= filter is honored in the export.
+              purchaser: purchaserFilter,
             });
           }}
           filename={`forwarders${sp.status ? `-status${sp.status}` : ""}${sp.mode ? `-mode${sp.mode}` : ""}${sp.q ? `-${sp.q}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
@@ -821,6 +890,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         modeLabel={MODE_LABEL}
         currentStatus={sp.status}
         isUltra={roles.includes("ultra")}
+        canReassignPurchaser={canReassignPurchaserRole}
+        purchaserAdmins={purchaserAdmins}
       />
 
       {/* Wave 7 — per-page money-sum footer (faithful: legacy admin lists
@@ -907,9 +978,12 @@ export async function fetchForwarderList(
   admin: ReturnType<typeof createAdminClient>,
   sp: SearchParams,
   dateWindow: { from: string | null; to: string | null; isDefault: boolean },
-  opts: { page?: number; exportAll?: boolean },
+  // owner ④ — `purchaserScope` (a tb_admin.adminID or null) hard-filters the list
+  // to that assigned purchaser's orders. null = no scope (see all).
+  opts: { page?: number; exportAll?: boolean; purchaserScope?: string | null },
 ): Promise<{ rows: Row[]; totalForwarders: number; forwarderErr: { message: string } | null }> {
   const exportAll = opts.exportAll === true;
+  const purchaserScope = opts.purchaserScope && opts.purchaserScope !== "" ? opts.purchaserScope : null;
 
   // ─── Pagination (2026-06-04) ──────────────────────────────────────────
   // This list has THREE post-fetch filters that shrink rows AFTER the DB
@@ -955,7 +1029,9 @@ export async function fetchForwarderList(
       // 2026-07-06 (ภูม · legacy fidelity) — TH-delivery carrier (nameShipBy) +
       // product type (nameProductsType) for the list cells, like legacy
       // forwarder.php L622 (ประเภท) / L656 (nameShipBy above เลขพัสดุไทย).
-      "fshipby,fproductstype",
+      "fshipby,fproductstype," +
+      // owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order).
+      "adminidpurchaser",
       // count:exact only on the common path (no post-fetch shrink) so the
       // pager total matches the rendered rows; the search/6.1 views compute
       // total from the JS-filtered length instead.
@@ -1030,6 +1106,11 @@ export async function fetchForwarderList(
   } else if (sp.status && /^[1-7]$/.test(sp.status)) {
     q = q.eq("fstatus", sp.status);
   }
+
+  // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
+  // A `purchaser`-only viewer is hard-scoped to their own assigned orders; a
+  // non-scoped viewer may filter by ?purchaser=. Both resolve to purchaserScope.
+  if (purchaserScope) q = q.eq("adminidpurchaser", purchaserScope);
 
   if (sp.mode && MODE_LABEL[sp.mode]) q = q.eq("ftransporttype", sp.mode);
 
@@ -1173,6 +1254,30 @@ export async function fetchForwarderList(
     }
   }
 
+  // ── owner ④ — resolve assigned-purchaser (ผู้สั่งซื้อ) names ──────────────
+  const purchaserNameById = new Map<string, string>();
+  const purchaserIds = Array.from(
+    new Set(raw.map((r) => (r.adminidpurchaser ?? "").trim()).filter((v) => v !== "")),
+  );
+  if (purchaserIds.length > 0) {
+    const { data: padminRows, error: padminErr } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname")
+      .in("adminID", purchaserIds);
+    if (padminErr) {
+      console.error("[forwarders purchaser-name join] failed", { error: padminErr.message });
+    }
+    for (const a of (padminRows ?? []) as unknown as Array<{
+      adminID: string;
+      adminName: string | null;
+      adminLastName: string | null;
+      adminNickname: string | null;
+    }>) {
+      const nm = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim() || a.adminNickname || a.adminID;
+      if (a.adminID) purchaserNameById.set(a.adminID, nm);
+    }
+  }
+
   // Shape into our Row type for the table.
   let rows: Row[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
@@ -1249,6 +1354,10 @@ export async function fetchForwarderList(
       length_cm: r.flength != null && Number(r.flength) > 0 ? Number(r.flength) : null,
       height_cm: r.fheight != null && Number(r.fheight) > 0 ? Number(r.fheight) : null,
       cg_no: null as string | null, // filled by the momo_import_tracks lookup below
+      // owner ④ — assigned ผู้สั่งซื้อ (per-order).
+      assigned_purchaser_id: (r.adminidpurchaser ?? "").trim(),
+      assigned_purchaser_name:
+        purchaserNameById.get((r.adminidpurchaser ?? "").trim()) ?? null,
       customer: user
         ? {
             userid: user.userID,
@@ -1378,12 +1487,43 @@ export async function fetchForwarderList(
  * in a single query; PostgREST has no GROUP BY in select so we run
  * one head query per status. 9 parallel HEAD queries × ~50ms each.
  */
+/**
+ * Resolve the current admin's legacy `tb_admin.adminID` from their email — the
+ * scope key for the per-order purchaser hard-scope (owner ④). "" when no legacy
+ * mirror (a scoped purchaser then sees no orders, which is correct).
+ */
+async function resolvePurchaserAdminId(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string | null,
+): Promise<string> {
+  if (!email) return "";
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string }>();
+  if (error) {
+    console.error("[/admin/forwarders resolvePurchaserAdminId] failed", {
+      code: error.code,
+      message: error.message,
+    });
+  }
+  return data?.adminID ?? "";
+}
+
 async function loadStatusCounts(
   admin: ReturnType<typeof createAdminClient>,
   dateWindow: { from: string | null; to: string | null; isDefault: boolean },
+  purchaserScope?: string | null,
 ) {
+  // owner ④ — when a purchaser scope is set, badge counts reflect ONLY that
+  // purchaser's orders (so a scoped viewer's tabs match their scoped list).
+  const scope = purchaserScope && purchaserScope !== "" ? purchaserScope : null;
   // Wave 18-B — scope all count queries to the same date window the data
-  // query uses, so badge numbers match what the user sees on screen.
+  // query uses, so badge numbers match what the user sees on screen. The
+  // purchaser scope is applied on the base builder (before this helper) to keep
+  // the generic constraint narrow (a wide {gte,lte,eq} constraint tripped
+  // TS2589 "excessively deep").
   function applyDate<T extends { gte: (col: string, v: string) => T; lte: (col: string, v: string) => T }>(
     builder: T,
   ): T {
@@ -1392,30 +1532,21 @@ async function loadStatusCounts(
     if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
     return q;
   }
+  function base() {
+    let q = admin.from("tb_forwarder").select("id", { count: "exact", head: true });
+    if (scope) q = q.eq("adminidpurchaser", scope);
+    return q;
+  }
   async function countFstatus(value: string): Promise<number> {
-    const r = await applyDate(
-      admin
-        .from("tb_forwarder")
-        .select("id", { count: "exact", head: true })
-        .eq("fstatus", value),
-    );
+    const r = await applyDate(base().eq("fstatus", value));
     return r.count ?? 0;
   }
   async function countCredit(): Promise<number> {
-    const r = await applyDate(
-      admin
-        .from("tb_forwarder")
-        .select("id", { count: "exact", head: true })
-        .eq("fcredit", "1"),
-    );
+    const r = await applyDate(base().eq("fcredit", "1"));
     return r.count ?? 0;
   }
   async function countTotal(): Promise<number> {
-    const r = await applyDate(
-      admin
-        .from("tb_forwarder")
-        .select("id", { count: "exact", head: true }),
-    );
+    const r = await applyDate(base());
     return r.count ?? 0;
   }
 

@@ -82,6 +82,15 @@ export type AdminRole =
   // compile + god-nav bypasses them); re-add to ASSIGNABLE_ROLES when a real
   // functional role is needed again ("เดี๋ยว role ทำเพิ่มมาอีกอัน").
   | "normies"
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles for the
+  // ฝากสั่งซื้อ + ฝากนำเข้า work. `purchaser` = the individual (hard-scoped to
+  // orders assigned to them via tb_header_order/tb_forwarder.adminidpurchaser).
+  // `purchaser_lead` = the supervisor (หัวหน้าสั่งซื้อ · god-nav via isGodRole? NO —
+  // it is a SCOPED role that sees ALL purchaser work + may reassign, but is NOT
+  // added to isGodRole; the two list pages grant it full-scope explicitly).
+  // interpreter keeps its role but GAINS the reassign capability (in the action).
+  | "purchaser"
+  | "purchaser_lead"
   | "manager"               // Cargo Manager — approve cnt-payment · cross-team supervise (0118)
   | "ops"
   | "accounting"

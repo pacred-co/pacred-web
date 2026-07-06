@@ -2177,6 +2177,26 @@ const menuPricing: MenuSection[] = [
   extensionSection([blockExtIncidents]),
 ];
 
+/**
+ * `purchaser` / `purchaser_lead` — the per-order ผู้สั่งซื้อ workflow (owner ④ ·
+ * mig 0241). The daily home is the two order lists (ฝากสั่งซื้อ + ฝากนำเข้า): a
+ * plain `purchaser` sees only their auto-scoped work there ("งานของฉัน"), a
+ * `purchaser_lead` sees ALL + can reassign (both server-enforced on the pages).
+ * The sidebar is identical for both (the scope + reassign live on the pages).
+ */
+const menuPurchaser: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "งานสั่งซื้อ (ผู้สั่งซื้อ)",
+    items: [
+      { labelKey: "purchasing.title",      href: "/admin/service-orders", icon: "ShoppingCart" },
+      { labelKey: "forwarderImport.title", href: "/admin/forwarders",     icon: "Package" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
 const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   // 2026-06-18 (owner · mig 0189) — Ultra Admin Z sees the FULL CEO sidebar,
   // identical to super (the cost/profit DATA inside those pages is gated
@@ -2187,6 +2207,10 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   // sidebar (identical to super); only the cost/profit DATA inside pages is
   // gated (canViewCost/canViewProfit), never the menu.
   normies:     menuSuper,
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles. Both land on
+  // the two order lists; the scope + reassign live on those pages.
+  purchaser:      menuPurchaser,
+  purchaser_lead: menuPurchaser,
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // Per ภูม decision #5 (synthesis §6 D6 · "sidebar รก · fix per-role filter
   // ก่อนเปิดได้เลย") — Cargo Manager has cnt-payment approval + cross-team
@@ -2258,6 +2282,10 @@ const ROLE_PRECEDENCE: AdminRole[] = [
   "warehouse",
   "driver",
   "interpreter",
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles. Lead outranks
+  // the individual; both resolve to the lean purchaser menu (two order lists).
+  "purchaser_lead",
+  "purchaser",
   // Freight Mgrs first, then Staff in dept order (Sales → Export → Import).
   "freight_sales_manager",
   "freight_sales",

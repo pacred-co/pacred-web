@@ -9,6 +9,8 @@ import { Explain } from "@/components/ui/tooltip";
 import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
 import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
 import { parseDbInstant } from "@/lib/utils/thai-datetime";
+import { PurchaserCell } from "@/components/admin/purchaser-cell";
+import type { SalesAdminOption } from "@/actions/admin/customer-profile";
 
 /**
  * Service-orders list table — ภูม flag 2026-05-30 evening.
@@ -76,6 +78,9 @@ export type ServiceOrderRow = {
   isSvip: boolean;
   isCps: boolean;
   trackingNumbers: string[];
+  // owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order).
+  assignedPurchaserId: string;              // tb_admin.adminID · "" = ยังไม่มอบหมาย
+  assignedPurchaserName: string | null;     // resolved display name
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -165,6 +170,8 @@ export function ServiceOrdersTable({
   currentSort,
   currentDir,
   sortHrefs,
+  canReassignPurchaser = false,
+  purchaserAdmins = [],
 }: {
   rows: ServiceOrderRow[];
   /** When viewing q=3 or q=4 the legacy uses hDateUpdate instead of hDate. */
@@ -174,6 +181,10 @@ export function ServiceOrdersTable({
   /** Next 16: pass pre-computed hrefs as a serialisable Record, NOT a fn.
    *  Server Components can't ship functions over the RSC wire. */
   sortHrefs: Record<SortField, string>;
+  /** owner ④ — true for interpreter/purchaser_lead/ultra/super (server-gated too). */
+  canReassignPurchaser?: boolean;
+  /** owner ④ — active admins for the row reassign picker. */
+  purchaserAdmins?: SalesAdminOption[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -463,6 +474,15 @@ export function ServiceOrdersTable({
                             </span>
                           )}
                         </div>
+                        {/* owner ④ — assigned ผู้สั่งซื้อ + reassign control */}
+                        <PurchaserCell
+                          kind="shop"
+                          orderNo={r.hno}
+                          purchaserAdminId={r.assignedPurchaserId}
+                          purchaserName={r.assignedPurchaserName}
+                          canReassign={canReassignPurchaser}
+                          admins={purchaserAdmins}
+                        />
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex gap-2 items-start">

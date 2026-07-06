@@ -185,6 +185,9 @@ const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   ultra:       "role.ultra",   // Ultra Admin Z (mig 0189)
   super:       "role.super",
   normies:     "role.normies", // 2026-06-27 (ปอน) — god-nav, money-blind tier
+  // 2026-07-06 (owner ④ · mig 0241) — per-order purchaser roles.
+  purchaser:      "role.purchaser",
+  purchaser_lead: "role.purchaserLead",
   // 2026-05-28 ดึก — Wave 26 · `manager` role added by migration 0118.
   // G4 (synthesis §3) added a dedicated role.manager i18n key + the
   // separate `menuManager` (super menu minus HR + Settings) in

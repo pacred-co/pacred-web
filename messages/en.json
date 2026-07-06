@@ -3195,6 +3195,8 @@
       "ultra": "Ultra Admin Z",
       "super": "Super Admin",
       "normies": "Normies Admin",
+      "purchaser": "Purchaser",
+      "purchaserLead": "Head Purchaser",
       "manager": "Cargo Manager",
       "ops": "Cargo Operations",
       "accounting": "Accounting",

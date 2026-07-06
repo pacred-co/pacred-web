@@ -42,6 +42,8 @@ import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
+import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader, SectionHeading } from "@/components/admin/page-header";
 import { Explain } from "@/components/ui/tooltip";
@@ -127,6 +129,7 @@ type SearchParams = {
   dir?: "asc" | "desc";
   n?: string;                   // page size: 25|50|100|200
   page?: string;                // 1-based page number (server-side pagination)
+  purchaser?: string;           // owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID)
 };
 
 // Raw row shape from tb_header_order — the columns we read.
@@ -159,6 +162,7 @@ type RawHeaderOrder = {
   adminidip: string | null;
   adminidupdate: string | null;
   userid: string;
+  adminidpurchaser: string | null;  // owner ④ — assigned ผู้สั่งซื้อ (tb_admin.adminID)
 };
 
 // tb_users uses mixed-case columns (CLAUDE.md exception · userID/userName).
@@ -190,10 +194,37 @@ export default async function AdminServiceOrdersPage({
   // CSPurchasing + accounting + ops need this view (legacy shops.php
   // gates on CEO / Manager / QAAndQC / Accounting / ITDT / CSPurchasing
   // / SaleCargo / Marketing per L528; we use the equivalent Pacred roles).
-  await requireAdmin(["ops", "sales", "accounting"]);
+  // 2026-07-06 (owner ④ · mig 0241) — `purchaser` + `purchaser_lead` may reach
+  // this list too. A `purchaser`-only viewer is HARD-SCOPED to their own assigned
+  // orders below (isPurchaserScoped); everyone else sees all + a ผู้สั่งซื้อ filter.
+  const { user, roles } = await requireAdmin([
+    "ops",
+    "sales",
+    "accounting",
+    "purchaser",
+    "purchaser_lead",
+  ]);
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
+  const purchaserScoped = isPurchaserScoped(roles);
+  const canReassignPurchaserRole = canReassignPurchaser(roles);
+  // The viewer's own legacy tb_admin.adminID — the scope key. "" when they have
+  // no legacy mirror (then a scoped purchaser sees nothing, which is correct:
+  // orders are assigned by adminID, so a purchaser with no adminID has none).
+  const ownAdminId = await resolveLegacyAdminId(admin, user.email);
+  // Active-admins list for the ผู้สั่งซื้อ filter dropdown + the row reassign
+  // control — only fetched for viewers who can reassign (interpreter/lead/god).
+  let purchaserAdmins: SalesAdminOption[] = [];
+  if (canReassignPurchaserRole) {
+    const res = await listActiveAdmins();
+    if (res.ok) purchaserAdmins = res.data?.rows ?? [];
+  }
+  // ?purchaser=<adminID> filter — only honored for non-scoped viewers (a scoped
+  // purchaser is already locked to their own).
+  const purchaserFilter = purchaserScoped ? undefined : sp.purchaser?.trim() || undefined;
 
   // ── URL contract reconcile ──────────────────────────────────────────
   // `?q=1..6` (numeric) → status filter.
@@ -262,7 +293,7 @@ export default async function AdminServiceOrdersPage({
         "hdatepayment,htitle,hcount,hcover,htotalpricechn,hshippingchn," +
         "hshippingservice,hrate,hnote,hnoteuser,hnoteuserread,hnotedate," +
         "hprintbill,hprintbill2,adminid,adminidcreate,adminidip," +
-        "adminidupdate,userid",
+        "adminidupdate,userid,adminidpurchaser",
       { count: "exact" },
     )
     .order(SORT_COL[currentSort], { ascending: currentDir === "asc", nullsFirst: false })
@@ -270,6 +301,15 @@ export default async function AdminServiceOrdersPage({
 
   if (statusFilter) {
     q = q.eq("hstatus", statusFilter);
+  }
+
+  // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
+  // A `purchaser`-only viewer is HARD-scoped to their own assigned orders. A
+  // non-scoped viewer may optionally filter by a specific purchaser (?purchaser=).
+  if (purchaserScoped) {
+    q = q.eq("adminidpurchaser", ownAdminId);
+  } else if (purchaserFilter) {
+    q = q.eq("adminidpurchaser", purchaserFilter);
   }
 
   // Date window
@@ -422,6 +462,32 @@ export default async function AdminServiceOrdersPage({
     }
   }
 
+  // ── Resolve assigned-purchaser (ผู้สั่งซื้อ) names (owner ④) ───────────────
+  // Batch tb_admin lookup for the page's distinct adminidpurchaser values, like
+  // the usersByUserId / corpNameByUser batches above.
+  const purchaserNameById = new Map<string, string>();
+  const purchaserIds = Array.from(
+    new Set(raw.map((r) => (r.adminidpurchaser ?? "").trim()).filter((v) => v !== "")),
+  );
+  if (purchaserIds.length > 0) {
+    const { data: padminRows, error: padminErr } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname")
+      .in("adminID", purchaserIds);
+    if (padminErr) {
+      console.error("[/admin/service-orders purchaser-name join] failed", { error: padminErr.message });
+    }
+    for (const a of (padminRows ?? []) as unknown as Array<{
+      adminID: string;
+      adminName: string | null;
+      adminLastName: string | null;
+      adminNickname: string | null;
+    }>) {
+      const nm = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim() || a.adminNickname || a.adminID;
+      if (a.adminID) purchaserNameById.set(a.adminID, nm);
+    }
+  }
+
   // ── Resolve cover image URLs in parallel ─────────────────────────
   const coverMap = await resolveLegacyUrlMap(
     raw.map((r) => ({ id: r.id, filename: r.hcover })),
@@ -494,12 +560,19 @@ export default async function AdminServiceOrdersPage({
       isCps: String(user?.userComparison ?? "") === "1",
       // Legacy shops.php — cShippingNumber(s) under เลขที่ออเดอร์.
       trackingNumbers: shippingByHno.get(r.hno) ?? [],
+      // owner ④ — assigned ผู้สั่งซื้อ (per-order).
+      assignedPurchaserId: (r.adminidpurchaser ?? "").trim(),
+      assignedPurchaserName:
+        purchaserNameById.get((r.adminidpurchaser ?? "").trim()) ?? null,
     };
   });
 
   // ── Per-status counts (parallel HEAD queries · global · independent
   // of keyword/date filters so badges stay stable while user types). ─
-  const counts = await loadStatusCounts(admin);
+  const counts = await loadStatusCounts(
+    admin,
+    purchaserScoped ? ownAdminId : purchaserFilter ?? null,
+  );
 
   const showUpdateDate = statusFilter === "3" || statusFilter === "4";
 
@@ -672,6 +745,41 @@ export default async function AdminServiceOrdersPage({
                 ))}
               </div>
             </div>
+            {/* owner ④ — ผู้สั่งซื้อ filter (non-scoped viewers only · a scoped
+                purchaser is already locked to their own). GET form preserves the
+                other filters via hidden inputs; "" = ทั้งหมด. */}
+            {!purchaserScoped && canReassignPurchaserRole && purchaserAdmins.length > 0 && (
+              <div>
+                <label className="text-[11px] text-muted block mb-1">ผู้สั่งซื้อ</label>
+                <form method="GET" action="/admin/service-orders" className="flex gap-1">
+                  {statusFilter && <input type="hidden" name="q" value={statusFilter} />}
+                  {sp.date_from && <input type="hidden" name="date_from" value={sp.date_from} />}
+                  {sp.date_to && <input type="hidden" name="date_to" value={sp.date_to} />}
+                  {keyword && <input type="hidden" name="search" value={keyword} />}
+                  {sp.n && <input type="hidden" name="n" value={sp.n} />}
+                  <select
+                    name="purchaser"
+                    defaultValue={purchaserFilter ?? ""}
+                    aria-label="กรองตามผู้สั่งซื้อ"
+                    className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs"
+                  >
+                    <option value="">ผู้สั่งซื้อทั้งหมด</option>
+                    {purchaserAdmins.map((a) => (
+                      <option key={a.adminID} value={a.adminID}>
+                        {a.name}
+                        {a.nickname ? ` (${a.nickname})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    className="rounded border border-border bg-white px-2 py-1.5 text-xs hover:bg-surface-alt"
+                  >
+                    กรอง
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
 
           {/* Search form */}
@@ -787,6 +895,8 @@ export default async function AdminServiceOrdersPage({
                     keyword,
                     sort: currentSort,
                     dir: currentDir,
+                    // owner ④ — mirror the on-screen ผู้สั่งซื้อ filter.
+                    purchaser: purchaserFilter,
                   });
                 }}
                 filename={`service-orders${statusFilter ? `-status${statusFilter}` : ""}${keyword ? `-${keyword}` : ""}-page${page}-${new Date().toISOString().slice(0, 10)}.csv`}
@@ -802,6 +912,8 @@ export default async function AdminServiceOrdersPage({
           currentSort={currentSort}
           currentDir={currentDir}
           sortHrefs={sortHrefs}
+          canReassignPurchaser={canReassignPurchaserRole}
+          purchaserAdmins={purchaserAdmins}
         />
 
         {/* Wave 7 — per-page money-sum footer (faithful: legacy shops.php
@@ -866,18 +978,52 @@ export default async function AdminServiceOrdersPage({
  * Legacy did 7× `SELECT COUNT(ID) FROM tb_header_order WHERE hStatus='N'`
  * sequentially (L290-345). 7 parallel HEAD queries here.
  */
-async function loadStatusCounts(admin: ReturnType<typeof createAdminClient>) {
+/**
+ * Resolve the current admin's legacy `tb_admin.adminID` from their email — the
+ * scope key for the per-order purchaser hard-scope (owner ④). Returns "" if no
+ * legacy mirror row (a scoped purchaser then sees no orders, which is correct).
+ */
+async function resolveLegacyAdminId(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string | null,
+): Promise<string> {
+  if (!email) return "";
+  const { data, error } = await admin
+    .from("tb_admin")
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string }>();
+  if (error) {
+    console.error("[/admin/service-orders resolveLegacyAdminId] failed", {
+      code: error.code,
+      message: error.message,
+    });
+  }
+  return data?.adminID ?? "";
+}
+
+async function loadStatusCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  purchaserScope?: string | null,
+) {
+  // owner ④ — when a purchaser scope is set, badge counts reflect ONLY that
+  // purchaser's orders (so a scoped viewer's tabs match their scoped list).
+  const scope = purchaserScope && purchaserScope !== "" ? purchaserScope : null;
   async function countStatus(value: string): Promise<number> {
-    const r = await admin
+    let q = admin
       .from("tb_header_order")
       .select("id", { count: "exact", head: true })
       .eq("hstatus", value);
+    if (scope) q = q.eq("adminidpurchaser", scope);
+    const r = await q;
     return r.count ?? 0;
   }
   async function countTotal(): Promise<number> {
-    const r = await admin
+    let q = admin
       .from("tb_header_order")
       .select("id", { count: "exact", head: true });
+    if (scope) q = q.eq("adminidpurchaser", scope);
+    const r = await q;
     return r.count ?? 0;
   }
 
