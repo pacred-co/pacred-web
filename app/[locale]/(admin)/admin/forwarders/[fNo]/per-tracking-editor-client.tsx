@@ -22,6 +22,7 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
@@ -123,7 +124,8 @@ const TH = "px-2 py-1.5 text-[11px] font-semibold text-muted whitespace-nowrap b
 export function PerTrackingEditorClient({
   rows: rowsInit,
   isMao = false,
-  customComparisonInit,
+  // customComparisonInit — no longer seeds the checkbox (default UNCHECKED · owner
+  // 2026-07-06 locked-pair). Kept in Props for caller compatibility.
   canEditComparison,
   profileRate = 0,
   profileBasis = "cbm",
@@ -147,18 +149,22 @@ export function PerTrackingEditorClient({
   const [results, setResults] = useState<Record<number, RowResult>>({});
 
   // ── ORDER-level shared toggles ──
-  // ภูม 2026-06-19 — PIN both override boxes OPEN by default; the inputs render
-  // always (below) so the seller can type a rate (฿/กก. · ฿/CBM) + ค่าเทียบ when
-  // overriding. 2026-06-19 (#1 revise · owner) — the input fields now DEFAULT TO 0
-  // (the seller types only when overriding); they NO LONGER seed from the stored
-  // figure. The billing D1 guard still blocks any ฿0-transport bill if a rate is
-  // left at 0, so a 0 default is money-safe. The checkbox defaults are unchanged.
-  const [customRate, setCustomRate] = useState<"0" | "1">("1");
+  // 2026-07-06 (owner) — BOTH override checkboxes now DEFAULT TO UNCHECKED so the
+  // CORRECT auto-computed rate (the resolve-rate waterfall · ค่าเทียบ 250) is used
+  // first; the seller ticks only when overriding. The two toggles are a LOCKED
+  // PAIR: you cannot tick just one — ค่าเทียบ (comparison) must accompany a custom
+  // sell price and vice-versa (enforced by the mirrored onChange below + the
+  // both-or-neither validation in onSave + server-side). The input fields default
+  // to 0 (the seller types only when a box is ticked); the billing D1 guard blocks
+  // any ฿0-transport bill so an untyped-but-ticked box can't silently bill 0.
+  const [customRate, setCustomRate] = useState<"0" | "1">("0");
   const [customRateKg, setCustomRateKg] = useState<string>("0");
   const [customRateCbm, setCustomRateCbm] = useState<string>("0");
-  // ค่าเทียบ — warehouse staff CANNOT edit it, so seed the checkbox from the STORED
-  // value (no forced-on for them); everyone else gets the pinned-ON default.
-  const [customComparison, setCustomComparison] = useState<"0" | "1">(canEditComparison ? "1" : customComparisonInit);
+  // ค่าเทียบ — default UNCHECKED too (locked-pair with custom price). Warehouse
+  // staff still CANNOT edit it (the input/checkbox stay disabled via
+  // !canEditComparison); with the default-off + locked mirror they simply never
+  // reach an unpaired custom-price state through the UI.
+  const [customComparison, setCustomComparison] = useState<"0" | "1">("0");
   const [comparisonValue, setComparisonValue] = useState<string>("0");
 
   // ── per-tracking rows (string-valued for free typing) ──
@@ -333,6 +339,15 @@ export function PerTrackingEditorClient({
       setError(`ค่าเทียบเกินเพดาน — 1 คิว ไม่เกิน ${MAX_COMPARISON} กก. (กรอก ${cmp})`);
       return;
     }
+    // 2026-07-06 (owner) — LOCKED PAIR: "คิดราคาแบบกำหนดเอง" (custom sell price) และ
+    // "คิดค่าเทียบแบบกำหนดเอง" (ค่าเทียบ) ต้องติ๊กพร้อมกัน หรือไม่ติ๊กทั้งคู่ — ห้ามติ๊ก
+    // อันเดียว. ไม่ติ๊กทั้งคู่ = ใช้เรทระบบ (auto logic) · ติ๊กคู่ = กรอกราคาเอง + ค่าเทียบ.
+    // Same pure rule the server enforces (lib/forwarder/comparison-guard).
+    const pairErr = validateComparisonPricePair(customRate === "1", customComparison === "1", cmp);
+    if (pairErr) {
+      setError(pairErr);
+      return;
+    }
 
     // §0f confirm-before-mutate — both saves get an explicit confirm so no one
     // ลั่นปุ่ม. The two prompts spell out the different consequence (advance vs stay).
@@ -432,7 +447,10 @@ export function PerTrackingEditorClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <div className={`rounded-lg border px-3 py-1.5 ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
-            <input type="checkbox" checked={customRate === "1"} onChange={(e) => setCustomRate(e.target.checked ? "1" : "0")} disabled={pending} className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500" />
+            {/* 2026-07-06 LOCKED PAIR — ticking custom price auto-ticks ค่าเทียบ
+                (and untick clears it) so the two physically move together. Only
+                mirror the ค่าเทียบ side when the user MAY edit it (not warehouse). */}
+            <input type="checkbox" checked={customRate === "1"} onChange={(e) => { const on = e.target.checked; setCustomRate(on ? "1" : "0"); if (canEditComparison) setCustomComparison(on ? "1" : "0"); }} disabled={pending} className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500" />
             <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>คิดราคาแบบกำหนดเอง</span>
           </label>
           {/* PINNED OPEN (ภูม 2026-06-19) — inputs always render so the seller fills the rate. */}
@@ -442,11 +460,12 @@ export function PerTrackingEditorClient({
             <label className="block"><span className="block text-[11px] text-muted">เรท ฿/CBM</span>
               <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
           </div>
-          <p className="mt-1 text-[11px] text-muted">ติ๊ก = ใช้เรทที่กรอก (เซลกรอกเอง) · ไม่ติ๊ก = เรทระบบ</p>
+          <p className="mt-1 text-[11px] text-muted">ติ๊ก = ใช้เรทที่กรอก (ต้องกรอกค่าเทียบด้วย · ติ๊กคู่กัน) · ไม่ติ๊ก = เรทระบบ (ค่าเทียบ 250)</p>
         </div>
         <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">
-            <input type="checkbox" checked={customComparison === "1"} onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")} disabled={pending || !canEditComparison} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 disabled:opacity-50" />
+            {/* 2026-07-06 LOCKED PAIR — ticking ค่าเทียบ auto-ticks custom price too. */}
+            <input type="checkbox" checked={customComparison === "1"} onChange={(e) => { const on = e.target.checked; setCustomComparison(on ? "1" : "0"); setCustomRate(on ? "1" : "0"); }} disabled={pending || !canEditComparison} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 disabled:opacity-50" />
             <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>คิดค่าเทียบแบบกำหนดเอง</span>
           </label>
           {/* PINNED OPEN + เพดาน 350 (ภูม 2026-06-19: "ค่าเทียบ 1 คิว ไม่เกิน 350 กก."). */}

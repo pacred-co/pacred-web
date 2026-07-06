@@ -1,4 +1,6 @@
 import { calcFreight, calcQuoteTotals, round2, type FreightCalcInput } from "./cargo-quote-calc";
+import { DEFAULT_COMPARISON } from "./cargo-promo-packages";
+import { COMPARISON_DEFAULT, COMPARISON_MAX, clampComparison } from "../forwarder/resolve-rate";
 
 let pass = 0;
 let fail = 0;
@@ -112,6 +114,18 @@ const base: FreightCalcInput = {
   approx(t.whtAmount, 100, "WHT excludes pass-through (1% of 10000, not 10200)");
   approx(t.subtotalNoVat, 200, "pass-through still in no-VAT subtotal");
 }
+
+// ── ITEM C (owner 2026-07-06) — ค่าเทียบ default 250 everywhere ─────────────
+// The quote-tool / rate-editor display default must be 250 (not 150/350) and
+// match the auto-calc default the resolver uses. Cap stays 350.
+ok(DEFAULT_COMPARISON === 250, "DEFAULT_COMPARISON = 250 (quote-tool/rate-editor display default)");
+ok(DEFAULT_COMPARISON === COMPARISON_DEFAULT, "DEFAULT_COMPARISON matches resolver COMPARISON_DEFAULT (250)");
+ok(COMPARISON_MAX === 350, "COMPARISON_MAX (cap) stays 350");
+// A stored userComparisonValue of 0 → the resolver clamps up to 250 (so display
+// + auto-calc both show 250 with zero data backfill).
+ok(clampComparison(0) === 250, "clampComparison(0) → 250 (stored-0 customer defaults to 250)");
+ok(clampComparison(300) === 300, "clampComparison(300) → 300 (in-range unchanged)");
+ok(clampComparison(500) === 350, "clampComparison(500) → 350 (capped at max)");
 
 console.log(`cargo-quote-calc: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

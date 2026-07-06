@@ -16,6 +16,7 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
+import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 
 export type EditItemRow = {
   itemId:        number;
@@ -321,6 +322,18 @@ export function AdminForwarderEditForm({
       return;
     }
 
+    // 2026-07-06 (owner) — LOCKED PAIR: custom sell price + ค่าเทียบ ต้องติ๊กพร้อมกัน
+    // (หรือไม่ติ๊กทั้งคู่ = ใช้เรทระบบ). ห้ามติ๊กอันเดียว. Same pure rule as the server.
+    const pairErr = validateComparisonPricePair(
+      customRate === "1",
+      customComparison === "1",
+      parseFloat(comparisonValue) || 0,
+    );
+    if (pairErr) {
+      setError(pairErr);
+      return;
+    }
+
     startTransition(async () => {
       const res = await adminUpdateForwarderDimensions({
         fNo:          fNo,
@@ -457,10 +470,11 @@ export function AdminForwarderEditForm({
           {/* Toggle 1 — คิดราคาแบบกำหนดเอง (customRate) */}
           <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
+              {/* 2026-07-06 LOCKED PAIR — custom price + ค่าเทียบ tick together. */}
               <input
                 type="checkbox"
                 checked={customRate === "1"}
-                onChange={(e) => setCustomRate(e.target.checked ? "1" : "0")}
+                onChange={(e) => { const on = e.target.checked; setCustomRate(on ? "1" : "0"); setCustomComparison(on ? "1" : "0"); }}
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
               />
@@ -501,10 +515,11 @@ export function AdminForwarderEditForm({
           {/* Toggle 2 — คิดค่าเทียบแบบกำหนดเอง (customComparison) · persists (mig 0187) */}
           <div className={`rounded-lg border px-3 py-1.5 transition-colors ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
             <label className="flex cursor-pointer items-center gap-2 select-none">
+              {/* 2026-07-06 LOCKED PAIR — ค่าเทียบ + custom price tick together. */}
               <input
                 type="checkbox"
                 checked={customComparison === "1"}
-                onChange={(e) => setCustomComparison(e.target.checked ? "1" : "0")}
+                onChange={(e) => { const on = e.target.checked; setCustomComparison(on ? "1" : "0"); setCustomRate(on ? "1" : "0"); }}
                 disabled={pending}
                 className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
               />

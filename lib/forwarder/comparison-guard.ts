@@ -61,3 +61,28 @@ export function resolveComparisonInput(
 
   return { switchInput, valueInput };
 }
+
+/**
+ * LOCKED PAIR (owner 2026-07-06) — "คิดราคาแบบกำหนดเอง" (custom sell price) และ
+ * ค่าเทียบ (comparison) ต้องติ๊กพร้อมกัน หรือไม่ติ๊กทั้งคู่ — ห้ามติ๊กอันเดียว.
+ * ไม่ติ๊กทั้งคู่ = ใช้เรทระบบ (auto waterfall · ค่าเทียบ default 250). ติ๊กคู่ =
+ * กรอกราคาเอง + ค่าเทียบ (>0).
+ *
+ * Pure so the server action AND the client forms enforce the same rule. Pass the
+ * EFFECTIVE (post-`resolveComparisonInput`) comparison switch server-side so a
+ * warehouse caller whose ค่าเทียบ was dropped can't set custom price alone.
+ * Returns null when the pair is valid, or an error message when it isn't.
+ */
+export function validateComparisonPricePair(
+  priceOn: boolean,
+  comparisonOn: boolean,
+  comparisonValue: number | undefined,
+): string | null {
+  if (priceOn !== comparisonOn) {
+    return "ต้องเลือกทั้ง 'คิดราคาแบบกำหนดเอง' และ 'ค่าเทียบ' พร้อมกัน (หรือไม่เลือกทั้งคู่ = ใช้เรทระบบ)";
+  }
+  if (comparisonOn && !(Number(comparisonValue ?? 0) > 0)) {
+    return "กรอกค่าเทียบ (มากกว่า 0) เมื่อกำหนดราคาเอง";
+  }
+  return null;
+}

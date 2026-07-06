@@ -38,7 +38,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
-import { resolveComparisonInput } from "@/lib/forwarder/comparison-guard";
+import { resolveComparisonInput, validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 import {
   resolveLiveForwarderRate,
   type PricingRowContext,
@@ -281,6 +281,31 @@ export async function adminUpdateForwarderDimensions(
       if (cmp.error) return { ok: false, error: cmp.error };
       const cmpSwitchInput = cmp.switchInput;
       const cmpValueInput  = cmp.valueInput;
+
+      // ── 2026-07-06 (owner) — LOCKED PAIR server-side enforcement ──
+      // "คิดราคาแบบกำหนดเอง" (custom sell price · d.customRate) และ ค่าเทียบ ต้องมา
+      // พร้อมกัน (หรือไม่มาทั้งคู่). Enforce on the EFFECTIVE (post-guard) comparison
+      // switch so a warehouse caller whose ค่าเทียบ was dropped can't set custom
+      // price alone. Guard ONLY when the caller sends customRate — a legacy/single-
+      // row caller that omits both toggles stays non-breaking (uses the stored/auto
+      // path). When both-unchecked, the resolver's system waterfall runs unchanged.
+      if (d.customRate !== undefined) {
+        const pairErr = validateComparisonPricePair(
+          d.customRate === "1",
+          cmpSwitchInput === "1",
+          cmpValueInput,
+        );
+        if (pairErr) {
+          return {
+            ok: false,
+            error:
+              pairErr +
+              ((roles ?? []).includes("warehouse") && d.customRate === "1"
+                ? " — พนักงานโกดังตั้งค่าเทียบไม่ได้ จึงกำหนดราคาเองไม่ได้"
+                : ""),
+          };
+        }
+      }
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
       // Issue 3: a typed CBM overrides the W×L×H derivation (rounded to the
       // legacy numeric(10,5) shape); omitted → fall back to computeCbm.

@@ -4,7 +4,7 @@
  * POSTs to adminUpdateForwarderDimensions). Run: tsx lib/forwarder/comparison-guard.test.ts
  */
 import assert from "node:assert";
-import { resolveComparisonInput, COMPARISON_CAP } from "./comparison-guard";
+import { resolveComparisonInput, validateComparisonPricePair, COMPARISON_CAP } from "./comparison-guard";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
 let pass = 0;
@@ -89,6 +89,30 @@ t("null roles → treated as no-warehouse → can edit", () => {
   const out = resolveComparisonInput(null, "1", 100);
   assert.strictEqual(out.switchInput, "1");
   assert.strictEqual(out.valueInput, 100);
+});
+
+// ── LOCKED PAIR (owner 2026-07-06) — custom price XOR ค่าเทียบ rejected ──────
+t("both OFF → ok (uses system/auto rate)", () =>
+  assert.strictEqual(validateComparisonPricePair(false, false, 0), null));
+t("both ON with ค่าเทียบ 250 → ok", () =>
+  assert.strictEqual(validateComparisonPricePair(true, true, 250), null));
+t("both ON with ค่าเทียบ 350 (max) → ok", () =>
+  assert.strictEqual(validateComparisonPricePair(true, true, 350), null));
+t("price ON but ค่าเทียบ OFF → rejected (XOR)", () => {
+  const err = validateComparisonPricePair(true, false, 0);
+  assert.ok(err && err.includes("พร้อมกัน"));
+});
+t("ค่าเทียบ ON but price OFF → rejected (XOR)", () => {
+  const err = validateComparisonPricePair(false, true, 250);
+  assert.ok(err && err.includes("พร้อมกัน"));
+});
+t("both ON but ค่าเทียบ = 0 → rejected (need > 0)", () => {
+  const err = validateComparisonPricePair(true, true, 0);
+  assert.ok(err && err.includes("ค่าเทียบ"));
+});
+t("both ON but ค่าเทียบ undefined → rejected (need > 0)", () => {
+  const err = validateComparisonPricePair(true, true, undefined);
+  assert.ok(err !== null);
 });
 
 console.log(`\n  ${pass} passed · 0 failed\n`);
