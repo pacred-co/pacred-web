@@ -129,9 +129,12 @@ async function loadCounts(): Promise<Counts> {
   };
 }
 
-const ITEMS: { key: CountKey | "history"; label: string; href: string }[] = [
+const ITEMS: { key: CountKey | "history" | "sacks"; label: string; href: string }[] = [
   { key: "history",                label: "ประวัติเข้าโกดังไทย",  href: "/admin/forwarders/warehouse-history" },
   { key: "waiting",                label: "รายงานตู้",            href: "/admin/report-cnt" },
+  // 2026-07-06 (ภูม) — กระสอบรวม (consolidated-sack registry · read-only MOMO
+  // mirror) เพิ่มที่แถบบนนี้ด้วย ให้พนักงานเข้าได้สะดวก (§0d).
+  { key: "sacks",                  label: "กระสอบรวม",           href: "/admin/warehouse/sacks" },
   { key: "noteShop",               label: "หมายเหตุสั่งซื้อ",    href: "/admin/forwarder-action?action=NoteShop" },
   // Wave 16 P0-2 — bulk-bill-customer queue (เรียกเก็บเงินลูกค้า).
   // Placed BEFORE "หมายเหตุนำเข้า" because billing the customer is the
@@ -160,7 +163,7 @@ export async function TopMenuReport({ activeHref }: { activeHref?: string } = {}
     <nav className="pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-2 py-2">
       <ul className="flex flex-wrap gap-1 items-center text-xs">
         {ITEMS.map((it) => {
-          const count = it.key === "history" ? 0 : counts[it.key];
+          const count = it.key === "history" || it.key === "sacks" ? 0 : counts[it.key];
           const active =
             activeHref &&
             (it.href === activeHref || it.href.startsWith(activeHref + "?") || activeHref.startsWith(it.href.split("?")[0]));
