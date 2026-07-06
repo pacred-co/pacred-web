@@ -738,7 +738,7 @@ export function CntListTable({
                         className="inline-flex items-center gap-1 rounded-full bg-pink-100 text-pink-700 border border-pink-300 px-2 py-0.5 text-[11px] font-semibold"
                         title={`ยังขาด ${(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
-                        💗 ขาด {(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง
+                        ขาด {(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง
                       </span>
                     )}
                   </td>

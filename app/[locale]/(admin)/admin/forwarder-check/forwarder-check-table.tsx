@@ -390,7 +390,7 @@ export function ForwarderCheckTable({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
+            <table className="w-full text-[11px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8">
