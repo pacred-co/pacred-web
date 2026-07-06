@@ -1,5 +1,7 @@
 # Foundation-first BUILD QUEUE — พี่ป๊อป spec (audit 2026-07-06 · workflow-grounded)
 
+> **✅ STATUS 2026-07-06 (close): FOUNDATION 8/8 SHIPPED + 3 display enhancements + container-ladder verified-exists.** All on dave-pacred→ALL branches (`0f9f8782`→`77d8d8d6`). #1 amber-keep · #2 ขาด/ครบ pill · #3 ค่าส่งไทย gate (`c1f29101`) · #4 handoff+cost-hide · #5 consolidation แบบ1+2 (`75c3cecc` money-reviewed) · #6 slip 3-step · #7 Picking≠Delivery · #8 China receive-bill (`0f9f8782`) · +monitor (`43d6ed6d`) +stickers (`77d8d8d6`) · E3 container-ladder = already existed (`buildContainerJourney`). **REMAINING = OWNER-INPUT (§🔴 below · task #29):** MOMO 3-round semantics · กระสอบรวม data-model · CS จ่ายแทน surface · ระบบเบิกเงิน · accounting step-2 (จ่าย=ถามพี่แนท).
+
 **Verdict: platform ~80% at spec-foundation.** `lib/admin/forwarder-status.ts` fstatus maps 1:1 to the 6 statuses (3=กำลังส่งมาไทย · 4=ถึงไทยแล้ว · 5=รอชำระเงิน · 6=เตรียมส่ง · 7=ส่งแล้ว). ขาด/ครบ = `lib/warehouse/container-completeness.ts`. Handheld scan auto→'4' (`actions/admin/barcode-import.ts`). billing-run = 2-round slip + WHT-1% + dup-check. Permission gate `lib/auth/check-fstatus-transition.ts` (warehouse can't touch billing). Customer slip-attach holds at "ส่งสลิปแล้ว·รอตรวจ" (fstatus 5) until accounting flips 5→6. **NEXT-FREE mig = 0241.**
 
 ## FOUNDATION QUEUE (ordered)

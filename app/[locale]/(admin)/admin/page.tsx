@@ -13,7 +13,7 @@
  * stat card and every tab queue now reads the legacy `tb_*` tables
  * loaded by migration 0081. Tab labels + JSX layout are kept intact;
  * the tab keys are renamed where the rebuilt-app term no longer makes
- * sense in the legacy model (e.g. forwarder6 = fstatus='4' arrived).
+ * sense in the legacy model (e.g. forwarder6 = fstatus='6' เตรียมส่ง).
  *
  * Legacy column reference:
  *   tb_users          — userid, username, userlastname, usertel, useremail,
@@ -218,12 +218,16 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // topup badge counts the DEDUPED queue (owner 2026-06-21) — exclude the
     // "เติม-แล้วจ่าย" pay-half (type='4' with reforder2 → it collapses into its topup
     // row), so the badge matches the 1-row-per-payment list. `or` = NOT(type=4 AND reforder2 set).
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0).or("type.neq.4,reforder2.is.null"),
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").lt("amount", 0),
-    // sales_payouts — Pacred-original module (no legacy equivalent).
-    // Keep the rebuilt-app read; on prod the table is empty so the badge = 0.
-    // TODO Phase C: decide whether to retire this tab or wire it to a real
-    // legacy commission table (tb_user_sales_admin_pay status='1' looks closest).
+    // Also exclude type='3' (withdrawals are OUTGOING, not incoming money-in slips).
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0).neq("type", "3").or("type.neq.4,reforder2.is.null"),
+    // ถอนเงิน (withdraw) = legacy type='3' (withdrawUser.php). NOTE: tb_wallet_hs.amount
+    // is stored POSITIVE always (sign derived from `type` at display), so the old
+    // `.lt('amount',0)` matched ZERO rows — the tab was structurally always-empty. Key
+    // off `type` like legacy so pending withdrawals actually surface for accounting.
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").eq("type", "3"),
+    // payShop queue — repointed to the LIVE tb_shop_pay_h (real INSERT at
+    // actions/admin/shop-disbursement.ts; the old rebuilt `sales_payouts` twin was 0-row).
+    // Count + list both read tb_shop_pay_h status='1' (same source — no drift).
     admin.from("tb_shop_pay_h").select("id", { count: "exact", head: true }).eq("status", "1"),
     // tb_payment paystatus '1' = pending (รอตรวจสอบ).
     admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("paystatus", "1"),
@@ -798,7 +802,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .eq("status", "1")
         .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
-      q = tab === "topup" ? q.gt("amount", 0) : q.lt("amount", 0);
+      // topup = money-in slips (amount>0, exclude type='3' withdrawals) · withdraw = legacy
+      // type='3'. amount is stored POSITIVE so the old `.lt('amount',0)` never matched.
+      q = tab === "topup" ? q.gt("amount", 0).neq("type", "3") : q.eq("type", "3");
       const { data, error } = await q;
       if (error) {
         console.warn(`[tb_wallet_hs list] failed (soft-fail · returning empty rows)`, error);
@@ -924,8 +930,8 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // forwarder1   = fstatus='1' (รอเข้าโกดังจีน)
     // forwarder5   = fstatus='5' (รอชำระเงิน)
     // forwarderC   = fcredit='1'
-    // forwarder6   = fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
-    // forwarder62  = fstatus='6' (กำลังจัดส่ง)
+    // forwarder6   = fstatus='6' + NO open driver-item ("เตรียมส่ง" queue)
+    // forwarder62  = fstatus='6' + open driver-item (กำลังจัดส่ง)
     case "forwarder1":
     case "forwarder5":
     case "forwarderC":
