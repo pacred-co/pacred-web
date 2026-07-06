@@ -12,6 +12,7 @@
 import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateYuanPaymentManual } from "@/actions/admin/yuan-payments-tb";
+import { CustomerPicker } from "@/components/admin/customer-picker";
 
 export type CustomerLite = {
   userid:       string;
@@ -38,11 +39,9 @@ type PayType = typeof PAYTYPE_OPTIONS[number]["value"];
 
 export function AdminYuanPaymentNewForm({
   preset,
-  recent,
   defaultRate,
 }: {
   preset:      CustomerLite | null;
-  recent:      CustomerLite[];
   defaultRate: number;
 }) {
   const router = useRouter();
@@ -146,31 +145,24 @@ export function AdminYuanPaymentNewForm({
 
   return (
     <form onSubmit={onSubmit} className="mt-4 space-y-3">
-      {/* Customer */}
+      {/* Customer — type-to-search autocomplete over the FULL customer DB
+          (9,000+ tb_users) via <CustomerPicker> + adminSearchCustomers.
+          Yields the PR member code into `userid` — the exact field the
+          create action already submits (unchanged). `?q=PR1234` still
+          pre-selects (preset → initialLabel chip). */}
       <div>
         <label className="block text-xs text-muted mb-1">สมาชิก <span className="text-red-700">*</span></label>
-        {preset && (
-          <div className="mb-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-primary-700">
-            ✓ Preselected: <strong>{labelCustomer(preset)}</strong>
-          </div>
-        )}
-        <select
-          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+        <CustomerPicker
           value={userid}
-          onChange={(e) => setUserid(e.target.value)}
-          disabled={pending}
+          onChange={(id) => setUserid(id)}
+          initialLabel={preset ? labelCustomer(preset) : undefined}
+          placeholder="ค้นหา PR / ชื่อ / เบอร์ / อีเมล / บริษัท"
           required
-        >
-          <option value="">— เลือกจากสมาชิกล่าสุด —</option>
-          {recent.map((c) => (
-            <option key={c.userid} value={c.userid}>{labelCustomer(c)}</option>
-          ))}
-          {preset && !recent.find((c) => c.userid === preset.userid) && (
-            <option value={preset.userid}>{labelCustomer(preset)}</option>
-          )}
-        </select>
+          disabled={pending}
+        />
         <small className="mt-1 block text-xs text-muted">
-          ถ้าไม่เห็นสมาชิก ใช้ <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">/admin/yuan-payments/new?q=PR1234</code> เพื่อระบุตรง
+          พิมพ์ PR / ชื่อ / เบอร์ / อีเมล / ชื่อบริษัท เพื่อค้นหาลูกค้าทั้งหมด · หรือใช้{" "}
+          <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">/admin/yuan-payments/new?q=PR1234</code> เพื่อระบุตรง
         </small>
       </div>
 

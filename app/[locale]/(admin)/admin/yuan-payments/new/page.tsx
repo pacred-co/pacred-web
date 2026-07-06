@@ -77,17 +77,9 @@ export default async function AdminYuanPaymentNewPage({
     preset = data ? toCustomerLite(data) : null;
   }
 
-  // Recent customers (cap 20).
-  const { data: recentRaw, error: recentRawErr } = await admin
-    .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail")
-    .eq("userStatus", "1")
-    .order("userRegistered", { ascending: false })
-    .limit(20);
-  if (recentRawErr) {
-    console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });
-  }
-  const recent = ((recentRaw ?? []) as unknown as UserRow[]).map(toCustomerLite);
+  // Customer selection is now a type-to-search autocomplete over the FULL
+  // customer DB (<CustomerPicker> → adminSearchCustomers · 9,000+ tb_users),
+  // so the old recent-members dropdown query is no longer needed.
 
   // Default rate from tb_settings (single-row config). rpdefault = ฝากชำระ
   // transfer-rate default. Tier A6 fix (2026-05-29): switched from `rsdefault`
@@ -159,7 +151,6 @@ export default async function AdminYuanPaymentNewPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <AdminYuanPaymentNewForm
           preset={preset}
-          recent={recent}
           defaultRate={defaultRate}
         />
       </section>
