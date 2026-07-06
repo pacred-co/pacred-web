@@ -173,6 +173,7 @@ type RawUserRow = {
   userCompany:     string | null;            // CUSTTAG — '1' = นิติบุคคล
   userCreditValue: number | string | null;   // CUSTTAG — วงเงินเครดิต
   userCreditDate:  number | string | null;   // CUSTTAG — เทอม (วัน)
+  userComparison:  number | string | null;   // CPS — '1' = คิดราคาตามค่าเทียบ (legacy badgeVIP2)
 };
 
 type RawCorpRow = {
@@ -343,7 +344,7 @@ export default async function AdminServiceOrdersPage({
   if (uniqueUserIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userID,userName,userLastName,coID,adminIDSale,userCompany,userCreditValue,userCreditDate")
+      .select("userID,userName,userLastName,coID,adminIDSale,userCompany,userCreditValue,userCreditDate,userComparison")
       .in("userID", uniqueUserIds);
     if (userErr) {
       console.error("[/admin/service-orders] tb_users join failed", {
@@ -377,6 +378,47 @@ export default async function AdminServiceOrdersPage({
     for (const c of corpList) {
       const nm = (c.corporatename ?? "").trim();
       if (c.userid && nm) corpNameByUser.set(c.userid, nm);
+    }
+  }
+
+  // ── SVIP set (legacy badgeVIP2) — customers with a per-customer custom
+  //    rate row in tb_rate_custom_cbm (ported col = lowercase `userid`). ──
+  let svipUserIds = new Set<string>();
+  if (uniqueUserIds.length > 0) {
+    const { data: svipRows, error: svipErr } = await admin
+      .from("tb_rate_custom_cbm")
+      .select("userid")
+      .in("userid", uniqueUserIds);
+    if (svipErr) {
+      console.error("[/admin/service-orders] tb_rate_custom_cbm (SVIP) join failed", { error: svipErr.message });
+    }
+    svipUserIds = new Set(
+      ((svipRows ?? []) as Array<{ userid: string | null }>)
+        .map((s) => s.userid)
+        .filter((u): u is string => !!u),
+    );
+  }
+
+  // ── Chinese shipping numbers per order (legacy shops.php L475-479) —
+  //    the cShippingNumber(s) shown under เลขที่ออเดอร์. ──
+  const shippingByHno = new Map<string, string[]>();
+  const pageHnos = Array.from(new Set(raw.map((r) => r.hno).filter(Boolean)));
+  if (pageHnos.length > 0) {
+    const { data: shipRows, error: shipErr } = await admin
+      .from("tb_order")
+      .select("hno,cshippingnumber")
+      .in("hno", pageHnos)
+      .neq("cshippingnumber", "");
+    if (shipErr) {
+      console.error("[/admin/service-orders] tb_order shipping-number scan failed", { error: shipErr.message });
+    }
+    for (const s of (shipRows ?? []) as Array<{ hno: string | null; cshippingnumber: string | null }>) {
+      const h = s.hno;
+      const c = (s.cshippingnumber ?? "").trim();
+      if (!h || !c) continue;
+      const arr = shippingByHno.get(h) ?? [];
+      if (!arr.includes(c)) arr.push(c);
+      shippingByHno.set(h, arr);
     }
   }
 
@@ -447,6 +489,11 @@ export default async function AdminServiceOrdersPage({
       vipTier: isVip ? coid : null,
       isCorporate: corporateUserIds.has(r.userid),
       salesRep: user?.adminIDSale && user.adminIDSale !== "" ? user.adminIDSale : null,
+      // Legacy badgeVIP2 — SVIP (has custom-rate row) · CPS (userComparison=1).
+      isSvip: svipUserIds.has(r.userid),
+      isCps: String(user?.userComparison ?? "") === "1",
+      // Legacy shops.php — cShippingNumber(s) under เลขที่ออเดอร์.
+      trackingNumbers: shippingByHno.get(r.hno) ?? [],
     };
   });
 

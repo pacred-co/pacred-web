@@ -72,6 +72,9 @@ export type ServiceOrderRow = {
   vipTier: string | null;
   isCorporate: boolean;
   salesRep: string | null;
+  isSvip: boolean;
+  isCps: boolean;
+  trackingNumbers: string[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -393,6 +396,14 @@ export function ServiceOrdersTable({
                             {sourceLabel}
                           </span>
                         </div>
+                        {/* Legacy shops.php L475-479 — เลขพัสดุจีน (cShippingNumber) ใต้เลขออเดอร์ */}
+                        {r.trackingNumbers.length > 0 && (
+                          <div className="mt-0.5 text-[10px] leading-tight text-primary-600">
+                            {r.trackingNumbers.map((t) => (
+                              <div key={t}>{t}</div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2.5">
                         <Link
@@ -424,6 +435,17 @@ export function ServiceOrdersTable({
                           {r.isVip && r.vipTier && (
                             <span className="rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 text-[11px] font-semibold">
                               {r.vipTier}
+                            </span>
+                          )}
+                          {/* Legacy badgeVIP2 — SVIP (ราคาส่วนตัว) · CPS (คิดตามค่าเทียบ) */}
+                          {r.isSvip && (
+                            <span className="rounded-full bg-pink-50 text-pink-700 border border-pink-200 px-1.5 py-0.5 text-[11px] font-semibold" title="ลูกค้าคิดราคาแบบส่วนตัว">
+                              SVIP
+                            </span>
+                          )}
+                          {r.isCps && (
+                            <span className="rounded-full bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 text-[11px] font-semibold" title="ลูกค้าคิดราคาตามค่าเทียบ">
+                              CPS
                             </span>
                           )}
                           {r.isCorporate && (
