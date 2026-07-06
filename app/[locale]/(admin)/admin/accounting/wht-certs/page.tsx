@@ -125,7 +125,7 @@ export default async function AdminWhtCertsPage({
               <h2 className="font-bold text-sm">🔓 ใบเสร็จรออนุมัติ 50 ทวิ ({receiptCertQueue.length}) — ลูกค้าแนบแล้ว · รอกดอนุมัติเพื่อปลดล็อกการพิมพ์</h2>
             </div>
             <div className="overflow-x-auto scrollbar-x-visible bg-white dark:bg-surface">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[640px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">เลขที่ใบเสร็จ</th>
@@ -166,7 +166,7 @@ export default async function AdminWhtCertsPage({
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
             <h2 className="font-bold text-sm mb-3">🎯 ลูกค้าที่ค้าง cert มากที่สุด (top {queue.byCustomer.length})</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[500px] text-sm">
+              <table className="w-full min-w-[500px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
@@ -251,7 +251,7 @@ export default async function AdminWhtCertsPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[1000px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">ลูกค้า</th>

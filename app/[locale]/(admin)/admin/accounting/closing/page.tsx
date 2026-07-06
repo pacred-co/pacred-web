@@ -287,7 +287,7 @@ export default async function ClosingReportPage({
 
       {/* Table */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-x-auto">
-        <table className="w-full text-xs sm:text-sm">
+        <table className="w-full text-xs sm:text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] sm:text-[11px] text-muted">
             <tr>
               <th className="px-3 py-2.5">เลขใบเสร็จ</th>

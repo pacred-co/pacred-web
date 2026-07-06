@@ -151,7 +151,7 @@ export default async function AdminNearChurnPage({
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
             <h2 className="font-bold text-sm mb-3">🏆 จัดเซลส์ตามจำนวนลูกค้าหายไป (top 20)</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[500px] text-sm">
+              <table className="w-full min-w-[500px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>
@@ -194,7 +194,7 @@ export default async function AdminNearChurnPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[1000px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>

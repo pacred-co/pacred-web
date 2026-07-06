@@ -136,7 +136,7 @@ export function PaymentBoardTable({
 
       {/* Grid */}
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/60 text-left text-[11px] uppercase text-muted">
             <tr>
               <th className="px-3 py-2.5">ลูกค้า · F-no</th>

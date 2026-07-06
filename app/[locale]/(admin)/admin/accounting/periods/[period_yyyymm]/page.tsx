@@ -182,7 +182,7 @@ export default async function AdminAccountingPeriodDetailPage({
             ยังไม่ได้ปิดงวด · ปิดงวดจะสร้าง snapshot ของ 4 ตาราง: tax_invoices · freight_invoices · freight_invoice_payments · wallet_transactions
           </p>
         ) : (
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] text-muted">
               <tr>
                 <th className="px-3 py-2">ตาราง</th>

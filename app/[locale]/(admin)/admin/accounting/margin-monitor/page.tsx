@@ -201,7 +201,7 @@ export default async function AdminMarginMonitorPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[800px] text-sm">
+              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
@@ -247,7 +247,7 @@ export default async function AdminMarginMonitorPage({
             <p className="p-12 text-center text-sm text-muted">ไม่มีตู้ขาดทุน 👍</p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[800px] text-sm">
+              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
@@ -284,7 +284,7 @@ export default async function AdminMarginMonitorPage({
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
             <h2 className="font-bold text-sm mb-3">🏆 Sales Rep ที่สร้างกำไรมากที่สุด (top 20)</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[600px] text-sm">
+              <table className="w-full min-w-[600px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                 <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2">#</th>

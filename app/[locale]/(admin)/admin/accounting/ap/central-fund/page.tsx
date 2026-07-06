@@ -78,7 +78,7 @@ export default async function ApCentralFundPage() {
 
         {/* Table */}
         <div className="overflow-x-auto rounded-xl border border-black/10 bg-white scrollbar-x-visible">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[760px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead>
               <tr className="border-b border-black/10 bg-gray-50 text-left text-[11px] uppercase text-gray-500">
                 <th className="px-3 py-2.5">วันที่</th>

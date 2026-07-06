@@ -150,7 +150,7 @@ export function ConsolidateClient({ rows }: { rows: ConsolidationCandidateRow[] 
       {/* Table */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
             <thead className="bg-surface-alt/60 text-xs font-medium text-muted">
               <tr>
                 <th className="px-3 py-2 w-10 text-center">

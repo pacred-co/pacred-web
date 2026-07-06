@@ -231,7 +231,7 @@ export default async function AdminFreightLedgerPage({
               <p className="p-10 text-center text-sm text-muted">ไม่มีเงินเข้าในช่วงนี้</p>
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[760px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">วันที่</th>
@@ -285,7 +285,7 @@ export default async function AdminFreightLedgerPage({
               <p className="p-10 text-center text-sm text-muted">ไม่มีต้นทุน shipment ในช่วงนี้</p>
             ) : (
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="w-full min-w-[820px] text-sm">
+                <table className="w-full min-w-[820px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
                   <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2">วันที่</th>

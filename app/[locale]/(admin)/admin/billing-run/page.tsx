@@ -399,7 +399,7 @@ export default async function BillingRunListPage({
                 className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors whitespace-nowrap ${tabToneCls(t.tone, active)}`}
               >
                 <span>{t.label}</span>
-                <span className={`rounded-full px-1.5 text-xs font-medium ${active ? "bg-white/20" : "bg-surface-alt text-muted"}`}>
+                <span className={`inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold ${active ? "bg-white/25 text-white" : "bg-primary-600 text-white"}`}>
                   {count}
                 </span>
               </Link>
