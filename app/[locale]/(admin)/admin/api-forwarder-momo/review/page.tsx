@@ -18,6 +18,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { ReviewGridClient, type PendingRow } from "./review-client";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,16 @@ export default async function AdminMomoReviewPage() {
       raw && typeof raw === "object"
         ? (typeof raw.ship_by === "string" ? raw.ship_by : null)
         : null;
+    // 2026-07-06 (owner · MONEY) — fproductstype drives the cost/duty tier.
+    // MOMO sends `raw.type` (general/tis/fda/control); the review grid used to
+    // hardcode "1" (ทั่วไป) for every row → มอก./อย./พิเศษ mispriced. Map the
+    // REAL MOMO type to the Pacred code (1/2/3/4); unknown/empty → "1" (no
+    // regression). Admin sees it as an EDITABLE default in the dropdown.
+    const typeRaw =
+      raw && typeof raw === "object"
+        ? (typeof raw.type === "string" ? raw.type : null)
+        : null;
+    const guessedProductType = momoTypeToProductType(typeRaw);
     const qtyRaw =
       raw && typeof raw === "object" && typeof raw.quantity === "number"
         ? raw.quantity
@@ -119,6 +130,7 @@ export default async function AdminMomoReviewPage() {
       phase:             row.phase ?? null,
       guessedUserId,
       guessedShipBy:     shipByRaw ?? null,
+      guessedProductType,
       qty:               qtyRaw,
       weightKg:          numFromRaw("kg"),
       cbm:               numFromRaw("cbm"),

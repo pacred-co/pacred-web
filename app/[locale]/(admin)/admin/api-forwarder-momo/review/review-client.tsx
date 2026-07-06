@@ -66,6 +66,14 @@ export type PendingRow = {
    */
   userIdValid:        boolean | null;
   guessedShipBy:      string | null;
+  /**
+   * 2026-07-06 (owner · MONEY) — mapped from MOMO `raw.type`
+   * (general→"1" · tis→"2" · fda→"3" · control→"4" · unknown/empty→"1").
+   * Pre-fills the ประเภทสินค้า dropdown so มอก./อย./พิเศษ price on the
+   * right cost/duty tier instead of silently defaulting to ทั่วไป.
+   * Admin can still override before commit.
+   */
+  guessedProductType: "1" | "2" | "3" | "4";
   qty:                number | null;
   /** 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก MOMO raw → ตรวจก่อน commit. 0 = ยังไม่ชั่ง. */
   weightKg:           number;
@@ -148,7 +156,9 @@ export function ReviewGridClient({
       m[r.id] = {
         userID:        r.guessedUserId ?? "",
         fShipBy:       "",
-        fProductsType: "1",
+        // 2026-07-06 (owner · MONEY) — default from the MOMO-mapped type
+        // instead of hardcoded "1" (admin can still override the dropdown).
+        fProductsType: r.guessedProductType ?? "1",
       };
     }
     return m;

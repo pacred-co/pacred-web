@@ -35,7 +35,9 @@
  *      - payMethod = derivePayMethod(carrier) → '1' ต้นทาง (BKK origin) /
  *        '2' ปลายทาง COD (upcountry private carrier). The province rule is
  *        EMERGENT from carrier-eligibility ∘ this map (no province switch).
- *      - fProductsType = "1" (ทั่วไป — same as legacy default)
+ *      - fProductsType = momoTypeToProductType(raw.type) — the REAL MOMO
+ *        type (general/tis/fda/control → 1/2/3/4 · unknown/empty → "1"
+ *        ทั่วไป, the legacy default). MONEY-relevant: drives the cost/duty tier.
  *
  *      Why no "PCS" fallback any more: the v1 chain ended in "PCS" on
  *      no-signal, which the commit core maps to the warehouse self-pickup
@@ -98,6 +100,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { commitMomoRowSystem } from "@/lib/admin/commit-momo-row-core";
 import { extractMetricsFromMomoRaw } from "@/lib/admin/momo-raw-helpers";
+import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import {
   checkUserGroupMatchesCompany,
   checkNotDuplicateTracking,
@@ -374,12 +377,16 @@ export async function autoCommitEligibleMomoRows(
   // 2. Collect candidates with raw, user_group, weight/cbm — these feed
   //    the per-row safety predicates below. One pass through the rows.
   type Candidate = {
-    rowId:          string;
-    momoTrackingNo: string | null;
-    guessedUserId:  string | null;
-    userGroup:      string | null;
-    weightKg:       number;
-    cbm:            number;
+    rowId:              string;
+    momoTrackingNo:     string | null;
+    guessedUserId:      string | null;
+    userGroup:          string | null;
+    weightKg:           number;
+    cbm:                number;
+    // 2026-07-06 (owner · MONEY) — mapped from MOMO raw.type so the cron
+    // commit prices on the right cost/duty tier. unknown/empty → "1" (ทั่วไป,
+    // the previous hardcoded default = no regression).
+    guessedProductType: "1" | "2" | "3" | "4";
   };
   const candidates: Candidate[] = [];
   for (const row of uncommitted ?? []) {
@@ -394,14 +401,19 @@ export async function autoCommitEligibleMomoRows(
         : (row.momo_user_code ?? null);
     const guessedUserId =
       userGroup && userCode ? `${userGroup}${userCode}` : null;
+    const typeRaw =
+      raw && typeof raw === "object" && typeof raw.type === "string"
+        ? raw.type
+        : null;
     const metrics = extractMetricsFromMomoRaw(raw);
     candidates.push({
-      rowId:          row.id as string,
-      momoTrackingNo: row.momo_tracking_no ?? null,
+      rowId:              row.id as string,
+      momoTrackingNo:     row.momo_tracking_no ?? null,
       guessedUserId,
       userGroup,
-      weightKg:       metrics.weight,
-      cbm:            metrics.cbm,
+      weightKg:           metrics.weight,
+      cbm:                metrics.cbm,
+      guessedProductType: momoTypeToProductType(typeRaw),
     });
   }
 
@@ -573,7 +585,9 @@ export async function autoCommitEligibleMomoRows(
         rowId:         c.rowId,
         userID:        c.guessedUserId as string,
         fShipBy:       delivery.fShipBy,
-        fProductsType: "1",
+        // 2026-07-06 (owner · MONEY) — the REAL MOMO type (mapped) instead of
+        // the old hardcoded "1"; unknown/empty already resolved to "1".
+        fProductsType: c.guessedProductType,
         addressID:     delivery.addressID,
         payMethod:     delivery.payMethod,
       });

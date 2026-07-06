@@ -15,6 +15,7 @@ import {
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
   extractCrateFromMomoRaw,
+  extractCoverFromMomoRaw,
   momoRawDisplay,
   flattenMomoRaw,
   collectMomoRawColumns,
@@ -394,6 +395,45 @@ check("import_track: isContainer false", momoRawDisplay({ tracking: "1779955936"
   check("crate: ภูม example (status 7, ship, wooden_create false) → not crated", (() => {
     const c = extractCrateFromMomoRaw({ wooden_create: false, wooden_info: null, extra_cost: 0, kg: 100, ship_by: "ship" });
     return c.crate === "2" && c.pricecrate === 0;
+  })());
+}
+
+// ── extractCoverFromMomoRaw (owner 2026-07-06 · first raw.images → fcover) ──
+console.log("\n--- extractCoverFromMomoRaw ---");
+{
+  // DEFAULT-SAFE (no image / bad shapes) → "" (no regression on the old fcover="").
+  check("cover: null → ''", extractCoverFromMomoRaw(null) === "");
+  check("cover: undefined → ''", extractCoverFromMomoRaw(undefined) === "");
+  check("cover: string raw → ''", extractCoverFromMomoRaw("x") === "");
+  check("cover: number raw → ''", extractCoverFromMomoRaw(42) === "");
+  check("cover: empty object → ''", extractCoverFromMomoRaw({}) === "");
+  check("cover: images missing → ''", extractCoverFromMomoRaw({ kg: 5 }) === "");
+  check("cover: images not an array → ''", extractCoverFromMomoRaw({ images: "http://x" }) === "");
+  check("cover: images empty array → ''", extractCoverFromMomoRaw({ images: [] }) === "");
+  check("cover: images all empty strings → ''", extractCoverFromMomoRaw({ images: ["", "  "] }) === "");
+  check("cover: images with non-strings only → ''", extractCoverFromMomoRaw({ images: [1, null, {}] }) === "");
+
+  // Populated → first usable URL, passed through verbatim (a MOMO full URL).
+  check("cover: single URL → that URL", (() => {
+    const u = "https://api.momocargo.com/images/momo-center/tracking/a.png";
+    return extractCoverFromMomoRaw({ images: [u] }) === u;
+  })());
+  check("cover: first of many → first URL", (() => {
+    const a = "https://api.momocargo.com/images/a.png";
+    const b = "https://api.momocargo.com/images/b.png";
+    return extractCoverFromMomoRaw({ images: [a, b] }) === a;
+  })());
+  check("cover: trims surrounding whitespace", (() => {
+    const u = "https://api.momocargo.com/images/a.png";
+    return extractCoverFromMomoRaw({ images: [`  ${u}  `] }) === u;
+  })());
+  check("cover: skips leading empty/blank entries → first non-empty", (() => {
+    const u = "https://api.momocargo.com/images/real.png";
+    return extractCoverFromMomoRaw({ images: ["", "   ", u] }) === u;
+  })());
+  check("cover: skips leading non-strings → first string URL", (() => {
+    const u = "https://api.momocargo.com/images/real.png";
+    return extractCoverFromMomoRaw({ images: [null, 3, u] }) === u;
   })());
 }
 

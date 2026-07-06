@@ -659,3 +659,34 @@ export function extractCrateFromMomoRaw(raw: unknown): MomoCrate {
   })();
   return { crate: "1", pricecrate: fee };
 }
+
+/**
+ * Extract the FIRST usable image URL from MOMO's raw `images` array → the value
+ * for tb_forwarder.fcover (the row cover thumbnail).
+ *
+ * MOMO's `raw.images` is an array of strings (often `[]`, sometimes populated
+ * with full external URLs, e.g. `https://api.momocargo.com/images/…png`). The
+ * commit used to hardcode `fcover=""`, so forwarder rows never showed a picture.
+ *
+ * The value flows into forwarder-check / report-cnt through
+ * `resolveLegacyUrl(fcover, "cover")`, whose Case-1 branch passes any
+ * `http(s)://` value through UNCHANGED (a `momocargo.com` URL matches no legacy
+ * CDN/thumb rewrite rule) → it renders directly. A bare filename would instead
+ * be resolved against the legacy Supabase bucket, so we only ever store what
+ * MOMO actually sends (a full URL) or "".
+ *
+ * DEFAULT-SAFE: no images / non-array / non-string / empty → "" (today's value,
+ * no regression). Display/data only — never money.
+ */
+export function extractCoverFromMomoRaw(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.images)) return "";
+  for (const img of r.images) {
+    if (typeof img === "string") {
+      const trimmed = img.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+  }
+  return "";
+}

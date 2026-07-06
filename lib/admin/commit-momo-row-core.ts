@@ -45,6 +45,7 @@ import {
   extractMetricsFromMomoRaw,
   extractWarehouseDatesFromMomoRaw,
   extractCrateFromMomoRaw,
+  extractCoverFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
@@ -391,6 +392,12 @@ export async function commitMomoRowCore(
   // adminUpdateForwarderCratePrice editor (editable all statuses) overrides
   // this initial value — propagate.ts never touches crate/pricecrate.
   const momoCrate = extractCrateFromMomoRaw(srcRow.raw);
+  // ── Cover image (owner 2026-07-06) — first URL from MOMO raw.images ──────
+  // The old code hardcoded fcover="" so forwarder rows never showed a picture.
+  // MOMO sends full external URLs (momocargo.com); resolveLegacyUrl passes those
+  // through unchanged so forwarder-check / report-cnt render them directly.
+  // DEFAULT-SAFE: no images → "" (no regression). Display/data only.
+  const momoCover = extractCoverFromMomoRaw(srcRow.raw);
   // ── Transport type (รถ EK "1" / เรือ SEA "2") — พี่ป๊อป flag 2026-06-11 ──
   // Priority:
   //   1. d.fTransportType        — explicit admin override (review form) wins.
@@ -607,7 +614,7 @@ export async function commitMomoRowCore(
       fnote:                 null,
       fnoteuser:             "0",
       fnoteuserread:         "0",
-      fcover:                "",
+      fcover:                momoCover,
       fphotoend:             "",
       fcostrefrate:          0,
       fpriceupdate:          0,
