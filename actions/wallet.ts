@@ -14,6 +14,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
 import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
+import { WALLET_HS_TYPE_KIND as HS_TYPE_TO_KIND } from "@/lib/wallet/wallet-hs";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { BANK } from "@/components/seo/site";
@@ -112,17 +113,10 @@ export async function getWallet(): Promise<ActionResult<WalletBalance>> {
 //   type 6 = ชำระฝากโอน         → kind=yuan_payment    · DEBIT (−)
 //   type 7 = ชำระเงินรอตรวจสอบ    → kind=order_top_up    · DEBIT (−)
 //   status 1=pending · 2=completed · 3=failed (legacy 0081 L6213)
-// The legacy `amount` is stored POSITIVE; we apply the sign per direction so
-// the page's `tx.amount >= 0` green/red rendering is correct.
-const HS_TYPE_TO_KIND: Record<string, { kind: string; credit: boolean }> = {
-  "1": { kind: "deposit",        credit: true  },
-  "2": { kind: "order_payment",  credit: false },
-  "3": { kind: "withdraw",       credit: false },
-  "4": { kind: "import_payment", credit: false },
-  "5": { kind: "refund",         credit: true  },
-  "6": { kind: "yuan_payment",   credit: false },
-  "7": { kind: "order_top_up",   credit: false },
-};
+// The legacy `amount` is stored POSITIVE; we apply the sign per direction (from
+// `type`, not the amount sign) so the page's green/red rendering is correct. The
+// type→direction map is the shared SOT in lib/wallet/wallet-hs.ts (imported above
+// as HS_TYPE_TO_KIND) — every wallet surface must use it, never the amount sign.
 const HS_STATUS_TO_STATUS: Record<string, WalletTransaction["status"]> = {
   "1": "pending",
   "2": "completed",
