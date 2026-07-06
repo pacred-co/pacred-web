@@ -40,11 +40,13 @@
  *   one) and makes the call-site grep-able.
  *
  * ── Idempotency ───────────────────────────────────────────────────
- *   Before INSERTing, we check `tb_receipt_item` for ANY existing row
- *   with `fid IN <fids>`. If any of the input fids is already on a
- *   receipt, we abort with `already_issued`. The caller logs but does
- *   not throw — this is the "happy duplicate" case (admin re-approved a
- *   slip that was already invoiced).
+ *   Before INSERTing, we check `tb_receipt_item` for existing rows with
+ *   `fid IN <fids>`, then look up their owning `tb_receipt.rstatus`. We
+ *   abort with `already_issued` ONLY when a fid is on a NON-cancelled
+ *   receipt ('0'/'1'/'3'). A CANCELLED receipt (rstatus='2') does NOT
+ *   block — a voided receipt must be re-issuable after a void→re-bill
+ *   (e.g. customer changed บุคคล→นิติ · ภูม 2026-07-06). The caller logs
+ *   but does not throw on `already_issued` — the "happy duplicate" case.
  */
 
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -190,8 +192,17 @@ export async function autoIssueReceiptOnPaymentLand(
   const dateSlip = opts.dateSlip;
   const source = opts.source ?? "wallet_hs.approve";
 
-  // 1. Idempotency guard — any of these fids already on a tb_receipt?
-  const { data: existing, error: existingErr } = await admin
+  // 1. Idempotency guard — is any of these fids already on an ACTIVE receipt?
+  //
+  //    A CANCELLED receipt (rstatus='2' · ยกเลิก) must NOT block a re-issue.
+  //    Real case (ภูม 2026-07-06 · PR086): customer changed บุคคล→นิติ, staff
+  //    voided the old ใบเสร็จ + ใบวางบิล, then re-billed — the new receipt has
+  //    to be able to issue. `voidReceipts` (actions/admin/accounting-receipts.ts)
+  //    flips ONLY the tb_receipt header rstatus→'2'; the tb_receipt_item rows
+  //    survive. So a fid-only check falsely reported "already_issued" for a
+  //    fid whose only receipt was cancelled → the receipt never re-created.
+  //    Fix: block ONLY when a NON-cancelled receipt ('0'/'1'/'3') still covers a fid.
+  const { data: existingItems, error: existingErr } = await admin
     .from("tb_receipt_item")
     .select("fid, rid")
     .in("fid", fids);
@@ -201,12 +212,39 @@ export async function autoIssueReceiptOnPaymentLand(
     });
     return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
   }
-  if ((existing ?? []).length > 0) {
-    const ridList = Array.from(new Set(((existing ?? []) as Array<{ rid: string }>).map((r) => r.rid)));
-    logger.warn("auto-receipt", "skip — at least one fid already on a receipt", {
-      userid, fids, alreadyOnRids: ridList, source,
+  const priorRids = Array.from(
+    new Set(
+      ((existingItems ?? []) as Array<{ rid: string | null }>)
+        .map((r) => r.rid)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  if (priorRids.length > 0) {
+    // Which of those prior receipts are still ACTIVE (not cancelled)?
+    const { data: activeReceipts, error: activeErr } = await admin
+      .from("tb_receipt")
+      .select("rid, rstatus")
+      .in("rid", priorRids)
+      .neq("rstatus", "2"); // '2' = ยกเลิก — cancelled receipts do NOT block
+    if (activeErr) {
+      console.error(`[auto-receipt: tb_receipt active check] failed`, {
+        code: activeErr.code, message: activeErr.message, userid, priorRids,
+      });
+      return { ok: false, error: `db_error:${activeErr.code ?? "unknown"}` };
+    }
+    if ((activeReceipts ?? []).length > 0) {
+      const ridList = Array.from(
+        new Set(((activeReceipts ?? []) as Array<{ rid: string }>).map((r) => r.rid)),
+      );
+      logger.warn("auto-receipt", "skip — at least one fid already on an ACTIVE receipt", {
+        userid, fids, alreadyOnRids: ridList, source,
+      });
+      return { ok: false, error: "already_issued", alreadyIssued: true };
+    }
+    // Every prior receipt covering these fids is cancelled → OK to re-issue.
+    logger.warn("auto-receipt", "prior receipt(s) cancelled — re-issuing a fresh receipt", {
+      userid, fids, cancelledRids: priorRids, source,
     });
-    return { ok: false, error: "already_issued", alreadyIssued: true };
   }
 
   // 2. Read the forwarder rows to compute totals (re-fetch — never trust
@@ -426,6 +464,34 @@ export async function autoIssueReceiptOnPaymentLand(
   }
 
   // 8. INSERT tb_receipt_item — one row per fid (legacy L568-569 batch INSERT).
+  //
+  //    RE-ISSUE-AFTER-VOID (ภูม 2026-07-06 · PR086): tb_receipt_item.fid is UNIQUE
+  //    (idx_16914_fid · migration 0082). `voidReceipts` flips only the header
+  //    rstatus→'2' and NEVER deletes the item rows, so a voided receipt's items
+  //    keep holding these fids. Without freeing them the insert below would 23505
+  //    and the whole receipt would roll back (the exact reason PR086 got no
+  //    receipt). The guard above already confirmed EVERY prior receipt covering
+  //    these fids is CANCELLED (priorRids · activeReceipts was empty) → it is safe
+  //    to release those stale items now. Scoped by BOTH fid AND rid-∈-priorRids so
+  //    an ACTIVE receipt's item can never be touched. Idempotent under concurrency
+  //    (two re-issuers delete the same rows; the UNIQUE(fid) still serializes the
+  //    insert so only one receipt survives).
+  const issueFids = rows.map((r) => r.id);
+  if (priorRids.length > 0) {
+    const { error: freeErr } = await admin
+      .from("tb_receipt_item")
+      .delete()
+      .in("fid", issueFids)
+      .in("rid", priorRids); // priorRids = the CANCELLED receipts identified above
+    if (freeErr) {
+      console.error(`[auto-receipt: free cancelled-receipt items] failed`, {
+        code: freeErr.code, message: freeErr.message, rid: receiptRow.rid, priorRids,
+      });
+      // Best-effort — if a fid stays occupied the insert below 23505s and the
+      // catch cleans up the orphan header (safe-fail · no double-doc).
+    }
+  }
+
   const itemRows = rows.map((r) => ({
     rid: receiptRow.rid,
     fid: r.id,

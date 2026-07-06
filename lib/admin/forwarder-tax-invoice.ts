@@ -94,10 +94,15 @@ export async function issueForwarderTaxInvoice(
   }
   const fids = Array.from(new Set(opts.fids));
 
-  // 1. Idempotency — any of these fids already on a tax invoice line?
+  // 1. Idempotency — is any of these fids already on an ACTIVE (non-cancelled)
+  //    tax invoice line? A CANCELLED invoice (status='cancelled') must NOT block
+  //    a re-issue after a void→re-bill — same recovery path as the receipt
+  //    (ภูม 2026-07-06). Blocking only on active invoices lets a นิติ customer
+  //    who voided a wrong ใบกำกับ get a fresh one; it still prevents a genuine
+  //    double-issue (an active invoice already covers the fid).
   const { data: existingItems, error: existErr } = await admin
     .from("tb_forwarder_tax_invoice_item")
-    .select("fid")
+    .select("fid, invoice_id")
     .in("fid", fids);
   if (existErr) {
     // Table missing (migration 0129 not applied) OR transient — log + bail,
@@ -107,8 +112,29 @@ export async function issueForwarderTaxInvoice(
     });
     return { ok: false, error: `db_error:${existErr.code ?? "unknown"}` };
   }
-  if ((existingItems ?? []).length > 0) {
-    return { ok: false, error: "already_issued", alreadyIssued: true };
+  const priorInvoiceIds = Array.from(
+    new Set(
+      ((existingItems ?? []) as Array<{ invoice_id: number | null }>)
+        .map((r) => r.invoice_id)
+        .filter((x): x is number => x != null),
+    ),
+  );
+  if (priorInvoiceIds.length > 0) {
+    const { data: activeInv, error: activeErr } = await admin
+      .from("tb_forwarder_tax_invoice")
+      .select("id, status")
+      .in("id", priorInvoiceIds)
+      .neq("status", "cancelled"); // cancelled invoices do NOT block a re-issue
+    if (activeErr) {
+      logger.warn("forwarder-tax-invoice", "active-invoice check failed", {
+        code: activeErr.code, message: activeErr.message, userid: opts.userid, priorInvoiceIds,
+      });
+      return { ok: false, error: `db_error:${activeErr.code ?? "unknown"}` };
+    }
+    if ((activeInv ?? []).length > 0) {
+      return { ok: false, error: "already_issued", alreadyIssued: true };
+    }
+    // All prior tax invoices for these fids are cancelled → OK to re-issue.
   }
 
   // 2. Read the forwarder rows (same buckets the receipt sums).
@@ -241,6 +267,24 @@ export async function issueForwarderTaxInvoice(
   const invoiceId = hdr.id;
 
   // 6. INSERT line items (one per fid).
+  //    RE-ISSUE-AFTER-VOID (ภูม 2026-07-06): tb_forwarder_tax_invoice_item.fid is
+  //    UNIQUE (migration 0129). A cancelled invoice's item rows survive and hold
+  //    these fids, so a plain insert would 23505 → header rolled back → no invoice.
+  //    The guard above confirmed every prior invoice covering these fids is
+  //    CANCELLED (priorInvoiceIds) → release those stale items first. Scoped by
+  //    BOTH fid AND invoice_id-∈-priorInvoiceIds so an ACTIVE invoice is never touched.
+  if (priorInvoiceIds.length > 0) {
+    const { error: freeErr } = await admin
+      .from("tb_forwarder_tax_invoice_item")
+      .delete()
+      .in("fid", rows.map((r) => r.id))
+      .in("invoice_id", priorInvoiceIds);
+    if (freeErr) {
+      logger.warn("forwarder-tax-invoice", "free cancelled-invoice items failed", {
+        code: freeErr.code, message: freeErr.message, invoiceId, priorInvoiceIds,
+      });
+    }
+  }
   const itemRows = rows.map((r) => ({
     invoice_id:            invoiceId,
     fid:                   r.id,
