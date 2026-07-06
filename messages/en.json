@@ -3539,6 +3539,7 @@
     },
     "warehouse": {
       "containers": "Containers",
+      "sacks": "Consolidated sacks",
       "logisticsBoard": "Logistics Center",
       "printLabels": "Print box labels (cabinet)",
       "bulletin": "Daily container bulletin",
