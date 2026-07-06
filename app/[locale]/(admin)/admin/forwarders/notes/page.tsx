@@ -95,13 +95,15 @@ export default async function ForwarderNotesPage({
   // to its numeric legacy fstatus via the shared status map.
   const legacyStatusCode = sp.status ? toLegacyForwarderCode(sp.status) : undefined;
 
-  // Pass 1 — fetch headers with at least one non-empty note column.
-  // Supabase `.or()` can combine "neq empty" predicates: fnote.neq.,fnoteuser.neq.
-  // §0c: destructure error + throw on the load-bearing read.
+  // Pass 1 — fetch forwarders that have a real ADMIN note. Legacy
+  // forwarder-action.php?action=Note filters `fNote<>''`. ⚠️ fNoteUser is a
+  // varchar(1) VISIBILITY FLAG (0 = ทั้งลูกค้าและแอดมิน · 1 = แอดมินเท่านั้น),
+  // NOT a note text — never filter or render it as a note (that bloated the
+  // list to ~every row + showed "📝 0"). §0c: destructure error + throw.
   let q = admin
     .from("tb_forwarder")
     .select("id, fidorco, fstatus, fnote, fnoteuser, fdate, fdateadminstatus, ftotalprice, ftrackingchn, ftrackingth, userid")
-    .or("fnote.neq.,fnoteuser.neq.")
+    .neq("fnote", "")
     .order("fdateadminstatus", { ascending: false, nullsFirst: false })
     .order("fdate", { ascending: false })
     .limit(500);
@@ -116,8 +118,8 @@ export default async function ForwarderNotesPage({
     throw new Error(`Failed to load tb_forwarder notes (${rowsErr.code ?? "unknown"}): ${rowsErr.message}`);
   }
   const rows = ((rowsRaw ?? []) as RawForwarder[])
-    // Drop any row where BOTH note columns are empty (.or with neq.'' false negatives).
-    .filter((r) => (r.fnote && r.fnote.trim()) || (r.fnoteuser && r.fnoteuser.trim()));
+    // Keep only rows with a real admin note (fNoteUser is a visibility flag, not text).
+    .filter((r) => Boolean(r.fnote && r.fnote.trim()));
 
   // PERF (2026-06-03): client-slice pagination. The fetched-then-filtered
   // `rows` is the authoritative set (a DB count:exact would over-count the
@@ -237,7 +239,7 @@ export default async function ForwarderNotesPage({
           </div>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-3">วันอัปเดต / สั่ง</th>
@@ -279,16 +281,20 @@ export default async function ForwarderNotesPage({
                         {!r.ftrackingchn && !r.ftrackingth && <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs max-w-[320px] space-y-1">
+                        {/* legacy badge — fNoteUser is a VISIBILITY flag (1 = แอดมินเท่านั้น) */}
+                        <span
+                          className={`inline-block rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
+                            r.fnoteuser === "1"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-sky-50 text-sky-700 border-sky-200"
+                          }`}
+                        >
+                          {r.fnoteuser === "1" ? "แอดมินเท่านั้น" : "ทั้งลูกค้าและแอดมิน"}
+                        </span>
+                        {/* legacy red note block (forwarder-action.php L462) */}
                         {r.fnote && r.fnote.trim() && (
-                          <div className="rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1">
-                            <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">แอดมิน</span>
-                            <div>📝 {r.fnote}</div>
-                          </div>
-                        )}
-                        {r.fnoteuser && r.fnoteuser.trim() && (
-                          <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
-                            <span className="text-[11px] font-semibold text-yellow-700 dark:text-yellow-300">ลูกค้า</span>
-                            <div>📝 {r.fnoteuser}</div>
+                          <div className="rounded bg-red-600 px-2 py-1 text-white">
+                            หมายเหตุ : {r.fnote}
                           </div>
                         )}
                       </td>
