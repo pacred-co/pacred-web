@@ -42,12 +42,15 @@ import {
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+import { isThShippingCostMissing } from "@/lib/forwarder/domestic-shipping";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import {
   isBillableForwarder,
   type ForwarderBillingEligibilityFields,
 } from "@/lib/forwarder/billing-eligibility";
 import { sendNotification } from "@/lib/notifications";
+import { notifyStaffGroup } from "@/lib/notifications/staff-group";
+import { logger } from "@/lib/logger";
 import {
   createBillingRunInvoiceSchema,
   markBillingRunPaidSchema,
@@ -98,6 +101,15 @@ export type EligibleForwarderRow = {
   fstatus: string | null;
   fcredit: string | null;
   already_billed: boolean;
+  /** ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic delivery leg applies to
+   *  this row (fshipby ≠ self-pickup) but the in-Thailand cost (ftransportprice)
+   *  is still ฿0/empty → warehouse/CS forgot to fill it. The create-form badges
+   *  it "ยังไม่กรอกค่าส่งไทย" + requires a confirm; the create action backstops. */
+  th_ship_missing: boolean;
+  /** The carrier code (fshipby) — surfaced so the UI can show what leg applies. */
+  fshipby: string | null;
+  /** The captured in-Thailand delivery cost (ftransportprice) — display + gate. */
+  ftransportprice: number;
 };
 
 export type BillingRunInvoiceRow = {
@@ -575,6 +587,11 @@ export async function listEligibleForwarders(
         fstatus:         f.fstatus,
         fcredit:         f.fcredit,
         already_billed:  alreadyBilledIds.has(f.id),
+        // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic leg applies but the
+        // TH cost is still ฿0. Self-pickup rows (fshipby='PCS') are exempt.
+        th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice }),
+        fshipby:         f.fshipby,
+        ftransportprice: Number(f.ftransportprice ?? 0),
       }));
 
       return { ok: true, data: { rows } };
@@ -1127,6 +1144,26 @@ async function createBillingRunInvoiceImpl(
         };
       }
 
+      // (a3) ค่าส่งไทย "ห้ามลืม" GATE (pop-spec #3 · owner 2026-07-06) — a SELECTED
+      // row whose domestic delivery leg applies (fshipby ≠ self-pickup 'PCS') but
+      // whose in-Thailand cost (ftransportprice) is still ฿0/empty = the warehouse
+      // or CS forgot the ค่าส่งไทย. Refuse unless the admin explicitly acknowledged
+      // (the form badges it "ยังไม่กรอกค่าส่งไทย" + a confirm that sets the ack).
+      // Server-side backstop — a client can't skip the TH leg (recomputed here from
+      // the DB rows). NOTE: pure validation — this changes NO pricing math; the bill
+      // amount is computed exactly as before. Self-pickup rows are exempt.
+      const missingThShip = fwd.filter((f) =>
+        isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice }),
+      );
+      if (missingThShip.length > 0 && !v.allowMissingThShip) {
+        return {
+          ok: false,
+          error:
+            `มี ${missingThShip.length} รายการที่ยังไม่กรอกค่าส่งไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง): ` +
+            `${missingThShip.map((f) => `#${f.id}`).join(", ")} — กรุณาให้โกดัง/CS กรอกค่าส่งไทยก่อนวางบิล หรือยืนยันออกบิลทั้งที่ยังไม่มีค่าส่งไทย`,
+        };
+      }
+
       // (b) Already-billed-on-non-cancelled-invoice guard
       const { data: billed, error: billedErr } = await admin
         .from("tb_forwarder_invoice_item")
@@ -1415,6 +1452,11 @@ async function createBillingRunInvoiceImpl(
         ...(zeroTransport.length > 0
           ? { zero_transport_override: true, zero_transport_ids: zeroTransport.map((f) => f.id) }
           : {}),
+        // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — breadcrumb when billed despite a
+        // still-฿0 domestic leg, so an under-billed TH-leg invoice can be told apart.
+        ...(missingThShip.length > 0
+          ? { missing_th_ship_override: true, missing_th_ship_ids: missingThShip.map((f) => f.id) }
+          : {}),
         // D2 — record any per-line bill-amount overrides (the manual figure that
         // replaced the auto outstanding) for the same forensic reason.
         ...(overriddenIds.length > 0
@@ -1430,6 +1472,47 @@ async function createBillingRunInvoiceImpl(
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+
+      // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — if the bill went out WITH rows still
+      // missing a TH-shipping cost, PING CS + accounting so they chase/fix the
+      // ค่าส่งไทย. Best-effort: a notify failure never fails the (already-committed)
+      // invoice — the audit breadcrumb above is the durable record.
+      if (missingThShip.length > 0) {
+        const link = `/admin/billing-run/${invoiceId}`;
+        const body =
+          `ใบวางบิล ${docNo} ออกทั้งที่มี ${missingThShip.length} รายการยังไม่กรอกค่าส่งไทย ` +
+          `(${missingThShip.map((f) => `#${f.id}`).join(", ")}) — กรุณาตรวจ/กรอกค่าส่งในไทย`;
+        try {
+          const { data: csAdmins, error: csErr } = await admin
+            .from("admins")
+            .select("profile_id")
+            .in("role", ["sales", "sales_admin", "ops", "accounting", "super", "ultra"])
+            .eq("is_active", true);
+          if (csErr) logger.error("billing-run.th-ship-notify", "CS admins lookup failed", csErr, {});
+          const seen = new Set<string>();
+          for (const row of csAdmins ?? []) {
+            const pid = (row as { profile_id: string }).profile_id;
+            if (!pid || seen.has(pid)) continue;
+            seen.add(pid);
+            await sendNotification(pid, {
+              category: "forwarder",
+              severity: "warning",
+              title: "ยังไม่กรอกค่าส่งไทยก่อนวางบิล",
+              body,
+              link_href: link,
+              reference_type: "forwarder_invoice",
+              reference_id: String(invoiceId),
+            });
+          }
+        } catch (e) {
+          logger.error("billing-run.th-ship-notify", "in-app notify fan-out failed", e, { invoiceId });
+        }
+        try {
+          await notifyStaffGroup(`🚚 ${body}`, { url: link, urlLabel: "เปิดใบวางบิล", title: "ยังไม่กรอกค่าส่งไทย" });
+        } catch {
+          /* best-effort */
+        }
+      }
 
       return { ok: true, data: { invoiceId, docNo } };
     },
@@ -2000,6 +2083,10 @@ export async function createForwarderOrderBill(
     discountThb: 0,
     noteForCustomer: opts?.noteForCustomer ?? "",
     allowUnmeasured: false,
+    // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — the quick-bill button has no confirm
+    // step, so it never overrides: a cabinet with a forgotten TH cost is REFUSED
+    // with the clear error (surfaced on the button), the intended soft-gate.
+    allowMissingThShip: false,
     overrides: {},
   });
 

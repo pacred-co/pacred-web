@@ -76,6 +76,12 @@ export const createBillingRunInvoiceSchema = z.object({
    *  ⚠️ badge + a confirm before setting this; the server REFUSES unmeasured rows
    *  unless it is true. */
   allowUnmeasured: z.boolean().optional().default(false),
+  /** ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3, owner 2026-07-06) — explicit ack that
+   *  the admin is billing row(s) whose domestic delivery leg cost (ค่าส่งไทย ·
+   *  ftransportprice) is still ฿0 while a leg applies (not self-pickup). The form
+   *  shows a "ยังไม่กรอกค่าส่งไทย" badge + a confirm before setting this; the server
+   *  REFUSES those rows unless it is true (a client can't silently skip the TH leg). */
+  allowMissingThShip: z.boolean().optional().default(false),
   /** Build A D2 2026-06-19 — per-line bill-amount override (forwarder_id → ฿amount,
    *  keyed as a string). Lets the admin correct a row's billed amount inline (e.g.
    *  type the right figure on a ค่าขนส่ง-฿0 row). The action uses the override when

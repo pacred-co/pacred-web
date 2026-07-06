@@ -169,3 +169,51 @@ export const DOMESTIC_ZONE_LABEL: Record<DomesticZone, string> = {
   maomao: "ในเขตเหมาๆ (กทม.-ปริมณฑล)",
   upcountry: "นอกเขต / ต่างจังหวัด",
 };
+
+// ────────────────────────────────────────────────────────────────────────
+// ค่าส่งไทย "ห้ามลืม" gate — the TH-shipping-cost required predicate
+// ────────────────────────────────────────────────────────────────────────
+//
+// พี่ป๊อป spec (pop-spec #3, owner-answered 2026-07-06): warehouse/CS must fill
+// the in-Thailand delivery cost before a container is billed. This is the pure,
+// testable "does this row still need a TH cost?" predicate the billing-run
+// eligibility surface + create backstop use to FLAG (not silently under-charge)
+// a row whose domestic leg cost was forgotten.
+//
+// A TH cost is REQUIRED whenever a domestic delivery leg applies — i.e. the row
+// is NOT self-pickup ("PCS", ฿0 legitimate). It is NOT required for self-pickup.
+// The cost is MISSING when required AND ftransportprice is ฿0/empty.
+//
+// Note: this is a MONEY-VALIDATION signal only — it changes NO pricing math. It
+// never asserts what the cost SHOULD be (that's the auto-resolver
+// `domesticShippingOptions` / the CS editor); it only asserts "still ฿0 where a
+// leg applies → don't forget it".
+
+/** Self-pickup carrier code — no domestic delivery leg, so ฿0 TH cost is legit. */
+export const SELF_PICKUP_CARRIER = "PCS" as const;
+
+/**
+ * Does a domestic delivery leg apply to this row (→ a TH shipping cost is
+ * expected before billing)? True unless the row is self-pickup ("PCS"). An
+ * empty/unset fshipby also counts as "leg applies" — the carrier just isn't
+ * decided yet, so the cost is still owed (and the warehouse/CS must resolve it).
+ */
+export function isThShippingCostRequired(fshipby: string | null | undefined): boolean {
+  const s = (fshipby ?? "").trim().toUpperCase();
+  return s !== SELF_PICKUP_CARRIER;
+}
+
+/**
+ * Is the TH shipping cost MISSING for this row — i.e. a domestic leg applies but
+ * ftransportprice is still ฿0/empty (warehouse/CS forgot to fill it)? This is the
+ * "ยังไม่กรอกค่าส่งไทย" flag the billing UI raises + the create backstop enforces.
+ * Bad/negative numbers coerce to 0 (→ treated as missing).
+ */
+export function isThShippingCostMissing(args: {
+  fshipby: string | null | undefined;
+  ftransportprice: number | string | null | undefined;
+}): boolean {
+  if (!isThShippingCostRequired(args.fshipby)) return false; // self-pickup — ฿0 ok
+  const cost = Number(args.ftransportprice);
+  return !Number.isFinite(cost) || cost <= 0;
+}
