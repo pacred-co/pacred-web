@@ -3161,6 +3161,9 @@
     "wallet": {
       "title": "Wallet"
     },
+    "payUser": {
+      "title": "Pay on behalf"
+    },
     "payment": {
       "title": "Yuan Payments",
       "list": "All Payments",

@@ -173,6 +173,15 @@ const itemWalletAll: MenuItem = {
   badge: "walletAll",
 };
 
+/** จ่ายเงินแทนลูกค้า (pay-on-behalf) — legacy `pcs-admin/pay-users.php`.
+ *  ภูม 2026-07-06: promoted from the /admin/wallet top-menubar to a dedicated
+ *  sidebar leaf right under กระเป๋าเงิน (owner: "ข้างล่างติดกับกระเป๋าเงิน"). */
+const itemPayUser: MenuItem = {
+  labelKey: "payUser.title",
+  href: "/admin/wallet/pay-user",
+  icon: "HandCoins",
+};
+
 /** Single-leaf "บริการฝากสั่งสินค้า" replacement (ภูม brief 2026-05-20 ค่ำ).
  *  Sub-items (search / all / pending / cart / cartAdd / note) now live in
  *  the page top-menubar on /admin/service-orders (Agent B owns the page).
@@ -1082,6 +1091,7 @@ const wrapClassAcc: MenuItem = {
   children: [
     blockAccounting,
     itemWalletAll,
+    itemPayUser,
     blockWithdrawalList,
     blockExtWithdrawalsAll,
     // 2026-06-29 (gap-hunt §0d) — customer refund money-queue (was orphan).
@@ -1372,6 +1382,7 @@ const menuManager: MenuSection[] = [
       itemCustomersAll,
       blockWithdrawalList,
       itemWalletAll,
+      itemPayUser,
       itemPurchasingAll,
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
@@ -1449,6 +1460,7 @@ const menuOps: MenuSection[] = [
       itemQAAll,
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
       itemWalletAll,
+      itemPayUser,
       itemPurchasingAll,
       blockForwarderImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
@@ -1486,6 +1498,7 @@ const menuAccounting: MenuSection[] = [
     items: [
       blockWithdrawalList,
       itemWalletAll,
+      itemPayUser,
       blockPayment,
       itemReportsAll,
       blockAccounting,
