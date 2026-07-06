@@ -46,6 +46,7 @@ import {
 } from "./container-detail-client";
 import { CostUpdateView } from "./cost-update-view";
 import { CntPaySlipPanel } from "./cnt-pay-slip-panel";
+import { WarehouseHandoffButton } from "./handoff-button";
 import {
   getContainerCostSheetParcels,
   type SheetParcel,
@@ -609,9 +610,11 @@ export default async function AdminReportCntDetailPage({
       <main className="p-4 lg:p-6 space-y-4 pb-32">
         <Breadcrumb fCabinetNumber={fCabinetNumber} />
 
-        {/* Phase 3 (ops-workflow audit §30) — completeness banner.
-            Green if every forwarder has scanned ≥ famount; amber otherwise
-            with concrete gap counts so warehouse can act. */}
+        {/* พี่ป๊อป spec (2026-07-06 · TASK #2) — the ขาด/ครบ completeness banner.
+            ครบ = green ✅ (every forwarder scanned ≥ famount) · ขาด = 💗 ชมพู, led
+            by the box gap ("ขาด N กล่อง") which is the owner's headline number.
+            (Pink is the spec's colour for the ขาด sub-status — distinct from the
+            KEEP-amber status-4 pill.) */}
         {completeness.forwardersTotal > 0 && (
           completeness.isComplete ? (
             <div className="rounded-2xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-200">
@@ -624,13 +627,14 @@ export default async function AdminReportCntDetailPage({
               </p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-800 dark:text-amber-200">
+            <div className="rounded-2xl border border-pink-300 bg-pink-50 dark:bg-pink-900/20 p-4 text-sm text-pink-800 dark:text-pink-200">
               <p className="font-semibold flex items-center gap-2">
-                <span className="text-lg">⚠️</span>
+                <span className="text-lg">💗</span>
                 <span>
-                  ยังขาด {completeness.forwardersTotal - completeness.forwardersComplete} รายการ (ยิงครบ {completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
-                  · ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง
-                  · ขาด {Math.max(0, completeness.expected - completeness.scanned).toLocaleString()} กล่อง · {completeness.pct}%)
+                  ขาด {Math.max(0, completeness.expected - completeness.scanned).toLocaleString()} กล่อง
+                  {" "}(ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง
+                  · ยิงครบ {completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
+                  · {completeness.pct}%)
                 </span>
               </p>
             </div>
@@ -715,6 +719,16 @@ export default async function AdminReportCntDetailPage({
               >
                 🖨 พิมพ์ป้ายกล่องทั้งตู้
               </Link>
+              {/* พี่ป๊อป spec (2026-07-06 · TASK #4) — warehouse → accounting
+                  handoff. STATUS-ONLY (notify + audit · no fstatus flip · no
+                  money). Shown to everyone who reaches this page (warehouse/
+                  ops/super) once the cabinet has forwarders. */}
+              {completeness.forwardersTotal > 0 && (
+                <WarehouseHandoffButton
+                  fCabinetNumber={fCabinetNumber}
+                  isComplete={completeness.isComplete}
+                />
+              )}
               {canEditCost && (
                 <CostRateModal
                   fCabinetNumber={fCabinetNumber}

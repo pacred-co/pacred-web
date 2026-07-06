@@ -715,26 +715,30 @@ export function CntListTable({
                   <td className="px-2 py-2 text-right">{r.completenessExpected.toLocaleString()}</td>
                   <td className="px-2 py-2 text-right">{fmtNum(r.volumeSum, 6)}</td>
                   <td className="px-2 py-2 text-right">{fmtNum(r.weightSum, 2)}</td>
-                  {/* ยิงครบ — per owner (2026-06-19): count by BOX (CTNS) not by
-                      record. Shows scanned/expected boxes (Σ fi2amount / Σ famount);
-                      green when every box is in. The รายการ (shipment) breakdown
-                      stays in the tooltip for reference. */}
+                  {/* ยิงครบ — พี่ป๊อป spec (2026-07-06 · TASK #2): the ขาด/ครบ
+                      sub-status. Count by BOX (CTNS): scanned/expected (Σ fi2amount /
+                      Σ famount).
+                        · scanned < expected → 💗 ชมพู "ขาด N กล่อง" (owner: หาย→ขาว
+                          เมื่อยิงครบ) — a self-explaining pill (§0g); the reader sees
+                          exactly how many boxes are still missing.
+                        · scanned ≥ expected → ✅ "ครบ" (ขาว/เขียว) — every box in.
+                      scanned/expected + the รายการ breakdown stay in the tooltip. */}
                   <td className="px-2 py-2 text-center">
                     {r.completenessForwardersTotal === 0 ? (
                       <span className="text-[11px] text-muted">-</span>
                     ) : r.completenessScanned >= r.completenessExpected ? (
                       <span
-                        className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[11px] font-medium"
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold"
                         title={`ยิงครบทุกกล่อง — ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ`}
                       >
-                        {r.completenessScanned}/{r.completenessExpected}
+                        ✅ ครบ
                       </span>
                     ) : (
                       <span
-                        className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[11px] font-medium"
-                        title={`ของยังขาด ${r.completenessExpected - r.completenessScanned} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
+                        className="inline-flex items-center gap-1 rounded-full bg-pink-100 text-pink-700 border border-pink-300 px-2 py-0.5 text-[11px] font-semibold"
+                        title={`ยังขาด ${(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง — ยิง ${r.completenessScanned}/${r.completenessExpected} กล่อง · ${r.completenessForwardersComplete}/${r.completenessForwardersTotal} รายการ · ${r.completenessPct}%`}
                       >
-                        {r.completenessScanned}/{r.completenessExpected}
+                        💗 ขาด {(r.completenessExpected - r.completenessScanned).toLocaleString()} กล่อง
                       </span>
                     )}
                   </td>
