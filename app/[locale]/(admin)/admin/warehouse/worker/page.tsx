@@ -19,7 +19,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadWarehouseDashboard } from "@/lib/warehouse/worker-queries";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
-import { ScanLine, Calculator, Boxes, Truck, PackageSearch, Clock } from "lucide-react";
+import { ScanLine, Calculator, Boxes, Truck, PackageSearch, PackageCheck, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,7 @@ export default async function WarehouseWorkerDashboard() {
     { href: "/admin/warehouse/worker/measure", icon: Calculator,   label: "ชั่ง / วัดขนาด",     desc: "บันทึกน้ำหนัก + กว้าง×ยาว×สูง → คำนวณ CBM", accent: "border-emerald-200 bg-emerald-50/50 text-emerald-800" },
     { href: "/admin/warehouse/worker/sacks",   icon: Boxes,        label: "งานกระสอบ",          desc: "สร้างกระสอบ + จัดของลงกระสอบ + ซีล", accent: "border-amber-200 bg-amber-50/50 text-amber-800" },
     { href: "/admin/warehouse/worker/shipping",icon: Truck,        label: "ใส่ตู้ / ออกของ",     desc: "ใส่ตู้คอนเทนเนอร์ + ออกจากจีน → ถึงไทย", accent: "border-purple-200 bg-purple-50/50 text-purple-800" },
+    { href: "/admin/warehouse/worker/arrive-th", icon: PackageCheck, label: "ยิงรับเข้าไทย",     desc: "สแกน tracking ที่ถึงไทย → สถานะ “ถึงไทยแล้ว”", accent: "border-[#d7ccc8] bg-[#efebe9]/60 text-[#5d4037]" },
     { href: "/admin/warehouse/worker/follow",  icon: PackageSearch,label: "ติดตามสินค้า",       desc: "ไทม์ไลน์งานต่อรายการ (no phone call)", accent: "border-cyan-200 bg-cyan-50/50 text-cyan-800" },
   ];
 

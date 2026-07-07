@@ -733,6 +733,88 @@ export async function warehouseAdvanceTransit(
 }
 
 // ════════════════════════════════════════════════════════════
+// 6b. ARRIVE-TH SCAN — scan a tracking (like intake) → flip 3→4 (ถึงไทยแล้ว).
+//     A dedicated TH-warehouse "ยิงรับเข้าไทย" surface (พี่ป๊อป spec §2 · legacy
+//     forwarder-import-warehouse.php sets fStatus=4 on scan). Mirrors
+//     warehouseIntakeScan's tracking lookup + warehouseAdvanceTransit's 3→4 flip
+//     (incl. the credit-6 arrive carve-out). NO money mutation · gated + audited.
+// ════════════════════════════════════════════════════════════
+
+const arriveThScanSchema = z.object({
+  keysearch: z.string().trim().min(1).max(100),
+  note:      z.string().trim().max(500).optional(),
+});
+
+export async function warehouseArriveThScan(
+  rawInput: z.input<typeof arriveThScanSchema>,
+): Promise<AdminActionResult<{ fid: number; from: string }>> {
+  const parsed = arriveThScanSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{ fid: number; from: string }>([...WAREHOUSE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+    const roles = (await getAdminRoles()) ?? [];
+
+    // Lookup by tracking or order id (mirrors warehouseIntakeScan).
+    const { data: rows, error: lookupErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, ftrackingchn, fidorco, fcredit")
+      .or(`ftrackingchn.eq.${d.keysearch},fidorco.eq.${d.keysearch}`)
+      .limit(2);
+    if (lookupErr) {
+      console.error(`[tb_forwarder arrive-th lookup] failed`, { code: lookupErr.code, message: lookupErr.message });
+      return { ok: false, error: `db_error:${lookupErr.code ?? "unknown"}` };
+    }
+    const list = (rows ?? []) as Array<{
+      id: number; fstatus: string | null; ftrackingchn: string | null; fidorco: string | null; fcredit: string | null;
+    }>;
+    if (list.length === 0) return { ok: false, error: "ไม่พบรายการจาก tracking/รหัสนี้" };
+    if (list.length > 1)  return { ok: false, error: "พบหลายรายการที่ตรงกัน — กรุณาระบุให้เฉพาะเจาะจง" };
+    const fwd = list[0];
+    const from = (fwd.fstatus ?? "1").trim();
+    const isCredit = (fwd.fcredit ?? "").trim() === "1";
+
+    // Idempotent — already arrived.
+    if (from === "4") return { ok: true, data: { fid: fwd.id, from } };
+
+    // Ready only from in-transit (3) OR the credit-6 arrive carve-out (goods land
+    // AFTER credit-grant flipped it to 6 · same rule as warehouseAdvanceTransit).
+    const arriveOnCredit = from === "6" && isCredit;
+    if (from !== "3" && !arriveOnCredit) {
+      return { ok: false, error: `สถานะปัจจุบัน (${from}) ยังไม่พร้อมรับเข้าไทย — ต้อง "กำลังส่งมาไทย" (3) ก่อน` };
+    }
+    if (!canAnyRoleFlipFstatus(roles, from, "4")) {
+      return { ok: false, error: "forbidden_transition (ไม่มีสิทธิ์รับเข้าไทย)" };
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ fstatus: "4", fdatestatus4: nowIso, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
+      .eq("id", fwd.id);
+    if (updErr) {
+      console.error(`[tb_forwarder arrive-th update] failed`, { code: updErr.code, message: updErr.message });
+      return { ok: false, error: `db_error:${updErr.code ?? "unknown"}` };
+    }
+
+    await logIntakeEvent(admin, {
+      fid: fwd.id, step: "arrive", fstatusFrom: from, fstatusTo: "4",
+      adminId: legacyAdminId, payload: { keysearch: d.keysearch, viaScan: true }, note: d.note ?? null,
+    });
+    await logAdminAction(adminId, "warehouse.arrive_th_scan", "tb_forwarder", String(fwd.id), { from, to: "4" });
+
+    revalidatePath("/admin/warehouse/worker/arrive-th");
+    revalidatePath("/admin/warehouse/worker/shipping");
+    revalidatePath(`/admin/forwarders/${fwd.id}`);
+    return { ok: true, data: { fid: fwd.id, from } };
+  });
+}
+
+// ════════════════════════════════════════════════════════════
 // 7. STATUS OVERRIDE — supervisor manual flip (every transition gated).
 // ════════════════════════════════════════════════════════════
 
