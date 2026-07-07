@@ -464,18 +464,19 @@ export default async function BillingRunListPage({
           </section>
         )}
 
-        {/* List table */}
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <div className="text-xs text-muted">
-              {tabDef.label} · แสดง <strong>{rows.length}</strong> จาก {totalCount} ใบ
+        {/* ประวัติการออกบิล — PCS-style blue register (พี่ป๊อป spec §3 "หน้าประวัติออกบิล สีฟ้า") */}
+        <section className="rounded-2xl border border-sky-300 bg-white dark:bg-surface shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-sky-300 bg-sky-600 text-white flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+              🧾 ประวัติการออกบิล
+              <span className="text-xs font-normal text-sky-100">· {tabDef.label} · แสดง {rows.length} จาก {totalCount} ใบ</span>
             </div>
             {/* Date-range filter — visible only on tabs that honor it */}
             {(tab === "recent" || tab === "all") && (
               <form method="GET" className="flex items-center gap-2 text-xs">
                 <input type="hidden" name="tab" value={tab} />
                 <input type="date" name="from" defaultValue={dateFrom} className="rounded border border-border bg-white dark:bg-surface px-2 py-1" />
-                <span className="text-muted">→</span>
+                <span className="text-sky-100">→</span>
                 <input type="date" name="to" defaultValue={dateTo} className="rounded border border-border bg-white dark:bg-surface px-2 py-1" />
                 <button type="submit" className="rounded bg-foreground/90 text-white px-3 py-1 hover:bg-foreground">ค้นหา</button>
               </form>
