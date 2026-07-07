@@ -8,7 +8,7 @@
  * actions. No money mutation.
  */
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Truck, Container, PackageCheck, Lock } from "lucide-react";
 import {
@@ -37,12 +37,31 @@ type Row = {
   locked: boolean; weight: number; cbm: number;
 };
 
+/** ขาด/ครบ ของตู้ (พี่ป๊อป spec §2.1) — ชมพู=ขาด · ขาว=ครบ. คลังเห็นความครบ
+ *  ของตู้บนมือถือ (reuse lib/warehouse/container-completeness · read-only). */
+type Completeness = { expected: number; scanned: number; isComplete: boolean };
+function CompletenessPill({ c }: { c?: Completeness }) {
+  if (!c || c.expected === 0) return null;
+  const missing = Math.max(0, c.expected - c.scanned);
+  return c.isComplete ? (
+    <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+      ✓ ครบ {c.scanned}/{c.expected}
+    </span>
+  ) : (
+    <span className="ml-1.5 inline-flex items-center rounded-full border border-pink-300 bg-pink-100 px-1.5 py-0.5 text-[11px] font-medium text-pink-700">
+      ขาด {missing} · {c.scanned}/{c.expected}
+    </span>
+  );
+}
+
 export function ShippingPanel({
   readyQueue,
   transitQueue,
+  completenessByContainer,
 }: {
   readyQueue: Row[];
   transitQueue: Row[];
+  completenessByContainer: Record<string, Completeness>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -109,6 +128,7 @@ export function ShippingPanel({
                     <td className="px-3 py-2">
                       {r.container || "—"}
                       {r.locked && <Lock className="inline h-3 w-3 ml-1 text-gray-400" />}
+                      {r.container && <CompletenessPill c={completenessByContainer[r.container]} />}
                     </td>
                     <td className="px-3 py-2 text-right">{r.weight > 0 ? r.weight : "—"}</td>
                     <td className="px-3 py-2 text-right">{r.cbm > 0 ? r.cbm : "—"}</td>
@@ -156,7 +176,10 @@ export function ShippingPanel({
                   <tr key={r.id} className="hover:bg-gray-50/60">
                     <td className="px-3 py-2 text-gray-700">{r.id}</td>
                     <td className="px-3 py-2 font-mono text-xs">{r.tracking || "—"}</td>
-                    <td className="px-3 py-2">{r.container || "—"}</td>
+                    <td className="px-3 py-2">
+                      {r.container || "—"}
+                      {r.container && <CompletenessPill c={completenessByContainer[r.container]} />}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <button type="button" disabled={pending} onClick={() => void arrive(r)}
                         className="inline-flex items-center gap-1 rounded bg-cyan-600 px-2 py-1 text-xs font-semibold text-white hover:bg-cyan-700 disabled:opacity-50">

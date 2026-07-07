@@ -13,6 +13,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadWorkerQueue } from "@/lib/warehouse/worker-queries";
 import { ShippingPanel } from "./shipping-panel";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,14 @@ export default async function WarehouseShippingPage() {
     loadWorkerQueue("2", 100),
     loadWorkerQueue("3", 100),
   ]);
+
+  // ขาด/ครบ ต่อตู้ (พี่ป๊อป spec §2.1 · คลังเห็นความครบของตู้บนมือถือ) — 1 batch query.
+  const containers = Array.from(
+    new Set([...atWarehouse, ...inTransit].map((r) => r.fcabinetnumber ?? "").filter(Boolean)),
+  );
+  const completenessByContainer = containers.length
+    ? await getContainerCompletenessBatch(createAdminClient(), containers)
+    : {};
 
   const map = (r: typeof atWarehouse[number]) => ({
     id: r.id,
@@ -48,6 +58,7 @@ export default async function WarehouseShippingPage() {
       <ShippingPanel
         readyQueue={atWarehouse.map(map)}
         transitQueue={inTransit.map(map)}
+        completenessByContainer={completenessByContainer}
       />
     </main>
   );
