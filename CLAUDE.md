@@ -3,6 +3,24 @@
 
 ---
 
+# 🧩 2026-07-07 (ภูม) — พี่ป๊อป-spec gap-items build (audit 10 ข้อ → 6 done · 2 owner-input · item8 plan) → Poom-pacred · read FIRST
+
+> **🏁 SESSION CLOSE (ภูม: "เซฟ Poom-pacred · ทำต่อพรุ่งนี้").** Branch **Poom-pacred = HEAD** (pushed · clean · local==origin). Gate เขียวทุก commit: **tsc 0 · lint 0** (`cd /c/Users/Admin/pacred-web/pacred-web` ก่อนเสมอ — cwd reset บ่อย · เจอ  2 ครั้ง session นี้). ⚠️ **screenshot MCP glitch ทั้ง session** → verify จาก legacy PHP source + gate + DOM-check แทน.
+>
+> **🎯 งาน:** audit พี่ป๊อป spec (`docs/research/pop-spec-2026-07-06/00-SPEC.md` + `03-BUILD-PLAN.md` เดฟ) → gap list 10 ข้อ → ภูม สั่งลุย 1-10 (ข้าม 7,9 รอถามพี่ป๊อป). **เดฟ ทำ foundation 8/8 ไปแล้วเมื่อคืน** (2 ข้อในลิสต์เลยมีอยู่แล้ว).
+>
+> **✅ Built + pushed (4):** **1** ขาด(ชมพู)/ครบ(ขาว) pill ต่อตู้ บน warehouse worker/shipping (reuse container-completeness) · **3** ประวัติออกบิล register แถบสีฟ้า (billing-run/page) · **4** MOMO ป้าย "3 รอบ" คร่าวๆ/packing/ปิดตู้ (sync-client) · **6** หน้า "ยิงรับเข้าไทย" แยกเฉพาะ `warehouse/worker/arrive-th` + action `warehouseArriveThScan` (lookup tracking → gate → flip 3→4 · เครดิต-6 carve-out · NO money) + การ์ดหน้าแรกแอปคลัง. **+ก่อนหน้า:** สถานะ 4 "ถึงไทยแล้ว" → **สีน้ำตาล** (#8d6e63) admin (`lib/admin/forwarder-status.ts`) + customer (`service-import/forwarder-row-view`).
+>
+> **✅ Verified มีแล้ว/ไม่ต้องแก้ (3):** **2** ปุ่ม "แจ้งส่งต่อบัญชี" = `report-cnt/[fNo]/handoff-button.tsx` (เดฟ · status-only) · **5** คลังห้ามเห็นต้นทุน = gated ครบทุกหน้า warehouse-reachable (`canViewCostProfit` · forwarder-cost-section `if(!canEdit) return null`) · **10** สถานะตู้ จีน-ไทย ladder = `report-cnt/[fNo]/container-journey-panel.tsx` (buildContainerJourney).
+>
+> **🔴 รอ owner (ภูม ถามพี่ป๊อป):** **7** ค่าส่งไทย auto-fill (โซนไหน auto · คลัง-auto vs CS-กรอก) · **9** กระสอบรวม data-model (วางบิลของชิ้นเล็กหลายลูกค้า) — build-plan เดฟ flag ว่า owner-input "ห้ามเดา".
+>
+> **🟡 item 8 MOMO อัพไฟล์ XLSX → ตารางหลัก (build พรุ่งนี้ · plan พร้อม):** ภูม ส่งไฟล์จริง `Downloads/PR20260614-SEA01 (1).xlsx` = **MOMO packing list ต่อตู้** (decode แล้ว · 18-col: Tracking/Code/W/L/H/ParcelCount/Weight/CBM/CG + meta CONTAINER NAME=GZS260617-1). **⚠️ GOTCHA: SheetJS พังกับไฟล์นี้** (inline strings · ไม่มี sharedStrings → คืน raw ZIP-XML) → ต้อง **unzip + parse `xl/worksheets/sheet1.xml` เอง**. **แผนเต็ม + column mapping + gotcha: [`docs/research/momo-xlsx-import-plan-2026-07-07.md`](docs/research/momo-xlsx-import-plan-2026-07-07.md).** money-adjacent → build careful (preview→commit · §0e).
+>
+> **🔴 NEXT (พรุ่งนี้):** build item 8 (parser+test → UI upload บน api-forwarder-momo/sync → ingest momo_import_tracks) · เอา owner input 7/9 มาทำ. **dev pacred = :3000** (ถ้า poom-tools ยึด :3000 → หยุดก่อน) · **431 cookie-bloat fix** = restart ด้วย `NODE_OPTIONS=--max-http-header-size=131072`.
+
+---
+
 # 🧾 2026-07-07 ค่ำ (เดฟ · resume ต่อจาก limit) — กู้ WIP faithful-port (refund-rebill guard) + verify flow นำเข้า faithful vs PCS จริง (list/คนขับ/ตู้/ขนส่ง) + WHT namesake = ยืนยันแก้จบ + เจอ gap report-cnt 11 exception-tab → ALL 4 BRANCHES · read FIRST
 
 > **🏁 CLOSE (owner: "ต่อ session ค้าง · resume ก่อน limit · flow นำเข้าให้จบ · หน้าตา+logic เหมือน PCS อันดับแรก · รัน local ต่อ chrome" → "ปิด session · push all branch · สรุป").** **all 4 (main=dave-pacred=Poom-pacred=InwPond007) → `<HEAD>`** (Vercel prod). PCS PHP รัน local เป็น reference: `https://localhost/pcscargo/member/pcs-admin/` (admin_tam/pacred1234 · services `mysqld`+`httpd` via PowerShell · cert bypass `thisisunsafe` · [[pcs-legacy-local-run]]). legacy source ก็อ่านได้ที่ `C:\xampp\htdocs\pcscargo\member\pcs-admin\*.php`. 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`) · `.env.local` SUPABASE_DB_PASSWORD STALE (`Jirayus40x.` — ใช้ DqOz.../n61... แทน). NEXT FREE mig = 0244. gate: `rm -f .next/dev/types/validator.ts` ก่อน · NODE_OPTIONS=8192 build (อ่าน BUILD_EXIT · ห้าม build ตอน preview เปิด) · tsc 0 · commit heredoc `cat > f <<'EOF'`.
