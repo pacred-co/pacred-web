@@ -128,6 +128,11 @@ export const markBillingRunPaidSchema = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "กรุณากรอกเวลาในรูปแบบ 24 ชม HH:mm")
     .optional(),
+  // STEP-2 doc-number panel (2026-07-07) — accounting may hand-pick the ใบเสร็จ
+  // เลขที่ (rID) before mark-paid auto-creates the receipt. Passed through to
+  // autoIssueReceiptOnPaymentLand, which re-validates it unique before insert.
+  // Absent → the receipt auto-mints (MAX+1) as before.
+  overrideRid: z.string().trim().min(1).max(20).optional(),
 });
 
 export type MarkBillingRunPaidInput = z.infer<

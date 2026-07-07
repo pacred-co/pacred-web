@@ -89,6 +89,16 @@ export interface AutoIssueReceiptOpts {
    * or some other path. Defaults to `"wallet_hs.approve"`.
    */
   source?: string;
+  /**
+   * STEP-2 doc-number panel (2026-07-07). When accounting picks the receipt
+   * เลขที่ (rID) by hand in the slip-verify doc-number panel, it flows through
+   * here to BYPASS the MAX+1 auto-mint. Re-validated unique server-side before
+   * the tb_receipt insert (tb_receipt.rid is NOT a DB-unique key, so a duplicate
+   * would silently create a second doc with the same serial → we reject it and
+   * return `rid_duplicate`). Absent → the default auto-mint path (bulk/cascade
+   * lanes) is unchanged.
+   */
+  overrideRid?: string;
 }
 
 export type AutoIssueReceiptResult =
@@ -409,16 +419,41 @@ export async function autoIssueReceiptOnPaymentLand(
     ?? "";
   const recompAddress = corpRow?.corporateaddress ?? fallbackAddress;
 
-  // 6. Mint the rid via the new minter (FRC/FRG + yyMM + 5-digit seq).
+  // 6. Resolve the rid. Default = mint via the minter (FRC/FRG + yyMM + 5-digit
+  //    seq). STEP-2 override (2026-07-07): when accounting supplies `overrideRid`
+  //    from the doc-number panel, use it — but re-validate uniqueness FIRST
+  //    (legacy checkRIDF), because tb_receipt.rid has no DB UNIQUE constraint and
+  //    a duplicate serial must never be minted.
   let rid: string;
-  try {
-    rid = await mintReceiptDocNo(admin, { corporate, dateSlip });
-  } catch (e) {
-    console.error(`[auto-receipt: mintReceiptDocNo] threw`, {
-      error: e instanceof Error ? e.message : String(e),
-      userid, corporate,
-    });
-    return { ok: false, error: `mint_failed: ${e instanceof Error ? e.message : "unknown"}` };
+  const overrideRid = opts.overrideRid?.trim();
+  if (overrideRid) {
+    const { data: dupRid, error: dupErr } = await admin
+      .from("tb_receipt")
+      .select("id")
+      .eq("rid", overrideRid)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (dupErr) {
+      console.error(`[auto-receipt: overrideRid dup-check] failed`, {
+        code: dupErr.code, message: dupErr.message, overrideRid, userid,
+      });
+      return { ok: false, error: `db_error:${dupErr.code ?? "unknown"}` };
+    }
+    if (dupRid) {
+      logger.warn("auto-receipt", "overrideRid rejected — เลขที่ใบเสร็จซ้ำ", { overrideRid, userid, source });
+      return { ok: false, error: "rid_duplicate" };
+    }
+    rid = overrideRid;
+  } else {
+    try {
+      rid = await mintReceiptDocNo(admin, { corporate, dateSlip });
+    } catch (e) {
+      console.error(`[auto-receipt: mintReceiptDocNo] threw`, {
+        error: e instanceof Error ? e.message : String(e),
+        userid, corporate,
+      });
+      return { ok: false, error: `mint_failed: ${e instanceof Error ? e.message : "unknown"}` };
+    }
   }
 
   // 7. INSERT tb_receipt — legacy L574-575 column list.

@@ -27,6 +27,7 @@ import {
 } from "@/actions/admin/billing-run";
 import { uploadSlip } from "@/lib/storage-upload";
 import { SlipImage } from "@/components/admin/slip-image";
+import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
 
 type Props = {
   invoiceId: number;
@@ -105,6 +106,10 @@ export function BillingRunActions({
 
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  // STEP-2 doc-number panel (2026-07-07). null = keep the auto-mint suggestion;
+  // string = accounting hand-picked the ใบเสร็จ เลขที่ (passed as overrideRid).
+  const [overrideRid, setOverrideRid] = useState<string | null>(null);
 
   // Slip upload (multi) + reject
   const fileRef = useRef<HTMLInputElement>(null);
@@ -227,6 +232,8 @@ export function BillingRunActions({
         paymentReference: paymentRef,
         paidAt,
         paidAtTime,
+        // STEP-2: hand-picked receipt เลขที่ (null → auto-mint MAX+1).
+        overrideRid: overrideRid ?? undefined,
       });
       if (res.ok) {
         setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
@@ -463,6 +470,16 @@ export function BillingRunActions({
               <h4 className="font-medium text-sm text-emerald-800">
                 ✓ บันทึกการรับชำระ {hasPendingSlip ? "(อนุมัติ + ตัดจ่าย · รอบ 2)" : ""}
               </h4>
+
+              {/* STEP-2 — doc-number panel (ออกเลขที่ใบเสร็จ) before ตัดจ่าย. Mark-paid
+                  auto-creates the ใบเสร็จ; let accounting see/edit the เลขที่ + dup-check
+                  first. Absent override → auto-mint (MAX+1) unchanged. */}
+              <ReceiptDocNoEditor
+                userid={customerId}
+                dateSlipIso={paidAt}
+                onOverrideRidChange={setOverrideRid}
+                disabled={pending}
+              />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <label>
                   <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>

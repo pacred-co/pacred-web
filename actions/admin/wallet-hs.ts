@@ -67,6 +67,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { mintReceiptDocNo, yyMmTokenForDate } from "@/lib/admin/mint-receipt-doc-no";
 import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
@@ -648,6 +649,11 @@ const approveDepositSchema = z.object({
   // same-amount slip exists, unless the accountant explicitly acknowledges it
   // (the legacy blocking dup-review Pacred had softened to an advisory banner).
   acknowledgeDuplicate: z.boolean().optional(),
+  // STEP-2 doc-number panel (2026-07-07): accounting may hand-pick the ใบเสร็จ
+  // เลขที่ (rID) for the DIRECT forwarder-slip receipt. Passed through to
+  // autoIssueReceiptOnPaymentLand, which re-validates it unique before insert.
+  // Absent → the receipt auto-mints (MAX+1) as before.
+  overrideRid: z.string().trim().min(1).max(20).optional(),
 });
 export type AdminApproveWalletDepositInput = z.infer<typeof approveDepositSchema>;
 
@@ -727,6 +733,154 @@ export async function adminReviewSlipRound1(
     revalidatePath("/admin/wallet");
     revalidatePath("/admin");
     return { ok: true };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// STEP-2 doc-number panel (2026-07-07) — the missing legacy step-2 piece.
+// Two READ-ONLY helpers so accounting can see + hand-pick the ใบเสร็จ เลขที่
+// (rID) BEFORE the receipt is minted at approve, faithful to the legacy
+// create-f-receipt "ออกเลขบิล" panel (editable rID + live checkRIDF dup-check).
+// Neither mutates — they only READ tb_receipt / tb_corporate / tb_users.
+// ─────────────────────────────────────────────────────────────
+
+export type ReceiptDocNoPreview = {
+  /** The auto-mint suggestion (MAX+1 · what the receipt would get by default). */
+  nextRid: string;
+  /** The current highest doc-no this month for this corporate class (or null). */
+  previousRid: string | null;
+  previousIssueDate: string | null;
+  /** 1 = นิติบุคคล (FRC) · 2 = บุคคลธรรมดา (FRG). */
+  corporate: 1 | 2;
+  /** Customer identity for the receipt header. */
+  recompNumber: string;
+  recompName: string;
+  recompAddress: string;
+  /** ผู้อนุมัติ = the current admin (display only). */
+  approver: string;
+};
+
+/**
+ * PREVIEW the receipt doc-number + header identity for a customer. Read-only —
+ * runs the SAME MAX+1 lookup mintReceiptDocNo uses, but performs NO insert. The
+ * doc-number panel calls this to prefill the editable rID + show the previous
+ * doc-no + the customer's tax-id/name/address + the approver.
+ */
+export async function previewReceiptDocNo(
+  input: { userid: string; dateSlipIso?: string | null },
+): Promise<AdminActionResult<ReceiptDocNoPreview>> {
+  const userid = String(input?.userid ?? "").trim();
+  if (!userid) return { ok: false, error: "invalid_userid" };
+
+  return withAdmin<ReceiptDocNoPreview>(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
+    const parsed = input.dateSlipIso ? new Date(input.dateSlipIso) : new Date();
+    const dateSlip = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+
+    // corporate + identity (mirror lib/admin/auto-issue-receipt.ts L283-410).
+    // Best-effort READS — a failure logs + degrades to blank fields (this is a
+    // display preview, not a mutation), but §0c requires destructuring `error`.
+    const { data: corpRow, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("corporatenumber, corporatename, corporateaddress")
+      .eq("userid", userid)
+      .maybeSingle<{ corporatenumber: string | null; corporatename: string | null; corporateaddress: string | null }>();
+    if (corpErr && corpErr.code !== "PGRST116") console.error(`[previewReceiptDocNo: tb_corporate]`, { code: corpErr.code, message: corpErr.message });
+    const corporate: 1 | 2 = corpRow?.corporatenumber ? 1 : 2;
+
+    const { data: userRow, error: userErr } = await admin
+      .from("tb_users")
+      .select("userName, userLastName")
+      .eq("userID", userid)
+      .maybeSingle<{ userName: string | null; userLastName: string | null }>();
+    if (userErr) console.error(`[previewReceiptDocNo: tb_users]`, { code: userErr.code, message: userErr.message });
+
+    let fallbackAddress = "";
+    if (corporate === 2) {
+      const { data: addrMain, error: addrMainErr } = await admin
+        .from("tb_address_main")
+        .select("addressid")
+        .eq("userid", userid)
+        .maybeSingle<{ addressid: number | null }>();
+      if (addrMainErr && addrMainErr.code !== "PGRST116") console.error(`[previewReceiptDocNo: tb_address_main]`, { code: addrMainErr.code, message: addrMainErr.message });
+      if (addrMain?.addressid) {
+        const { data: addr, error: addrErr } = await admin
+          .from("tb_address")
+          .select("addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
+          .eq("addressid", addrMain.addressid)
+          .maybeSingle<{
+            addressno: string | null; addresssubdistrict: string | null;
+            addressdistrict: string | null; addressprovince: string | null; addresszipcode: string | null;
+          }>();
+        if (addrErr && addrErr.code !== "PGRST116") console.error(`[previewReceiptDocNo: tb_address]`, { code: addrErr.code, message: addrErr.message });
+        if (addr) {
+          fallbackAddress = [
+            addr.addressno ?? "",
+            addr.addresssubdistrict ? `ตำบล/แขวง ${addr.addresssubdistrict}` : "",
+            addr.addressdistrict ? `อำเภอ/เขต ${addr.addressdistrict}` : "",
+            addr.addressprovince ? `จังหวัด ${addr.addressprovince}` : "",
+            addr.addresszipcode ?? "",
+          ].filter(Boolean).join(" ").trim();
+        }
+      }
+    }
+
+    const nextRid = await mintReceiptDocNo(admin, { corporate, dateSlip });
+
+    // Previous doc-no = current MAX rid for this corporate class + yyMM.
+    const prefix = corporate === 1 ? "FRC" : "FRG";
+    const yyMm = yyMmTokenForDate(dateSlip);
+    const { data: prev, error: prevErr } = await admin
+      .from("tb_receipt")
+      .select("rid, issuedate")
+      .eq("corporatetype", String(corporate))
+      .ilike("rid", `${prefix}${yyMm}-%`)
+      .order("rid", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ rid: string | null; issuedate: string | null }>();
+    if (prevErr && prevErr.code !== "PGRST116") console.error(`[previewReceiptDocNo: tb_receipt prev]`, { code: prevErr.code, message: prevErr.message });
+
+    return {
+      ok: true,
+      data: {
+        nextRid,
+        previousRid: prev?.rid ?? null,
+        previousIssueDate: prev?.issuedate ?? null,
+        corporate,
+        recompNumber: corpRow?.corporatenumber ?? "",
+        recompName: corpRow?.corporatename ?? `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim(),
+        recompAddress: corpRow?.corporateaddress ?? fallbackAddress,
+        approver: (legacyAdminId || adminId) ?? "",
+      },
+    };
+  });
+}
+
+/**
+ * Live rID availability check (legacy `checkRIDF`). Returns `available:false`
+ * when a tb_receipt already carries this rid (the panel shows red ซ้ำ). Read-only.
+ */
+export async function checkReceiptRidAvailable(
+  input: { rid: string },
+): Promise<AdminActionResult<{ available: boolean }>> {
+  const rid = String(input?.rid ?? "").trim();
+  if (!rid) return { ok: false, error: "invalid_rid" };
+
+  return withAdmin<{ available: boolean }>(["accounting"], async () => {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_receipt")
+      .select("id")
+      .eq("rid", rid)
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (error) {
+      console.error(`[checkReceiptRidAvailable] failed`, { code: error.code, message: error.message, rid });
+      return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+    }
+    return { ok: true, data: { available: !data } };
   });
 }
 
@@ -886,7 +1040,7 @@ async function adminApproveWalletDepositImpl(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { id, acknowledgeDuplicate } = parsed.data;
+  const { id, acknowledgeDuplicate, overrideRid } = parsed.data;
 
   return withAdmin<ApproveResult>(
     ["accounting"],
@@ -1209,6 +1363,8 @@ async function adminApproveWalletDepositImpl(
             fids: [fid],
             dateSlip,
             source: "wallet_hs.approve_deposit.direct",
+            // STEP-2: accounting-chosen ใบเสร็จ เลขที่ (dup-validated in the helper).
+            overrideRid,
           });
           if (!rcpt.ok && !rcpt.alreadyIssued) {
             logger.warn("wallet-hs", "auto-receipt failed (non-fatal)", { wallet_hs_id: id, userid, fid, error: rcpt.error });

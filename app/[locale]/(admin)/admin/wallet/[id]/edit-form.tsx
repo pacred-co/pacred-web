@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
 import { DateTime24Field } from "@/components/admin/datetime-24-field";
+import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
 import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
 import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 // ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
@@ -51,16 +52,29 @@ export function EditDateSlipForm({
   id,
   initialDateSlip,
   showLabel = "แก้ไขเวลา",
+  needsRound1 = false,
+  reviewedAt = null,
 }: {
   id: number;
   initialDateSlip: string | null;
   showLabel?: string;
+  /**
+   * A4 STEP-1 fold (2026-07-07): for a customer payment slip (type 1/4/8) the
+   * date panel IS the round-1 review — saving the transfer date + dup-check is
+   * one continuous flow that also stamps `reviewed_at` (adminReviewSlipRound1),
+   * so the approve (round-2) unlocks without a separate "ตรวจสลิป รอบ 1" button.
+   */
+  needsRound1?: boolean;
+  /** The round-1 stamp (null = not yet reviewed). */
+  reviewedAt?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<boolean>(!initialDateSlip);
   const [value, setValue] = useState<string>(toLocalInput(initialDateSlip));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const round1Pending = needsRound1 && !reviewedAt;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,25 +85,65 @@ export function EditDateSlipForm({
     }
     startTransition(async () => {
       const res = await adminUpdateWalletHsDateSlip({ id, dateslip: value });
-      if (res.ok) {
-        router.refresh();
-        setOpen(false);
-      } else {
+      if (!res.ok) {
         setError(res.error);
+        return;
       }
+      // STEP-1 fold: กรอกวันที่โอน → ตรวจรายการซ้ำ → ผ่านรอบ 1 = ต่อเนื่องขั้นเดียว.
+      // Stamp round-1 on success for the payment-slip types. Best-effort — a stamp
+      // failure doesn't undo the saved date (the admin can re-confirm round-1).
+      if (needsRound1) {
+        await adminReviewSlipRound1({ id });
+      }
+      router.refresh();
+      setOpen(false);
+    });
+  }
+
+  // Confirm round-1 WITHOUT re-editing the date (a row that already has a
+  // transfer date but hasn't been round-1 reviewed yet). Keeps STEP-1 self-
+  // contained on this left pane.
+  function confirmRound1() {
+    setError(null);
+    startTransition(async () => {
+      const res = await adminReviewSlipRound1({ id });
+      if (res.ok) router.refresh();
+      else setError(res.error);
     });
   }
 
   return (
-    <div className="mt-2">
+    <div className="mt-2 space-y-2">
       {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
-        >
-          <Calendar className="h-3.5 w-3.5" /> {showLabel}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
+          >
+            <Calendar className="h-3.5 w-3.5" /> {showLabel}
+          </button>
+          {round1Pending && (
+            <button
+              type="button"
+              onClick={confirmRound1}
+              disabled={pending}
+              className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-50"
+            >
+              {pending ? "กำลังบันทึก…" : "✓ ตรวจสลิป รอบ 1 (ยืนยันวันที่โอนถูกต้อง)"}
+            </button>
+          )}
+          {needsRound1 && reviewedAt && (
+            <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+              ✓ ตรวจสลิป รอบ 1 แล้ว
+            </span>
+          )}
+        </div>
+      )}
+      {round1Pending && !open && (
+        <p className="text-[11px] text-sky-800">
+          ขั้นที่ 1 — ยืนยันวันที่โอน + ตรวจรายการซ้ำ (รอบ 1) ก่อน จึงจะกดอนุมัติ + ตัดจ่าย (รอบ 2) ได้
+        </p>
       )}
       {open && (
         <form onSubmit={onSubmit} className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
@@ -116,7 +170,7 @@ export function EditDateSlipForm({
               {pending ? (
                 <><Loader2 className="h-3 w-3 animate-spin" /> กำลังบันทึก…</>
               ) : (
-                "บันทึกวันที่โอน และตรวจสอบรายการซ้ำ"
+                needsRound1 ? "บันทึกวันที่โอน · ตรวจซ้ำ · ผ่านรอบ 1" : "บันทึกวันที่โอน และตรวจสอบรายการซ้ำ"
               )}
             </button>
             <button
@@ -253,6 +307,7 @@ export function ApproveRejectForm({
   hasDuplicate = false,
   needsRound1 = false,
   reviewedAt = null,
+  receiptContext = null,
 }: {
   id: number;
   hasDateSlip: boolean;
@@ -278,29 +333,30 @@ export function ApproveRejectForm({
    */
   needsRound1?: boolean;
   reviewedAt?: string | null;
+  /**
+   * STEP-2 doc-number panel (2026-07-07). When this deposit slip issues a
+   * ใบเสร็จ at approve (a ฝากนำเข้า DIRECT forwarder-slip · type='4'), pass the
+   * receipt context so accounting can see/edit the receipt เลขที่ + live dup-check
+   * before it's minted. Absent → no panel (the row issues no receipt at approve).
+   */
+  receiptContext?: { fid: number; userid: string; dateSlipIso: string | null } | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
   const [reason, setReason] = useState<string>("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // null = keep the auto-mint suggestion (receipt เลขที่ minted MAX+1 at settle);
+  // string = accounting hand-picked the เลขที่ (passed as overrideRid).
+  const [overrideRid, setOverrideRid] = useState<string | null>(null);
 
   const isWithdraw = kind === "withdraw";
   // Round-1 is pending when the row needs it + hasn't been reviewed yet.
+  // STEP-1 fold (2026-07-07): round-1 is now confirmed on the LEFT date panel
+  // (<EditDateSlipForm> · "บันทึกวันที่โอน · ตรวจซ้ำ · ผ่านรอบ 1"), NOT a separate
+  // button here — so while round-1 is pending the approve is simply DISABLED with a
+  // hint pointing left, instead of swapping in a "ตรวจสลิป รอบ 1" button.
   const round1Pending = !isWithdraw && needsRound1 && !reviewedAt;
-
-  function reviewRound1() {
-    setError(null);
-    if (!hasDateSlip) {
-      setError("กรุณากรอกวันที่ในสลิปก่อนตรวจรอบ 1");
-      return;
-    }
-    startTransition(async () => {
-      const res = await adminReviewSlipRound1({ id });
-      if (res.ok) router.refresh();
-      else setError(res.error);
-    });
-  }
 
   function approve() {
     setError(null);
@@ -329,7 +385,12 @@ export function ApproveRejectForm({
     startTransition(async () => {
       const res = isWithdraw
         ? await adminApproveWithdraw({ id })
-        : await adminApproveWalletDeposit({ id, acknowledgeDuplicate });
+        : await adminApproveWalletDeposit({
+            id,
+            acknowledgeDuplicate,
+            // STEP-2: pass the hand-picked receipt เลขที่ (null → auto-mint MAX+1).
+            overrideRid: overrideRid ?? undefined,
+          });
       if (res.ok) {
         router.refresh();
       } else {
@@ -384,41 +445,40 @@ export function ApproveRejectForm({
 
       {mode === "idle" && (
         <>
-          {/* A4 — show the 2 rounds explicitly (owner 2026-06-21). Round-1 done
-              shows a green ✓ banner; the approve becomes the round-2 button. */}
+          {/* A4 — show the 2 rounds explicitly (owner 2026-06-21). STEP-1 fold: round-1
+              is confirmed on the LEFT date panel; the approve here is round-2. When
+              round-1 is still pending the banner points left + the approve is disabled. */}
           {!isWithdraw && needsRound1 && (
             <div className={`rounded-lg border px-3 py-1.5 text-[11px] mb-2 ${reviewedAt ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
-              {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ตรวจสลิป (รอบ 1) ก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+              {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ทางด้านซ้ายก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+            </div>
+          )}
+          {/* STEP-2 — doc-number panel (ออกเลขที่ใบเสร็จ) for a receipt-issuing slip. */}
+          {!isWithdraw && receiptContext && (
+            <div className="mb-2">
+              <ReceiptDocNoEditor
+                fid={receiptContext.fid}
+                userid={receiptContext.userid}
+                dateSlipIso={receiptContext.dateSlipIso}
+                onOverrideRidChange={setOverrideRid}
+                disabled={pending}
+              />
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            {round1Pending ? (
-              <button
-                type="button"
-                onClick={reviewRound1}
-                disabled={pending}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50"
-              >
-                {pending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก…</>
-                ) : (
-                  <><CheckCircle2 className="h-4 w-4" /> ตรวจสลิป รอบ 1</>
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={approve}
-                disabled={pending}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
-              >
-                {pending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> {isWithdraw ? "กำลังจ่าย…" : "กำลังอนุมัติ…"}</>
-                ) : (
-                  <><CheckCircle2 className="h-4 w-4" /> {isWithdraw ? "ยืนยันจ่ายเงิน" : (needsRound1 ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "ยืนยันทำรายการ")}</>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={approve}
+              disabled={pending || round1Pending}
+              title={round1Pending ? "ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ทางด้านซ้ายก่อน" : undefined}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {pending ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> {isWithdraw ? "กำลังจ่าย…" : "กำลังอนุมัติ…"}</>
+              ) : (
+                <><CheckCircle2 className="h-4 w-4" /> {isWithdraw ? "ยืนยันจ่ายเงิน" : receiptContext ? "ยืนยันทำรายการ พร้อมสร้างใบเสร็จตามข้อมูลข้างต้น" : (needsRound1 ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "ยืนยันทำรายการ")}</>
+              )}
+            </button>
             <button
               type="button"
               onClick={() => { setMode("reject"); setError(null); }}

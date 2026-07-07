@@ -1471,6 +1471,8 @@ async function markBillingRunPaidImpl(
               fids:     Array.from(invFids),
               dateSlip: new Date(paidAtIso),
               source:   "billing_run.mark_paid",
+              // STEP-2: accounting-chosen ใบเสร็จ เลขที่ (dup-validated in the helper).
+              overrideRid: v.overrideRid,
             });
             if (rcpt.ok) {
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {

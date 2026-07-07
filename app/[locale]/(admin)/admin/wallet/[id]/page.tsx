@@ -422,6 +422,12 @@ export default async function AdminWalletDetail({
   );
   const isDirectSlip = directSlipShape.shape === "direct-slip";
 
+  // A4 two-round verify — customer payment slips (type 1/4/8) require a round-1
+  // review before the approve (round-2). STEP-1 fold: round-1 is confirmed on the
+  // left date panel (<EditDateSlipForm>), so pass the flag + stamp there too.
+  const reviewedAt = (row as { reviewed_at?: string | null }).reviewed_at ?? null;
+  const needsRound1 = row.type === "1" || row.type === "4" || row.type === "8";
+
   // ────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────
@@ -503,7 +509,12 @@ export default async function AdminWalletDetail({
                 เวลาโอนเงินในสลิป: {row.dateslip ? formatThai(row.dateslip) : "(ยังไม่ได้กรอก)"}
               </span>
               {isPending && (
-                <EditDateSlipForm id={row.id} initialDateSlip={row.dateslip} />
+                <EditDateSlipForm
+                  id={row.id}
+                  initialDateSlip={row.dateslip}
+                  needsRound1={needsRound1}
+                  reviewedAt={reviewedAt}
+                />
               )}
             </div>
 
@@ -669,9 +680,17 @@ export default async function AdminWalletDetail({
                   (s) => s.status === "1" || s.status === "2",
                 )}
                 // A4 two-round verify — customer payment slips (type 1/4/8) must
-                // be round-1 reviewed before approve (round-2). reviewed_at = stamp.
-                needsRound1={row.type === "1" || row.type === "4" || row.type === "8"}
-                reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
+                // be round-1 reviewed (on the left date panel) before approve (round-2).
+                needsRound1={needsRound1}
+                reviewedAt={reviewedAt}
+                // STEP-2 doc-number panel (2026-07-07): a ฝากนำเข้า DIRECT slip issues
+                // a ใบเสร็จ at approve time → let accounting see/edit the receipt เลขที่
+                // + live dup-check before it's minted.
+                receiptContext={
+                  isDirectSlip && row.reforder && /^\d+$/.test(String(row.reforder))
+                    ? { fid: Number(row.reforder), userid, dateSlipIso: row.dateslip }
+                    : null
+                }
               />
             ) : (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">

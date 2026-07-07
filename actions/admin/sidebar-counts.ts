@@ -23,7 +23,8 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
-import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
+import { pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
+import { computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
 import { type BadgeCounts, ADMIN_SIDEBAR_COUNTS_TAG } from "@/lib/admin/sidebar-menu";
 import { LIVE_INCIDENT_STATUSES } from "@/lib/validators/platform-incident";
 import { logger } from "@/lib/logger";
@@ -63,7 +64,7 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
 
   try {
     const [
-      walletTopup,
+      walletTopupBadge,
       walletWithdraw,
       shopPending,
       shopAwaitPay,
@@ -90,10 +91,12 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       // status='1' = รออนุมัติ. Direction comes from `type`, NOT the amount sign
       // (amounts are stored POSITIVE — an `amount<0` filter matched ZERO rows, so
       // the withdraw badge used to be permanently 0). Route BOTH badges through the
-      // shared SOT filters so they always agree with the /admin dashboard tabs.
-      pendingTopupFilter(
-        admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
-      ),
+      // shared SOT so they always agree with the /admin dashboard tabs.
+      // ชำระเงิน badge = computeTopupBadge (GOAL 1) — wallet-topup rows − wallet twins
+      // already on a pending ใบวางบิล (FRI) + pending FRIs. This is the SAME SOT the
+      // /admin dashboard topup tab uses, so sidebar badge = dashboard badge = list
+      // (previously the sidebar counted only wallet rows and omitted the FRI slips).
+      computeTopupBadge(admin),
       pendingWithdrawFilter(
         admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
       ),
@@ -202,7 +205,7 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
         .eq("cntStatus", "1"),
     ]);
 
-    const wt = n(walletTopup);
+    const wt = walletTopupBadge; // already a number (computeTopupBadge · GOAL 1)
     const ww = n(walletWithdraw);
     // B-6 ledger shipped (Wave 1) — query the live tb_cnt table for the
     // legacy "ค่าตู้รออนุมัติ" badge instead of the prior hardcoded 0.

@@ -39,6 +39,7 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { SlipImage } from "@/components/admin/slip-image";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
+import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
@@ -169,7 +170,6 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     usageCountsRes,
     totalCustomersCount,
     cancelledOrdersCount,
-    walletDepositsPending,
     walletWithdrawsPending,
     salesPayoutsPending,
     yuanPending,
@@ -215,11 +215,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
-    // Pending queues (tab badge counts). Both wallet queues route through the shared
-    // SOT filters (lib/wallet/wallet-hs.ts) so the dashboard tab + the sidebar badge
-    // always agree, and direction is keyed off `type` — NEVER the amount sign (amounts
-    // are stored POSITIVE, so the old `.lt('amount',0)` withdraw filter matched nothing).
-    pendingTopupFilter(admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })),
+    // Pending withdraw queue (tab badge count). Routes through the shared SOT filter
+    // (lib/wallet/wallet-hs.ts) so the dashboard tab + the sidebar badge always agree,
+    // and direction is keyed off `type` — NEVER the amount sign (amounts are stored
+    // POSITIVE, so the old `.lt('amount',0)` withdraw filter matched nothing).
+    // (The TOPUP badge is computed separately via computeTopupBadge so it can net out
+    //  the wallet↔ใบวางบิล เบิ้ล — GOAL 1. See below.)
     pendingWithdrawFilter(admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })),
     // payShop queue — repointed to the LIVE tb_shop_pay_h (real INSERT at
     // actions/admin/shop-disbursement.ts; the old rebuilt `sales_payouts` twin was 0-row).
@@ -307,14 +308,11 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const activePct     = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
   const inactivePct   = totalUsers > 0 ? Math.round((inactiveUsers / totalUsers) * 100) : 0;
 
-  // ภูม 2026-06-30 — สลิป "ใบวางบิล" รอบัญชีตรวจ ถูกรวมเข้าคิว "ชำระเงิน" (topup) แล้ว
-  // → นับเข้า badge ด้วยให้ตรงกับ list (§0f badge ตรง). cheap head-count (partial index).
-  const billSlipPendingRes = await createAdminClient()
-    .from("tb_forwarder_invoice")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "issued")
-    .eq("slip_status", "pending");
-  const billSlipPending = billSlipPendingRes.count ?? 0;
+  // ภูม 2026-06-30 — สลิป "ใบวางบิล" รอบัญชีตรวจ ถูกรวมเข้าคิว "ชำระเงิน" (topup) แล้ว.
+  // GOAL 1 (§0f badge ตรง) — the badge must equal the LIST after the เบิ้ล collapse:
+  // wallet-topup rows − wallet twins already on a pending FRI + pending FRIs. One SOT
+  // (computeTopupBadge) shared with the sidebar so dashboard badge = sidebar badge = list.
+  const topupBadge = await computeTopupBadge(createAdminClient());
 
   // เตรียมส่ง(6) vs กำลังจัดส่ง(62) — partition fstatus=6 by whether the row is in an
   // OPEN driver batch (fdistatus '' / '1' = assigned, not delivered).
@@ -327,7 +325,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
-    topup:              (walletDepositsPending.count ?? 0) + billSlipPending,
+    topup:              topupBadge,
     withdraw:           walletWithdrawsPending.count ?? 0,
     payShop:            salesPayoutsPending.count ?? 0,
     shop1:              shop1Count.count ?? 0,
@@ -745,9 +743,11 @@ function nameOf(u: RawUserRow | undefined): string {
  * เดียวกับสลิปต่อออเดอร์ (กดเข้าหน้า /admin/billing-run/[id] ตรวจ+ตัดจ่าย). Append-only —
  * ไม่แตะ logic tb_wallet_hs เดิม.
  */
+type BillingRunSlipRow = RowShape & { invoiceId: number; forwarderIds: number[] };
+
 async function fetchBillingRunSlipRows(
   admin: ReturnType<typeof createAdminClient>,
-): Promise<RowShape[]> {
+): Promise<BillingRunSlipRow[]> {
   const { data, error } = await admin
     .from("tb_forwarder_invoice")
     .select("id, doc_no, userid, buyer_name, total_thb, slip_path, slip_uploaded_at")
@@ -763,6 +763,28 @@ async function fetchBillingRunSlipRows(
     id: number; doc_no: string; userid: string | null; buyer_name: string | null;
     total_thb: number | string | null; slip_path: string | null; slip_uploaded_at: string | null;
   }>;
+
+  // Batch-read the forwarder ids each FRI bills so the topup queue can collapse a
+  // raw wallet slip twin whose forwarder is already covered by one of these FRIs
+  // (the เบิ้ล fix · GOAL 1 · lib/admin/topup-slip-dedup.ts). READ-only.
+  const fidByInvoice = new Map<number, number[]>();
+  const invoiceIds = list.map((r) => r.id);
+  if (invoiceIds.length > 0) {
+    const { data: items, error: itemErr } = await admin
+      .from("tb_forwarder_invoice_item")
+      .select("invoice_id, forwarder_id")
+      .in("invoice_id", invoiceIds);
+    if (itemErr) {
+      console.warn(`[billing-run slip queue: forwarder_ids] failed (soft-fail)`, itemErr);
+    } else {
+      for (const it of (items ?? []) as Array<{ invoice_id: number; forwarder_id: number }>) {
+        const arr = fidByInvoice.get(it.invoice_id) ?? [];
+        if (it.forwarder_id != null) arr.push(Number(it.forwarder_id));
+        fidByInvoice.set(it.invoice_id, arr);
+      }
+    }
+  }
+
   return await Promise.all(list.map(async (r) => {
     const slipUrl = r.slip_path ? await getSignedBucketUrl("slips", r.slip_path) : null;
     return {
@@ -775,6 +797,8 @@ async function fetchBillingRunSlipRows(
       link: `/admin/billing-run/${r.id}`,
       status: "1",
       slipUrl,
+      invoiceId: r.id,
+      forwarderIds: fidByInvoice.get(r.id) ?? [],
     };
   }));
 }
@@ -853,7 +877,29 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // ภูม 2026-06-30 — รวมสลิป "ใบวางบิล" (เซลแนบ · รอบัญชีตรวจ) เข้าคิว "ชำระเงิน"
       // เดียวกัน (เลิก tab แยก "วางบิลรอตรวจสลิป"). เฉพาะ topup (ขาเข้า) · withdraw ไม่แตะ.
       if (tab === "topup") {
-        return [...walletRows, ...(await fetchBillingRunSlipRows(admin))];
+        const friRows = await fetchBillingRunSlipRows(admin);
+        // COLLAPSE THE เบิ้ล (GOAL 1 · READ/aggregation only · no money moved · no
+        // settlement row dropped). A raw wallet slip that pays a forwarder DIRECTLY
+        // (type='4' · reforder=fid) is shown TWICE when a ใบวางบิล (FRI) also bills
+        // that same forwarder. The FRI wins (richer legacy-shaped doc · routes to the
+        // /admin/billing-run/[id] 2-round gate) → suppress the raw wallet twin.
+        const walletFidByRowId = new Map<string, number>();
+        for (const r of rows) {
+          if (r.type === "4" && r.reforder && /^\d+$/.test(String(r.reforder))) {
+            walletFidByRowId.set(String(r.id), Number(r.reforder));
+          }
+        }
+        const { suppressedWalletFids } = collapseWalletBillingPairs({
+          walletForwarderIds: [...walletFidByRowId.values()],
+          friForwarderSets: friRows.map((f) => ({ invoiceId: f.invoiceId, forwarderIds: f.forwarderIds })),
+        });
+        const filteredWalletRows = suppressedWalletFids.size === 0
+          ? walletRows
+          : walletRows.filter((w) => {
+              const fid = walletFidByRowId.get(w.id);
+              return fid === undefined || !suppressedWalletFids.has(fid);
+            });
+        return [...filteredWalletRows, ...friRows];
       }
       return walletRows;
     }
