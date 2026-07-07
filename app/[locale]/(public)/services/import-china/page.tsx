@@ -225,7 +225,7 @@ export default async function ImportChinaPage({
               {tp("heroEyebrow")}
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">{tp("h1Accent")}</span> {tp("h1Main")}
+              {tp("h1Prefix")} <span className="text-primary-600">{tp("h1Accent")}</span> {tp("h1Main")}
               <span className="hidden md:inline"> {tp("h1Suffix")}</span>
             </h1>
 

@@ -2647,8 +2647,8 @@
         "description": "Pacred Shipping services — China import (FCL/LCL), worldwide export, customs clearance, and 1688/Taobao/Tmall shop-order. All in one place."
       },
       "importChina": {
-        "title": "Import from China",
-        "description": "Import from China — 1688, Taobao, Tmall · FCL · LCL · door-to-door · cleared across every Incoterm and port by Pacred Shipping."
+        "title": "Import from China · FCL Full Container Shipping",
+        "description": "Full-service China import shipping — FCL full container · LCL groupage · order from 1688, Taobao, Tmall · factory pickup, customs clearance, Form E, door-to-door across Thailand by Pacred Shipping."
       },
       "importChinaFcl": {
         "title": "Import FCL from China",
@@ -7694,9 +7694,10 @@
     "svcLabel": "Services",
     "pageTitle": "Import from China",
     "heroEyebrow": "IMPORT FROM CHINA · Import from China",
+    "h1Prefix": "Shipping ·",
     "h1Accent": "Import from China",
-    "h1Main": "Full Service FCL · LCL",
-    "h1Suffix": "All Terms, All Ports",
+    "h1Main": "FCL Full Container",
+    "h1Suffix": "All-Inclusive · All Terms & Ports",
     "h2Desc": "Professional China import service — factory pickup · China-Thailand FCL/LCL shipping · customs clearance · Form E tax savings · Door-to-Door nationwide —",
     "h2Cta": "FCL from $500/container · LCL from $150/CBM · Chinese interpreter team closes deals for you",
     "freightCtaAriaLabel": "Get freight quote for FCL/LCL import",
