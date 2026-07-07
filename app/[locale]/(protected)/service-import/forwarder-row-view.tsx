@@ -54,7 +54,7 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   "1":   { label: "รอสินค้าเข้าโกดังจีน",  cls: "bg-amber-100 text-amber-700 border-amber-200"     },
   "2":   { label: "สินค้าถึงโกดังจีนแล้ว", cls: "bg-sky-100 text-sky-700 border-sky-200"           },
   "3":   { label: "กำลังส่งมาประเทศไทย",   cls: "bg-pink-100 text-pink-700 border-pink-200"        },
-  "4":   { label: "สินค้าถึงประเทศไทยแล้ว",cls: "bg-amber-200 text-amber-900 border-amber-300"     },
+  "4":   { label: "สินค้าถึงประเทศไทยแล้ว",cls: "bg-[#d7ccc8] text-[#5d4037] border-[#a1887f]"     },
   "5":   { label: "รอชำระเงิน",            cls: "bg-red-100 text-red-700 border-red-200"           },
   "6":   { label: "เตรียมส่ง",             cls: "bg-indigo-100 text-indigo-700 border-indigo-200"  },
   "6.1": { label: "กำลังจัดส่ง",           cls: "bg-cyan-100 text-cyan-700 border-cyan-200"        },
