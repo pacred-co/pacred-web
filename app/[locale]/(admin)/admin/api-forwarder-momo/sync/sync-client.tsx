@@ -263,30 +263,40 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
           </label>
         </div>
 
+        {/* พี่ป๊อป spec §4 — MOMO อัพเดตข้อมูล 3 รอบ (ยิ่งรอบท้าย ข้อมูล/สถานะยิ่งตรง). */}
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[11px] leading-relaxed text-sky-800">
+          <strong>MOMO อัพเดต 3 รอบ</strong> — ยิ่งรอบท้าย ข้อมูลยิ่งตรง ·
+          {" "}<b>รอบ 1 คร่าวๆ</b> (Import Track) → <b>รอบ 2 packing</b> (Sack) → <b>รอบ 3 ปิดตู้</b> (Container Closed).
+          {" "}ดึงซ้ำช่องเดิมได้เรื่อยๆ จนสถานะตรง.
+        </div>
+
         <div className="flex flex-wrap gap-2 pt-1">
           <button
             type="button"
             onClick={onFetchImportTrack}
             disabled={busy != null}
+            title="รอบ 1 — ข้อมูลคร่าวๆ ตอนพัสดุเข้าโกดังจีน"
             className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
           >
-            {busy === "import-track" ? "กำลังดึง..." : "ดึง Import Track"}
-          </button>
-          <button
-            type="button"
-            onClick={onFetchContainerClosed}
-            disabled={busy != null}
-            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {busy === "container-closed" ? "กำลังดึง..." : "ดึง Container Closed"}
+            {busy === "import-track" ? "กำลังดึง..." : "รอบ 1 · ดึง Import Track (คร่าวๆ)"}
           </button>
           <button
             type="button"
             onClick={onFetchSackInfo}
             disabled={busy != null || !sackNo.trim()}
+            title="รอบ 2 — ตอนแพ็คลงกระสอบ (ต้องกรอก Sack No)"
             className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
           >
-            {busy === "sack-info" ? "กำลังดึง..." : "ค้นหา Sack Info"}
+            {busy === "sack-info" ? "กำลังดึง..." : "รอบ 2 · ค้นหา Sack Info (packing)"}
+          </button>
+          <button
+            type="button"
+            onClick={onFetchContainerClosed}
+            disabled={busy != null}
+            title="รอบ 3 — ตอนปิดตู้ (ข้อมูลตรงที่สุด)"
+            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+          >
+            {busy === "container-closed" ? "กำลังดึง..." : "รอบ 3 · ดึง Container Closed (ปิดตู้)"}
           </button>
           <span className="border-l border-border mx-1 self-stretch" />
           <button
