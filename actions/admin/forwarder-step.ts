@@ -65,6 +65,7 @@ import { FSTATUS_CFG } from "@/lib/admin/forwarder-status";
 import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { sendNotification } from "@/lib/notifications";
+import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 
 // ── Local resolveLegacyAdminId (same pattern as forwarders-field-edits.ts) ───
 // Known consolidation TODO across the forwarder actions; kept local to avoid
@@ -269,6 +270,13 @@ export async function revertForwarderStep(
             "ถ้าต้องการแก้ไขการชำระเงิน ให้ทำผ่านหน้าจ่ายแทนลูกค้า/คืนเงิน",
         };
       }
+
+      // Defense-in-depth (legacy forwarder.php:1290 "ePayRe") — a payment row
+      // (tb_wallet_hs typenew 5/6, reforder=fid) also blocks the 6→5 demote back
+      // into รอชำระเงิน. Complements the settled-PAY guard above (different marker).
+      // Fail-CLOSED.
+      const noRebill = await assertNotRefunded(admin, fid);
+      if (!noRebill.ok) return { ok: false, error: noRebill.error };
     }
 
     // 4. Build the UPDATE.
@@ -343,6 +351,10 @@ export async function adminAdvanceForwarderToWaitPayment(
     const skipped: number[] = [];
 
     for (const fid of fIds) {
+      // MONEY — refuse a flip-to-รอชำระเงิน(5) on a row that already has a
+      // payment (legacy forwarder.php:1290 "ePayRe" · กันเรียกเก็บซ้ำ). Fail-CLOSED.
+      const noRebill = await assertNotRefunded(admin, fid);
+      if (!noRebill.ok) { skipped.push(fid); continue; }
       // Flip ONLY 4 → 5, atomically (WHERE fstatus='4'). Any other status → 0 rows → skip.
       const { data: updated, error: updErr } = await admin
         .from("tb_forwarder")
@@ -496,6 +508,15 @@ export async function advanceForwarderStep(
       };
     }
     const to = String(fromInt + 1);
+
+    // ── MONEY — refuse the 4→5 advance (into รอชำระเงิน) on an already-paid row ──
+    // Legacy forwarder.php:1290 "ePayRe" · a payment record (tb_wallet_hs typenew
+    // 5/6, reforder=fid) means this order is paid → don't demote it into a
+    // bill-collectible state (กันเรียกเก็บซ้ำ). Fail-CLOSED. 5→6 is unaffected.
+    if (to === "5") {
+      const noRebill = await assertNotRefunded(admin, fid);
+      if (!noRebill.ok) return { ok: false, error: noRebill.error };
+    }
 
     // ── UNIT E — credit-limit lock on the advance to fstatus '6' (เตรียมส่ง) ──
     // Owner: a credit customer who is at/over their credit limit (with unpaid

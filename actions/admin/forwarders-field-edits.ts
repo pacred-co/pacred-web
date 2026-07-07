@@ -84,6 +84,7 @@ import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
+import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
 const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
@@ -1177,6 +1178,13 @@ export async function adminMarkForwarderCredit(
     if (!["1", "2", "3", "4", "5"].includes((fwd.fstatus ?? "").trim())) {
       return { ok: false, error: `สถานะปัจจุบัน (${fwd.fstatus}) ให้เครดิตไม่ได้ — ต้องเป็นรายการที่ยังไม่ส่ง` };
     }
+
+    // MONEY — refuse granting credit (flip to fstatus '6'/fcredit='1') on a row
+    // that already has a payment (legacy forwarder.php:1290 "ePayRe" · the guard
+    // fires for fStatus 5 AND 'c'/credit). Prevents re-billing an already-paid
+    // import onto the customer's credit line. Fail-CLOSED.
+    const noRebill = await assertNotRefunded(admin, d.fId);
+    if (!noRebill.ok) return { ok: false, error: noRebill.error };
 
     // 2. Read the customer's credit LIMIT + corporate flag (tb_users · camelCase).
     const { data: u, error: uErr } = await admin

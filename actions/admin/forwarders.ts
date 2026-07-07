@@ -8,6 +8,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
+import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
@@ -739,6 +740,39 @@ export async function adminBulkUpdateForwarderTbStatus(
                 `ระบบได้แจ้งชำระไปยังลูกค้าแล้ว`,
             };
           }
+        }
+      }
+    }
+
+    // ── MONEY — refund/re-bill lock on the move to fstatus '5' (รอชำระเงิน) ──────
+    // Legacy forwarder.php:1290 "ePayRe": a row that already has a payment
+    // (tb_wallet_hs typenew 5/6, reforder=fid) must NOT be flipped back into a
+    // bill-collectible state → กันเรียกเก็บซ้ำ. Apply PER ROW; SKIP the paid rows
+    // (don't fail the whole batch — mirrors the credit-lock skip-and-report just
+    // above). Disjoint from the credit-lock (that fires on target '6'). Fail-CLOSED.
+    if (derivedFstatus === "5") {
+      const refundBlocked: Array<{ id: number; fidorco: string | null }> = [];
+      for (const r of beforeRows) {
+        const noRebill = await assertNotRefunded(admin, r.id);
+        if (!noRebill.ok) refundBlocked.push({ id: r.id, fidorco: r.fidorco });
+      }
+      if (refundBlocked.length > 0) {
+        const blockedIdSet = new Set(refundBlocked.map((b) => b.id));
+        workFids = workFids.filter((id) => !blockedIdSet.has(id));
+        beforeRows = beforeRows.filter((r) => !blockedIdSet.has(r.id));
+        await logAdminAction(adminId, "forwarder.bulk_refund_rebill_skip", "tb_forwarder", "bulk", {
+          target_fstatus: derivedFstatus,
+          skipped: refundBlocked.map((b) => ({ id: b.id, fidorco: b.fidorco })),
+        });
+        // Every targeted row was refund-blocked → nothing left to update.
+        if (workFids.length === 0 || beforeRows.length === 0) {
+          const sample = refundBlocked.slice(0, 5).map((b) => `#${b.fidorco ?? b.id}`).join(", ");
+          const more = refundBlocked.length > 5 ? ` และอีก ${refundBlocked.length - 5} รายการ` : "";
+          bustAdminChrome();
+          return {
+            ok: false,
+            error: `เปลี่ยนเป็นรอชำระเงินไม่ได้ — รายการต่อไปนี้มีบันทึกการชำระเงินแล้ว (กันเรียกเก็บซ้ำ): ${sample}${more}`,
+          };
         }
       }
     }
