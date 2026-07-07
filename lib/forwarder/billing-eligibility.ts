@@ -128,3 +128,31 @@ export function isBillableForwarder(
     isAdvanceBillEligible(row)
   );
 }
+
+/**
+ * BILLING-RUN eligibility (owner 2026-07-07) — a ใบวางบิล is issued ONLY for
+ * CREDIT (fcredit='1') or นิติบุคคล (juristic) customers. A cash customer's
+ * ฝากนำเข้า is collected by the customer paying on the portal (total+QR+slip at
+ * fstatus='5'), the staff verifying the slip at /admin/wallet, and the auto-receipt
+ * — NEVER by a billing-run. So the two eligibility PICKERS drop the pure cash
+ * cohort (a plain fstatus='5' row on a personal, non-credit customer).
+ *
+ *   juristic customer → every billable row (isBillableForwarder)
+ *   else (cash/personal) → credit-unsettled OR advance-bill only (drops cash rows)
+ *
+ * NOTE: this is per-CUSTOMER — juristic is a `tb_users.userCompany`/`tb_corporate`
+ * fact, not a `tb_forwarder` column (fusercompany is stamped only at pay-time and
+ * is empty for essentially all unpaid rows) — so it cannot be a pure SQL WHERE
+ * clause. The candidate rows are fetched by the same union queries (the cash query
+ * stays as the pool that surfaces juristic-cash rows); this predicate then drops
+ * the non-juristic cash rows in memory. Does NOT change createBillingRunInvoice's
+ * guard (isBillableForwarder), only WHO the pickers surface. Reversible (this fn).
+ */
+export function isBillingRunEligible(
+  row: ForwarderBillingEligibilityFields,
+  customerIsJuristic: boolean,
+): boolean {
+  if (!isBillableForwarder(row)) return false;
+  if (customerIsJuristic) return true; // นิติ → all billable stages
+  return isCreditUnsettledEligible(row) || isAdvanceBillEligible(row); // else credit/advance only
+}

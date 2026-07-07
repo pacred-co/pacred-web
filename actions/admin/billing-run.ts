@@ -51,6 +51,7 @@ import { getContainerCompletenessBatch } from "@/lib/warehouse/container-complet
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import {
   isBillableForwarder,
+  isBillingRunEligible,
   type ForwarderBillingEligibilityFields,
 } from "@/lib/forwarder/billing-eligibility";
 import { sendNotification } from "@/lib/notifications";
@@ -289,23 +290,21 @@ export async function listEligibleCustomers(): Promise<
       // already-billed rows (badged · ติ๊กได้เพื่อออกใบใหม่ · ภูม 2026-06-22 "เผื่อวางบิล
       // ผิดต้องวางใหม่"), so the dropdown count must include them too or the two
       // disagree again. The picker badges + warns on a re-bill; it no longer hides.
-      const aggByUser = new Map<string, { count: number; total: number }>();
+      //
+      // Collect every BILLABLE row per user. The credit/นิติ narrowing (owner
+      // 2026-07-07 — drop the cash cohort) is DEFERRED to the final map: juristic
+      // is a per-customer fact that needs the tb_users/tb_corporate join below,
+      // so we can't decide eligibility here yet.
+      const rowsByUser = new Map<string, FwdBillingRaw[]>();
       for (const r of aggById.values()) {
         if (!r.userid) continue;
         if (!isBillableForwarder(r)) continue; // defensive — Set B narrows to 5/6
-        const cur = aggByUser.get(r.userid) ?? { count: 0, total: 0 };
-        cur.count += 1;
-        // WHT-fix 2026-06-25 — GROSS composite (Σ 7 cols − discount, no 1%).
-        // The ใบวางบิล stores gross + shows the หัก ณ ที่จ่าย 1% as its own line
-        // (computeBillWht). This dropdown preview is the bill's gross total; the
-        // create-form's สรุปยอด section then breaks out the WHT + net. Was
-        // calcForwarderOutstanding (NET) → previewed a pre-deducted total that
-        // then got 1% withheld AGAIN on the bill = double-deduct.
-        cur.total += calcForwarderGross(r);
-        aggByUser.set(r.userid, cur);
+        const list = rowsByUser.get(r.userid) ?? [];
+        list.push(r);
+        rowsByUser.set(r.userid, list);
       }
 
-      const userids = Array.from(aggByUser.keys());
+      const userids = Array.from(rowsByUser.keys());
       if (userids.length === 0) {
         return { ok: true, data: { rows: [] } };
       }
@@ -364,7 +363,7 @@ export async function listEligibleCustomers(): Promise<
       }
 
       const rows: EligibleCustomerRow[] = userids
-        .map((uid) => {
+        .map((uid): EligibleCustomerRow | null => {
           const u = userByID.get(uid);
           const corp = corpByUser.get(uid);
           // Juristic flag = tb_users.userCompany === '1' (per legacy
@@ -372,19 +371,32 @@ export async function listEligibleCustomers(): Promise<
           // tb_corporate.corporatenumber for safety (some legacy rows lost
           // userCompany during migration).
           const isJuristic = u?.userCompany === "1" || !!corp?.number;
+          // BILLING-RUN narrowing (owner 2026-07-07) — a ใบวางบิล is issued ONLY
+          // for CREDIT or นิติบุคคล. For a cash (personal, non-credit) customer
+          // this drops their fstatus='5' rows → they collect by paying on the
+          // portal (ตรวจสลิปที่ /admin/wallet), not via a billing-run. count/total
+          // stay EXACT vs the narrowed picker (§0f) since both use this predicate.
+          const eligibleRows = (rowsByUser.get(uid) ?? []).filter((r) =>
+            isBillingRunEligible(r, isJuristic),
+          );
+          if (eligibleRows.length === 0) return null; // no billing-run rows → drop customer
           const display = isJuristic
             ? `${uid} (${corp?.name || u?.userName || ""} ${corp?.number ?? ""})`.trim()
             : `${uid} (${u?.userName ?? ""} ${u?.userLastName ?? ""})`.trim();
-          const agg = aggByUser.get(uid)!;
+          // WHT-fix 2026-06-25 — GROSS composite (Σ 7 cols − discount, no 1%).
+          // The ใบวางบิล stores gross + shows the หัก ณ ที่จ่าย 1% as its own line
+          // (computeBillWht). This dropdown preview is the bill's gross total.
+          const total = eligibleRows.reduce((s, r) => s + calcForwarderGross(r), 0);
           return {
             userid:             uid,
             display_name:       display,
             is_juristic:        isJuristic,
             tax_id:             corp?.number ?? "",
-            eligible_count:     agg.count,
-            eligible_total_thb: Math.round(agg.total * 100) / 100,
+            eligible_count:     eligibleRows.length,
+            eligible_total_thb: Math.round(total * 100) / 100,
           };
         })
+        .filter((r): r is EligibleCustomerRow => r !== null)
         .sort((a, b) => a.userid.localeCompare(b.userid));
 
       return { ok: true, data: { rows } };
@@ -455,14 +467,44 @@ export async function listEligibleForwarders(
         return { ok: false, error: bErr.message };
       }
 
+      // Is this customer นิติบุคคล? Same signal listEligibleCustomers +
+      // createBillingRunInvoice use: tb_users.userCompany==='1' OR a
+      // tb_corporate.corporatenumber. Needed for the credit/นิติ narrowing below.
+      const { data: uRow, error: uErr } = await admin
+        .from("tb_users")
+        .select("userCompany")
+        .eq("userID", userid)
+        .maybeSingle<{ userCompany: string | null }>();
+      if (uErr) {
+        console.error("[listEligibleForwarders tb_users] failed", {
+          code: uErr.code, message: uErr.message,
+        });
+      }
+      const { data: cRow, error: cErr } = await admin
+        .from("tb_corporate")
+        .select("corporatenumber")
+        .eq("userid", userid)
+        .maybeSingle<{ corporatenumber: string | null }>();
+      if (cErr) {
+        console.error("[listEligibleForwarders tb_corporate] failed", {
+          code: cErr.code, message: cErr.message,
+        });
+      }
+      const customerIsJuristic =
+        uRow?.userCompany === "1" || (cRow?.corporatenumber ?? "").trim() !== "";
+
       // Union by id (a row can be in both sets) — keep the deterministic
       // newest-first order from Set A.
       const fwdById = new Map<number, FwdBillingRaw>();
       for (const r of ([...(aRaw ?? []), ...(bRaw ?? [])] as unknown as FwdBillingRaw[])) {
         fwdById.set(r.id, r);
       }
+      // BILLING-RUN narrowing (owner 2026-07-07) — surface a row ONLY if this
+      // customer is credit/นิติ (juristic → all billable; else credit/advance
+      // only, dropping the cash fstatus='5' rows). A cash customer collects by
+      // paying on the portal (ตรวจสลิปที่ /admin/wallet), not via a billing-run.
       const fwd = Array.from(fwdById.values())
-        .filter((r) => isBillableForwarder(r)) // defensive — narrow Set B to 5/6
+        .filter((r) => isBillingRunEligible(r, customerIsJuristic))
         .sort((a, b) => b.id - a.id);
       if (fwd.length === 0) {
         return { ok: true, data: { rows: [] } };

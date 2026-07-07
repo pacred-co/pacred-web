@@ -357,8 +357,8 @@ export default async function BillingRunListPage({
         <div className="pt-4">
           <PageHeader
             eyebrow="ADMIN · รายรับ → ใบวางบิล"
-            title="ใบวางบิล"
-            subtitle="ออกใบเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม · ดูประวัติ · ปรับสถานะรับชำระ"
+            title="ใบวางบิล (เฉพาะลูกค้าเครดิต / นิติบุคคล)"
+            subtitle="ออกใบเรียกเก็บค่าฝากนำเข้าเฉพาะลูกค้าเครดิตเทอม/นิติบุคคล · ลูกค้าเงินสดชำระเองผ่านพอร์ทัล (ตรวจสลิปที่ /admin/wallet) · ดูประวัติ · ปรับสถานะรับชำระ"
             actions={
               <>
                 <CsvButton
@@ -488,7 +488,8 @@ export default async function BillingRunListPage({
 
         {/* PEAK-style help note */}
         <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 text-xs text-muted space-y-1">
-          <p>💡 <strong>เกี่ยวกับ ใบวางบิล</strong> — เป็นเอกสารเรียกเก็บค่าฝากนำเข้าให้ลูกค้าเครดิตเทอม (juristic/บุคคลธรรมดาที่มีเครดิต) สร้างจากรายการ <code className="bg-surface px-1 rounded">tb_forwarder.fStatus=5</code> (ส่งแล้ว · รอชำระเงิน) ลูกค้าเห็นใบวางบิลของตัวเองที่ <Link href="/billing-run" className="text-primary-600 hover:underline">/billing-run</Link>.</p>
+          <p>💡 <strong>เกี่ยวกับ ใบวางบิล</strong> — เป็นเอกสารเรียกเก็บค่าฝากนำเข้าให้ <strong>เฉพาะลูกค้าเครดิตเทอม หรือ นิติบุคคล</strong> เท่านั้น สร้างจากรายการ <code className="bg-surface px-1 rounded">tb_forwarder.fStatus=5</code> (ส่งแล้ว · รอชำระเงิน) ลูกค้าเห็นใบวางบิลของตัวเองที่ <Link href="/billing-run" className="text-primary-600 hover:underline">/billing-run</Link>.</p>
+          <p>💵 <strong>ลูกค้าเงินสด</strong> (บุคคลธรรมดา ไม่มีเครดิต) ไม่ต้องออกใบวางบิล — ลูกค้าชำระค่าฝากนำเข้าเองผ่านพอร์ทัล (เห็นยอด+QR+แนบสลิปตอน fStatus=5) แล้วพนักงานตรวจสลิปที่ <Link href="/admin/wallet" className="text-primary-600 hover:underline">/admin/wallet</Link> → ระบบออกใบเสร็จอัตโนมัติ.</p>
           <p>📨 ส่งแจ้งเตือนผ่าน LINE OA + Email ได้ที่หน้า detail · ระบบเตือนซ้ำอัตโนมัติทุกเช้า 09:00 (cron <code className="bg-surface px-1 rounded">billing-run-overdue</code>) สำหรับใบที่เลยกำหนด.</p>
           <p>🔗 ดูเอกสารที่เกี่ยวข้อง: <Link href="/admin/forwarders/combine-bill" className="text-primary-600 hover:underline">รวมบิลสินค้า (ใบส่งสินค้า)</Link> · <Link href="/admin/accounting/receipts" className="text-primary-600 hover:underline">ใบเสร็จรับเงิน</Link> · <Link href="/admin/accounting/ar-aging" className="text-primary-600 hover:underline">ลูกหนี้ค้างชำระ (AR Aging)</Link></p>
         </section>

@@ -19,6 +19,7 @@ import {
   isCreditUnsettledEligible,
   isAdvanceBillEligible,
   isBillableForwarder,
+  isBillingRunEligible,
   type ForwarderBillingEligibilityFields,
 } from "./billing-eligibility";
 import {
@@ -162,6 +163,35 @@ assertEq("isBillableForwarder: fstatus 2 not confirmed → false (unchanged)",
   isBillableForwarder(gate({ fstatus: "2", ftotalprice: 1000 })), false);
 assertEq("isBillableForwarder: plain fstatus 5 still true (cohort A intact)",
   isBillableForwarder(gate({ fstatus: "5" })), true);
+
+// ── BILLING-RUN eligibility (owner 2026-07-07 · credit/นิติ ONLY, drop cash) ──
+section("billing-run eligibility — credit/นิติ only (drop the cash cohort)");
+// นิติ customer → every billable stage counts (incl. plain cash fstatus='5').
+assertEq("juristic: plain fstatus 5 (cash) → eligible",
+  isBillingRunEligible(gate({ fstatus: "5" }), true), true);
+assertEq("juristic: credit-unsettled fstatus 6 → eligible",
+  isBillingRunEligible(gate({ fstatus: "6", fcredit: "1" }), true), true);
+assertEq("juristic: confirmed advance (fstatus 2) → eligible",
+  isBillingRunEligible(gate({ fstatus: "2", advance_bill_confirmed: "1", ftotalprice: 1000 }), true), true);
+assertEq("juristic: non-billable (fstatus 1) → not eligible",
+  isBillingRunEligible(gate({ fstatus: "1" }), true), false);
+// CASH (non-juristic) customer → the plain fstatus='5' cohort is DROPPED.
+assertEq("cash: plain fstatus 5 → NOT eligible (dropped · collect on portal)",
+  isBillingRunEligible(gate({ fstatus: "5" }), false), false);
+// CASH but on credit → still eligible (credit cohort survives).
+assertEq("cash-but-credit: fstatus 5 fcredit=1 → eligible",
+  isBillingRunEligible(gate({ fstatus: "5", fcredit: "1" }), false), true);
+assertEq("cash-but-credit: fstatus 6 fcredit=1 → eligible",
+  isBillingRunEligible(gate({ fstatus: "6", fcredit: "1" }), false), true);
+// CASH + confirmed advance bill → still eligible (advance cohort survives).
+assertEq("cash: confirmed advance (fstatus 3) → eligible",
+  isBillingRunEligible(gate({ fstatus: "3", advance_bill_confirmed: "1", ftotalprice: 1 }), false), true);
+// CASH + settled credit (paydeposit=1) → not eligible.
+assertEq("cash: settled credit (paydeposit=1) → not eligible",
+  isBillingRunEligible(gate({ fstatus: "6", fcredit: "1", paydeposit: "1" }), false), false);
+// non-billable row → never eligible regardless of juristic.
+assertEq("cash: non-billable (fstatus 1) → not eligible",
+  isBillingRunEligible(gate({ fstatus: "1" }), false), false);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} forwarder/billing-eligibility: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

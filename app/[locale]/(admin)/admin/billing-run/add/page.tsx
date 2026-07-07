@@ -77,9 +77,9 @@ export default async function BillingRunAddPage({
 
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">สร้างใบวางบิลใหม่</h1>
+          <h1 className="text-xl font-bold tracking-tight">สร้างใบวางบิลใหม่ (เฉพาะเครดิต / นิติบุคคล)</h1>
           <p className="text-xs text-muted mt-0.5">
-            เลือกลูกค้า → เลือกรายการฝากนำเข้า (fStatus=5) → ตั้งวันครบกำหนด → ออกใบวางบิล
+            เลือกลูกค้า → เลือกรายการฝากนำเข้า (fStatus=5) → ตั้งวันครบกำหนด → ออกใบวางบิล · แสดงเฉพาะลูกค้าเครดิต/นิติบุคคล (ลูกค้าเงินสดชำระเองที่พอร์ทัล)
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -102,7 +102,7 @@ export default async function BillingRunAddPage({
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-700">
           <p className="text-sm font-medium">ไม่มีลูกค้าที่มีรายการรอออกใบวางบิล</p>
           <p className="text-xs mt-1">
-            ใบวางบิลออกได้เฉพาะรายการฝากนำเข้าที่อยู่ในสถานะ <strong>รอชำระเงิน (fStatus=5)</strong> เท่านั้น
+            ใบวางบิลออกได้เฉพาะ <strong>ลูกค้าเครดิตเทอม หรือ นิติบุคคล</strong> ที่มีรายการฝากนำเข้ารอชำระ (fStatus=5 หรือเครดิตค้างชำระ) เท่านั้น · ลูกค้าเงินสดชำระค่าฝากนำเข้าเองผ่านพอร์ทัล (ตรวจสลิปที่ <strong>/admin/wallet</strong>)
           </p>
         </div>
       )}
