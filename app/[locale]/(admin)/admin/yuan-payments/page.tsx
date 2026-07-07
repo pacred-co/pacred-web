@@ -440,6 +440,7 @@ export default async function AdminYuanPaymentsPage({
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
+                  <th className="px-3 py-3">เลขที่ออเดอร์</th>
                   <YuanSortTh label="วันที่สร้าง" field="paydate"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <YuanSortTh label="ลูกค้า"      field="userid"       activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
                   <YuanSortTh label="ช่องทาง"     field="paytype"      activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
@@ -471,6 +472,7 @@ export default async function AdminYuanPaymentsPage({
                       <td className="px-2 py-3 w-8">
                         {status === "1" ? <TbYuanRowCheckbox id={r.id} /> : null}
                       </td>
+                      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{r.id}</td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.paydate
                           ? new Date(r.paydate).toLocaleString("th-TH", {
