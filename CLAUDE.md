@@ -3,6 +3,20 @@
 
 ---
 
+# 🧾 2026-07-07 ค่ำ (เดฟ · resume ต่อจาก limit) — กู้ WIP faithful-port (refund-rebill guard) + verify flow นำเข้า faithful vs PCS จริง (list/คนขับ/ตู้/ขนส่ง) + WHT namesake = ยืนยันแก้จบ + เจอ gap report-cnt 11 exception-tab → ALL 4 BRANCHES · read FIRST
+
+> **🏁 CLOSE (owner: "ต่อ session ค้าง · resume ก่อน limit · flow นำเข้าให้จบ · หน้าตา+logic เหมือน PCS อันดับแรก · รัน local ต่อ chrome" → "ปิด session · push all branch · สรุป").** **all 4 (main=dave-pacred=Poom-pacred=InwPond007) → `<HEAD>`** (Vercel prod). PCS PHP รัน local เป็น reference: `https://localhost/pcscargo/member/pcs-admin/` (admin_tam/pacred1234 · services `mysqld`+`httpd` via PowerShell · cert bypass `thisisunsafe` · [[pcs-legacy-local-run]]). legacy source ก็อ่านได้ที่ `C:\xampp\htdocs\pcscargo\member\pcs-admin\*.php`. 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`) · `.env.local` SUPABASE_DB_PASSWORD STALE (`Jirayus40x.` — ใช้ DqOz.../n61... แทน). NEXT FREE mig = 0244. gate: `rm -f .next/dev/types/validator.ts` ก่อน · NODE_OPTIONS=8192 build (อ่าน BUILD_EXIT · ห้าม build ตอน preview เปิด) · tsc 0 · commit heredoc `cat > f <<'EOF'`.
+>
+> **✅ งาน resume นี้:**
+> - **กู้ WIP faithful-port session (ก่อนติด limit) — ห้ามงานหาย** — worktree มี WIP ค้าง (guard ใหม่ + 3 forwarder action edits + package.json) → verify coherent (test 5/5 · tsc 0) → commit **`ed986de5`** = `lib/admin/refund-rebill-guard.ts` `assertNotRefunded` (port legacy `forwarder.php:1290` ePayRe · กันเรียกเก็บเงินซ้ำบนออเดอร์นำเข้าที่จ่ายแล้ว · REFUSAL-only fail-closed · wired 7 flip-to-5/credit sites). build 0 · push 4 branch.
+> - **verify flow นำเข้า faithful vs PCS จริง (เทียบ Chrome + code):** รายการฝากนำเข้า (source/status tabs · date filter 30วัน · bulk bar · คอลัมน์) · คนขับ (`forwarder-driver.php` list cols) · **รายงานตู้ 14 คอลัมน์ตรง** (หมายเลขตู้→สถานะจ่ายค่าตู้ + totals) · การเลือกขนส่ง (`nameShipBy` Flash=2/J&T=24/เหมาๆ=PRF · admin 47 เจ้า · zone logic) = **faithful ระดับ label/คอลัมน์แล้ว** (session ก่อนทำครบ).
+> - **WHT 1% double-deduction (ชื่อ session) = ยืนยันแก้จบ (verify code):** ใบวางบิลใช้ `calcForwarderGross` (GROSS) + `computeBillWht` หัก 1% **ครั้งเดียว** (billing-run.ts:565/735/1112) · net ลูกค้า = `calcForwarderOutstanding` (ตรง legacy `calPriceForwarderMain` L1864) · fix ตั้งแต่ `3e529b42` · "12 ใบ" = over-count (หักซ้อนจริง 0) · เหลือ FRI2606-00006 (PR7429 ฿21.57 re-issue · owner/บัญชี).
+> - **🔴 GAP เจอ (punch-list `cbff4fe6` · [`docs/research/import-flow-pcs-fidelity-punchlist-2026-07-07.md`](docs/research/import-flow-pcs-fidelity-punchlist-2026-07-07.md)):** report-cnt ขาด **11 QA/exception tabs** ของ PCS ทั้งหมด (หมายเหตุสั่งซื้อ/นำเข้า · ไม่ได้ถ่ายสินค้า · ไม่ใส่ค่าขนส่ง/เบอร์ตู้/วันปิดตู้ · ไม่เลือกขนส่งฟรี · เลือกขนส่งผิด · เครดิตเกินกำหนด · ประวัติเข้าโกดังไทย) = "ทุกทางเข้า" ยังไม่ครบ (~ครึ่งวัน · 11 query + tab strip).
+>
+> **🔴 CARRYOVER (owner เคาะ · resume ต่อ):** (1) build 11 report-cnt exception tabs · (2) **pixel-look sweep ต้อง render Pacred /admin คู่ PCS** — ยังไม่มี dev admin login (ตั้ง pw admin บน dev + login ก่อน = unblock) · (3) 2 flag: label "รับเองที่โกดัง (PCS)" คงหรือ rebrand · คอลัมน์เกิน (ETD/ETA · ID/ส่งแล้ว) ซ่อนหรือเก็บ.
+
+---
+
 # 🎨 2026-07-07 (เดฟ · cont) — FAITHFUL-PCS-LOOK + 🔴 MONEY-ROUTING v2 (cargo→LOGISTICS) + DATA-LINKAGE (owner "ลูกค้าจริงบ่นเยอะ") : phone+reset · report-cnt · slip-verify · dashboard+sidebar · gridlines · ทุกใบ 1-page · phantom-เหมาๆ · rate-guard · rate re-price-on-card-save + reverse ตู้→บิล link + PR002 3700→3300 fix → ALL 4 BRANCHES · read FIRST
 
 > **🎯 OWNER TOP PRIORITY (standing · ส่งงาน 2 วัน · verbatim "อย่าลืมโจทย์หลัก...หน้าตา และ ฟังชั่น โลจิกส์การทำงานทั้งหมด ต้องเหมือน pcs ก่อน เรื่องอื่นค่อยว่ากัน ขอหน้ามาก่อนเลยตอนนี้ บอกภูมิด้วย สำคัญมาก"):** ทั้ง platform **หน้าตา + logic ต้องเหมือน PCS ก่อน** — เรื่องอื่นทีหลัง. **บอกภูมิด้วย.** legacy source = `C:\Users\Admin\Desktop\ALL DEV DATA\newrealdatapcs\pcscargo\member\pcs-admin\` (187 .php · §0b อ่าน source จริง). วิธี: read-only punch-list scan → build gridded-look ทีละกลุ่ม.
