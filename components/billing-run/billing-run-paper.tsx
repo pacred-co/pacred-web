@@ -56,6 +56,9 @@ export type BillingRunPaperRow = {
   famount:     number;
   fweight:     number;
   fvolume:     number;
+  /** ค่าขนส่งสินค้า (freight-only · ftotalprice) — the row Amount so Rate × Kg
+   *  reconciles on the paper. The GROSS amount_thb is unchanged in storage. */
+  freight:     number;
   amount:      number;
 };
 
@@ -80,6 +83,17 @@ export type BillingRunCommonProps = {
   deliveryTh:    number;
   other:         number;
   discount:      number;
+  /** Σ per-ROW named fees folded inside `subtotal` (owner 2026-07-07) — so the
+   *  สรุป splits "ค่าขนส่งรายการ" into its correctly-labeled parts. Each is MERGED
+   *  with the matching admin-typed header adjustment (ค่าขนส่งในไทย = sumThaiShipping
+   *  + deliveryTh · etc.). The ค่าขนส่งสินค้า line is the balancing remainder so the
+   *  itemized lines re-sum to `total` to the satang. Totals storage is unchanged. */
+  sumThaiShipping: number; // ค่าขนส่งในไทย (LOGISTICS)
+  sumChnPlus:      number; // ค่าขนส่งจีน+
+  sumCrate:        number; // ค่าตีลัง
+  sumUpdate:       number; // ค่าอัปเดต
+  sumOtherRows:    number; // ค่าอื่นๆ
+  sumDiscountRows: number; // ส่วนลด (per-row)
   total:         number;
   whtAmount:     number;
   netPayable:    number;
@@ -112,6 +126,24 @@ function BillingRunPage({
   const tintBg     = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
   const showWht    = p.whtAmount > 0;
   const isLast     = pageNumber === pageCount;
+
+  // ── Named fee lines (owner 2026-07-07 · money-accounting rule) ──
+  // Each per-row Σ is merged with the matching admin-typed header adjustment and
+  // shown under its CORRECT label — ค่าขนส่งในไทย (LOGISTICS) is a distinct line,
+  // never lumped into "อื่นๆ" nor conflated with ค่าส่งเหมาๆ (SERVICE promo).
+  // ค่าขนส่งสินค้า is the BALANCING remainder so the itemized lines re-sum to
+  // `total` to the satang (mig 0138 storage untouched — pure re-presentation).
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const feeThai     = r2(p.sumThaiShipping + p.deliveryTh); // ค่าขนส่งในไทย (LOGISTICS)
+  const feeChn      = r2(p.sumChnPlus + p.deliveryChn);     // ค่าขนส่งจีน+
+  const feeCrate    = r2(p.sumCrate);                       // ค่าตีลัง
+  const feeUpdate   = r2(p.sumUpdate);                      // ค่าอัปเดต
+  const feeOther    = r2(p.sumOtherRows + p.other);         // ค่าอื่นๆ
+  const feeDiscount = r2(p.sumDiscountRows + p.discount);   // ส่วนลด
+  const feeMao      = r2(p.maoFee);                         // ค่าส่งเหมาๆ (SERVICE)
+  const feeFreight  = r2(
+    r2(p.total) - feeMao - (feeThai + feeChn + feeCrate + feeUpdate + feeOther - feeDiscount),
+  );
 
   return (
     <div
@@ -229,7 +261,9 @@ function BillingRunPage({
                     <td style={tdNum}>{fmt5(row.fvolume)}</td>
                     <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.rateBasis || "—"}</td>
                     <td style={tdNum}>{row.rate > 0 ? fmt2(row.rate) : "—"}</td>
-                    <td style={tdNum}>{fmt2(row.amount)}</td>
+                    {/* Amount = ค่าขนส่งสินค้า (freight-only) so Rate × Kg reconciles;
+                        the non-freight fees are itemized in the สรุป below. */}
+                    <td style={tdNum}>{fmt2(row.freight)}</td>
                   </tr>
                 ))
               )}
@@ -256,12 +290,15 @@ function BillingRunPage({
               <div style={{ display: "flex", gap: "4mm" }}>
                 <DocSectionLabel section="summary" />
                 <div style={{ flex: 1 }}>
-                  <SumLine k="ค่าขนส่งรายการ" v={`${fmt2(p.subtotal)} บาท`} />
-                  {p.maoFee > 0 && <SumLine k="+ ค่าส่งเหมาๆ (PRF)" v={`${fmt2(p.maoFee)} บาท`} />}
-                  {p.deliveryChn > 0 && <SumLine k="+ ค่าขนส่งจีน" v={`${fmt2(p.deliveryChn)} บาท`} />}
-                  {p.deliveryTh > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(p.deliveryTh)} บาท`} />}
-                  {p.other > 0 && <SumLine k="+ อื่นๆ" v={`${fmt2(p.other)} บาท`} />}
-                  {p.discount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(p.discount)} บาท`} red />}
+                  <SumLine k="ค่าขนส่งสินค้า" v={`${fmt2(feeFreight)} บาท`} />
+                  {/* ค่าขนส่งในไทย (LOGISTICS) — distinct from ค่าส่งเหมาๆ (SERVICE promo). */}
+                  {feeThai > 0 && <SumLine k="+ ค่าขนส่งในไทย" v={`${fmt2(feeThai)} บาท`} />}
+                  {feeChn > 0 && <SumLine k="+ ค่าขนส่งจีน+" v={`${fmt2(feeChn)} บาท`} />}
+                  {feeCrate > 0 && <SumLine k="+ ค่าตีลัง" v={`${fmt2(feeCrate)} บาท`} />}
+                  {feeUpdate > 0 && <SumLine k="+ ค่าอัปเดต" v={`${fmt2(feeUpdate)} บาท`} />}
+                  {feeOther > 0 && <SumLine k="+ ค่าอื่นๆ" v={`${fmt2(feeOther)} บาท`} />}
+                  {feeDiscount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(feeDiscount)} บาท`} red />}
+                  {feeMao > 0 && <SumLine k="+ ค่าส่งเหมาๆ (PRF)" v={`${fmt2(feeMao)} บาท`} />}
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px", marginTop: "2px" }}>
                     <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ยอดชำระสุทธิ</p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "55mm", textAlign: "right" }}>

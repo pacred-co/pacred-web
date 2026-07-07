@@ -68,13 +68,19 @@ export type ReceiptPageRow = {
   ftotalprice:  number;
 };
 
-/** The receipt-level totals breakdown (per-leg sums, pre-WHT). */
+/** The receipt-level totals breakdown (per-leg sums, pre-WHT).
+ *  Each leg is its OWN named fee (owner 2026-07-07 · money-accounting rule):
+ *  ค่าขนส่งในไทย (fTransport · LOGISTICS) and ค่าอื่นๆ MUST be distinct lines — never
+ *  lumped into one opaque "บริการอื่นๆ". `priceOther` now carries ONLY
+ *  fshippingservice + priceother (crate + update split out). */
 export type ReceiptTotals = {
-  fTotal:           number;
-  fTransportCHNTHB: number;
-  fTransport:       number;
-  priceOther:       number;
-  fDiscount:        number;
+  fTotal:           number; // ค่าขนส่งสินค้า  (freight · ftotalprice)
+  fTransportCHNTHB: number; // ค่าขนส่งจีน+    (ftransportpricechnthb)
+  fTransport:       number; // ค่าขนส่งในไทย   (ftransportprice · LOGISTICS)
+  crate:            number; // ค่าตีลัง        (pricecrate)
+  update:           number; // ค่าอัปเดต       (fpriceupdate)
+  priceOther:       number; // ค่าอื่นๆ        (fshippingservice + priceother)
+  fDiscount:        number; // ส่วนลด          (fdiscount · subtracted)
 };
 
 /**
@@ -212,12 +218,32 @@ export function ReceiptPage({
   const preTax = (preTaxTotal !== undefined && preTaxTotal !== null)
     ? preTaxTotal
     : totals.fTotal + totals.fTransportCHNTHB + totals.fTransport +
-      totals.priceOther - totals.fDiscount + maoFee;
+      totals.crate + totals.update + totals.priceOther - totals.fDiscount + maoFee;
   // netPaid = the real amount the customer settles. `grandTotal` is ALREADY
   // net of WHT upstream (grandTotal = totalLineSum − whtAmount), so netPaid IS
   // grandTotal — do NOT subtract WHT again (that double-counted it). This is
   // the figure ภูม wants highlighted (point 6: "ยอดจริงที่ลูกค้าต้องชำระ").
   const netPaid = grandTotal;
+
+  // ── Named fee split (owner 2026-07-07 · money-accounting rule) ──
+  // The สรุป lists each fee under its CORRECT label — never lumping
+  // ค่าขนส่งในไทย (ftransportprice · LOGISTICS account) into a generic "อื่นๆ",
+  // never conflating it with ค่าส่งเหมาๆ (SERVICE · promo). The ค่าขนส่งสินค้า
+  // (freight) line is the BALANCING remainder so the itemized lines re-sum to
+  // preTax to the satang regardless of any post-issue drift (totals = detail;
+  // preTax = the frozen authoritative total). Pure re-presentation — no new money.
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const feeThaiShipping = r2(totals.fTransport);
+  const feeChnPlus      = r2(totals.fTransportCHNTHB);
+  const feeCrate        = r2(totals.crate);
+  const feeUpdate       = r2(totals.update);
+  const feeOther        = r2(totals.priceOther);
+  const feeDiscount     = r2(totals.fDiscount);
+  const feeMao          = r2(maoFee);
+  const feeFreight      = r2(
+    r2(preTax) - feeMao -
+      (feeThaiShipping + feeChnPlus + feeCrate + feeUpdate + feeOther - feeDiscount),
+  );
 
   return (
     <div
@@ -520,13 +546,51 @@ export function ReceiptPage({
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ค่าขนส่งรายการ</p>
-                      <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(preTax - maoFee)} บาท</p>
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ค่าขนส่งสินค้า</p>
+                      <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeFreight)} บาท</p>
                     </div>
-                    {maoFee > 0 && (
+                    {/* Each non-freight fee under its OWN correct label (ค่าขนส่งในไทย
+                        = LOGISTICS · distinct from ค่าส่งเหมาๆ = SERVICE promo). */}
+                    {feeThaiShipping > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าขนส่งในไทย</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeThaiShipping)} บาท</p>
+                      </div>
+                    )}
+                    {feeChnPlus > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าขนส่งจีน+</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeChnPlus)} บาท</p>
+                      </div>
+                    )}
+                    {feeCrate > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าตีลัง</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeCrate)} บาท</p>
+                      </div>
+                    )}
+                    {feeUpdate > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าอัปเดต</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeUpdate)} บาท</p>
+                      </div>
+                    )}
+                    {feeOther > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าอื่นๆ</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeOther)} บาท</p>
+                      </div>
+                    )}
+                    {feeDiscount > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#b91c1c" }}>− ส่วนลด</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#b91c1c" }}>{fmt2(feeDiscount)} บาท</p>
+                      </div>
+                    )}
+                    {feeMao > 0 && (
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
                         <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>+ ค่าส่งเหมาๆ (PRF)</p>
-                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(maoFee)} บาท</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#111827" }}>{fmt2(feeMao)} บาท</p>
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px" }}>

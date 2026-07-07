@@ -7,6 +7,7 @@ import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { sumNamedFees, namedNonFreight } from "@/lib/forwarder/fee-breakdown";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
 
 /**
@@ -118,6 +119,7 @@ type ReceiptRow = {
   issuedate:              string | null;
   ramount:                number | string | null;
   totalbeforewithholding: number | string | null;
+  mao_fee_thb:            number | string | null;
   userid:                 string | null;
   recompnumber:           string | null;
   recompname:             string | null;
@@ -199,7 +201,7 @@ export default async function ServiceImportInvoicePage({
       .from("tb_receipt")
       .select(
         "id, rid, refid, rstatus, rdatecreate, rdate, issuedate, " +
-        "ramount, totalbeforewithholding, userid, recompnumber, recompname, " +
+        "ramount, totalbeforewithholding, mao_fee_thb, userid, recompnumber, recompname, " +
         "recompaddress, corporatetype",
       )
       .eq("rid", itemLink.rid)
@@ -335,6 +337,18 @@ export default async function ServiceImportInvoicePage({
   const rAmount       = Number(receipt?.ramount ?? itemsTotal);
   // grandTotal = ยอดที่ลูกค้าต้องชำระ (after withholding tax cut).
   const grandTotal    = receipt ? rAmount : calcForwarderOutstanding(forwarder);
+
+  // ── Named fee split (owner 2026-07-07 · money-accounting rule) ──
+  // Present each fee under its CORRECT label — ค่าขนส่งในไทย (ftransportprice ·
+  // LOGISTICS account) is a distinct line, never lumped into a generic "อื่นๆ" nor
+  // conflated with ค่าส่งเหมาๆ (SERVICE · promo). ค่าขนส่งสินค้า is the balancing
+  // remainder so the itemized lines re-sum to totalBeforeWh (the NET grandTotal /
+  // ramount is UNCHANGED). Pure re-presentation — no total changes.
+  const invoiceRows  = receiptItems.length > 0 ? receiptItems : [forwarder];
+  const invNamed     = sumNamedFees(invoiceRows);
+  const invMaoFee    = Number(receipt?.mao_fee_thb ?? 0);
+  const r2           = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const invFreight   = r2(r2(totalBeforeWh) - r2(invMaoFee) - r2(namedNonFreight(invNamed)));
 
   // ── 6. ใบกำกับภาษี (RD Code 86) request panel — World-B (ADR-0027) ──
   // Moved here from the old …/receipt orphan. The customer-request action
@@ -521,7 +535,7 @@ export default async function ServiceImportInvoicePage({
                         <th className="border border-slate-300 px-3 py-2 text-right">จำนวน</th>
                         <th className="border border-slate-300 px-3 py-2 text-right">น้ำหนัก</th>
                         <th className="border border-slate-300 px-3 py-2 text-right">ปริมาตร</th>
-                        <th className="border border-slate-300 px-3 py-2 text-right">ยอด (฿)</th>
+                        <th className="border border-slate-300 px-3 py-2 text-right">ค่าขนส่งสินค้า (฿)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -546,8 +560,10 @@ export default async function ServiceImportInvoicePage({
                           <td className="border border-slate-200 px-3 py-2 text-right">
                             {Number(r.fvolume ?? 0).toFixed(3)} cbm
                           </td>
+                          {/* Freight-only (ค่าขนส่งสินค้า · ftotalprice) so Rate × Kg
+                              reconciles; the other fees are itemized in the totals below. */}
                           <td className="border border-slate-200 px-3 py-2 text-right font-mono font-bold">
-                            ฿{numberFormat2(r._amountThb)}
+                            ฿{numberFormat2(Number(r.ftotalprice ?? 0))}
                           </td>
                         </tr>
                       ))}
@@ -558,14 +574,62 @@ export default async function ServiceImportInvoicePage({
                 {/* Totals */}
                 <div className="mt-4 flex justify-end">
                   <div className="w-full sm:w-80 space-y-1 text-sm">
+                    {/* Itemized fees under their correct labels — ค่าขนส่งในไทย
+                        (LOGISTICS) is distinct from ค่าส่งเหมาๆ (SERVICE promo). */}
+                    <div className="flex justify-between text-slate-700">
+                      <span>ค่าขนส่งสินค้า</span>
+                      <span className="font-mono">฿{numberFormat2(invFreight)}</span>
+                    </div>
+                    {invNamed.thaiShipping > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าขนส่งในไทย</span>
+                        <span className="font-mono">฿{numberFormat2(invNamed.thaiShipping)}</span>
+                      </div>
+                    )}
+                    {invNamed.chnPlus > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าขนส่งจีน+</span>
+                        <span className="font-mono">฿{numberFormat2(invNamed.chnPlus)}</span>
+                      </div>
+                    )}
+                    {invNamed.crate > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าตีลัง</span>
+                        <span className="font-mono">฿{numberFormat2(invNamed.crate)}</span>
+                      </div>
+                    )}
+                    {invNamed.update > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าอัปเดต</span>
+                        <span className="font-mono">฿{numberFormat2(invNamed.update)}</span>
+                      </div>
+                    )}
+                    {invNamed.other > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าอื่นๆ</span>
+                        <span className="font-mono">฿{numberFormat2(invNamed.other)}</span>
+                      </div>
+                    )}
+                    {invNamed.discount > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>ส่วนลด</span>
+                        <span className="font-mono">−฿{numberFormat2(invNamed.discount)}</span>
+                      </div>
+                    )}
+                    {invMaoFee > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>ค่าส่งเหมาๆ (PRF)</span>
+                        <span className="font-mono">฿{numberFormat2(invMaoFee)}</span>
+                      </div>
+                    )}
                     {totalBeforeWh !== rAmount && totalBeforeWh > 0 && (
                       <>
-                        <div className="flex justify-between text-slate-700">
-                          <span>ยอดก่อนหัก ณ ที่จ่าย</span>
+                        <div className="flex justify-between text-slate-700 border-t border-slate-200 pt-1">
+                          <span>รวมทั้งสิ้น</span>
                           <span className="font-mono">฿{numberFormat2(totalBeforeWh)}</span>
                         </div>
                         <div className="flex justify-between text-amber-700">
-                          <span>หัก ณ ที่จ่าย</span>
+                          <span>หัก ณ ที่จ่าย 1%</span>
                           <span className="font-mono">−฿{numberFormat2(totalBeforeWh - rAmount)}</span>
                         </div>
                       </>

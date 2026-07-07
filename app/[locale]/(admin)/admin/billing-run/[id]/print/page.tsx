@@ -60,6 +60,7 @@ export default async function BillingRunPrintPage({
     famount:   it.forwarder?.famount ?? 0,
     fweight:   it.forwarder?.fweight ?? 0,
     fvolume:   it.forwarder?.fvolume ?? 0,
+    freight:   it.forwarder?.freight ?? 0,
     amount:    it.amount_thb,
   }));
 
@@ -108,6 +109,12 @@ export default async function BillingRunPrintPage({
         deliveryTh={header.delivery_th_thb}
         other={header.other_thb}
         discount={header.discount_thb}
+        sumThaiShipping={header.sum_thai_shipping}
+        sumChnPlus={header.sum_chn_plus}
+        sumCrate={header.sum_crate}
+        sumUpdate={header.sum_update}
+        sumOtherRows={header.sum_other_rows}
+        sumDiscountRows={header.sum_discount_rows}
         total={header.total_thb}
         whtAmount={header.wht_amount}
         netPayable={header.net_payable}

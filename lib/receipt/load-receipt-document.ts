@@ -345,9 +345,12 @@ export async function loadReceiptDocument(
         // running totals contribution
         _line: {
           fTotalPrice,
-          fTransport:       fTransportPrice,
-          fTransportCHNTHB: fTransportPriceCHNTHB,
-          priceOther:       fPriceUpdate + fShippingService + priceCrate + priceOther,
+          fTransport:       fTransportPrice,        // ค่าขนส่งในไทย (LOGISTICS)
+          fTransportCHNTHB: fTransportPriceCHNTHB,  // ค่าขนส่งจีน+
+          // Split the old opaque bucket into its named parts (owner 2026-07-07):
+          crate:            priceCrate,             // ค่าตีลัง
+          update:           fPriceUpdate,           // ค่าอัปเดต
+          priceOther:       fShippingService + priceOther,  // ค่าอื่นๆ
           fDiscount,
           lineTotal:        totalPrice,
         },
@@ -360,6 +363,8 @@ export async function loadReceiptDocument(
       fTotal:           acc.fTotal           + row._line.fTotalPrice,
       fTransport:       acc.fTransport       + row._line.fTransport,
       fTransportCHNTHB: acc.fTransportCHNTHB + row._line.fTransportCHNTHB,
+      crate:            acc.crate            + row._line.crate,
+      update:           acc.update           + row._line.update,
       priceOther:       acc.priceOther       + row._line.priceOther,
       fDiscount:        acc.fDiscount        + row._line.fDiscount,
       totalLineSum:     acc.totalLineSum     + row._line.lineTotal,
@@ -368,6 +373,8 @@ export async function loadReceiptDocument(
       fTotal:           0,
       fTransport:       0,
       fTransportCHNTHB: 0,
+      crate:            0,
+      update:           0,
       priceOther:       0,
       fDiscount:        0,
       totalLineSum:     0,
@@ -436,6 +443,8 @@ export async function loadReceiptDocument(
         fTotal:           headerTotalBefore,
         fTransport:       0,
         fTransportCHNTHB: 0,
+        crate:            0,
+        update:           0,
         priceOther:       0,
         fDiscount:        0,
       }
@@ -443,6 +452,8 @@ export async function loadReceiptDocument(
         fTotal:           totals.fTotal,
         fTransport:       totals.fTransport,
         fTransportCHNTHB: totals.fTransportCHNTHB,
+        crate:            totals.crate,
+        update:           totals.update,
         priceOther:       totals.priceOther,
         fDiscount:        totals.fDiscount,
       };

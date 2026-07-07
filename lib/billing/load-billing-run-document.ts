@@ -20,6 +20,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeBillWht } from "@/lib/billing/wht";
+import { sumNamedFees, type ForwarderFeeFields } from "@/lib/forwarder/fee-breakdown";
 
 // ── Public document shape (moved here from actions/admin/billing-run.ts so the
 //    public loader + the admin action share ONE definition) ─────────────────
@@ -63,6 +64,19 @@ export type BillingRunInvoiceDetail = {
     wht_amount: number;
     /** ยอดชำระสุทธิ = total_thb − wht_amount (what the customer remits). */
     net_payable: number;
+    /**
+     * Σ of the per-ROW named fees folded inside `subtotal_thb` (owner 2026-07-07):
+     * so the paper can present each fee under its CORRECT label instead of one
+     * opaque "ค่าขนส่งรายการ" that hides ค่าขนส่งในไทย (LOGISTICS). These are the
+     * per-line forwarder fees; the admin-typed header adjustments (delivery_*_thb
+     * / other_thb / discount_thb) are ADDED to the matching line at render.
+     * amount_thb / subtotal_thb / total_thb storage is UNCHANGED (mig 0138). */
+    sum_thai_shipping: number; // Σ ค่าขนส่งในไทย (ftransportprice · LOGISTICS)
+    sum_chn_plus:      number; // Σ ค่าขนส่งจีน+  (ftransportpricechnthb)
+    sum_crate:         number; // Σ ค่าตีลัง      (pricecrate)
+    sum_update:        number; // Σ ค่าอัปเดต     (fpriceupdate)
+    sum_other_rows:    number; // Σ ค่าอื่นๆ      (fshippingservice + priceother)
+    sum_discount_rows: number; // Σ ส่วนลด        (fdiscount)
     /** สลิปแนบ (ภูม 2026-06-29) — เซลแนบ → บัญชีตรวจ+ตัดจ่าย. */
     slip_path: string | null;
     /** null=ยังไม่แนบ · pending=รอบัญชีตรวจ · verified=ยืนยันแล้ว · rejected=ถูกปฏิเสธ */
@@ -94,6 +108,10 @@ export type BillingRunInvoiceDetail = {
       /** "KG" | "CBM" | "" */
       rate_basis: string;
       rate: number;
+      /** ค่าขนส่งสินค้า (freight · ftotalprice) — the FREIGHT-only amount so the
+       *  row's Amount reconciles with Rate × Kg (owner 2026-07-07). The stored
+       *  amount_thb (GROSS incl ค่าขนส่งในไทย etc.) is unchanged; this is display. */
+      freight: number;
     } | null;
   }>;
 };
@@ -164,6 +182,16 @@ type FwdHydRow = {
   ftransporttype: string | null;
   frefprice: string | null;
   frefrate: number | string | null;
+  // Price columns — for the named-fee split (owner 2026-07-07). calcForwarderGross
+  // reads exactly these; the paper re-presents the SAME gross with correct labels.
+  ftotalprice: number | string | null;
+  ftransportprice: number | string | null;
+  fpriceupdate: number | string | null;
+  fshippingservice: number | string | null;
+  pricecrate: number | string | null;
+  ftransportpricechnthb: number | string | null;
+  priceother: number | string | null;
+  fdiscount: number | string | null;
 };
 
 /**
@@ -212,17 +240,33 @@ export async function loadBillingRunDocument(
   if (fids.length > 0) {
     const { data: fwdRaw, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, ftransporttype, frefprice, frefrate")
+      .select(
+        "id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
+          "ftransporttype, frefprice, frefrate, " +
+          // price columns for the named-fee split (owner 2026-07-07)
+          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+      )
       .in("id", fids);
     if (fwdErr) {
       console.error("[loadBillingRunDocument tb_forwarder hydrate] failed", {
         code: fwdErr.code, message: fwdErr.message,
       });
     }
-    for (const f of ((fwdRaw ?? []) as FwdHydRow[])) {
+    for (const f of ((fwdRaw ?? []) as unknown as FwdHydRow[])) {
       fwdByID.set(f.id, f);
     }
   }
+
+  // Σ the per-row named fees folded inside subtotal_thb (owner 2026-07-07) — over
+  // the LINE forwarders, so the paper can split "ค่าขนส่งรายการ" into its correctly
+  // labeled parts (ค่าขนส่งในไทย · LOGISTICS distinct from ค่าส่งเหมาๆ · SERVICE). The
+  // paper's ค่าขนส่งสินค้า line is the balancing remainder so Σ lines == subtotal even
+  // when a per-line amount_thb override drifts from calcForwarderGross.
+  const lineFwdFees: ForwarderFeeFields[] = items
+    .map((i) => fwdByID.get(i.forwarder_id))
+    .filter((f): f is FwdHydRow => !!f);
+  const named = sumNamedFees(lineFwdFees);
 
   return {
     header: {
@@ -265,6 +309,12 @@ export async function loadBillingRunDocument(
                             : [],
       slip_reviewed_at:   hdrRaw.slip_reviewed_at,
       is_overdue:         isBillOverdue(hdrRaw.date_due, hdrRaw.status),
+      sum_thai_shipping:  named.thaiShipping,
+      sum_chn_plus:       named.chnPlus,
+      sum_crate:          named.crate,
+      sum_update:         named.update,
+      sum_other_rows:     named.other,
+      sum_discount_rows:  named.discount,
       ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
     },
     items: items.map((i) => {
@@ -287,6 +337,8 @@ export async function loadBillingRunDocument(
               // คิดราคาตาม: '1'=KG · '2'=CBM
               rate_basis:   f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
+              // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
+              freight:      f.ftotalprice != null ? Number(f.ftotalprice) : 0,
             }
           : null,
       };
