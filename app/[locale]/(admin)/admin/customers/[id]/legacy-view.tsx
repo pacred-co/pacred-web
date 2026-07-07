@@ -619,13 +619,14 @@ export async function renderLegacyCustomerView(
                 ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
               </span>
             </div>
-            {/* Juristic (นิติบุคคล) — the H2 above is now the COMPANY name; show the
-                contact person + tax id here so staff still see who they talk to.
-                (Personal customers: nothing extra — the H2 already is the person.) */}
-            {isJuristic && (contactPersonName || identity.taxId) ? (
+            {/* Sub-line under the display name — เบอร์โทร ALWAYS (personal + juristic ·
+                owner 2026-07-06) + ผู้ติดต่อ/เลขผู้เสียภาษี for a juristic (the H2 is the
+                COMPANY name, so show who staff talk to). Personal: just the phone. */}
+            {u.userTel || (isJuristic && (contactPersonName || identity.taxId)) ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
-                {contactPersonName ? <span>ผู้ติดต่อ: <span className="text-foreground font-medium">{contactPersonName}</span></span> : null}
-                {identity.taxId ? <span>เลขผู้เสียภาษี: <span className="text-foreground font-mono">{identity.taxId}</span></span> : null}
+                {isJuristic && contactPersonName ? <span>ผู้ติดต่อ: <span className="text-foreground font-medium">{contactPersonName}</span></span> : null}
+                {u.userTel ? <span>เบอร์โทร: <span className="text-foreground font-medium font-mono">{u.userTel}</span></span> : null}
+                {isJuristic && identity.taxId ? <span>เลขผู้เสียภาษี: <span className="text-foreground font-mono">{identity.taxId}</span></span> : null}
               </div>
             ) : null}
             {/* Meta row — รหัสลูกค้า + สถานะ + Sales/CS tags inline
@@ -664,6 +665,11 @@ export async function renderLegacyCustomerView(
               {/* อัพเกรดเป็นนิติบุคคล (owner 2026-07-05) — เฉพาะลูกค้า "บุคคล" · เซล/CS ทำเองได้
                   ไม่ต้องปลดล็อกรหัส · เปิด popup กรอกข้อมูล + แนบเอกสารในตัว. */}
               {!isJuristic ? <UpgradeJuristicPopup userid={u.userID} /> : null}
+              {/* รีเซ็ตรหัสผ่านลูกค้า (owner 2026-07-06) — moved UP into the header,
+                  right after the ทีม Pricing chip and BEFORE รันเลข PR (was in the
+                  account-tools block far below). Shown to every admin who reaches
+                  the page (a normal CS action · confirm-before-mutate in the button). */}
+              <ResetPwdButton userid={u.userID} />
               {/* รันเลข PR ลูกค้าใหม่ (ULTRA-ONLY · owner 2026-07-06) — surfaced here
                   in the identity header (was buried ~550 lines down in the account
                   tools) so it's reachable without scrolling (§0d). Same component +
@@ -1190,15 +1196,8 @@ export async function renderLegacyCustomerView(
         </div>
       )}
 
-      {/* Account tools — รีเซ็ตรหัสผ่าน. (รันเลข PR ลูกค้าใหม่ was moved UP into the
-          identity header so ultra admins reach it without scrolling · §0d.)
-          Confirm-before-mutate is in the button (§0f). */}
-      <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3">
-        <p className="mb-2 text-xs font-semibold text-muted">เครื่องมือบัญชีลูกค้า</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <ResetPwdButton userid={u.userID} />
-        </div>
-      </div>
+      {/* (เครื่องมือบัญชีลูกค้า — รีเซ็ตรหัสผ่าน + รันเลข PR ลูกค้าใหม่ moved UP into the
+          identity header · owner 2026-07-06 · reachable without scrolling §0d.) */}
 
       {/* Danger zone — super-only HARD delete (staff-CRUD gap · §PM-6 #3.3).
           Only for truly-empty (test/orphan) accounts; the panel shows the
