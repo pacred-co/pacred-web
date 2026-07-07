@@ -37,6 +37,7 @@ import { unstable_cache } from "next/cache";
 import { resolveLegacyUrl, resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { SlipImage } from "@/components/admin/slip-image";
+import { RevenueCarouselCard } from "@/components/admin/revenue-carousel-card";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
@@ -395,27 +396,30 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           overflowed on common 1366-1500px laptop viewports because the big
           ฿-numbers (text-3xl font-mono) refuse to shrink. At lg/md → 2 cols. */}
       <section className="grid gap-3 grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
-        <RevenueCard
+        <RevenueCarouselCard
           tone="info"
           icon={<ShoppingBasket />}
-          label={`ยอดฝากสั่งซื้อ ${monthLabel}`}
+          monthLabel={`ยอดฝากสั่งซื้อ ${monthLabel}`}
           monthValue={shopMonth}
+          todayLabel="ยอดฝากสั่งซื้อวันนี้"
           todayValue={shopToday}
           href="/admin/service-orders"
         />
-        <RevenueCard
+        <RevenueCarouselCard
           tone="danger"
           icon={<Box />}
-          label={`ยอดฝากนำเข้า ${monthLabel}`}
+          monthLabel={`ยอดฝากนำเข้า ${monthLabel}`}
           monthValue={forwarderMonth}
+          todayLabel="ยอดฝากนำเข้าวันนี้"
           todayValue={forwarderToday}
           href="/admin/forwarders"
         />
-        <RevenueCard
+        <RevenueCarouselCard
           tone="primary"
           icon={<ArrowLeftRight />}
-          label={`ยอดฝากโอน ${monthLabel}`}
+          monthLabel={`ยอดฝากโอน ${monthLabel}`}
           monthValue={yuanMonth}
+          todayLabel="ยอดฝากโอนวันนี้"
           todayValue={yuanToday}
           href="/admin/yuan-payments"
         />

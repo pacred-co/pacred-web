@@ -1267,7 +1267,25 @@ const wrapServiceImport: MenuItem = {
   icon: "Package",
   badge: "forwarderArrived",
   children: [
-    { labelKey: "serviceNav.importList", href: "/admin/forwarders", icon: "Package", badge: "forwarderArrived" },
+    // 2026-07-07 — expand to mirror the legacy บริการนำเข้า group (reuse existing
+    // routes + i18n keys · nav-only, no data change). ค้นหา → รายการ → หมายเหตุ →
+    // เช็คต้นทุน → รายงานตู้ → ประวัติโกดัง → (คงเดิม) อัปเดต API + กระสอบรวม.
+    { labelKey: "forwarder.search",      href: "/admin/forwarders",             icon: "Search" },
+    { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search", icon: "Search" },
+    {
+      labelKey: "forwarder.list",
+      icon: "Package",
+      children: [
+        { labelKey: "serviceNav.importList", href: "/admin/forwarders",           icon: "Package",  badge: "forwarderArrived" },
+        { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?status=6",   icon: "Truck",    badge: "forwarderDelivery" },
+        { labelKey: "forwarder.listCredit",  href: "/admin/forwarders?q=c",        icon: "Landmark" },
+        { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",        icon: "Plus" },
+      ],
+    },
+    { labelKey: "forwarder.note",         href: "/admin/forwarders/notes",               icon: "FileText" },
+    { labelKey: "forwarder.checkCntCost", href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
+    { labelKey: "warehouse.containers",   href: "/admin/report-cnt",                     icon: "Package" },
+    { labelKey: "forwarder.whHistory",    href: "/admin/forwarders/warehouse-history",   icon: "PackageCheck", badge: "forwarderWhError" },
     blockApiForwarderUpdate,
     // 2026-07-06 (ภูม) — กระสอบรวม = สินค้าที่นำเข้ามา → ย้ายมาอยู่ใต้ "บริการนำเข้า"
     // ต่อจาก "อัปเดตฝากนำเข้า" (ย้ายออกจากกลุ่ม Warehouse). read-only MOMO mirror.
@@ -1384,7 +1402,9 @@ const menuManager: MenuSection[] = [
       itemWalletAll,
       itemPayUser,
       itemPurchasingAll,
-      blockForwarderImport,
+      // 2026-07-07 — manager parity: use the expanded บริการนำเข้า group
+      // (ค้นหา/รายการ/หมายเหตุ/ต้นทุน/รายงานตู้/ประวัติโกดัง) instead of the bare leaf.
+      wrapServiceImport,
       // 2026-06-08 (เดฟ · freight revenue unlock) — inbound Freight RFQ inbox.
       itemFreightLeads,
       // 2026-06-09 (W4 · freight ops cockpit) — AX-JOB PRICING→SALES→DOC→ACC board.
