@@ -36,20 +36,17 @@ import {
   CONTACT,
   DOC_SIGNATORY,
 } from "@/components/seo/site";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { DocSectionLabel } from "./doc-section-label";
 import { DocCertRow } from "./doc-cert-row";
 
-// ใบเสร็จ ฝากนำเข้า/freight (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE 204-1-55856-6,
-// resolved through the SHARED bank SOT (lib/payment/bank-accounts.ts) so the bill,
-// the receipt, AND the forwarder-invoice all show the SAME account for the same
-// order. Was hardcoded to the static site.ts BANK (LOGISTICS 225-2-91144-0) →
-// same order billed to SERVICE but receipted to LOGISTICS. A ใบกำกับ receipt would
-// resolve to TRADING (+ VAT 7%). Mirrors BILL_ACCOUNT in billing-run-paper.tsx.
-const RECEIPT_ACCOUNT = resolvePaymentAccount({
-  issuesTaxInvoice: false,
-  isDomesticDeliveryLeg: false,
-});
+// ใบเสร็จ ฝากนำเข้าคาร์โก้ (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี LOGISTICS 225-2-91144-0,
+// resolved through serviceAccountFor("import_cargo") (owner 2026-07-07 v2: cargo
+// import = งานขนส่งผ่านบริษัทเฟรทเจ้าอื่น = logistics) so the bill, the receipt, AND
+// the forwarder-invoice all show the SAME account for the same order. A ใบกำกับ
+// receipt would override to TRADING (+ VAT 7%). Mirrors BILL_ACCOUNT in
+// billing-run-paper.tsx.
+const RECEIPT_ACCOUNT = serviceAccountFor("import_cargo");
 
 // ── Shared render types (single source of truth) ─────────────
 

@@ -1,16 +1,26 @@
 /**
- * 📄 Shared items-per-page for the money documents — THE single source so the
- * ใบวางบิล (billing-run) and the ใบเสร็จ (receipt) paginate an order IDENTICALLY.
+ * 📄 Items-per-page for the money documents (owner 2026-07-07: "แก้ให้ครบทุกใบ ·
+ * แพทเทินเดียวกัน · เรียบร้อยสวยงามเป็นระเบียบเหมือนกันทุกใบ").
  *
- * Before this was two divergent literals (bill = 24, receipt = 13) → the SAME
- * order broke onto a different number of pages depending on which doc you printed.
- *
- * 13 is chosen deliberately: it is the largest value that fits BOTH papers.
- *   - The receipt footer is TALLER (it carries a summary block + the
- *     "จำนวนเงินรวม / ภาษีหัก ณ ที่จ่าย" payment sub-rows), and its print CSS is
- *     tuned to 285mm/@page 3mm so a full receipt never spills to a 2nd sheet.
- *   - The bill footer is smaller, so 13 rows/page fits it too (it already fit 24).
- * Raising the receipt to 24 would risk overflowing its taller footer to an extra
- * sheet — the exact bug the receipt CSS was tuned to avoid. So both papers use 13.
+ * ALL money docs (ใบวางบิล + ใบเสร็จ + ใบแจ้งหนี้) now target ONE-PAGE-FILL at 24
+ * rows/page → a normal doc = 1 ต้นฉบับ + 1 สำเนา (no ugly 13+N split). The owner
+ * explicitly accepts that a very long doc may overflow the bottom edge ("ถ้าล้น
+ * ตกขอบค่อยว่ากัน") — a filled single page beats a messy multi-page split.
  */
-export const DOC_ROWS_PER_PAGE = 13;
+
+/**
+ * RECEIPT (ใบเสร็จ / ใบแจ้งหนี้) rows/page = 24 (was 13 · owner 2026-07-07 wanted
+ * every doc consistent). The receipt footer is taller (summary + WHT sub-rows), so
+ * a ≥~20-row receipt can overflow the bottom edge — accepted per the owner's
+ * "ค่อยว่ากัน" (fill one page, refine overflow later). Consumed by
+ * lib/receipt/load-receipt-document.ts.
+ */
+export const DOC_ROWS_PER_PAGE = 24;
+
+/**
+ * BILL (ใบวางบิล) rows/page = 24 — same as the receipt so EVERY money doc paginates
+ * consistently. Consumed by BOTH bill surfaces: the admin print page + the public
+ * /b/[token] page (they MUST use the same value or the same bill would paginate
+ * differently on each).
+ */
+export const BILL_ROWS_PER_PAGE = 24;

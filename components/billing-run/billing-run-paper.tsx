@@ -32,18 +32,15 @@ import {
 import { fmt2, fmt5, fmt0 } from "@/components/receipt/receipt-paper";
 import { DocSectionLabel } from "@/components/receipt/doc-section-label";
 import { DocCertRow } from "@/components/receipt/doc-cert-row";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { serviceAccountFor } from "@/lib/services/service-catalog";
 
-// ใบวางบิล = freight/cargo billing (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี SERVICE per the
-// 3-account routing SOT (lib/payment/bank-accounts.ts). owner 2026-07-05: the bill
-// must show the SERVICE account 204-1-55856-6, NOT the static site.ts BANK (which
-// was LOGISTICS 225-2-91144-0). (A ใบกำกับ bill would route to TRADING — future.)
-// Resolved through the SHARED resolver with the SAME inputs the receipt uses
+// ใบวางบิล = ฝากนำเข้าคาร์โก้ billing (ไม่ออกใบกำกับ) → เก็บเข้าบัญชี LOGISTICS
+// 225-2-91144-0 per the 3-account routing SOT (owner 2026-07-07 v2: cargo import =
+// งานขนส่งผ่านบริษัทเฟรทเจ้าอื่น = logistics; freight + เหมาๆ + ค่าขนส่งในไทยรวมกัน).
+// Resolved through serviceAccountFor("import_cargo") so it follows the lane SOT
+// (a ใบกำกับ bill would override to TRADING). Same account the receipt uses
 // (receipt-paper.tsx RECEIPT_ACCOUNT) so bill + receipt show the SAME account.
-const BILL_ACCOUNT = resolvePaymentAccount({
-  issuesTaxInvoice: false,
-  isDomesticDeliveryLeg: false,
-});
+const BILL_ACCOUNT = serviceAccountFor("import_cargo");
 
 export type BillingRunPaperRow = {
   no:          number;

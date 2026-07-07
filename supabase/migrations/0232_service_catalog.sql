@@ -75,7 +75,7 @@ insert into public.service_catalog
 values
   ('shop_order',         'ฝากสั่งซื้อสินค้า',                        'China shopping cart',                       'cargo',   array['truck','sea','air'], false, true,  'import', true,  'service',   true,  10,  true),
   ('yuan_transfer',      'ฝากโอนชำระ / โอนหยวน',                     'Yuan / Alipay transfer',                    'cargo',   array[]::text[],            false, false, 'none',   true,  'service',   true,  20,  true),
-  ('import_cargo',       'ฝากนำเข้า — คาร์โก้',                       'China→TH cargo (LCL consolidated)',         'cargo',   array['truck','sea','air'], false, true,  'import', true,  'service',   true,  30,  true),
+  ('import_cargo',       'ฝากนำเข้า — คาร์โก้',                       'China→TH cargo (LCL consolidated)',         'cargo',   array['truck','sea','air'], false, true,  'import', true,  'logistics', true,  30,  true),
   ('freight_import',     'ฝากนำเข้า — เฟรท FCL/LCL',                  'International freight import (FCL/LCL)',     'freight', array['truck','sea','air'], true,  true,  'import', true,  'service',   true,  40,  true),
   ('freight_export',     'ส่งออกสินค้า',                             'Export worldwide (FCL/LCL)',                'freight', array['truck','sea','air'], true,  true,  'export', true,  'service',   true,  50,  true),
   ('customs_clearance',  'เคลียร์สินค้าติดด่าน / ตัวแทนออกของ',       'Customs clearance',                         'service', array['truck','sea','air'], false, false, 'both',   true,  'service',   true,  60,  true),

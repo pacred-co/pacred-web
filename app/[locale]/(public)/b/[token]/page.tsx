@@ -31,7 +31,7 @@ import { BillingRunPaper, type BillingRunPaperRow } from "@/components/billing-r
 import { loadBillingRunDocument } from "@/lib/billing/load-billing-run-document";
 import { verifyBillToken } from "@/lib/receipt/receipt-token";
 import { readThaiBaht } from "@/lib/utils/thai-number";
-import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
+import { BILL_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
 import PublicBillToolbar from "./public-bill-toolbar";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +42,8 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-// Paginate identically to the admin print page (shared DOC_ROWS_PER_PAGE=13).
-const ROWS_PER_PAGE = DOC_ROWS_PER_PAGE;
+// Paginate identically to the admin print page (shared BILL_ROWS_PER_PAGE=24).
+const ROWS_PER_PAGE = BILL_ROWS_PER_PAGE;
 
 export default async function PublicBillPage({
   params,

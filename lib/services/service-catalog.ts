@@ -144,7 +144,9 @@ export const SERVICE_CATALOG: Record<ServiceKey, ServiceCatalogEntry> = {
     pricingMode: "rate", // rate OR item — pricing_mode flag; default rate
     issuesTaxInvoiceDefault: true,
     defaultTaxDoc: "receipt",
-    defaultAccount: "service",
+    // owner 2026-07-07 v2: ฝากนำเข้าคาร์โก้ = LOGISTICS 225-2-91144-0 (freight +
+    // เหมาๆ + ค่าขนส่งในไทย · งานขนส่งผ่านบริษัทเฟรทเจ้าอื่น). A ใบกำกับ still → TRADING.
+    defaultAccount: "logistics",
     requiresDeclared: true,
     orderTable: "tb_forwarder",
     isLive: true,

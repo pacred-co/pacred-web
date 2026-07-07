@@ -172,13 +172,15 @@ t("serviceAccountFor: ใบกำกับ → TRADING (+VAT) regardless of ser
   assert.equal(serviceAccountFor("domestic_logistics", { issuesTaxInvoice: true }).key, "trading");
 });
 
-t("serviceAccountFor: domestic_logistics (no ใบกำกับ) → LOGISTICS", () => {
+t("serviceAccountFor: domestic_logistics + import_cargo (no ใบกำกับ) → LOGISTICS", () => {
   assert.equal(serviceAccountFor("domestic_logistics").key, "logistics");
   assert.equal(serviceAccountFor("domestic_logistics", { issuesTaxInvoice: false }).key, "logistics");
+  // owner 2026-07-07 v2: ฝากนำเข้าคาร์โก้ = LOGISTICS (งานขนส่งผ่านบริษัทเฟรทเจ้าอื่น)
+  assert.equal(serviceAccountFor("import_cargo").key, "logistics");
+  assert.equal(serviceAccountFor("import_cargo", { issuesTaxInvoice: false }).key, "logistics");
 });
 
-t("serviceAccountFor: general service/freight (no ใบกำกับ) → SERVICE PromptPay", () => {
-  assert.equal(serviceAccountFor("import_cargo").key, "service");
+t("serviceAccountFor: shop/yuan/freight (no ใบกำกับ) → SERVICE PromptPay", () => {
   assert.equal(serviceAccountFor("freight_import").key, "service");
   assert.equal(serviceAccountFor("yuan_transfer").key, "service");
   assert.equal(serviceAccountFor("shop_order").key, "service");

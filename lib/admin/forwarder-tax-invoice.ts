@@ -36,7 +36,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderCharges, TaxableParts } from "@/lib/tax/wht";
 import { computeTaxForMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { getTaxRates } from "@/lib/tax/rates";
-import { resolvePaymentAccount } from "@/lib/payment/bank-accounts";
+import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { logger } from "@/lib/logger";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -224,8 +224,9 @@ export async function issueForwarderTaxInvoice(
 
   // Destination Pacred account (3-account SOT) — recorded AT ISSUANCE so the
   // routing decision is an audited fact, not display-only. ใบกำกับ → TRADING
-  // (+VAT 7%); ใบขน/ไม่รับฯ → SERVICE. Read by /admin/accounting/etax + reconcile.
-  const bankAccountKey = resolvePaymentAccount({ issuesTaxInvoice: mode === "tax_invoice" }).key;
+  // (+VAT 7%); ใบขน/ไม่รับฯ (ฝากนำเข้าคาร์โก้) → LOGISTICS 225-2-91144-0 (owner
+  // 2026-07-07 v2). Read by /admin/accounting/etax + reconcile.
+  const bankAccountKey = serviceAccountFor("import_cargo", { issuesTaxInvoice: mode === "tax_invoice" }).key;
 
   // 5. INSERT header.
   const insertHeader = {

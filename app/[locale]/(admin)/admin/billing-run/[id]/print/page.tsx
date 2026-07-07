@@ -18,18 +18,19 @@ import { getInvoiceDetail } from "@/actions/admin/billing-run";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { SITE_URL, ADDRESSES } from "@/components/seo/site";
 import { BillingRunPaper, type BillingRunPaperRow } from "@/components/billing-run/billing-run-paper";
-import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
+import { BILL_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
 import { signBillToken } from "@/lib/receipt/receipt-token";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-// Paginate identically to the ใบเสร็จ (receipt) so the SAME order breaks onto the
-// same number of pages on both docs — shared constant DOC_ROWS_PER_PAGE (=13, the
-// largest value that fits both papers' footers; see lib/receipt/rows-per-page.ts).
-// The last page still keeps the summary block (flex-grow on the items box pushes
-// it to the bottom, so a short bill's summary sits at the page bottom, not mid-page).
-const ROWS_PER_PAGE = DOC_ROWS_PER_PAGE;
+// Bill-only pagination: BILL_ROWS_PER_PAGE (=24, the bill footer is smaller than the
+// receipt's, so a ≤24-row bill = 1 ต้นฉบับ + 1 สำเนา; see lib/receipt/rows-per-page.ts).
+// MUST match the public /b/[token] page — same value or the same bill paginates
+// differently on each surface. The last page still keeps the summary block (flex-grow
+// on the items box pushes it to the bottom, so a short bill's summary sits at the
+// page bottom, not mid-page).
+const ROWS_PER_PAGE = BILL_ROWS_PER_PAGE;
 
 export default async function BillingRunPrintPage({
   params,

@@ -8,11 +8,12 @@
  * THREE accounts, all บมจ. กสิกรไทย (Kasikorn), all owned by บจก. แพคเรด (ประเทศไทย):
  *
  *   1) SERVICE   ออมทรัพย์   204-1-55856-6   PromptPay นิติ 0105564077716
- *        งานบริการ · เฟรท · ออกใบขน · ฝากโอน · ฝากสั่ง · ฝากนำเข้า
+ *        ฝากสั่งซื้อ (จ่ายค่าสินค้า) · ฝากโอนชำระ (โอนหยวน) เท่านั้น
  *        ❌ ไม่ออกใบกำกับภาษี (no VAT)
  *
  *   2) LOGISTICS กระแสรายวัน 225-2-91144-0   (Thai-QR / K-Shop · ref KPS004KB…)
- *        ค่าขนส่งในไทย · บริการฝากนำเข้าอย่างเดียว (ของถึงไทยแล้ว ลูกค้าชำระก่อนจัดส่ง)
+ *        ค่าขนส่งในไทย · ฝากนำเข้าคาร์โก้ (freight + เหมาๆ + ค่าขนส่งในไทย ·
+ *        งานขนส่งผ่านบริษัทเฟรทเจ้าอื่น) · ชำระก่อนจัดส่ง
  *        ❌ ไม่ออกใบกำกับภาษี
  *
  *   3) TRADING   กระแสรายวัน 232-1-07669-9   (Thai-QR / K-Shop · ref KPS004KB…)
@@ -21,8 +22,8 @@
  *
  * ROUTING RULE (the load-bearing decision — order matters):
  *   (a) ออกใบกำกับภาษี? ............................ → TRADING  (+ VAT 7%)   [overrides type]
- *   (b) ค่าขนส่งในไทย / ชำระปลายทางก่อนจัดส่ง? ...... → LOGISTICS
- *   (c) อื่นๆ (service/freight/ฝากโอน/ฝากสั่ง ไม่ออกใบกำกับ) → SERVICE (PromptPay)
+ *   (b) ค่าขนส่งในไทย / ฝากนำเข้าคาร์โก้ (freight + เหมาๆ + ftransportprice)? → LOGISTICS
+ *   (c) ฝากสั่งซื้อ / ฝากโอนชำระ (ไม่ออกใบกำกับ) ...... → SERVICE (PromptPay)
  *
  * VAT: only TRADING charges output VAT 7% to the customer (true ใบกำกับ → ภพ.30).
  * SERVICE/LOGISTICS = ไม่ออกใบกำกับ → no customer VAT line. (ใบขน = Non, margin-VAT is
@@ -67,7 +68,7 @@ export const PACRED_BANK_ACCOUNTS: Record<PacredAccountKey, PacredBankAccount> =
     channel: "promptpay",
     promptPayId: PACRED_TAX_ID,
     issuesTaxInvoice: false,
-    note: "งานบริการ · เฟรท · ออกใบขน · ฝากโอน · ฝากสั่ง · ฝากนำเข้า — ไม่ออกใบกำกับภาษี",
+    note: "ฝากสั่งซื้อ (จ่ายค่าสินค้า) · ฝากโอนชำระ (โอนหยวน) — ไม่ออกใบกำกับภาษี",
   },
   logistics: {
     key: "logistics",
@@ -82,7 +83,7 @@ export const PACRED_BANK_ACCOUNTS: Record<PacredAccountKey, PacredBankAccount> =
     qrImagePath: "/images/payment/qr-logistics.jpg",
     qrRef: "KPS004KB",
     issuesTaxInvoice: false,
-    note: "ค่าขนส่งในไทย · ฝากนำเข้าอย่างเดียว (ของถึงไทยแล้ว ชำระก่อนจัดส่ง) — ไม่ออกใบกำกับภาษี",
+    note: "ค่าขนส่งในไทย · ฝากนำเข้าคาร์โก้ (freight + เหมาๆ + ค่าขนส่งในไทย) — ไม่ออกใบกำกับภาษี",
   },
   trading: {
     key: "trading",

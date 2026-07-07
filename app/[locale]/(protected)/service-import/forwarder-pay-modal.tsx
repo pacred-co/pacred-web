@@ -11,7 +11,8 @@ import {
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import type { ForwarderRow } from "./forwarder-row-view";
-import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
+import { OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
+import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { PayDestination } from "@/components/payment/pay-destination";
 
@@ -125,21 +126,19 @@ export function ForwarderPayModal({
     return { totalPriceAll, sumPricePCSF, totalNiTi, payAmount };
   }, [rows, isJuristic]);
 
-  // ── pay-destination routing (lib/payment/bank-accounts.ts — 3-account SOT) ──
-  // owner 2026-07-02: an INT'L cargo-import balance is NOT a domestic-delivery
-  // leg — it must route to the SERVICE นิติ account (204-1-55856-6 · PromptPay
-  // amount-QR), NOT LOGISTICS (225-2-91144-0 = ค่าขนส่งในไทยเท่านั้น). A ใบกำกับ
-  // choice on ANY selected row overrides → TRADING (232-1-07669-9 · +VAT 7%).
-  // (`isDomesticDeliveryLeg` is intentionally NOT set here — this modal is the
-  // import-balance pay, not the in-Thailand shipping charge; LOGISTICS is only for
-  // a genuine domestic delivery leg on a dedicated surface.) DISPLAY-ONLY — the
+  // ── pay-destination routing (service-catalog serviceAccountFor → 3-account SOT) ──
+  // owner 2026-07-07 v2: a cargo-import (ฝากนำเข้าคาร์โก้) balance routes to the
+  // LOGISTICS account (225-2-91144-0 · Thai-QR) — cargo import = งานขนส่งผ่านบริษัท
+  // เฟรทเจ้าอื่น (freight + เหมาๆ + ค่าขนส่งในไทยรวมกัน). A ใบกำกับ choice on ANY selected
+  // row overrides → TRADING (232-1-07669-9 · +VAT 7%). Resolved through
+  // serviceAccountFor("import_cargo") so it follows the lane SOT. DISPLAY-ONLY — the
   // slip-upload + submitForwarderPayment path is untouched.
   const anyTaxInvoice = useMemo(
     () => rows.some((r) => modeFromPref(r.tax_doc_pref) === "tax_invoice"),
     [rows],
   );
   const payAccount = useMemo(
-    () => resolvePaymentAccount({ issuesTaxInvoice: anyTaxInvoice }),
+    () => serviceAccountFor("import_cargo", { issuesTaxInvoice: anyTaxInvoice }),
     [anyTaxInvoice],
   );
 
