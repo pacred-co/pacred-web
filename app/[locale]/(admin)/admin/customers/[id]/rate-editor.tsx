@@ -216,10 +216,11 @@ export function CustomerRateEditor({
         return;
       }
       const whShort = WAREHOUSES.find((w) => w.id === wh)?.short;
+      const repricedNote = res.data?.repriced ? ` · คิดราคาใหม่ให้ออเดอร์ที่ยังไม่วางบิล ${res.data.repriced} รายการ` : "";
       setSuccess(
-        res.data?.created
+        (res.data?.created
           ? `สร้างเรทเฉพาะตัว (SVIP) สำหรับโกดัง${whShort} แล้ว — ${res.data.changed} ช่องเปลี่ยน`
-          : `บันทึกเรทโกดัง${whShort} แล้ว — ${res.data?.changed ?? 0} ช่องเปลี่ยน`,
+          : `บันทึกเรทโกดัง${whShort} แล้ว — ${res.data?.changed ?? 0} ช่องเปลี่ยน`) + repricedNote,
       );
       router.refresh();
       setTimeout(() => setSuccess(null), 6000);

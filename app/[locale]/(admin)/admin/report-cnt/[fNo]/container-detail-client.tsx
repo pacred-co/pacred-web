@@ -141,6 +141,9 @@ export type ContainerDetailClientProps = {
    *  decoupled from money visibility. Mirrors adminReportCntAddCheck's gate. */
   canCheckFlow: boolean;
   cabinetIsPaid: boolean;
+  /** fid → the ใบวางบิล (billing-run) invoices covering it (read-only display ·
+   *  newest invoice first · a forwarder on no bill has no entry). */
+  billByFid?: Record<number, Array<{ invoiceId: number; docNo: string; status: string }>>;
 };
 
 // Sortable column keys — keep type-safe + map to DetailRow numeric/string fields.
@@ -169,7 +172,7 @@ type SortKey =
 
 type SortDir = "asc" | "desc";
 
-export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIsPaid }: ContainerDetailClientProps) {
+export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIsPaid, billByFid = {} }: ContainerDetailClientProps) {
   // The checkbox COLUMN shows for any check-flow viewer; interactivity (ticking
   // + the add button) is disabled on a PAID cabinet (read-only, with a note).
   const checkColumn = canCheckFlow;
@@ -494,6 +497,30 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               <GroupCollectButton fIDs={a.billableIds} base={base} userid={a.userid} />
             </div>
           )}
+          {/* Reverse bill link (read-only) — union of the group members' bills,
+              deduped, newest invoice first. Groups collapse by default so surface
+              it on the summary row too. */}
+          {(() => {
+            const gb = Array.from(
+              new Map(
+                g.flatMap((r) => (billByFid[r.id] ?? []).map((b) => [b.invoiceId, b] as const)),
+              ).values(),
+            ).sort((a2, b2) => b2.invoiceId - a2.invoiceId);
+            return gb.length > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                {gb.map((b) => (
+                  <Link
+                    key={b.invoiceId}
+                    href={`/admin/billing-run/${b.invoiceId}`}
+                    title={`ใบวางบิล ${b.docNo} · สถานะ ${b.status}`}
+                    className="block text-[11px] text-primary-600 hover:underline"
+                  >
+                    🧾 {b.docNo}
+                  </Link>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </td>
         {/* สถานะตู้ */}
         <td className="px-2 py-2 text-center">
@@ -944,6 +971,22 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                     {showMoney && Number(r.fstatus) === 4 && (
                       <div className="mt-1">
                         <BillToCustomerButton fID={r.id} />
+                      </div>
+                    )}
+                    {/* Reverse bill link (read-only) — the ใบวางบิล(s) covering
+                        this forwarder. No bill → nothing renders. */}
+                    {(billByFid[r.id] ?? []).length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {(billByFid[r.id] ?? []).map((b) => (
+                          <Link
+                            key={b.invoiceId}
+                            href={`/admin/billing-run/${b.invoiceId}`}
+                            title={`ใบวางบิล ${b.docNo} · สถานะ ${b.status}`}
+                            className="block text-[11px] text-primary-600 hover:underline"
+                          >
+                            🧾 {b.docNo}
+                          </Link>
+                        ))}
                       </div>
                     )}
                   </td>

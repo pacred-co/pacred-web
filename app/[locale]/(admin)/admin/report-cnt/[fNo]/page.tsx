@@ -403,6 +403,46 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
+  // ── 9c) Reverse bill link (read-only · display) — which ใบวางบิล (billing-run)
+  //       covers each forwarder in this container. forwarder_id → invoice_id →
+  //       tb_forwarder_invoice(doc_no,status). A forwarder can sit on >1 invoice
+  //       (cancel + re-bill) → keep all, newest invoice first. Serialized as a
+  //       plain Record (a Map won't cross the server→client boundary). Pure read,
+  //       no mutation; a row on NO bill simply has no entry.
+  const billByFid: Record<number, Array<{ invoiceId: number; docNo: string; status: string }>> = {};
+  if (fIds.length > 0) {
+    const { data: billItems, error: billItemsErr } = await admin
+      .from("tb_forwarder_invoice_item")
+      .select("forwarder_id, invoice_id")
+      .in("forwarder_id", fIds);
+    if (billItemsErr) {
+      console.error(`[tb_forwarder_invoice_item bill-link] failed`, { code: billItemsErr.code, message: billItemsErr.message });
+    }
+    const invoiceIds = Array.from(
+      new Set((billItems ?? []).map((r) => Number((r as { invoice_id: number }).invoice_id))),
+    );
+    const invMap = new Map<number, { doc_no: string; status: string }>();
+    if (invoiceIds.length > 0) {
+      const { data: invs, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status")
+        .in("id", invoiceIds);
+      if (invErr) {
+        console.error(`[tb_forwarder_invoice bill-link] failed`, { code: invErr.code, message: invErr.message });
+      }
+      for (const inv of (invs ?? []) as Array<{ id: number; doc_no: string; status: string }>) {
+        invMap.set(Number(inv.id), { doc_no: inv.doc_no, status: inv.status });
+      }
+    }
+    for (const it of (billItems ?? []) as Array<{ forwarder_id: number; invoice_id: number }>) {
+      const inv = invMap.get(Number(it.invoice_id));
+      if (!inv) continue;
+      const fid = Number(it.forwarder_id);
+      (billByFid[fid] ??= []).push({ invoiceId: Number(it.invoice_id), docNo: inv.doc_no, status: inv.status });
+    }
+    for (const k of Object.keys(billByFid)) billByFid[Number(k)].sort((a, b) => b.invoiceId - a.invoiceId);
+  }
+
   // FIX 2 (2026-07-07): resolve the fcover thumbnail per row (signed/passthrough
   // legacy URL) — reuse the same resolver forwarder-check uses. Empty fcover →
   // null (the cell renders no image, gracefully).
@@ -838,6 +878,7 @@ export default async function AdminReportCntDetailPage({
             showMoney={showMoney}
             canCheckFlow={canCheckFlow}
             cabinetIsPaid={cabinetIsPaid}
+            billByFid={billByFid}
           />
         )}
       </main>

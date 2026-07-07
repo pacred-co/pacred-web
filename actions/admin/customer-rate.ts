@@ -47,6 +47,7 @@ import {
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
 import { getResolvedFloor } from "@/lib/admin/sell-floor-config";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
 // ── resolveLegacyAdminId (duplicated · see rate-edits.ts note) ───────────
 async function resolveLegacyAdminId(): Promise<string> {
@@ -152,7 +153,7 @@ export type SaveCustomerRateInput = z.infer<typeof saveSchema>;
 
 export async function adminSaveCustomerRate(
   input: SaveCustomerRateInput,
-): Promise<AdminActionResult<{ changed: number; created: boolean; belowFloor: number }>> {
+): Promise<AdminActionResult<{ changed: number; created: boolean; belowFloor: number; repriced: number }>> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -177,7 +178,7 @@ export async function adminSaveCustomerRate(
   // (below), after reading the existing rows, so we GRANDFATHER legacy below-floor
   // data: only a NEWLY-set below-floor value blocks the save (an untouched legacy
   // cell never breaks an unrelated edit). A 0 = "ไม่คิดตามหน่วยนี้" → never below.
-  return withAdmin<{ changed: number; created: boolean; belowFloor: number }>(
+  return withAdmin<{ changed: number; created: boolean; belowFloor: number; repriced: number }>(
     ["super", "accounting", "sales_admin"],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -343,6 +344,51 @@ export async function adminSaveCustomerRate(
         }
       }
 
+      // ── Apply the just-saved card to the customer's OPEN orders (owner: the
+      //    card must take effect on un-billed orders). Money-adjacent but INTENDED.
+      //    Scope is tight + bounded: ONLY this customer's forwarders, in the saved
+      //    warehouse, that are (1) un-billed (fstatus < 5 · billed/paid = frozen),
+      //    (2) NOT a manual custom rate (customrate != '1'), (3) NOT cabinet-locked.
+      //    Best-effort: NEVER fails / rolls back the card save (already committed).
+      //    Reuses computeAndFillForwarderImportRate — the SAME audited engine the
+      //    MOMO import + dimension-edit save call (no hand-written frefrate). It
+      //    re-writes ONLY frefrate/frefprice/ftotalprice and skips a missing rate.
+      let repriced = 0;
+      try {
+        const { data: cand, error: candErr } = await admin
+          .from("tb_forwarder")
+          .select("id, fstatus, customrate, fcabinet_locked")
+          .eq("userid", userid)
+          .eq("fwarehousechina", wh)
+          .order("id", { ascending: false })
+          .limit(2000);
+        if (candErr) {
+          console.error(`[customer-rate re-price scan] failed`, {
+            userid, wh, code: candErr.code, message: candErr.message,
+          });
+        } else {
+          const targets = (cand ?? [])
+            .filter((r) => {
+              const row = r as { fstatus: string | null; customrate: string | null; fcabinet_locked: boolean | null };
+              const fstatusNum = Number(String(row.fstatus ?? "0").trim() || "0");
+              const isManual = String(row.customrate ?? "0").trim() === "1";
+              return fstatusNum < 5 && !isManual && row.fcabinet_locked !== true;
+            })
+            .slice(0, 500); // hard cap — single-customer scope, but belt-and-suspenders
+          for (const t of targets) {
+            const fid = Number((t as { id: number }).id);
+            try {
+              const res = await computeAndFillForwarderImportRate(admin, fid);
+              if (res.wrote) repriced++;
+            } catch (e) {
+              console.error(`[customer-rate re-price fid] failed`, { userid, fid, e });
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[customer-rate re-price block] failed`, { userid, wh, e });
+      }
+
       await logAdminAction(adminId, "tb_rate_custom.save", "tb_rate_custom", `${userid}/${wh}`, {
         userid,
         sourceWarehouse: wh,
@@ -351,10 +397,11 @@ export async function adminSaveCustomerRate(
         crhsid,
         changed: changes.length,
         belowFloor,
+        repriced,
       });
 
       revalidatePath(`/admin/customers/${userid}`);
-      return { ok: true, data: { changed: changes.length, created, belowFloor } };
+      return { ok: true, data: { changed: changes.length, created, belowFloor, repriced } };
     },
   );
 }
