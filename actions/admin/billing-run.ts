@@ -1329,9 +1329,9 @@ async function markBillingRunPaidImpl(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at")
+        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1473,6 +1473,11 @@ async function markBillingRunPaidImpl(
               source:   "billing_run.mark_paid",
               // STEP-2: accounting-chosen ใบเสร็จ เลขที่ (dup-validated in the helper).
               overrideRid: v.overrideRid,
+              // เหมาๆ mirrors the bill's OWN stored value (tb_forwarder_invoice.mao_fee_thb ·
+              // mig 0209) so receipt total == bill total by construction. markBillingRunPaid
+              // settles exactly ONE invoice → the receipt covers exactly its fids (invFids) →
+              // no SUM needed. 0 stays 0, 100 stays 100.
+              maoFeeOverride: Number(cur.mao_fee_thb ?? 0),
             });
             if (rcpt.ok) {
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {

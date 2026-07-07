@@ -53,6 +53,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
+import { resolveReceiptMaoFee } from "@/lib/admin/receipt-mao-fee";
 import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
 import { modeFromPref, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
@@ -99,6 +100,15 @@ export interface AutoIssueReceiptOpts {
    * lanes) is unchanged.
    */
   overrideRid?: string;
+  /**
+   * เหมาๆ (mao_fee) OVERRIDE — billing-run mark-paid (2026-07-07). When the receipt is
+   * minted FROM a paid ใบวางบิล, the caller passes the bill's OWN stored mao_fee_thb
+   * (tb_forwarder_invoice.mao_fee_thb · mig 0209) so the receipt's เหมาๆ line + total
+   * mirror the bill to the satang instead of re-deriving live (which drifts if เหมาๆ was
+   * hand-edited on the bill). Applies even at 0 (bill with เหมาๆ removed → receipt shows
+   * 0). Absent → recompute (direct-slip / wallet path unchanged).
+   */
+  maoFeeOverride?: number;
 }
 
 export type AutoIssueReceiptResult =
@@ -346,9 +356,16 @@ export async function autoIssueReceiptOnPaymentLand(
     })),
     { userId: userid, isCorporate: corporate === 1 },
   );
-  const maoFeeThb = Math.round(
+  const recomputedMaoFeeThb = Math.round(
     maoBatch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0) * 100,
   ) / 100;
+  // STEP-2 override (billing-run mark-paid 2026-07-07): issued FROM a paid ใบวางบิล →
+  // mirror the bill's stored mao_fee_thb (mig 0209) EXACTLY so receipt total == bill
+  // total by construction (not re-derived live, which drifts if เหมาๆ was hand-edited).
+  // Override wins even at 0. Absent → recompute (direct-slip / wallet path unchanged).
+  // This is the SINGLE mao computation point → it flows into pricePayAll (the WHT base),
+  // totalBeforeWithholding, ramount, AND the tb_receipt.mao_fee_thb column consistently.
+  const maoFeeThb = resolveReceiptMaoFee(recomputedMaoFeeThb, opts.maoFeeOverride);
   const pricePayAll = pricePayBase + maoFeeThb;
 
   // Legacy L557-559: 1% WHT applies only to juristic AND total ≥ 1000.
