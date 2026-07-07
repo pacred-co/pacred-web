@@ -49,6 +49,7 @@ import { Explain } from "@/components/ui/tooltip";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { isContainerInBucket } from "@/lib/admin/report-cnt-bucket";
 import {
   getContainerCompletenessBatch,
   type ContainerCompleteness,
@@ -264,8 +265,10 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       .neq("fcabinetnumber", "0")
       .neq("fstatus", "99") // 0190: drop cancelled containers (parity with the RPC)
       .limit(50_000);
-    if (isWaiting) q = q.lt("fstatus", "4");
-    else            q = q.gt("fstatus", "3");
+    // 0243: NO row-level fstatus bucket here — fetch ALL non-99 rows of the
+    // matching cabinets, then bucket by the CONTAINER-WIDE MIN(fstatus) after
+    // grouping (below), matching the RPC's HAVING MIN. The <>'99', transport +
+    // succeed-date filters still apply at the row level (parity with the RPC).
     if (transportType === "1") q = q.eq("ftransporttype", "1");
     if (transportType === "2") q = q.eq("ftransporttype", "2");
     if (transportType === "3") q = q.eq("ftransporttype", "3");
@@ -279,7 +282,13 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       // Run the JS group AND strip isPaid so the merge step below remains
       // uniform across both paths.
       const tmp = groupByContainer(rows as Row[], new Set<string>());
-      groupedNoPaid = tmp.map(({ isPaid: _isPaid, ...rest }) => rest);
+      // 0243: container-level bucket by MIN(fstatus). groupByContainer already
+      // folds the container-wide min into g.fstatus (skipping empty/null), so a
+      // cabinet is in exactly ONE tab — mixed cabinets no longer double-list.
+      // Same predicate as the RPC's HAVING (isContainerInBucket = shared SOT).
+      const page = isWaiting ? "waiting" : "succeed";
+      const bucketed = tmp.filter((g) => isContainerInBucket(g.fstatus ?? "", page));
+      groupedNoPaid = bucketed.map(({ isPaid: _isPaid, ...rest }) => rest);
     }
   } else {
     // Happy path — RPC available + returned pre-aggregated rows.

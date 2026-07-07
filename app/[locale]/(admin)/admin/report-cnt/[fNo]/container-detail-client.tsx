@@ -54,7 +54,11 @@ export type DetailRow = {
   username: string | null;
   usercompany: string | null;
   fdetail: string | null;
+  /** resolved product-detail to render (fdetail → item productname → null) */
+  detailDisplay: string | null;
   fcover: string | null;
+  /** resolved signed/passthrough thumbnail URL for fcover (FIX 2 · null = none) */
+  coverUrl: string | null;
   famount: number | null;
   famountfi: number | null;
   fvolume: number | null;
@@ -101,11 +105,24 @@ export type DetailRow = {
   checkDate: string | null;
 };
 
-export type FilterKey = "all" | "notWarehouse" | "cntUnpaid" | "cntPaid" | "trackingDup" | "idCoDup" | "notCollected";
+export type FilterKey =
+  | "all"
+  | "notWarehouse"
+  | "readyToCheck"
+  | "inCheckQueue"
+  | "cntUnpaid"
+  | "cntPaid"
+  | "trackingDup"
+  | "idCoDup"
+  | "notCollected";
 
+// Legacy report-cnt filter-button order: ยังไม่ยิงเข้าโกดังไทย · พร้อมเพิ่ม… ·
+// มีในรายการ… · ยังไม่จ่ายค่าตู้ · จ่ายแล้ว · แทร็คซ้ำ · ID/CO ซ้ำ · ยังไม่เก็บเงินลูกค้า.
 const FILTER_LABEL: Record<FilterKey, string> = {
   all:          "ทั้งหมด",
   notWarehouse: "ยังไม่ยิงเข้าโกดังไทย",
+  readyToCheck: "พร้อมเพิ่มไปยังรายการตรวจสอบแล้ว",
+  inCheckQueue: "มีในรายการตรวจสอบแล้ว",
   cntUnpaid:    "ยังไม่จ่ายเงิน (ค่าตู้)",
   cntPaid:      "จ่ายเงินแล้ว (ค่าตู้)",
   trackingDup:  "แทร็คกิ้งซ้ำ",
@@ -120,7 +137,9 @@ const FILTER_LABEL: Record<FilterKey, string> = {
 export type ContainerDetailClientProps = {
   rows: DetailRow[];
   showMoney: boolean;
-  canBulkCheck: boolean;
+  /** FIX 2: the viewer can use the add-to-check flow (checkbox + bar) —
+   *  decoupled from money visibility. Mirrors adminReportCntAddCheck's gate. */
+  canCheckFlow: boolean;
   cabinetIsPaid: boolean;
 };
 
@@ -150,7 +169,11 @@ type SortKey =
 
 type SortDir = "asc" | "desc";
 
-export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIsPaid }: ContainerDetailClientProps) {
+export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIsPaid }: ContainerDetailClientProps) {
+  // The checkbox COLUMN shows for any check-flow viewer; interactivity (ticking
+  // + the add button) is disabled on a PAID cabinet (read-only, with a note).
+  const checkColumn = canCheckFlow;
+  const checkInteractive = canCheckFlow && !cabinetIsPaid;
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, start] = useTransition();
@@ -230,7 +253,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
 
   // Total column count — for the empty-state colSpan (22 base cols + the select
   // col + the 3 money cols).
-  const totalCols = 22 + (canBulkCheck && !cabinetIsPaid ? 1 : 0) + (showMoney ? 3 : 0);
+  const totalCols = 22 + (checkColumn ? 1 : 0) + (showMoney ? 3 : 0);
 
   // Render list: a multi-box order emits a SUMMARY row (always) + its box rows
   // ONLY when expanded; a single-box order emits one plain row. Recomputes when
@@ -276,6 +299,8 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
     const c: Record<FilterKey, number> = {
       all:          rows.length,
       notWarehouse: 0,
+      readyToCheck: 0,
+      inCheckQueue: 0,
       cntUnpaid:    0,
       cntPaid:      0,
       trackingDup:  0,
@@ -284,6 +309,8 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
     };
     for (const r of rows) {
       if (r.notYetWarehouse) c.notWarehouse += 1;
+      if (!r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus)) c.readyToCheck += 1;
+      if (r.inCheckQueue)    c.inCheckQueue += 1;
       if (!r.cntPaid)        c.cntUnpaid    += 1;
       if (r.cntPaid)         c.cntPaid      += 1;
       if (r.trackingDup)     c.trackingDup  += 1;
@@ -356,14 +383,19 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         onClick={() => toggleGroup(gkey)}
         className="border-t-2 border-primary-200 bg-primary-50/60 dark:bg-primary-900/15 font-medium cursor-pointer hover:bg-primary-100/70 dark:hover:bg-primary-900/25"
       >
-        {canBulkCheck && !cabinetIsPaid && (
+        {checkColumn && (
           <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
             {eligibleIds.length > 0 && (
               <input
                 type="checkbox"
                 checked={groupSel}
                 onChange={() => toggleGroupSelect(eligibleIds)}
-                title={`เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`}
+                disabled={!checkInteractive}
+                title={
+                  checkInteractive
+                    ? `เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
+                    : "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                }
                 aria-label={`เลือกออเดอร์ ${base}`}
               />
             )}
@@ -536,7 +568,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         <table className="w-full text-xs">
           <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
             <tr>
-              {canBulkCheck && !cabinetIsPaid && (
+              {checkColumn && (
                 <th className="px-2 py-2 text-center w-8">
                   <input
                     type="checkbox"
@@ -545,11 +577,13 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       selected.size === eligibleFilteredIds.length
                     }
                     onChange={toggleAll}
-                    disabled={eligibleFilteredIds.length === 0}
+                    disabled={!checkInteractive || eligibleFilteredIds.length === 0}
                     title={
-                      eligibleFilteredIds.length === 0
-                        ? `ไม่มีรายการที่ถึงโกดังไทยแล้ว (ขั้นต่ำ "${FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS]}")`
-                        : `เลือกทั้งหมด ${eligibleFilteredIds.length} รายการที่ถึงโกดังไทยแล้ว`
+                      !checkInteractive
+                        ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                        : eligibleFilteredIds.length === 0
+                          ? `ไม่มีรายการที่ถึงโกดังไทยแล้ว (ขั้นต่ำ "${FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS]}")`
+                          : `เลือกทั้งหมด ${eligibleFilteredIds.length} รายการที่ถึงโกดังไทยแล้ว`
                     }
                     aria-label="เลือกทั้งหมด"
                   />
@@ -588,7 +622,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
             {/* Summary band — orange→red gradient totals row (legacy L1653-1684 `.bg-color`).
                 One <td> per header column, in order. */}
             <tr className="bg-gradient-to-r from-orange-400 to-red-500 text-white font-semibold text-[11px]">
-              {canBulkCheck && !cabinetIsPaid && <td className="px-2 py-1.5"></td>}
+              {checkColumn && <td className="px-2 py-1.5"></td>}
               {/* ID / IDORCO / Tracking / รหัส — merged label */}
               <td className="px-2 py-1.5" colSpan={4}>รวม {summary.count.toLocaleString()} รายการ</td>
               {/* รายละเอียด */}
@@ -665,26 +699,41 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     selected: selected.has(r.id),
                   })}`}
                 >
-                  {canBulkCheck && !cabinetIsPaid && (
-                    <td className="px-2 py-2 text-center">
-                      {!r.inCheckQueue && (() => {
+                  {checkColumn && (
+                    <td className="px-2 py-2 text-center align-middle">
+                      {r.inCheckQueue ? (
+                        <span className="block text-[11px] text-emerald-600" title={`เพิ่มแล้วโดย ${r.checkAdminId ?? "-"}`}>
+                          ✓ อยู่ในรายการ
+                        </span>
+                      ) : (() => {
                         const eligible = isRowEligibleForAddCheck(r.fstatus);
                         const currentLabel =
                           FSTATUS_LABEL[r.fstatus] ??
                           (r.fstatus ? r.fstatus : "(ว่าง)");
                         return (
-                          <input
-                            type="checkbox"
-                            checked={selected.has(r.id)}
-                            onChange={() => toggleRow(r.id)}
-                            disabled={!eligible}
-                            title={
-                              eligible
-                                ? `เลือก ${r.fidorco ?? `#${r.id}`}`
-                                : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
-                            }
-                            aria-label={`เลือก ${r.id}`}
-                          />
+                          <>
+                            <input
+                              type="checkbox"
+                              checked={selected.has(r.id)}
+                              onChange={() => toggleRow(r.id)}
+                              disabled={!eligible || !checkInteractive}
+                              title={
+                                !checkInteractive
+                                  ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                                  : eligible
+                                    ? `เลือก ${r.fidorco ?? `#${r.id}`}`
+                                    : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                              }
+                              aria-label={`เลือก ${r.id}`}
+                            />
+                            {/* FIX 2b — VISIBLE disabled reason so a not-yet-arrived
+                                row (fstatus<4) doesn't read as "broken" (the dead-end). */}
+                            {!eligible && checkInteractive && (
+                              <span className="mt-0.5 block text-[11px] leading-tight text-amber-600">
+                                รอสินค้าถึงไทย
+                              </span>
+                            )}
+                          </>
                         );
                       })()}
                     </td>
@@ -720,9 +769,28 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       {r.userid}
                     </Link>
                   </td>
-                  <td className="px-2 py-2 max-w-[200px]">
-                    <div className="truncate" title={r.fdetail ?? ""}>
-                      {r.fdetail ?? "-"}
+                  <td className="px-2 py-2 max-w-[220px]">
+                    {/* FIX 2d — cover thumbnail + real product-detail (fdetail →
+                        item productname → tracking·ประเภท), never a bare "-". */}
+                    <div className="flex items-start gap-2">
+                      {r.coverUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={r.coverUrl}
+                          alt={`#${r.id}`}
+                          loading="lazy"
+                          className="h-10 w-10 shrink-0 rounded border border-border bg-surface-alt object-cover"
+                        />
+                      ) : null}
+                      <div
+                        className="min-w-0 flex-1 truncate"
+                        title={r.detailDisplay ?? r.ftrackingchn ?? ""}
+                      >
+                        {r.detailDisplay ??
+                          (r.ftrackingchn
+                            ? `${r.ftrackingchn} · ${productTypeLabel(r.fproductstype)}`
+                            : "-")}
+                      </div>
                     </div>
                   </td>
                   <td className="px-2 py-2 text-right">
@@ -906,18 +974,27 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         </table>
       </div>
 
-      {/* Fixed-bottom bulk-action bar — only for money-tier roles and when cnt is unpaid */}
-      {canBulkCheck && !cabinetIsPaid && (
+      {/* Fixed-bottom add-to-check bar — for any check-flow viewer (super/ops/
+          accounting/god). On a PAID cabinet it's read-only: the add button is
+          replaced by a note, but the "ดูรายการที่ตรวจสอบแล้ว" CTA (→ /admin/
+          forwarder-check where 4→5 billing happens) stays visible. */}
+      {checkColumn && (
         <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-2 rounded-full bg-white dark:bg-surface border border-border shadow-lg px-3 py-2 text-xs">
-          <span className="text-muted">เลือก: <span className="font-semibold text-foreground">{selected.size}</span> รายการ</span>
-          <button
-            type="button"
-            disabled={pending || selected.size === 0}
-            onClick={bulkCheck}
-            className="rounded-full bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
-          >
-            {pending ? "กำลังเพิ่ม…" : "เพิ่มในรายการตรวจสอบแล้ว"}
-          </button>
+          {checkInteractive ? (
+            <>
+              <span className="text-muted">เลือก: <span className="font-semibold text-foreground">{selected.size}</span> รายการ</span>
+              <button
+                type="button"
+                disabled={pending || selected.size === 0}
+                onClick={bulkCheck}
+                className="rounded-full bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+              >
+                {pending ? "กำลังเพิ่ม…" : "เพิ่มในรายการตรวจสอบแล้ว"}
+              </button>
+            </>
+          ) : (
+            <span className="text-muted">ตู้นี้จ่ายค่าตู้แล้ว · เพิ่มรายการตรวจสอบไม่ได้ (แก้ผ่านบิลจ่ายเงินตู้)</span>
+          )}
           <Link
             href="/admin/forwarder-check"
             className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
@@ -926,7 +1003,7 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
           >
             ดูรายการที่ตรวจสอบแล้ว
           </Link>
-          {bulkMsg && <span className="text-muted">{bulkMsg}</span>}
+          {checkInteractive && bulkMsg && <span className="text-muted">{bulkMsg}</span>}
         </div>
       )}
     </div>
@@ -1080,6 +1157,8 @@ function filterRows(rows: DetailRow[], filter: FilterKey): DetailRow[] {
   switch (filter) {
     case "all":          return rows;
     case "notWarehouse": return rows.filter((r) => r.notYetWarehouse);
+    case "readyToCheck": return rows.filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus));
+    case "inCheckQueue": return rows.filter((r) => r.inCheckQueue);
     case "cntUnpaid":    return rows.filter((r) => !r.cntPaid);
     case "cntPaid":      return rows.filter((r) =>  r.cntPaid);
     case "trackingDup":  return rows.filter((r) => r.trackingDup);

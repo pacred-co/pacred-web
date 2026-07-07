@@ -583,15 +583,14 @@ export function CntListTable({
             )}
 
             {filteredRows.map((r) => {
-              // สถานะตู้ — owner 2026-06-19 (ปอน): "มีเลขตู้ = กำลังส่งมาไทย ทั้งหมด".
-              // Every row on the รอเข้าโกดังไทย tab has a cabinet number (the page
-              // groups by + filters fcabinetnumber), so the container is loaded +
-              // in transit → its CONTAINER status is "กำลังส่งมาไทย" (3). The old
-              // MIN(fstatus) left a ตู้ reading "รอเข้าโกดังจีน/ถึงโกดังจีนแล้ว" when
-              // one stale tracking sat at 1/2 — contradictory for a closed container.
+              // สถานะตู้ — 0243 (2026-07-07): show the REAL container-wide status =
+              // MIN(fstatus) across the ตู้'s trackings (the least-advanced one = the
+              // container's true overall stage), on BOTH tabs. r.fstatus already
+              // carries min_fstatus from get_container_summary. Supersedes the
+              // 2026-06-19 hardcode (waiting always "กำลังส่งมาไทย"/3) — the truthful
+              // min is now consistent with the container-level bucketing.
               // Display-only · the per-tracking tb_forwarder.fstatus is unchanged.
-              // The เข้าโกดังไทยแล้ว tab (arrived) keeps its real status.
-              const badge = fstatusBadge(isWaiting ? "3" : r.fstatus);
+              const badge = fstatusBadge(r.fstatus);
               const isOn = selected.has(r.fcabinetnumber);
               const selectable = canSelect && !r.isPaid;
               // Per owner (2026-06-19): keep the LIST table WHITE — drop the

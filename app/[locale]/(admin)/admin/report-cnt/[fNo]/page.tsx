@@ -33,8 +33,9 @@
  */
 
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -137,6 +138,16 @@ export default async function AdminReportCntDetailPage({
   // ultra/accounting/pricing see ราคาต้นทุน/กำไร/เรทต้นทุน + the cost-update tab;
   // super/ops/warehouse see the container detail without money internals.
   const showMoney = canViewCostProfit(roles);
+
+  // FIX 2 (2026-07-07): the ops-tier "add-to-check" flow (checkbox column +
+  // select-all + the เพิ่มในรายการตรวจสอบแล้ว bar) is DECOUPLED from money
+  // visibility — legacy always showed the checkbox to anyone who reached the
+  // page. canCheckFlow mirrors adminReportCntAddCheck's gate exactly
+  // (withAdmin(["super","ops","accounting"]) → isGodRole ∪ {super,ops,accounting}),
+  // so warehouse/pricing-only viewers don't get a click→permission-error
+  // dead-end, while super+ops (who reached the page but saw NO checkbox — the
+  // PR002 dead-end) now can. Money COLUMNS stay showMoney-gated below.
+  const canCheckFlow = hasRole(roles, ["super", "ops", "accounting"]);
 
   const isCostUpdate = sp.action === "cost-update";
 
@@ -392,6 +403,14 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
+  // FIX 2 (2026-07-07): resolve the fcover thumbnail per row (signed/passthrough
+  // legacy URL) — reuse the same resolver forwarder-check uses. Empty fcover →
+  // null (the cell renders no image, gracefully).
+  const coverMap = await resolveLegacyUrlMap(
+    cntRows.map((r) => ({ id: r.id, filename: r.fcover })),
+    "cover",
+  );
+
   // ── 10) Build the rows + totals ──
   const detailRows: DetailRow[] = cntRows.map((r) => {
     const u = userMap.get(String(r.userid));
@@ -467,6 +486,7 @@ export default async function AdminReportCntDetailPage({
       fdetail: r.fdetail,
       detailDisplay,
       fcover: r.fcover,
+      coverUrl: coverMap[String(r.id)] ?? null,
       famount: Number(r.famount ?? 0) || null,
       // V-D4 — boxes actually received at TH warehouse (sum of fi2amount).
       // null when the parcel has no import2 scan row yet (shows "-/M").
@@ -816,7 +836,7 @@ export default async function AdminReportCntDetailPage({
                   }))
             }
             showMoney={showMoney}
-            canBulkCheck={showMoney}
+            canCheckFlow={canCheckFlow}
             cabinetIsPaid={cabinetIsPaid}
           />
         )}
