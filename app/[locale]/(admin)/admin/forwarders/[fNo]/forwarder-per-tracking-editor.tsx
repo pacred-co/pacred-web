@@ -30,6 +30,7 @@ import {
 // the "คิดราคาแบบกำหนดเอง" toggle is OFF (the client alone can't reach the rate
 // cards). Uses the EXACT same waterfall the save runs → preview == save (no drift).
 import { resolveLiveForwarderRate, type PricingRowContext } from "@/lib/forwarder/live-rate";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { PerTrackingEditorClient, type PerTrackingRow } from "./per-tracking-editor-client";
 
@@ -39,6 +40,8 @@ type SeedRow = {
   userid?: string | null;
   ftrackingchn?: string | null;
   fstatus?: string | null;
+  // Rate-mode guard — the ตู้ name decodes the transport mode (authoritative).
+  fcabinetnumber?: string | null;
 };
 
 type Props = {
@@ -296,6 +299,12 @@ export async function ForwarderPerTrackingEditor({
   let cbmUnitRate: number | null = null;  // uniform cbm unit rate (null if rows differ)
   let kgRateUniform = true;
   let cbmRateUniform = true;
+  // ── Rate-mode guard (advisory · owner) — derive the transport mode from the ตู้
+  // name and resolve the derived-mode + other-mode SYSTEM ฿/CBM rate so the client
+  // can warn if a manual custom rate looks like the wrong mode's number. READ-ONLY.
+  let modeDerived: "1" | "2" | "3" | null = null;
+  let modeExpectedCbmRate: number | null = null;
+  let modeOtherCbmRate: number | null = null;
   if (r.userid && display.length > 0) {
     // Σweight / Σcbm across display rows — the order-total ค่าเทียบ ratio (same
     // aggregate the client preview box sums). cbmProduct per row = famountcount==1
@@ -390,6 +399,51 @@ export async function ForwarderPerTrackingEditor({
     }
     profileRateMissing = allMissing;
     profileResolved = true;
+
+    // ── Rate-mode guard rates (advisory · read-only) ──
+    // The transport mode comes from the ตู้/tracking NAME (authoritative), NOT the
+    // stored ftransporttype. Resolve the SYSTEM ฿/CBM rate for the derived mode AND
+    // the other mode using a representative (first) row's tuple, so the client can
+    // flag a manual custom rate typed for the wrong mode. Skips air (no other mode).
+    // Wrapped in try/catch → any failure leaves the rates null (client shows nothing).
+    try {
+      modeDerived =
+        transportModeFromCabinetName(r.fcabinetnumber) ??
+        transportModeFromCabinetName(r.ftrackingchn);
+      if (modeDerived && modeDerived !== "3") {
+        const rep = display[0];
+        const fAmountCount = rep.famountcount == null ? null : String(rep.famountcount);
+        const fAmount = num(rep.famount);
+        const fVolume = num(rep.fvolume);
+        const cbmProduct = String(fAmountCount ?? "").trim() === "1" ? fVolume : fVolume * fAmount;
+        const otherMode = modeDerived === "1" ? "2" : "1";
+        const modeBase: PricingRowContext = {
+          userid: r.userid,
+          fwarehousechina: String(rep.fwarehousechina ?? "").trim() || "1",
+          ftransporttype: "",
+          fproductstype: String(rep.fproductstype ?? "").trim() || "1",
+          weightKg: num(rep.fweight),
+          cbmProduct,
+          famountcount: fAmountCount,
+          famount: fAmount,
+          reforder: rep.reforder,
+          customRateSwitch: false,
+          customRateKg: 0,
+          customRateCbm: 0,
+          userComparison,
+          userComparisonValue,
+        };
+        const expRes = await resolveLiveForwarderRate(admin, { ...modeBase, ftransporttype: modeDerived });
+        if (!("error" in expRes)) modeExpectedCbmRate = expRes.unitRates.cbmRate;
+        const othRes = await resolveLiveForwarderRate(admin, { ...modeBase, ftransporttype: otherMode });
+        if (!("error" in othRes)) modeOtherCbmRate = othRes.unitRates.cbmRate;
+      }
+    } catch (e) {
+      console.error(`[ForwarderPerTrackingEditor: modeGuard rates]`, { fid: r.id, error: String(e) });
+      modeDerived = null;
+      modeExpectedCbmRate = null;
+      modeOtherCbmRate = null;
+    }
   }
 
   // เหมาๆ (Pacred PRF) — when ANY tracking ships via the เหมาๆ carrier, the in-Thailand
@@ -419,6 +473,12 @@ export async function ForwarderPerTrackingEditor({
       // it — else the client omits the multiplier and shows just the Σ amount).
       profileKgUnitRate={kgRateUniform ? kgUnitRate : null}
       profileCbmUnitRate={cbmRateUniform ? cbmUnitRate : null}
+      // Rate-mode guard (advisory) — the ตู้-derived mode + system ฿/CBM for that
+      // mode and the other mode. The client warns if the manual custom rate looks
+      // like the wrong mode. null → no warning (no ตู้ / air / unresolved).
+      derivedMode={modeDerived}
+      modeExpectedCbmRate={modeExpectedCbmRate}
+      modeOtherCbmRate={modeOtherCbmRate}
     />
   );
 }

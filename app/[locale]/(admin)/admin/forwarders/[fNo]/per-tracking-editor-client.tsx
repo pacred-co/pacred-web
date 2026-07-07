@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
+import { evaluateRateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
@@ -94,6 +95,16 @@ type Props = {
   profileKgUnitRate?: number | null;
   /** uniform cbm unit rate to label "× rate" (null = rows differ → omit multiplier). */
   profileCbmUnitRate?: number | null;
+  // ── Rate-mode guard (advisory · owner) — the transport mode decoded from the ตู้
+  // name + the system ฿/CBM for that mode and the other mode. When the manual
+  // "คิดราคาแบบกำหนดเอง" rate looks like the WRONG mode's number, the card shows an
+  // amber warning. null → no warning (no ตู้ / air / rate unresolved). ────────────
+  /** ตู้-derived transport mode (1=รถ · 2=เรือ · 3=อากาศ) · null = no ตู้/undecodable. */
+  derivedMode?: "1" | "2" | "3" | null;
+  /** System ฿/CBM for the derived mode. */
+  modeExpectedCbmRate?: number | null;
+  /** System ฿/CBM for the OTHER mode (null = air / none). */
+  modeOtherCbmRate?: number | null;
 };
 
 const WAREHOUSE_CHINA = [
@@ -136,6 +147,9 @@ export function PerTrackingEditorClient({
   profileCbmAmount = null,
   profileKgUnitRate = null,
   profileCbmUnitRate = null,
+  derivedMode = null,
+  modeExpectedCbmRate = null,
+  modeOtherCbmRate = null,
 }: Props) {
   const router = useRouter();
   const { confirm, dialogs } = useConfirmDialogs();
@@ -438,6 +452,24 @@ export function PerTrackingEditorClient({
     });
   }
 
+  // ── Rate-mode guard (advisory · owner) — warn (never block) when the manual
+  // custom ฿/CBM looks like the WRONG transport mode's rate for this ตู้. Uses the
+  // ตู้-derived mode + system rates resolved server-side. A warning only — it does
+  // NOT gate onSave. Null when the override is off / no ตู้ / rate looks correct.
+  const modeGuardWarn = useMemo(() => {
+    if (customRate !== "1" || !derivedMode) return null;
+    const g = evaluateRateModeGuard({
+      derivedMode,
+      typedCbmRate: parseFloat(customRateCbm) || 0,
+      typedKgRate: parseFloat(customRateKg) || 0,
+      expectedCbmRate: modeExpectedCbmRate ?? 0,
+      otherModeCbmRate: modeOtherCbmRate ?? 0,
+      expectedKgRate: 0,
+      otherModeKgRate: 0,
+    });
+    return g.level === "mismatch" ? g.message : null;
+  }, [customRate, customRateCbm, customRateKg, derivedMode, modeExpectedCbmRate, modeOtherCbmRate]);
+
   return (
     <div className="space-y-3">
       {/* ── ORDER-level rate toggles (shared · ใช้ทุกแทค) ──
@@ -461,6 +493,13 @@ export function PerTrackingEditorClient({
               <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
           </div>
           <p className="mt-1 text-[11px] text-muted">ติ๊ก = ใช้เรทที่กรอก (ต้องกรอกค่าเทียบด้วย · ติ๊กคู่กัน) · ไม่ติ๊ก = เรทระบบ (ค่าเทียบ 250)</p>
+          {/* Rate-mode guard (advisory) — warns if the typed ฿/CBM looks like the
+              WRONG transport mode's rate for this ตู้. A warning only · does NOT block. */}
+          {modeGuardWarn && (
+            <p className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+              {modeGuardWarn}
+            </p>
+          )}
         </div>
         <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
           <label className="flex cursor-pointer items-center gap-2 select-none">

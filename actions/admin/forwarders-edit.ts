@@ -44,6 +44,8 @@ import {
   type PricingRowContext,
 } from "@/lib/forwarder/live-rate";
 import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { evaluateRateModeGuard, type RateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -245,6 +247,15 @@ export type AdminUpdateForwarderDimensionsData = {
    * is true only if the owner flips the policy to a true gate.
    */
   minSell: MinSellAdvisory;
+  /**
+   * Rate-mode guard advisory (mirrors minSell shape). When the "คิดราคาแบบกำหนดเอง"
+   * override is on AND the container's mode is decodable from its cabinet/tracking
+   * name, this flags when the typed custom rate looks like the WRONG transport
+   * mode's number (e.g. a ทางรถ rate on a ทางเรือ ตู้). ADVISORY ONLY — the save
+   * still succeeds; the edit UI hard-WARNS. undefined = no container/mode to
+   * evaluate, override off, or the extra rate resolves failed (never breaks save).
+   */
+  modeGuard?: RateModeGuard;
 };
 
 export async function adminUpdateForwarderDimensions(
@@ -322,6 +333,8 @@ export async function adminUpdateForwarderDimensions(
         .select(
           "id, fidorco, userid, fweight, fwidth, flength, fheight, fvolume, " +
           "fproductstype, frefprice, fnote, fstatus, fcredit, " +
+          // ── rate-mode guard inputs (decode transport mode from the ตู้ name) ──
+          "fcabinetnumber, ftrackingchn, " +
           // ── pricing-context columns (legacy update_data reads these) ──
           "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
           "customrate, customratekg, customratecbm, fdiscount, " +
@@ -381,6 +394,8 @@ export async function adminUpdateForwarderDimensions(
         doc_tier_confirmed: boolean | null;
         fstatus: string | null;
         fcredit: string | null;
+        fcabinetnumber: string | null;
+        ftrackingchn: string | null;
       };
 
       const nowIso = new Date().toISOString();
@@ -577,6 +592,56 @@ export async function adminUpdateForwarderDimensions(
         transport: (String(before.ftransporttype ?? "1").trim() as MinSellTransport) || "1",
         quotedThb: newFTotalPrice,
       });
+
+      // ─── Rate-mode guard advisory (mirrors minSell · ADVISORY ONLY) ──
+      // When the pricer overrode the rate manually (customRateSwitch), check that
+      // the typed custom rate isn't the WRONG transport mode's number. The mode is
+      // decoded from the ตู้/tracking NAME (authoritative · cabinet-transport.ts),
+      // NOT the unreliable stored ftransporttype. We resolve the SYSTEM rate for the
+      // derived mode AND the other mode (read-only · customRateSwitch:false) and
+      // compare. NEVER blocks — wrapped in try/catch so any resolve failure leaves
+      // modeGuard undefined and the save proceeds unchanged.
+      let modeGuard: RateModeGuard | undefined;
+      try {
+        if (customRateSwitch) {
+          const derivedMode =
+            transportModeFromCabinetName(before.fcabinetnumber) ??
+            transportModeFromCabinetName(before.ftrackingchn);
+          if (derivedMode) {
+            const otherMode = derivedMode === "1" ? "2" : derivedMode === "2" ? "1" : null;
+            const sysCtx: PricingRowContext = {
+              ...priceCtx,
+              customRateSwitch: false,
+              customRateKg: 0,
+              customRateCbm: 0,
+            };
+            const exp = await resolveLiveForwarderRate(admin, { ...sysCtx, ftransporttype: derivedMode });
+            const expCbm = "error" in exp ? 0 : (exp.unitRates.cbmRate ?? 0);
+            const expKg  = "error" in exp ? 0 : (exp.unitRates.kgRate ?? 0);
+            let othCbm = 0;
+            let othKg = 0;
+            if (otherMode) {
+              const oth = await resolveLiveForwarderRate(admin, { ...sysCtx, ftransporttype: otherMode });
+              othCbm = "error" in oth ? 0 : (oth.unitRates.cbmRate ?? 0);
+              othKg  = "error" in oth ? 0 : (oth.unitRates.kgRate ?? 0);
+            }
+            modeGuard = evaluateRateModeGuard({
+              derivedMode,
+              typedCbmRate: effectiveCustomRateCbm,
+              typedKgRate: effectiveCustomRateKg,
+              expectedCbmRate: expCbm,
+              otherModeCbmRate: othCbm,
+              expectedKgRate: expKg,
+              otherModeKgRate: othKg,
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`[adminUpdateForwarderDimensions: modeGuard]`, {
+          fNo: d.fNo, id: before.id, error: String(e),
+        });
+        modeGuard = undefined;
+      }
 
       // ─── UPDATE tb_forwarder ────────────────────────────────────
       const update: Record<string, unknown> = {
@@ -781,6 +846,16 @@ export async function adminUpdateForwarderDimensions(
               quoted_thb:   minSell.quotedThb,
               shortfall_thb: minSell.shortfallThb,
             },
+            // Rate-mode guard (advisory) — record when a manual custom rate looked
+            // like the wrong transport mode's number (auditable even if overridden).
+            mode_guard: modeGuard
+              ? {
+                  level:        modeGuard.level,
+                  derived_mode: modeGuard.derivedMode,
+                  expected_cbm: modeGuard.expectedCbmRate,
+                  typed_cbm:    modeGuard.typedCbmRate,
+                }
+              : undefined,
           },
           items_updated:   d.items.length,
           crate_count:     d.items.filter((it) => it.crateType === "2").length,
@@ -822,6 +897,7 @@ export async function adminUpdateForwarderDimensions(
           grandTotal:  newGrandTotal,
           advancedToFive,
           minSell,
+          modeGuard,
         },
       };
     },
