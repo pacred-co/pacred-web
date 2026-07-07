@@ -111,6 +111,11 @@ export type Row = {
   admin_creator: string | null;
   ref_order: string | null;
   fcredit: string;
+  // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c') · display only
+  credit_date_granted: string | null; // legacy fdatestatus5 · วันที่ให้เครดิต
+  credit_due_date: string | null;     // legacy fcreditdate · วันที่ครบกำหนด
+  // 2026-07-07 — fstatus='6' + open driver item → "กำลังจัดส่ง" pill override
+  driverOpen: boolean;
   paydeposit: string | null;
   note: string | null;
   /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
@@ -831,6 +836,14 @@ export function ForwardersTable({
                       ไม่รับฯ) + นิติบุคคล/หัก ณ ที่จ่าย · staff scan VAT/no-VAT per row. */}
                   <th className="px-2 py-3" title="เอกสารภาษีที่ลูกค้าเลือก (ใบกำกับ / ใบขน / ไม่รับเอกสาร)">เอกสาร</th>
                   <FwSortableTh label="อัปเดต"        sortKey="date_admin_status" activeKey={sortKey} activeDir={sortDir} onSort={handleSort} />
+                  {/* 2026-07-07 — credit tab only (legacy forwarder.php q=='c' L526-528):
+                      วันที่ให้เครดิต + วันที่ครบกำหนด (red box when overdue). */}
+                  {currentStatus === "c" && (
+                    <>
+                      <th className="px-2 py-3 whitespace-nowrap">วันที่ให้เครดิต</th>
+                      <th className="px-2 py-3 whitespace-nowrap">วันที่ครบกำหนด</th>
+                    </>
+                  )}
                   <th className="px-2 py-3">ตัวเลือก</th>
                 </tr>
               </thead>
@@ -887,10 +900,20 @@ export function ForwardersTable({
                   const statusKey = r.status;
                   // VIVID end-of-row status pill (owner 2026-06-23: rows white →
                   // เน้นสถานะท้ายรายการเด่นๆ). Solid high-contrast fill, not the soft chip.
-                  const badgeCls = fstatusVivid(r.status);
-                  const sLabel = r.fcredit === "1"
-                    ? `เครติด · ${statusLabel[r.status] ?? r.status}`
-                    : statusLabel[statusKey] ?? statusKey;
+                  // S1 (2026-07-07) — legacy statusForwarderAll2(): fStatus='6' WITH an
+                  // open driver item → distinct "กำลังจัดส่ง" pill; else "เตรียมส่ง".
+                  // Per-row override only — FSTATUS_CFG (6 = เตรียมส่ง) is unchanged.
+                  const isDelivering = r.status === "6" && r.driverOpen;
+                  const badgeCls = isDelivering
+                    ? "bg-indigo-600 text-white"
+                    : fstatusVivid(r.status);
+                  const sLabel = isDelivering
+                    ? r.fcredit === "1"
+                      ? "เครติด · กำลังจัดส่ง"
+                      : "กำลังจัดส่ง"
+                    : r.fcredit === "1"
+                      ? `เครติด · ${statusLabel[r.status] ?? r.status}`
+                      : statusLabel[statusKey] ?? statusKey;
                   // next-action hint (self-explaining-row §0g) — what staff does NOW.
                   const fsCfg = FSTATUS_CFG[r.status as keyof typeof FSTATUS_CFG];
                   const fsNext = fsCfg?.next ?? "";
@@ -1443,6 +1466,28 @@ export function ForwardersTable({
                           <span className="text-muted">—</span>
                         )}
                       </td>
+                      {/* 2026-07-07 — credit tab only: วันที่ให้เครดิต + วันที่ครบกำหนด.
+                          Overdue due-date → red box with elapsed diff (legacy
+                          diffDateTimeNow · forwarder.php L690-691). Display only. */}
+                      {currentStatus === "c" && (() => {
+                        const due = r.credit_due_date;
+                        const overdue = !!due && Date.parse(due) < Date.now();
+                        return (
+                          <>
+                            <td className="px-2 py-2.5 whitespace-nowrap text-center text-[11px]">
+                              {fmtDate(r.credit_date_granted) || "—"}
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap text-center text-[11px]">
+                              {fmtDate(due) || "—"}
+                              {overdue && (
+                                <div className="mt-0.5 rounded bg-red-600 px-1 text-white">
+                                  ผ่านมา {relativeAgo(due)}
+                                </div>
+                              )}
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col gap-1">
                           <Link
@@ -1477,7 +1522,7 @@ export function ForwardersTable({
                         small text · indented. */}
                     {group && isExpanded && (
                       <tr className="border-t border-border bg-slate-50">
-                        <td colSpan={15} className="px-3 py-2">
+                        <td colSpan={currentStatus === "c" ? 17 : 15} className="px-3 py-2">
                           <div className="pl-8">
                             <div className="mb-1.5 text-[11px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}

@@ -257,6 +257,9 @@ type RawForwarderRow = {
   fshipby: string | null;             // TH-delivery carrier code · nameShipBy()
   fproductstype: string | null;       // product type · nameProductsType() 1-4
   adminidpurchaser: string | null;    // owner ④ — assigned ผู้สั่งซื้อ (tb_admin.adminID)
+  // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c' L688-691)
+  fdatestatus5: string | null;        // legacy fDateStatus5 · วันที่ให้เครดิต
+  fcreditdate: string | null;         // legacy fCreditDate · วันที่ครบกำหนด
 };
 
 type RawUserRow = {
@@ -298,6 +301,11 @@ export type Row = {
   admin_creator: string | null;     // adminidcreator (empty=customer · set=admin-initiated)
   ref_order: string | null;         // reforder (set = system-replicated)
   fcredit: string;             // '1' = credit order
+  // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c') · display only
+  credit_date_granted: string | null; // legacy fdatestatus5 · วันที่ให้เครดิต
+  credit_due_date: string | null;     // legacy fcreditdate · วันที่ครบกำหนด
+  // 2026-07-07 — fstatus='6' + open driver item (fdistatus='') → กำลังจัดส่ง pill
+  driverOpen: boolean;
   paydeposit: string | null;   // '1' = paid · null/'' = ยอดค้างชำระ remaining
   note: string | null;
   /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
@@ -449,7 +457,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     { v: "4",   l: STATUS_LABEL["4"]!,   n: counts.s4 },
     { v: "5",   l: STATUS_LABEL["5"]!,   n: counts.s5 },
     { v: "6",   l: STATUS_LABEL["6"]!,   n: counts.s6 },
-    { v: "6.1", l: STATUS_LABEL["6.1"]!, n: 0 },  // TODO: needs driver-item join
+    { v: "6.1", l: STATUS_LABEL["6.1"]!, n: counts.s6driver },
     { v: "7",   l: STATUS_LABEL["7"]!,   n: counts.s7 },
     { v: "c",   l: STATUS_LABEL["c"]!,   n: counts.credit },
     { v: "p",   l: STATUS_LABEL["p"]!,   n: counts.special },
@@ -1036,7 +1044,9 @@ export async function fetchForwarderList(
       // forwarder.php L622 (ประเภท) / L656 (nameShipBy above เลขพัสดุไทย).
       "fshipby,fproductstype," +
       // owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order).
-      "adminidpurchaser",
+      "adminidpurchaser," +
+      // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c') · read-only.
+      "fdatestatus5,fcreditdate",
       // count:exact only on the common path (no post-fetch shrink) so the
       // pager total matches the rendered rows; the search/6.1 views compute
       // total from the JS-filtered length instead.
@@ -1085,7 +1095,14 @@ export async function fetchForwarderList(
   // syntax). For the unfiltered + most-status views the 6.1 join is
   // skipped (saves a roundtrip on the common path).
   let driverInProgressIds: Set<number> | null = null;
-  if (sp.status === "6" || sp.status === "6.1") {
+  // Compute the open-driver-item set on every view that could contain a
+  // fstatus='6' row (so the per-row "กำลังจัดส่ง" pill + the 6.1 badge are
+  // correct on the all/credit/search views too), skipping only the pure
+  // single-status tabs that can't hold a '6' (1-5,7) and the '99' special
+  // lane. This does NOT change the 6/6.1 filter logic below — it only widens
+  // WHEN the set is populated.
+  const needsDriverSet = sp.status !== "p" && !/^[1-57]$/.test(sp.status ?? "");
+  if (needsDriverSet) {
     const { data: driverItemRows, error: driverItemRowsErr } = await admin
       .from("tb_forwarder_driver_item")
       .select("fid")
@@ -1332,6 +1349,10 @@ export async function fetchForwarderList(
       admin_creator: r.adminidcreator,
       ref_order: r.reforder,
       fcredit: r.fcredit ?? "0",
+      // 2026-07-07 — credit-tab AR columns (read-only) + delivering flag.
+      credit_date_granted: r.fdatestatus5 ?? null,
+      credit_due_date: r.fcreditdate ?? null,
+      driverOpen: driverInProgressIds?.has(Number(r.id)) ?? false,
       paydeposit: r.paydeposit,
       note: r.fnote,
       products_type: r.fproductstype,
@@ -1554,8 +1575,28 @@ async function loadStatusCounts(
     const r = await applyDate(base());
     return r.count ?? 0;
   }
+  // S2 (2026-07-07) — real "กำลังจัดส่ง" (6.1) count = fstatus='6' rows that
+  // have an open driver item (fdistatus=''). Same predicate the 6.1 list
+  // filter uses (fstatus='6' ∩ open-driver-item set) so the badge matches
+  // the rows the 6.1 tab shows (§0f). Count-only · no mutation.
+  async function countDriverInProgress6(): Promise<number> {
+    const { data: di } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("fid")
+      .eq("fdistatus", "");
+    const fids = Array.from(
+      new Set(
+        (di ?? [])
+          .map((r) => Number((r as { fid: number | string }).fid))
+          .filter((n) => Number.isFinite(n)),
+      ),
+    );
+    if (fids.length === 0) return 0;
+    const r = await applyDate(base().eq("fstatus", "6").in("id", fids));
+    return r.count ?? 0;
+  }
 
-  const [total, s1, s2, s3, s4, s5, s6, s7, credit, special] = await Promise.all([
+  const [total, s1, s2, s3, s4, s5, s6, s6driver, s7, credit, special] = await Promise.all([
     countTotal(),
     countFstatus("1"),
     countFstatus("2"),
@@ -1563,12 +1604,13 @@ async function loadStatusCounts(
     countFstatus("4"),
     countFstatus("5"),
     countFstatus("6"),
+    countDriverInProgress6(),
     countFstatus("7"),
     countCredit(),
     countFstatus("99"),
   ]);
 
-  return { total, s1, s2, s3, s4, s5, s6, s7, credit, special };
+  return { total, s1, s2, s3, s4, s5, s6, s6driver, s7, credit, special };
 }
 
 /** 2026-05-21 ภูม brief — Segmented Control component for service · container
