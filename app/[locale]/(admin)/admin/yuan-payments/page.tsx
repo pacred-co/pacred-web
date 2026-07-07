@@ -436,7 +436,7 @@ export default async function AdminYuanPaymentsPage({
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr:nth-child(even)]:bg-muted/30">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>

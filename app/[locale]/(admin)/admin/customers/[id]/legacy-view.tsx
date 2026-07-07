@@ -1258,7 +1258,7 @@ function Section({
 function Table({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto scrollbar-x-visible">
-      <table className="w-full text-[11px]">{children}</table>
+      <table className="w-full text-[11px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr:nth-child(even)]:bg-muted/30">{children}</table>
     </div>
   );
 }
