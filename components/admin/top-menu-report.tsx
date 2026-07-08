@@ -35,6 +35,7 @@ import { FREE_SHIPPING_ZIPS, FREE_SHIPPING_ZIPS_IN_CLAUSE } from "@/lib/forwarde
 type CountKey =
   | "waiting"
   | "checkQueue"
+  | "history"
   | "noteShop"
   | "note"
   | "notPhoto"
@@ -62,6 +63,22 @@ async function loadCounts(): Promise<Counts> {
   const checkQueueCount = admin
     .from("tb_check_forwarder")
     .select("id", { count: "exact", head: true })
+    .then((r) => r.count ?? 0);
+
+  // "ประวัติเข้าโกดังไทย" badge = countErrorF4 (legacy Warehouse.php L7-9) —
+  // warehouse scans made TODAY (tb_forwarder_import2.fi2Date=today) that have
+  // NOT been matched to a forwarder yet (fid IS NULL). Was hardcoded 0 → now
+  // the real faithful count so the tab surfaces today's unmatched scans.
+  const _now = new Date();
+  const _y = _now.getFullYear();
+  const _m = String(_now.getMonth() + 1).padStart(2, "0");
+  const _d = String(_now.getDate()).padStart(2, "0");
+  const errorF4Count = admin
+    .from("tb_forwarder_import2")
+    .select("id", { count: "exact", head: true })
+    .is("fid", null)
+    .gte("fi2date", `${_y}-${_m}-${_d} 00:00:00`)
+    .lte("fi2date", `${_y}-${_m}-${_d} 23:59:59`)
     .then((r) => r.count ?? 0);
 
   // 2026-06-14 forwarder-fidelity audit (§0f "อย่ามั่ว"): noteShop /
@@ -109,6 +126,8 @@ async function loadCounts(): Promise<Counts> {
     c((q) => q.eq("fcredit", "1").lt("fcreditdate", new Date().toISOString())),
     // 10) Wave 16 — bulk-bill queue (tb_check_forwarder rows = pending bills)
     checkQueueCount,
+    // 11) history — countErrorF4 (today's unmatched warehouse scans)
+    errorF4Count,
   ]);
 
   const val = (i: number): number =>
@@ -126,6 +145,7 @@ async function loadCounts(): Promise<Counts> {
     notShipFreeError:       val(8),
     fCreditError:           val(9),
     checkQueue:             val(10),
+    history:                val(11),
   };
 }
 
@@ -163,7 +183,7 @@ export async function TopMenuReport({ activeHref }: { activeHref?: string } = {}
     <nav className="pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-2 py-2">
       <ul className="flex flex-wrap gap-1 items-center text-xs">
         {ITEMS.map((it) => {
-          const count = it.key === "history" || it.key === "sacks" ? 0 : counts[it.key];
+          const count = it.key === "sacks" ? 0 : counts[it.key];
           const active =
             activeHref &&
             (it.href === activeHref || it.href.startsWith(activeHref + "?") || activeHref.startsWith(it.href.split("?")[0]));
