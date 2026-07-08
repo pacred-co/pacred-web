@@ -66,7 +66,7 @@ export function PacredDialog({
       // kills (its `*{margin:0}` clobbers the UA `dialog{margin:auto}` → the
       // modal pins top-left). With inset:0 + fit-content height + margin:auto
       // the top-layer dialog centers both axes. (verified live 2026-07-06)
-      className={`m-auto rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 max-h-[90vh] ${widthClass}`}
+      className={`animate-fade-in m-auto rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 max-h-[90vh] ${widthClass}`}
     >
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
         <h2 className="text-base font-semibold text-gray-900">{title}</h2>
@@ -195,7 +195,7 @@ export function useConfirmDialogs() {
         resolveRef.current = null;
         setState(null);
       }}
-      className="m-auto rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 w-[min(420px,95vw)]"
+      className="animate-fade-in m-auto rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 w-[min(420px,95vw)]"
     >
       <div className="px-5 py-4">
         <p className="text-sm text-gray-800 whitespace-pre-line">{state?.message ?? ""}</p>

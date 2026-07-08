@@ -11,6 +11,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CostRevealProvider } from "@/components/admin/cost-reveal";
 import { AdminHeaderNavProvider, AdminHeaderNavDisplay } from "@/components/admin/admin-header-nav";
+import { RouteFade } from "@/components/admin/route-fade";
 
 /**
  * Layout for /admin/* routes. Gates access to admin profiles; non-admins
@@ -114,7 +115,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           blur + PIN gate. */}
       <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
         <CostRevealProvider bypass={hasRole(roles, ["accounting", "pricing"])}>
-          {children}
+          <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
       </div>
     </div>

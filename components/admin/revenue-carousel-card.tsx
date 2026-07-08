@@ -45,7 +45,7 @@ export function RevenueCarouselCard({
     <>
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 transition-opacity duration-500">
+          <div key={face} className="min-w-0 flex-1 animate-fade-in">
             <p className={`font-bold leading-none ${tones.text} text-2xl sm:text-3xl font-mono`}>
               ฿{formatTHB(value)}
             </p>
