@@ -55,7 +55,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { sendSms } from "@/lib/sms/gateway";
-import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import {
+  computeForwarderCollectTotal,
+  type ForwarderCollectRow,
+} from "@/lib/forwarder/forwarder-collect-total";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog as appendStatusLogShared } from "@/lib/notifications/status-flip-helper";
@@ -93,7 +96,17 @@ type ForwarderRow = {
   userid: string;
   fstatus: string;
   ftrackingchn: string | null;
-  // price components for calcForwarderOutstanding() + the SMS body
+  // price components for computeForwarderCollectTotal() + the notify body.
+  // G2 (2026-07-08): the notify now quotes the SAME collect total the
+  // customer actually pays in the portal (computeForwarderCollectTotal),
+  // which needs fshipby (เหมาๆ detection), paymethod (COD guard) +
+  // faddressdistrict (หนองแขม exemption) — fields the old per-row
+  // calcForwarderOutstanding didn't. The juristic 1% lever comes from
+  // tb_users.userCompany (BUG-2b — NOT the row's fusercompany), so
+  // fusercompany is no longer selected here.
+  fshipby: string | null;
+  paymethod: number | string | null;
+  faddressdistrict: string | null;
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -102,7 +115,6 @@ type ForwarderRow = {
   ftransportpricechnthb: number | string | null;
   priceother: number | string | null;
   fdiscount: number | string | null;
-  fusercompany: number | string | null;
 };
 
 type UserRow = {
@@ -112,6 +124,7 @@ type UserRow = {
   userTel: string | null;
   userEmail: string | null;
   userLineNotify: string | null;
+  userCompany: number | string | null; // '1' = นิติบุคคล — the collect 1% lever (BUG-2b source)
 };
 
 type BillResult = {
@@ -152,24 +165,21 @@ async function appendStatusLog(
 /** Compose the customer-facing SMS body. Legacy template was
  *    "คุณมีค่าขนส่งที่ต้องชำระ ดู->{url}"
  *
- *  Wave 27 / E2E LOOP FIX gap #5 (2026-05-29) — the URL now points at
- *  the new customer-side invoice view `/service-import/<fid>/invoice`
- *  (built same wave by Agent F4) so the customer can SEE their bill
- *  before paying. The bare `/service-import/<fid>` detail page still
- *  works as a fallback but the invoice surface carries the formal
- *  ใบแจ้งหนี้ chrome + print/PDF button.
+ *  G2 (2026-07-08) — one SMS per CUSTOMER (not per row) quoting the FULL
+ *  collect total the customer actually pays in the portal (เหมาๆ ฿100 +
+ *  batch-1% included, COD legs excluded — computeForwarderCollectTotal).
+ *  The link points at `/service-import` (the pay surface whose pay-bar
+ *  computes the identical collect), not a single-fid invoice — the SMS
+ *  amount and the pay screen now agree exactly.
  *
  *  Char budget — ThaiBulkSMS encodes Thai as TIS-620 (1 SMS = 70 chars
  *  · multi-part up to 153/segment). We aim for ≤155 chars TIS-620 so
- *  the message ships in at most 3 segments. The Thai labels here
- *  (~50 chars) + the URL (~50 chars) + amount/id (~20 chars) keeps
- *  us comfortably inside the budget.
+ *  the message ships in at most 3 segments.
  */
 function composeBillSms(opts: {
   userId: string;
-  fid: number;
+  count: number;
   amountThb: number;
-  trackingChn: string | null;
 }): string {
   // Domain root — env override · falls back to bare "pacred.co.th" (no
   // protocol) which gives us ~7 chars of head-room over "https://" + the
@@ -181,37 +191,36 @@ function composeBillSms(opts: {
   const host = (envUrl !== "" ? envUrl : "pacred.co.th")
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "");
-  const invoiceUrl = `${host}/service-import/${opts.fid}/invoice`;
+  const payUrl = `${host}/service-import`;
   const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-  void opts.trackingChn; // kept for back-compat callers; tracking now lives on the invoice page
   // Tight single-block message under 155 chars TIS-620 — every line
   // is mandatory for the customer to act:
-  //   1. Sender identity + order id
-  //   2. Amount to pay (the most-read line)
-  //   3. Invoice link (the new gap #5 fix)
+  //   1. Sender identity + how many parcels this bill covers
+  //   2. Amount to pay (the most-read line · the full collect)
+  //   3. Pay link (the pay-bar shows the same amount)
   //   4. Wallet-pay CTA (the close-the-loop hint)
   return (
-    `Pacred · ฝากนำเข้า ${opts.fid}\n` +
+    `Pacred · ฝากนำเข้า ${opts.count} รายการ\n` +
     `ยอดที่ต้องชำระ: ฿${amount}\n` +
-    `ดูใบแจ้งหนี้: ${invoiceUrl}\n` +
+    `ชำระเงิน: ${payUrl}\n` +
     `จ่ายจากกระเป๋าได้เลย`
   );
 }
 
 /** Compose the LINE/email notification body. Longer than SMS — we can afford
  *  a multi-line message + a deep link. Sender prepends `[title]\n` itself
- *  (see lib/notifications/index.ts:sendLinePush). */
+ *  (see lib/notifications/index.ts:sendLinePush).
+ *
+ *  G2 (2026-07-08) — per-customer, quotes the same FULL collect total. */
 function composeBillBody(opts: {
   userId: string;
-  fid: number;
+  count: number;
   amountThb: number;
-  trackingChn: string | null;
 }): string {
-  const amount       = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
-  const trackingLine = opts.trackingChn ? `\nเลขพัสดุ: ${opts.trackingChn}` : "";
+  const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
   return (
     `เรียนคุณ ${opts.userId} ค่ะ\n` +
-    `บริการนำเข้า #${opts.fid}${trackingLine}\n` +
+    `บริการนำเข้า ${opts.count} รายการ\n` +
     `ยอดที่ต้องชำระ: ฿${amount}\n` +
     `กรุณาเข้าระบบเพื่อชำระเงิน`
   );
@@ -265,9 +274,9 @@ export async function adminCallPriceUser(
       const { data: forwarderRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, ftrackingchn, " +
+          "id, userid, fstatus, ftrackingchn, fshipby, paymethod, faddressdistrict, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-            "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+            "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
         .in("id", fids)
         .eq("fstatus", "4");
@@ -284,7 +293,7 @@ export async function adminCallPriceUser(
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
       const { data: userRows, error: userRowsErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify")
+        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify, userCompany")
         .in("userID", uniqueUserIds);
       if (userRowsErr) {
         console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
@@ -300,7 +309,10 @@ export async function adminCallPriceUser(
       //     added after the backfill) won't — we fall back to SMS-only for them.
       const profileIdByUserid = await resolveProfileIdsForLegacyUserids(uniqueUserIds);
 
-      // 3. Per-row bill loop.
+      // 3. Per-row bill loop (UPDATE per row) — billing stays row-by-row so a
+      //    single bad row fails independently; the customer NOTIFY is grouped
+      //    per-customer AFTER the loop (G2) so the SMS/LINE quotes the ONE
+      //    collect total the customer actually pays in the portal.
       const nowIso = new Date().toISOString();
       const result: BillResult = {
         processed:    0,
@@ -317,18 +329,21 @@ export async function adminCallPriceUser(
       const successfulFids: number[] = []; // for the queue-delete step
       let autoFilledThCount = 0;           // #7 ค่าส่งไทย auto-filled this call
 
+      // G2 — accumulate the EFFECTIVE collect rows (post-autofill, post-discount)
+      // per customer, ONLY for rows that actually flipped to '5'. After the loop
+      // we run ONE computeForwarderCollectTotal per customer over their billed
+      // set → the notify amount == the portal charge for that same set (batch
+      // เหมาๆ ฿100 once + batch-1%, COD legs excluded — never a per-row net).
+      const billedRowsByUser = new Map<string, ForwarderCollectRow[]>();
+
       for (const row of candidates) {
         // #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") — if a delivery leg
         // applies but ftransportprice is still ฿0, auto-fill the zone default so the
         // bulk-bill includes the TH cost (no manual detour). Best-effort · never
-        // overwrites a set cost. The filled cost feeds calcForwarderOutstanding below.
+        // overwrites a set cost. The filled cost feeds the collect total below.
         const autoTh = await autoFillThShippingForForwarder(admin, row.id);
-        const rowWithTh = autoTh ? { ...row, ftransportprice: autoTh.cost } : row;
+        const effectiveTransport = autoTh ? autoTh.cost : row.ftransportprice;
         if (autoTh) autoFilledThCount++;
-        const rowForCalc = discount !== undefined
-          ? { ...rowWithTh, fdiscount: discount }   // operator-supplied override (per parsed)
-          : rowWithTh;
-        const outstandingThb = calcForwarderOutstanding(rowForCalc);
 
         // 3a. UPDATE the forwarder row · re-guarded fstatus='4' to dodge a race
         //     where another operator billed it between our read + write.
@@ -357,103 +372,93 @@ export async function adminCallPriceUser(
         successfulFids.push(row.id);
         await appendStatusLog(admin, row.id, row.fstatus, "5", adminId);
 
-        // 3b. Notify the customer (SMS now · LINE/email deferred).
-        const user = usersById.get(row.userid);
+        // 3b. Stage the effective collect row for this customer (post-autofill,
+        //     post-discount-override). Amount is computed once per customer below.
+        const collectRow: ForwarderCollectRow = {
+          fshipby:               row.fshipby,
+          ftransportprice:       effectiveTransport,
+          paymethod:             row.paymethod,
+          faddressdistrict:      row.faddressdistrict,
+          ftotalprice:           row.ftotalprice,
+          fpriceupdate:          row.fpriceupdate,
+          fshippingservice:      row.fshippingservice,
+          pricecrate:            row.pricecrate,
+          ftransportpricechnthb: row.ftransportpricechnthb,
+          priceother:            row.priceother,
+          fdiscount:             discount !== undefined ? discount : row.fdiscount,
+        };
+        const bucket = billedRowsByUser.get(row.userid);
+        if (bucket) bucket.push(collectRow);
+        else billedRowsByUser.set(row.userid, [collectRow]);
+      }
+
+      // 3c. Per-CUSTOMER notify pass (G2). One SMS + one LINE/email per customer
+      //     quoting the collect total for their whole just-billed set — the exact
+      //     amount computeForwarderCollectTotal charges in the portal.
+      for (const [userid, collectRows] of billedRowsByUser) {
+        const user = usersById.get(userid);
+        const { total: collectTotal } = computeForwarderCollectTotal(collectRows, {
+          userId:      userid,
+          userCompany: String(user?.userCompany ?? ""),
+        });
+        const count = collectRows.length;
+
+        // SMS (real · best-effort — billing already landed above).
         if (user?.userTel) {
           const sms = await sendSms(
             user.userTel,
-            composeBillSms({
-              userId:      row.userid,
-              fid:         row.id,
-              amountThb:   outstandingThb,
-              trackingChn: row.ftrackingchn,
-            }),
+            composeBillSms({ userId: userid, count, amountThb: collectTotal }),
           );
           if (sms.ok) {
             result.sms_sent++;
           } else {
             result.sms_failed++;
-            // Don't add to errors[] — billing succeeded; SMS is best-effort.
             logger.warn("forwarder-check", "SMS failed", {
-              fid:   row.id,
-              userid: row.userid,
+              userid,
               phone: redactPhone(user.userTel),
               error: sms.error,
             });
           }
         } else {
-          // No phone on file — log so accounting can chase it manually
-          logger.warn("forwarder-check", "customer has no usertel", {
-            fid:    row.id,
-            userid: row.userid,
-          });
+          logger.warn("forwarder-check", "customer has no usertel", { userid });
         }
 
-        // 3c+3d. LINE + email push via the notifications spine.
-        //     sendNotification() inserts a notifications row + tries LINE
-        //     Messaging API push (if profiles.line_user_id set) + falls back
-        //     to email (if profiles.email set). Each call is wrapped: a
-        //     channel failure does NOT block billing — the bill already
-        //     landed in the DB above and SMS already fired.
-        const profileId = profileIdByUserid.get(row.userid);
+        // LINE + email push via the notifications spine.
+        const profileId = profileIdByUserid.get(userid);
         if (!profileId) {
-          // Customer has no profile (extremely rare post-backfill — e.g. a
-          // brand-new tb_users row added since the last provisioning run).
-          // SMS still fired above; LINE+email skipped silently.
           result.no_profile++;
           logger.warn("forwarder-check", "no profile for tb_users.userid — LINE+email skipped", {
-            fid:    row.id,
-            userid: row.userid,
+            userid,
           });
         } else {
           try {
             const notif = await sendNotification(profileId, {
               category:       "forwarder",
               severity:       "info",
-              title:          `แจ้งชำระเงิน · บริการนำเข้า #${row.id}`,
-              body:           composeBillBody({
-                userId:      row.userid,
-                fid:         row.id,
-                amountThb:   outstandingThb,
-                trackingChn: row.ftrackingchn,
-              }),
-              link_href:      `/service-import/${row.id}`,
+              title:          `แจ้งชำระเงิน · บริการนำเข้า ${count} รายการ`,
+              body:           composeBillBody({ userId: userid, count, amountThb: collectTotal }),
+              link_href:      `/service-import`,
               reference_type: "forwarder",
-              reference_id:   String(row.id),
+              reference_id:   userid,
             });
 
-            // LINE counts: deliveredLine === true → sent. If false AND the
-            // profile has a line_user_id, treat as failure (push API rejected).
-            // If false AND no line_user_id, it was never attempted → not a
-            // failure, just unavailable for this channel.
             if (notif.deliveredLine) {
               result.line_sent++;
-            } else if (user?.userEmail || user) {
-              // Heuristic: count line_failed only when we'd expect LINE to
-              // exist. line_user_id presence is the actual gate (set via
-              // /liff/link). Without exposing it through sendNotification's
-              // return shape we can't be precise — treat as "not_attempted"
-              // by default. Keep the counter focused on actual API failures.
-              // (LINE failure surfaces in Sentry via lib/notifications.)
             }
+            // (LINE not-attempted vs failed is indistinguishable via the return
+            //  shape — real API failures surface in Sentry via lib/notifications.)
 
-            // Email counts: deliveredEmail === true → sent. Otherwise the
-            // RESEND_API_KEY likely isn't set yet (per ก๊อต hand-off backlog)
-            // — track as failed so the operator sees "0 emails sent" and the
-            // team knows to wire RESEND.
             if (notif.deliveredEmail) {
               result.email_sent++;
             } else if (user?.userEmail) {
               result.email_failed++;
             }
           } catch (e) {
-            // Total failure — neither LINE nor email landed. Log + continue.
             result.line_failed++;
             result.email_failed++;
             logger.warn("forwarder-check", "sendNotification threw", {
-              fid:    row.id,
-              userid: row.userid,
-              error:  e instanceof Error ? e.message : String(e),
+              userid,
+              error: e instanceof Error ? e.message : String(e),
             });
           }
         }

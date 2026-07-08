@@ -238,5 +238,78 @@ console.log("forwarder-collect-total:");
   assertClose("COD guard zeroes ONLY the domestic leg → 375", r.total, 375);
 }
 
+// ────────────────────────────────────────────────────────────
+// G2 (2026-07-08) — the customer-facing NOTIFY (forwarder-check bulk-bill
+// SMS/LINE) must quote the SAME collect total this helper produces (the
+// portal charge), NOT the per-row calcForwarderOutstanding it used before.
+// And the ใบวางบิล (createBillingRunInvoice) must be a legitimate SUPERSET
+// of that collect — collect + bill-level extras (the COD legs it bills
+// upfront) — never a conflicting number.
+// ────────────────────────────────────────────────────────────
+
+// The bill money math imports (pure — no server-only):
+//   bill GROSS per row = calcForwarderGross (Σ 7 cols − discount, NO COD guard)
+//   bill เหมาๆ         = MAO_FLAT_FEE once when a เหมาๆ-zero row is present
+import { calcForwarderGross } from "./outstanding";
+import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
+
+// A mixed billed set for one juristic customer, one shipment:
+//   A — PRF เหมาๆ, ftransportprice 0, ftotalprice 500 (prepaid)
+//   B — PCS,       ftotalprice 600, ftransportprice 80 (prepaid)
+//   C — PCS,       ftotalprice 300, ftransportprice 50, COD (paymethod='2')
+const mixedSet: ForwarderCollectRow[] = [
+  row({ fshipby: "PRF", ftransportprice: 0,  ftotalprice: "500" }),
+  row({ fshipby: "PCS", ftransportprice: 80, ftotalprice: "600", paymethod: "1" }),
+  row({ fshipby: "PCS", ftransportprice: 50, ftotalprice: "300", paymethod: "2" }),
+];
+
+// 11. NOTIFY == PORTAL — the number the bulk-bill SMS/LINE now quotes.
+{
+  // collect = 500 + 680(B: 600+80) + 300(C: COD ฿50 leg excluded) = 1480
+  //         + เหมาๆ 100 = 1580 ; juristic & ≥1000 → −1% = 1564.20
+  const collect = computeForwarderCollectTotal(mixedSet, { userId: "PR100", userCompany: "1" });
+  assertClose("G2 notify quotes the portal collect = 1564.20", collect.total, 1564.2);
+  assertEq("G2 collect applied เหมาๆ", collect.applied50, true);
+  assertEq("G2 collect applied 1%", collect.appliedWht, true);
+  // The forwarder-check bulk-bill feeds this exact set to computeForwarderCollectTotal,
+  // so the SMS/LINE amount == this value == what the portal charges for the same set.
+}
+
+// 12. BILL ⊇ COLLECT — the ใบวางบิล gross is the collect + the bill-level
+//     extras (the COD domestic leg the bill bills upfront but the collect
+//     defers to the courier's door). Proves the bill is a SUPERSET, not a
+//     conflicting number.
+{
+  const nonJuristic = { userId: "PR100", userCompany: "0" };
+  // (a) All-prepaid, single-shipment, ≥฿1000 → arithmetic identity:
+  //     bill gross (Σ calcForwarderGross + เหมาๆ) == collect gross (no COD, no 1%).
+  const prepaidSet: ForwarderCollectRow[] = [
+    row({ fshipby: "PRF", ftransportprice: 0,  ftotalprice: "500" }),
+    row({ fshipby: "PCS", ftransportprice: 80, ftotalprice: "600", paymethod: "1" }),
+  ];
+  const billGrossPrepaid =
+    prepaidSet.reduce((s, r) => s + calcForwarderGross({ ...r, fusercompany: null }), 0) +
+    (prepaidSet.some((r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice) === 0)
+      ? MAO_FLAT_FEE
+      : 0);
+  const collectPrepaid = computeForwarderCollectTotal(prepaidSet, nonJuristic);
+  assertClose("G2 bill gross == collect (all-prepaid, no extras)", billGrossPrepaid, collectPrepaid.total);
+
+  // (b) Add a COD row → the bill gross INCLUDES the ฿50 domestic leg
+  //     (calcForwarderGross has no COD guard) but the collect EXCLUDES it →
+  //     bill − collect == 50 (the single bill-level extra). bill ⊋ collect.
+  const billGrossMixed =
+    mixedSet.reduce((s, r) => s + calcForwarderGross({ ...r, fusercompany: null }), 0) +
+    (mixedSet.some((r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice) === 0)
+      ? MAO_FLAT_FEE
+      : 0);
+  const collectMixed = computeForwarderCollectTotal(mixedSet, nonJuristic); // non-juristic → no 1% noise
+  assertClose(
+    "G2 bill gross == collect + the ฿50 COD leg (bill is the superset)",
+    billGrossMixed,
+    collectMixed.total + 50,
+  );
+}
+
 console.log(`\nforwarder-collect-total: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
