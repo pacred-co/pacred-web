@@ -31,17 +31,19 @@ import {
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
 // Pacred-native status palette (NOT legacy) — do not remap to legacy codes.
-const RSTATUS_CFG: Record<string, { label: string; chip: string }> = {
-  "1": { label: "ออกแล้ว", chip: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
-  "2": { label: "ยกเลิก",  chip: "bg-red-100 text-red-800 border border-red-300" },
-  "3": { label: "รอชำระ",  chip: "bg-amber-100 text-amber-800 border border-amber-300" },
-  "0": { label: "ร่าง",    chip: "bg-slate-100 text-slate-700 border border-slate-300" },
+// `dot` = the legacy PCS colored ● dot style (● + label) shown in the สถานะ column.
+const RSTATUS_CFG: Record<string, { label: string; dot: string; text: string }> = {
+  "1": { label: "ออกแล้ว", dot: "bg-emerald-500", text: "text-emerald-700" },
+  "2": { label: "ยกเลิก",  dot: "bg-red-500",     text: "text-red-700" },
+  "3": { label: "รอชำระ",  dot: "bg-amber-500",   text: "text-amber-700" },
+  "0": { label: "ร่าง",    dot: "bg-slate-400",   text: "text-slate-600" },
 };
 
 function rstatusCfg(rstatus: string) {
   return RSTATUS_CFG[rstatus] ?? {
     label: rstatus,
-    chip: "bg-slate-100 text-slate-700 border border-slate-300",
+    dot: "bg-slate-400",
+    text: "text-slate-600",
   };
 }
 
@@ -139,7 +141,7 @@ export function ReceiptsVoidTable({
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible">
         <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tfoot>tr>td]:border [&>tfoot>tr>td]:border-border/60">
-          <thead className="bg-slate-100 text-slate-700 text-xs">
+          <thead className="bg-orange-500 text-white text-xs [&>tr>th]:border-orange-400/60">
             <tr>
               <th className="px-2 py-2 text-left font-medium w-10">
                 <input
@@ -214,7 +216,7 @@ export function ReceiptsVoidTable({
                     <td className="px-2 py-2 whitespace-nowrap">
                       <Link
                         href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                        className="font-semibold text-primary-700 hover:underline"
+                        className="font-semibold text-sky-700 hover:underline"
                       >
                         {r.rid}
                       </Link>
@@ -230,7 +232,7 @@ export function ReceiptsVoidTable({
                       {r.refwhid ? (
                         <Link
                           href={`/admin/wallet/${r.refwhid}`}
-                          className="text-primary-700 hover:underline whitespace-nowrap"
+                          className="text-sky-700 hover:underline whitespace-nowrap"
                           title="ดูสลิปที่รายการเติมเงินที่อ้างอิง"
                         >
                           กดเพื่อดูสลิป
@@ -244,10 +246,10 @@ export function ReceiptsVoidTable({
                     {/* ⑥ ประเภทลูกค้า */}
                     <td className="px-2 py-2 text-center">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${
                           r.isCorporate
-                            ? "bg-indigo-100 text-indigo-800 border border-indigo-300"
-                            : "bg-slate-100 text-slate-700 border border-slate-300"
+                            ? "bg-rose-100 text-rose-700 border border-rose-300"
+                            : "bg-slate-100 text-slate-600 border border-slate-300"
                         }`}
                       >
                         {r.isCorporate ? "นิติบุคคล" : "บุคคลธรรมดา"}
@@ -257,7 +259,7 @@ export function ReceiptsVoidTable({
                     <td className="px-2 py-2 whitespace-nowrap">
                       <Link
                         href={`/admin/customers/${r.userid}`}
-                        className="font-mono text-slate-700 hover:text-primary-700 hover:underline"
+                        className="font-mono text-sky-700 hover:underline"
                       >
                         {r.userid}
                       </Link>
@@ -276,25 +278,26 @@ export function ReceiptsVoidTable({
                     <td className="px-2 py-2 text-right tabular-nums font-semibold text-primary-700">
                       ฿{fmtThb(r.ramount)}
                     </td>
-                    {/* ⑫ สถานะ (Pacred RSTATUS_CFG) */}
+                    {/* ⑫ สถานะ (Pacred RSTATUS_CFG · legacy ● dot style) */}
                     <td className="px-2 py-2 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${cfg.chip}`}>
+                      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-medium ${cfg.text}`}>
+                        <span className={`h-2 w-2 rounded-full ${cfg.dot}`} aria-hidden />
                         {cfg.label}
                       </span>
                     </td>
                     {/* ⑬ ตัวเลือก — ดูใบเสร็จ + อ้างอิงชำระเงิน */}
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-wrap items-center gap-1">
                         <Link
                           href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                          className="text-primary-700 hover:underline"
+                          className="rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-600 whitespace-nowrap"
                         >
                           ดูใบเสร็จ
                         </Link>
                         {r.refwhid && (
                           <Link
                             href={`/admin/wallet/${r.refwhid}`}
-                            className="text-slate-500 hover:text-primary-700 hover:underline"
+                            className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-600 whitespace-nowrap"
                           >
                             อ้างอิงชำระเงิน
                           </Link>
@@ -308,12 +311,12 @@ export function ReceiptsVoidTable({
           </tbody>
           {rows.length > 0 && (
             <tfoot>
-              <tr className="bg-slate-50 font-semibold text-sm">
-                <td colSpan={10} className="px-3 py-2.5 text-right text-slate-600">
+              <tr className="bg-cyan-100 font-semibold text-sm text-cyan-900 [&>td]:border-cyan-200">
+                <td colSpan={10} className="px-3 py-2.5 text-right">
                   รวม {rows.length.toLocaleString()} รายการ ในหน้านี้
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums text-primary-700">฿{fmtThb(totals.ramount)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.ramount)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>

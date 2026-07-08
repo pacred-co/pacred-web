@@ -284,20 +284,24 @@ export default async function ReceiptsListPage({
                   ctype: c.key === "all" ? undefined : c.key,
                   page:  undefined,
                 })}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium border ${
+                className={`inline-flex items-center gap-1.5 rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
                   active
-                    ? "bg-primary-600 text-white border-primary-600"
-                    : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                    ? "border-red-400 bg-red-50 text-red-700"
+                    : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
                 }`}
               >
-                {c.label} ({cTypeCount(c.key, cTypeCounts).toLocaleString()})
+                {c.label}
+                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
+                  {cTypeCount(c.key, cTypeCounts).toLocaleString()}
+                </span>
               </Link>
             );
           })}
         </div>
 
-        {/* ── Tab row #2 — สถานะ (Pacred semantics · unchanged) ── */}
-        <nav className="flex gap-1 border-b border-slate-200 overflow-x-auto scrollbar-x-visible">
+        {/* ── Tab row #2 — สถานะ (Pacred semantics · legacy dashed-pill look) ── */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500 mr-1">สถานะ:</span>
           {STATUS_TABS.map((t) => (
             <Link
               key={t}
@@ -305,16 +309,16 @@ export default async function ReceiptsListPage({
                 tab:  t === "recent" ? undefined : t,
                 page: undefined,
               })}
-              className={`whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+              className={`whitespace-nowrap rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
                 t === tab
-                  ? "border-primary-600 text-primary-700"
-                  : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
+                  ? "border-red-400 bg-red-50 text-red-700"
+                  : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
               }`}
             >
               {statusTabLabel(t, counts)}
             </Link>
           ))}
-        </nav>
+        </div>
 
         {/* ── Filter + description (2-col on lg) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -380,20 +384,22 @@ export default async function ReceiptsListPage({
             )}
           </form>
 
-          {/* คำอธิบายระบบ — numbering explainer (static) */}
-          <aside className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-xs text-slate-700 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-semibold text-indigo-800">
+          {/* คำอธิบายระบบ — numbering explainer (static · legacy green header) */}
+          <aside className="rounded-lg border border-emerald-200 overflow-hidden text-xs text-slate-700">
+            <div className="flex items-center gap-1.5 bg-emerald-500 px-3 py-2 font-semibold text-white">
               <Info className="size-4" /> คำอธิบายระบบ
             </div>
-            <p>
-              บุคคลธรรมดา = <span className="font-mono font-medium">FRG</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
-              <span className="text-slate-500"> (เช่น FRG2408-00001)</span>
-            </p>
-            <p>
-              นิติบุคคล = <span className="font-mono font-medium">FRC</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
-            </p>
-            <p>ใบเสร็จถูกสร้างอัตโนมัติเมื่ออนุมัติสลิป</p>
-            <p>วันที่ออก = วันที่ในสลิป</p>
+            <div className="bg-white p-3 space-y-1.5">
+              <p>
+                บุคคลธรรมดา = <span className="font-mono font-medium">FRG</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
+                <span className="text-slate-500"> (เช่น FRG2408-00001)</span>
+              </p>
+              <p>
+                นิติบุคคล = <span className="font-mono font-medium">FRC</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
+              </p>
+              <p>ใบเสร็จถูกสร้างอัตโนมัติเมื่ออนุมัติสลิป</p>
+              <p>วันที่ออก = วันที่ในสลิป</p>
+            </div>
           </aside>
         </div>
 
