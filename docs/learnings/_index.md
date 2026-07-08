@@ -83,3 +83,5 @@ As entries accumulate, watch for:
 The user (เดฟ) described it as: *"นักปราชญ์ผู้เป็นอมตะ"* — immortal scholar. Every learning persists. Future Claude Code sessions inherit. Pacred-specific knowledge that no LLM training has = our compounding moat.
 
 Cross-link: [`docs/STRATEGY.md`](../STRATEGY.md) §12 · [`.claude/skills/scholar-immortal/SKILL.md`](../../.claude/skills/scholar-immortal/SKILL.md).
+
+- [pcs-admin-house-style](pcs-admin-house-style.md) — the faithful-look color language (orange header · cyan totals · dashed-red pills · green/orange buttons · sky links) · reusable across every faithful-port admin list page
