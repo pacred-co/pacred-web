@@ -130,6 +130,20 @@ export interface AutoIssueReceiptOpts {
    * re-derive a different withholding than what was billed.
    */
   isJuristicOverride?: boolean;
+  /**
+   * G8 (billing-run mark-paid · 2026-07-08) — STAMP the receipt HEADER identity
+   * from the paid ใบวางบิล's snapshot (tb_forwarder_invoice.buyer_name / buyer_tax_id
+   * / buyer_address) instead of re-resolving live tb_corporate/tb_users/tb_address.
+   * The bill's identity was itself resolved through resolveBillingIdentity at issue
+   * time → passing it here makes the receipt header == the bill header by construction
+   * (a บุคคล↔นิติ change, or a differently-formatted personal address, between
+   * issue↔pay can't drift the header). A present value wins via `??` even when it is
+   * the empty string (a personal buyer's blank tax id is a valid snapshot). Absent
+   * (direct-slip / wallet path) → live resolve, unchanged.
+   */
+  recompNameOverride?: string;
+  recompNumberOverride?: string;
+  recompAddressOverride?: string;
 }
 
 export type AutoIssueReceiptResult =
@@ -477,11 +491,14 @@ export async function autoIssueReceiptOnPaymentLand(
     }
   }
 
-  const recompNumber = corpRow?.corporatenumber ?? "";
-  const recompName = corpRow?.corporatename
+  // G8 — a bill-snapshot value (incl "" for a personal buyer's blank tax id) wins;
+  // `undefined` (no bill · direct-slip/wallet path) falls through to the live resolve.
+  const recompNumber = opts.recompNumberOverride ?? (corpRow?.corporatenumber ?? "");
+  const recompName = opts.recompNameOverride
+    ?? corpRow?.corporatename
     ?? `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim()
     ?? "";
-  const recompAddress = corpRow?.corporateaddress ?? fallbackAddress;
+  const recompAddress = opts.recompAddressOverride ?? (corpRow?.corporateaddress ?? fallbackAddress);
 
   // 6. Resolve the rid. Default = mint via the minter (FRC/FRG + yyMM + 5-digit
   //    seq). STEP-2 override (2026-07-07): when accounting supplies `overrideRid`

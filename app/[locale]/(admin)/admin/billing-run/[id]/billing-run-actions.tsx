@@ -111,6 +111,11 @@ export function BillingRunActions({
   // string = accounting hand-picked the ใบเสร็จ เลขที่ (passed as overrideRid).
   const [overrideRid, setOverrideRid] = useState<string | null>(null);
 
+  // G7 (2026-07-08) — no-slip "ชำระนอกระบบ (ยืนยันจบการ)" acknowledgment. A bill with
+  // no reviewed slip may not settle until the ตัดจ่าย admin ticks this + gives a reason.
+  const [offlineAck, setOfflineAck] = useState(false);
+  const [offlineReason, setOfflineReason] = useState("");
+
   // Slip upload (multi) + reject
   const fileRef = useRef<HTMLInputElement>(null);
   const [slipBusy, setSlipBusy] = useState(false);
@@ -219,6 +224,15 @@ export function BillingRunActions({
       return;
     }
 
+    // G7 — no-slip bill: require the "ชำระนอกระบบ (ยืนยันจบการ)" ack + reason first.
+    if (!hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3)) {
+      setMsg({
+        kind: "err",
+        text: 'บิลนี้ไม่มีสลิป — กรุณาติ๊ก "ชำระนอกระบบ (ยืนยันจบการ)" + ระบุเหตุผล (อย่างน้อย 3 ตัวอักษร) ก่อนตัดจ่าย',
+      });
+      return;
+    }
+
     const verb = hasPendingSlip ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "บันทึกการรับชำระ";
     const dupNote = hasDup
       ? `\n\n⚠️ เตือน: พบใบที่จ่ายแล้วยอดตรงกัน (${dupWarnings.map((d) => d.doc_no).join(", ")}) — ยืนยันว่าตรวจสลิปซ้ำแล้ว?`
@@ -234,6 +248,10 @@ export function BillingRunActions({
         paidAtTime,
         // STEP-2: hand-picked receipt เลขที่ (null → auto-mint MAX+1).
         overrideRid: overrideRid ?? undefined,
+        // G7: no-slip settle needs an explicit "ชำระนอกระบบ" confirm + reason. On the
+        // slip-bearing path offlineAck stays false + reason "" → ignored server-side.
+        offlineConfirmed: offlineAck,
+        offlineReason: offlineReason.trim(),
       });
       if (res.ok) {
         setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
@@ -471,6 +489,29 @@ export function BillingRunActions({
                 ✓ บันทึกการรับชำระ {hasPendingSlip ? "(อนุมัติ + ตัดจ่าย · รอบ 2)" : ""}
               </h4>
 
+              {/* G7 — no-slip settle gate: this bill has no reviewed slip, so it can't
+                  skip the "ยืนยันจบการ" step. Require an explicit ชำระนอกระบบ ack + reason. */}
+              {!hasPendingSlip && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-2">
+                  <label className="flex items-start gap-2 text-[13px] text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={offlineAck}
+                      onChange={(e) => setOfflineAck(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                    />
+                    <span className="font-semibold">ชำระนอกระบบ (ยืนยันจบการ) — บิลนี้ไม่มีสลิปในระบบ · ยืนยันว่าได้รับชำระจริงแล้ว</span>
+                  </label>
+                  <textarea
+                    value={offlineReason}
+                    onChange={(e) => setOfflineReason(e.target.value)}
+                    rows={2}
+                    className={inputCls}
+                    placeholder="เหตุผล/ช่องทางการรับชำระ (เช่น 'โอนเข้าบัญชีบริษัท ยืนยันจากบัญชี', 'เงินสด') · อย่างน้อย 3 ตัวอักษร"
+                  />
+                </div>
+              )}
+
               {/* STEP-2 — doc-number panel (ออกเลขที่ใบเสร็จ) before ตัดจ่าย. Mark-paid
                   auto-creates the ใบเสร็จ; let accounting see/edit the เลขที่ + dup-check
                   first. Absent override → auto-mint (MAX+1) unchanged. */}
@@ -524,8 +565,18 @@ export function BillingRunActions({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="submit"
-                  disabled={pending || (hasDup && !dupAck)}
-                  title={hasDup && !dupAck ? "ติ๊กยืนยัน ‘ตรวจสลิปซ้ำแล้ว’ ในขั้นที่ 3 ก่อน" : undefined}
+                  disabled={
+                    pending ||
+                    (hasDup && !dupAck) ||
+                    (!hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3))
+                  }
+                  title={
+                    hasDup && !dupAck
+                      ? "ติ๊กยืนยัน ‘ตรวจสลิปซ้ำแล้ว’ ในขั้นที่ 3 ก่อน"
+                      : !hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3)
+                        ? "ติ๊กยืนยัน ‘ชำระนอกระบบ (ยืนยันจบการ)’ + ระบุเหตุผลก่อน"
+                        : undefined
+                  }
                   className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {pending ? "กำลังบันทึก..." : `${hasPendingSlip ? "อนุมัติ + ตัดจ่าย" : "ออกใบเสร็จ · บันทึกการรับชำระ"} ฿${thbFmt(totalThb)}`}

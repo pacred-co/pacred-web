@@ -133,6 +133,21 @@ export const markBillingRunPaidSchema = z.object({
   // autoIssueReceiptOnPaymentLand, which re-validates it unique before insert.
   // Absent → the receipt auto-mints (MAX+1) as before.
   overrideRid: z.string().trim().min(1).max(20).optional(),
+  // G7 (2026-07-08) — a bill with NO reviewed slip (slip_status null/'rejected')
+  // must NOT settle silently. The UI's "ชำระนอกระบบ (ยืนยันจบการ)" acknowledgment
+  // sets this + a reason; the action refuses to settle a no-slip bill without it and
+  // stamps the confirming admin (reviewed_by · mig 0231) into the audit trail. The
+  // slip-bearing round-1 path (slip_status='pending') is unaffected.
+  offlineConfirmed: z.boolean().optional().default(false),
+  offlineReason: z.string().trim().max(500).optional(),
+}).superRefine((val, ctx) => {
+  if (val.offlineConfirmed && (val.offlineReason ?? "").trim().length < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["offlineReason"],
+      message: "กรุณาระบุเหตุผลการชำระนอกระบบ (อย่างน้อย 3 ตัวอักษร)",
+    });
+  }
 });
 
 export type MarkBillingRunPaidInput = z.infer<

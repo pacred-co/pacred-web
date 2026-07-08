@@ -49,6 +49,7 @@ import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-tota
 import { isThShippingCostMissing } from "@/lib/forwarder/domestic-shipping";
 import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import {
   isBillableForwarder,
   isBillingRunEligible,
@@ -1176,16 +1177,28 @@ async function createBillingRunInvoiceImpl(
           code: corpErr.code, message: corpErr.message,
         });
       }
-      const corpNumber = (corp?.corporatenumber ?? "").trim();
-      const isJuristic = userRow.userCompany === "1" || corpNumber !== "";
+      // G8 (2026-07-08) — resolve the buyer identity through the SHARED SOT
+      // (resolveBillingIdentity · the same resolver step-1 forwarder-check uses)
+      // so the bill header + the receipt header + the step-1 preview all derive
+      // นิติ/บุคคล name·tax-id·address from ONE code path (was an inline re-impl →
+      // could drift). Behaviour is byte-identical to the old inline block: juristic
+      // name = corpName||person, tax-id = corp number, address = corp registered
+      // address. The buyer_* columns below are the SNAPSHOT stamped onto the bill.
+      const identity = resolveBillingIdentity({
+        userCompany:  userRow.userCompany,
+        userName:     userRow.userName,
+        userLastName: userRow.userLastName,
+        corp,
+      });
+      const corpNumber = identity.taxId;
+      const isJuristic = identity.isJuristic;
 
-      let buyerName = `${userRow.userName ?? ""} ${userRow.userLastName ?? ""}`.trim();
+      let buyerName = identity.name;
       let buyerAddress = "";
       const buyerBranch  = ""; // tb_corporate has no `corporatebranch` column
 
       if (isJuristic) {
-        if (corp?.corporatename) buyerName = corp.corporatename;
-        if (corp?.corporateaddress) buyerAddress = corp.corporateaddress;
+        buyerAddress = identity.registeredAddress;
       } else if (userRow.userAddressID) {
         // Personal customer — resolve address via tb_address.
         type AddrRow = {
@@ -1490,9 +1503,9 @@ async function markBillingRunPaidImpl(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb")
+        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb, buyer_name, buyer_tax_id, buyer_address")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1508,7 +1521,20 @@ async function markBillingRunPaidImpl(
       if (cur.slip_status === "pending" && !cur.slip_reviewed_at) {
         return { ok: false, error: 'กรุณากด "ตรวจสลิป รอบ 1" ก่อนอนุมัติ + ตัดจ่าย (รอบ 2)' };
       }
+      // G7 (2026-07-08) — a bill with NO reviewed slip (slip_status null/'rejected')
+      // must not settle silently, skipping the "ยืนยันจบการ" step. Require an explicit
+      // ชำระนอกระบบ acknowledgment (offlineConfirmed + reason from the UI); the
+      // slip-bearing round-1 path above is untouched. This is a settle-GATE only — it
+      // changes WHEN a no-slip bill may settle, never any amount.
+      const isOfflineSettle = cur.slip_status !== "pending";
+      if (isOfflineSettle && !v.offlineConfirmed) {
+        return {
+          ok: false,
+          error: 'บิลนี้ไม่มีสลิป — ต้องยืนยัน "ชำระนอกระบบ (ยืนยันจบการ)" พร้อมเหตุผลก่อนตัดจ่าย',
+        };
+      }
 
+      const offlineReason = (v.offlineReason ?? "").trim();
       const { error: updErr } = await admin
         .from("tb_forwarder_invoice")
         .update({
@@ -1516,10 +1542,20 @@ async function markBillingRunPaidImpl(
           paid_at:           paidAtIso,
           paid_by:           legacyAdminId,
           payment_method:    v.paymentMethod,
-          payment_reference: v.paymentReference,
+          // G7 — fold the offline-confirm reason into the reference so the paid doc
+          // itself carries who/why for a no-slip settle.
+          payment_reference: isOfflineSettle && offlineReason
+            ? `${v.paymentReference ? v.paymentReference + " · " : ""}ชำระนอกระบบ: ${offlineReason}`
+            : v.paymentReference,
           // ภูม 2026-06-29 — บัญชีตัดจ่าย = ยืนยันสลิปที่เซลแนบ. แนบ pending → verified.
           // ไม่มีสลิป (null) → คงไว้ null (จ่ายนอกระบบ/ไม่ผ่านสลิป).
           slip_status:       cur.slip_status === "pending" ? "verified" : cur.slip_status,
+          // G7 — STAMP the "ยืนยันจบการ" audit on the offline path (reuse the 2-round
+          // columns · mig 0231). The round-1 path already sets these; only stamp here
+          // for a no-slip settle so the confirming admin + time are on-record.
+          ...(isOfflineSettle
+            ? { slip_reviewed_at: paidAtIso, slip_reviewed_by: legacyAdminId }
+            : {}),
         })
         .eq("id", v.invoiceId)
         .eq("status", "issued"); // race guard: re-check we're flipping from issued
@@ -1539,6 +1575,9 @@ async function markBillingRunPaidImpl(
         doc_no: cur.doc_no, payment_method: v.paymentMethod, reference: v.paymentReference,
         total_thb: Number(cur.total_thb), wht_amount: paidWht.wht_amount,
         net_payable: paidWht.net_payable, paid_at: paidAtIso,
+        // G7 — record the no-slip "ยืนยันจบการ" (offline settle) confirm + reason.
+        offline_confirmed: isOfflineSettle && v.offlineConfirmed,
+        offline_reason: isOfflineSettle ? offlineReason : "",
       });
 
       // ภูม 2026-06-22 — sync the linked ใบเสร็จ to "ออกแล้ว/paid". A receipt issued
@@ -1647,6 +1686,13 @@ async function markBillingRunPaidImpl(
               totalOverride:      Number(cur.total_thb),
               netOverride:        paidWht.net_payable,
               isJuristicOverride: cur.is_juristic,
+              // G8 (2026-07-08) — STAMP the receipt header from THIS bill's buyer
+              // snapshot (resolved via resolveBillingIdentity at issue) so bill == receipt
+              // header even if บุคคล↔นิติ or the address changed between issue↔pay. Nullish
+              // (a pre-G8 bill missing the column) → the receipt re-resolves live, unchanged.
+              recompNameOverride:    cur.buyer_name ?? undefined,
+              recompNumberOverride:  cur.buyer_tax_id ?? undefined,
+              recompAddressOverride: cur.buyer_address ?? undefined,
             });
             if (rcpt.ok) {
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {
