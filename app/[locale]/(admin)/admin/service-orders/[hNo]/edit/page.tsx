@@ -43,6 +43,7 @@ import type React from "react";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { SHOP_ORDER_EDIT_ROLES } from "@/lib/admin/shop-order-access";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Eye, CheckCircle2,
@@ -203,7 +204,9 @@ export default async function AdminServiceOrderEditPage({
   params: Promise<{ hNo: string }>;
 }) {
   const { hNo } = await params;
-  const { roles } = await requireAdmin();
+  // Faithful to legacy shops.php L528 — the ฝากสั่งซื้อ update page is office-only
+  // (god-nav bypasses; bare warehouse/driver/freight → notFound). SOT: shop-order-access.
+  const { roles } = await requireAdmin([...SHOP_ORDER_EDIT_ROLES]);
   const superAdmin = isGodRole(roles);
   // COST visibility (ต้นทุน / margin) — strict cost-role gate (ultra/accounting/
   // pricing · §0e data-layer gate). super sees profit but NOT cost, so the

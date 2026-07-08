@@ -173,6 +173,7 @@ export function ServiceOrdersTable({
   canReassignPurchaser = false,
   purchaserAdmins = [],
   activeTab = "",
+  canEditOrder = true,
 }: {
   rows: ServiceOrderRow[];
   /** When viewing q=3 or q=4 the legacy uses hDateUpdate instead of hDate. */
@@ -189,6 +190,9 @@ export function ServiceOrdersTable({
   /** active status tab (?q). Legacy shops.php L548-553 hides the bulk-PRINT
    *  buttons on q=1 (รอดำเนินการ · ยังไม่จ่าย) + q=6 (ยกเลิก) — nothing valid to print. */
   activeTab?: string;
+  /** legacy shops.php L528 — "อัปเดตรายการ" is office-only (server-gated too).
+   *  Defaults true (the edit page is the real backstop). */
+  canEditOrder?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -601,12 +605,14 @@ export function ServiceOrdersTable({
                           >
                             ดูรายละเอียด
                           </Link>
-                          <Link
-                            href={`/admin/service-orders/${r.hno}`}
-                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[11px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
-                          >
-                            อัปเดตรายการ
-                          </Link>
+                          {canEditOrder && (
+                            <Link
+                              href={`/admin/service-orders/${r.hno}`}
+                              className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[11px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
+                            >
+                              อัปเดตรายการ
+                            </Link>
+                          )}
                           {r.hstatus === "5" && (
                             <a
                               href={`/admin/service-orders/print?print=1&id=${encodeURIComponent(r.hno)}`}
