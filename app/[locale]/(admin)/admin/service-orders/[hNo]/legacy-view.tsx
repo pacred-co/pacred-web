@@ -344,9 +344,16 @@ export async function renderLegacyServiceOrderView(hno: string) {
             <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
               {STATUS_LABEL[status] ?? `status ${status}`}
             </span>
-            {r.adminidip && (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">ล่าม: {r.adminidip}</span>
-            )}
+            {(() => {
+              // Legacy badgeAdminIP — prefer adminidip, fall back to adminidcreate;
+              // 'customer' = ลูกค้าเปิดเอง → treat as no-IPC.
+              const ip = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
+              const cr = r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
+              const ipc = ip || cr;
+              return ipc ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">IPC: {ipc}</span>
+              ) : null;
+            })()}
             {u?.adminIDSale && (
               <span className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px]">เซล: {u.adminIDSale}</span>
             )}

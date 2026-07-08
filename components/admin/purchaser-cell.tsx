@@ -27,6 +27,7 @@ export function PurchaserCell({
   purchaserName,
   canReassign,
   admins,
+  auto = false,
 }: {
   kind: "shop" | "forwarder";
   /** shop → hno · forwarder → the numeric id (as string). */
@@ -39,6 +40,12 @@ export function PurchaserCell({
   canReassign: boolean;
   /** Active admins for the picker (listActiveAdmins · empty when !canReassign). */
   admins: SalesAdminOption[];
+  /**
+   * owner ④ — the displayed id is a FALLBACK (ip/creator), not a real stored
+   * assignment. When true we read as auto (name plainly · no amber "ยังไม่มอบหมาย")
+   * instead of forced-assign. Legacy PCS shows the handling admin automatically.
+   */
+  auto?: boolean;
 }) {
   const router = useRouter();
   const { confirm, dialogs } = useConfirmDialogs();
@@ -87,6 +94,9 @@ export function PurchaserCell({
           >
             {currentLabel}
           </span>
+        ) : auto ? (
+          // owner ④ — auto case with no resolvable admin: neutral, not forced-assign.
+          <span className="text-muted">—</span>
         ) : (
           <span className="text-amber-600">ยังไม่มอบหมาย</span>
         )}
@@ -102,7 +112,7 @@ export function PurchaserCell({
             title="มอบหมาย / เปลี่ยนผู้สั่งซื้อ"
             aria-expanded={open}
           >
-            <UserCog className="h-3 w-3" /> มอบหมาย
+            <UserCog className="h-3 w-3" /> {currentLabel ? "เปลี่ยน" : "มอบหมาย"}
           </button>
         )}
       </div>

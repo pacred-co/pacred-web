@@ -81,6 +81,7 @@ export type ServiceOrderRow = {
   // owner ④ (mig 0241) — assigned ผู้สั่งซื้อ (per-order).
   assignedPurchaserId: string;              // tb_admin.adminID · "" = ยังไม่มอบหมาย
   assignedPurchaserName: string | null;     // resolved display name
+  purchaserIsAuto: boolean;                 // true = fallback id (ip/creator), not a stored assignment
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -490,6 +491,7 @@ export function ServiceOrdersTable({
                           purchaserName={r.assignedPurchaserName}
                           canReassign={canReassignPurchaser}
                           admins={purchaserAdmins}
+                          auto={r.purchaserIsAuto}
                         />
                       </td>
                       <td className="px-2 py-2.5">
