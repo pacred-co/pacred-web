@@ -1,0 +1,78 @@
+/**
+ * Tests parseMomoPackingXlsx against the two REAL committed fixtures:
+ *  - momo-packing-data.xlsx  (Format A · a closed GZS container with 3 tracking rows)
+ *  - momo-packing-empty.xlsx (Format B · "คิวมั่ว" · only a GRAND TOTAL row)
+ * Run: npx tsx lib/admin/momo-packing-xlsx-parser.test.ts
+ */
+
+import assert from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
+import { parseMomoPackingXlsx } from "./momo-packing-xlsx-parser";
+
+const FIX = path.join(__dirname, "__fixtures__");
+let passed = 0;
+function ok(name: string, fn: () => void) {
+  fn();
+  passed += 1;
+  console.log(`  ✓ ${name}`);
+}
+
+console.log("momo-packing-xlsx-parser");
+
+// ── Format A (has data) ─────────────────────────────────────────────────────
+const dataBuf = fs.readFileSync(path.join(FIX, "momo-packing-data.xlsx"));
+const A = parseMomoPackingXlsx(dataBuf);
+
+ok("Format A: reads the container from meta", () => {
+  assert.strictEqual(A.container, "GZS260617-1");
+});
+
+ok("Format A: title + totals from the meta header", () => {
+  assert.ok((A.listTitle ?? "").includes("PACKING LIST"));
+  assert.strictEqual(A.totals.trackingCount, 3);
+  assert.strictEqual(A.totals.qty, 7);
+  assert.strictEqual(A.totals.totalWeight, 510);
+  assert.ok(Math.abs((A.totals.totalCbm ?? 0) - 1.569334) < 1e-6);
+});
+
+ok("Format A: transport hint = SEA (GZS container)", () => {
+  assert.strictEqual(A.transportHint, "SEA");
+});
+
+ok("Format A: has ≥1 parcel row and NO GRAND TOTAL row leaked in", () => {
+  assert.ok(A.rows.length >= 1, `expected ≥1 row, got ${A.rows.length}`);
+  assert.ok(!A.rows.some((r) => /grand/i.test(r.tracking)), "GRAND TOTAL leaked as a row");
+});
+
+ok("Format A: the PR10190 row is parsed by header name (Code=G, Tracking=H)", () => {
+  const row = A.rows.find((r) => r.tracking === "1781309805");
+  assert.ok(row, "tracking 1781309805 not found");
+  assert.strictEqual(row!.code, "PR10190");
+  assert.ok(Math.abs((row!.totalCbm ?? 0) - 1.05) < 1e-9, `totalCbm=${row!.totalCbm}`);
+  assert.strictEqual(row!.totalWeight, 335);
+  assert.strictEqual(row!.parcelCount, 1);
+  assert.ok((row!.productType ?? "").includes("ทั่วไป") || (row!.productType ?? "").includes("普通"));
+  assert.strictEqual(row!.cg, "CG81337997530");
+});
+
+ok("Format A: raw grid exposes a data header for the Excel-view", () => {
+  assert.ok(A.rawGrid, "rawGrid missing");
+  const hdr = A.rawGrid!.header.map((h) => h.toLowerCase());
+  assert.ok(hdr.includes("tracking") && hdr.includes("code"), "header missing Tracking/Code");
+  assert.strictEqual(A.rawGrid!.rows.length, A.rows.length);
+});
+
+// ── Format B (empty / คิวมั่ว) ───────────────────────────────────────────────
+const emptyBuf = fs.readFileSync(path.join(FIX, "momo-packing-empty.xlsx"));
+const B = parseMomoPackingXlsx(emptyBuf);
+
+ok("Format B: no parcel rows", () => {
+  assert.strictEqual(B.rows.length, 0);
+});
+
+ok("Format B: warns about an empty export", () => {
+  assert.ok(B.warnings.some((w) => w.includes("ว่าง") || w.includes("คิวมั่ว")), `warnings=${JSON.stringify(B.warnings)}`);
+});
+
+console.log(`\n✅ momo-packing-xlsx-parser — ${passed} assertions passed`);

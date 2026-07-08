@@ -507,6 +507,12 @@ export default async function AdminApiForwarderMomoPage({
             🔄 เทียบข้อมูลกับแต้ม
           </Link>
           <Link
+            href="/admin/api-forwarder-momo/packing-upload"
+            className="rounded-md border border-emerald-300 bg-white text-emerald-700 px-3 py-1.5 text-xs font-medium hover:bg-emerald-50 inline-flex items-center gap-1"
+          >
+            📦 อัปโหลด packing list (ปิดตู้)
+          </Link>
+          <Link
             href="/admin/api-forwarder-momo/drift"
             className="rounded-md border border-rose-300 bg-white text-rose-700 px-3 py-1.5 text-xs font-medium hover:bg-rose-50 inline-flex items-center gap-1"
           >

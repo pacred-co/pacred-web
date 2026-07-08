@@ -81,14 +81,22 @@ export default async function AdminMomoSyncPage() {
           เชื่อม MOMO Cargo API → บันทึกผลลง <code className="rounded bg-surface-alt px-1">momo_*</code> tables (isolated).
           ไม่กระทบ table เดิม. หน้านี้สำหรับ admin หลังบ้านเท่านั้น.
         </p>
-        {canEditCost && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {canEditCost && (
+            <Link
+              href="/admin/api-forwarder-momo/invoice-cost"
+              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white text-amber-700 px-3 py-1.5 text-xs font-medium hover:bg-amber-50"
+            >
+              💰 ลงต้นทุนจากใบแจ้งหนี้ MOMO
+            </Link>
+          )}
           <Link
-            href="/admin/api-forwarder-momo/invoice-cost"
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white text-amber-700 px-3 py-1.5 text-xs font-medium hover:bg-amber-50"
+            href="/admin/api-forwarder-momo/packing-upload"
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white text-emerald-700 px-3 py-1.5 text-xs font-medium hover:bg-emerald-50"
           >
-            💰 ลงต้นทุนจากใบแจ้งหนี้ MOMO
+            📦 อัปโหลด packing list (ปิดตู้)
           </Link>
-        )}
+        </div>
       </header>
 
       <MomoSyncClient initialDbRows={initialDbRows} />
