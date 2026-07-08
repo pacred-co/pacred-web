@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { adminCreateYuanPaymentManual } from "@/actions/admin/yuan-payments-tb";
 import { CustomerPicker } from "@/components/admin/customer-picker";
 import { decodeQrFromFile } from "@/lib/qr/decode-image";
+import { OcrExtract } from "@/components/ocr/ocr-extract";
 
 export type CustomerLite = {
   userid:       string;
@@ -379,9 +380,23 @@ export function AdminYuanPaymentNewForm({
               ＋ ใช้เป็นข้อมูลผู้รับ
             </button>
             <p className="mt-1 text-blue-600/80">
-              หมายเหตุ: ชื่อร้าน (ตัวอักษรจีนบนรูป) ไม่ได้อยู่ใน QR — ต้องใช้ระบบอ่านภาพ (vision) เพิ่ม
+              ชื่อร้าน (ตัวอักษรจีนบนรูป) ไม่ได้อยู่ใน QR — กดปุ่ม “อ่านข้อความจากรูป” ด้านล่างเพื่อดึงชื่อร้าน
             </p>
           </div>
+        )}
+
+        {/* In-house OCR (Tesseract.js) — read the Chinese shop name / any text
+            printed on the QR image, then click a line to fill the recipient. */}
+        {qrFile && (
+          <OcrExtract
+            file={qrFile}
+            langs="chi_sim+eng"
+            label="🔍 อ่านชื่อร้าน/ข้อความบนรูป (OCR)"
+            disabled={pending}
+            onPickLine={(l) =>
+              setPaydetail((prev) => (prev.trim() ? `${prev.trim()} · ${l}` : l))
+            }
+          />
         )}
       </div>
 
