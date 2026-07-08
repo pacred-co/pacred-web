@@ -172,6 +172,7 @@ export function ServiceOrdersTable({
   sortHrefs,
   canReassignPurchaser = false,
   purchaserAdmins = [],
+  activeTab = "",
 }: {
   rows: ServiceOrderRow[];
   /** When viewing q=3 or q=4 the legacy uses hDateUpdate instead of hDate. */
@@ -185,6 +186,9 @@ export function ServiceOrdersTable({
   canReassignPurchaser?: boolean;
   /** owner ④ — active admins for the row reassign picker. */
   purchaserAdmins?: SalesAdminOption[];
+  /** active status tab (?q). Legacy shops.php L548-553 hides the bulk-PRINT
+   *  buttons on q=1 (รอดำเนินการ · ยังไม่จ่าย) + q=6 (ยกเลิก) — nothing valid to print. */
+  activeTab?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -683,22 +687,28 @@ export function ServiceOrdersTable({
                 >
                   ยกเลิก
                 </button>
-                <a
-                  href={bulkPrintInvoiceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-                >
-                  พิมพ์ใบแจ้งหนี้ ({selected.size})
-                </a>
-                <a
-                  href={bulkPrintReceiptUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-                >
-                  พิมพ์ใบเสร็จ ({selected.size})
-                </a>
+                {/* Legacy shops.php L548-553: bulk-print hidden on q=1 (รอดำเนินการ ·
+                    ยังไม่จ่าย = ไม่มีอะไรพิมพ์) + q=6 (ยกเลิก). status-override เก็บไว้ทุกแท็บ. */}
+                {activeTab !== "1" && activeTab !== "6" && (
+                  <>
+                    <a
+                      href={bulkPrintInvoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                    >
+                      พิมพ์ใบแจ้งหนี้ ({selected.size})
+                    </a>
+                    <a
+                      href={bulkPrintReceiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+                    >
+                      พิมพ์ใบเสร็จ ({selected.size})
+                    </a>
+                  </>
+                )}
               </div>
             </div>
 
