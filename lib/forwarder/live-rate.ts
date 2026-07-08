@@ -35,6 +35,7 @@ import {
 } from "@/lib/forwarder/resolve-rate";
 import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
+import { transportModeFromCabinetName, resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 
 // ────────────────────────────────────────────────────────────
 // numeric coercion (legacy stores some price/measure cols as varchar).
@@ -344,7 +345,11 @@ export async function computeAndFillForwarderImportRate(
       // the SAME KG-vs-CBM basis as the dimension-edit save (no basis drift).
       "custom_comparison, custom_comparison_value, " +
       // doc-tier discount inputs (owner 2026-06-16 · doc_tier_confirmed = C1 mig 0188)
-      "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed",
+      "tax_doc_pref, reforder, adminidcreator, doc_tier_confirmed, " +
+      // physical-cabinet mode (owner 2026-07-08 · road-shipped=road-priced) — the
+      // stored ftransporttype can be a stale sea default while the ตู้ is road (GZE/EK);
+      // reconcile below so this shared pricer never under-charges a road shipment.
+      "fcabinetnumber, ftrackingchn",
     )
     .eq("id", fid)
     .maybeSingle<{
@@ -367,6 +372,8 @@ export async function computeAndFillForwarderImportRate(
       reforder: string | null;
       adminidcreator: string | null;
       doc_tier_confirmed: boolean | null;
+      fcabinetnumber: string | null;
+      ftrackingchn: string | null;
     }>();
   if (rowErr) {
     console.error(`[computeAndFillForwarderImportRate: tb_forwarder read] failed`, {
@@ -430,10 +437,18 @@ export async function computeAndFillForwarderImportRate(
   // dimension-edit save would, so a measure/sync auto-price never drifts the basis.
   const customComparisonSwitch = String(row.custom_comparison ?? "0").trim() === "1";
   const customComparisonValue = customComparisonSwitch ? num(row.custom_comparison_value) : 0;
+  // Reconcile the transport mode to the PHYSICAL ตู้/tracking (owner 2026-07-08):
+  // the stored ftransporttype may be a stale sea default while the ตู้ is road
+  // (GZE/EK) — price at the ACTUAL shipped mode so road-shipped = road-priced (stops
+  // the under-charge). Cabinet name wins → tracking → normalized stored fallback.
+  const reconciledTransportType =
+    transportModeFromCabinetName(row.fcabinetnumber) ??
+    transportModeFromCabinetName(row.ftrackingchn) ??
+    resolveTransportMode(null, row.ftransporttype);
   const ctx: PricingRowContext = {
     userid:              row.userid,
     fwarehousechina:     String(row.fwarehousechina ?? "").trim(),
-    ftransporttype:      String(row.ftransporttype ?? "").trim(),
+    ftransporttype:      reconciledTransportType,
     fproductstype:       String(row.fproductstype ?? "").trim() || "1",
     weightKg:            num(row.fweight),
     cbmProduct,
@@ -473,6 +488,9 @@ export async function computeAndFillForwarderImportRate(
       frefrate:    resolved.rate,
       frefprice:   String(resolved.refPrice),
       ftotalprice: resolved.transportSubtotal,
+      // persist the reconciled physical-cabinet mode so the stored ftransporttype
+      // + the priced rate agree afterward (mirrors forwarders-edit + MOMO commit).
+      ftransporttype: reconciledTransportType,
     })
     .eq("id", fid);
   if (updErr) {

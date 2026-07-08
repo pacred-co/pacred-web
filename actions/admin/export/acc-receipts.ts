@@ -25,7 +25,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminExport } from "@/actions/admin/export-log";
-import type { ReceiptTab } from "@/actions/admin/accounting-receipts";
+import type { ReceiptTab, ReceiptCType } from "@/actions/admin/accounting-receipts";
 import {
   resolveBillingIdentity,
   fetchCorporateNameMap,
@@ -104,6 +104,7 @@ export type ReceiptExportRow = Record<string, string | number | null | undefined
 /** Active filters the page passes through (mirrors the page's searchParams). */
 export type ReceiptsExportFilter = {
   tab?: ReceiptTab;
+  cType?: ReceiptCType; // customer-type tab (all / com / gen)
   dateFrom?: string; // 'YYYY-MM-DD'
   dateTo?: string; // 'YYYY-MM-DD'
   search?: string; // ilike on rid, userid, recompname
@@ -125,6 +126,8 @@ export async function exportReceiptsAll(
   const admin = createAdminClient();
 
   const tab: ReceiptTab = filter.tab ?? "recent";
+  const cType: ReceiptCType = filter.cType ?? "all";
+  const cTypeFilter: string | null = cType === "com" ? "1" : cType === "gen" ? "2" : null;
   const search = (filter.search ?? "").trim();
   const range = defaultDateRange();
   const dateFrom = filter.dateFrom && DATE_RE.test(filter.dateFrom) ? filter.dateFrom : range.from;
@@ -150,6 +153,9 @@ export async function exportReceiptsAll(
       .lte("rdate", dateToInclusive)
       .order("rdate", { ascending: false, nullsFirst: false });
   }
+
+  // ประเภทลูกค้า filter — composes with the tab/date/search (same as the page).
+  if (cTypeFilter) q = q.eq("corporatetype", cTypeFilter);
 
   if (search) {
     const term = search.replace(/[\\%_,]/g, (m) => "\\" + m);
@@ -269,7 +275,7 @@ export async function exportReceiptsAll(
   const truncated = rows.length >= EXPORT_CAP;
   await logAdminExport({
     dataset: "acc-receipts",
-    filters: { tab, dateFrom, dateTo, search },
+    filters: { tab, cType, dateFrom, dateTo, search },
     rowCount: rows.length,
     truncated,
   });

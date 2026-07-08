@@ -586,6 +586,9 @@ export async function adminSubmitCartAsOrder(
           adminidcreate:       safeLegacyAdminId(adminIdForHeader, 10),
           adminid:             safeLegacyAdminId(adminIdForHeader, 10),
           adminidupdate:       safeLegacyAdminId(adminIdForHeader, 10),
+          // owner ④ — auto-assign ผู้สั่งซื้อ = the handling admin (like PCS auto-routing),
+          // so a new shop order is never "ยังไม่มอบหมาย". col = varchar(20).
+          adminidpurchaser:    safeLegacyAdminId(adminIdForHeader, 20),
           // Placeholders patched in step e below
           htitle:              "",
           hcover:              "",

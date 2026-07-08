@@ -217,3 +217,71 @@ export function isThShippingCostMissing(args: {
   const cost = Number(args.ftransportprice);
   return !Number.isFinite(cost) || cost <= 0;
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// ค่าส่งไทย AUTO-FILL — the "ตรวจตู้เสร็จ เก็บเงินได้เลย" resolver
+// ────────────────────────────────────────────────────────────────────────
+//
+// พี่ป๊อป spec #7 (owner-answered 2026-07-08): "มันต้อง auto เลย — กดตรวจตู้เสร็จ
+// ข้ามไปกดเก็บเงินลูกค้าเลย". Today the billing surface GATES on a ฿0 TH cost
+// (isThShippingCostMissing flags it), forcing the operator to detour to the
+// domestic-ship editor before they can bill → not continuous. This resolver
+// computes the RECOMMENDED default cost from the order's own delivery address so
+// the bill action can auto-fill it and the flow stays continuous.
+//
+// SAFE-BY-CONSTRUCTION (money):
+//   • only fires when ftransportprice is still ฿0/empty (never overwrites a set cost)
+//   • never touches a self-pickup row ("PCS", ฿0 legit)
+//   • only auto-applies a DETERMINISTIC carrier — เหมาๆ ฿100 (in-zone) or Flash
+//     (computed from weight+zip). A manual carrier (J&T/ไปรษณีย์) whose cost the
+//     server can't know → returns null (the operator still types it · the gate
+//     stays as the backstop). Address unresolvable → null (can't guess a zone).
+//   • the address is the order's OWN faddress* (server-derived, never the client).
+
+export type AutoThShippingFill = {
+  carrier: string;       // fshipby to write
+  cost: number;          // ftransportprice to write (THB)
+  payMethod: "1" | "2";  // '1' ต้นทาง · '2' ปลายทาง(COD)
+  zone: DomesticZone;
+  label: string;         // for the UI toast ("เพิ่มค่าส่งไทย …")
+};
+
+/**
+ * Resolve the auto-fill ค่าส่งไทย for a forwarder row, or null when it can't /
+ * shouldn't auto-fill (already set · self-pickup · manual carrier · no address).
+ * Pure + testable — the server helper reads the row and applies this.
+ */
+export function resolveAutoThShippingFill(args: {
+  fshipby: string | null | undefined;
+  ftransportprice: number | string | null | undefined;
+  zip?: string | null;
+  province?: string | null;
+  amphoe?: string | null;
+  weightKg?: number | null;
+  parcels?: DomesticShipArgs["parcels"];
+}): AutoThShippingFill | null {
+  // Already has a TH cost → leave it (never overwrite).
+  const existing = Number(args.ftransportprice);
+  if (Number.isFinite(existing) && existing > 0) return null;
+  // Self-pickup → ฿0 legit, nothing to auto-fill.
+  if ((args.fshipby ?? "").trim().toUpperCase() === SELF_PICKUP_CARRIER) return null;
+
+  // v1 SCOPE — auto-fill ONLY the in-zone เหมาๆ case. It is the single fully-safe
+  // auto: a FLAT ฿100 (weight-agnostic), PREPAID ต้นทาง, collected by PACRED, so it
+  // unambiguously belongs in the customer's bill. Upcountry is Flash/J&T = ปลายทาง
+  // COD (collected at the door by the carrier, NOT by Pacred), address+weight
+  // dependent → do NOT auto-add a guessed amount to the Pacred bill; the operator
+  // sets it (the "ห้ามลืมค่าส่งไทย" gate stays the backstop). Missing zip → can't
+  // classify → null. This keeps ตรวจตู้→เก็บเงิน continuous for the common in-zone
+  // customer while never mis-billing an out-of-zone one.
+  const zone = classifyDomesticZone({ addressID: null, zip: args.zip });
+  if (zone !== "maomao") return null;
+
+  return {
+    carrier: MAO_CARRIER_CODE, // PRF เหมาๆ
+    cost: MAO_FLAT_FEE,        // ฿100 flat
+    payMethod: "1",            // ต้นทาง (prepaid)
+    zone,
+    label: `เหมาๆ (กทม.-ปริมณฑล) · ฿${MAO_FLAT_FEE.toLocaleString("th-TH")}`,
+  };
+}

@@ -62,6 +62,7 @@ import { appendStatusLog as appendStatusLogShared } from "@/lib/notifications/st
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -314,11 +315,19 @@ export async function adminCallPriceUser(
         errors:       [],
       };
       const successfulFids: number[] = []; // for the queue-delete step
+      let autoFilledThCount = 0;           // #7 ค่าส่งไทย auto-filled this call
 
       for (const row of candidates) {
+        // #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") — if a delivery leg
+        // applies but ftransportprice is still ฿0, auto-fill the zone default so the
+        // bulk-bill includes the TH cost (no manual detour). Best-effort · never
+        // overwrites a set cost. The filled cost feeds calcForwarderOutstanding below.
+        const autoTh = await autoFillThShippingForForwarder(admin, row.id);
+        const rowWithTh = autoTh ? { ...row, ftransportprice: autoTh.cost } : row;
+        if (autoTh) autoFilledThCount++;
         const rowForCalc = discount !== undefined
-          ? { ...row, fdiscount: discount }   // operator-supplied override (per parsed)
-          : row;
+          ? { ...rowWithTh, fdiscount: discount }   // operator-supplied override (per parsed)
+          : rowWithTh;
         const outstandingThb = calcForwarderOutstanding(rowForCalc);
 
         // 3a. UPDATE the forwarder row · re-guarded fstatus='4' to dodge a race
@@ -481,6 +490,7 @@ export async function adminCallPriceUser(
           requested_fids: fids,
           billed_fids:    successfulFids,
           processed:      result.processed,
+          th_shipping_autofilled: autoFilledThCount,
           failed:         result.failed,
           sms_sent:       result.sms_sent,
           sms_failed:     result.sms_failed,

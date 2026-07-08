@@ -269,7 +269,7 @@ export default async function AddForwarderInvoicePage({
             </label>
             <button
               type="submit"
-              className="px-3 py-1.5 rounded bg-slate-900 text-white text-sm hover:bg-slate-800"
+              className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"
             >
               ค้นหา
             </button>

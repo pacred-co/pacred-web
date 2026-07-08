@@ -13,6 +13,7 @@ import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateYuanPaymentManual } from "@/actions/admin/yuan-payments-tb";
 import { CustomerPicker } from "@/components/admin/customer-picker";
+import { decodeQrFromFile } from "@/lib/qr/decode-image";
 
 export type CustomerLite = {
   userid:       string;
@@ -61,6 +62,14 @@ export function AdminYuanPaymentNewForm({
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const slipInputRef = useRef<HTMLInputElement | null>(null);
 
+  // owner 2026-07-08 — payee 收款码 QR (Alipay/WeChat) the customer sent
+  const [qrFile, setQrFile]       = useState<File | null>(null);
+  const [qrPreview, setQrPreview] = useState<string | null>(null);
+  const qrInputRef = useRef<HTMLInputElement | null>(null);
+  // auto-read the QR machine payload (channel + reference) — admin reviews
+  const [qrDecoding, setQrDecoding] = useState<boolean>(false);
+  const [qrDecoded, setQrDecoded]   = useState<{ text: string; channel: "alipay" | "wechat" | null } | null>(null);
+
   const [error, setError]     = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -69,6 +78,40 @@ export function AdminYuanPaymentNewForm({
       if (slipPreview) URL.revokeObjectURL(slipPreview);
     };
   }, [slipPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (qrPreview) URL.revokeObjectURL(qrPreview);
+    };
+  }, [qrPreview]);
+
+  function selectQr(f: File | null) {
+    setError(null);
+    if (f && f.size > 5 * 1024 * 1024) {
+      setError("ไฟล์รูป QR ใหญ่เกิน 5 MB — กรุณาเลือกไฟล์ใหม่");
+      return;
+    }
+    setQrFile(f);
+    setQrDecoded(null);
+    if (qrPreview) URL.revokeObjectURL(qrPreview);
+    setQrPreview(f && f.type.startsWith("image/") ? URL.createObjectURL(f) : null);
+
+    // Auto-read the QR — decode its machine payload + detect the channel so the
+    // admin doesn't retype. Best-effort · silent on failure (a non-QR image or a
+    // logo-heavy code just yields no auto-fill). The Chinese shop name printed on
+    // the image is NOT in the QR (needs OCR · owner-gated on a vision key).
+    if (f && f.type.startsWith("image/")) {
+      setQrDecoding(true);
+      void decodeQrFromFile(f)
+        .then((res) => {
+          setQrDecoded(res);
+          if (res?.channel === "alipay") setPaytype("1");
+          else if (res?.channel === "wechat") setPaytype("2");
+        })
+        .catch(() => setQrDecoded(null))
+        .finally(() => setQrDecoding(false));
+    }
+  }
 
   function selectSlip(f: File | null) {
     setError(null);
@@ -127,6 +170,7 @@ export function AdminYuanPaymentNewForm({
           note: note || undefined,
         },
         slipFile,                       // Wave 12-A — optional admin-attached slip
+        qrFile,                         // owner 2026-07-08 — payee 收款码 QR
       );
 
       if (!result.ok) { setError(result.error); return; }
@@ -138,7 +182,9 @@ export function AdminYuanPaymentNewForm({
       setPaydetail("");
       setNote("");
       selectSlip(null);
+      selectQr(null);
       if (slipInputRef.current) slipInputRef.current.value = "";
+      if (qrInputRef.current) qrInputRef.current.value = "";
       router.refresh();
     });
   };
@@ -247,6 +293,98 @@ export function AdminYuanPaymentNewForm({
         </div>
       )}
 
+      {/* owner 2026-07-08 — payee QR (收款码) the customer sent, so the China
+          operator can scan+pay. Distinct from the after-transfer slip below. */}
+      <div>
+        <label className="block text-xs text-muted mb-1">
+          รูป QR ปลายทาง (Alipay / WeChat 收款码 ที่ลูกค้าส่งมา) <span className="text-muted">— สำหรับสแกนโอน</span>
+        </label>
+        <label
+          className={`block cursor-pointer rounded-xl border-2 border-dashed p-3.5 transition ${
+            qrFile
+              ? "border-blue-400 bg-blue-50/40"
+              : "border-border bg-surface-alt/40 hover:border-blue-300 hover:bg-blue-50/30"
+          } ${pending ? "cursor-not-allowed opacity-60" : ""}`}
+        >
+          <input
+            ref={qrInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            className="hidden"
+            disabled={pending}
+            onChange={(e) => selectQr(e.currentTarget.files?.[0] ?? null)}
+          />
+          {qrFile ? (
+            <div className="flex items-start gap-3.5">
+              {qrPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={qrPreview}
+                  alt="พรีวิว QR ปลายทาง"
+                  className="max-h-[120px] max-w-[160px] rounded border border-border bg-white object-contain"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="m-0 break-all font-medium text-sm">{qrFile.name}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {(qrFile.size / 1024).toFixed(1)} KB · {qrFile.type || "unknown"}
+                </p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    selectQr(null);
+                    if (qrInputRef.current) qrInputRef.current.value = "";
+                  }}
+                  className="mt-1.5 bg-transparent p-0 text-xs text-red-600 hover:text-red-700"
+                >
+                  ลบไฟล์
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-2 text-center">
+              <div className="text-2xl">📱</div>
+              <p className="mt-1 font-medium text-sm">คลิกเพื่อแนบรูป QR ปลายทาง</p>
+              <p className="mt-0.5 text-[11px] text-muted">
+                JPG / PNG / PDF · ≤ 5 MB
+              </p>
+            </div>
+          )}
+        </label>
+
+        {/* Auto-read result — the QR machine payload + detected channel.
+            The admin reviews; a button folds it into the recipient field. */}
+        {qrDecoding && (
+          <p className="mt-2 text-[11px] text-blue-600">⏳ กำลังอ่าน QR อัตโนมัติ…</p>
+        )}
+        {qrDecoded && (
+          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+            <p className="font-medium">
+              📷 อ่านจาก QR อัตโนมัติ
+              {qrDecoded.channel && (
+                <span className="ml-1">· ช่องทาง: {qrDecoded.channel === "alipay" ? "Alipay (支付宝)" : "WeChat"} (ตั้งให้แล้ว)</span>
+              )}
+            </p>
+            <p className="mt-1 break-all font-mono text-blue-700">{qrDecoded.text}</p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                setPaydetail((prev) => (prev.trim() ? `${prev.trim()} · ${qrDecoded.text}` : qrDecoded.text))
+              }
+              className="mt-1.5 bg-transparent p-0 font-medium text-blue-700 underline hover:text-blue-900"
+            >
+              ＋ ใช้เป็นข้อมูลผู้รับ
+            </button>
+            <p className="mt-1 text-blue-600/80">
+              หมายเหตุ: ชื่อร้าน (ตัวอักษรจีนบนรูป) ไม่ได้อยู่ใน QR — ต้องใช้ระบบอ่านภาพ (vision) เพิ่ม
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Wave 12-A — slip upload (optional · admin-attached proof) */}
       <div>
         <label className="block text-xs text-muted mb-1">
@@ -354,7 +492,9 @@ export function AdminYuanPaymentNewForm({
             setPayyuan(""); setPaydetail(""); setNote(""); setPaycost("");
             setError(null); setSuccess(null);
             selectSlip(null);
+            selectQr(null);
             if (slipInputRef.current) slipInputRef.current.value = "";
+            if (qrInputRef.current) qrInputRef.current.value = "";
           }}
           disabled={pending}
         >

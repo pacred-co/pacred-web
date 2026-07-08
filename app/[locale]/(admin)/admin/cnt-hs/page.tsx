@@ -8,6 +8,13 @@ import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
 import { PageHeader } from "@/components/admin/page-header";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { exportCntHsAll } from "@/actions/admin/export/cnt-hs";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+
+const CNT_STATUS_CSV_LABEL: Record<string, string> = {
+  "1": "รอดำเนินการ", "2": "สำเร็จแล้ว", "3": "ปฏิเสธ",
+};
 
 /**
  * Admin > "รายการจ่ายเงินตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
@@ -187,6 +194,23 @@ export default async function CntHsPage({
     };
   });
 
+  // CSV rows for the on-screen "⬇ CSV หน้านี้" (identical keys to the export-all
+  // action — actions/admin/export/cnt-hs.ts). §0-audit 2026-07-08: cnt-hs was the
+  // one admin list missing the export the other ~72 surfaces + legacy DataTables had.
+  const csvRows: CsvRow[] = tableRows.map((r) => ({
+    "เลขที่": r.ID,
+    "วันที่": r.date ? formatThaiDateTime(r.date) : "",
+    "หมายเลขตู้": r.cabinets.join(" "),
+    "จำนวนเงิน": r.cntAmount.toFixed(2),
+    "ธนาคาร": r.nameBlank,
+    "เลขที่บัญชี": r.noBlank,
+    "ชื่อบัญชี": r.nameAccount,
+    "ผู้ทำรายการ": r.adminIDCreate,
+    "สถานะ": CNT_STATUS_CSV_LABEL[r.cntStatus] ?? r.cntStatus,
+  }));
+  const csvExportStatus = sp.q === "1" || sp.q === "2" ? sp.q : "all";
+  const csvExportSearch = search;
+
   const activeTab: "all" | "1" | "2" =
     sp.q === "1" ? "1" : sp.q === "2" ? "2" : "all";
 
@@ -279,11 +303,22 @@ export default async function CntHsPage({
               ล้าง
             </Link>
           )}
-          <span className="ml-auto text-xs text-muted">
-            พบ {resultTotal.toLocaleString()} รายการ
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-muted">
+              พบ {resultTotal.toLocaleString()} รายการ
             {resultTotal > PAGE_SIZE &&
               ` · แสดง ${(offset + 1).toLocaleString()}–${Math.min(offset + rows.length, resultTotal).toLocaleString()}`}
-          </span>
+            </span>
+            <CsvButton
+              rows={csvRows}
+              cols={Object.keys(csvRows[0] ?? {}).map((k) => ({ key: k, label: k }))}
+              filename={`cnt-hs${csvExportStatus !== "all" ? `-${csvExportStatus}` : ""}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportCntHsAll({ status: csvExportStatus, search: csvExportSearch });
+              }}
+            />
+          </div>
         </form>
 
         {/* Table card */}

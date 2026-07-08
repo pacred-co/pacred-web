@@ -478,15 +478,12 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
                 <option value="2">จ่ายแล้ว</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-muted">ประเภทการขนส่ง</span>
-              <select name="transportType" defaultValue={transportType} className="rounded-md border border-border px-2 py-1">
-                <option value="all">ทั้งหมด</option>
-                <option value="1">ทางรถ</option>
-                <option value="2">ทางเรือ</option>
-                <option value="3">ทางอากาศ</option>
-              </select>
-            </label>
+            {/* ประเภทการขนส่ง = the chip-tab strip below (with per-type counts).
+                The old redundant <select name="transportType"> was removed
+                2026-07-08 — one control per param (§0f), the tabs are the SOT.
+                Preserve the current selection across a search submit so the
+                form doesn't reset the transport filter. */}
+            <input type="hidden" name="transportType" value={transportType} />
             <input type="hidden" name="historyTable" value="1" />
             <button type="submit" className="rounded-md border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
               ค้นหาข้อมูล

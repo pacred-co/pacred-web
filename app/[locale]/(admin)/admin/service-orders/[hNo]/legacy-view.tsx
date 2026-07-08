@@ -37,7 +37,7 @@ import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
-  Pencil,
+  Pencil, RotateCcw,
   ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck, Warehouse,
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -54,6 +54,7 @@ import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
 import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
+import { canEditShopOrder } from "@/lib/admin/shop-order-access";
 // 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
 // (the `pricing` role) — isolated from the selling-price/quote flow.
 import { ShopOrderCostSection } from "./shop-cost-section";
@@ -343,9 +344,16 @@ export async function renderLegacyServiceOrderView(hno: string) {
             <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
               {STATUS_LABEL[status] ?? `status ${status}`}
             </span>
-            {r.adminidip && (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">ล่าม: {r.adminidip}</span>
-            )}
+            {(() => {
+              // Legacy badgeAdminIP — prefer adminidip, fall back to adminidcreate;
+              // 'customer' = ลูกค้าเปิดเอง → treat as no-IPC.
+              const ip = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
+              const cr = r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
+              const ipc = ip || cr;
+              return ipc ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">IPC: {ipc}</span>
+              ) : null;
+            })()}
             {u?.adminIDSale && (
               <span className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px]">เซล: {u.adminIDSale}</span>
             )}
@@ -374,6 +382,18 @@ export async function renderLegacyServiceOrderView(hno: string) {
               <Pencil className="h-3.5 w-3.5" />
               แก้ไข / อัปเดต
             </Link>
+            {/* คืนเงินลูกค้า — faithful to legacy detail.php L57-59 (shows when hStatus>2).
+                Detail is read-only, so this routes to the edit page's refund panel
+                (#refund). Same office-role gate as the edit page (money-sensitive). */}
+            {canEditShopOrder(roles) && ["3", "4", "40", "5"].includes(status) && (
+              <Link
+                href={`${editHref}#refund`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                คืนเงินลูกค้า
+              </Link>
+            )}
           </div>
           {showPrint && (
             <div className="flex gap-2">

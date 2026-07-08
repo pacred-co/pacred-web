@@ -306,6 +306,13 @@ export type ForwarderRow = {
    *  populates it; when undefined the modal safely defaults to LOGISTICS
    *  (the ฝากนำเข้า "ชำระก่อนจัดส่ง / ค่าส่งในไทย" leg). */
   tax_doc_pref?: string | null;
+  /** S3 (2026-07-08) — true when this forwarder id sits on an OPEN
+   *  (status='issued') tb_forwarder_invoice. Suppresses the per-row direct-pay
+   *  button in favour of a "อยู่ในใบวางบิลแล้ว" note so the customer pays
+   *  through the bill, not twice. READ-ONLY guard — does NOT change
+   *  fstatus/money. Only the customer feeders populate it; when undefined the
+   *  direct-pay button renders as before (no suppression). */
+  onOpenBill?: boolean;
 };
 
 // ────────────────────────────────────────────────────────────────────
@@ -606,12 +613,21 @@ export function ForwarderRowView({
               {t("viewDetails")}
             </a>
             {(row.fstatus === "5" || row.fcredit === "1") && (
-              <a
-                href={`/service-import/${row.id}?pay=true`}
-                className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm whitespace-nowrap"
-              >
-                ✓ {t("pay")}
-              </a>
+              row.onOpenBill ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-3 py-1.5 text-[11px] font-semibold text-amber-800 whitespace-nowrap"
+                  title="รายการนี้ถูกรวมในใบวางบิลแล้ว กรุณาชำระผ่านใบวางบิล"
+                >
+                  🧾 อยู่ในใบวางบิลแล้ว
+                </span>
+              ) : (
+                <a
+                  href={`/service-import/${row.id}?pay=true`}
+                  className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-700 active:scale-[0.98] transition-all shadow-sm whitespace-nowrap"
+                >
+                  ✓ {t("pay")}
+                </a>
+              )
             )}
           </div>
         </div>

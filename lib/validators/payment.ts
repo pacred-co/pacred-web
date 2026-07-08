@@ -41,6 +41,9 @@ export const yuanPaymentSchema = z.object({
   paid_via_wallet:  z.boolean().optional(),
   slip_url:         z.string().optional(),
   id_doc_url:       z.string().optional(),
+  // owner 2026-07-08 — payee 收款码 QR (Alipay/WeChat) the customer attaches so
+  // the operator can scan+pay. → tb_payment.payee_qr_image (mig 0244).
+  payee_qr_url:     z.string().optional(),
   // GAP 3 (2026-06-12) — the customer's tax-document choice for THIS yuan
   // transfer (ฝากโอน). Raw form fields, mapped to tb_payment.tax_doc_* (mig
   // 0140) the same way cart.ts + forwarder-legacy.ts do. SELECTION only — the

@@ -48,6 +48,7 @@ import {
   extractCoverFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
+import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -542,9 +543,10 @@ export async function commitMomoRowCore(
       adminidcreator:        legacyAdminId,
       subuserid:             d.subUserID ?? "",
       // paymethod — '1'=ต้นทาง (pay-at-origin) · '2'=ปลายทาง (เก็บเงินปลายทาง / COD).
-      // Admin /review path omits d.payMethod → '1' (unchanged legacy default).
-      // MOMO cron supplies derivePayMethod(carrier) → '2' for upcountry COD.
-      paymethod:             d.payMethod ?? "1",
+      // MOMO cron supplies d.payMethod (zone-aware). Admin /review omits it → derive
+      // zone-aware from carrier+address zip (external courier upcountry → COD;
+      // self-pickup 'PCS'/own-fleet → ต้นทาง via the own-fleet guard).
+      paymethod:             d.payMethod ?? derivePayMethodForDelivery(d.fShipBy, { addressID: null, zip: addr.addresszipcode }),
       fusercompany:          fUserCompany,
       priceother:            0,
       // fwarehousename: "8" = MOMO (per WAREHOUSE_LABEL in /admin/report-cnt/

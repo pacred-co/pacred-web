@@ -35,6 +35,8 @@ import { logger } from "@/lib/logger";
 import { costBasisMode } from "@/lib/forwarder/resolve-cost";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
+import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
+import type { AutoThShippingFill } from "@/lib/forwarder/domestic-shipping";
 
 // Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
 // cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
@@ -620,14 +622,14 @@ export async function computeBillToCustomerAmounts(row: {
 
 export async function adminReportCntBillToCustomer(
   input: BillToCustomerInput,
-): Promise<AdminActionResult<{ fID: number; pricePay: number; alreadyBilled: boolean }>> {
+): Promise<AdminActionResult<{ fID: number; pricePay: number; alreadyBilled: boolean; autoThShipping?: AutoThShippingFill | null }>> {
   const parsed = billToCustomerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const fID = parsed.data.fID;
 
-  return withAdmin<{ fID: number; pricePay: number; alreadyBilled: boolean }>(
+  return withAdmin<{ fID: number; pricePay: number; alreadyBilled: boolean; autoThShipping?: AutoThShippingFill | null }>(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -684,6 +686,15 @@ export async function adminReportCntBillToCustomer(
         };
       }
 
+      // ── (a2) #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") ──
+      // If a delivery leg applies but ftransportprice is still ฿0, auto-fill the
+      // zone default (เหมาๆ ฿100 / Flash) so ตรวจตู้→เก็บเงิน stays continuous.
+      // Best-effort · never overwrites a set cost · returns what it filled (UI toast).
+      const autoThShipping = await autoFillThShippingForForwarder(admin, fID);
+      const rowForBill = autoThShipping
+        ? { ...row, ftransportprice: autoThShipping.cost }
+        : row;
+
       // ── (b) Recompute the promo discount (legacy L862-878) ──
       const { data: promoRow, error: promoErr } = await admin
         .from("tb_promotion")
@@ -698,7 +709,7 @@ export async function adminReportCntBillToCustomer(
         });
       }
       const promoId = promoRow?.promoid == null ? "" : String(promoRow.promoid);
-      const { fDiscount, pricePay } = await computeBillToCustomerAmounts({ ...row, promoId });
+      const { fDiscount, pricePay } = await computeBillToCustomerAmounts({ ...rowForBill, promoId });
 
       // ── (c) Flip fstatus 4→5 + stamp fdatestatus5 + recomputed fDiscount ──
       const nowIso = new Date().toISOString();
@@ -721,6 +732,9 @@ export async function adminReportCntBillToCustomer(
         promo_id:    promoId || null,
         f_discount:  fDiscount,
         price_pay:   pricePay,
+        auto_th_shipping: autoThShipping
+          ? { carrier: autoThShipping.carrier, cost: autoThShipping.cost, zone: autoThShipping.zone }
+          : null,
       });
 
       // ── (e) Status-log row (4→5) — matches legacy saveHistory($sql,41) ──
@@ -766,7 +780,7 @@ export async function adminReportCntBillToCustomer(
       // refreshed client-side since this action only has fID, not the cabinet).
       revalidatePath("/admin/report-cnt", "layout");
       revalidatePath("/admin/forwarders");
-      return { ok: true, data: { fID, pricePay, alreadyBilled: false } };
+      return { ok: true, data: { fID, pricePay, alreadyBilled: false, autoThShipping } };
     },
   );
 }

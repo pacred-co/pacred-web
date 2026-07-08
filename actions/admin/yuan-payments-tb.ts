@@ -126,6 +126,7 @@ export type AdminCreateYuanPaymentManualInput = z.infer<typeof manualYuanPayment
 export async function adminCreateYuanPaymentManual(
   input: AdminCreateYuanPaymentManualInput,
   slipFile?: File | null,
+  qrFile?: File | null,          // owner 2026-07-08 — payee 收款码 QR the customer sent
 ): Promise<AdminActionResult<{ id: number; paythb: number; new_wallet_balance: number }>> {
   const parsed = manualYuanPaymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -176,7 +177,12 @@ export async function adminCreateYuanPaymentManual(
         return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
       }
       const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-      if (currentBalance < paythb) {
+      // 2026-07-08 (owner) — ฝากโอนหยวน = DIRECT-CUT by default (the customer paid
+      // the company bank directly + attached the slip; admin is RECORDING a settled
+      // deal). ONLY the pay-from-wallet path (paydeposit=1) touches the wallet, so
+      // the balance pre-check must NOT block a direct-cut record. This mirrors the
+      // customer flow (createYuanPayment · tb_payment only, no wallet).
+      if (d.paydeposit && currentBalance < paythb) {
         return {
           ok: false,
           error: `insufficient_balance: ยอดกระเป๋าของลูกค้า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${paythb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
@@ -191,6 +197,16 @@ export async function adminCreateYuanPaymentManual(
         const up = await uploadToBucket(slipFile, "slips", `admin/yuan-payment/${customer.userID}`);
         if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
         slipFilename = up.filename;
+      }
+
+      // owner 2026-07-08 — the payee 收款码 QR (Alipay/WeChat) the customer sent,
+      // so the China operator can scan+pay. Separate slot from the after-transfer
+      // slip (imagesslipadmin) → the two never overwrite each other.
+      let qrFilename = "";
+      if (qrFile) {
+        const upQr = await uploadToBucket(qrFile, "slips", `admin/yuan-qr/${customer.userID}`);
+        if (!upQr.ok) return { ok: false, error: `อัปโหลดรูป QR ปลายทางไม่สำเร็จ: ${upQr.error}` };
+        qrFilename = upQr.filename;
       }
 
       // INSERT tb_payment — all NOT NULL columns must be populated.
@@ -217,21 +233,25 @@ export async function adminCreateYuanPaymentManual(
           imagesslip:        "",                   // customer-supplied slip (empty for admin-add)
           certifiedtruecopy: "",
           imagesslipadmin:   slipFilename,         // Wave 12-A: admin-attached proof-of-payment
+          payee_qr_image:    qrFilename,           // owner 2026-07-08: payee 收款码 QR
         })
         .select("id")
         .single<{ id: number }>();
       if (insErr || !row) return { ok: false, error: insErr?.message ?? "insert failed" };
 
-      // ── Tier A1 — Debit customer wallet (legacy payment.php L51-69) ─
+      // ── Tier A1 — Debit customer wallet — ONLY when paid-from-wallet ──
       //
-      // Pacred has no real DB transactions over the REST client, so we
-      // do tb_payment first, then tb_wallet_hs + tb_wallet. If either
-      // wallet write fails AFTER tb_payment was inserted we DELETE the
-      // tb_payment row to keep books balanced (silent half-state =
-      // exactly the bug we are closing). Mirror of cnt-payment commit
-      // partial-failure recovery.
-      const newBalance = Math.round((currentBalance - paythb) * 100) / 100;
+      // 2026-07-08 (owner): a direct-cut record (paydeposit=0 · the default · the
+      // customer paid the company bank directly) has NO wallet movement — it just
+      // records tb_payment, mirroring the customer createYuanPayment. Only
+      // paydeposit=1 (pay-from-wallet) debits the wallet. Pacred has no real DB
+      // transactions over REST, so on a wallet write failure AFTER tb_payment we
+      // DELETE the tb_payment row to keep books balanced.
+      const newBalance = d.paydeposit
+        ? Math.round((currentBalance - paythb) * 100) / 100
+        : currentBalance;
 
+      if (d.paydeposit) {
       // INSERT tb_wallet_hs — type='6' (ชำระเงินฝากโอน), status='2'
       // (approved; admin = verifier per Pacred convention in
       // actions/admin/wallet-hs.ts), amount=paythb (positive — debit
@@ -296,6 +316,7 @@ export async function adminCreateYuanPaymentManual(
           };
         }
       }
+      } // end if (d.paydeposit) — direct-cut records tb_payment only, no wallet
 
       await logAdminAction(adminId, "tb_payment.manual_create", "tb_payment", String(row.id), {
         userid:           customer.userID,
@@ -322,4 +343,53 @@ export async function adminCreateYuanPaymentManual(
       return { ok: true, data: { id: row.id, paythb, new_wallet_balance: newBalance } };
     },
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// adminSetYuanPayeeQr — attach/replace the payee 收款码 QR on an existing row
+//
+// Owner 2026-07-08: the customer's Alipay/WeChat receive-QR often arrives AFTER
+// the job is created (via LINE), so accounting needs to attach it any time from
+// the detail page. Image-only — writes ONLY tb_payment.payee_qr_image, never any
+// money/status/rate column.
+// ────────────────────────────────────────────────────────────
+
+export async function adminSetYuanPayeeQr(
+  id: number,
+  qrFile: File | null,
+): Promise<AdminActionResult<{ id: number; filename: string }>> {
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "invalid_id" };
+  if (!qrFile) return { ok: false, error: "ไม่ได้เลือกไฟล์รูป QR" };
+
+  return withAdmin<{ id: number; filename: string }>(["accounting"], async () => {
+    const admin = createAdminClient();
+
+    // Confirm the row exists + fetch the userid for a tidy storage prefix.
+    const { data: rowBefore, error: readErr } = await admin
+      .from("tb_payment")
+      .select("id, userid")
+      .eq("id", id)
+      .maybeSingle<{ id: number; userid: string | null }>();
+    if (readErr) {
+      console.error(`[tb_payment qr read] failed`, { code: readErr.code, message: readErr.message });
+      return { ok: false, error: `db_error:${readErr.code ?? "unknown"}` };
+    }
+    if (!rowBefore) return { ok: false, error: "ไม่พบรายการฝากโอน" };
+
+    const up = await uploadToBucket(qrFile, "slips", `admin/yuan-qr/${rowBefore.userid ?? "unknown"}`);
+    if (!up.ok) return { ok: false, error: `อัปโหลดรูป QR ปลายทางไม่สำเร็จ: ${up.error}` };
+
+    const { error: updErr } = await admin
+      .from("tb_payment")
+      .update({ payee_qr_image: up.filename })
+      .eq("id", id);
+    if (updErr) {
+      console.error(`[tb_payment qr update] failed`, { code: updErr.code, message: updErr.message });
+      return { ok: false, error: `db_error:${updErr.code ?? "unknown"}` };
+    }
+
+    revalidatePath(`/admin/yuan-payments/${id}`);
+    revalidatePath("/admin/yuan-payments");
+    return { ok: true, data: { id, filename: up.filename } };
+  });
 }

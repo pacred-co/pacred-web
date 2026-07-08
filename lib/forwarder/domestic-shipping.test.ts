@@ -4,6 +4,7 @@ import {
   domesticShippingOptions,
   isThShippingCostRequired,
   isThShippingCostMissing,
+  resolveAutoThShippingFill,
 } from "./domestic-shipping";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
 
@@ -119,6 +120,53 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   assert.equal(isThShippingCostMissing({ fshipby: "PCS", ftransportprice: null }), false, "self-pickup null → not missing (exempt)");
   // unset carrier + ฿0 → missing (must resolve)
   assert.equal(isThShippingCostMissing({ fshipby: "", ftransportprice: 0 }), true, "unset carrier ฿0 → missing");
+}
+
+// ── #7 resolveAutoThShippingFill — auto-fill ค่าส่งไทย (owner 2026-07-08) ──
+{
+  // already has a cost → null (never overwrite)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "PRF", ftransportprice: 100, zip: "10110", weightKg: 13 }),
+    null, "existing cost > 0 → no auto-fill",
+  );
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "2", ftransportprice: "350.50", zip: "50000", weightKg: 5 }),
+    null, "existing string cost → no auto-fill",
+  );
+  // self-pickup → null (฿0 legit)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "PCS", ftransportprice: 0, zip: "10110", weightKg: 13 }),
+    null, "self-pickup → no auto-fill",
+  );
+  // in-zone (maomao) + ฿0 → เหมาๆ ฿100 · ต้นทาง
+  {
+    const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "10110", weightKg: 13 });
+    assert.ok(fill, "in-zone ฿0 → auto-fills");
+    assert.equal(fill!.carrier, MAO_CARRIER_CODE, "in-zone → เหมาๆ PRF");
+    assert.equal(fill!.cost, MAO_FLAT_FEE, "in-zone → ฿100");
+    assert.equal(fill!.payMethod, "1", "เหมาๆ → ต้นทาง");
+    assert.equal(fill!.zone, "maomao");
+  }
+  // upcountry → null (v1 scope = in-zone เหมาๆ only · Flash/COD left to operator)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "50000", weightKg: 5, province: "เชียงใหม่" }),
+    null, "upcountry → no auto-fill (Flash/COD is operator-set)",
+  );
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "74130", weightKg: 20 }),
+    null, "out-of-zone (สมุทรสาคร 74130) → no auto-fill",
+  );
+  // no address at all → can't classify → null (gate stays backstop)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: null, province: null }),
+    null, "no address → no auto-fill (safe)",
+  );
+  // in-zone auto-fill is weight-agnostic (เหมาๆ flat) — works even with no weight
+  {
+    const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "10250" });
+    assert.ok(fill, "in-zone no weight → still auto-fills (เหมาๆ flat)");
+    assert.equal(fill!.cost, MAO_FLAT_FEE);
+  }
 }
 
 console.log("domestic-shipping.test.ts — all assertions passed");

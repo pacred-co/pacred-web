@@ -347,8 +347,14 @@ export async function adminSaveCustomerRate(
       // ── Apply the just-saved card to the customer's OPEN orders (owner: the
       //    card must take effect on un-billed orders). Money-adjacent but INTENDED.
       //    Scope is tight + bounded: ONLY this customer's forwarders, in the saved
-      //    warehouse, that are (1) un-billed (fstatus < 5 · billed/paid = frozen),
-      //    (2) NOT a manual custom rate (customrate != '1'), (3) NOT cabinet-locked.
+      //    warehouse, that are (1) OPEN — un-billed (fstatus < 5) OR waiting-payment
+      //    but NOT yet paid (fstatus = 5 · paydeposit != '1'); a paid/delivered row
+      //    (fstatus ≥ 6 or paydeposit = '1') is frozen. (2) NOT a manual custom rate.
+      //    (3) NOT cabinet-locked. (4) NOT already on an OPEN ใบวางบิล — re-pricing a
+      //    forwarder on an unpaid bill would desync the bill's stored total, so those
+      //    are excluded here + corrected by the stale-svip backfill script instead.
+      //    (owner 2026-07-08: PR130 #52117 was fstatus=5 on a bill → the old fstatus<5
+      //    filter skipped it → stayed stale · this closes the non-billed fstatus=5 gap.)
       //    Best-effort: NEVER fails / rolls back the card save (already committed).
       //    Reuses computeAndFillForwarderImportRate — the SAME audited engine the
       //    MOMO import + dimension-edit save call (no hand-written frefrate). It
@@ -357,7 +363,7 @@ export async function adminSaveCustomerRate(
       try {
         const { data: cand, error: candErr } = await admin
           .from("tb_forwarder")
-          .select("id, fstatus, customrate, fcabinet_locked")
+          .select("id, fstatus, customrate, fcabinet_locked, paydeposit")
           .eq("userid", userid)
           .eq("fwarehousechina", wh)
           .order("id", { ascending: false })
@@ -367,14 +373,43 @@ export async function adminSaveCustomerRate(
             userid, wh, code: candErr.code, message: candErr.message,
           });
         } else {
-          const targets = (cand ?? [])
+          const eligible = (cand ?? [])
             .filter((r) => {
-              const row = r as { fstatus: string | null; customrate: string | null; fcabinet_locked: boolean | null };
+              const row = r as { fstatus: string | null; customrate: string | null; fcabinet_locked: boolean | null; paydeposit: string | null };
               const fstatusNum = Number(String(row.fstatus ?? "0").trim() || "0");
               const isManual = String(row.customrate ?? "0").trim() === "1";
-              return fstatusNum < 5 && !isManual && row.fcabinet_locked !== true;
+              const isPaid = String(row.paydeposit ?? "").trim() === "1";
+              // un-billed (<5) OR waiting-payment-not-yet-paid (=5, paydeposit!='1')
+              const openStage = fstatusNum < 5 || (fstatusNum === 5 && !isPaid);
+              return openStage && !isManual && row.fcabinet_locked !== true;
             })
             .slice(0, 500); // hard cap — single-customer scope, but belt-and-suspenders
+          // Exclude any forwarder sitting on an OPEN (issued+unpaid) ใบวางบิล — re-pricing
+          // it would desync the bill total; the stale-svip backfill handles those (it
+          // recomputes the bill). Batch lookup so a bill-heavy customer stays cheap.
+          const eligibleIds = eligible.map((t) => Number((t as { id: number }).id));
+          const onOpenBill = new Set<number>();
+          if (eligibleIds.length > 0) {
+            const { data: billItems } = await admin
+              .from("tb_forwarder_invoice_item")
+              .select("forwarder_id, invoice_id")
+              .in("forwarder_id", eligibleIds);
+            const invIds = Array.from(new Set((billItems ?? []).map((b) => Number((b as { invoice_id: number }).invoice_id))));
+            if (invIds.length > 0) {
+              const { data: openInvs } = await admin
+                .from("tb_forwarder_invoice")
+                .select("id")
+                .in("id", invIds)
+                .eq("status", "issued")
+                .is("slip_status", null);
+              const openInvSet = new Set((openInvs ?? []).map((v) => Number((v as { id: number }).id)));
+              for (const b of billItems ?? []) {
+                const bi = b as { forwarder_id: number; invoice_id: number };
+                if (openInvSet.has(Number(bi.invoice_id))) onOpenBill.add(Number(bi.forwarder_id));
+              }
+            }
+          }
+          const targets = eligible.filter((t) => !onOpenBill.has(Number((t as { id: number }).id)));
           for (const t of targets) {
             const fid = Number((t as { id: number }).id);
             try {

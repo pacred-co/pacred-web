@@ -5,6 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActivePromoBanners } from "@/lib/promo/banners";
 import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
+import { resolveOpenBillForwarderIds } from "@/lib/forwarder/open-bill";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { ImportViewTabs } from "./import-view-tabs";
 import { type ForwarderRow } from "./forwarder-row-view";
@@ -312,6 +313,11 @@ export default async function ServiceImportPage({
     rowIds,
   );
 
+  // ── S3 (2026-07-08) — which on-screen rows sit on an OPEN (status='issued')
+  // ใบวางบิล → suppress the per-row direct-pay button ("อยู่ในใบวางบิลแล้ว")
+  // so the customer pays through the bill, not twice. READ-ONLY · fails-soft.
+  const openBillIds = await resolveOpenBillForwarderIds(admin, rowIds);
+
   // Normalise + apply the legacy q=6 / q=6.1 fdiStatus sub-filter
   // (L651/L652) — q=6 keeps rows NOT in the "out-for-delivery" set,
   // q=6.1 keeps only rows IN it.
@@ -352,6 +358,7 @@ export default async function ServiceImportPage({
       promoid: promoByFid.get(Number(r.id)) ?? null,
       fproductstype: (r.fproductstype as string) ?? null,
       pendingSlip: pendingSlipIds.has(Number(r.id)),
+      onOpenBill: openBillIds.has(Number(r.id)),
     }),
   );
   if (q === "6") {
