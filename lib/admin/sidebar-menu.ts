@@ -1324,10 +1324,43 @@ const wrapServiceCustoms: MenuItem = {
  * — relocated, never removed. The QA pair (hub + inspections) lives inside
  * the Marketing wrapper (ปอน 2026-06-10).
  */
+/**
+ * 2026-07-08 (ปอน · scaffold — "ขึ้นแถบเฉยๆ · หน้าเปล่าๆ") — the "Workspace"
+ * quick-access section: two grouped accordions landing on BLANK placeholder
+ * pages under /admin/workspace/*. Menu-only scaffold: the leaf pages are
+ * intentional empty placeholders pending their real destinations.
+ *   Booking (บริการ): ฝากสั่ง · ฝากโอน · นำเข้า · ส่งออก · อื่นๆ
+ *   รายการ:          นำเข้า
+ */
+const blockWorkspaceBooking: MenuItem = {
+  labelKey: "workspaceNav.booking.title",
+  icon: "PackagePlus",
+  children: [
+    { labelKey: "workspaceNav.booking.shopOrder",    href: "/admin/workspace/booking/shop-order",    icon: "ShoppingCart" },
+    { labelKey: "workspaceNav.booking.yuanTransfer",  href: "/admin/workspace/booking/yuan-transfer",  icon: "Languages" },
+    { labelKey: "workspaceNav.booking.import",        href: "/admin/workspace/booking/import",         icon: "Package" },
+    { labelKey: "workspaceNav.booking.export",        href: "/admin/workspace/booking/export",         icon: "Ship" },
+    { labelKey: "workspaceNav.booking.other",         href: "/admin/workspace/booking/other",          icon: "Boxes" },
+  ],
+};
+
+const blockWorkspaceList: MenuItem = {
+  labelKey: "workspaceNav.list.title",
+  icon: "ListOrdered",
+  children: [
+    { labelKey: "workspaceNav.list.import", href: "/admin/workspace/list/import", icon: "Package" },
+  ],
+};
+
 const menuSuper: MenuSection[] = [
   // 2026-06-10 (ปอน) — "แดชบอร์ดผู้บริหาร" + "Inbox งานของฉัน" promoted to
   // top-level next to Dashboard (cockpit above inbox).
   { header: "", items: [itemDashboard, blockExtServiceDash, blockExtCockpit, blockExtInbox] },
+  // 2026-07-08 (ปอน · scaffold) — "Workspace" quick-access shortcuts section.
+  {
+    header: "Workspace",
+    items: [blockWorkspaceBooking, blockWorkspaceList],
+  },
   {
     header: "Holding",
     items: [

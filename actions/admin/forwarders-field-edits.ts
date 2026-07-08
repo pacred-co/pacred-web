@@ -816,6 +816,11 @@ export async function adminUpdateForwarderCostAdjust(
 const amountCountSchema = z.object({
   fId:         z.number().int().positive(),
   famountcount: z.enum(["1", "2"] as const), // '1' per-box · '2' total
+  // จำนวนกล่อง/ชิ้น (famount). Optional — when supplied, staff are correcting the count
+  // to match MOMO (owner/ภูม 2026-07-08: "แก้จำนวนกล่องก็ไม่ได้"). famount is DISPLAY-ONLY
+  // (verified: it is in NO bill/outstanding/debit formula — the folded famountcount='1'
+  // marker is what tells the bill NOT to multiply by it), so editing it moves ZERO money.
+  famount:     z.coerce.number().int().min(1).max(9999).optional(),
 });
 export type AdminUpdateForwarderAmountCountInput = z.infer<typeof amountCountSchema>;
 
@@ -832,29 +837,38 @@ export async function adminUpdateForwarderAmountCount(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, famountcount")
+      .select("id, famountcount, famount")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; famountcount: string | null }>();
+      .maybeSingle<{ id: number; famountcount: string | null; famount: number | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderAmountCount read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
-    if ((fwd.famountcount ?? "").trim() === d.famountcount) {
-      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ฐานราคาเดิม)" };
+
+    const countChanged = (fwd.famountcount ?? "").trim() !== d.famountcount;
+    const amountChanged = d.famount != null && Math.round(Number(fwd.famount ?? 0)) !== d.famount;
+    if (!countChanged && !amountChanged) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง" };
     }
+
+    // Build the update — famountcount always (basis toggle) + famount ONLY when the staff
+    // typed a new count (display-only · money-safe). adminidupdate stamps the editor.
+    const update: Record<string, unknown> = { famountcount: d.famountcount, adminidupdate: legacyAdminId };
+    if (amountChanged) update.famount = d.famount;
 
     const { error: updErr } = await admin
       .from("tb_forwarder")
-      .update({ famountcount: d.famountcount, adminidupdate: legacyAdminId })
+      .update(update)
       .eq("id", d.fId);
     if (updErr) {
       console.error(`[adminUpdateForwarderAmountCount update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
-      return { ok: false, error: `บันทึกฐานราคาไม่สำเร็จ: ${updErr.message}` };
+      return { ok: false, error: `บันทึกไม่สำเร็จ: ${updErr.message}` };
     }
 
     await logAdminAction(adminId, "tb_forwarder.update_amount_count", "tb_forwarder", String(d.fId), {
-      before: fwd.famountcount, after: d.famountcount,
+      before: { famountcount: fwd.famountcount, famount: fwd.famount },
+      after: { famountcount: d.famountcount, famount: amountChanged ? d.famount : fwd.famount },
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);

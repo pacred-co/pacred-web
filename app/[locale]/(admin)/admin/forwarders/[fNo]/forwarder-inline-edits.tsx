@@ -1583,6 +1583,9 @@ export function EditAmountCountField({ fId, famountcount, famount }: { fId: numb
   const [editing, setEditing] = useState(false);
   const initialAmountCount = (famountcount === "1" ? "1" : "2") as "1" | "2";
   const [amountCountVal, setAmountCountVal] = useState<"1" | "2">(initialAmountCount);
+  // จำนวนกล่อง/ชิ้น (famount) — editable so staff can correct it to match MOMO
+  // (owner/ภูม 2026-07-08: "แก้จำนวนกล่องก็ไม่ได้"). display-only field · money-safe.
+  const [amountVal, setAmountVal] = useState<string>(String(famount ?? 1));
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -1602,20 +1605,30 @@ export function EditAmountCountField({ fId, famountcount, famount }: { fId: numb
           </>
         }
       >
-        {(close) => (
+        {(close) => {
+          const amountNum = Math.max(1, Math.round(Number(amountVal) || 0));
+          return (
           <>
+            <label className="block text-[11px] text-muted mb-0.5">จำนวนกล่อง/ชิ้น (ให้ตรงกับ MOMO)</label>
+            <input
+              type="number" min={1} max={9999} inputMode="numeric"
+              className={`${selectCls} w-28`} value={amountVal}
+              onChange={(e) => setAmountVal(e.target.value)}
+            />
+            <label className="block text-[11px] text-muted mt-2 mb-0.5">การรวมกล่อง (ฐานคิดราคา)</label>
             <select className={selectCls} value={amountCountVal} onChange={(e) => setAmountCountVal(e.target.value as "1" | "2")}>
               <option value="2">ไม่รวมกล่อง (คิดราคาแยกต่อกล่อง)</option>
               <option value="1">รวมกล่อง (คิดราคารวมทั้งบิล)</option>
             </select>
-            <p className="text-[11px] text-muted">⚠ ค่าฐานการคิดราคา — มีผลตอนกดแก้ไขขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)</p>
+            <p className="text-[11px] text-muted">จำนวน = แค่แสดงผล (ไม่กระทบยอดเงิน) · การรวมกล่อง = ฐานคิดราคา มีผลตอนแก้ขนาด/น้ำหนักครั้งถัดไป (ราคาเดิมไม่ recompute)</p>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave}
-                onClick={() => run(() => adminUpdateForwarderAmountCount({ fId, famountcount: amountCountVal }), close)}>บันทึก</button>
+                onClick={() => run(() => adminUpdateForwarderAmountCount({ fId, famountcount: amountCountVal, famount: amountNum }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
             </div>
           </>
-        )}
+          );
+        }}
       </EditableRow>
     </div>
   );

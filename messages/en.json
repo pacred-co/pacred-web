@@ -3151,6 +3151,20 @@
       "taxInvoice": "Issue Tax Invoice",
       "domesticShipping": "Domestic Shipping"
     },
+    "workspaceNav": {
+      "booking": {
+        "title": "Booking",
+        "shopOrder": "Shop Order",
+        "yuanTransfer": "Yuan Transfer",
+        "import": "Import",
+        "export": "Export",
+        "other": "Other"
+      },
+      "list": {
+        "title": "List",
+        "import": "Import"
+      }
+    },
     "logisticsNav": {
       "docFreight": "Doc Freight",
       "docShipping": "Doc Shipping",

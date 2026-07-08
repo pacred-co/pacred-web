@@ -3151,6 +3151,20 @@
       "taxInvoice": "เปิดใบกำกับภาษี",
       "domesticShipping": "ขนส่งภายในประเทศ"
     },
+    "workspaceNav": {
+      "booking": {
+        "title": "Booking",
+        "shopOrder": "ฝากสั่ง",
+        "yuanTransfer": "ฝากโอน",
+        "import": "นำเข้า",
+        "export": "ส่งออก",
+        "other": "อื่นๆ"
+      },
+      "list": {
+        "title": "รายการ",
+        "import": "นำเข้า"
+      }
+    },
     "logisticsNav": {
       "docFreight": "Doc Freight",
       "docShipping": "Doc Shipping",
