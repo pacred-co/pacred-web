@@ -46,6 +46,7 @@ import { YuanCostEditor } from "@/components/admin/yuan-cost-editor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
+import { YuanQrAttach } from "./yuan-qr-attach";
 import { Link } from "@/i18n/navigation";
 import { YuanPaymentActions } from "../actions-cell";
 import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
@@ -91,6 +92,7 @@ type PaymentRow = {
   adminid: string | null;
   imagesslip: string | null;
   imagesslipadmin: string | null;
+  payee_qr_image: string | null;
   // P0-11: '1' = paid from wallet (refund must reverse the debit on YuanPaymentActions)
   paydeposit: string | null;
 };
@@ -126,7 +128,7 @@ export default async function AdminYuanPaymentDetail({
   // ภูม #2: also pulled `payratecost` for the right-column price breakdown
   // (cost columns added to the SELECT ONLY when showCostProfit).
   const baseCols =
-    "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,paydeposit,reviewed_at";
+    "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin,payee_qr_image,paydeposit,reviewed_at";
   const costCols = ",payratecost,paythbcost,payprofitthb";
   const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
@@ -154,6 +156,7 @@ export default async function AdminYuanPaymentDetail({
     { data: allCb, error: allCbErr },
     slipUrl,
     slipAdminUrl,
+    qrUrl,
     refundRow,
   ] = await Promise.all([
     admin
@@ -180,6 +183,7 @@ export default async function AdminYuanPaymentDetail({
     admin.from("tb_cash_back").select("cbtotal").limit(50_000),
     resolveLegacyUrl(row.imagesslip, "slip"),
     resolveLegacyUrl(row.imagesslipadmin, "slip"),
+    resolveLegacyUrl(row.payee_qr_image, "slip"),
     admin
       .from("tb_wallet_hs")
       .select("id")
@@ -422,6 +426,13 @@ export default async function AdminYuanPaymentDetail({
             ) : null}
           </div>
         </div>
+      </section>
+
+      {/* ── 3.5 PAYEE QR (收款码) — owner 2026-07-08 · always shown so accounting
+             can attach it any time (the customer's QR often arrives via LINE
+             after the job is created) ── */}
+      <section>
+        <YuanQrAttach id={row.id} qrUrl={qrUrl} qrFilename={row.payee_qr_image} />
       </section>
 
       {/* ── 4. SLIP IMAGES ── */}
