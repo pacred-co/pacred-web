@@ -20,6 +20,7 @@ import {
   isAdvanceBillEligible,
   isBillableForwarder,
   isBillingRunEligible,
+  isCheckedArrivedForwarder,
   type ForwarderBillingEligibilityFields,
 } from "./billing-eligibility";
 import {
@@ -192,6 +193,21 @@ assertEq("cash: settled credit (paydeposit=1) → not eligible",
 // non-billable row → never eligible regardless of juristic.
 assertEq("cash: non-billable (fstatus 1) → not eligible",
   isBillingRunEligible(gate({ fstatus: "1" }), false), false);
+
+section("G4 — isCheckedArrivedForwarder (ตรวจตู้-done arrival · fstatus='4')");
+// Only fstatus='4' matches — the fstatus arm of the G4 pre-lift admission.
+assertEq("fstatus 4 → checked-arrived", isCheckedArrivedForwarder(gate({ fstatus: "4" })), true);
+assertEq("fstatus 4 (untrimmed ' 4 ') → checked-arrived", isCheckedArrivedForwarder(gate({ fstatus: " 4 " })), true);
+assertEq("fstatus 5 → NOT checked-arrived", isCheckedArrivedForwarder(gate({ fstatus: "5" })), false);
+assertEq("fstatus 3 → NOT checked-arrived", isCheckedArrivedForwarder(gate({ fstatus: "3" })), false);
+assertEq("fstatus null → NOT checked-arrived", isCheckedArrivedForwarder(gate({ fstatus: null })), false);
+// It is NOT billable on its own — must never widen isBillableForwarder.
+assertEq("checked-arrived (4) is NOT billable on its own",
+  isBillableForwarder(gate({ fstatus: "4" })), false);
+// A plain fstatus='4' also fails isBillingRunEligible for a juristic customer
+// (admission requires the check-queue membership, added by the caller, not this fn).
+assertEq("juristic: plain fstatus 4 → NOT billing-run-eligible (needs check-queue)",
+  isBillingRunEligible(gate({ fstatus: "4" }), true), false);
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} forwarder/billing-eligibility: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

@@ -281,6 +281,20 @@ export function ForwarderCheckTable({
     return { total, customerCount: userSet.size, rowCount: selected.size };
   }, [rows, selected]);
 
+  // G3 reachability (§0d · 2026-07-08) — when the current selection is a SINGLE
+  // credit/นิติ customer, offer a direct jump to ออกใบวางบิล for them. The billing-run
+  // add form auto-ticks this customer's ตรวจตู้ (check-queue) rows, so the ตรวจตู้
+  // selection carries straight into the ใบวางบิล (a credit/นิติ order bills via a
+  // ใบวางบิล, not the SMS-pay flow). Only shown for a juristic/credit single customer.
+  const billingRunTarget = useMemo(() => {
+    const picked = rows.filter((r) => selected.has(r.id));
+    const uids = new Set(picked.map((r) => r.userid));
+    if (uids.size !== 1) return null;
+    const uid = [...uids][0];
+    const eligible = picked.some((r) => r.customer_company === 1 || r.user_credit === "1");
+    return eligible ? uid : null;
+  }, [rows, selected]);
+
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
@@ -722,6 +736,15 @@ export function ForwarderCheckTable({
               </span>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {billingRunTarget && (
+                <Link
+                  href={`/admin/billing-run/add?userid=${encodeURIComponent(billingRunTarget)}`}
+                  className="rounded-md border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
+                  title="ออกใบวางบิลให้ลูกค้าเครดิต/นิติ — ระบบติ๊กรายการที่ตรวจตู้แล้วให้อัตโนมัติ"
+                >
+                  🧾 ออกใบวางบิล (เครดิต/นิติ)
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={runRemoveFromQueue}

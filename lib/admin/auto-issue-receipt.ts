@@ -54,7 +54,7 @@ import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { resolveReceiptMaoFee } from "@/lib/admin/receipt-mao-fee";
-import { legacyReceiptAmount } from "@/lib/tax/wht";
+import { legacyReceiptAmount, LEGACY_RECEIPT_WHT_MIN } from "@/lib/tax/wht";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
 import { modeFromPref, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
@@ -109,6 +109,27 @@ export interface AutoIssueReceiptOpts {
    * 0). Absent → recompute (direct-slip / wallet path unchanged).
    */
   maoFeeOverride?: number;
+  /**
+   * G1 (billing-run mark-paid · 2026-07-08) — the paid ใบวางบิล's frozen GROSS
+   * face (tb_forwarder_invoice.total_thb · INCLUDES เหมาๆ + extras). When present,
+   * the receipt's totalbeforewithholding is PINNED to this instead of the live
+   * perRowRaw sum → receipt == the paid bill by construction, even if a row was
+   * hand-edited between issue↔pay. RECONCILE-not-recompute: we still compute live,
+   * and on drift we PREFER the bill (what the customer actually paid) + log it.
+   */
+  totalOverride?: number;
+  /**
+   * G1 — the paid bill's net payable (gross − 1% WHT · = the cash the customer
+   * remitted). Pins tb_receipt.ramount. Absent (with totalOverride present) →
+   * derived from totalOverride + isJuristicOverride.
+   */
+  netOverride?: number;
+  /**
+   * G1 — the paid bill's frozen is_juristic. The WHT decision follows the BILL
+   * (not live tb_corporate) so a บุคคล→นิติ change between issue↔pay can't
+   * re-derive a different withholding than what was billed.
+   */
+  isJuristicOverride?: boolean;
 }
 
 export type AutoIssueReceiptResult =
@@ -372,8 +393,34 @@ export async function autoIssueReceiptOnPaymentLand(
   // Shared, unit-tested rule (lib/tax/wht.ts:legacyReceiptAmount) so the
   // grenrateReceiptF juristic-1% behaviour can't silently drift untested.
   // The เหมาๆ is part of the bill total → it's in the WHT base too (consistent w/ the bill).
-  const { totalBeforeWithholding, rAmount, applied: applyJuristic1Pct } =
-    legacyReceiptAmount(pricePayAll, corporate === 1);
+  const live = legacyReceiptAmount(pricePayAll, corporate === 1);
+
+  // G1 (billing-run mark-paid · 2026-07-08) — RECONCILE-not-recompute. When the
+  // receipt is minted FROM a paid ใบวางบิล the caller passes the bill's frozen
+  // total/net/is_juristic. We PIN the receipt to those (what the customer actually
+  // paid) instead of the live recompute → receipt == bill by construction even if a
+  // row was edited between issue↔pay. On drift we PREFER the bill + log for accounting.
+  // No bill override (direct-slip / wallet path) → live recompute, unchanged.
+  let totalBeforeWithholding = live.totalBeforeWithholding;
+  let rAmount = live.rAmount;
+  let applyJuristic1Pct = live.applied;
+
+  if (opts.totalOverride !== undefined) {
+    const billJuristic = opts.isJuristicOverride ?? (corporate === 1);
+    if (Math.abs(live.totalBeforeWithholding - opts.totalOverride) > 0.01) {
+      console.error("[auto-receipt: bill-vs-live drift · pinned to bill]", {
+        userid, fids, source,
+        liveTotal: live.totalBeforeWithholding, billTotal: opts.totalOverride,
+        liveNet: live.rAmount, billNet: opts.netOverride,
+        liveJuristic: corporate === 1, billJuristic,
+      });
+    }
+    totalBeforeWithholding = Math.round(opts.totalOverride * 100) / 100;
+    rAmount = opts.netOverride !== undefined
+      ? Math.round(opts.netOverride * 100) / 100
+      : legacyReceiptAmount(opts.totalOverride, billJuristic).rAmount;
+    applyJuristic1Pct = billJuristic && opts.totalOverride >= LEGACY_RECEIPT_WHT_MIN;
+  }
 
   // 5. Customer header info — name/address for the printable receipt.
   type UserRow = { userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null };
@@ -497,7 +544,15 @@ export async function autoIssueReceiptOnPaymentLand(
     recompname:             recompName,
     recompaddress:          recompAddress,
     rpopup:                 "0",
-    corporatetype:          String(corporate),            // '1' or '2'
+    // '1' or '2'. G1: when pinned to a paid bill, follow the BILL's frozen
+    // is_juristic so the receipt paper's WHT-line visibility matches the pinned
+    // net (showWht = corporatetype==='1' && recompnumber). Common billed path =
+    // unchanged (bill juristic == live corporate).
+    corporatetype:          String(
+                              opts.totalOverride !== undefined && opts.isJuristicOverride !== undefined
+                                ? (opts.isJuristicOverride ? 1 : 2)
+                                : corporate,
+                            ),
     documentissuer:         "ระบบอัตโนมัติ",
     documentapprover:       "",
     refwhid:                null,

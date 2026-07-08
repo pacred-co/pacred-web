@@ -52,8 +52,12 @@ import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import {
   isBillableForwarder,
   isBillingRunEligible,
+  isCheckedArrivedForwarder,
   type ForwarderBillingEligibilityFields,
 } from "@/lib/forwarder/billing-eligibility";
+import { getAdminRoles } from "@/lib/auth/require-admin";
+import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
+import { appendStatusLog as appendForwarderStatusLog } from "@/lib/notifications/status-flip-helper";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { logger } from "@/lib/logger";
@@ -116,6 +120,10 @@ export type EligibleForwarderRow = {
   fshipby: string | null;
   /** The captured in-Thailand delivery cost (ftransportprice) — display + gate. */
   ftransportprice: number;
+  /** G3/G4 (2026-07-08) — this row is on the ตรวจตู้ check-queue (tb_check_forwarder).
+   *  The create-form PRE-TICKS these so the ตรวจตู้ selection carries into the bill.
+   *  A check-queued row still at fstatus='4' is surfaced (G4) so the bill lifts it 4→5. */
+  check_queued: boolean;
 };
 
 export type BillingRunInvoiceRow = {
@@ -449,11 +457,24 @@ export async function listEligibleForwarders(
         .neq("fstatus", "99")
         .order("id", { ascending: false })
         .limit(2000);
+      // G4 (2026-07-08) — the ตรวจตู้-done ARRIVAL pool (fstatus='4' · ถึงไทยแล้ว) not
+      // yet lifted to รอชำระเงิน. These are surfaced ONLY when on the check-queue AND
+      // the customer is juristic (filtered below); createBillingRunInvoice then lifts
+      // its own picked rows 4→5 with the guarded flip. Kept a separate query so the two
+      // existing cohorts are untouched.
+      const qArrivedChecked = admin
+        .from("tb_forwarder")
+        .select(FWD_BILLING_SELECT)
+        .eq("userid", userid)
+        .eq("fstatus", "4")
+        .order("id", { ascending: false })
+        .limit(2000);
 
       const [
         { data: aRaw, error: aErr },
         { data: bRaw, error: bErr },
-      ] = await Promise.all([qAwaiting, qCredit]);
+        { data: cRaw, error: cRawErr },
+      ] = await Promise.all([qAwaiting, qCredit, qArrivedChecked]);
       if (aErr) {
         console.error("[listEligibleForwarders awaiting] failed", {
           code: aErr.code, message: aErr.message,
@@ -465,6 +486,12 @@ export async function listEligibleForwarders(
           code: bErr.code, message: bErr.message,
         });
         return { ok: false, error: bErr.message };
+      }
+      if (cRawErr) {
+        console.error("[listEligibleForwarders arrived-checked] failed", {
+          code: cRawErr.code, message: cRawErr.message,
+        });
+        return { ok: false, error: cRawErr.message };
       }
 
       // Is this customer นิติบุคคล? Same signal listEligibleCustomers +
@@ -496,15 +523,42 @@ export async function listEligibleForwarders(
       // Union by id (a row can be in both sets) — keep the deterministic
       // newest-first order from Set A.
       const fwdById = new Map<number, FwdBillingRaw>();
-      for (const r of ([...(aRaw ?? []), ...(bRaw ?? [])] as unknown as FwdBillingRaw[])) {
+      for (const r of ([...(aRaw ?? []), ...(bRaw ?? []), ...(cRaw ?? [])] as unknown as FwdBillingRaw[])) {
         fwdById.set(r.id, r);
       }
+
+      // G3/G4 (2026-07-08) — read the ตรวจตู้ check-queue (tb_check_forwarder) for the
+      // candidate pool. Used to (a) PRE-TICK the ตรวจตู้ selection in the create-form
+      // (G3), and (b) admit a fresh-4 arrival row into the picker (G4). tb_check_forwarder
+      // has no userid col → intersect by fID against this customer's candidate ids.
+      const candidateIds = Array.from(fwdById.keys());
+      const checkQueuedIds = new Set<number>();
+      if (candidateIds.length > 0) {
+        const { data: cq, error: cqErr } = await admin
+          .from("tb_check_forwarder")
+          .select("fID")
+          .in("fID", candidateIds);
+        if (cqErr) {
+          console.error("[listEligibleForwarders check-queue] failed", {
+            code: cqErr.code, message: cqErr.message,
+          });
+          // Non-fatal — no pre-tick / no G4 admission, but the existing cohorts still list.
+        }
+        for (const r of (cq ?? []) as Array<{ fID: number }>) checkQueuedIds.add(Number(r.fID));
+      }
+
       // BILLING-RUN narrowing (owner 2026-07-07) — surface a row ONLY if this
       // customer is credit/นิติ (juristic → all billable; else credit/advance
       // only, dropping the cash fstatus='5' rows). A cash customer collects by
       // paying on the portal (ตรวจสลิปที่ /admin/wallet), not via a billing-run.
+      // G4: additionally admit a fresh-4 ARRIVAL row ONLY when it is on the check-queue
+      // AND the customer is juristic (the QA-checked pre-lift case the bill lifts 4→5).
       const fwd = Array.from(fwdById.values())
-        .filter((r) => isBillingRunEligible(r, customerIsJuristic))
+        .filter(
+          (r) =>
+            isBillingRunEligible(r, customerIsJuristic) ||
+            (isCheckedArrivedForwarder(r) && customerIsJuristic && checkQueuedIds.has(r.id)),
+        )
         .sort((a, b) => b.id - a.id);
       if (fwd.length === 0) {
         return { ok: true, data: { rows: [] } };
@@ -573,6 +627,7 @@ export async function listEligibleForwarders(
         th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice }),
         fshipby:         f.fshipby,
         ftransportprice: Number(f.ftransportprice ?? 0),
+        check_queued:    checkQueuedIds.has(f.id),
       }));
 
       return { ok: true, data: { rows } };
@@ -604,11 +659,16 @@ export async function resolveCabinetBillingTarget(
         return { ok: true, data: { userid: null, forwarderIds: [], customerCount: 0 } };
       }
 
+      // G4 (2026-07-08) — include the ตรวจตู้-done ARRIVAL rows (fstatus='4') alongside
+      // รอชำระเงิน ('5') so the container 📄 ทำใบวางบิล shortcut lists fresh rows instead
+      // of a BLANK form. The already-billed exclusion + the 4→5 lift happen downstream
+      // (listEligibleForwarders admits only check-queued-4 · createBillingRunInvoice
+      // lifts 4→5 with the guarded flip). Billed 6/7/99 stay excluded.
       const { data, error } = await admin
         .from("tb_forwarder")
         .select("id, userid")
         .in("fcabinetnumber", clean)
-        .eq("fstatus", "5")
+        .in("fstatus", ["4", "5"])
         .limit(2000);
       if (error) {
         console.error("[resolveCabinetBillingTarget tb_forwarder] failed", {
@@ -926,6 +986,65 @@ async function createBillingRunInvoiceImpl(
           error: `รายการเหล่านี้ไม่ใช่ของลูกค้านี้: ${wrongUser.map((f) => f.id).join(", ")}`,
         };
       }
+      // (a1) G4 (2026-07-08) — LIFT this bill's OWN ตรวจตู้-done arrival rows 4→5
+      // before the billable guard, so issuing a ใบวางบิล no longer requires the
+      // separate adminCallPriceUser hop (4→5 + SMS + empty-queue). Faithful to that
+      // legacy lift: the SAME guarded `.eq('fstatus','4')` flip + fdatestatus5 +
+      // status-log. SAFE — only rows on the ตรวจตู้ check-queue (tb_check_forwarder)
+      // are liftable, so a crafted POST of a random fstatus='4' row can't be billed
+      // (it stays 4 → rejected by the wrongStatus guard below). Never touches a
+      // billed 5/6/7 row (the .eq guard no-ops). Role-gated by the 4→5 matrix.
+      const arrivedIds = fwd
+        .filter((f) => (f.fstatus ?? "").trim() === "4")
+        .map((f) => f.id);
+      if (arrivedIds.length > 0) {
+        const { data: cqRows, error: cqErr } = await admin
+          .from("tb_check_forwarder")
+          .select("fID")
+          .in("fID", arrivedIds);
+        if (cqErr) {
+          console.error("[createBillingRunInvoice check-queue] failed", {
+            code: cqErr.code, message: cqErr.message,
+          });
+        }
+        const liftable = new Set(
+          ((cqRows ?? []) as Array<{ fID: number }>).map((r) => Number(r.fID)),
+        );
+        const toLift = arrivedIds.filter((id) => liftable.has(id));
+        if (toLift.length > 0) {
+          const callerRoles = (await getAdminRoles()) ?? [];
+          if (!canAnyRoleFlipFstatus(callerRoles, "4", "5")) {
+            return {
+              ok: false,
+              error: "บทบาทนี้ยืนยันสถานะ 4→5 (แจ้งชำระเงิน) ไม่ได้ — ให้บัญชี/แอดมินดำเนินการ",
+            };
+          }
+          const nowIso = new Date().toISOString();
+          const liftLegacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+          for (const id of toLift) {
+            const { error: liftErr } = await admin
+              .from("tb_forwarder")
+              .update({
+                fstatus:          "5",
+                fdatestatus5:     nowIso,
+                fdateadminstatus: nowIso,
+                adminidupdate:    liftLegacyAdminId,
+              })
+              .eq("id", id)
+              .eq("fstatus", "4"); // same guarded flip as adminCallPriceUser
+            if (liftErr) {
+              console.error("[createBillingRunInvoice 4->5 lift] failed", {
+                code: liftErr.code, message: liftErr.message, id,
+              });
+              continue; // stays 4 → the wrongStatus guard below rejects the whole bill
+            }
+            const f = fwd.find((x) => x.id === id);
+            if (f) f.fstatus = "5";
+            await appendForwarderStatusLog(admin, id, "4", "5", liftLegacyAdminId);
+          }
+        }
+      }
+
       const wrongStatus = fwd.filter((f) => !isBillableForwarder(f));
       if (wrongStatus.length > 0) {
         return {
@@ -1520,6 +1639,14 @@ async function markBillingRunPaidImpl(
               // settles exactly ONE invoice → the receipt covers exactly its fids (invFids) →
               // no SUM needed. 0 stays 0, 100 stays 100.
               maoFeeOverride: Number(cur.mao_fee_thb ?? 0),
+              // G1 (2026-07-08) — PIN the ใบเสร็จ total to THIS paid bill's frozen
+              // numbers. total_thb = the GROSS face (incl เหมาๆ + extras); paidWht.net_payable
+              // = the cash the customer actually remitted (gross − 1% WHT); is_juristic = the
+              // WHT decision as billed. The receipt reconciles to these (not a live recompute
+              // that drifts if a row was edited between issue↔pay) and logs any drift.
+              totalOverride:      Number(cur.total_thb),
+              netOverride:        paidWht.net_payable,
+              isJuristicOverride: cur.is_juristic,
             });
             if (rcpt.ok) {
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {

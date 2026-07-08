@@ -156,3 +156,23 @@ export function isBillingRunEligible(
   if (customerIsJuristic) return true; // นิติ → all billable stages
   return isCreditUnsettledEligible(row) || isAdvanceBillEligible(row); // else credit/advance only
 }
+
+/**
+ * G4 (2026-07-08) — a ตรวจตู้-done arrival row (fstatus='4' · ถึงไทยแล้ว) that has
+ * NOT yet been lifted to รอชำระเงิน (fstatus='5'). Legacy lifts 4→5 in a separate
+ * step (adminCallPriceUser · which also SMSes + empties the check-queue), so today
+ * a bill can't be raised until that hop runs. This predicate lets the billing-run
+ * picker + the container shortcut surface a fresh-4 row so createBillingRunInvoice
+ * can lift its OWN rows 4→5 (with the same guarded flip) at issue time.
+ *
+ * DELIBERATELY NARROW — a plain fstatus='4' is NOT billable on its own. The caller
+ * MUST additionally require (a) the row is on tb_check_forwarder (the ตรวจตู้-done
+ * signal · preserves the QA gate) AND (b) the customer is juristic/credit. This fn
+ * is only the fstatus arm; it does NOT widen isBillableForwarder (which the
+ * manual-receipt issue path shares — that must never admit a plain 4).
+ */
+export function isCheckedArrivedForwarder(
+  row: ForwarderBillingEligibilityFields,
+): boolean {
+  return norm(row.fstatus) === "4";
+}

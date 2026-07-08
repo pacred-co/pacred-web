@@ -164,15 +164,21 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       if (res.ok) {
         setEligible(res.data!.rows);
         setFwdErr(null);
-        // Default selection: tick all unbilled rows — EXCEPT when this is the
-        // cabinet-preselected customer, in which case tick only the container's
-        // forwarders (ภูม flag · "ทำใบวางบิล" from the ตู้พร้อมวางบิล bar).
+        // Default selection priority:
+        //   1. cabinet-preselected customer → tick only the container's forwarders
+        //      (ภูม flag · "ทำใบวางบิล" from the ตู้พร้อมวางบิล bar).
+        //   2. G3 (2026-07-08) — if any row is on the ตรวจตู้ check-queue, tick EXACTLY
+        //      those (unbilled) so the ตรวจตู้ selection carries into the bill.
+        //   3. else → tick all unbilled rows (legacy default).
         const unbilled = res.data!.rows.filter((r) => !r.already_billed);
         const usePreselect =
           !!preselectUserid && selectedUserid === preselectUserid && preselectForwarderIds.length > 0;
+        const hasCheckQueued = unbilled.some((r) => r.check_queued);
         const tick = usePreselect
           ? unbilled.filter((r) => preselectForwarderIds.includes(r.id))
-          : unbilled;
+          : hasCheckQueued
+            ? unbilled.filter((r) => r.check_queued)
+            : unbilled;
         setSelectedIds(new Set(tick.map((r) => r.id)));
       } else {
         setEligible([]);

@@ -66,7 +66,7 @@ export default async function BillingRunAddPage({
       } else if (t.data.customerCount > 1) {
         preselectNote = `📦 ตู้ ${cabLabel} มี ${t.data.customerCount} ลูกค้า — เลือกลูกค้าทีละราย (ใบวางบิล = 1 ใบต่อ 1 ลูกค้า)`;
       } else {
-        preselectNote = `📦 ตู้ ${cabLabel} ยังไม่มีรายการสถานะ "รอชำระเงิน (fStatus=5)" — เลือกลูกค้าจากรายการด้านล่าง`;
+        preselectNote = `📦 ตู้ ${cabLabel} ยังไม่มีรายการสถานะ "ตรวจตู้แล้ว (fStatus=4) / รอชำระเงิน (fStatus=5)" — เลือกลูกค้าจากรายการด้านล่าง`;
       }
     }
   }
@@ -79,7 +79,7 @@ export default async function BillingRunAddPage({
         <div>
           <h1 className="text-xl font-bold tracking-tight">สร้างใบวางบิลใหม่ (เฉพาะเครดิต / นิติบุคคล)</h1>
           <p className="text-xs text-muted mt-0.5">
-            เลือกลูกค้า → เลือกรายการฝากนำเข้า (fStatus=5) → ตั้งวันครบกำหนด → ออกใบวางบิล · แสดงเฉพาะลูกค้าเครดิต/นิติบุคคล (ลูกค้าเงินสดชำระเองที่พอร์ทัล)
+            เลือกลูกค้า → เลือกรายการฝากนำเข้า (ตรวจตู้แล้ว/รอชำระเงิน) → ตั้งวันครบกำหนด → ออกใบวางบิล · แสดงเฉพาะลูกค้าเครดิต/นิติบุคคล (ลูกค้าเงินสดชำระเองที่พอร์ทัล)
           </p>
         </div>
         <div className="flex items-center gap-3">
