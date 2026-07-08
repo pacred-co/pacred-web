@@ -36,6 +36,7 @@
     "@upstash/redis": "^1.38.0",
     "bwip-js": "^4.10.2",
     "google-auth-library": "^10.6.2",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.14.0",
     "next": "16.2.6",
     "next-intl": "^4.11.1",
