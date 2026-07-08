@@ -44,10 +44,12 @@ const STATUS_LABEL: Record<string, string> = {
   "2": "อนุมัติแล้ว",
   "3": "ปฏิเสธ",
 };
-const STATUS_CLS: Record<string, string> = {
-  "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
-  "2": "bg-green-100 text-green-700 border-green-200",
-  "3": "bg-red-100 text-red-700 border-red-200",
+// PCS house-style status dot color (dot bg + text) — amber=รอตรวจ,
+// emerald=อนุมัติ/สำเร็จ, red=ปฏิเสธ.
+const STATUS_DOT: Record<string, { dot: string; text: string }> = {
+  "1": { dot: "bg-amber-500",   text: "text-amber-700" },
+  "2": { dot: "bg-emerald-500", text: "text-emerald-700" },
+  "3": { dot: "bg-red-500",     text: "text-red-700" },
 };
 // next-action hint (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ".
 const STATUS_NEXT: Record<string, { next: string; act: boolean }> = {
@@ -82,6 +84,7 @@ type PaymentRow = {
   paydateadmin: string | null;
   userid: string | null;
   adminid: string | null;
+  adminidupdate: string | null;
   imagesslip: string | null;
 };
 
@@ -167,7 +170,7 @@ export default async function AdminYuanPaymentsPage({
   let q = admin
     .from("tb_payment")
     .select(
-      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,imagesslip,reviewed_at",
+      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,payprofitthb,paydateadmin,userid,adminid,adminidupdate,imagesslip,reviewed_at",
       { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })
@@ -232,16 +235,29 @@ export default async function AdminYuanPaymentsPage({
     sortHrefs[k] = `/admin/yuan-payments?${params.toString()}`;
   }
 
-  // Pending count for the page header chip — scoped to the SAME date window
-  // so the chip matches the visible data (per the "{rows.length} is a lie"
-  // pattern in docs/learnings/supabase-rls-patterns.md).
-  let pendingCountQ = admin
-    .from("tb_payment")
-    .select("id", { count: "exact", head: true })
-    .eq("paystatus", "1");
-  if (window.from) pendingCountQ = pendingCountQ.gte("paydate", window.from);
-  if (window.to)   pendingCountQ = pendingCountQ.lte("paydate", window.to + "T23:59:59");
-  const { count: pendingCount } = await pendingCountQ;
+  // Per-status tab counts — scoped to the SAME date window so each tab's
+  // badge matches the visible data (legacy payment.php L213-241 countStatus*).
+  // Also feeds the page header "รอตรวจ" chip.
+  const countInWindow = (status: string | null) => {
+    let cq = admin.from("tb_payment").select("id", { count: "exact", head: true });
+    if (status) cq = cq.eq("paystatus", status);
+    if (window.from) cq = cq.gte("paydate", window.from);
+    if (window.to)   cq = cq.lte("paydate", window.to + "T23:59:59");
+    return cq;
+  };
+  const [cAll, c1, c2, c3] = await Promise.all([
+    countInWindow(null),
+    countInWindow("1"),
+    countInWindow("2"),
+    countInWindow("3"),
+  ]);
+  const tabCounts: Record<string, number | null> = {
+    "": cAll.count ?? null,
+    "1": c1.count ?? null,
+    "2": c2.count ?? null,
+    "3": c3.count ?? null,
+  };
+  const pendingCount = c1.count ?? 0;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -268,26 +284,36 @@ export default async function AdminYuanPaymentsPage({
         </Link>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {STATUS_TABS.map((t) => {
-          const isActive = (t.key ?? "") === (sp.status ?? "");
-          const href = t.key ? `/admin/yuan-payments?status=${t.key}` : `/admin/yuan-payments`;
-          return (
-            <Link
-              key={t.label}
-              href={href}
-              className={
-                "px-3 py-1.5 text-xs rounded-t-md border-b-2 -mb-px " +
-                (isActive
-                  ? "border-primary-600 text-primary-600 font-semibold"
-                  : "border-transparent text-muted hover:text-foreground")
-              }
-            >
-              {t.label}
-            </Link>
-          );
-        })}
+      {/* Status tabs — PCS house-style dashed pills with count badges
+          (legacy payment.php nav-tabs pcs-tabs L247-276) */}
+      <div>
+        <h5 className="text-sm font-semibold text-slate-700 mb-1.5">สถานะรายการ</h5>
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TABS.map((t) => {
+            const isActive = (t.key ?? "") === (sp.status ?? "");
+            const href = t.key ? `/admin/yuan-payments?status=${t.key}` : `/admin/yuan-payments`;
+            const cnt = tabCounts[t.key ?? ""];
+            return (
+              <Link
+                key={t.label}
+                href={href}
+                className={
+                  "inline-flex items-center gap-1.5 rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium transition-colors " +
+                  (isActive
+                    ? "border-red-400 bg-red-50 text-red-700"
+                    : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50")
+                }
+              >
+                {t.label}
+                {cnt ? (
+                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
+                    {cnt}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Wave 15 P0-2 — Search + date-range filter (default last 60 days) */}
@@ -435,9 +461,9 @@ export default async function AdminYuanPaymentsPage({
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr:nth-child(even)]:bg-muted/30">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr:nth-child(even)]:bg-muted/30">
+              <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
                   <th className="px-3 py-3">เลขที่ออเดอร์</th>
@@ -451,6 +477,8 @@ export default async function AdminYuanPaymentsPage({
                     <YuanSortTh label="กำไร"        field="payprofitthb" activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} align="right" />
                   ) : null}
                   <YuanSortTh label="สถานะ"       field="paystatus"    activeKey={sortKey} activeDir={sortDir} hrefs={sortHrefs} />
+                  {/* อัปเดต — admin ที่อัปเดตสถานะ (legacy payment.php col 8) */}
+                  <th className="px-3 py-3">อัปเดต</th>
                   <th className="px-3 py-3">สลิป</th>
                   <th className="px-3 py-3">จัดการ</th>
                 </tr>
@@ -472,7 +500,11 @@ export default async function AdminYuanPaymentsPage({
                       <td className="px-2 py-3 w-8">
                         {status === "1" ? <TbYuanRowCheckbox id={r.id} /> : null}
                       </td>
-                      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{r.id}</td>
+                      <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">
+                        <Link href={`/admin/yuan-payments/${r.id}`} className="text-sky-700 hover:underline">
+                          {r.id}
+                        </Link>
+                      </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.paydate
                           ? new Date(r.paydate).toLocaleString("th-TH", {
@@ -482,7 +514,13 @@ export default async function AdminYuanPaymentsPage({
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        <div className="font-mono">{r.userid ?? "—"}</div>
+                        {r.userid ? (
+                          <Link href={`/admin/customers/${r.userid}`} className="font-mono text-sky-700 hover:underline">
+                            {r.userid}
+                          </Link>
+                        ) : (
+                          <div className="font-mono">—</div>
+                        )}
                         <div>{customerName}</div>
                         {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
                       </td>
@@ -500,12 +538,12 @@ export default async function AdminYuanPaymentsPage({
                           minimumFractionDigits: 2,
                         })}
                       </td>
-                      <td className="px-3 py-3 text-right font-mono text-xs">
+                      <td className="px-3 py-3 text-right font-mono text-xs font-semibold text-red-600">
                         ฿
                         {Number(r.paythb ?? 0).toLocaleString("th-TH", {
                           minimumFractionDigits: 2,
                         })}
-                        <div className="text-muted text-[11px] inline-flex items-center gap-1">
+                        <div className="text-muted text-[11px] inline-flex items-center gap-1 font-normal">
                           <span>@ {Number(r.payrate ?? 0).toFixed(2)}</span>
                           <Explain align="right" def="เรท = อัตราแลกเปลี่ยนหยวน→บาท ที่ใช้คิดยอดนี้ (เรทขายที่บริษัทตั้ง · ต้นทุนจริงต่ำกว่านี้ = ส่วนต่างคือกำไร)" />
                         </div>
@@ -524,12 +562,9 @@ export default async function AdminYuanPaymentsPage({
                         </td>
                       ) : null}
                       <td className="px-3 py-3">
-                        <span className="inline-flex items-center gap-1">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                              STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}
-                          >
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${STATUS_DOT[status]?.text ?? "text-slate-700"}`}>
+                            <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]?.dot ?? "bg-slate-400"}`} />
                             {STATUS_LABEL[status] ?? "—"}
                           </span>
                           <Explain def="รอตรวจสอบ = สลิปโอนหยวนเข้ามา ยังไม่ตรวจ · อนุมัติแล้ว = ตรวจผ่าน ตัดจ่าย/โอนหยวนแล้ว · ปฏิเสธ = สลิปไม่ถูกต้อง ไม่ดำเนินการ" />
@@ -546,6 +581,14 @@ export default async function AdminYuanPaymentsPage({
                           </div>
                         ) : null}
                       </td>
+                      {/* อัปเดต — admin ที่อัปเดตสถานะ (legacy col 8) */}
+                      <td className="px-3 py-3 text-[11px] text-center whitespace-nowrap">
+                        {r.adminidupdate ? (
+                          <span className="text-slate-600">{r.adminidupdate}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-xs">
                         {slipUrlMap[String(r.id)] ? (
                           <a href={slipUrlMap[String(r.id)]!} target="_blank" rel="noopener noreferrer" className="inline-block" title="เปิดสลิปเต็ม">
@@ -560,15 +603,39 @@ export default async function AdminYuanPaymentsPage({
                       <td className="px-3 py-3 text-xs">
                         <Link
                           href={`/admin/yuan-payments/${r.id}`}
-                          className="text-primary-600 hover:underline"
+                          className="inline-block rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-600"
                         >
-                          ดู
+                          ดู / แก้ไข
                         </Link>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+              {/* Totals — Σ ของหน้านี้ (PCS cyan summary row) */}
+              <tfoot>
+                <tr className="bg-cyan-100 text-cyan-900 font-semibold [&>td]:border [&>td]:border-cyan-200">
+                  <td className="px-2 py-3 w-8" />
+                  <td className="px-3 py-3 text-xs" colSpan={4}>
+                    รวม {rows.length} รายการ (หน้านี้)
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono text-xs">
+                    ¥{rows.reduce((s, r) => s + Number(r.payyuan ?? 0), 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono text-xs">
+                    ฿{rows.reduce((s, r) => s + Number(r.paythb ?? 0), 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </td>
+                  {showProfit ? (
+                    <td className="px-3 py-3 text-right font-mono text-xs">
+                      ฿{rows.reduce((s, r) => s + Number(r.payprofitthb ?? 0), 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  ) : null}
+                  <td className="px-3 py-3" />
+                  <td className="px-3 py-3" />
+                  <td className="px-3 py-3" />
+                  <td className="px-3 py-3" />
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -616,8 +683,8 @@ function YuanSortTh({
     <th className={`px-3 py-3 ${cls}`}>
       <Link
         href={hrefs[field]}
-        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
-          active ? "text-primary-700 font-semibold" : ""
+        className={`inline-flex items-center gap-1 text-white transition-colors hover:text-white/80 ${
+          active ? "font-bold underline" : ""
         } ${align === "right" ? "flex-row-reverse" : ""}`}
       >
         <span>{label}</span>
