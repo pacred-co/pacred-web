@@ -37,6 +37,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
   const [yuan, setYuan] = useState("");
   const [slipPath, setSlipPath] = useState<string | null>(null);
   const [idDocPath, setIdDocPath] = useState<string | null>(null);
+  const [qrPath, setQrPath] = useState<string | null>(null);   // payee 收款码 QR (owner 2026-07-08)
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ id: number; thb: number } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -107,6 +108,17 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
     else setError(res.error);
   }
 
+  // owner 2026-07-08 — the recipient's Alipay/WeChat 收款码 QR the customer
+  // attaches, so the operator can scan+pay instead of retyping an account.
+  async function onQrFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    const res = await uploadSlip(file, "yuan_payment");
+    if (res.ok) setQrPath(res.path);
+    else setError(res.error);
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -145,6 +157,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         paid_via_wallet:  false,
         slip_url:         slipPath ?? undefined,
         id_doc_url:       idDocPath ?? undefined,
+        payee_qr_url:     qrPath ?? undefined,   // owner 2026-07-08 — payee 收款码 QR
         taxDocPref,
         taxDocTaxId,
         taxDocBillingName,
@@ -253,6 +266,23 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
           />
           <span className="block text-xs text-muted">{t("recipientDetailHint")}</span>
         </label>
+
+        {/* owner 2026-07-08 — attach the recipient's Alipay/WeChat 收款码 QR
+            (optional) so the team can scan+pay directly. */}
+        <div className="space-y-1">
+          <span className="text-sm font-medium">
+            <Explain
+              label={<>รูป QR ปลายทาง (Alipay / WeChat 收款码)</>}
+              def="ถ้าร้านค้าจีนส่งรูป QR รับเงิน (收款码) มา ให้แนบที่นี่ ทีมงานจะสแกนโอนให้ได้เลย — ไม่ต้องพิมพ์เลขบัญชี"
+            />
+          </span>
+          <StyledFileInput
+            accept="image/*,application/pdf"
+            onChange={onQrFile}
+            label="แนบรูป QR ปลายทาง (ถ้ามี)"
+            selectedLabel={qrPath ? "แนบรูป QR แล้ว ✓" : undefined}
+          />
+        </div>
       </div>
 
       {/* Amount */}

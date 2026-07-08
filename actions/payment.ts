@@ -377,6 +377,7 @@ export async function createYuanPayment(
       imagesslip:        d.slip_url ?? "",
       certifiedtruecopy: d.id_doc_url ?? "",
       imagesslipadmin:   "",
+      payee_qr_image:    d.payee_qr_url ?? "",   // owner 2026-07-08 — payee 收款码 QR
       // GAP 3 — the customer's tax-document choice for this ฝากโอน (mig 0140).
       // SELECTION only; issuance stays gated by tax_invoice.shop_yuan_enabled.
       ...mapTaxDocColumns(d),
