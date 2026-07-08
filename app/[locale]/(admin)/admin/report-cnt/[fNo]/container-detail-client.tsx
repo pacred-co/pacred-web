@@ -1074,10 +1074,11 @@ function BillToCustomerButton({ fID }: { fID: number }) {
         return;
       }
       setDone(true);
+      const auto = res.data?.autoThShipping;
       setMsg(
         res.data?.alreadyBilled
           ? "รายการนี้แจ้งหนี้ไปแล้ว"
-          : `แจ้งหนี้แล้ว · ยอดค้างชำระ ${(res.data?.pricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.`,
+          : `แจ้งหนี้แล้ว · ยอดค้างชำระ ${(res.data?.pricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.${auto ? ` · เพิ่มค่าส่งไทย ${auto.label} อัตโนมัติ` : ""}`,
       );
       router.refresh();
     });
