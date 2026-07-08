@@ -13,6 +13,7 @@ import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateYuanPaymentManual } from "@/actions/admin/yuan-payments-tb";
 import { CustomerPicker } from "@/components/admin/customer-picker";
+import { decodeQrFromFile } from "@/lib/qr/decode-image";
 
 export type CustomerLite = {
   userid:       string;
@@ -65,6 +66,9 @@ export function AdminYuanPaymentNewForm({
   const [qrFile, setQrFile]       = useState<File | null>(null);
   const [qrPreview, setQrPreview] = useState<string | null>(null);
   const qrInputRef = useRef<HTMLInputElement | null>(null);
+  // auto-read the QR machine payload (channel + reference) — admin reviews
+  const [qrDecoding, setQrDecoding] = useState<boolean>(false);
+  const [qrDecoded, setQrDecoded]   = useState<{ text: string; channel: "alipay" | "wechat" | null } | null>(null);
 
   const [error, setError]     = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -88,8 +92,25 @@ export function AdminYuanPaymentNewForm({
       return;
     }
     setQrFile(f);
+    setQrDecoded(null);
     if (qrPreview) URL.revokeObjectURL(qrPreview);
     setQrPreview(f && f.type.startsWith("image/") ? URL.createObjectURL(f) : null);
+
+    // Auto-read the QR — decode its machine payload + detect the channel so the
+    // admin doesn't retype. Best-effort · silent on failure (a non-QR image or a
+    // logo-heavy code just yields no auto-fill). The Chinese shop name printed on
+    // the image is NOT in the QR (needs OCR · owner-gated on a vision key).
+    if (f && f.type.startsWith("image/")) {
+      setQrDecoding(true);
+      void decodeQrFromFile(f)
+        .then((res) => {
+          setQrDecoded(res);
+          if (res?.channel === "alipay") setPaytype("1");
+          else if (res?.channel === "wechat") setPaytype("2");
+        })
+        .catch(() => setQrDecoded(null))
+        .finally(() => setQrDecoding(false));
+    }
   }
 
   function selectSlip(f: File | null) {
@@ -332,6 +353,36 @@ export function AdminYuanPaymentNewForm({
             </div>
           )}
         </label>
+
+        {/* Auto-read result — the QR machine payload + detected channel.
+            The admin reviews; a button folds it into the recipient field. */}
+        {qrDecoding && (
+          <p className="mt-2 text-[11px] text-blue-600">⏳ กำลังอ่าน QR อัตโนมัติ…</p>
+        )}
+        {qrDecoded && (
+          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+            <p className="font-medium">
+              📷 อ่านจาก QR อัตโนมัติ
+              {qrDecoded.channel && (
+                <span className="ml-1">· ช่องทาง: {qrDecoded.channel === "alipay" ? "Alipay (支付宝)" : "WeChat"} (ตั้งให้แล้ว)</span>
+              )}
+            </p>
+            <p className="mt-1 break-all font-mono text-blue-700">{qrDecoded.text}</p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                setPaydetail((prev) => (prev.trim() ? `${prev.trim()} · ${qrDecoded.text}` : qrDecoded.text))
+              }
+              className="mt-1.5 bg-transparent p-0 font-medium text-blue-700 underline hover:text-blue-900"
+            >
+              ＋ ใช้เป็นข้อมูลผู้รับ
+            </button>
+            <p className="mt-1 text-blue-600/80">
+              หมายเหตุ: ชื่อร้าน (ตัวอักษรจีนบนรูป) ไม่ได้อยู่ใน QR — ต้องใช้ระบบอ่านภาพ (vision) เพิ่ม
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Wave 12-A — slip upload (optional · admin-attached proof) */}
