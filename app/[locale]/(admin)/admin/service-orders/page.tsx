@@ -44,6 +44,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
 import { getStafferWorkspaceRole } from "@/lib/admin/positions";
+import { canEditShopOrder } from "@/lib/admin/shop-order-access";
 import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader, SectionHeading } from "@/components/admin/page-header";
@@ -216,6 +217,9 @@ export default async function AdminServiceOrdersPage({
   const viewerWorkspaceRole = await getStafferWorkspaceRole(user.id);
   const purchaserScoped = isPurchaserScoped(viewerWorkspaceRole, roles);
   const canReassignPurchaserRole = canReassignPurchaser(viewerWorkspaceRole, roles);
+  // Faithful to legacy shops.php L528 — "อัปเดตรายการ" is office-only (god-nav +
+  // office roles; hidden for bare warehouse/driver/freight). SOT: shop-order-access.
+  const canEditOrderRole = canEditShopOrder(roles);
   // The viewer's own legacy tb_admin.adminID — the scope key. "" when they have
   // no legacy mirror (then a scoped purchaser sees nothing, which is correct:
   // orders are assigned by adminID, so a purchaser with no adminID has none).
@@ -920,6 +924,7 @@ export default async function AdminServiceOrdersPage({
           canReassignPurchaser={canReassignPurchaserRole}
           purchaserAdmins={purchaserAdmins}
           activeTab={qParam}
+          canEditOrder={canEditOrderRole}
         />
 
         {/* Wave 7 — per-page money-sum footer (faithful: legacy shops.php
