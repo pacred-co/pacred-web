@@ -112,7 +112,7 @@ export async function calculateForwarderTotal(
   const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, faddressdistrict, fshipby, fshippingservice, ftransporttype, fdiscount, ftotalprice, ftransportprice, fpriceupdate, priceother, ftransportpricechnthb, pricecrate",
+      "id, faddressdistrict, fshipby, paymethod, fshippingservice, ftransporttype, fdiscount, ftotalprice, ftransportprice, fpriceupdate, priceother, ftransportpricechnthb, pricecrate",
     )
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
@@ -403,7 +403,7 @@ async function submitForwarderPaymentImpl(
   const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fshipby, fcredit, faddressdistrict, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
+      "id, fshipby, paymethod, fcredit, faddressdistrict, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
     )
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
@@ -415,6 +415,7 @@ async function submitForwarderPaymentImpl(
   const eligible = (rows ?? []) as Array<{
     id: number;
     fshipby: string | null;
+    paymethod: string | null;
     fcredit: string | null;
     faddressdistrict: string | null;
     fpriceupdate: number | string | null;
@@ -462,9 +463,12 @@ async function submitForwarderPaymentImpl(
   // are the batch-level adjustments the helper decided). Used only for the
   // per-row tb_wallet_hs.amount split.
   const num = (v: number | string | null) => Number(v ?? 0);
+  // COD guard (lockstep with computeForwarderCollectTotal): a ปลายทาง (paymethod='2')
+  // row's ftransportprice is collected at the door, so it is excluded from the upfront
+  // per-row split too — keeping the split's Σ reconciled to collect.total.
   const perRowTotal = (r: (typeof eligible)[number]) =>
     num(r.ftotalprice) +
-    num(r.ftransportprice) +
+    (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)) +
     num(r.fpriceupdate) +
     num(r.fshippingservice) +
     num(r.pricecrate) +

@@ -53,6 +53,7 @@ function row(p: Partial<ForwarderCollectRow> = {}): ForwarderCollectRow {
   return {
     fshipby: p.fshipby ?? "Flash",
     ftransportprice: p.ftransportprice ?? 0,
+    paymethod: p.paymethod ?? null,
     faddressdistrict: p.faddressdistrict ?? null,
     ftotalprice: p.ftotalprice ?? 0,
     fpriceupdate: p.fpriceupdate ?? 0,
@@ -201,6 +202,40 @@ console.log("forwarder-collect-total:");
   assertClose("two เหมาๆ-zero rows → ONE +100 → 400", r.total, 400);
   assertEq("countPCSF = 2", r.countPCSF, 2);
   assertEq("applied50 true (count >= 1)", r.applied50, true);
+}
+
+// 10. COD guard — a ปลายทาง (paymethod='2') row's ftransportprice is collected
+//     at the door, so it is EXCLUDED from the upfront collect total.
+{
+  const r = computeForwarderCollectTotal(
+    [row({ fshipby: "2", paymethod: "2", ftotalprice: "300", ftransportprice: "80" })],
+    { userId: "PR146", userCompany: "0" },
+  );
+  // 300 only — the ฿80 domestic leg is COD (at the door), not billed upfront.
+  assertClose("COD row → domestic leg (80) NOT billed upfront → 300", r.total, 300);
+}
+
+// 10b. Prepaid (paymethod='1') row — domestic leg IS billed (unchanged behaviour).
+{
+  const r = computeForwarderCollectTotal(
+    [row({ fshipby: "PCSE", paymethod: "1", ftotalprice: "300", ftransportprice: "80" })],
+    { userId: "PR147", userCompany: "0" },
+  );
+  assertClose("prepaid row → domestic leg (80) billed → 380", r.total, 380);
+}
+
+// 10c. COD guard drops ONLY the domestic leg — freight/crate/other/discount intact.
+{
+  const r = computeForwarderCollectTotal(
+    [row({
+      fshipby: "2", paymethod: "2",
+      ftotalprice: "300", ftransportprice: "80",
+      pricecrate: "50", ftransportpricechnthb: "20", priceother: "10", fdiscount: "5",
+    })],
+    { userId: "PR148", userCompany: "0" },
+  );
+  // 300 + (80 dropped) + 50 + 20 + 10 - 5 = 375
+  assertClose("COD guard zeroes ONLY the domestic leg → 375", r.total, 375);
 }
 
 console.log(`\nforwarder-collect-total: ${pass} passed, ${fail} failed`);

@@ -83,7 +83,7 @@ import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-bo
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethod } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
@@ -215,7 +215,7 @@ export async function adminPickForwarderAddress(
         faddressnote:        addr.addressnote ?? "",
         faddresstel:         addr.addresstel ?? "",
         faddresstel2:        addr.addresstel2 ?? "",
-        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethod(carrier) } : {}),
+        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
         ...(reprice != null ? { ftransportprice: reprice } : {}),
         adminidupdate:       legacyAdminId,
       })
@@ -300,7 +300,7 @@ export async function adminUpdateForwarderAddressDetails(
         faddresstel:         d.tel,
         faddresstel2:        d.tel2,
         faddressnote:        d.note,
-        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethod(carrier) } : {}),
+        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
         ...(reprice != null ? { ftransportprice: reprice } : {}),
         adminidupdate:       legacyAdminId,
       })
