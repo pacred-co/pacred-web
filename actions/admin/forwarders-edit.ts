@@ -44,7 +44,11 @@ import {
   type PricingRowContext,
 } from "@/lib/forwarder/live-rate";
 import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
-import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import {
+  transportModeFromCabinetName,
+  resolveTransportMode,
+  type TransportMode,
+} from "@/lib/forwarder/cabinet-transport";
 import { evaluateRateModeGuard, type RateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
@@ -483,10 +487,25 @@ export async function adminUpdateForwarderDimensions(
       });
       const docTierDiscountCbm = docTierEligible ? await getDocTierDiscountCbm() : 0;
 
+      // ── Reconcile transport mode to the PHYSICAL cabinet (owner 2026-07-08) ──
+      // The stored ftransporttype is unreliable ("อย่าหลงเชื่อข้อมูลผิดๆ") — an
+      // order shipped by road (GZE/EK ตู้) can sit with a stored sea "2" and get
+      // priced sea = under-charged. The ตู้/tracking NAME is authoritative
+      // (cabinet-transport.ts SOT · same decode MOMO commit already uses), so the
+      // PHYSICAL mode wins at pricing; fall back to the normalized stored mode
+      // only when neither the ตู้ nor the tracking carries a mode token. We both
+      // price at THIS mode (below) AND persist it (update object) so the stored
+      // mode and the rate agree afterwards. NOT a blanket backfill — only rows
+      // saved through this pricing path are reconciled.
+      const reconciledTransportType: TransportMode =
+        transportModeFromCabinetName(before.fcabinetnumber) ??
+        transportModeFromCabinetName(before.ftrackingchn) ??
+        resolveTransportMode(null, before.ftransporttype);
+
       const priceCtx: PricingRowContext = {
         userid:            before.userid,
         fwarehousechina:   effectiveWarehouseChina,
-        ftransporttype:    before.ftransporttype,
+        ftransporttype:    reconciledTransportType,
         fproductstype:     d.productType,          // the JUST-submitted product type
         weightKg:          d.weightKg,
         cbmProduct,
@@ -528,7 +547,8 @@ export async function adminUpdateForwarderDimensions(
       if (resolved.rateMissing) {
         console.error(`[adminUpdateForwarderDimensions: rate missing]`, {
           fNo: d.fNo, id: before.id, userid: before.userid,
-          warehouse: before.fwarehousechina, transport: before.ftransporttype,
+          warehouse: before.fwarehousechina, transport: reconciledTransportType,
+          storedTransport: before.ftransporttype,
           product: d.productType, source: resolved.source,
         });
         return {
@@ -589,7 +609,7 @@ export async function adminUpdateForwarderDimensions(
       const minSell = getMinSellAdvisory({
         floors: minSellFloors,
         warehouse: (effectiveWarehouseChina.trim() as MinSellWarehouse) || "1",
-        transport: (String(before.ftransporttype ?? "1").trim() as MinSellTransport) || "1",
+        transport: (reconciledTransportType as MinSellTransport) || "1",
         quotedThb: newFTotalPrice,
       });
 
@@ -656,6 +676,11 @@ export async function adminUpdateForwarderDimensions(
         frefprice:         String(resolved.refPrice),
         frefrate:          resolved.rate,
         ftotalprice:       newFTotalPrice,
+        // Persist the reconciled mode so the stored ftransporttype matches the
+        // rate we just priced (the cabinet/tracking name won). Only changes the
+        // row when the physical ตู้/tracking implies a different mode than the
+        // stored one; identical otherwise (resolveTransportMode normalizes).
+        ftransporttype:    reconciledTransportType,
         fnote:             d.note ?? before.fnote ?? null,
         adminidupdate:     legacyAdminId,
         fdateadminstatus:  nowIso,
