@@ -177,7 +177,12 @@ export async function adminCreateYuanPaymentManual(
         return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
       }
       const currentBalance = Number(walletBefore?.wallettotal ?? 0);
-      if (currentBalance < paythb) {
+      // 2026-07-08 (owner) — ฝากโอนหยวน = DIRECT-CUT by default (the customer paid
+      // the company bank directly + attached the slip; admin is RECORDING a settled
+      // deal). ONLY the pay-from-wallet path (paydeposit=1) touches the wallet, so
+      // the balance pre-check must NOT block a direct-cut record. This mirrors the
+      // customer flow (createYuanPayment · tb_payment only, no wallet).
+      if (d.paydeposit && currentBalance < paythb) {
         return {
           ok: false,
           error: `insufficient_balance: ยอดกระเป๋าของลูกค้า ฿${currentBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ไม่พอชำระ ฿${paythb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
@@ -234,16 +239,19 @@ export async function adminCreateYuanPaymentManual(
         .single<{ id: number }>();
       if (insErr || !row) return { ok: false, error: insErr?.message ?? "insert failed" };
 
-      // ── Tier A1 — Debit customer wallet (legacy payment.php L51-69) ─
+      // ── Tier A1 — Debit customer wallet — ONLY when paid-from-wallet ──
       //
-      // Pacred has no real DB transactions over the REST client, so we
-      // do tb_payment first, then tb_wallet_hs + tb_wallet. If either
-      // wallet write fails AFTER tb_payment was inserted we DELETE the
-      // tb_payment row to keep books balanced (silent half-state =
-      // exactly the bug we are closing). Mirror of cnt-payment commit
-      // partial-failure recovery.
-      const newBalance = Math.round((currentBalance - paythb) * 100) / 100;
+      // 2026-07-08 (owner): a direct-cut record (paydeposit=0 · the default · the
+      // customer paid the company bank directly) has NO wallet movement — it just
+      // records tb_payment, mirroring the customer createYuanPayment. Only
+      // paydeposit=1 (pay-from-wallet) debits the wallet. Pacred has no real DB
+      // transactions over REST, so on a wallet write failure AFTER tb_payment we
+      // DELETE the tb_payment row to keep books balanced.
+      const newBalance = d.paydeposit
+        ? Math.round((currentBalance - paythb) * 100) / 100
+        : currentBalance;
 
+      if (d.paydeposit) {
       // INSERT tb_wallet_hs — type='6' (ชำระเงินฝากโอน), status='2'
       // (approved; admin = verifier per Pacred convention in
       // actions/admin/wallet-hs.ts), amount=paythb (positive — debit
@@ -308,6 +316,7 @@ export async function adminCreateYuanPaymentManual(
           };
         }
       }
+      } // end if (d.paydeposit) — direct-cut records tb_payment only, no wallet
 
       await logAdminAction(adminId, "tb_payment.manual_create", "tb_payment", String(row.id), {
         userid:           customer.userID,
