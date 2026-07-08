@@ -20,6 +20,7 @@ import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
 import { PendingSlipBadge } from "../forwarder-row-view";
 import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
+import { resolveOpenBillForwarderIds } from "@/lib/forwarder/open-bill";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — READ-ONLY "ยอดเก็บจริง"
 // breakdown so the customer sees the SAME amount admin will collect (freight +
 // เหมาๆ ฿100 − ส่วนลด − หัก ณ ที่จ่าย นิติ 1%), not the freight-only number.
@@ -838,6 +839,13 @@ export default async function ServiceImportDetailPage({
     await resolvePendingSlipForwarderIds(admin, row.userid ?? "", [idNum])
   ).has(idNum);
 
+  // ── S3 (2026-07-08) — is THIS row on an OPEN (status='issued') ใบวางบิล? If
+  // so, suppress the direct-pay button + show "อยู่ในใบวางบิลแล้ว รอชำระผ่านบิล"
+  // so the customer pays through the bill, not twice. READ-ONLY · fails-soft.
+  const isOnOpenBill = (
+    await resolveOpenBillForwarderIds(admin, [idNum])
+  ).has(idNum);
+
   // Self-pickup (fShipBy='PCS' = "รับเองที่โกดัง") always shows Pacred's TH
   // receiving warehouse (สมุทรสาคร — ADDRESSES.warehouseTh) from the SOT
   // constant, never the stored faddress* snapshot. The write paths already
@@ -990,6 +998,7 @@ export default async function ServiceImportDetailPage({
     promoid:                promoIdStr,
     fproductstype:          row.fproductstype,
     tax_doc_pref:           row.tax_doc_pref ?? null,
+    onOpenBill:             isOnOpenBill,
   };
 
   // forwarder.php L1678 — total price with WHT adjustment for tax-exempt customers.
@@ -1614,10 +1623,16 @@ export default async function ServiceImportDetailPage({
                               </h4>
                               {fStatusValue === "5" && (
                                 <div className="md:text-right">
-                                  <ServiceImportPayButton
-                                    row={payButtonRow}
-                                    isJuristic={fUserCompany === "1"}
-                                  />
+                                  {isOnOpenBill ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-4 py-2 text-xs font-semibold text-amber-800">
+                                      🧾 อยู่ในใบวางบิลแล้ว รอชำระผ่านบิล
+                                    </span>
+                                  ) : (
+                                    <ServiceImportPayButton
+                                      row={payButtonRow}
+                                      isJuristic={fUserCompany === "1"}
+                                    />
+                                  )}
                                 </div>
                               )}
                             </div>

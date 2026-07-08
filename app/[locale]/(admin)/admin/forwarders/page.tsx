@@ -827,7 +827,10 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
             volume_cbm: r.volume_cbm.toFixed(4),
             total_price: r.total_price.toFixed(2),
             outstanding_thb: r.outstanding_thb.toFixed(2),
-            paydeposit: r.paydeposit === "1" ? "ชำระแล้ว" : "",
+            // ชำระแล้ว label (2026-07-08 · display-only) — MUST stay byte-for-byte
+            // identical to actions/admin/export/forwarders.ts L148: a slip-paid
+            // row (fstatus 6/7 · paydeposit="") is paid too. LABEL ONLY.
+            paydeposit: (r.paydeposit === "1" || Number(r.status) >= 6) ? "ชำระแล้ว" : "",
             fcredit: r.fcredit === "1" ? "เครดิต" : "",
             created_at: r.created_at,
             date_status2: r.date_status2 ?? "",
