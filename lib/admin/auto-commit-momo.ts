@@ -114,7 +114,7 @@ import {
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { logger } from "@/lib/logger";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
-import { derivePayMethod } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 
 const SCOPE = "auto-commit-momo";
 
@@ -329,7 +329,8 @@ async function resolveAutoCommitDelivery(
   return {
     fShipBy:   carrier,
     addressID: address.addressID,
-    payMethod: derivePayMethod(carrier),
+    // zone-aware: external courier upcountry → COD ('2'); own-fleet carrier-derived.
+    payMethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: address.zip }),
   };
 }
 

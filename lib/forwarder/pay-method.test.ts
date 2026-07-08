@@ -3,7 +3,7 @@
  * Run: tsx lib/forwarder/pay-method.test.ts
  */
 import assert from "node:assert";
-import { derivePayMethod, isPayAtOriginCarrier, PAY_AT_ORIGIN_CARRIERS } from "./pay-method";
+import { derivePayMethod, derivePayMethodForDelivery, isPayAtOriginCarrier, PAY_AT_ORIGIN_CARRIERS } from "./pay-method";
 
 let pass = 0;
 function t(name: string, fn: () => void) {
@@ -43,5 +43,28 @@ t("isPayAtOriginCarrier(null) false", () => assert.strictEqual(isPayAtOriginCarr
 // ── Set membership = the 6 legacy origin carriers + PRF (PCSF rebrand) = 7 ───────
 t("PAY_AT_ORIGIN_CARRIERS has exactly 7 entries (incl. PRF)", () =>
   assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 7));
+
+// ── derivePayMethodForDelivery — zone-aware (upcountry external → COD) ───
+// "50000" = เชียงใหม่ (upcountry) · "10240" = กทม (free/maomao zone).
+t("upcountry + Flash (2) → '2' COD (the fix)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("2", { zip: "50000" }), "2"));
+t("upcountry + J&T (24) → '2' COD", () =>
+  assert.strictEqual(derivePayMethodForDelivery("24", { zip: "50000" }), "2"));
+t("upcountry + ไปรษณีย์ (11) → '2' COD", () =>
+  assert.strictEqual(derivePayMethodForDelivery("11", { zip: "50000" }), "2"));
+t("upcountry + PCSE (own-fleet) → '1' ต้นทาง (never zone-flipped)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("PCSE", { zip: "50000" }), "1"));
+t("upcountry + PCS self-pickup → '1'", () =>
+  assert.strictEqual(derivePayMethodForDelivery("PCS", { zip: "50000" }), "1"));
+t("upcountry + PRF เหมาๆ → '1' (own-fleet)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("PRF", { zip: "50000" }), "1"));
+t("BKK zip + Flash (2) → '1' ต้นทาง (metro carrier-derived)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("2", { zip: "10240" }), "1"));
+t("maomao zip + PRF → '1'", () =>
+  assert.strictEqual(derivePayMethodForDelivery("PRF", { zip: "10240" }), "1"));
+t("self-pickup addressID='PCS' + upcountry zip → '1' (own-fleet guard)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("PCS", { addressID: "PCS", zip: "50000" }), "1"));
+t("upcountry + private carrier (5) → '2' (already COD)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("5", { zip: "50000" }), "2"));
 
 console.log(`\n  ${pass} passed · 0 failed\n`);

@@ -316,7 +316,11 @@ export default async function AdminServiceOrdersPage({
   // A `purchaser`-only viewer is HARD-scoped to their own assigned orders. A
   // non-scoped viewer may optionally filter by a specific purchaser (?purchaser=).
   if (purchaserScoped) {
-    q = q.eq("adminidpurchaser", ownAdminId);
+    // own assigned OR (unassigned AND this admin is the ip/creator) — so an
+    // auto-assigned/legacy order is visible without a manual มอบหมาย. Does NOT
+    // widen to other admins' orders. Empty/unsafe ownAdminId → impossible match.
+    const scope = purchaserScopeOr(ownAdminId);
+    q = scope.kind === "or" ? q.or(scope.expr) : q.eq("id", -1);
   } else if (purchaserFilter) {
     q = q.eq("adminidpurchaser", purchaserFilter);
   }
@@ -476,7 +480,7 @@ export default async function AdminServiceOrdersPage({
   // the usersByUserId / corpNameByUser batches above.
   const purchaserNameById = new Map<string, string>();
   const purchaserIds = Array.from(
-    new Set(raw.map((r) => (r.adminidpurchaser ?? "").trim()).filter((v) => v !== "")),
+    new Set(raw.map((r) => purchaserResp(r)).filter((v) => v !== "")),
   );
   if (purchaserIds.length > 0) {
     const { data: padminRows, error: padminErr } = await admin
@@ -569,10 +573,13 @@ export default async function AdminServiceOrdersPage({
       isCps: String(user?.userComparison ?? "") === "1",
       // Legacy shops.php — cShippingNumber(s) under เลขที่ออเดอร์.
       trackingNumbers: shippingByHno.get(r.hno) ?? [],
-      // owner ④ — assigned ผู้สั่งซื้อ (per-order).
-      assignedPurchaserId: (r.adminidpurchaser ?? "").trim(),
-      assignedPurchaserName:
-        purchaserNameById.get((r.adminidpurchaser ?? "").trim()) ?? null,
+      // owner ④ — responsible ผู้สั่งซื้อ (auto-display like PCS): stored
+      // assignment → interpreter → creator. Shows the handling admin, never a
+      // forced-assign amber "ยังไม่มอบหมาย".
+      assignedPurchaserId: purchaserResp(r),
+      assignedPurchaserName: purchaserNameById.get(purchaserResp(r)) ?? null,
+      // true = the id is a fallback, not a real stored assignment (soften UI).
+      purchaserIsAuto: (r.adminidpurchaser ?? "").trim() === "",
     };
   });
 
@@ -580,7 +587,10 @@ export default async function AdminServiceOrdersPage({
   // of keyword/date filters so badges stay stable while user types). ─
   const counts = await loadStatusCounts(
     admin,
-    purchaserScoped ? ownAdminId : purchaserFilter ?? null,
+    // exact ?purchaser=X filter (non-scoped viewer only)
+    purchaserScoped ? null : purchaserFilter ?? null,
+    // scoped viewer → own-assigned OR unassigned-ip/creator fallback
+    purchaserScoped ? ownAdminId : null,
   );
 
   const showUpdateDate = statusFilter === "3" || statusFilter === "4";
@@ -1013,19 +1023,57 @@ async function resolveLegacyAdminId(
   return data?.adminID ?? "";
 }
 
+// owner ④ — the responsible admin for a shop order (auto-display, like PCS
+// badgeAdminIP): stored purchaser assignment → interpreter → creator. Excludes
+// ''/'customer' (customer opened it themselves = no IPC).
+function purchaserResp(r: {
+  adminidpurchaser: string | null;
+  adminidip: string | null;
+  adminidcreate: string | null;
+}): string {
+  const p = (r.adminidpurchaser ?? "").trim();
+  if (p) return p;
+  const ip = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
+  const cr =
+    r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
+  return ip || cr || "";
+}
+
+// owner ④ — a scoped purchaser sees: own assigned OR (unassigned AND this admin
+// is the ip/creator) — so an auto-assigned/legacy order is visible without a
+// manual มอบหมาย. NEVER widens to other admins' orders. Empty/unsafe id →
+// impossible match (AGENTS §0e — a flaky adminID must not expose ALL unassigned
+// rows to a scoped viewer). Legacy adminIDs are ^[A-Za-z0-9_-]+$.
+function purchaserScopeOr(own: string): { kind: "or"; expr: string } | { kind: "none" } {
+  if (!own || !/^[A-Za-z0-9_-]+$/.test(own)) return { kind: "none" };
+  return {
+    kind: "or",
+    expr:
+      `adminidpurchaser.eq.${own},` +
+      `and(adminidpurchaser.eq.,adminidip.eq.${own}),` +
+      `and(adminidpurchaser.eq.,adminidcreate.eq.${own})`,
+  };
+}
+
 async function loadStatusCounts(
   admin: ReturnType<typeof createAdminClient>,
   purchaserScope?: string | null,
+  ownFallback?: string | null,
 ) {
   // owner ④ — when a purchaser scope is set, badge counts reflect ONLY that
   // purchaser's orders (so a scoped viewer's tabs match their scoped list).
+  //   • purchaserScope = an EXACT ?purchaser=X filter (non-scoped viewer).
+  //   • ownFallback    = a scoped viewer → own-assigned OR unassigned-ip/creator.
   const scope = purchaserScope && purchaserScope !== "" ? purchaserScope : null;
+  const fb =
+    ownFallback && ownFallback !== "" ? purchaserScopeOr(ownFallback) : null;
   async function countStatus(value: string): Promise<number> {
     let q = admin
       .from("tb_header_order")
       .select("id", { count: "exact", head: true })
       .eq("hstatus", value);
-    if (scope) q = q.eq("adminidpurchaser", scope);
+    if (fb) q = fb.kind === "or" ? q.or(fb.expr) : q.eq("id", -1); // impossible → empty
+    else if (scope) q = q.eq("adminidpurchaser", scope);
     const r = await q;
     return r.count ?? 0;
   }
@@ -1033,7 +1081,8 @@ async function loadStatusCounts(
     let q = admin
       .from("tb_header_order")
       .select("id", { count: "exact", head: true });
-    if (scope) q = q.eq("adminidpurchaser", scope);
+    if (fb) q = fb.kind === "or" ? q.or(fb.expr) : q.eq("id", -1); // impossible → empty
+    else if (scope) q = q.eq("adminidpurchaser", scope);
     const r = await q;
     return r.count ?? 0;
   }

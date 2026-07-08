@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethod, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { ADDRESSES } from "@/components/seo/site";
@@ -236,8 +236,10 @@ export async function createLegacyForwarder(
     }
     fShipBy = mao.carrier;
   }
-  // forwarder.php L49-53 — paymethod from the FINAL carrier (setPayMethodShip).
-  const paymethod = derivePayMethod(fShipBy);
+  // forwarder.php L49-53 — paymethod from the FINAL carrier (setPayMethodShip),
+  // zone-aware: an external courier delivered upcountry → COD (ปลายทาง). Own-fleet
+  // (PCS/PCSF/PRF/PCSE) + self-pickup (addressID='PCS') stay carrier-derived.
+  const paymethod = derivePayMethodForDelivery(fShipBy, { addressID: d.addressID, zip: addressZIPCode });
 
   // forwarder.php L89-91 — the INSERT. Every column the legacy doesn't
   // mention defaults from the schema (numbers → 0, strings → ''). The

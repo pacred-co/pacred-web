@@ -1028,7 +1028,7 @@ async function tryRenderTbForwarder(
             <p className="text-foreground"><b className="font-semibold">โทร. : </b>{u?.userTel ? <a href={`tel:${u.userTel}`} className="text-sky-600 hover:underline">{u.userTel}</a> : "—"}</p>
             <EditPalletField fId={r.id} fpallet={r.fpallet} />
             <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
-            <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
+            <EditPayMethodField fId={r.id} paymethod={r.paymethod} zip={r.faddresszipcode} fshipby={r.fshipby} />
             <EditShipByField fId={r.id} fshipby={r.fshipby} />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>

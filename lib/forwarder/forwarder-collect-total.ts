@@ -50,6 +50,13 @@ import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
 export interface ForwarderCollectRow {
   fshipby: string | null;
   ftransportprice: number | string | null;
+  /**
+   * '1'=ต้นทาง (prepaid) · '2'=ปลายทาง (COD, collected at the door by the courier).
+   * A COD row's ftransportprice is the AT-DOOR amount → it must NOT be billed
+   * in the Pacred upfront collect total (else double-charge). Optional/absent →
+   * treated as prepaid (the domestic leg is billed as before).
+   */
+  paymethod?: number | string | null;
   faddressdistrict: string | null;
   ftotalprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -120,10 +127,16 @@ export function computeForwarderCollectTotal(
   let countPricePCSF = 0;
 
   for (const r of rows) {
-    // calPrice.php L26 — per-row total (verbatim).
+    // calPrice.php L26 — per-row total. The DOMESTIC leg (ftransportprice) is
+    // billed upfront ONLY for a prepaid (ต้นทาง) row; a COD (ปลายทาง, paymethod='2')
+    // row's ftransportprice is collected at the door by the courier, so it is NOT
+    // added to the Pacred upfront bill (owner: COD row can't be billed the domestic
+    // shipping upfront). This guards ONLY the domestic leg — freight/mao/crate/other
+    // are untouched.
+    const domesticLeg = toNumber(r.paymethod) === 2 ? 0 : toNumber(r.ftransportprice);
     const totalPrice =
       toNumber(r.ftotalprice) +
-      toNumber(r.ftransportprice) +
+      domesticLeg +
       toNumber(r.fpriceupdate) +
       toNumber(r.fshippingservice) +
       toNumber(r.pricecrate) +
