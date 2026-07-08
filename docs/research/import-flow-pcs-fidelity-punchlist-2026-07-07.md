@@ -20,7 +20,19 @@
   เหมาๆ=PRF, รับเอง — match legacy `nameShipBy`; admin dropdown = full 47 carriers. ✓
   Zone logic (in-zone เหมาๆ ต้นทาง · ต่างจังหวัด Flash+J&T+ไปรษณีย์ COD) faithful.
 
-## 🔴 CONCRETE GAP #1 — report-cnt QA/exception tabs (0 of 11 present)
+## ✅ CONCRETE GAP #1 — report-cnt QA/exception tabs — **CLOSED (verified 2026-07-08)**
+> **UPDATE 2026-07-08:** this "0 of 11 present" claim was STALE. Verified from source:
+> `<TopMenuReport>` (the 11-tab exception strip) IS rendered on `report-cnt/page.tsx:438`
+> (+ cnt-hs · forwarder-check · warehouse-history · report-cnt/[fNo]), and each tab links to
+> the real `/admin/forwarder-action?action=X` route whose WHERE conditions match legacy
+> `header-theme.php` + `forwarder-action.php` faithfully (all 11: note/noteShop/notPhoto/
+> notPortage/notContainer/notDateClose/notShipFree/notShipFreeError/fCreditError/errorF4 +
+> รายงานตู้). The ONE remaining defect — the "ประวัติเข้าโกดังไทย" (errorF4) badge was
+> hardcoded 0 — was fixed (commit `138ebebc`: now counts tb_forwarder_import2 WHERE fid IS
+> NULL AND DATE(fi2date)=today, faithful Warehouse.php L7-9). **Nothing left to build here.**
+
+<details><summary>original (stale) finding — kept for trail</summary>
+
 PCS `report-cnt.php` header shows 11 filter/entry tabs (counts from live prod-ish dev DB):
 `ประวัติเข้าโกดังไทย · รายงานตู้(20) · หมายเหตุสั่งซื้อ(108) · หมายเหตุนำเข้า(204) ·
 ไม่ได้ถ่ายสินค้า(672) · ไม่ใส่ค่าขนส่ง(11) · ไม่ใส่เบอร์ตู้(12) · ไม่ใส่วันที่ปิดตู้(9) ·

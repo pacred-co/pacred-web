@@ -1,19 +1,24 @@
 "use client";
 
 /**
- * ใบเสร็จรับเงิน list — table + tick-to-VOID bulk action (task 4c · ภูม 2026-07-01).
+ * ใบเสร็จรับเงิน ฝากนำเข้าสินค้า — legacy-faithful 13-column list + tick-to-VOID
+ * bulk action (rebuild 2026-07-08 · owner "หน้ายังไม่เหมือน").
  *
  * The receipts list is a Server Component; this client island renders the same
- * PEAK table (thead + rows + footer Σ) PLUS working per-row checkboxes and a
- * sticky bulk bar that soft-VOIDs the ticked receipts via `adminVoidReceipts`.
+ * 13-column table the legacy PCS `receipt-forwarder-item/home.php` shows —
+ * PLUS working per-row checkboxes and a sticky bulk bar that soft-VOIDs the
+ * ticked receipts via `adminVoidReceipts`.
  *
- * VOID = keep history: it flips rstatus → '2' (ยกเลิก · the existing legacy
- * cancelled state) — it NEVER deletes, NEVER moves money. Voided rows stay
- * visible in the list, badged "ยกเลิก". A confirm dialog + a required reason
- * gate the mutation (§0f confirm-before-mutate).
+ * ── STATUS SEMANTICS (Pacred-native · NOT legacy) ────────────────────────
+ * Pacred tb_receipt.rstatus: '1'=ออกแล้ว(paid) · '2'=ยกเลิก(cancelled) ·
+ * '3'=รอชำระ(pending · DEFAULT). We KEEP the Pacred RSTATUS_CFG exactly — the
+ * legacy status codes mean something different (1=ร่าง 2=รออนุมัติ 3=รับชำระ 4=ลบ)
+ * and copying them would mislabel paid receipts. Only the LAYOUT is legacy.
  *
- * Already-cancelled rows ('2') can't be re-ticked (their checkbox is hidden) so
- * a re-void can't happen. The action is idempotent regardless (race-guarded).
+ * VOID = keep history: it flips rstatus → '2' (ยกเลิก) — it NEVER deletes,
+ * NEVER moves money. Voided rows stay visible, badged "ยกเลิก". A confirm dialog
+ * + a required reason gate the mutation (§0f confirm-before-mutate). Already-
+ * cancelled rows ('2') can't be re-ticked; the action is idempotent regardless.
  */
 
 import { useMemo, useState, useTransition } from "react";
@@ -25,6 +30,7 @@ import {
 } from "@/actions/admin/accounting-receipts";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
+// Pacred-native status palette (NOT legacy) — do not remap to legacy codes.
 const RSTATUS_CFG: Record<string, { label: string; chip: string }> = {
   "1": { label: "ออกแล้ว", chip: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
   "2": { label: "ยกเลิก",  chip: "bg-red-100 text-red-800 border border-red-300" },
@@ -132,10 +138,10 @@ export function ReceiptsVoidTable({
       )}
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto scrollbar-x-visible">
-        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-          <thead className="bg-slate-100 text-slate-700">
+        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tfoot>tr>td]:border [&>tfoot>tr>td]:border-border/60">
+          <thead className="bg-slate-100 text-slate-700 text-xs">
             <tr>
-              <th className="px-3 py-2 text-left font-medium w-10">
+              <th className="px-2 py-2 text-left font-medium w-10">
                 <input
                   type="checkbox"
                   aria-label="เลือกทั้งหมด"
@@ -146,26 +152,29 @@ export function ReceiptsVoidTable({
                   title={voidableIds.length === 0 ? "ไม่มีใบที่ยกเลิกได้ในหน้านี้" : "เลือกทั้งหมด (ที่ยกเลิกได้)"}
                 />
               </th>
-              <th className="px-3 py-2 text-left font-medium">เลขที่เอกสาร</th>
-              <th className="px-3 py-2 text-left font-medium">ลูกค้า</th>
-              <th className="px-3 py-2 text-left font-medium">วันที่</th>
-              <th className="px-3 py-2 text-right font-medium">
-                <Explain label="มูลค่ารวม (ก่อน WHT)" def={GUIDE.bill_gross} align="right" />
+              <th className="px-2 py-2 text-left font-medium">ID</th>
+              <th className="px-2 py-2 text-left font-medium">เลขที่เอกสาร</th>
+              <th className="px-2 py-2 text-left font-medium">วันที่ออก</th>
+              <th className="px-2 py-2 text-center font-medium">สลิป</th>
+              <th className="px-2 py-2 text-left font-medium">วันที่สร้าง</th>
+              <th className="px-2 py-2 text-center font-medium">ประเภทลูกค้า</th>
+              <th className="px-2 py-2 text-left font-medium">รหัสลูกค้า</th>
+              <th className="px-2 py-2 text-left font-medium">เลขผู้เสียภาษี</th>
+              <th className="px-2 py-2 text-left font-medium">ชื่อลูกค้า</th>
+              <th className="px-2 py-2 text-right font-medium">
+                <Explain label="ก่อนหัก ณ ที่จ่าย" def={GUIDE.bill_gross} align="right" />
               </th>
-              <th className="px-3 py-2 text-right font-medium">
-                <Explain label="WHT หัก" def={GUIDE.wht_1pct_bill} align="right" />
+              <th className="px-2 py-2 text-right font-medium">
+                <Explain label="มูลค่าสุทธิ" def={GUIDE.bill_net_payable} align="right" />
               </th>
-              <th className="px-3 py-2 text-right font-medium">
-                <Explain label="รับสุทธิ" def={GUIDE.bill_net_payable} align="right" />
-              </th>
-              <th className="px-3 py-2 text-center font-medium">สถานะ</th>
-              <th className="px-3 py-2 text-center font-medium">รายการ</th>
+              <th className="px-2 py-2 text-center font-medium">สถานะ</th>
+              <th className="px-2 py-2 text-center font-medium">ตัวเลือก</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="text-[11px]">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-slate-500">
+                <td colSpan={14} className="px-3 py-12 text-center text-slate-500 text-sm">
                   ไม่พบใบเสร็จในเงื่อนไขที่เลือก
                 </td>
               </tr>
@@ -177,11 +186,10 @@ export function ReceiptsVoidTable({
                 return (
                   <tr
                     key={r.id}
-                    className={`border-t border-slate-100 hover:bg-slate-50/80 ${
-                      checked ? "bg-red-50/40" : ""
-                    }`}
+                    className={`hover:bg-slate-50/80 ${checked ? "bg-red-50/40" : ""}`}
                   >
-                    <td className="px-3 py-2 align-middle">
+                    {/* ☐ tick-to-void */}
+                    <td className="px-2 py-2 align-middle">
                       {voidable ? (
                         <input
                           type="checkbox"
@@ -200,38 +208,99 @@ export function ReceiptsVoidTable({
                         />
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    {/* ① ID */}
+                    <td className="px-2 py-2 text-slate-500 tabular-nums">{r.id}</td>
+                    {/* ② เลขที่เอกสาร → receipt detail/print */}
+                    <td className="px-2 py-2 whitespace-nowrap">
                       <Link
                         href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                        className="font-medium text-primary-700 hover:underline"
+                        className="font-semibold text-primary-700 hover:underline"
                       >
                         {r.rid}
                       </Link>
                       {r.refid && r.refid.trim() && (
-                        <div className="text-xs text-slate-500 font-mono">{r.refid}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{r.refid}</div>
                       )}
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">{r.customerLabel}</div>
-                      <div className="text-xs text-slate-500 font-mono">
+                    {/* ③ วันที่ออก (rdate) */}
+                    <td className="px-2 py-2 whitespace-nowrap text-slate-700">{fmtDate(r.rdate)}</td>
+                    {/* ④ สลิป — tb_receipt has NO imagesslip column; the slip lives on the
+                        linked wallet-deposit (refwhid → tb_wallet_hs). Link there if present. */}
+                    <td className="px-2 py-2 text-center">
+                      {r.refwhid ? (
+                        <Link
+                          href={`/admin/wallet/${r.refwhid}`}
+                          className="text-primary-700 hover:underline whitespace-nowrap"
+                          title="ดูสลิปที่รายการเติมเงินที่อ้างอิง"
+                        >
+                          กดเพื่อดูสลิป
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    {/* ⑤ วันที่สร้าง (rdatecreate) */}
+                    <td className="px-2 py-2 whitespace-nowrap text-slate-600">{fmtDate(r.rdatecreate)}</td>
+                    {/* ⑥ ประเภทลูกค้า */}
+                    <td className="px-2 py-2 text-center">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${
+                          r.isCorporate
+                            ? "bg-indigo-100 text-indigo-800 border border-indigo-300"
+                            : "bg-slate-100 text-slate-700 border border-slate-300"
+                        }`}
+                      >
+                        {r.isCorporate ? "นิติบุคคล" : "บุคคลธรรมดา"}
+                      </span>
+                    </td>
+                    {/* ⑦ รหัสลูกค้า → customer detail */}
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <Link
+                        href={`/admin/customers/${r.userid}`}
+                        className="font-mono text-slate-700 hover:text-primary-700 hover:underline"
+                      >
                         {r.userid}
-                        {r.isCorporate ? " · นิติบุคคล" : ""}
-                      </div>
+                      </Link>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-700">{fmtDate(r.rdate)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">฿{fmtThb(r.totalBeforeWithholding)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-                      {r.whtAmount > 0 ? `฿${fmtThb(r.whtAmount)}` : "—"}
+                    {/* ⑧ เลขผู้เสียภาษี (recompnumber) */}
+                    <td className="px-2 py-2 whitespace-nowrap font-mono text-slate-600">
+                      {r.recompnumber ?? "—"}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary-700">
+                    {/* ⑨ ชื่อลูกค้า */}
+                    <td className="px-2 py-2">
+                      <span className="font-medium text-slate-900">{r.customerLabel}</span>
+                    </td>
+                    {/* ⑩ ก่อนหัก ณ ที่จ่าย */}
+                    <td className="px-2 py-2 text-right tabular-nums">฿{fmtThb(r.totalBeforeWithholding)}</td>
+                    {/* ⑪ มูลค่าสุทธิ */}
+                    <td className="px-2 py-2 text-right tabular-nums font-semibold text-primary-700">
                       ฿{fmtThb(r.ramount)}
                     </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cfg.chip}`}>
+                    {/* ⑫ สถานะ (Pacred RSTATUS_CFG) */}
+                    <td className="px-2 py-2 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${cfg.chip}`}>
                         {cfg.label}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-center text-slate-700">{r.itemCount}</td>
+                    {/* ⑬ ตัวเลือก — ดูใบเสร็จ + อ้างอิงชำระเงิน */}
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <Link
+                          href={`/admin/accounting/forwarder-invoice/${r.id}`}
+                          className="text-primary-700 hover:underline"
+                        >
+                          ดูใบเสร็จ
+                        </Link>
+                        {r.refwhid && (
+                          <Link
+                            href={`/admin/wallet/${r.refwhid}`}
+                            className="text-slate-500 hover:text-primary-700 hover:underline"
+                          >
+                            อ้างอิงชำระเงิน
+                          </Link>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -239,13 +308,12 @@ export function ReceiptsVoidTable({
           </tbody>
           {rows.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-sm">
-                <td colSpan={4} className="px-3 py-2.5 text-right text-slate-600">
-                  ผลรวม {rows.length.toLocaleString()} รายการ ในหน้านี้
+              <tr className="bg-slate-50 font-semibold text-sm">
+                <td colSpan={10} className="px-3 py-2.5 text-right text-slate-600">
+                  รวม {rows.length.toLocaleString()} รายการ ในหน้านี้
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">฿{fmtThb(totals.whtAmount)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-primary-700">฿{fmtThb(totals.ramount)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-primary-700">฿{fmtThb(totals.ramount)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>

@@ -77,12 +77,21 @@ export type ReceiptTab =
   | "cancelled"; // ยกเลิก — rstatus='2'
 
 /**
+ * Customer-type filter (legacy `corporatetype` axis · matches nameCorporateType):
+ *   all → both · com → corporatetype='1' (นิติบุคคล) · gen → '2' (บุคคลธรรมดา)
+ * This composes WITH the status tab + date range (all filters apply together,
+ * like the legacy receipt-forwarder-item list).
+ */
+export type ReceiptCType = "all" | "com" | "gen";
+
+/**
  * Filter input for the list view. Date params are inclusive YYYY-MM-DD
  * strings (page layer defaults to current month). search hits rid +
  * userid + recompname; pageSize defaults to 10 (PEAK convention).
  */
 export type GetReceiptListInput = {
   tab?: ReceiptTab;
+  cType?: ReceiptCType;  // customer-type tab (all / com / gen)
   dateFrom?: string;     // 'YYYY-MM-DD' — inclusive
   dateTo?: string;       // 'YYYY-MM-DD' — inclusive (we add T23:59:59)
   search?: string;       // ilike on rid, userid, recompname
@@ -100,6 +109,8 @@ export type ReceiptListRow = {
   userid: string;
   customerLabel: string;       // recompname OR "userName userLastName" OR userid
   isCorporate: boolean;
+  recompnumber: string | null; // เลขผู้เสียภาษี (tb_receipt.recompnumber · varchar(13))
+  refwhid: number | null;      // อ้างอิงรายการเติมเงิน → /admin/wallet/[refwhid]
   totalBeforeWithholding: number;
   ramount: number;
   whtAmount: number;           // totalBeforeWithholding − ramount
@@ -115,6 +126,17 @@ export type ReceiptTabCounts = {
   cancelled: number;
 };
 
+/**
+ * Per-customer-type COUNT badges for the ประเภทลูกค้า tab row.
+ * Computed within the SAME status/date/search filter as the visible list
+ * (so the badge count matches what clicking the tab shows).
+ */
+export type ReceiptCTypeCounts = {
+  all: number;
+  com: number;   // corporatetype='1' — นิติบุคคล
+  gen: number;   // corporatetype='2' — บุคคลธรรมดา
+};
+
 export type GetReceiptListResult = {
   rows: ReceiptListRow[];
   totals: {
@@ -123,6 +145,7 @@ export type GetReceiptListResult = {
     ramount: number;
   };
   counts: ReceiptTabCounts;
+  cTypeCounts: ReceiptCTypeCounts;  // ประเภทลูกค้า tab badges
   totalRowCount: number;       // for pagination — total in current filter
   page: number;
   pageSize: number;
@@ -247,9 +270,14 @@ export async function getReceiptList(
   await requireAdmin(["super", "accounting"]);
 
   const tab: ReceiptTab = input.tab ?? "recent";
+  const cType: ReceiptCType = input.cType ?? "all";
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 10)));
   const search = (input.search ?? "").trim();
+  // corporatetype filter value: '1'=นิติบุคคล · '2'=บุคคลธรรมดา · null=both
+  const cTypeFilter: string | null = cType === "com" ? "1" : cType === "gen" ? "2" : null;
+  // sanitized ilike term (reused by the count + rows builders)
+  const searchTerm = search ? search.replace(/[\\%_,]/g, (m) => "\\" + m) : "";
 
   const range = defaultDateRange();
   const dateFrom = input.dateFrom && DATE_RE.test(input.dateFrom) ? input.dateFrom : range.from;
@@ -302,6 +330,44 @@ export async function getReceiptList(
     cancelled: cCancel.count ?? 0,
   };
 
+  // ── ประเภทลูกค้า COUNTS — within the SAME status(tab)+date+search filter ─
+  // so each badge reflects what clicking that customer-type tab will show.
+  // (For the "recent" tab there is no date/status window — mirror that by
+  // counting corporatetype across all rows, matching the recent rows query.)
+  const buildCTypeCount = (corporate?: string) => {
+    let q = admin
+      .from("tb_receipt")
+      .select("id", { count: "exact", head: true });
+    if (tab !== "recent") {
+      const rstatusFilter = TAB_TO_RSTATUS[tab];
+      if (rstatusFilter) q = q.eq("rstatus", rstatusFilter);
+      q = q.gte("rdate", dateFrom).lte("rdate", dateToInclusive);
+    }
+    if (corporate) q = q.eq("corporatetype", corporate);
+    if (searchTerm) {
+      q = q.or(`rid.ilike.%${searchTerm}%,userid.ilike.%${searchTerm}%,recompname.ilike.%${searchTerm}%`);
+    }
+    return q;
+  };
+
+  const [ctAll, ctCom, ctGen] = await Promise.all([
+    buildCTypeCount(),
+    buildCTypeCount("1"),
+    buildCTypeCount("2"),
+  ]);
+  for (const [label, r] of [["all", ctAll], ["com", ctCom], ["gen", ctGen]] as const) {
+    if (r.error) {
+      console.error(`[tb_receipt cType count: ${label}] failed`, {
+        code: r.error.code, message: r.error.message,
+      });
+    }
+  }
+  const cTypeCounts: ReceiptCTypeCounts = {
+    all: ctAll.count ?? 0,
+    com: ctCom.count ?? 0,
+    gen: ctGen.count ?? 0,
+  };
+
   // ── ROWS query ────────────────────────────────────────────────
   // For "recent" tab: just last 10 by rdatecreate (no date filter, no
   // status filter) — that's the PEAK "ล่าสุด" semantic.
@@ -309,7 +375,7 @@ export async function getReceiptList(
 
   let q = admin.from("tb_receipt").select(
     "id, rid, refid, rdate, rdatecreate, rstatus, userid, ramount, " +
-      "totalbeforewithholding, recompname, corporatetype",
+      "totalbeforewithholding, recompname, recompnumber, corporatetype, refwhid",
     { count: "exact" },
   );
 
@@ -326,10 +392,11 @@ export async function getReceiptList(
       .order("rdate", { ascending: false, nullsFirst: false });
   }
 
-  if (search) {
-    // sanitize SQL wildcards before ilike
-    const term = search.replace(/[\\%_,]/g, (m) => "\\" + m);
-    q = q.or(`rid.ilike.%${term}%,userid.ilike.%${term}%,recompname.ilike.%${term}%`);
+  // ประเภทลูกค้า filter — composes with the tab/date/search (both apply).
+  if (cTypeFilter) q = q.eq("corporatetype", cTypeFilter);
+
+  if (searchTerm) {
+    q = q.or(`rid.ilike.%${searchTerm}%,userid.ilike.%${searchTerm}%,recompname.ilike.%${searchTerm}%`);
   }
 
   const from = (page - 1) * pageSize;
@@ -343,6 +410,7 @@ export async function getReceiptList(
       rows: [],
       totals: { totalBeforeWithholding: 0, whtAmount: 0, ramount: 0 },
       counts,
+      cTypeCounts,
       totalRowCount: 0,
       page,
       pageSize,
@@ -359,7 +427,9 @@ export async function getReceiptList(
     ramount: number | string | null;
     totalbeforewithholding: number | string | null;
     recompname: string | null;
+    recompnumber: string | null;
     corporatetype: string | null;
+    refwhid: number | string | null;
   };
   const receipts = (receiptRows ?? []) as unknown as RawReceipt[];
 
@@ -409,6 +479,8 @@ export async function getReceiptList(
       userid:                 r.userid,
       customerLabel:          customerLabel(r.recompname, userMap.get(r.userid), r.userid),
       isCorporate:            r.corporatetype === "1",
+      recompnumber:           (r.recompnumber ?? "").trim() || null,
+      refwhid:                r.refwhid != null && Number(r.refwhid) > 0 ? Number(r.refwhid) : null,
       totalBeforeWithholding: tb,
       ramount:                amt,
       whtAmount:              tb - amt,
@@ -433,6 +505,7 @@ export async function getReceiptList(
     rows,
     totals,
     counts,
+    cTypeCounts,
     totalRowCount: filterCount ?? rows.length,
     page,
     pageSize,
