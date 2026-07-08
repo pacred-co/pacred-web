@@ -919,6 +919,7 @@ export default async function AdminServiceOrdersPage({
           sortHrefs={sortHrefs}
           canReassignPurchaser={canReassignPurchaserRole}
           purchaserAdmins={purchaserAdmins}
+          activeTab={qParam}
         />
 
         {/* Wave 7 — per-page money-sum footer (faithful: legacy shops.php
