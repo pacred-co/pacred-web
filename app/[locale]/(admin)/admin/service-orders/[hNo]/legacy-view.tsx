@@ -37,7 +37,7 @@ import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
-  Pencil,
+  Pencil, RotateCcw,
   ClipboardList, CircleDollarSign, ShoppingCart, Clock, PackageCheck, Warehouse,
 } from "lucide-react";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -54,6 +54,7 @@ import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
 import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 import { OrderNoteForm, OrderDangerZone } from "./order-actions";
+import { canEditShopOrder } from "@/lib/admin/shop-order-access";
 // 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
 // (the `pricing` role) — isolated from the selling-price/quote flow.
 import { ShopOrderCostSection } from "./shop-cost-section";
@@ -374,6 +375,18 @@ export async function renderLegacyServiceOrderView(hno: string) {
               <Pencil className="h-3.5 w-3.5" />
               แก้ไข / อัปเดต
             </Link>
+            {/* คืนเงินลูกค้า — faithful to legacy detail.php L57-59 (shows when hStatus>2).
+                Detail is read-only, so this routes to the edit page's refund panel
+                (#refund). Same office-role gate as the edit page (money-sensitive). */}
+            {canEditShopOrder(roles) && ["3", "4", "40", "5"].includes(status) && (
+              <Link
+                href={`${editHref}#refund`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                คืนเงินลูกค้า
+              </Link>
+            )}
           </div>
           {showPrint && (
             <div className="flex gap-2">

@@ -842,9 +842,12 @@ export default async function AdminServiceOrderEditPage({
         </div>
       )}
 
-      {/* ── 6. Refund (status 3/4/5) ── self-hides via internal guard */}
+      {/* ── 6. Refund (status 3/4/5) ── self-hides via internal guard.
+          id="refund" = the anchor the detail page's "คืนเงินลูกค้า" link jumps to. */}
       {showRefund && (
-        <AdminRefundItemPanel hNo={r.hno} hstatus={status} refundableItems={refundableItems} />
+        <div id="refund" className="scroll-mt-24">
+          <AdminRefundItemPanel hNo={r.hno} hstatus={status} refundableItems={refundableItems} />
+        </div>
       )}
 
       {/* ── 7. Bottom nav ── */}
