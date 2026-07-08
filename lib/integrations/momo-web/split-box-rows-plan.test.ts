@@ -337,4 +337,102 @@ check("de-dupes repeated box trackings + sorts by suffix (deterministic anchor)"
   assert.deepEqual(d.rows.map((r) => r.ftrackingchn), ["T", "T-2/3", "T-3/3"]);
 });
 
+// ── DIMS FALLBACK — the folded-discovery mixed-convention bug (prod 760234506976 / fwd 52167) ──
+// momo_box_detail mixes conventions across a folded MOMO row's boxes: the bare base stores
+// weight/cbm PER-PIECE while the "-i" siblings store the box TOTAL. Multiplying every box by
+// qty over-counts ×qty (Σ weight 1901.5 vs the true 172.5), so the stored-based guard wrongly
+// REFUSES. But the DIMENSIONS are per-piece on EVERY box → Σ(w×l×h×qty) === the trusted
+// aggregate fvolume, so the HUMAN button (allowPriced) reconstructs the split money-neutrally.
+function foldedDiscoveryAgg(): AggregateRowInput {
+  return agg({
+    ftrackingchn: "760234506976", fstatus: "3", ftotalprice: 3017.34,
+    famount: 1, famountcount: "1", fweight: 172.5, fvolume: 0.603468,
+    frefrate: 5000, frefprice: "2",
+  });
+}
+function foldedDiscoveryBoxes(): BoxDetailInput[] {
+  // weightKgPerPiece/cbmPerPiece = the RAW stored momo_box_detail columns (mixed convention).
+  return [
+    box({ boxTracking: "760234506976",   weightKgPerPiece: 13,  cbmPerPiece: 0.0384,   quantity: 2,  width: 53, length: 29, height: 25 }),
+    box({ boxTracking: "760234506976-2", weightKgPerPiece: 133, cbmPerPiece: 0.429226, quantity: 14, width: 43, length: 31, height: 23 }),
+    box({ boxTracking: "760234506976-3", weightKgPerPiece: 5,   cbmPerPiece: 0.020832, quantity: 1,  width: 42, length: 31, height: 16 }),
+    box({ boxTracking: "760234506976-4", weightKgPerPiece: 8.5, cbmPerPiece: 0.07656,  quantity: 1,  width: 60, length: 44, height: 29 }),
+  ];
+}
+
+check("DIMS FALLBACK: priced human button SPLITS the folded-discovery row (52167) money-neutrally", () => {
+  const a = foldedDiscoveryAgg();
+  const d = planBoxRowSplit(a, foldedDiscoveryBoxes(), { allowPriced: true });
+  assert.equal(d.split, true, "the human button now splits it (was weight_mismatch)");
+  if (!d.split) return;
+  assert.equal(d.priced, true);
+  assert.equal(d.rows.length, 4, "4 box rows");
+  // anchor keeps the bare base; siblings keep their suffixed tracking.
+  assert.equal(d.rows[0].ftrackingchn, "760234506976");
+  assert.deepEqual(d.rows.map((r) => r.ftrackingchn), ["760234506976", "760234506976-2", "760234506976-3", "760234506976-4"]);
+  // 💰 money-neutral: Σ(ftotalprice) === the aggregate to the satang (bill byte-identical).
+  const sumPrice = d.rows.reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+  assert.equal(Number(sumPrice.toFixed(2)), a.ftotalprice, "Σ price === 3017.34");
+  // Σ(fvolume) === the trusted aggregate คิว (the DIMS reconstruct it exactly).
+  const sumCbm = d.rows.reduce((s, r) => s + r.fvolume, 0);
+  assert.equal(Number(sumCbm.toFixed(6)), Number(a.fvolume.toFixed(6)), "Σ คิว === aggregate");
+  // Σ(fweight) === the trusted aggregate weight (proportionally allocated, no ×qty blow-up).
+  const sumWt = d.rows.reduce((s, r) => s + r.fweight, 0);
+  assert.equal(Number(sumWt.toFixed(2)), a.fweight, "Σ weight === 172.5, NOT 1901.5");
+  // famount restored to the REAL per-box pieces (the fold is undone) — Σ = 2+14+1+1 = 18.
+  assert.deepEqual(d.rows.map((r) => r.famount), [2, 14, 1, 1]);
+  assert.equal(d.rows.reduce((s, r) => s + r.famount, 0), 18);
+  // each row carries its OWN dims (per-piece) so staff can fix a wrong box.
+  assert.equal(d.rows[1].fwidth, 43);
+  assert.equal(d.rows[1].flength, 31);
+  assert.equal(d.rows[1].fheight, 23);
+  // frefrate/frefprice copied for display + future per-box edit.
+  for (const r of d.rows) { assert.equal(r.frefrate, 5000); assert.equal(r.frefprice, "2"); }
+});
+
+check("DIMS FALLBACK is HUMAN-ONLY: the cron (no allowPriced) leaves the folded-discovery row intact", () => {
+  // The real 52167 is PRICED, so the cron refuses at the already_priced guard BEFORE the metric
+  // guard — it never dims-reconstructs. (Proves the automatic pass can't surprise-split it.)
+  const d = planBoxRowSplit(foldedDiscoveryAgg(), foldedDiscoveryBoxes());
+  assert.equal(d.split, false, "cron path unchanged");
+  if (!d.split) assert.equal(d.reason, "already_priced");
+});
+
+check("DIMS FALLBACK is HUMAN-ONLY: an UNPRICED cron pass still REFUSES weight_mismatch (no fallback)", () => {
+  // An unpriced version reaches the metric guard; without allowPriced the fallback never fires.
+  const a = { ...foldedDiscoveryAgg(), ftotalprice: 0 };
+  const d = planBoxRowSplit(a, foldedDiscoveryBoxes());
+  assert.equal(d.split, false, "cron path leaves it intact");
+  if (!d.split) assert.equal(d.reason, "weight_mismatch");
+});
+
+check("DIMS FALLBACK needs the dims to reconcile: bad dims still REFUSE (no blind split)", () => {
+  // Zero-out the dims → sumDimVol can't reconcile the aggregate → refuse even with allowPriced.
+  const boxes = foldedDiscoveryBoxes().map((b) => ({ ...b, width: 0, length: 0, height: 0 }));
+  const d = planBoxRowSplit(foldedDiscoveryAgg(), boxes, { allowPriced: true });
+  assert.equal(d.split, false, "no reliable signal → don't split");
+  if (!d.split) assert.ok(d.reason === "weight_mismatch" || d.reason === "cbm_mismatch");
+});
+
+check("NORMAL consistent boxes are UNCHANGED by the fallback (stored path still wins)", () => {
+  // The #52142 consistent case must behave EXACTLY as before (stored metrics reconcile → no fallback).
+  const a = agg({
+    ftrackingchn: "908006917359", ftotalprice: 128.93, famount: 1, famountcount: "1",
+    fweight: 50, fvolume: 0.02262, frefrate: 5700, frefprice: "2",
+  });
+  const boxes = [
+    box({ boxTracking: "908006917359",   weightKgPerPiece: 28.5, cbmPerPiece: 0.0138,  quantity: 1, width: 30, length: 23, height: 20 }),
+    box({ boxTracking: "908006917359-2", weightKgPerPiece: 21.5, cbmPerPiece: 0.00882, quantity: 1, width: 30, length: 21, height: 14 }),
+  ];
+  const d = planBoxRowSplit(a, boxes, { allowPriced: true });
+  assert.ok(d.split);
+  if (!d.split) return;
+  // stored-based per-box price shares unchanged (78.66 / 50.27) — the fallback did not fire.
+  assert.equal(d.rows[0].ftotalprice, 78.66);
+  assert.equal(d.rows[1].ftotalprice, 50.27);
+  // stored-based metrics unchanged (fweight 28.5 / 21.5, not a dims re-allocation).
+  assert.equal(d.rows[0].fweight, 28.5);
+  assert.equal(d.rows[1].fweight, 21.5);
+});
+
 console.log(`\n✅ split-box-rows-plan.test.ts — ${passed} checks passed`);

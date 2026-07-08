@@ -178,6 +178,21 @@ function relDiff(a: number, b: number): number {
   return Math.abs(a - b) / denom;
 }
 
+/**
+ * Allocate a TOTAL across `shares` so Σ(out) === total EXACTLY (index 0 — the anchor —
+ * absorbs the rounding remainder). Used by the dims fallback to spread the trusted
+ * aggregate fweight/fvolume across boxes money-neutrally. Zero/empty shares → the anchor
+ * takes the whole total (defensive; the caller only calls when Σshares > 0).
+ */
+function allocateExact(total: number, shares: readonly number[], round: (n: number) => number): number[] {
+  const sum = shares.reduce((a, b) => a + b, 0);
+  if (!(sum > 0)) return shares.map((_, i) => (i === 0 ? round(total) : 0));
+  const out = shares.map((s, i) => (i === 0 ? 0 : round((total * s) / sum)));
+  const rest = out.reduce((a, b, i) => (i === 0 ? a : a + b), 0);
+  out[0] = round(total - rest);
+  return out;
+}
+
 /** Strip a numeric "-i/n" (or "-i") split-suffix → the BASE tracking. Mirrors
  *  baseTrackingOf / momo-bill-header.baseTracking (SEA isn't digits → left intact). */
 export function baseOf(tracking: string): string {
@@ -296,13 +311,59 @@ export function planBoxRowSplit(
   if (!isFolded && sumQty !== Math.round(Number(agg.famount))) {
     return { split: false, reason: "qty_mismatch" };
   }
-  // 7. money basis (weight + คิว) must be preserved within tolerance.
-  if (relDiff(sumWeight, Number(agg.fweight) || 0) > relTolerance) {
-    return { split: false, reason: "weight_mismatch" };
+  // 7. money basis (weight + คิว) must be preserved within tolerance — OR reconstructable
+  //    from the RELIABLE per-box DIMENSIONS when the stored weight/คิว disagree.
+  //
+  // 💥 THE FOLDED-DISCOVERY BUG (verified prod 760234506976 / fwd 52167, PR079):
+  //    momo_box_detail can carry a MIX of conventions across a folded MOMO row's boxes —
+  //    the bare-base box stores weight_kg/cbm PER-PIECE while the "-i" siblings store the
+  //    box TOTAL (MOMO's own Live scrape is inconsistent per box). Multiplying every box
+  //    by quantity then over-counts the total ×qty (Σ weight 1901 vs the true 172.5), so
+  //    the stored-based guard REFUSES a split that is actually fine — "แตกกล่องไม่ได้".
+  //
+  //    But the DIMENSIONS (ก×ย×ส) are per-piece on EVERY box, so Σ(w×l×h×qty) reconciles
+  //    the trusted aggregate fvolume. For the HUMAN button ONLY (opts.allowPriced — never
+  //    the unattended cron) we fall back to that dimensional signal: allocate the trusted
+  //    aggregate fweight/fvolume PROPORTIONALLY by each box's dims-volume share so Σ ===
+  //    the aggregate EXACTLY (anchor absorbs the remainder → money-neutral). The bill is
+  //    the PRESERVED ftotalprice (priced) or a re-price whose Σคิว === the aggregate
+  //    (unpriced) — unchanged either way. Per-box fweight is then a dims-proportional
+  //    estimate (display-only for a priced row · editable per box — the whole point of
+  //    splitting), and each box carries its OWN dims + real qty so staff can fix them.
+  const aggWeight = Number(agg.fweight) || 0;
+  const aggVolume = Number(agg.fvolume) || 0;
+  const weightOk = relDiff(sumWeight, aggWeight) <= relTolerance;
+  const cbmOk = relDiff(sumCbm, aggVolume) <= relTolerance;
+
+  // effTotals = the per-box TOTAL metrics the split WRITES. Normally == boxTotals (stored),
+  // so the proven path is byte-unchanged; the dims fallback only rewrites them when the
+  // stored metrics fail to reconcile AND the human button is driving the split.
+  let effTotals = boxTotals;
+  if (!weightOk || !cbmOk) {
+    const allDims = uniq.every((b) => Number(b.width) > 0 && Number(b.length) > 0 && Number(b.height) > 0);
+    // box TOTAL dims-volume = (w×l×h / 1e6) × pieces (famount = piecesOf(qty)).
+    const dimVols = boxTotals.map((bt, i) => {
+      const u = uniq[i];
+      return ((Number(u.width) * Number(u.length) * Number(u.height)) / 1_000_000) * bt.famount;
+    });
+    const sumDimVol = dimVols.reduce((s, v) => s + v, 0);
+    const dimsReconcile = allDims && sumDimVol > 0 && relDiff(sumDimVol, aggVolume) <= relTolerance;
+    if (opts.allowPriced && dimsReconcile) {
+      // allocate the trusted aggregate fvolume + fweight proportionally by dims-volume →
+      // Σ === aggregate EXACTLY (anchor at index 0 absorbs the rounding remainder).
+      const volAlloc = allocateExact(aggVolume, dimVols, r6);
+      const wtAlloc = allocateExact(aggWeight, dimVols, r2);
+      effTotals = boxTotals.map((bt, i) => ({ ...bt, fvolume: volAlloc[i], fweight: wtAlloc[i] }));
+    } else if (!weightOk) {
+      return { split: false, reason: "weight_mismatch" };
+    } else {
+      return { split: false, reason: "cbm_mismatch" };
+    }
   }
-  if (relDiff(sumCbm, Number(agg.fvolume) || 0) > relTolerance) {
-    return { split: false, reason: "cbm_mismatch" };
-  }
+
+  // Σ over effTotals (the dims fallback rewrote fweight/fvolume) for the price basis.
+  const effSumCbm = effTotals.reduce((s, b) => s + b.fvolume, 0);
+  const effSumWeight = effTotals.reduce((s, b) => s + b.fweight, 0);
 
   // For a PRICED split (allowPriced), split the FROZEN aggregate ftotalprice across
   // the boxes MONEY-NEUTRALLY: proportional to each box's share of the billed metric
@@ -315,13 +376,13 @@ export function planBoxRowSplit(
   const priceShares: number[] = [];
   if (priced) {
     const total = money2(Number(agg.ftotalprice));
-    let basis = boxTotals.map((b) => b.fvolume);
-    let basisSum = sumCbm;
-    if (!(basisSum > 0)) { basis = boxTotals.map((b) => b.fweight); basisSum = sumWeight; }
-    if (!(basisSum > 0)) { basis = boxTotals.map(() => 1); basisSum = boxTotals.length; }
+    let basis = effTotals.map((b) => b.fvolume);
+    let basisSum = effSumCbm;
+    if (!(basisSum > 0)) { basis = effTotals.map((b) => b.fweight); basisSum = effSumWeight; }
+    if (!(basisSum > 0)) { basis = effTotals.map(() => 1); basisSum = effTotals.length; }
     // siblings (index ≥1) get their rounded proportional share; the anchor takes the rest.
     let siblingSum = 0;
-    for (let i = 1; i < boxTotals.length; i++) {
+    for (let i = 1; i < effTotals.length; i++) {
       const share = money2((total * basis[i]) / basisSum);
       priceShares[i] = share;
       siblingSum += share;
@@ -332,7 +393,7 @@ export function planBoxRowSplit(
   // Build the plan: the FIRST box becomes the anchor (keeps the BARE base tracking +
   // the aggregate row's id/linkage); the rest get their own suffixed tracking.
   const base = baseOf(agg.ftrackingchn);
-  const rows: BoxRowPlan[] = boxTotals.map((b, i) => ({
+  const rows: BoxRowPlan[] = effTotals.map((b, i) => ({
     // Anchor keeps the BARE base (suffix 0 = เหมาๆ anchor + committed_forwarder_id link).
     ftrackingchn: i === 0 ? base : b.boxTracking,
     isAnchor: i === 0,
