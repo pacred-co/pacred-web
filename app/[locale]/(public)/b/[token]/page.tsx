@@ -32,7 +32,10 @@ import { loadBillingRunDocument } from "@/lib/billing/load-billing-run-document"
 import { verifyBillToken } from "@/lib/receipt/receipt-token";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { BILL_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
+import { serviceAccountFor } from "@/lib/services/service-catalog";
+import { buildServicePromptPayQrDataUrl } from "@/lib/promptpay";
 import PublicBillToolbar from "./public-bill-toolbar";
+import PublicBillPayBlock from "./public-bill-pay-block";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +65,20 @@ export default async function PublicBillPage({
   if (!doc) notFound();
 
   const { header, items } = doc;
+
+  // Customer pay affordance — SAME destination the paper's BILL_ACCOUNT uses
+  // (serviceAccountFor("import_cargo") → LOGISTICS). The amount = net_payable
+  // (the frozen bill total — no recompute). For the SERVICE/PromptPay lane we
+  // generate an amount-QR; the LOGISTICS/TRADING lanes serve a static K-Shop QR
+  // (payQr = null → <PayDestination> shows the PNG + the amount hint).
+  const payAccount = serviceAccountFor("import_cargo");
+  const payQr =
+    payAccount.channel === "promptpay"
+      ? (await buildServicePromptPayQrDataUrl(header.net_payable)) || null
+      : null;
+  // Only an issued bill with a positive balance offers a pay surface (a paid /
+  // cancelled bill shows nothing to pay).
+  const showPay = header.status === "issued" && header.net_payable > 0;
 
   // Build the SAME rows the admin print page builds.
   const rows: BillingRunPaperRow[] = items.map((it, idx) => ({
@@ -127,6 +144,16 @@ export default async function PublicBillPage({
           qrDataUrl={qrDataUrl}
         />
       </div>
+
+      {showPay && (
+        <PublicBillPayBlock
+          token={token}
+          account={payAccount}
+          amountThb={header.net_payable}
+          serviceQrDataUrl={payQr}
+          initialSlipStatus={header.slip_status}
+        />
+      )}
 
       <PublicBillToolbar />
     </div>
