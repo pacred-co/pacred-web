@@ -81,6 +81,8 @@ export type LiveDataFillResult = {
   filled: number;
   /** Rows skipped because they were already billed (fstatus 5/6/7). */
   skippedBilled: number;
+  /** Rows whose display count (famount) was re-synced to MOMO's real quantity (money-safe). */
+  syncedAmount: number;
   /** Rows skipped because they already had a value (non-empty, matched-fresh). */
   skippedHasValue: number;
   /**
@@ -107,6 +109,7 @@ export function emptyDataFillResult(): LiveDataFillResult {
     matched: 0,
     filled: 0,
     skippedBilled: 0,
+    syncedAmount: 0,
     skippedHasValue: 0,
     flaggedMismatch: 0,
     mismatches: [],
@@ -207,6 +210,36 @@ export async function fillLiveDataForParcels(
     if (BILLED_FSTATUS.has(row.fstatus ?? "")) {
       result.skippedBilled += 1;
       continue;
+    }
+
+    // ── จำนวน (famount) SYNC — keep the count MATCHING MOMO (owner/ภูม 2026-07-08:
+    //    "แค่ดึงมาให้ตรงมันก็จบ") ─────────────────────────────────────────────────────
+    // The weight/คิว fill below is FILL-WHEN-EMPTY (แต้ม stays authoritative for the money
+    // basis), but famount is DISPLAY-ONLY — it is in NO bill/outstanding/debit formula (the
+    // folded famountcount='1' marker is what tells the bill NOT to multiply by it), so a
+    // stale count can be corrected to MOMO's real quantity WITHOUT moving a single baht.
+    // Confirmed prod: 52186 was committed with famount=1 while MOMO reports quantity=2 →
+    // detail showed "1 กล่อง" forever (the fill-when-empty guard never re-touched it).
+    // Sync ONLY a SINGLE-parcel tracking (parcelCount===1 · NOT a multi-box split whose
+    // siblings carry their own per-box count) that is the BARE base row (rowTracking===base,
+    // so a split sibling is never clobbered) and unbilled (guarded above). The .in(fstatus)
+    // WHERE keeps it TOCTOU-safe against a race into billing.
+    if (
+      agg.parcelCount === 1 &&
+      rowTracking === base &&
+      agg.quantity > 0 &&
+      Math.round(Number(row.famount ?? 0)) !== agg.quantity
+    ) {
+      const { error: amtErr } = await admin
+        .from("tb_forwarder")
+        .update({ famount: agg.quantity })
+        .eq("id", row.id)
+        .in("fstatus", FILLABLE_FSTATUS);
+      if (amtErr) {
+        console.error("[propagate famount-sync] failed", { code: amtErr.code, message: amtErr.message, id: row.id });
+      } else {
+        result.syncedAmount = (result.syncedAmount ?? 0) + 1;
+      }
     }
 
     const decision = decideMetricFill(row.fweight, row.fvolume, agg.weightKg, agg.cbm);
