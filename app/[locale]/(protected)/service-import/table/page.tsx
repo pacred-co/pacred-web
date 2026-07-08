@@ -22,6 +22,7 @@ import {
 } from "./table-interactive";
 import { type ForwarderRow as PayModalRow, PendingSlipBadge } from "../forwarder-row-view";
 import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
+import { resolveOpenBillForwarderIds } from "@/lib/forwarder/open-bill";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -543,7 +544,17 @@ export default async function ForwarderTablePage({
   // ── Payable rows (legacy: fStatus=5 get a checkbox; `.d-none2` hides it on
   //    the rest) → the row-select checkboxes + live pay-bar total + pay modal.
   //    Default-selected, mirroring the legacy DataTables `initComplete`. ──
-  const payableRows = pageRows.filter((r) => r.fstatus === "5");
+  // S3 (2026-07-08) — exclude rows on an OPEN (status='issued') ใบวางบิล from
+  // the bulk-pay checkboxes so the customer can't double-pay a billed row here
+  // (they pay through the bill). READ-ONLY lookup · fails-soft (empty set → no
+  // exclusion). A cash fstatus=5 row NOT on any open bill stays payable.
+  const openBillIds = await resolveOpenBillForwarderIds(
+    admin,
+    pageRows.map((r) => r.id),
+  );
+  const payableRows = pageRows.filter(
+    (r) => r.fstatus === "5" && !openBillIds.has(r.id),
+  );
   const payablePayload = payableRows.map((r) => ({
     id: r.id,
     net: rowNet.get(r.id) ?? 0,
