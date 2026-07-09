@@ -25,9 +25,11 @@
  */
 
 import zlib from "node:zlib";
+import { baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 
 export type MomoPackingRow = {
   tracking: string;
+  baseTracking: string;       // tracking stripped of the "-N"/"-N/M" split suffix
   code: string | null;
   productType: string | null; // raw "Type" cell (e.g. 普通货物/ทั่วไป/A)
   width: number | null;
@@ -41,6 +43,67 @@ export type MomoPackingRow = {
   cg: string | null;          // CG column (CG…)
 };
 
+/**
+ * One AGGREGATED shipment — every "-N" split sub-row of the same BASE tracking
+ * summed into a single row. MOMO/tb_forwarder keys a shipment on the base
+ * tracking (SF1567683726553), while the packing list lists box-suffixed sub-rows
+ * (SF1567683726553-1/2 · SF1567683726553-2/2). The reconcile matches on the base
+ * and compares against the SYSTEM aggregate → this is the packing-side aggregate.
+ */
+export type MomoPackingAggRow = {
+  baseTracking: string;
+  code: string | null;          // first sub
+  productType: string | null;   // first sub
+  width: number | null;         // first sub (dims for display only)
+  length: number | null;        // first sub
+  height: number | null;        // first sub
+  cg: string | null;            // first sub
+  parcelCount: number | null;   // Σ sub.parcelCount = box count
+  totalWeight: number | null;   // Σ sub.totalWeight — the SELL weight basis
+  totalCbm: number | null;      // Σ sub.totalCbm — the SELL CBM basis
+  subTrackings: string[];       // every raw sub tracking under this base
+};
+
+/**
+ * Group parsed rows by their BASE tracking (strip "-N"/"-N/M"), summing the
+ * money-basis fields. A numeric field stays `null` ONLY when EVERY sub was null
+ * (so a partial file never zeroes a real weight); otherwise it's the Σ of the
+ * non-null subs. dims/cg/code/productType come from the FIRST sub. Insertion
+ * order is preserved. PURE — no DB, no side effects.
+ */
+export function aggregatePackingRowsByBase(rows: MomoPackingRow[]): MomoPackingAggRow[] {
+  const byBase = new Map<string, MomoPackingAggRow>();
+  // track, per base + field, whether we ever saw a non-null value (else keep null)
+  const seen = new Map<string, { parcel: boolean; wt: boolean; cbm: boolean }>();
+  for (const r of rows) {
+    const base = r.baseTracking || baseTrackingOf(r.tracking);
+    let agg = byBase.get(base);
+    if (!agg) {
+      agg = {
+        baseTracking: base,
+        code: r.code,
+        productType: r.productType,
+        width: r.width,
+        length: r.length,
+        height: r.height,
+        cg: r.cg,
+        parcelCount: null,
+        totalWeight: null,
+        totalCbm: null,
+        subTrackings: [],
+      };
+      byBase.set(base, agg);
+      seen.set(base, { parcel: false, wt: false, cbm: false });
+    }
+    const s = seen.get(base)!;
+    agg.subTrackings.push(r.tracking);
+    if (r.parcelCount != null) { agg.parcelCount = (agg.parcelCount ?? 0) + r.parcelCount; s.parcel = true; }
+    if (r.totalWeight != null) { agg.totalWeight = (agg.totalWeight ?? 0) + r.totalWeight; s.wt = true; }
+    if (r.totalCbm != null) { agg.totalCbm = (agg.totalCbm ?? 0) + r.totalCbm; s.cbm = true; }
+  }
+  return Array.from(byBase.values());
+}
+
 export type MomoPackingParse = {
   listTitle: string | null;
   container: string | null;      // CONTAINER NAME meta → fcabinetnumber
@@ -52,7 +115,8 @@ export type MomoPackingParse = {
     totalCbm: number | null;
   };
   transportHint: "SEA" | "EK" | null; // informational; ftransporttype derives from the container name
-  rows: MomoPackingRow[];
+  rows: MomoPackingRow[];              // raw one-row-per-sub (for the Excel grid)
+  aggregated: MomoPackingAggRow[];     // one-row-per-base (for reconcile — Σ over subs)
   warnings: string[];
   /** Excel-like raw view (data-header + data rows) for the preview UI. */
   rawGrid?: { header: string[]; rows: (string | number | null)[][] };
@@ -213,7 +277,7 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
   const empty: MomoPackingParse = {
     listTitle: null, container: null, containerCode: null,
     totals: { trackingCount: null, qty: null, totalWeight: null, totalCbm: null },
-    transportHint: null, rows: [], warnings,
+    transportHint: null, rows: [], aggregated: [], warnings,
   };
 
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
@@ -298,6 +362,7 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
     if (!tracking) continue; // not a parcel row
     rows.push({
       tracking,
+      baseTracking: baseTrackingOf(tracking),
       code: cCode >= 0 ? cellStr(row[cCode]) || null : null,
       productType: cType >= 0 ? cellStr(row[cType]) || null : null,
       width: cWidth >= 0 ? toNum(row[cWidth]) : null,
@@ -325,6 +390,7 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
     totals,
     transportHint,
     rows,
+    aggregated: aggregatePackingRowsByBase(rows),
     warnings,
     rawGrid: { header: headerText, rows: rawRows },
   };

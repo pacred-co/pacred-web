@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 export default async function BillingRunAddPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cabinet?: string; userid?: string }>;
+  searchParams: Promise<{ cabinet?: string; userid?: string; fids?: string }>;
 }) {
   // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles create the
   // billing doc (mark-paid stays accounting-only).
@@ -52,7 +52,23 @@ export default async function BillingRunAddPage({
   const useridParam = (sp.userid ?? "").trim();
   if (!cabinetParam && useridParam && customers.some((c) => c.userid === useridParam)) {
     preselectUserid = useridParam;
-    preselectNote = `👤 ลูกค้า ${useridParam} — ติ๊กรายการที่ยังไม่ออกใบวางบิลให้อัตโนมัติแล้ว (รวมทุกตู้เป็นใบเดียว) · ตรวจสอบแล้วกด "สร้างใบวางบิล"`;
+    // G1 combo-flow (2026-07-08) — arrived from the ตรวจตู้ detail "→ ออกใบวางบิล"
+    // button carrying the EXACT ticked forwarder ids (?fids=1,2,3). Pass them through
+    // so the create-form pre-ticks EXACTLY those rows (carry-not-rederive: the ตรวจตู้
+    // selection → the bill). The client's usePreselect ladder consumes
+    // preselectForwarderIds (priority above the check-queue auto-tick). Cabinet param
+    // still wins if both are present.
+    const fids = (sp.fids ?? "")
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0)
+      .slice(0, 500);
+    if (fids.length > 0) {
+      preselectForwarderIds = fids;
+      preselectNote = `📦 มาจากหน้าตรวจตู้ — ติ๊ก ${fids.length} รายการที่เลือกให้อัตโนมัติแล้ว · ตรวจสอบแล้วกด "สร้างใบวางบิล"`;
+    } else {
+      preselectNote = `👤 ลูกค้า ${useridParam} — ติ๊กรายการที่ยังไม่ออกใบวางบิลให้อัตโนมัติแล้ว (รวมทุกตู้เป็นใบเดียว) · ตรวจสอบแล้วกด "สร้างใบวางบิล"`;
+    }
   }
   if (cabinetParam) {
     const cabinets = cabinetParam.split(",").map((c) => c.trim()).filter(Boolean);

@@ -127,6 +127,13 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     () => (eligible ?? []).filter((f) => selectedIds.has(f.id) && isThShipMissing(f)).length,
     [eligible, selectedIds],
   );
+  // G1 combo-flow packing-reconcile gate — count of SELECTED rows whose container has
+  // no packing-list reconcile stamp yet (mig 0245). packing_reconciled is true for
+  // no-container rows (exempt), so only real-container-unreconciled rows count.
+  const unreconciledCount = useMemo(
+    () => (eligible ?? []).filter((f) => selectedIds.has(f.id) && f.packing_reconciled === false).length,
+    [eligible, selectedIds],
+  );
 
   // Per-row checked map (cleared on customer change)
   function toggleId(id: number, checked: boolean) {
@@ -303,6 +310,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
       .filter((f) => selectedIds.has(f.id) && isThShipMissing(f))
       .map((f) => f.id);
 
+    // G1 combo-flow packing-reconcile gate — SELECTED rows whose container has no
+    // packing-list reconcile stamp yet (mig 0245 · the basis may be pre-packing). A
+    // per-line override does NOT clear this (it corrects the face value, not the
+    // container basis). Ack via the confirm; the server backstops.
+    const unreconciledIds = (eligible ?? [])
+      .filter((f) => selectedIds.has(f.id) && f.packing_reconciled === false)
+      .map((f) => f.id);
+
     // §0f confirm-before-mutate (money action · ออกเอกสารวางบิลจริง).
     const warn =
       (rebillIds.length > 0
@@ -310,6 +325,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         : "") +
       (missingThShipIds.length > 0
         ? `🚚 มี ${missingThShipIds.length} รายการที่ยังไม่กรอกค่าส่งไทย (${missingThShipIds.map((id) => `#${id}`).join(", ")})\nควรให้โกดัง/CS กรอกค่าส่งไทยก่อนวางบิล — ถ้าจะออกบิลทั้งที่ยังไม่มีค่าส่งไทย กดตกลง\n\n`
+        : "") +
+      (unreconciledIds.length > 0
+        ? `📦 มี ${unreconciledIds.length} รายการที่ตู้ยังไม่อัพ packing list (${unreconciledIds.map((id) => `#${id}`).join(", ")})\nยอดกล่อง/น้ำหนักอาจยังไม่ยืนยัน — ควรอัพ packing list ก่อน · ถ้าจะออกบิลทั้งที่ยังไม่ reconcile กดตกลง\n\n`
         : "") +
       (zeroIds.length > 0
         ? `⚠️ มี ${zeroIds.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ${zeroIds.map((id) => `#${id}`).join(", ")}\nควรตรวจสอบ/วัดที่โกดังก่อน — ถ้าจะออกบิลทั้งที่ค่าขนส่งเป็น ฿0 กดตกลง\n\n`
@@ -336,6 +354,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         noteForCustomer:  note,
         allowUnmeasured:  zeroIds.length > 0,
         allowMissingThShip: missingThShipIds.length > 0,
+        allowUnreconciledPacking: unreconciledIds.length > 0,
         overrides,
       });
       if (res.ok) {
@@ -490,6 +509,18 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
           </div>
         )}
 
+        {/* G1 combo-flow packing-reconcile gate — amber warning when any selected row's
+            container has no packing-list reconcile stamp yet. Soft flag (not a block) —
+            staff confirm before billing; อัพ packing list ก่อนได้ยอดกล่อง/น้ำหนักที่ยืนยัน. */}
+        {selectedUserid && !loadingFwd && unreconciledCount > 0 && (
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            📦 มี <strong>{unreconciledCount}</strong> รายการที่เลือกไว้ <strong>ตู้ยังไม่อัพ packing list</strong> —
+            ยอดกล่อง/น้ำหนักอาจยังไม่ยืนยัน · อัพที่{" "}
+            <a href="/admin/api-forwarder-momo/packing-upload" className="underline font-medium hover:text-amber-900" target="_blank" rel="noreferrer">แพคกิ้งลิสต์</a>{" "}
+            ก่อนได้ (ยังออกบิลได้ แต่ต้องยืนยัน)
+          </div>
+        )}
+
         {selectedUserid && !loadingFwd && visibleForwarders.length > 0 && (
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
@@ -515,6 +546,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                 {visibleForwarders.map((f) => {
                   const zeroTransport = isZeroTransport(f);
                   const thShipMissing = isThShipMissing(f);
+                  const packingMissing = f.packing_reconciled === false;
                   const selected = selectedIds.has(f.id);
                   // Match lineAmountOf exactly — a blank/cleared input means "use
                   // auto", so the chip must NOT read as edited (it would bill auto).
@@ -558,6 +590,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                           title="ยังไม่กรอกค่าส่งในไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง) — ให้โกดัง/CS กรอกก่อนวางบิล"
                         >
                           🚚 ยังไม่กรอกค่าส่งไทย
+                        </span>
+                      )}
+                      {packingMissing && (
+                        <span
+                          className="ml-1 inline-block rounded bg-amber-100 px-1 py-0.5 text-[11px] font-semibold text-amber-800 align-middle"
+                          title={`ตู้ ${f.fcabinetnumber ?? ""} ยังไม่อัพ packing list — ยอดกล่อง/น้ำหนักอาจยังไม่ยืนยัน · อัพที่ /admin/api-forwarder-momo/packing-upload ก่อน`}
+                        >
+                          📦 ยังไม่อัพ packing
                         </span>
                       )}
                       {f.already_billed && (

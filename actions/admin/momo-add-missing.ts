@@ -74,6 +74,9 @@ const addMissingMomoParcelSchema = z.object({
   // manual-add range guards.
   weightKg:   z.number().nonnegative("น้ำหนักต้องไม่ติดลบ").max(1_000_000, "น้ำหนักเกินช่วงที่รับได้"),
   cbm:        z.number().nonnegative("คิวต้องไม่ติดลบ").max(100_000, "คิวเกินช่วงที่รับได้"),
+  // box count for this shipment (Σ of the packing-list sub-rows' parcelCount).
+  // Optional → defaults to 1 so the existing single/bulk callers stay byte-identical.
+  boxCount:   z.number().int().positive().max(100_000).optional(),
   // raw MOMO ship_by ("car"/"ship"/"air") — only used as the LAST-resort
   // transport-mode fallback when the cabinet code can't decide. Optional.
   shipBy:     z.enum(SHIP_BY_OPTIONS).optional(),
@@ -131,7 +134,7 @@ function roundTo(value: number, decimals: number): number {
  * "พัสดุนี้มีในระบบแล้ว" error, surfaced as "ข้าม" by the caller — never a double
  * write). `adminId` is the withAdmin ctx adminId (for the audit row).
  */
-async function createMissingMomoForwarderRow(
+export async function createMissingMomoForwarderRow(
   d: z.infer<typeof addMissingMomoParcelSchema>,
   adminId: string,
 ): Promise<AdminActionResult<{ fid: number; fIDorCO: string }>> {
@@ -240,7 +243,7 @@ async function createMissingMomoForwarderRow(
         .insert({
           // ── core identity ─────────────────────────────────
           ftrackingchn:          base,
-          famount:               1,
+          famount:               d.boxCount ?? 1,
           fdate:                 nowIso,
           userid:                customer.userID,
           fshipby:               "",          // ยังไม่ระบุขนส่ง → เซล/ลูกค้าเลือกภายหลัง

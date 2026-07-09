@@ -125,6 +125,14 @@ export type EligibleForwarderRow = {
    *  The create-form PRE-TICKS these so the ตรวจตู้ selection carries into the bill.
    *  A check-queued row still at fstatus='4' is surfaced (G4) so the bill lifts it 4→5. */
   check_queued: boolean;
+  /** G1 combo-flow (2026-07-08) — the container this row is packed into (fcabinetnumber),
+   *  for the packing-reconcile badge. null when the row has no container yet. */
+  fcabinetnumber: string | null;
+  /** G1 combo-flow — this row's container has a packing-list reconcile stamp (mig 0245),
+   *  OR the row has no container (exempt → true). false = ตู้ยังไม่อัพ packing → the
+   *  create-form badges "ยังไม่อัพ packing" + requires the allowUnreconciledPacking confirm;
+   *  the create action backstops with the server gate. */
+  packing_reconciled: boolean;
 };
 
 export type BillingRunInvoiceRow = {
@@ -165,7 +173,7 @@ export type BillingRunInvoiceRow = {
 // the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
 const FWD_BILLING_SELECT =
   "id, fshipby, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
-  "fcredit, paydeposit, fusercompany, advance_bill_confirmed, " +
+  "fcredit, paydeposit, fusercompany, advance_bill_confirmed, fcabinetnumber, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount";
 
@@ -179,6 +187,7 @@ type FwdBillingRaw = ForwarderPriceFields &
     famount: number | string | null;
     fweight: number | string | null;
     fvolume: number | string | null;
+    fcabinetnumber: string | null; // G1 combo-flow — the container, for the packing-reconcile gate
   };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -604,6 +613,29 @@ export async function listEligibleForwarders(
       const maoFeeById = new Map<number, number>();
       for (const ln of maoBatch.lines) maoFeeById.set(Number(ln.id), ln.breakdown.maoFee);
 
+      // G1 combo-flow (2026-07-08) — which of these rows' containers have a packing
+      // reconcile stamp (mig 0245). Drives the "📦 ยังไม่อัพ packing" badge + the create
+      // form's pre-ack of allowUnreconciledPacking. A blank/'0' cabinet is exempt
+      // (no container to reconcile). The server gate in createBillingRunInvoice is the
+      // authoritative backstop.
+      const cabs = Array.from(
+        new Set(fwd.map((f) => (f.fcabinetnumber ?? "").trim()).filter((c) => c !== "" && c !== "0")),
+      );
+      const reconciledCabs = new Set<string>();
+      if (cabs.length > 0) {
+        const { data: recRows, error: recErr } = await admin
+          .from("container_packing_reconcile")
+          .select("container_no")
+          .in("container_no", cabs);
+        if (recErr) {
+          console.error("[listEligibleForwarders packing-reconcile] failed", {
+            code: recErr.code, message: recErr.message,
+          });
+          // Non-fatal — no badge / no pre-ack, but the rows still list (the server gate holds).
+        }
+        for (const r of (recRows ?? []) as Array<{ container_no: string }>) reconciledCabs.add(r.container_no);
+      }
+
       const rows: EligibleForwarderRow[] = fwd.map((f) => ({
         id:              f.id,
         ftrackingchn:    f.ftrackingchn ?? "",
@@ -629,6 +661,13 @@ export async function listEligibleForwarders(
         fshipby:         f.fshipby,
         ftransportprice: Number(f.ftransportprice ?? 0),
         check_queued:    checkQueuedIds.has(f.id),
+        fcabinetnumber:  (f.fcabinetnumber ?? "").trim() || null,
+        // A row with no container is exempt (true = "nothing to reconcile"), else it's
+        // reconciled iff its container has a stamp.
+        packing_reconciled: (() => {
+          const c = (f.fcabinetnumber ?? "").trim();
+          return c === "" || c === "0" ? true : reconciledCabs.has(c);
+        })(),
       }));
 
       return { ok: true, data: { rows } };
@@ -1098,6 +1137,53 @@ async function createBillingRunInvoiceImpl(
             `มี ${missingThShip.length} รายการที่ยังไม่กรอกค่าส่งไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง): ` +
             `${missingThShip.map((f) => `#${f.id}`).join(", ")} — กรุณาให้โกดัง/CS กรอกค่าส่งไทยก่อนวางบิล หรือยืนยันออกบิลทั้งที่ยังไม่มีค่าส่งไทย`,
         };
+      }
+
+      // (a4) G1 combo-flow PACKING-RECONCILE GATE (2026-07-08) — a SELECTED row whose
+      // container has NOT been reconciled against the MOMO packing list yet (mig 0245)
+      // may still carry its pre-packing กล่อง/น้ำหนัก basis (the CBM/weight that drives
+      // the SELL price could be stale) → billing now risks an under/over-charge. Refuse
+      // unless the admin acknowledged (allowUnreconciledPacking · the create-form warns +
+      // confirms). Server-side backstop. NOTE: pure validation — changes NO pricing math.
+      // Carve-outs (grandfather): (i) rows with a blank/'0' fcabinetnumber are exempt
+      // (no container to reconcile); (ii) billed rows never reach here (already lifted /
+      // rejected by (b) below); (iii) acknowledgeable → pre-feature containers with no
+      // stamp are NOT hard-blocked (staff confirm once). Refuses the WHOLE bill (early
+      // return before any INSERT · never partial).
+      const cabsToCheck = Array.from(
+        new Set(
+          fwd
+            .map((f) => (f.fcabinetnumber ?? "").trim())
+            .filter((c) => c !== "" && c !== "0"),
+        ),
+      );
+      if (cabsToCheck.length > 0 && !v.allowUnreconciledPacking) {
+        const { data: reconciledRows, error: recErr } = await admin
+          .from("container_packing_reconcile")
+          .select("container_no")
+          .in("container_no", cabsToCheck);
+        if (recErr) {
+          console.error("[createBillingRunInvoice packing-reconcile check] failed", {
+            code: recErr.code, message: recErr.message,
+          });
+          // Non-fatal — don't block billing on a lookup error (fall through).
+        } else {
+          const reconciled = new Set(
+            (reconciledRows ?? []).map((r) => (r as { container_no: string }).container_no),
+          );
+          const unreconciled = fwd.filter((f) => {
+            const c = (f.fcabinetnumber ?? "").trim();
+            return c !== "" && c !== "0" && !reconciled.has(c);
+          });
+          if (unreconciled.length > 0) {
+            return {
+              ok: false,
+              error:
+                `มี ${unreconciled.length} รายการที่ตู้ยังไม่อัพ packing list (ยังไม่ยืนยันยอดกล่อง/น้ำหนัก): ` +
+                `${unreconciled.map((f) => `#${f.id}`).join(", ")} — กรุณาอัพ packing list ที่ /admin/api-forwarder-momo/packing-upload ก่อน หรือยืนยันออกบิลทั้งที่ยังไม่ reconcile`,
+            };
+          }
+        }
       }
 
       // (b) Already-billed-on-non-cancelled-invoice guard
@@ -2083,6 +2169,9 @@ export async function createForwarderOrderBill(
     // step, so it never overrides: a cabinet with a forgotten TH cost is REFUSED
     // with the clear error (surfaced on the button), the intended soft-gate.
     allowMissingThShip: false,
+    // G1 combo-flow — same never-waive stance: an un-reconciled container is REFUSED
+    // (this quick path has no confirm; อัพ packing list ก่อน หรือใช้หน้า /add).
+    allowUnreconciledPacking: false,
     overrides: {},
   });
 
@@ -2639,6 +2728,7 @@ export async function createBatchBillingRunInvoices(
           // · they go via the single /add form with the per-row overrides + confirms).
           allowUnmeasured: false,
           allowMissingThShip: false,
+          allowUnreconciledPacking: false,
           overrides: {},
         });
         if (created.ok) {

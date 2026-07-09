@@ -82,6 +82,13 @@ export const createBillingRunInvoiceSchema = z.object({
    *  shows a "ยังไม่กรอกค่าส่งไทย" badge + a confirm before setting this; the server
    *  REFUSES those rows unless it is true (a client can't silently skip the TH leg). */
   allowMissingThShip: z.boolean().optional().default(false),
+  /** G1 combo-flow packing-reconcile gate (2026-07-08) — explicit ack that the admin is
+   *  billing row(s) whose container has NOT been reconciled against the MOMO packing list
+   *  yet (mig 0245 · the กล่อง/น้ำหนัก basis that drives the SELL price may be pre-packing).
+   *  The create-form shows a "ยังไม่อัพ packing" warning + a confirm before setting this;
+   *  the server REFUSES those rows unless it is true (grandfathers pre-feature containers
+   *  with no stamp — no retroactive hard-block). Pure validation — no pricing change. */
+  allowUnreconciledPacking: z.boolean().optional().default(false),
   /** Build A D2 2026-06-19 — per-line bill-amount override (forwarder_id → ฿amount,
    *  keyed as a string). Lets the admin correct a row's billed amount inline (e.g.
    *  type the right figure on a ค่าขนส่ง-฿0 row). The action uses the override when
