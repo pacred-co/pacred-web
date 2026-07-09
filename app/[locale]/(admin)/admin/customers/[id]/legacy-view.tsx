@@ -71,6 +71,7 @@ import {
 } from "./profile-sections";
 import { parseCorporateDocs } from "@/lib/admin/corporate-docs";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolveActiveSalesRep, CENTRAL_SALES_LABEL } from "@/lib/admin/resolve-active-rep";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 
 type URow = {
@@ -505,6 +506,13 @@ export async function renderLegacyCustomerView(
     getCustomerActivity(u.userID),
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
+  // Active sales-rep id set (adminStatusA='1' AND adminStatusSale='1') — the
+  // SaleBadge resolves a RETIRED assigned rep to the central line via this set
+  // (owner 2026-07-09). `salesAdminsLoaded` distinguishes a genuinely-empty pool
+  // (all retired → central is correct) from a failed read (show the raw id, no
+  // false "central") so a transient error can't mislabel every rep as central.
+  const salesAdminsLoaded = salesAdminsRes.ok;
+  const activeSalesIds = new Set(salesAdmins.map((a) => a.adminID));
   const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
   const activeAdmins = activeAdminsRes.ok ? activeAdminsRes.data?.rows ?? [] : [];
   const customerTags = tagsRes.ok ? (tagsRes.data ?? []).map((t) => t.tag) : [];
@@ -801,7 +809,7 @@ export async function renderLegacyCustomerView(
                   <Td>{r.hdate ? new Date(r.hdate).toLocaleString("th-TH") : "-"}</Td>
                   <Td>
                     <span className="font-mono">{u.userID}</span>
-                    <SaleBadge adminId={u.adminIDSale} />
+                    <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
                   </Td>
                   <Td mono>{r.hno ?? "-"}</Td>
                   <Td>
@@ -884,7 +892,7 @@ export async function renderLegacyCustomerView(
                     <Td>{r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "-"}</Td>
                     <Td>
                       <span className="font-mono">{u.userID}</span>
-                      <SaleBadge adminId={u.adminIDSale} />
+                      <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
                     </Td>
                     <Td>
                       <div className="flex gap-2 items-start">
@@ -1293,10 +1301,26 @@ const PRODUCT_TYPE_LABEL_FW: Record<string, string> = {
 const TRANSPORT_LABEL_FW: Record<string, string> = {
   "1": "ขนส่งทางรถ", "2": "ขนส่งทางเรือ", "3": "ขนส่งทางอากาศ",
 };
-function SaleBadge({ adminId }: { adminId: string | null }) {
+function SaleBadge({
+  adminId,
+  activeIds,
+  activeLoaded,
+}: {
+  adminId: string | null;
+  activeIds: ReadonlySet<string>;
+  activeLoaded: boolean;
+}) {
+  // DISPLAY-only: a RETIRED assigned rep renders as the central line (owner
+  // 2026-07-09). When the active list failed to load, fall back to the raw id
+  // (never a false "central"). The stored adminIDSale is never rewritten.
+  const resolved = resolveActiveSalesRep(adminId, { activeIds });
+  const showCentral = activeLoaded && resolved.isCentral;
+  const text = showCentral
+    ? CENTRAL_SALES_LABEL
+    : adminId?.trim() || "ไม่ระบุ";
   return (
     <span className="ml-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-      Sale : {adminId || "ไม่ระบุ"}
+      Sale : {text}
     </span>
   );
 }

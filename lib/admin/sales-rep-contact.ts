@@ -18,6 +18,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CONTACT } from "@/components/seo/site";
+import {
+  CENTRAL_SALES_LABEL,
+  CENTRAL_SALES_NICKNAME,
+  CENTRAL_SALES_TEL,
+} from "@/lib/admin/resolve-active-rep";
 
 export type SalesRepContact = {
   /** Display name (admin's first+last when available · "Pacred CS" fallback). */
@@ -81,10 +86,13 @@ const REP_ADMIN_COLS =
  * or CS (adminIDCS) column of tb_users. Order of preference:
  *   1. the customer's ASSIGNED rep, IF that admin is still active in this role
  *      (tb_admin.adminStatusA='1' AND adminStatusSale/CS='1');
- *   2. otherwise (rep disabled / deleted / de-flagged) the FIRST still-active
- *      rep of this kind — so the customer always sees a WORKING contact
- *      (owner directive 2026-07-02: a dead rep hands off to a live one);
- *   3. otherwise the Pacred-wide CS fallback (never an empty box).
+ *   2a. SALES — otherwise (rep retired / de-flagged / empty) the CENTRAL sales
+ *      line "ทีมขายส่วนกลาง (Pacred)" (owner directive 2026-07-09 · supersedes
+ *      the 2026-07-02 "first still-active rep" substitute for the SALES column,
+ *      so a retired sales rep DISPLAYS as central everywhere);
+ *   2b. CS — otherwise the FIRST still-active CS rep (a dead CS hands off to a
+ *      live one), then the Pacred-wide CS fallback (never an empty box).
+ * DISPLAY-only: the stored adminIDSale/adminIDCS is never rewritten here.
  */
 async function resolveRepContactByColumn(
   userid: string,
@@ -139,10 +147,17 @@ async function resolveRepContactByColumn(
       return buildRepContact(admin, r, fallback);
     }
     // else the assigned rep is disabled / deleted / no longer this role →
-    // fall through to an active substitute.
+    // fall through to the central line (SALES) / an active substitute (CS).
   }
 
-  // 3 — substitute: the first STILL-ACTIVE rep of this kind (deterministic).
+  // 3 (SALES) — a retired/empty assigned SALES rep → the CENTRAL sales line
+  //   (owner 2026-07-09). Applies both when the assigned rep is inactive and
+  //   when the customer has no adminIDSale on file. DISPLAY-only.
+  if (column === "adminIDSale") {
+    return buildCentralSalesContact(fallback);
+  }
+
+  // 3 (CS) — substitute: the first STILL-ACTIVE CS rep (deterministic).
   const { data: poolRow, error: poolErr } = await admin
     .from("tb_admin")
     .select(REP_ADMIN_COLS)
@@ -159,8 +174,24 @@ async function resolveRepContactByColumn(
   }
   if (poolRow) return buildRepContact(admin, poolRow as AdminRow, fallback);
 
-  // 4 — no active rep at all → the Pacred-wide fallback.
+  // 4 (CS) — no active CS rep at all → the Pacred-wide CS fallback.
   return fallback;
+}
+
+/** The CENTRAL sales-line contact — shown when a customer's assigned SALES rep
+ *  is retired/empty (owner 2026-07-09). Label "ทีมขายส่วนกลาง (Pacred)" + the
+ *  central sales tel (02-421-3325); no photo (the UI falls to the Pacred logo).
+ *  isAssigned=false so consumers style it as the central line, not a person. */
+function buildCentralSalesContact(fallback: SalesRepContact): SalesRepContact {
+  return {
+    name:         CENTRAL_SALES_LABEL,
+    nickname:     CENTRAL_SALES_NICKNAME,
+    phone:        toIntlPhone(CENTRAL_SALES_TEL),
+    phoneDisplay: toDisplayPhone(CENTRAL_SALES_TEL),
+    email:        fallback.email,
+    avatarUrl:    null,
+    isAssigned:   false,
+  };
 }
 
 /** Build a resolved rep contact (name + nickname + tel + photo) from a
