@@ -26,6 +26,7 @@ import { BarChart3, ArrowLeft, User } from "lucide-react";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportMomoHistoryAll } from "@/actions/admin/export/momo-history";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
+import { deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +103,8 @@ async function loadHistory(
     if (r.shipment_status === "WAITING_SELLER_SHIP") continue;
     const userCode = typeof r.raw?.user_code === "string" ? r.raw.user_code : "—";
     const userGroup = typeof r.raw?.user_group === "string" ? r.raw.user_group : "PR";
-    const guessedPr = `${userGroup}${userCode}`;
+    // deriveMomoMemberCode collapses MOMO's mangled "PR+PR" group → "PR" (2026-07-09).
+    const guessedPr = deriveMomoMemberCode(userGroup, userCode);
 
     const cbm = Number(r.cbm ?? 0);
     const kgs = Number(r.weight_kg ?? 0);
