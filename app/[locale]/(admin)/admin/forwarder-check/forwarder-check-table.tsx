@@ -39,6 +39,7 @@ import {
   adminRemoveFromCheckQueue,
 } from "@/actions/admin/forwarder-check";
 import { confirm } from "@/components/ui/confirm";
+import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
 import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 
 // ────────────────────────────────────────────────────────────
@@ -795,71 +796,35 @@ export function ForwarderCheckTable({
         </div>
       )}
 
-      {/* Confirm-before-bill modal — shows the financial impact + channels.
-          Legacy used a sweetalert; we use a native dialog overlay for parity
-          with other Wave 14-16 confirm flows (`/admin/wallet/add`, etc.). */}
-      {confirmingBill && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bill-confirm-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          // backdrop click does NOT close (owner 2026-07-05)
-        >
-          <div className="w-full max-w-md rounded-2xl border border-border bg-white p-5 shadow-xl">
-            <h2 id="bill-confirm-title" className="text-lg font-semibold text-foreground">
-              ยืนยันแจ้งชำระเงินลูกค้า
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              การกระทำนี้จะเปลี่ยนสถานะรายการเป็น <b>5 · รอชำระเงิน</b> และส่ง SMS แจ้งลูกค้าทันที.
-              เมื่อแจ้งแล้วจะลบรายการออกจากคิวตรวจสอบโดยอัตโนมัติ.
-            </p>
-
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-xs text-muted">จำนวนรายการ</dt>
-                <dd className="font-semibold">{summary.rowCount}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">จำนวนลูกค้า</dt>
-                <dd className="font-semibold">{summary.customerCount}</dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-xs text-muted">รวมยอดบิล</dt>
-                <dd className="font-mono text-xl font-bold text-red-700">฿{thb(summary.total)}</dd>
-              </div>
-            </dl>
-
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-              <div className="font-medium">ช่องทางแจ้งเตือน:</div>
-              <ul className="mt-1 list-disc list-inside space-y-0.5">
-                <li>📱 SMS — เปิดใช้งาน (ThaiBulkSMS gateway)</li>
-                <li>💬 LINE OA — เปิดใช้งาน (push ผ่าน @pacred · เฉพาะลูกค้าที่ link LINE แล้ว)</li>
-                <li>📧 Email — เปิดใช้งาน (fallback เมื่อไม่มี LINE · ต้องมี email ใน tb_users)</li>
-              </ul>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmingBill(false)}
-                disabled={pending}
-                className="rounded-md border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt disabled:opacity-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={runBill}
-                disabled={pending}
-                className="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:bg-gray-300"
-              >
-                {pending ? "กำลังแจ้ง..." : `ยืนยันแจ้งชำระเงิน ${summary.rowCount} รายการ`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Itemized confirm-before-bill popup (§0f) — lists the ticked rows + per-row
+          จำนวนเงิน + a TOTAL footer (Σ outstanding, the same number the bill uses).
+          On confirm → the unchanged runBill() (adminCallPriceUser). The status-change
+          + SMS/LINE/Email channel notice is carried in `note`. */}
+      <SelectedItemsConfirmDialog
+        open={confirmingBill}
+        title={`รายการที่เลือก ${summary.rowCount}/${rows.length} รายการ`}
+        note={
+          <>
+            การกระทำนี้จะเปลี่ยนสถานะเป็น <b>5 · รอชำระเงิน</b> · ส่ง SMS / LINE OA / Email
+            แจ้งลูกค้าทันที ({summary.customerCount} ลูกค้า) · เมื่อแจ้งแล้วจะลบออกจากคิวตรวจสอบอัตโนมัติ
+          </>
+        }
+        rows={rows
+          .filter((r) => selected.has(r.id))
+          .map((r) => ({
+            orderNo: `#${r.id}`,
+            tracking: r.tracking_chn ?? "-",
+            customerCode: r.userid,
+            status: STATUS_LABEL[r.status] ?? r.status,
+            amount: r.outstanding_thb,
+          }))}
+        showAmount
+        total={summary.total}
+        confirmLabel={`เรียกเก็บเงินลูกค้ารายการนำเข้า จำนวนเงิน ฿${thb(summary.total)} บาท`}
+        busy={pending}
+        onCancel={() => setConfirmingBill(false)}
+        onConfirm={runBill}
+      />
     </div>
   );
 }
