@@ -69,7 +69,6 @@ import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
-import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import {
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
@@ -1000,21 +999,22 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
 }
 
 /** การเก็บเงิน · PCS L2428 — paymethod "1" ต้นทาง / "2" ปลายทาง.
- *  Upcountry external courier → the zone rule wants COD (ปลายทาง): pre-select "2"
- *  + show a red "ต่างจังหวัด เก็บปลายทางอัตโนมัติ" notice. The dropdown stays
- *  editable behind the EditableRow "แก้ไข" toggle (owner: lock but backend-editable). */
+ *  Owner 2026-07-09: DEFAULT = ต้นทาง (คิดค่าส่งจริง — the real Flash cost + margin
+ *  is auto-filled + billed upfront). COD (ปลายทาง) is a MANUAL choice only, shown in
+ *  red when the stored paymethod === "2" (the customer asked for เอกชน ปลายทาง). The
+ *  dropdown stays editable behind the EditableRow "แก้ไข" toggle. */
 export function EditPayMethodField({
   fId,
   paymethod,
-  zip,
-  fshipby,
+  zip: _zip,
+  fshipby: _fshipby,
 }: { fId: number; paymethod: string | null; zip?: string | null; fshipby?: string | null }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const isCod = derivePayMethodForDelivery(fshipby ?? "", { zip }) === "2";
-  const initialPay = (paymethod === "2" ? "2" : paymethod === "1" ? "1" : isCod ? "2" : "1") as "1" | "2";
+  const isManualCod = paymethod === "2"; // stored "2" = admin chose ปลายทาง COD
+  const initialPay = (paymethod === "2" ? "2" : "1") as "1" | "2";
   const [payVal, setPayVal] = useState<"1" | "2">(initialPay);
-  const showCodNotice = isCod && paymethod !== "2";
+  const payDisplay = isManualCod ? "ปลายทาง COD (ลูกค้าขอ)" : "ต้นทาง (คิดค่าส่งจริง)";
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -1025,27 +1025,20 @@ export function EditPayMethodField({
         setEditing={setEditing}
         display={
           <span className="inline-flex flex-col gap-0.5">
-            <span className={paymethod === "2" ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
-              {PAY_LABEL[paymethod ?? ""] ?? paymethod ?? "—"}
+            <span className={isManualCod ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
+              {payDisplay}
             </span>
-            {showCodNotice && (
-              <span className="text-[11px] font-medium text-red-600">
-                ปลายทาง (COD) · ต่างจังหวัด เก็บปลายทางอัตโนมัติ
-              </span>
-            )}
           </span>
         }
       >
         {(close) => (
           <>
-            {isCod && (
-              <p className="text-[11px] text-red-600 mb-1">
-                ต่างจังหวัด · ระบบแนะนำ “ปลายทาง (COD)” — แก้ได้หากต้องเก็บต้นทาง
-              </p>
-            )}
+            <p className="text-[11px] text-muted-foreground mb-1">
+              ค่าเริ่มต้น: ต้นทาง (คิดค่าส่งจริง) — เลือก “ปลายทาง COD” หากลูกค้าขอเก็บปลายทาง
+            </p>
             <select className={selectCls} value={payVal} onChange={(e) => setPayVal(e.target.value as "1" | "2")}>
-              <option value="1">ต้นทาง</option>
-              <option value="2">ปลายทาง</option>
+              <option value="1">ต้นทาง (คิดค่าส่งจริง)</option>
+              <option value="2">ปลายทาง COD (ลูกค้าขอ)</option>
             </select>
             <div className="flex gap-2">
               <button type="button" disabled={pending} className={btnSave}

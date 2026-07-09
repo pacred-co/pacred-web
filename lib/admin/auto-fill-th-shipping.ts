@@ -34,7 +34,7 @@ export async function autoFillThShippingForForwarder(
   const { data: row, error } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fshipby, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight",
+      "id, fshipby, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight, fwidth, flength, fheight",
     )
     .eq("id", fId)
     .maybeSingle<{
@@ -45,8 +45,16 @@ export async function autoFillThShippingForForwarder(
       faddressprovince: string | null;
       faddressdistrict: string | null;
       fweight: number | string | null;
+      fwidth: number | string | null;
+      flength: number | string | null;
+      fheight: number | string | null;
     }>();
   if (error || !row) return null;
+
+  // girth (w+l+h, cm) — Flash prices by max(kg, size); pass it so a light/bulky
+  // parcel isn't under-quoted. 0 when dims are unknown (weight-only path is safe).
+  const sizeCm =
+    (Number(row.fwidth) || 0) + (Number(row.flength) || 0) + (Number(row.fheight) || 0);
 
   const fill = resolveAutoThShippingFill({
     fshipby: row.fshipby,
@@ -55,6 +63,7 @@ export async function autoFillThShippingForForwarder(
     province: row.faddressprovince,
     amphoe: row.faddressdistrict,
     weightKg: Number(row.fweight) || 0,
+    sizeCm,
   });
   if (!fill) return null;
 

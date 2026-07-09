@@ -23,10 +23,11 @@
  *   - cAmount    จำนวน                        (required · >= 1)
  */
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminAddItemToCart } from "@/actions/admin/cart";
 import { ADMIN_CART_PROVIDERS } from "@/lib/validators/admin-cart";
+import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 
 type Props = {
   /** Initial userid (cart owner) — typically from ?userid= URL param. */
@@ -34,6 +35,11 @@ type Props = {
   /** Pacred-admin's own legacy adminid (resolved server-side) — fallback
    *  if the staff forgets to fill in a customer userid. */
   myAdminId: string;
+  /** customs.fx_rates (THB per 1 unit) — the price-per-piece currency
+   *  selector. Non-CNY → ¥-equivalent (server re-derives on submit). */
+  fxRates?: Record<string, number>;
+  /** Live yuan sell rate (tb_settings.rsdefault) — for the ฿ preview. */
+  rsDefault?: number;
 };
 
 // Tailwind shorthand classes for repeat use.
@@ -41,11 +47,22 @@ const LABEL_CLS = "block text-xs font-medium text-muted mb-1.5";
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500";
 
-export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
+export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rsDefault }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Price-per-piece currency selector (controlled so the live ฿ preview
+  // recomputes). Default CNY = หยวน.
+  const [priceStr, setPriceStr] = useState<string>("");
+  const [currency, setCurrency] = useState<string>("CNY");
+  const currencyOptions = useMemo(() => {
+    const keys = ["CNY", "THB", ...Object.keys(fxRates ?? {})];
+    return Array.from(new Set(keys.map((k) => k.toUpperCase())));
+  }, [fxRates]);
+  const priceNum = Number(priceStr) || 0;
+  const yuanEquiv = toYuanEquivalent(priceNum, currency, fxRates ?? {});
+  const thbPreview = yuanEquiv.yuan * (rsDefault ?? 0);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -88,6 +105,11 @@ export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
           camount,
           ccolor:    String(fd.get("cColor") ?? "").trim(),
           csize:     String(fd.get("cSize") ?? "").trim(),
+          // Non-CNY → server re-derives cprice = ¥-equivalent from the FX pool.
+          // CNY → omitted → cprice used verbatim (byte-identical to today).
+          ...(currency !== "CNY"
+            ? { input_currency: currency, input_price: cprice }
+            : {}),
         },
       });
 
@@ -246,18 +268,49 @@ export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
       <div className="grid md:grid-cols-2 gap-3">
         <div>
           <label htmlFor="cPrice" className={LABEL_CLS}>
-            4. ราคาต่อชิ้น (¥) <span className="text-red-500">*</span>
+            4. ราคาต่อชิ้น <span className="text-red-500">*</span>
           </label>
-          <input
-            id="cPrice"
-            name="cPrice"
-            type="number"
-            min="0.01"
-            step="0.01"
-            required
-            className={`${INPUT_CLS} text-right font-mono`}
-            placeholder="0.00"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              id="cPrice"
+              name="cPrice"
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+              value={priceStr}
+              onChange={(e) => setPriceStr(e.target.value)}
+              className={`${INPUT_CLS} text-right font-mono`}
+              placeholder="0.00"
+            />
+            <select
+              aria-label="สกุลเงิน"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className={`${INPUT_CLS} w-auto`}
+            >
+              {currencyOptions.map((c) => (
+                <option key={c} value={c}>{c === "CNY" ? "หยวน (CNY/RMB)" : c}</option>
+              ))}
+            </select>
+          </div>
+          {/* Transparency: original → ¥-equivalent → ฿ (×rsdefault) */}
+          {priceNum > 0 && yuanEquiv.yuan > 0 && (
+            <p className="mt-1 text-[11px] text-muted">
+              {currency !== "CNY" && (
+                <>{priceNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency} → </>
+              )}
+              <b className="text-foreground">¥{yuanEquiv.yuan.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+              {rsDefault ? (
+                <> → ฿{thbPreview.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+              ) : null}
+            </p>
+          )}
+          {yuanEquiv.flagged && priceNum > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-red-600">
+              ไม่พบเรตสกุลเงินนี้ — บันทึกเป็นหยวนตามที่กรอก
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="cAmount" className={LABEL_CLS}>

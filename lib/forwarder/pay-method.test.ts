@@ -44,27 +44,31 @@ t("isPayAtOriginCarrier(null) false", () => assert.strictEqual(isPayAtOriginCarr
 t("PAY_AT_ORIGIN_CARRIERS has exactly 7 entries (incl. PRF)", () =>
   assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 7));
 
-// ── derivePayMethodForDelivery — zone-aware (upcountry external → COD) ───
+// ── derivePayMethodForDelivery — DEFAULT ต้นทาง "1" for ALL carriers/zones ───
+// Owner 2026-07-09: the upcountry-external→COD auto-flip is REMOVED. The real Flash
+// cost + margin is auto-filled + billed upfront; COD "2" is a MANUAL admin choice.
 // "50000" = เชียงใหม่ (upcountry) · "10240" = กทม (free/maomao zone).
-t("upcountry + Flash (2) → '2' COD (the fix)", () =>
-  assert.strictEqual(derivePayMethodForDelivery("2", { zip: "50000" }), "2"));
-t("upcountry + J&T (24) → '2' COD", () =>
-  assert.strictEqual(derivePayMethodForDelivery("24", { zip: "50000" }), "2"));
-t("upcountry + ไปรษณีย์ (11) → '2' COD", () =>
-  assert.strictEqual(derivePayMethodForDelivery("11", { zip: "50000" }), "2"));
-t("upcountry + PCSE (own-fleet) → '1' ต้นทาง (never zone-flipped)", () =>
+t("upcountry + Flash (2) → '1' ต้นทาง (COD auto-flip removed)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("2", { zip: "50000" }), "1"));
+t("upcountry + J&T (24) → '1' ต้นทาง", () =>
+  assert.strictEqual(derivePayMethodForDelivery("24", { zip: "50000" }), "1"));
+t("upcountry + ไปรษณีย์ (11) → '1' ต้นทาง", () =>
+  assert.strictEqual(derivePayMethodForDelivery("11", { zip: "50000" }), "1"));
+t("upcountry + PCSE (own-fleet) → '1' ต้นทาง", () =>
   assert.strictEqual(derivePayMethodForDelivery("PCSE", { zip: "50000" }), "1"));
 t("upcountry + PCS self-pickup → '1'", () =>
   assert.strictEqual(derivePayMethodForDelivery("PCS", { zip: "50000" }), "1"));
 t("upcountry + PRF เหมาๆ → '1' (own-fleet)", () =>
   assert.strictEqual(derivePayMethodForDelivery("PRF", { zip: "50000" }), "1"));
-t("BKK zip + Flash (2) → '1' ต้นทาง (metro carrier-derived)", () =>
+t("BKK zip + Flash (2) → '1' ต้นทาง", () =>
   assert.strictEqual(derivePayMethodForDelivery("2", { zip: "10240" }), "1"));
 t("maomao zip + PRF → '1'", () =>
   assert.strictEqual(derivePayMethodForDelivery("PRF", { zip: "10240" }), "1"));
-t("self-pickup addressID='PCS' + upcountry zip → '1' (own-fleet guard)", () =>
+t("self-pickup addressID='PCS' + upcountry zip → '1'", () =>
   assert.strictEqual(derivePayMethodForDelivery("PCS", { addressID: "PCS", zip: "50000" }), "1"));
-t("upcountry + private carrier (5) → '2' (already COD)", () =>
-  assert.strictEqual(derivePayMethodForDelivery("5", { zip: "50000" }), "2"));
+t("upcountry + private carrier (5) → '1' ต้นทาง (COD is now manual-only)", () =>
+  assert.strictEqual(derivePayMethodForDelivery("5", { zip: "50000" }), "1"));
+t("null carrier + no address → '1' default", () =>
+  assert.strictEqual(derivePayMethodForDelivery(null, {}), "1"));
 
 console.log(`\n  ${pass} passed · 0 failed\n`);
