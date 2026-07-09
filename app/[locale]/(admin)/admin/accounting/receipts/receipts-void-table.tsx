@@ -63,6 +63,41 @@ function isVoidable(rstatus: string): boolean {
   return rstatus === "1" || rstatus === "3";
 }
 
+/**
+ * สถานะพิมพ์ต้นฉบับ / สำเนา cell (legacy hs-receipt-forwarder.php L339-356).
+ * When printed → green/blue "พิมพ์แล้ว" pill + the print date + the printing
+ * admin id; otherwise a muted "ยังไม่พิมพ์" pill. `tone` mirrors the legacy
+ * badge colour (ต้นฉบับ = success/green · สำเนา = info/blue).
+ */
+function PrintStatusCell({
+  print,
+  tone,
+}: {
+  print: { done: boolean; date: string | null; adminId: string | null };
+  tone: "emerald" | "sky";
+}) {
+  if (!print.done) {
+    return (
+      <span className="inline-block rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 whitespace-nowrap">
+        ยังไม่พิมพ์
+      </span>
+    );
+  }
+  const pill =
+    tone === "emerald"
+      ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+      : "border-sky-300 bg-sky-100 text-sky-700";
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${pill}`}>
+        พิมพ์แล้ว
+      </span>
+      {print.date && <span className="text-[10px] text-slate-500 whitespace-nowrap">{fmtDate(print.date)}</span>}
+      {print.adminId && <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">{print.adminId}</span>}
+    </div>
+  );
+}
+
 export function ReceiptsVoidTable({
   rows,
   totals,
@@ -156,6 +191,7 @@ export function ReceiptsVoidTable({
               </th>
               <th className="px-2 py-2 text-left font-medium">ID</th>
               <th className="px-2 py-2 text-left font-medium">เลขที่เอกสาร</th>
+              <th className="px-2 py-2 text-left font-medium">เลขที่ฝากนำเข้า</th>
               <th className="px-2 py-2 text-left font-medium">วันที่ออก</th>
               <th className="px-2 py-2 text-center font-medium">สลิป</th>
               <th className="px-2 py-2 text-left font-medium">วันที่สร้าง</th>
@@ -169,6 +205,8 @@ export function ReceiptsVoidTable({
               <th className="px-2 py-2 text-right font-medium">
                 <Explain label="มูลค่าสุทธิ" def={GUIDE.bill_net_payable} align="right" />
               </th>
+              <th className="px-2 py-2 text-center font-medium">สถานะพิมพ์ต้นฉบับ</th>
+              <th className="px-2 py-2 text-center font-medium">สถานะพิมพ์สำเนา</th>
               <th className="px-2 py-2 text-center font-medium">สถานะ</th>
               <th className="px-2 py-2 text-center font-medium">ตัวเลือก</th>
             </tr>
@@ -176,7 +214,7 @@ export function ReceiptsVoidTable({
           <tbody className="text-[11px]">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={14} className="px-3 py-12 text-center text-slate-500 text-sm">
+                <td colSpan={17} className="px-3 py-12 text-center text-slate-500 text-sm">
                   ไม่พบใบเสร็จในเงื่อนไขที่เลือก
                 </td>
               </tr>
@@ -222,6 +260,24 @@ export function ReceiptsVoidTable({
                       </Link>
                       {r.refid && r.refid.trim() && (
                         <div className="text-[10px] text-slate-500 font-mono">{r.refid}</div>
+                      )}
+                    </td>
+                    {/* ②b เลขที่ฝากนำเข้า — fid(s) → forwarder detail (legacy L298-309) */}
+                    <td className="px-2 py-2 align-middle">
+                      {r.forwarderIds.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                          {r.forwarderIds.map((fid) => (
+                            <Link
+                              key={fid}
+                              href={`/admin/forwarders/${fid}`}
+                              className="font-mono text-sky-700 hover:underline whitespace-nowrap"
+                            >
+                              {fid}
+                            </Link>
+                          ))}
+                        </div>
                       )}
                     </td>
                     {/* ③ วันที่ออก (rdate) */}
@@ -278,6 +334,14 @@ export function ReceiptsVoidTable({
                     <td className="px-2 py-2 text-right tabular-nums font-semibold text-primary-700">
                       ฿{fmtThb(r.ramount)}
                     </td>
+                    {/* ⑪b สถานะพิมพ์ต้นฉบับ (legacy statusPrint · L339-347) */}
+                    <td className="px-2 py-2 text-center align-middle">
+                      <PrintStatusCell print={r.printOriginal} tone="emerald" />
+                    </td>
+                    {/* ⑪c สถานะพิมพ์สำเนา (legacy statusPrintCopy · L348-356) */}
+                    <td className="px-2 py-2 text-center align-middle">
+                      <PrintStatusCell print={r.printCopy} tone="sky" />
+                    </td>
                     {/* ⑫ สถานะ (Pacred RSTATUS_CFG · legacy ● dot style) */}
                     <td className="px-2 py-2 text-center">
                       <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-medium ${cfg.text}`}>
@@ -312,12 +376,12 @@ export function ReceiptsVoidTable({
           {rows.length > 0 && (
             <tfoot>
               <tr className="bg-cyan-100 font-semibold text-sm text-cyan-900 [&>td]:border-cyan-200">
-                <td colSpan={10} className="px-3 py-2.5 text-right">
+                <td colSpan={11} className="px-3 py-2.5 text-right">
                   รวม {rows.length.toLocaleString()} รายการ ในหน้านี้
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.ramount)}</td>
-                <td colSpan={2} />
+                <td colSpan={4} />
               </tr>
             </tfoot>
           )}
