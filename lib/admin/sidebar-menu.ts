@@ -827,7 +827,10 @@ const blockWithdrawalList: MenuItem = {
       icon: "Banknote",
       badge: "withdrawalAll",
       children: [
-        { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
+        // 2026-07-09 (faithful-look · ภูม · withdrawal-audit) — was /admin/sales-payouts?kind=shop-goods
+        // but that route ignores ?kind (it's the report-user-sales-history port). The real faithful
+        // เบิกเงินค่าสินค้า (report-shops-profit-pay.php · full เบิก→จ่าย→พิมพ์ loop) is /admin/shop-disbursement.
+        { labelKey: "withdrawal.shopGoods",   href: "/admin/shop-disbursement",  icon: "HandCoins", badge: "shopPayout" },
         // Phase 3 — container-costs deeper-future per 2026-05-20 brief.
         { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney", phase: 3 },
         // Phase 2 — Wave 2 (2026-06-12) repointed from the Tailwind placeholder
@@ -838,7 +841,9 @@ const blockWithdrawalList: MenuItem = {
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
         // Phase 2 — sales-only commissions / payouts (not live to customers).
         { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
-        { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
+        // 2026-07-09 (faithful-look · ภูม) — was /admin/commissions (= SALES-rep commission, wrong feature).
+        // ค่าคอมล่ามจีน = withdraw-commission-interpreter.php → /admin/accounting/withdraw/comm-interpreter.
+        { labelKey: "withdrawal.interpreterBonus", href: "/admin/accounting/withdraw/comm-interpreter", icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
         { labelKey: "withdrawal.driver",      href: "/admin/driver-runs",                    icon: "Truck",                                     phase: 2 },
       ],
     },

@@ -127,8 +127,8 @@ export function ShopDisbursementCreateForm({
   return (
     <div className="space-y-3">
       <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-black/10">
-        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-          <thead className="bg-gray-50 text-xs text-gray-600">
+        <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+          <thead className="bg-orange-500 text-xs text-white">
             <tr>
               <th className="px-3 py-2 text-left">
                 <input
@@ -239,8 +239,8 @@ export function ShopDisbursementCreateForm({
 
             <div className="space-y-4 px-5 py-4">
               <div className="overflow-x-auto rounded-lg border border-black/10">
-                <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                  <thead className="bg-gray-50 text-xs text-gray-600">
+                <table className="min-w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                  <thead className="bg-orange-500 text-xs text-white">
                     <tr>
                       <th className="px-3 py-2 text-left">#</th>
                       <th className="px-3 py-2 text-left">เลขที่ออเดอร์</th>

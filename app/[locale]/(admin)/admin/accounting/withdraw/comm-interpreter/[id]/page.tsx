@@ -123,8 +123,8 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
             <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[700px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[700px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-3 py-2">hno</th>
                     <th className="px-3 py-2">วันที่สั่งจ่าย</th>
