@@ -147,10 +147,12 @@ function YearSelect({
   startYear,
   value,
   name = "year",
+  className,
 }: {
   startYear: number;
   value?: string;
   name?: string;
+  className?: string;
 }) {
   const currentYear = new Date().getFullYear();
   // Legacy clamp: if $startYear > currentYear, set $startYear = currentYear
@@ -158,7 +160,7 @@ function YearSelect({
   const years: number[] = [];
   for (let y = currentYear; y >= minYear; y--) years.push(y);
   return (
-    <select name={name} id={name} defaultValue={value ?? String(currentYear)}>
+    <select name={name} id={name} defaultValue={value ?? String(currentYear)} className={className}>
       {years.map((y) => (
         <option key={y} value={String(y)}>
           {y}
@@ -457,70 +459,92 @@ export default async function AdminAccountingWithdrawPage({
                                 ถอนเงิน โอนโดยตรง
                               </h3>
                             </div>
+                            {/* faithful-look 2026-07-09 (ภูม): the legacy filter
+                                was bare <br/>-separated controls ("ลอยโล่งๆ").
+                                Framed in a bordered card + styled inputs to match
+                                our house-style — same fields/logic, just boxed. */}
                             <form
                               className="pt-1"
                               method="GET"
                               action="/admin/accounting/withdraw"
                             >
-                              <label
-                                className="form-control-label"
-                                htmlFor="dateGroup"
-                              >
-                                วันที่ชำระเงินแบบรายเดือน
-                              </label>
-                              {/* generateYearDropdown(2021) — start year is 2021
-                                  per acc-withdraw.php L112 */}
-                              <YearSelect startYear={2021} value={sp.year} />
-                              {/* Hardcoded month list — acc-withdraw.php L113-126 */}
-                              <select
-                                name="month"
-                                id="month"
-                                defaultValue={sp.month ?? "01"}
-                              >
-                                <option value="01">01</option>
-                                <option value="02">02</option>
-                                <option value="03">03</option>
-                                <option value="04">04</option>
-                                <option value="05">05</option>
-                                <option value="06">06</option>
-                                <option value="07">07</option>
-                                <option value="08">08</option>
-                                <option value="09">09</option>
-                                <option value="10">10</option>
-                                <option value="11">11</option>
-                                <option value="12">12</option>
-                              </select>
-                              <button
-                                className="btn btn-outline-success btn-sm btn-rounded"
-                                name="dateGroup"
-                                value="true"
-                                type="submit"
-                              >
-                                <i className="fas fa-search"></i> ค้นหาข้อมูลด้วยปีและเดือน
-                              </button>
-                              <br />
-                              <label
-                                className="form-control-label"
-                                htmlFor="date"
-                              >
-                                วันที่ชำระเงิน
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control2 shawCalRanges"
-                                name="date"
-                                defaultValue={dateInputValue}
-                              />
-                              <button
-                                className="btn btn-outline-success btn-sm btn-rounded"
-                                type="submit"
-                              >
-                                <i className="fas fa-search"></i> ค้นหาข้อมูล
-                              </button>
-                              <br />
-                              <span className="font-14 text-danger">
-                                {filterBanner}
-                              </span>
+                              <div className="mt-2 max-w-xl space-y-3 rounded-xl border border-border bg-surface-alt/30 p-3.5">
+                                {/* row 1 — month/year */}
+                                <div className="flex flex-wrap items-end gap-2">
+                                  <div className="flex flex-col gap-1">
+                                    <label
+                                      className="text-xs font-medium text-foreground"
+                                      htmlFor="dateGroup"
+                                    >
+                                      วันที่ชำระเงินแบบรายเดือน
+                                    </label>
+                                    <div className="flex gap-1.5">
+                                      {/* generateYearDropdown(2021) — acc-withdraw.php L112 */}
+                                      <YearSelect
+                                        startYear={2021}
+                                        value={sp.year}
+                                        className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                      />
+                                      {/* Hardcoded month list — acc-withdraw.php L113-126 */}
+                                      <select
+                                        name="month"
+                                        id="month"
+                                        defaultValue={sp.month ?? "01"}
+                                        className="rounded-lg border border-border bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                      >
+                                        <option value="01">01</option>
+                                        <option value="02">02</option>
+                                        <option value="03">03</option>
+                                        <option value="04">04</option>
+                                        <option value="05">05</option>
+                                        <option value="06">06</option>
+                                        <option value="07">07</option>
+                                        <option value="08">08</option>
+                                        <option value="09">09</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                                    name="dateGroup"
+                                    value="true"
+                                    type="submit"
+                                  >
+                                    <i className="fas fa-search"></i> ค้นหาข้อมูลด้วยปีและเดือน
+                                  </button>
+                                </div>
+
+                                {/* row 2 — date range */}
+                                <div className="flex flex-wrap items-end gap-2 border-t border-border/60 pt-3">
+                                  <div className="flex flex-col gap-1">
+                                    <label
+                                      className="text-xs font-medium text-foreground"
+                                      htmlFor="date"
+                                    >
+                                      วันที่ชำระเงิน
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="form-control2 shawCalRanges min-w-[240px] rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                      name="date"
+                                      defaultValue={dateInputValue}
+                                    />
+                                  </div>
+                                  <button
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                                    type="submit"
+                                  >
+                                    <i className="fas fa-search"></i> ค้นหาข้อมูล
+                                  </button>
+                                </div>
+
+                                <span className="block text-xs font-medium text-danger">
+                                  {filterBanner}
+                                </span>
+                              </div>
                             </form>
                           </div>
 
