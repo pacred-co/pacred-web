@@ -280,13 +280,15 @@ export function PerTrackingEditorClient({
         byWeight = kgPerCbm > threshold;
         transport = byWeight ? pKg : pCbm;
       } else {
-        // owner 2026-06-23: NO ค่าเทียบ → DEFAULT "คิดตามคิว" (whole-order CBM) — NOT
-        // per-line max-of-both (which billed dense trackings by KG · the 4,324.05 the
-        // owner flagged on 1780103566 vs the wanted whole-order 4,083.96). This now
-        // EQUALS the saved total: resolve-rate bills CBM per-line, and Σ(cbm_i×rate) =
-        // (Σcbm)×rate = pCbm. KG only via the ค่าเทียบ tick; fall back to KG ONLY when
-        // there is no CBM rate at all (avoid ฿0).
-        if (rateCbm > 0) {
+        // owner 2026-07-08: ค่าเทียบ 250 = SYSTEM DEFAULT (reverses the 2026-06-23
+        // "default CBM"). Even a manual rate without the tick charges DENSE cargo
+        // (KGPerCBM > 250) by weight — matching the server so the preview == the save.
+        // Fall back to whichever basis has a rate when one is missing (avoid ฿0).
+        const dense = kgPerCbm > 250;
+        if (dense && rateKg > 0) {
+          byWeight = true;
+          transport = pKg;
+        } else if (rateCbm > 0) {
           byWeight = false;
           transport = pCbm;
         } else {

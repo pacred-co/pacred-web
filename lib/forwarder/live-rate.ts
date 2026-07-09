@@ -29,6 +29,7 @@ import {
   resolveForwarderRate,
   resolveBothBasisRates,
   clampComparison,
+  COMPARISON_DEFAULT,
   type ResolveRateCandidates,
   type ResolveRateInput,
   type ResolvedRate,
@@ -257,14 +258,17 @@ export async function resolveLiveForwarderRate(
   // resolver's EXISTING comparisonEnabled/comparisonValue inputs (force ON +
   // the admin-typed threshold), so NO rate math changes. When OFF (the default
   // for MOMO import / preview), the stored values flow through unchanged.
-  // owner 2026-06-23: DEFAULT = คิดตามคิว (CBM). The KG-for-dense comparison is now
-  // OPT-IN per order via the ค่าเทียบ TICK ONLY — the customer's stored userComparison
-  // flag no longer auto-enables it (that flag is what billed PR106's dense boxes by
-  // KG when the owner wanted CBM). Ticked → clamp the typed ค่าเทียบ to [250, 350].
-  const comparisonEnabled = ctx.customComparisonSwitch === true;
+  // owner 2026-07-08: ค่าเทียบ = 250 is now the SYSTEM DEFAULT applied to EVERY order
+  // (reverses the 2026-06-23 "default = คิดตามคิว/CBM"). Dense cargo (KGPerCBM > ค่าเทียบ)
+  // AUTO-charges by weight so it can never undercharge — e.g. 46.5kg / 0.044คิว
+  // (=1,048 KGPerCBM) now prices 930 (น้ำหนัก) from the start, not 262 (คิว). The
+  // per-order ค่าเทียบ TICK still OVERRIDES with the staff-typed threshold. The
+  // comparison threshold defaults to the customer's stored value, floored to
+  // COMPARISON_DEFAULT (250) — clampComparison keeps it in [250, 350].
+  const comparisonEnabled = true;
   const comparisonValue = ctx.customComparisonSwitch === true
     ? clampComparison(ctx.customComparisonValue)
-    : ctx.userComparisonValue;
+    : clampComparison(Number(ctx.userComparisonValue) > 0 ? ctx.userComparisonValue : COMPARISON_DEFAULT);
 
   // Build the resolver INPUT once + share it between the winner (the bill) and
   // the both-basis probe (the display) so the per-basis unit rates shown match
