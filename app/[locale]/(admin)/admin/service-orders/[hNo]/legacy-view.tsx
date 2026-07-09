@@ -62,6 +62,8 @@ import { ShopOrderCostSection } from "./shop-cost-section";
 // tax-document choice + juristic-WHT signal on the shop detail header (the
 // forwarder detail already has it; the shop side was the gap). Display-only.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
+import { ProductDetailLines } from "@/components/shop/product-detail-lines";
+import { TranslateButton } from "@/components/translate/translate-button";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -807,16 +809,23 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                                     <img src={it.coverUrl} alt={it.ctitle ?? ""} className="h-10 w-10 rounded border border-border object-cover" />
                                   </a>
                                 ) : null}
-                                <div className="min-w-0">
-                                  {it.curl ? (
-                                    <a href={it.curl} target="_blank" rel="noopener noreferrer" className="block truncate max-w-[280px] text-primary-600 hover:underline" title={it.ctitle ?? ""}>
-                                      {it.ctitle || it.curl}
-                                    </a>
-                                  ) : (
-                                    <span className="block truncate max-w-[280px]">{it.ctitle || "—"}</span>
-                                  )}
-                                  {(it.ccolor || it.csize) && (
-                                    <p className="text-[11px] text-muted">{it.ccolor}{it.ccolor && it.csize ? " · " : ""}{it.csize}</p>
+                                <div className="min-w-0 max-w-[320px]">
+                                  {/* Shared full-detail renderer (title · สี · ขนาด · รายละเอียด)
+                                      = same block as the customer side → no มีๆหายๆ drift.
+                                      cdetails is now shown in every status (was dropped here). */}
+                                  <ProductDetailLines
+                                    title={it.ctitle}
+                                    url={it.curl}
+                                    color={it.ccolor}
+                                    size={it.csize}
+                                    details={it.cdetails}
+                                  />
+                                  {/* หมายเหตุ (cnote) — admin-internal, shown only on the admin surface */}
+                                  {it.cnote && it.cnote.trim() !== "" && (
+                                    <div className="mt-1">
+                                      <p className="text-[11px] text-amber-700 dark:text-amber-400 whitespace-pre-wrap">📝 หมายเหตุ: {it.cnote}</p>
+                                      <TranslateButton text={it.cnote} />
+                                    </div>
                                   )}
                                   {refunded && <span className="mt-0.5 inline-block rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-medium text-white">คืนเงิน</span>}
                                 </div>

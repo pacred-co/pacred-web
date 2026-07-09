@@ -31,6 +31,7 @@ import {
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
 import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings";
+import { TranslateButton } from "@/components/translate/translate-button";
 // 2026-06-19 (owner ภูม #2) — customer-facing import price-breakdown. PURE +
 // DISPLAY-ONLY: turns the ALREADY-STORED rate decision (frefrate/frefprice/
 // ftotalprice) into the same "หาค่าเทียบ / คิดตามน้ำหนัก / คิดตามปริมาตร / ระบบเลือก"
@@ -1495,6 +1496,7 @@ export default async function ServiceImportDetailPage({
                               <p className="text-sm text-foreground">
                                 {row.fdetail}
                               </p>
+                              <TranslateButton text={row.fdetail} className="mt-1" />
                               <a
                                 className="image-popup-vertical-fit el-link mt-2 inline-block"
                                 href={coverUrl}
@@ -1508,6 +1510,7 @@ export default async function ServiceImportDetailPage({
                             {row.fnoteuser === "2" && row.fnote && row.fnote !== "" && (
                               <div className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white md:text-left">
                                 {t("adminNotePrefix")} {row.fnote}
+                                <TranslateButton text={row.fnote} className="mt-1" />
                               </div>
                             )}
                           </div>

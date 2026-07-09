@@ -11,6 +11,7 @@ import { CancelButton } from "./cancel-button";
 import { ShopOrderPayButton } from "./shop-order-pay-modal";
 import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
 import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
+import { ProductDetailLines } from "@/components/shop/product-detail-lines";
 
 // Badge colours keyed by the legacy tb_header_order.hstatus code
 // ('1'-'6' + '40' ถึงโกดังจีน · owner 2026-06-16 MOMO arrival).
@@ -291,22 +292,23 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                         <div className="w-16 h-16 rounded-lg bg-surface-alt flex items-center justify-center text-[11px] text-muted">No img</div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-medium text-sm line-clamp-2">{it.title ?? "—"}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          {/* Shared full-detail renderer (ชื่อสินค้า · ชื่อร้าน · สี · ขนาด ·
+                              รายละเอียด) with ZH→TH translate on Chinese fields.
+                              Same block as the admin side → no มีๆหายๆ drift. */}
+                          <ProductDetailLines
+                            title={it.title}
+                            url={it.url}
+                            shopName={it.shop_name}
+                            color={it.color}
+                            size={it.size}
+                            details={it.details}
+                            className="flex-1"
+                          />
                           <span className="text-[11px] rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 shrink-0">
                             {PROVIDER_LABEL[it.provider] ?? it.provider}
                           </span>
                         </div>
-                        {it.shop_name && <p className="text-xs text-muted">🏪 {it.shop_name}</p>}
-                        <p className="text-xs text-muted">
-                          {it.color && <>🎨 {it.color}</>}
-                          {it.size && <> · 📏 {it.size}</>}
-                        </p>
-                        {it.url && (
-                          <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline truncate block">
-                            🔗 {t("viewSource")}
-                          </a>
-                        )}
                         {it.tracking_number && (
                           <p className="text-[11px] mt-1 font-mono text-muted">📦 {it.tracking_number}</p>
                         )}
@@ -316,9 +318,6 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                         </div>
                       </div>
                     </div>
-                    {it.details && (
-                      <p className="mt-2 text-xs text-muted pl-[76px]">📝 {it.details}</p>
-                    )}
                   </li>
                 ))}
               </ul>

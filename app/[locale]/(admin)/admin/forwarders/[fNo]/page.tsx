@@ -98,6 +98,7 @@ import {
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
 import { getTranslations } from "next-intl/server";
+import { TranslateButton } from "@/components/translate/translate-button";
 import {
   User as UserIcon,
   Pencil,
@@ -1111,9 +1112,20 @@ async function tryRenderTbForwarder(
             <div className="pt-1">
               <p className="font-bold text-red-600">รายละเอียดสินค้า</p>
               {r.fdetail && r.fdetail.trim() !== "" && r.fdetail !== "..." ? (
-                <p className="mt-0.5 whitespace-pre-wrap text-muted">{r.fdetail}</p>
+                <>
+                  <p className="mt-0.5 whitespace-pre-wrap text-muted">{r.fdetail}</p>
+                  <TranslateButton text={r.fdetail} className="mt-0.5" />
+                </>
               ) : (
                 <p className="mt-0.5 text-muted">—</p>
+              )}
+              {/* หมายเหตุ (fnote) — always show when present (was only inside the edit form) */}
+              {r.fnote && r.fnote.trim() !== "" && r.fnote !== "..." && (
+                <div className="mt-1.5">
+                  <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">หมายเหตุ</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-muted">{r.fnote}</p>
+                  <TranslateButton text={r.fnote} className="mt-0.5" />
+                </div>
               )}
               {/* 2026-06-11 (ปอน) — รูปสินค้า (fCover) is now uploadable inline
                   here, like legacy PCS update.php's "เปลี่ยนรูปปกสินค้า". Wires the
