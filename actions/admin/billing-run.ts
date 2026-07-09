@@ -1369,7 +1369,7 @@ async function createBillingRunInvoiceImpl(
       const corpNumber = identity.taxId;
       const isJuristic = identity.isJuristic;
 
-      let buyerName = identity.name;
+      const buyerName = identity.name;
       let buyerAddress = "";
       const buyerBranch  = ""; // tb_corporate has no `corporatebranch` column
 
@@ -1649,14 +1649,14 @@ async function createBillingRunInvoiceImpl(
 
 export async function markBillingRunPaid(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
   return withObservability("markBillingRunPaid", markBillingRunPaidImpl)(input);
 }
 
 async function markBillingRunPaidImpl(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   const parsed = markBillingRunPaidSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -1763,6 +1763,13 @@ async function markBillingRunPaidImpl(
       // but FRG2606-00001 stuck). Link = tb_receipt_item (rid, fid) ↔ the invoice's
       // forwarders. Flips ONLY a receipt FULLY covered by this paid invoice. Best-effort
       // — never fails the invoice flip; only '3'→'1' (never touches cancelled/already-paid).
+      // ภูม 2026-07-09 — SURFACE the auto-receipt outcome to the admin. The receipt
+      // auto-issue below is BEST-EFFORT (a failure must never roll back the money-safe
+      // paid flip), but the old code swallowed a failure into a console.error → staff saw
+      // "✓ รับชำระแล้ว" while NO ใบเสร็จ was created + never knew (the exact PR086 /
+      // FRI2607-00015 symptom). Track the result so the UI can warn + prompt a manual issue.
+      let receiptRid: string | null = null;
+      let receiptWarning: string | null = null;
       try {
         const { data: invItems, error: invErr } = await admin
           .from("tb_forwarder_invoice_item")
@@ -1871,16 +1878,32 @@ async function markBillingRunPaidImpl(
               recompAddressOverride: cur.buyer_address ?? undefined,
             });
             if (rcpt.ok) {
+              receiptRid = rcpt.data.rid;
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
               });
             } else if (!rcpt.alreadyIssued) {
+              // Real failure (no_matching_forwarder_rows / mint_failed / insert error /
+              // rid_duplicate). Money already moved → NEVER roll back the paid flip; instead
+              // SURFACE the miss so accounting issues the receipt manually (the PR086 /
+              // FRI2607-00015 case: bill = รับชำระแล้ว but no ใบเสร็จ, silently).
+              receiptWarning =
+                `ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (${rcpt.error}) — กรุณากด "ออกใบเสร็จ" เอง หรือเช็ครายการใบเสร็จที่ค้าง`;
               console.error("[markBillingRunPaid auto-receipt] failed", { error: rcpt.error, invoiceId: v.invoiceId });
             }
+            // rcpt.alreadyIssued → a receipt already covers these rows (synced above) → no warning.
+          } else {
+            receiptWarning =
+              "ใบวางบิลนี้ไม่มีรหัสลูกค้า (userid) — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาออกใบเสร็จเอง";
           }
+        } else {
+          receiptWarning =
+            "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้ — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาตรวจสอบใบวางบิล";
         }
       } catch (e) {
         console.error("[markBillingRunPaid receipt-sync] unexpected", { message: String(e), invoiceId: v.invoiceId });
+        receiptWarning =
+          "เกิดข้อผิดพลาดระหว่างออกใบเสร็จอัตโนมัติ — บันทึกการรับชำระแล้ว · กรุณาตรวจสอบใบเสร็จ/ออกเอง";
       }
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
@@ -1888,7 +1911,14 @@ async function markBillingRunPaidImpl(
       revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
       revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
-      return { ok: true, data: { invoiceId: v.invoiceId } };
+      return {
+        ok: true,
+        data: {
+          invoiceId: v.invoiceId,
+          ...(receiptRid ? { receiptRid } : {}),
+          ...(receiptWarning ? { receiptWarning } : {}),
+        },
+      };
     },
   );
 }
