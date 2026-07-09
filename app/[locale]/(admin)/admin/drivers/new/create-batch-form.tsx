@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { Truck } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
+import { exportFlashPickupCsv } from "@/actions/admin/export/flash-pickup";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -102,6 +103,7 @@ export function CreateBatchForm({
   const [pageLength, setPageLength] = useState<number>(100);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [page, setPage] = useState<number>(1);
+  const [exporting, setExporting] = useState(false);
 
   // Aggregates for the selection summary.
   const summary = useMemo(() => {
@@ -191,6 +193,43 @@ export function CreateBatchForm({
   }
   function clearAll() {
     setSelectedKeys(new Set());
+  }
+
+  // Export the currently-listed external-courier deliveries (Flash carrier or
+  // all-external, whatever the filter shows) as the Flash "Import ข้อมูลผู้รับ"
+  // CSV → upload to the Flash web back-office → Flash picks up at the โกดัง.
+  // EXPORT-ONLY: no mutation; the action re-reads tb_forwarder by id.
+  async function handleExportFlash() {
+    const exportIds = filteredGroups.flatMap((g) => g.forwarderIds);
+    if (exportIds.length === 0) {
+      void alert("ไม่มีรายการให้ส่งออก");
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await exportFlashPickupCsv({ forwarderIds: exportIds });
+      if (!res.rowCount) {
+        void alert("ไม่พบข้อมูลสำหรับ export");
+        return;
+      }
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `flash-นัดรับ-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (res.truncated) {
+        void alert("ส่งออกได้สูงสุด 500 แถว — กรองรายการให้แคบลงเพื่อให้ครบ");
+      }
+    } catch (e) {
+      console.error("[handleExportFlash] failed:", e);
+      void alert("ส่งออกไฟล์ Flash ไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setExporting(false);
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -296,6 +335,24 @@ export function CreateBatchForm({
               {c.label} ({c.count})
             </button>
           ))}
+        </div>
+      )}
+
+      {/* ส่งออกไฟล์ Flash (นัดรับ) — Express tab only. Exports the currently-listed
+          external-courier deliveries as the Flash "Import ข้อมูลผู้รับ" CSV. */}
+      {showCarrierFilter && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportFlash}
+            disabled={exporting || filteredGroups.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-40 shrink-0"
+          >
+            {exporting ? "⏳ กำลังส่งออก…" : "📄 ส่งออกไฟล์ Flash (นัดรับ)"}
+          </button>
+          <p className="text-xs text-muted">
+            ดาวน์โหลด → อัพโหลดเข้าเวป Flash (Import ข้อมูลผู้รับ) → Flash มารับที่โกดัง
+          </p>
         </div>
       )}
 
