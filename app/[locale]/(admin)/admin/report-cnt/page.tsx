@@ -388,6 +388,21 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     }
   }
 
+  // G1 combo-flow (2026-07-08) — which of the visible containers have a MOMO packing-list
+  // reconcile stamp (mig 0245). Drives the "📦 packing ✓ / ⏳ ยังไม่อัพ" badge so staff
+  // see which containers are ready to bill. One tiny scoped lookup on container_no.
+  const packingByCab: Record<string, boolean> = {};
+  if (grouped.length > 0) {
+    const { data: recRows, error: recErr } = await admin
+      .from("container_packing_reconcile")
+      .select("container_no")
+      .in("container_no", grouped.map((g) => g.fcabinetnumber));
+    if (recErr) {
+      console.error("[report-cnt packingByCab] failed", { code: recErr.code, message: recErr.message });
+    }
+    for (const rr of (recRows ?? []) as { container_no: string }[]) packingByCab[rr.container_no] = true;
+  }
+
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
@@ -586,6 +601,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             completenessByCab={completenessByCab}
             momoInfoByCab={momoInfoByCab}
             tracksByCab={tracksByCab}
+            packingByCab={packingByCab}
           />
         )}
         {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons

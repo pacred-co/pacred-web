@@ -420,6 +420,25 @@ export default async function AdminForwarderCheckPage({
     }));
   }
 
+  // G1 combo-flow (2026-07-08) — which of these rows' containers have a MOMO packing-list
+  // reconcile stamp (mig 0245). Drives the "📦 packing" badge next to ตู้. One scoped lookup.
+  const packingByCab: Record<string, boolean> = {};
+  {
+    const cabs = Array.from(
+      new Set(rows.map((r) => (r.cabinet_number ?? "").trim()).filter((c) => c !== "" && c !== "0")),
+    );
+    if (cabs.length > 0) {
+      const { data: recRows, error: recErr } = await admin
+        .from("container_packing_reconcile")
+        .select("container_no")
+        .in("container_no", cabs);
+      if (recErr) {
+        console.error("[forwarder-check packingByCab] failed", { code: recErr.code, message: recErr.message });
+      }
+      for (const rr of (recRows ?? []) as { container_no: string }[]) packingByCab[rr.container_no] = true;
+    }
+  }
+
   return (
     <>
       {/* 11-button warehouse/container audit menu — shared with /admin/report-cnt
@@ -516,7 +535,7 @@ export default async function AdminForwarderCheckPage({
           />
         </div>
 
-        <ForwarderCheckTable rows={rows} showMoneyColumns={showMoneyColumns} />
+        <ForwarderCheckTable rows={rows} showMoneyColumns={showMoneyColumns} packingByCab={packingByCab} />
       </main>
     </>
   );

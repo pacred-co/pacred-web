@@ -222,9 +222,13 @@ function FwckSortableTh({
 export function ForwarderCheckTable({
   rows,
   showMoneyColumns,
+  packingByCab,
 }: {
   rows: ForwarderCheckRow[];
   showMoneyColumns: boolean;
+  /** G1 combo-flow (2026-07-08) — per-container packing-list reconcile flag keyed by
+   *  cabinet_number (mig 0245). true = อัพ packing แล้ว. Drives the "📦 packing" badge. */
+  packingByCab?: Record<string, boolean>;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -517,6 +521,20 @@ export function ForwarderCheckTable({
                             >
                               ตู้ {r.cabinet_number}
                             </Link>
+                            {/* G1 combo-flow (2026-07-08) — packing-list reconcile status (mig 0245). */}
+                            {packingByCab?.[r.cabinet_number] ? (
+                              <span className="ml-1 inline-block rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-1.5 py-0.5 align-middle">
+                                📦 ✓
+                              </span>
+                            ) : (
+                              <Link
+                                href="/admin/api-forwarder-momo/packing-upload"
+                                className="ml-1 inline-block rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] px-1.5 py-0.5 align-middle hover:bg-amber-100"
+                                title="ตู้นี้ยังไม่อัพ packing list — คลิกเพื่ออัพ"
+                              >
+                                ⏳ ยังไม่อัพ packing
+                              </Link>
+                            )}
                           </div>
                         )}
                         {r.tracking_chn && (

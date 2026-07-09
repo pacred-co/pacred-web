@@ -413,6 +413,36 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       }
     }
 
+    // ── G1 combo-flow (2026-07-08): STAMP the packing reconcile (mig 0245) ──────
+    // Records that THIS real container's กล่อง/น้ำหนัก basis is now reconciled, so the
+    // billing-run gate can refuse (acknowledgeably) an un-reconciled container and the
+    // ตรวจตู้ / forwarder-check lists can badge it. Write-only to the reference table —
+    // NO money / tb_forwarder touch. Best-effort (never fails the apply). Skipped for
+    // Format B ("คิวมั่ว") — no real container to stamp. `nowIso` from Loop 2 above.
+    const containerNo = (preview.container ?? "").trim();
+    if (containerNo) {
+      const { error: stampErr } = await admin
+        .from("container_packing_reconcile")
+        .upsert(
+          {
+            container_no:   containerNo,
+            reconciled_at:  nowIso,
+            reconciled_by:  adminId ? String(adminId).slice(0, 20) : null,
+            rows_updated:   updated,
+            boxes_short:    boxShort,
+            advanced,
+            tracking_count: preview.totals.trackingCount ?? null,
+            source:         "momo_packing",
+          },
+          { onConflict: "container_no" },
+        );
+      if (stampErr) {
+        console.error("[momo-packing apply] reconcile stamp failed", {
+          container: containerNo, code: stampErr.code, message: stampErr.message,
+        });
+      }
+    }
+
     await logAdminAction(adminId, "momo_packing.apply", "tb_forwarder", "", {
       container: preview.container,
       updated, boxShort, repriced, repriceFailed, advanced,

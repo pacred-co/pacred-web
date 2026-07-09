@@ -82,6 +82,12 @@ type Props = {
    * `fcabinetnumber`. Built server-side (scoped to the visible cabinets).
    */
   tracksByCab?: Record<string, string[]>;
+  /**
+   * G1 combo-flow (2026-07-08) — per-container packing-list reconcile flag keyed by
+   * `fcabinetnumber` (mig 0245). true = อัพ packing แล้ว · missing/false = ยังไม่อัพ.
+   * Drives the "📦 packing" badge so staff see which containers are ready to bill.
+   */
+  packingByCab?: Record<string, boolean>;
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -272,6 +278,7 @@ export function CntListTable({
   completenessByCab,
   momoInfoByCab,
   tracksByCab,
+  packingByCab,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
@@ -677,6 +684,22 @@ export function CntListTable({
                         </Link>
                       )}
                     </div>
+                    {/* G1 combo-flow (2026-07-08) — packing-list reconcile status (mig 0245).
+                        ✓ = อัพ packing แล้ว (ยอดกล่อง/น้ำหนักยืนยันแล้ว · พร้อมออกบิล) ·
+                        ⏳ = ยังไม่อัพ (ลิงก์ไปเครื่องมืออัพ). Keyed on the REAL fcabinetnumber. */}
+                    {packingByCab?.[r.fcabinetnumber] ? (
+                      <span className="mt-0.5 inline-block rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-1.5 py-0.5">
+                        📦 packing ✓
+                      </span>
+                    ) : (
+                      <Link
+                        href="/admin/api-forwarder-momo/packing-upload"
+                        className="mt-0.5 inline-block rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] px-1.5 py-0.5 hover:bg-amber-100"
+                        title="ตู้นี้ยังไม่อัพ packing list — คลิกเพื่ออัพ"
+                      >
+                        ⏳ ยังไม่อัพ packing
+                      </Link>
+                    )}
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
