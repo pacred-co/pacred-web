@@ -612,6 +612,41 @@ const blockAccounting: MenuItem = {
   icon: "Landmark",
 };
 
+/** legacy OOP/Cargo/menu-acc.php — "รายงานรับรู้รายได้ Cargo" sidebar group.
+ *  2026-07-09 (faithful-look · ภูม): legacy hosts these revenue-recognition
+ *  report leaves as a LEFT-SIDEBAR group (not a top-menu) → surfaced here to
+ *  match. Each leaf = a faithful acc-*.php port under /admin/accounting/*
+ *  (topup/shop/forwarder/payment/withdraw/shop-refund) + the invoice/receipt
+ *  history. Read-only reports over the wallet ledger. */
+const blockRevenueRecognition: MenuItem = {
+  labelKey: "revenueRec.title",
+  icon: "BarChart3",
+  children: [
+    { labelKey: "revenueRec.incomeExpense", href: "/admin/accounting?view=overview", icon: "BarChart3" },
+    { labelKey: "revenueRec.topup",         href: "/admin/accounting/topup",         icon: "Wallet" },
+    { labelKey: "revenueRec.shop",          href: "/admin/accounting/shop",          icon: "ShoppingCart" },
+    {
+      labelKey: "revenueRec.forwarder",
+      icon: "Package",
+      children: [
+        { labelKey: "revenueRec.forwarderInvoice",  href: "/admin/accounting/receipts",  icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderReceipts", href: "/admin/accounting/receipts",  icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderTotal",    href: "/admin/accounting/forwarder", icon: "BarChart3" },
+      ],
+    },
+    { labelKey: "revenueRec.payment",  href: "/admin/accounting/payment",  icon: "Coins" },
+    { labelKey: "revenueRec.withdraw", href: "/admin/accounting/withdraw", icon: "Banknote" },
+    {
+      labelKey: "revenueRec.walletRefund",
+      icon: "Undo2",
+      children: [
+        { labelKey: "revenueRec.shopRefund",      href: "/admin/accounting/shop-refund", icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderRefund", href: "/admin/reports/refunds",        icon: "Receipt" },
+      ],
+    },
+  ],
+};
+
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo
  *
  * 2026-05-22 (Wave 7.3 orphan wiring): added 2 new groups — "ระบบ" (cron
@@ -1090,6 +1125,8 @@ const wrapClassAcc: MenuItem = {
   badge: "withdrawalAll",
   children: [
     blockAccounting,
+    // 2026-07-09 (faithful-look · ภูม) — "รายงานรับรู้รายได้ Cargo" group.
+    blockRevenueRecognition,
     itemWalletAll,
     itemPayUser,
     blockWithdrawalList,
@@ -1458,6 +1495,7 @@ const menuManager: MenuSection[] = [
       blockPayment,
       itemReportsAll,
       blockAccounting,
+      blockRevenueRecognition,
     ],
   },
   // NOTE: Settings section intentionally dropped — manager doesn't configure
@@ -1555,6 +1593,7 @@ const menuAccounting: MenuSection[] = [
       blockPayment,
       itemReportsAll,
       blockAccounting,
+      blockRevenueRecognition,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — accounting has read access
       // to the China freight cost rates (RLS: super/ops/accounting read · the page
       // disables write controls for non-super/ops roles).

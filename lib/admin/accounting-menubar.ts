@@ -252,38 +252,6 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       },
     ],
   },
-  // 2026-07-09 (faithful-look · ภูม#1) — the "รายงานรับรู้รายได้ Cargo" group
-  // (legacy menu-acc.php). Its 8 revenue-recognition report leaves were only
-  // reachable as hub cards (hard to find — ภูม "ทางเข้าอยู่ไหน หาไม่เจอ") →
-  // surfaced here as a top-menubar dropdown (≤2 clicks from the accounting hub),
-  // mirroring the legacy sidebar group structure exactly.
-  {
-    label: "รายงานรับรู้รายได้",
-    children: [
-      { label: "รายรับ - รายจ่าย",   href: "/admin/accounting?view=overview" },
-      { label: "รายการเติมเงิน",     href: "/admin/accounting/topup" },
-      { label: "รายงานฝากสั่ง",      href: "/admin/accounting/shop" },
-      {
-        label: "ฝากนำเข้าสินค้า",
-        href: "/admin/accounting/forwarder",
-        children: [
-          { label: "ใบแจ้งหนี้",     href: "/admin/accounting/receipts" },
-          { label: "ประวัติใบเสร็จ", href: "/admin/accounting/receipts" },
-          { label: "ยอดทั้งหมด",     href: "/admin/accounting/forwarder" },
-        ],
-      },
-      { label: "ฝากชำระ/โอนหยวน",    href: "/admin/accounting/payment" },
-      { label: "ถอนเงิน โอนโดยตรง",  href: "/admin/accounting/withdraw" },
-      {
-        label: "คืนเงินเข้า Wallet",
-        href: "/admin/accounting/shop-refund",
-        children: [
-          { label: "คืนเงินฝากสั่ง",   href: "/admin/accounting/shop-refund" },
-          { label: "คืนเงินฝากนำเข้า", href: "/admin/reports/refunds" },
-        ],
-      },
-    ],
-  },
   {
     label: "รายจ่าย",
     children: [
