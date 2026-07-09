@@ -883,6 +883,96 @@ export async function getInvoiceDetail(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 4a2. SET DELIVERY ADDRESS (DISPLAY-only ship-to on the ใบวางบิล · mig 0247)
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Snapshot a chosen tb_address row (belonging to the invoice customer) into
+ * tb_forwarder_invoice.delivery_address so <BillingRunPaper> renders a "ที่อยู่จัดส่ง"
+ * line. DISPLAY-only — touches NOTHING else (no amount/subtotal/total/tax/status/
+ * buyer_*). Distinct from buyer_address (the tax billing identity).
+ *
+ * Ownership: the chosen address MUST belong to the invoice's userid + be active.
+ */
+export async function adminSetBillingRunDeliveryAddress(
+  invoiceId: number,
+  addressId: number,
+): Promise<AdminActionResult> {
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) return { ok: false, error: "invalid_invoice_id" };
+  if (!Number.isInteger(addressId) || addressId <= 0) return { ok: false, error: "invalid_address_id" };
+
+  return withAdmin(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Read the invoice → userid (ownership scope).
+      const { data: inv, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, userid")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; userid: string }>();
+      if (invErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress invoice] failed`, { code: invErr.code, message: invErr.message, invoiceId });
+        return { ok: false, error: `อ่านใบวางบิลไม่สำเร็จ: ${invErr.message}` };
+      }
+      if (!inv) return { ok: false, error: "ไม่พบใบวางบิล" };
+
+      // 2. Read the chosen address — MUST belong to the invoice customer + be active.
+      const { data: addr, error: addrErr } = await admin
+        .from("tb_address")
+        .select("addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
+        .eq("addressid", addressId)
+        .eq("userid", inv.userid)
+        .eq("addressstatus", "1")
+        .maybeSingle<{
+          addressname: string | null; addresslastname: string | null;
+          addresstel: string | null; addresstel2: string | null; addressno: string | null;
+          addresssubdistrict: string | null; addressdistrict: string | null;
+          addressprovince: string | null; addresszipcode: string | null;
+        }>();
+      if (addrErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress address] failed`, { code: addrErr.code, message: addrErr.message, addressId });
+        return { ok: false, error: `อ่านที่อยู่ไม่สำเร็จ: ${addrErr.message}` };
+      }
+      if (!addr) return { ok: false, error: "ไม่พบที่อยู่ของลูกค้ารายนี้ (หรือถูกลบไปแล้ว)" };
+
+      // 3. Compose the readable ship-to snapshot string.
+      const name = `${addr.addressname ?? ""} ${addr.addresslastname ?? ""}`.trim();
+      const line = [
+        addr.addressno,
+        addr.addresssubdistrict && `ตำบล/แขวง ${addr.addresssubdistrict}`,
+        addr.addressdistrict && `อำเภอ/เขต ${addr.addressdistrict}`,
+        addr.addressprovince && `จังหวัด ${addr.addressprovince}`,
+        addr.addresszipcode,
+      ].filter(Boolean).join(" ");
+      const tel = (addr.addresstel ?? "").trim();
+      const tel2 = (addr.addresstel2 ?? "").trim();
+      const telLine = tel || tel2 ? `โทร. ${tel || "—"}${tel2 ? `, ${tel2}` : ""}` : "";
+      const snapshot = [name, line, telLine].filter(Boolean).join("\n");
+
+      // 4. UPDATE ONLY delivery_address — no amount/tax/status/buyer_* touched.
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({ delivery_address: snapshot })
+        .eq("id", invoiceId);
+      if (updErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress update] failed`, { code: updErr.code, message: updErr.message, invoiceId });
+        return { ok: false, error: `บันทึกที่อยู่จัดส่งไม่สำเร็จ: ${updErr.message}` };
+      }
+
+      await logAdminAction(adminId, "tb_forwarder_invoice.set_delivery_address", "tb_forwarder_invoice", String(invoiceId), {
+        addressId, userid: inv.userid, province: addr.addressprovince ?? "",
+      });
+
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      revalidatePath(`/admin/billing-run/${invoiceId}/print`);
+      return { ok: true };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 4b. DUP-slip WARNING (READ-ONLY · display gate for the 3-step slip review)
 // ────────────────────────────────────────────────────────────────────────
 
