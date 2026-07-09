@@ -874,3 +874,15 @@ charge. Cross-link: [[sell-floor-rate-model]] · `lib/forwarder/resolve-rate.ts`
 **Why this matters next time:** a fill-when-empty guard (correct for the money basis fweight/fvolume, where แต้ม must stay authoritative) is WRONG for a display-only field that should track the partner feed — those want sync-when-different. Distinguish "authoritative-once" (money) from "keep-synced" (display) fields. Also: 52186 is NOT a multi-box split (momo_box_detail has 1 row · quantity=2) — different from the 52167 folded-box-split case; don't conflate a single-tracking-quantity-N with a box-split.
 
 **Cross-links:** [[momo-api-endpoint-limits]] · commit-momo-row-core.ts L538/L608 (famount/famountcount) · the box-split learning above (52167).
+
+## [2026-07-08] ลูกค้าเห็น "ถึงไทยแล้ว" แต่ของกำลังส่งมา — customer timeline lit the NEXT step, not the CURRENT phase
+
+**Context:** ภูม prod PR207 / order 52304 (fstatus=3 · fdatestatus3 stamped 07/07 · fdatestatus4=null). The customer tracker (`/service-import/[fNo]`) lit step 4 "สินค้าถึงไทย" as the active/red node → the customer read it as ARRIVED and complained ("ของกำลังส่งมาไทย ไม่ใช่ถึงไทยแล้ว"). The status pill ("กำลังส่งมาประเทศไทย") AND the admin timeline (step 3 active) were BOTH correct — customer-only, one step ahead.
+
+**Root cause:** `computeSteps` in the customer detail page used a "next un-stamped physical step = active" model: `out[3] = p4 ? "visited" : p3 && !p4 ? "active"`. With ส่งมาไทย stamped (p3) but ถึงไทย not (p4), it marked step 4 "สินค้าถึงไทย" active — even though "สินค้าถึงไทย" is a past-tense MILESTONE that must not light until it truly arrives. The active step should be the CURRENT PHASE the goods are IN (the highest-stamped step whose next milestone is un-reached = step 3 "กำลังส่งมาไทย"), matching the fstatus pill + the admin timeline.
+
+**Fix:** extracted the step machine to `lib/forwarder/customer-tracker-steps.ts` (pure · unit-tested — the customer page is auth-gated so it can't be browser-verified without a customer login). New rule: while physically in transit (fstatus < 5), `active` = `p4 ? step4 : p3 ? step3 : p2 ? step2 : …` — the phase the goods are in, NOT the next un-stamped step. The date-driven credit safety (ถึงไทย NOT "done" without a real fdatestatus4, even at credit fstatus=6) is preserved. 10-assertion test locks the 52304 case + every fstatus/stamp combo.
+
+**Why this matters next time:** distinguish a PHASE label (present tense · "กำลังส่งมาไทย" · active while you're in it) from a MILESTONE label (past tense · "สินค้าถึงไทย" · lights only when it happens). A "next-step-active" stepper is wrong for a mix of the two. And when a customer-facing and an admin view disagree on the SAME row, the customer one is usually the buggy fork — verify against the fstatus pill (the SOT label) + the admin timeline.
+
+**Cross-links:** `lib/forwarder/customer-tracker-steps.ts` (+ `.test.ts`) · the 2026-06-14 date-driven timeline fix (`hasRealStamp`) · the MOMO count/box-split learnings above (all 2026-07-08 cargo status work).

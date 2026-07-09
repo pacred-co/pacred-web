@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
+import { computeSteps, hasRealStamp } from "@/lib/forwarder/customer-tracker-steps";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl, forwarderCoverUrl } from "@/lib/legacy-image";
@@ -164,16 +165,8 @@ function dmy(ts: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
-// Is a stored date-stamp a REAL value (the warehouse scan actually set it),
-// not a null / empty / legacy MySQL zero-date sentinel? Drives the PHYSICAL
-// journey steps so a credit order flipped to fStatus=6 BEFORE the goods
-// arrive doesn't paint "สินค้าถึงไทย" as done.
-function hasRealStamp(ts: string | null): boolean {
-  if (!ts) return false;
-  const s = ts.trim();
-  if (s === "" || s.startsWith("0000-00-00")) return false;
-  return !isNaN(new Date(s.replace(" ", "T")).getTime());
-}
+// hasRealStamp / computeSteps / finalizeMoneySteps / StepState / PhysicalStamps
+// moved to lib/forwarder/customer-tracker-steps.ts (pure · unit-tested) — imported above.
 // PHP DateTime modify on a d/m/Y string — used for the "จะถึงไทย" range.
 function modifyDmy(dmyStr: string, days: number): string {
   const m = dmyStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -317,101 +310,8 @@ function TagPro({ id }: { id: string | null }) {
 // The 7-step process tabs (forwarder.php L1827-1906). The legacy emits
 // a per-`fStatus` `<li>` cluster — encoded here as a per-step state
 // machine to keep the markup identical.
-type StepState = "" | "visited" | "active";
-type PhysicalStamps = {
-  s2: string | null; // fdatestatus2 — สินค้าถึงโกดังจีน
-  s3: string | null; // fdatestatus3 — กำลังส่งมาไทย
-  s4: string | null; // fdatestatus4 — สินค้าถึงไทย
-};
-/**
- * The 8-step tracker state. Indices 0..7 → step 1..6 / step 6.1 / step 7
- * (รอเข้าโกดังจีน / ถึงโกดังจีน / กำลังส่งมาไทย / สินค้าถึงไทย / รอชำระเงิน /
- *  เตรียมส่ง / กำลังจัดส่ง / ส่งแล้ว).
- *
- * tb_forwarder.fstatus carries TWO dimensions on one column: a PHYSICAL
- * journey (1-4) AND money/dispatch (5-7). A CREDIT order is flipped to
- * fstatus=6 at credit-grant BEFORE the goods physically arrive — so driving
- * the physical steps off the fstatus integer would paint steps 1-4
- * (incl. "สินค้าถึงไทย") as done when nothing has physically arrived.
- *
- * FIX (2026-06-14): the PHYSICAL steps (2=ถึงโกดังจีน · 3=กำลังส่งมาไทย ·
- * 4=สินค้าถึงไทย) are "done" ONLY when their fdatestatusN stamp is real (the
- * warehouse scan set it) — NOT because fstatus advanced past them. The
- * money/dispatch steps (5/6/6.1/7) still key off fstatus. Step 1 is the
- * entry state, visited once the goods enter the China warehouse (step 2
- * stamped) or any later milestone is reached.
- */
-function computeSteps(
-  fStatus: string | null,
-  fidDriver: 0 | 1,
-  stamps: PhysicalStamps,
-): StepState[] {
-  const s = Number(fStatus);
-  const p2 = hasRealStamp(stamps.s2);
-  const p3 = hasRealStamp(stamps.s3);
-  const p4 = hasRealStamp(stamps.s4);
-
-  // Physical journey (indices 0..3). Each physical milestone is "done" only
-  // with a real stamp; the next un-stamped physical step is the active one.
-  const out: StepState[] = ["", "", "", "", "", "", "", ""];
-  // Step 1 (รอเข้าโกดังจีน) — visited the moment any later milestone is
-  // reached (a stamp OR fstatus already past the physical phase), else active.
-  const reachedBeyondStep1 = p2 || p3 || p4 || s >= 5;
-  out[0] = reachedBeyondStep1 ? "visited" : "active";
-  out[1] = p2 ? "visited" : reachedBeyondStep1 && !p2 ? "active" : "";
-  // Once a physical step is "active", later physical steps stay blank.
-  if (out[1] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
-  out[2] = p3 ? "visited" : p2 && !p3 ? "active" : "";
-  if (out[2] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
-  out[3] = p4 ? "visited" : p3 && !p4 ? "active" : "";
-  if (out[3] === "active") return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
-
-  return finalizeMoneySteps(out, s, fidDriver, p2, p3, p4);
-}
-
-// Money/dispatch tail (indices 4..7 = step 5 / 6 / 6.1 / 7). These DO key off
-// fstatus — they're the dispatch dimension, not the physical journey. Only
-// runs once the physical phase has no active step (goods at TH, or fstatus
-// already in the money phase). A credit order at fstatus=6 with no
-// fdatestatus4 keeps step 4 NOT-done (handled in the caller) and the
-// dispatch chips reflect fstatus.
-function finalizeMoneySteps(
-  out: StepState[],
-  s: number,
-  fidDriver: 0 | 1,
-  p2: boolean,
-  p3: boolean,
-  p4: boolean,
-): StepState[] {
-  // If a physical step is the active one, don't light any money step.
-  if (out.includes("active")) return out;
-  // No money phase yet (still physically in transit, fstatus < 5) → the
-  // furthest physical milestone is the active head if nothing downstream.
-  if (s < 5) {
-    // Make the next un-reached physical step active (entry already handled).
-    if (!p2) out[1] = out[1] || "active";
-    else if (!p3) out[2] = out[2] || "active";
-    else if (!p4) out[3] = out[3] || "active";
-    return out;
-  }
-  // Money/dispatch phase. Mark earlier money steps visited up to the current.
-  if (s === 5) out[4] = "active";
-  else if (s === 6) {
-    out[4] = "visited";
-    if (fidDriver === 1) {
-      out[5] = "visited";
-      out[6] = "active";
-    } else {
-      out[5] = "active";
-    }
-  } else if (s >= 7) {
-    out[4] = "visited";
-    out[5] = "visited";
-    out[6] = "visited";
-    out[7] = "active";
-  }
-  return out;
-}
+// StepState / PhysicalStamps / computeSteps / finalizeMoneySteps moved to
+// lib/forwarder/customer-tracker-steps.ts (pure · unit-tested).
 
 const ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder/";
 const STEPS = [
