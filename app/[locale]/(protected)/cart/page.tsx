@@ -88,6 +88,8 @@ type CartRow = {
   ccolor: string | null;
   csize: string | null;
   userid: string | null;
+  input_currency: string | null;
+  input_price: number | null;
 };
 
 /**
@@ -314,7 +316,7 @@ export default async function CartPage() {
     () => admin
       .from("tb_cart")
       .select(
-        "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
+        "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid, input_currency, input_price",
       )
       .eq("userid", userID)
       .order("id", { ascending: true }),
@@ -386,6 +388,8 @@ export default async function CartPage() {
           camount: Number(row.camount ?? 0),
           ccolor: row.ccolor,
           csize: row.csize,
+          inputCurrency: row.input_currency ?? "",
+          inputPrice: Number(row.input_price ?? 0),
           imageThumbUrl: convertIMGCHN(row.cimages, "_80x80.jpg"),
           imageFullUrl: convertIMGCHN(row.cimages, ""),
           providerImg:

@@ -6,6 +6,7 @@ import CartRowActions, { CartRowRemove } from "./cart-row-actions";
 import CartSubmitButton from "./cart-submit-button";
 import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 import { CartTaxDocPref, type TaxDocDefaults } from "@/app/[locale]/(protected)/cart/cart-tax-doc-pref";
+import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 
 /**
  * Admin > "รถเข็นสินค้า" — CS staff add-to-customer-cart surface.
@@ -117,6 +118,8 @@ type CartRow = {
   ccolor: string;
   csize: string;
   userid: string;
+  input_currency: string | null;
+  input_price: number | string | null;
 };
 
 type CoRow = { coID: string };
@@ -222,7 +225,7 @@ export default async function AdminCartPage({
     const { data, error } = await fetchAllRows<CartRow>(
       () => admin
         .from("tb_cart")
-        .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid")
+        .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid, input_currency, input_price")
         .eq("userid", targetUserId)
         .order("cprovider", { ascending: true })
         .order("cnameshop", { ascending: true })
@@ -427,6 +430,21 @@ export default async function AdminCartPage({
                     {sg.rows.map((row) => {
                       const imgUrl = resolveImageUrl(row);
                       const linePrice = numberFormat2(row.cprice * row.camount);
+                      // mig 0248 — foreign currency → show the ORIGINAL primary
+                      // + ¥/฿ small (else keep the ¥ cells unchanged).
+                      const rowInputPrice = Number(row.input_price ?? 0);
+                      const priceDisp = formatCartPriceDisplay({
+                        inputCurrency: row.input_currency ?? "",
+                        inputPrice: rowInputPrice,
+                        cpriceYuan: row.cprice,
+                        rsDefault: Number(rsDefault),
+                      });
+                      const lineDisp = formatCartPriceDisplay({
+                        inputCurrency: row.input_currency ?? "",
+                        inputPrice: rowInputPrice * row.camount,
+                        cpriceYuan: row.cprice * row.camount,
+                        rsDefault: Number(rsDefault),
+                      });
                       const idx = noRow++;
                       const titleText = row.ctitle && row.ctitle.trim() !== ""
                         ? row.ctitle : row.curl;
@@ -478,7 +496,14 @@ export default async function AdminCartPage({
                           {/* Price */}
                           <div className="md:col-span-1 text-xs md:text-right font-mono">
                             <span className="md:hidden text-muted">ราคา: </span>
-                            ¥{numberFormat2(row.cprice)}
+                            {priceDisp.isForeign ? (
+                              <span className="inline-flex flex-col md:items-end">
+                                <span className="font-semibold text-foreground">{priceDisp.primary}</span>
+                                <span className="text-[11px] text-muted">{priceDisp.secondary}</span>
+                              </span>
+                            ) : (
+                              <>¥{numberFormat2(row.cprice)}</>
+                            )}
                           </div>
                           {/* Qty */}
                           <div className="md:col-span-2 md:text-center">
@@ -491,7 +516,14 @@ export default async function AdminCartPage({
                           {/* Line total */}
                           <div className="md:col-span-1 text-xs md:text-right font-mono font-semibold">
                             <span className="md:hidden text-muted">รวม: </span>
-                            ¥{linePrice}
+                            {lineDisp.isForeign ? (
+                              <span className="inline-flex flex-col md:items-end">
+                                <span className="text-primary-600">{lineDisp.primary}</span>
+                                <span className="text-[11px] text-muted font-normal">{lineDisp.secondary}</span>
+                              </span>
+                            ) : (
+                              <>¥{linePrice}</>
+                            )}
                           </div>
                         </div>
                       );

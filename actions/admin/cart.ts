@@ -171,6 +171,10 @@ export async function adminAddItemToCart(
         ccolor:    item.ccolor,
         csize:     item.csize,
         userid,
+        // mig 0248 — persist the ORIGINAL currency + amount for display
+        // (cprice above stays the ¥-equiv). CNY / no-selector → '' / 0.
+        input_currency: (item.input_currency && normInputCur !== "CNY" && normInputCur !== "") ? normInputCur : "",
+        input_price:    (item.input_currency && normInputCur !== "CNY" && normInputCur !== "") ? (item.input_price ?? 0) : 0,
       })
       .select("id")
       .single<{ id: number }>();
@@ -504,11 +508,12 @@ export async function adminSubmitCartAsOrder(
         id: number; cdetails: string; curl: string; ctitle: string;
         cnameshop: string; cprovider: string; cimages: string;
         cprice: number; camount: number; ccolor: string; csize: string;
+        input_currency: string | null; input_price: number | string | null;
       };
       const { data: cartRows, error: readErr } = await fetchAllRows<CartRow>(
         () => admin
           .from("tb_cart")
-          .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize")
+          .select("id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, input_currency, input_price")
           .eq("userid", d.cart_owner_userid)
           .order("id", { ascending: true }),
       );
@@ -658,6 +663,9 @@ export async function adminSubmitCartAsOrder(
             camount:         r.camount,
             ccolor:          r.ccolor,
             csize:           r.csize,
+            // mig 0248 — carry the ORIGINAL currency + amount tb_cart → tb_order.
+            input_currency:  r.input_currency ?? "",
+            input_price:     Number(r.input_price ?? 0),
             userid:          d.customer_userid,
             hno,
             cshippingchn:    0,
