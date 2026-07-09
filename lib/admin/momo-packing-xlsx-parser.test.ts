@@ -8,7 +8,11 @@
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
-import { parseMomoPackingXlsx } from "./momo-packing-xlsx-parser";
+import {
+  parseMomoPackingXlsx,
+  aggregatePackingRowsByBase,
+  type MomoPackingRow,
+} from "./momo-packing-xlsx-parser";
 
 const FIX = path.join(__dirname, "__fixtures__");
 let passed = 0;
@@ -63,12 +67,63 @@ ok("Format A: raw grid exposes a data header for the Excel-view", () => {
   assert.strictEqual(A.rawGrid!.rows.length, A.rows.length);
 });
 
+ok("Format A: aggregated is one row per BASE tracking (3 single-sub bases)", () => {
+  assert.strictEqual(A.aggregated.length, 3, `expected 3 aggregated bases, got ${A.aggregated.length}`);
+  // every real-fixture row is single-sub → its agg equals its own row totals.
+  const a190 = A.aggregated.find((r) => r.baseTracking === "1781309805");
+  assert.ok(a190, "aggregated base 1781309805 not found");
+  assert.strictEqual(a190!.parcelCount, 1);
+  assert.strictEqual(a190!.totalWeight, 335);
+  assert.ok(Math.abs((a190!.totalCbm ?? 0) - 1.05) < 1e-9, `totalCbm=${a190!.totalCbm}`);
+  assert.strictEqual(a190!.subTrackings.length, 1);
+  assert.strictEqual(a190!.code, "PR10190");
+});
+
+// ── Synthetic multi-box base — the case the real fixture doesn't cover ────────
+ok("aggregate: sums a multi-box base (2 sub-rows) exactly", () => {
+  const mk = (tracking: string, base: string, parcel: number, wt: number, cbm: number): MomoPackingRow => ({
+    tracking, baseTracking: base, code: "PR555", productType: "ทั่วไป",
+    width: 10, length: 20, height: 30, parcelCount: parcel,
+    weightKg: wt / parcel, cbm: cbm / parcel, totalWeight: wt, totalCbm: cbm, cg: "CG1",
+  });
+  const agg = aggregatePackingRowsByBase([
+    mk("SF1567683726553-1/2", "SF1567683726553", 1, 10, 0.1),
+    mk("SF1567683726553-2/2", "SF1567683726553", 1, 12, 0.12),
+  ]);
+  assert.strictEqual(agg.length, 1, `expected 1 base, got ${agg.length}`);
+  assert.strictEqual(agg[0].baseTracking, "SF1567683726553");
+  assert.strictEqual(agg[0].parcelCount, 2);
+  assert.strictEqual(agg[0].totalWeight, 22);
+  assert.ok(Math.abs((agg[0].totalCbm ?? 0) - 0.22) < 1e-9, `totalCbm=${agg[0].totalCbm}`);
+  assert.strictEqual(agg[0].subTrackings.length, 2);
+});
+
+ok("aggregate: a field stays null only when EVERY sub is null", () => {
+  const base: MomoPackingRow = {
+    tracking: "X-1", baseTracking: "X", code: null, productType: null,
+    width: null, length: null, height: null, parcelCount: null,
+    weightKg: null, cbm: null, totalWeight: null, totalCbm: null, cg: null,
+  };
+  const agg = aggregatePackingRowsByBase([
+    { ...base, tracking: "X-1", totalWeight: null },
+    { ...base, tracking: "X-2", totalWeight: 5 },
+  ]);
+  assert.strictEqual(agg.length, 1);
+  assert.strictEqual(agg[0].totalWeight, 5, "one non-null sub → Σ = that value");
+  assert.strictEqual(agg[0].totalCbm, null, "all-null field stays null");
+  assert.strictEqual(agg[0].parcelCount, null, "all-null parcelCount stays null");
+});
+
 // ── Format B (empty / คิวมั่ว) ───────────────────────────────────────────────
 const emptyBuf = fs.readFileSync(path.join(FIX, "momo-packing-empty.xlsx"));
 const B = parseMomoPackingXlsx(emptyBuf);
 
 ok("Format B: no parcel rows", () => {
   assert.strictEqual(B.rows.length, 0);
+});
+
+ok("Format B: aggregated is empty too", () => {
+  assert.strictEqual(B.aggregated.length, 0);
 });
 
 ok("Format B: warns about an empty export", () => {
