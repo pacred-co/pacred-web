@@ -53,7 +53,11 @@ export function AdminYuanPaymentNewForm({
   const [paytype, setPaytype]     = useState<PayType>("1");
   const [paydetail, setPaydetail] = useState<string>("");
   const [payyuan, setPayyuan]     = useState<string>("");
-  const [payrate, setPayrate]     = useState<string>(defaultRate ? defaultRate.toFixed(2) : "5.00");
+  // Auto-fill the rate EXACTLY as set in the back office (tb_settings.rpdefault ·
+  // owner 2026-07-09: "ดึงตามที่ set ไว้หลังบ้าน · แก้ได้ · แต่ค่าต้องถูกเป๊ะ ไม่มั่ว").
+  // Use toFixed(4) to match the settings + customer forms — toFixed(2) truncated
+  // a >2-decimal rate (e.g. 5.1550 → "5.16" · a wrong displayed value).
+  const [payrate, setPayrate]     = useState<string>(defaultRate > 0 ? defaultRate.toFixed(4) : "5.0000");
   const [paycost, setPaycost]     = useState<string>("");      // admin cost rate (optional)
   const [paydeposit, setPaydeposit] = useState<boolean>(false);
   const [note, setNote]           = useState<string>("");
@@ -259,18 +263,20 @@ export function AdminYuanPaymentNewForm({
           />
         </div>
         <div>
-          <label className="block text-xs text-muted mb-1">เรท (THB/CNY) <span className="text-red-700">*</span></label>
+          <label className="block text-xs text-muted mb-1">เรทฝากโอน (THB/CNY) <span className="text-red-700">*</span></label>
           <input
             type="text"
             inputMode="decimal"
             className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={payrate}
             onChange={(e) => setPayrate(e.target.value)}
-            placeholder="5.00"
+            placeholder="5.0000"
             disabled={pending}
             required
           />
-          <small className="mt-1 block text-xs text-muted">default = tb_settings.rpdefault (เรทฝากชำระ)</small>
+          <small className="mt-1 block text-xs text-emerald-700 dark:text-emerald-400">
+            ✓ auto จากเรทระบบวันนี้ (ตั้งค่าหลังบ้าน · แก้ได้ถ้าต้องการ)
+          </small>
         </div>
         <div>
           <label className="block text-xs text-muted mb-1">cost rate (admin)</label>
