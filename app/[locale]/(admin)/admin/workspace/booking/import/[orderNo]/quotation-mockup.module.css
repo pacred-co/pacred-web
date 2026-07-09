@@ -94,8 +94,8 @@
 
 /* ── info (3 iboxes) ── */
 .info { padding: 20px 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; border-bottom: 1px solid #ececf2; }
-.ibox { background: #fafafa; border: 1px solid #eeeef4; border-radius: 16px; padding: 15px; }
-.ibox h3 { font-size: 14px; margin: 0 0 10px; color: #1f2937; }
+.ibox { background: #fff; border: 1px solid #ececf2; border-radius: 12px; padding: 14px 16px; }
+.ibox h3 { font-size: 13px; margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f5; color: #1f2937; font-weight: 700; }
 .kv { display: grid; grid-template-columns: 92px 1fr; gap: 8px 10px; font-size: 13px; line-height: 1.45; align-items: center; }
 .kv .k { color: #727782; }
 .kv .v { color: #26272a; font-weight: 700; min-width: 0; }

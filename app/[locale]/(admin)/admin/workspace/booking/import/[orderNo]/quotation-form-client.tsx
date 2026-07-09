@@ -12,13 +12,14 @@
 
 import { useMemo, useState, type ReactNode, type ChangeEvent } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { ArrowLeft, Paperclip, Trash2 } from "lucide-react";
+import { ArrowLeft, Paperclip, Trash2, Settings } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
   DIRECTION_OPTIONS, SERVICE_OPTIONS, LOAD_TYPE_OPTIONS, TERM_OPTIONS, PORT_OPTIONS, CONTAINER_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS,
-  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, IMPORT_QUOTE_TEMPLATES, PACRED_ISSUER,
+  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type QuoteLine,
 } from "../quotation-data";
+import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
 import styles from "./quotation-mockup.module.css";
 
@@ -46,13 +47,14 @@ const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ")
 const ENTER_COLOR: Record<string, string> = { "Change Status": "amber", "Document Amend": "purple", "Direct": "blue", "Indirect": "green" };
 
 export function QuotationFormClient({
-  booking, isNew, docNo, salesName,
+  booking, isNew, docNo, salesName, catalog, showCost, showProfit,
 }: {
   booking: Booking | null; isNew: boolean; docNo: string; salesName: string;
+  catalog: Record<string, CatalogTemplate>; showCost: boolean; showProfit: boolean;
 }) {
   const initCond = deriveConditions(booking);
   const [cond, setCond] = useState<QuoteConditions>(initCond);
-  const [lines, setLines] = useState<QuoteLine[]>(() => linesForConditions(initCond));
+  const [lines, setLines] = useState<QuoteLine[]>(() => linesForConditions(initCond, catalog));
   const [doc, setDoc] = useState({
     phone: "", memberCode: "",
     billName: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
@@ -60,7 +62,7 @@ export function QuotationFormClient({
     consignee: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
     product: booking?.product ?? "", pol: booking?.pol ?? "", pickupAddress: "",
     pod: booking?.pod ?? "", address: "", carrierAgent: "", transportAgent: "",
-    useDate: "", acceptDate: "", validUntil: "", reference: "", remark: "",
+    useDate: "", acceptDate: "", validUntil: "", reference: "", remark: noteForConditions(initCond, catalog),
   });
   const [lookupState, setLookupState] = useState<"idle" | "found" | "notfound">("idle");
   const [looking, setLooking] = useState(false);
@@ -97,7 +99,14 @@ export function QuotationFormClient({
   const status: BookingStatus = booking?.status ?? "customer_created";
   const meta = BOOKING_STATUS_META[status];
   const totals = useMemo(() => computeQuoteTotals(lines), [lines]);
-  const hasTemplate = (IMPORT_QUOTE_TEMPLATES[templateKeyOf(cond)] ?? []).length > 0;
+  const hasTemplate = (catalog[templateKeyOf(cond)]?.lines ?? []).length > 0;
+  const canSeeMoney = showCost || showProfit; // viewer = Pricing/Ultra/Super (เห็นต้นทุน/กำไร)
+  const isPricingStage = status === "pending_pricing";
+  // กำไร/มาร์จิน (ภายใน): cost-viewer = ยอดขาย(ไม่รวม receipt) − ต้นทุน · super = กำไรตั้งต้นจาก catalog
+  const sellNonReceipt = totals.vatBase + totals.nonVat;
+  const marginTotal = showCost ? sellNonReceipt - totals.costTotal : totals.profitTotal;
+  const marginPct = sellNonReceipt > 0 ? (marginTotal / sellNonReceipt) * 100 : 0;
+  const lineMargin = (l: QuoteLine) => (showCost ? (Number(l.unitPrice) || 0) - (Number(l.cost) || 0) : Number(l.profit) || 0);
   const router = useRouter();
   const canSave = doc.billName.trim() !== "" && doc.product.trim() !== "";
   const hasGroup = (g: string) => lines.some((l) => l.group === g);
@@ -133,8 +142,13 @@ export function QuotationFormClient({
     // เลือกขนส่งที่ไม่ใช่ทางเรือ (AIR/TRUCK) → บังคับ LCL (FCL เฉพาะ SEA)
     if (k === "service" && !usesLoadType(v as string)) next = { ...next, loadType: "LCL" };
     setCond(next);
-    // template ขึ้นกับ term + loadType (LCL/FCL) → reload เมื่อ term/service/loadType เปลี่ยน
-    if (k === "term" || k === "service" || k === "loadType") setLines(linesForConditions(next));
+    // template ขึ้นกับ term + ขนส่ง + loadType → reload line + note เมื่อ combo เปลี่ยน
+    if (k === "term" || k === "service" || k === "loadType") {
+      setLines(linesForConditions(next, catalog));
+      // อัปเดตหมายเหตุตามชุดใหม่ ถ้าผู้ใช้ยังไม่แก้เอง (ว่าง หรือ = note ชุดเดิม)
+      const prevNote = noteForConditions(cond, catalog);
+      setDoc((d) => (d.remark === "" || d.remark === prevNote ? { ...d, remark: noteForConditions(next, catalog) } : d));
+    }
   }
   function toggleSpecial(s: string) {
     setCond((p) => ({ ...p, special: p.special.includes(s) ? p.special.filter((x) => x !== s) : [...p.special, s] }));
@@ -143,12 +157,14 @@ export function QuotationFormClient({
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
   function addLine() {
-    setLines((prev) => [...prev, { id: `new-${prev.length}-${Math.round(totals.grand)}`, group: "Special", desc: "", qty: 1, unitPrice: 0, vat: true, wht: 0 }]);
+    setLines((prev) => [...prev, {
+      id: `new-${prev.length}-${Math.round(totals.grand)}`, group: "Special", desc: "", qty: 1, unitPrice: 0, vat: true, wht: 0,
+      ...(showCost ? { cost: 0 } : {}), ...(showProfit ? { profit: 0 } : {}),
+    }]);
   }
   const setF = (k: keyof typeof doc) => (v: string) => setDoc((d) => ({ ...d, [k]: v }));
 
   const webShort = PACRED_ISSUER.web.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const carrierLabel = /AIR/i.test(cond.service) ? "สายการบิน" : /TRUCK/i.test(cond.service) ? "บ.ขนส่ง" : "สายเรือ";
 
   return (
     <div className="space-y-5">
@@ -171,7 +187,21 @@ export function QuotationFormClient({
         <div className={styles.grid}>
           {/* ── เอกสาร Peak (ใบเสนอราคา) — คอลัมน์ซ้าย (หลัก) ── */}
           <div className={styles.doc}>
-            {/* สถานะ Booking (stepper) — วางบนหัวใบเสนอราคา (owner) · สีคงที่ (เอกสารสว่างเสมอ) */}
+            {/* docHeader (หัวจดหมาย) — บนสุดของใบ */}
+            <div className={styles.docHeader}>
+              <div className={styles.docBrand}>
+                <div className={styles.docMark}>PR</div>
+                <div>
+                  <h2>{PACRED_ISSUER.name}</h2>
+                  <p>{PACRED_ISSUER.address}<br />Tax ID: {PACRED_ISSUER.taxId} • Tel: {PACRED_ISSUER.tel} • {webShort}</p>
+                </div>
+              </div>
+              <div className={styles.docRight}>
+                <h1>ใบเสนอราคา</h1>
+                <div className={styles.docNo}>{docNo}</div>
+              </div>
+            </div>
+            {/* สถานะ Booking (stepper) — ย้ายเข้ามาในใบ ใต้หัวจดหมาย (owner 2026-07-10 "ขยับสถานะมาไว้ในใบ") · สีคงที่ (เอกสารสว่างเสมอ) */}
             <div className="border-b border-[#e9e9ee] px-7 py-5">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-[#1f2937]">สถานะ Booking</h2>
@@ -205,22 +235,9 @@ export function QuotationFormClient({
                 </ol>
               )}
             </div>
-            {/* docHeader */}
-            <div className={styles.docHeader}>
-              <div className={styles.docBrand}>
-                <div className={styles.docMark}>PR</div>
-                <div>
-                  <h2>{PACRED_ISSUER.name}</h2>
-                  <p>{PACRED_ISSUER.address}<br />Tax ID: {PACRED_ISSUER.taxId} • Tel: {PACRED_ISSUER.tel} • {webShort}</p>
-                </div>
-              </div>
-              <div className={styles.docRight}>
-                <h1>ใบเสนอราคา</h1>
-                <div className={styles.docNo}>{docNo}</div>
-              </div>
-            </div>
 
-            {/* info 3 iboxes */}
+            {/* info — เฉพาะที่ต้องขึ้นในใบเสนอราคา (ลูกค้า · งาน+เส้นทาง · เอกสาร) · owner 2026-07-10
+                Tax ID/ที่อยู่/Shipper/Consignee/ที่อยู่รับ/สายเรือ/ขนส่งไทย = รายละเอียดตอนจอง ไม่ต้องขึ้นในใบเสนอราคา */}
             <div className={styles.info}>
               <div className={styles.ibox}>
                 <h3>ลูกค้า / Customer</h3>
@@ -239,8 +256,6 @@ export function QuotationFormClient({
                   </div>
                   <KvInput label="ชื่อลูกค้า" value={doc.billName} onChange={setF("billName")} placeholder="ชื่อ / บริษัท" />
                   <KvInput label="เบอร์โทร" value={doc.phone} onChange={setF("phone")} placeholder="08x-xxx-xxxx" />
-                  <KvInput label="Tax ID" value={doc.taxId} onChange={setF("taxId")} placeholder="เลขผู้เสียภาษี" />
-                  <KvInput label="ที่อยู่" value={doc.address} onChange={setF("address")} placeholder="ที่อยู่จัดส่ง" />
                 </div>
               </div>
 
@@ -253,9 +268,6 @@ export function QuotationFormClient({
                   <KvInput label="POL" value={doc.pol} onChange={setF("pol")} placeholder="ท่า/เมืองต้นทาง" />
                   <div className={styles.k}>POD</div>
                   <div className={styles.v}>{cond.port} <span style={{ color: "#9aa0a8", fontWeight: 400, fontSize: 11 }}>← จาก PORT</span></div>
-                  <KvInput label="ที่อยู่รับ" value={doc.pickupAddress} onChange={setF("pickupAddress")} placeholder="ที่อยู่รับของต้นทาง" />
-                  <KvInput label={carrierLabel} value={doc.carrierAgent} onChange={setF("carrierAgent")} placeholder={`${carrierLabel} (Carrier)`} />
-                  <KvInput label="ขนส่งไทย" value={doc.transportAgent} onChange={setF("transportAgent")} placeholder="Transport Agent" />
                 </div>
               </div>
 
@@ -275,16 +287,31 @@ export function QuotationFormClient({
               <div className={styles.qtHead}>
                 <div>
                   <span className={styles.sectionTag}>Dynamic quotation lines</span>
-                  <div className={styles.sub}>รายการขึ้นตามเงื่อนไขที่เลือก ไม่ fix เป็นแบบเดียว</div>
+                  <div className={styles.sub}>รายการขึ้นตามเงื่อนไขที่เลือก · เรทตั้งต้นจาก “ตั้งค่า” (Pricing)</div>
                 </div>
                 <div className={styles.sourceWrap}>
                   <button type="button" className={styles.addBtn} onClick={addLine}>+ เพิ่มบรรทัด</button>
                 </div>
               </div>
 
+              {/* แถบ Pricing — เห็นต้นทุน/กำไร (ภายใน · ไม่โชว์ลูกค้า) */}
+              {canSeeMoney && (
+                <div style={{
+                  border: `1px solid ${isPricingStage ? "#f1d189" : "#cbd5e1"}`,
+                  background: isPricingStage ? "#fff9ec" : "#f6f7fa",
+                  borderRadius: 12, padding: "9px 13px", marginBottom: 12, fontSize: 12.5, color: "#4b5563", lineHeight: 1.5,
+                }}>
+                  🧮 <b>โหมด Pricing</b> — เห็น{[showCost && "ต้นทุน", showProfit && "กำไร"].filter(Boolean).join("/")} (ภายใน · ไม่โชว์ลูกค้า)
+                  {isPricingStage
+                    ? " · สถานะ “รอดำเนินการ (ทำราคา)” — แก้ราคา/เพิ่ม/ลบ ให้ครบ แล้วส่งกลับ Sales"
+                    : " · แก้ราคา/ต้นทุน เพิ่ม/ลบ บรรทัดได้"}
+                </div>
+              )}
+
               {!hasTemplate && lines.length === 0 ? (
                 <div style={{ border: "1px dashed #d9dce3", borderRadius: 16, padding: "28px 16px", textAlign: "center", color: "#6f7278", fontSize: 13 }}>
-                  ยังไม่มีเรทตั้งต้นสำหรับ <b>{templateKeyOf(cond)}</b> — กด “เพิ่มบรรทัด” เพื่อกรอกเอง<br />(seed ไว้ CIF_LCL / EXW_LCL · matrix เต็ม step ถัดไป)
+                  ยังไม่มีเรทตั้งต้นสำหรับ <b>{templateKeyOf(cond)}</b> — กด “เพิ่มบรรทัด” เพื่อกรอกเอง
+                  {canSeeMoney && <><br />หรือไปตั้งเรทชุดนี้ที่หน้า <b>ตั้งค่า</b> (Pricing) เพื่อให้ดึงมาอัตโนมัติครั้งต่อไป</>}
                 </div>
               ) : (
                 <div className={styles.qtScroll}>
@@ -292,7 +319,9 @@ export function QuotationFormClient({
                     <thead>
                       <tr>
                         <th>#</th><th>คำอธิบาย</th>
-                        <th className={styles.center}>Qty</th><th className={styles.money}>ราคา</th>
+                        <th className={styles.center}>Qty</th><th className={styles.money}>ราคาขาย</th>
+                        {showCost && <th className={styles.money}>ต้นทุน</th>}
+                        {showProfit && <th className={styles.money}>กำไร</th>}
                         <th className={styles.center}>VAT</th><th className={styles.center}>WHT</th><th className={styles.center} />
                       </tr>
                     </thead>
@@ -311,6 +340,20 @@ export function QuotationFormClient({
                             <td className={styles.money}>
                               <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.unitPrice} onChange={(e) => editLine(l.id, { unitPrice: Number(e.target.value) })} />
                             </td>
+                            {showCost && (
+                              <td className={styles.money}>
+                                {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
+                                  <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.cost ?? 0} onChange={(e) => editLine(l.id, { cost: Number(e.target.value) })} />
+                                )}
+                              </td>
+                            )}
+                            {showProfit && (
+                              <td className={styles.money}>
+                                {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
+                                  <span style={{ fontWeight: 700, color: lineMargin(l) < 0 ? "#dc2626" : "#159447" }}>{bahtFmt(lineMargin(l))}</span>
+                                )}
+                              </td>
+                            )}
                             <td className={styles.center}>{l.receipt ? "ไม่มี" : l.vat ? "7%" : "—"}</td>
                             <td className={styles.center}>{l.wht ? `${l.wht}%` : "-"}</td>
                             <td className={styles.center}>
@@ -333,6 +376,21 @@ export function QuotationFormClient({
                 {totals.nonVat > 0 && <div className={styles.totalLine}><span>บริการไม่คิด VAT</span><span className={styles.amt}>{bahtFmt(totals.nonVat)}</span></div>}
                 <div className={styles.totalLine}><span>เงินทดลองจ่าย / ใบเสร็จจริง</span><span className={styles.amt}>{bahtFmt(totals.receiptTotal)}</span></div>
                 <div className={cx(styles.totalLine, styles.big)}><span>ยอดเสนอราคา</span><span className={styles.amt}>{bahtFmt(totals.grand)}</span></div>
+                {/* ต้นทุน/กำไร (ภายใน · ไม่โชว์ลูกค้า) — Pricing เท่านั้น */}
+                {canSeeMoney && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #d9dce3" }}>
+                    {showCost && (
+                      <div className={styles.totalLine}><span>ต้นทุนรวม 🔒</span><span className={styles.amt}>{bahtFmt(totals.costTotal)}</span></div>
+                    )}
+                    <div className={styles.totalLine}>
+                      <span>กำไรรวม 🔒</span>
+                      <span className={styles.amt} style={{ color: marginTotal < 0 ? "#dc2626" : "#159447" }}>
+                        {bahtFmt(marginTotal)}{sellNonReceipt > 0 ? ` (${marginPct.toFixed(1)}%)` : ""}
+                      </span>
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9aa0a8" }}>🔒 ภายใน — ไม่แสดงในใบที่ส่งลูกค้า</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -348,10 +406,18 @@ export function QuotationFormClient({
           <div className={styles.rail}>
           {/* ── Condition Builder (ฟอร์มฝั่งแอดมิน) ── */}
           <div className={styles.card}>
-            <div className={styles.cardHead}><h2>Condition Builder</h2><small>ฟอร์มฝั่งแอดมิน</small></div>
+            <div className={styles.cardHead}>
+              <h2>Condition Builder</h2>
+              {/* ลิงก์ไปหน้าตั้งค่าเรท — เฉพาะ role ที่เข้าถึงหน้านั้นได้ (canViewCost) กัน super เด้ง 404 */}
+              {showCost ? (
+                <Link href="/admin/workspace/booking/import/settings" className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:text-primary-700">
+                  <Settings className="h-3.5 w-3.5" /> ตั้งค่าเรท
+                </Link>
+              ) : <small>ฟอร์มฝั่งแอดมิน</small>}
+            </div>
             <div className={styles.cardBody}>
               <div className={styles.selector}>
-                <SelRow label="ทิศทาง" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
+                <SelRow label="บริการ" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
                 <SelRow label="ขนส่ง" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
                 {usesLoadType(cond.service) && (
                   <SelRow label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} note="เฉพาะทางเรือ · LCL=รวมตู้ · FCL=เหมาตู้" onPick={(v) => setC("loadType", v)} />

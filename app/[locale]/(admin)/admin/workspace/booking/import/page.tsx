@@ -15,6 +15,7 @@
  * shows it auto (locked), no manual entry.
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { PageHeader } from "@/components/admin/page-header";
 import { BookingImportBoard } from "./booking-import-board";
 import { SEED_IMPORT_BOOKINGS } from "./booking-data";
@@ -22,7 +23,9 @@ import { SEED_IMPORT_BOOKINGS } from "./booking-data";
 export const dynamic = "force-dynamic";
 
 export default async function WorkspaceBookingImportPage() {
-  await requireAdmin();
+  // ปุ่ม "ตั้งค่า" (จัดการเรทตั้งต้น) = เห็นต้นทุน/กำไร → Pricing/Ultra/Accounting (canViewCost)
+  const { roles } = await requireAdmin();
+  const canManageCatalog = canViewCost(roles);
 
   return (
     <div className="space-y-5">
@@ -36,7 +39,7 @@ export default async function WorkspaceBookingImportPage() {
           </span>
         }
       />
-      <BookingImportBoard initial={SEED_IMPORT_BOOKINGS} />
+      <BookingImportBoard initial={SEED_IMPORT_BOOKINGS} canManageCatalog={canManageCatalog} />
     </div>
   );
 }

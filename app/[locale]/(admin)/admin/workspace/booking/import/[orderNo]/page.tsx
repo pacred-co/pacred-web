@@ -9,6 +9,8 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { canViewCost, canViewProfit } from "@/lib/admin/money-visibility";
+import { loadBookingCatalog } from "@/actions/admin/booking-catalog";
 import { SEED_IMPORT_BOOKINGS } from "../booking-data";
 import { QuotationFormClient } from "./quotation-form-client";
 
@@ -19,7 +21,7 @@ export default async function BookingImportQuotationPage({
 }: {
   params: Promise<{ orderNo: string }>;
 }) {
-  await requireAdmin();
+  const { roles } = await requireAdmin();
   const { orderNo } = await params;
   const key = decodeURIComponent(orderNo);
   const isNew = key === "new";
@@ -33,5 +35,18 @@ export default async function BookingImportQuotationPage({
 
   const docNo = isNew ? "QO-ใหม่ (ยังไม่บันทึก)" : `QO-${key}`;
 
-  return <QuotationFormClient booking={booking} isNew={isNew} docNo={docNo} salesName={salesName} />;
+  // เรทตั้งต้นต่อเงื่อนไข (Pricing ตั้งในหน้า "ตั้งค่า") — cost/profit strip ตามสิทธิ์แล้ว.
+  const { templates } = await loadBookingCatalog();
+
+  return (
+    <QuotationFormClient
+      booking={booking}
+      isNew={isNew}
+      docNo={docNo}
+      salesName={salesName}
+      catalog={templates}
+      showCost={canViewCost(roles)}
+      showProfit={canViewProfit(roles)}
+    />
+  );
 }
