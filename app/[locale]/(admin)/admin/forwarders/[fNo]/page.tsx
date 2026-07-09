@@ -1226,6 +1226,12 @@ async function tryRenderTbForwarder(
              super/accounting/pricing · writes ONLY the cost columns, never the
              selling price / status / customer notify (§0e). Placed with the items
              it annotates, inside ปอน's status-workflow restructure. ── */}
+          {/* owner 2026-07-08: ย่อกรุปข้อมูลเพิ่มเติม (ต้นทุน→WeChat) ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้. */}
+          <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
+            <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
+              <span className="text-xs">▸</span> ข้อมูลเพิ่มเติม — ต้นทุน · ใบขน · ส่วนลดเอกสาร · WeChat <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
+            </summary>
+            <div className="px-2 pb-3">
           <div className="mt-4">
             <ForwarderCostSection fId={r.id} reforder={r.reforder} />
           </div>
@@ -1269,6 +1275,8 @@ async function tryRenderTbForwarder(
               userid={r.userid}
             />
           </div>
+            </div>
+          </details>
         </ForwarderStatusWorkflow>
 
         {/* ── status-step control (owner 2026-06-19): ถอย/ดัน สถานะทีละขั้น ·
@@ -1302,9 +1310,15 @@ async function tryRenderTbForwarder(
            ของลูกค้า/ตู้ตีกลับ/ติดด่าน/PR สลับ with a note + photo · resolve when
            handled. The action writes ONLY fexception_* — money/status/ownership
            stay on the existing audited paths (แก้ไขลูกค้า · สร้างใบวางบิล). ── */}
-        <div className="mt-4">
-          <ForwarderExceptionPanel fNo={r.id} />
-        </div>
+        {/* owner 2026-07-08: ย่อ แจ้งปัญหาพัสดุ ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้. */}
+        <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
+          <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
+            <span className="text-xs">▸</span> แจ้งปัญหาพัสดุ (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/ติดด่าน) <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
+          </summary>
+          <div className="px-2 pb-3">
+            <ForwarderExceptionPanel fNo={r.id} />
+          </div>
+        </details>
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}
