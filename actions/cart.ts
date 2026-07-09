@@ -17,6 +17,8 @@ import { assertNotImpersonating } from "@/lib/auth/impersonation";
 // 600+ chars of tracking params (utparam/scm/spm/abtest/etc.) → overflow.
 // Strip to canonical id+skuId only.
 import { normalizeProductUrl } from "@/lib/url/normalize-product-url";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+import { toYuanEquivalent, normalizeCurrency } from "@/lib/forwarder/currency-convert";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
@@ -899,6 +901,17 @@ export async function addCartItem(
 
   const admin = createAdminClient();
 
+  // Currency-selector normalisation — when a non-CNY currency was chosen,
+  // RE-DERIVE the ¥-equivalent cprice server-side from the customs FX pool
+  // (never trust the client's price_cny for a converted currency). CNY /
+  // omitted → price_cny verbatim (byte-identical to today's yuan flow).
+  let cpriceYuan = d.price_cny;
+  const normInputCur = normalizeCurrency(d.input_currency);
+  if (d.input_currency && normInputCur !== "CNY" && normInputCur !== "") {
+    const fx = fxRateMap(await getCustomsFxRates());
+    cpriceYuan = toYuanEquivalent(d.input_price ?? 0, d.input_currency, fx).yuan;
+  }
+
   // Legacy cart cap: COUNT(tb_cart) for this user must stay < 10000
   // (cart.php L17/L76 `10000 - countCart`). The rebuilt twin enforced this via
   // a Postgres trigger on `cart_items`; tb_cart has no such trigger, so we
@@ -924,7 +937,7 @@ export async function addCartItem(
       cnameshop: d.shop_name && d.shop_name !== "pacred" ? d.shop_name : "pcs",
       cprovider: providerToLegacyCode(d.provider),
       cimages:   d.image_path ?? "",
-      cprice:    d.price_cny,
+      cprice:    cpriceYuan,
       camount:   d.amount,
       ccolor:    d.color ?? "",
       csize:     d.size ?? "",

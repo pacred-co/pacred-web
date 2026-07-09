@@ -42,6 +42,12 @@ export const adminCartItemSchema = z.object({
   camount:   z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }),
   ccolor:    z.string().trim().max(200).default(""),
   csize:     z.string().trim().max(200).default(""),
+  // Currency selector (price-per-piece in ANY currency). When input_currency
+  // ≠ CNY, the SERVER re-derives cprice = ¥-equivalent from (input_currency,
+  // input_price, customs.fx_rates) — never trusting the client's cprice.
+  // Omit / CNY → cprice is used verbatim (byte-identical to today).
+  input_currency: z.string().trim().max(8).optional(),
+  input_price:    z.number().nonnegative().optional(),
 });
 export type AdminCartItemInput = z.infer<typeof adminCartItemSchema>;
 

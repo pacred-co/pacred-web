@@ -92,6 +92,12 @@ export const cartItemSchema = z.object({
   price_cny:  z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
   amount:     z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }),
   details:    z.string().trim().max(2000).optional().or(z.literal("").transform(() => undefined)),
+  // Currency selector (price-per-piece entered in ANY currency). When
+  // input_currency ≠ CNY, the SERVER re-derives cprice = ¥-equivalent from
+  // (input_currency, input_price, customs.fx_rates) — never trusting the
+  // client's price_cny. Omit / CNY → price_cny is used verbatim (no regression).
+  input_currency: z.string().trim().max(8).optional(),
+  input_price:    z.number().nonnegative().optional(),
 });
 export type CartItemInput = z.infer<typeof cartItemSchema>;
 

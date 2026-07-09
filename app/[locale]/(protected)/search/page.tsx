@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { akucargoSearch } from "@/lib/china-search/akucargo";
 import type { AkucargoPlatform } from "@/lib/china-search/akucargo-helpers";
 import { convertProductUrlDetail, type ChinaProductDetail } from "@/lib/china-search";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
 import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
 import { SearchImagePanel } from "./search-image-panel";
@@ -189,6 +190,10 @@ export default async function SearchPage({
   }
   const rsDefault = Number(settingsRow?.rsdefault ?? 0);
 
+  // customs.fx_rates (THB per 1 unit) — powers the manual price-per-piece
+  // currency selector in UrlPasteAddToCart (non-CNY → ¥-equivalent).
+  const fxRates = fxRateMap(await getCustomsFxRates());
+
   // The convertURLChinna() MODE decision (see classifyUrl note).
   const dataRe = classifyUrl(getURL);
 
@@ -205,6 +210,7 @@ export default async function SearchPage({
         srcWeb={dataRe.srcWeb}
         urlcut={dataRe.urlcut}
         rsDefault={rsDefault}
+        fxRates={fxRates}
         detail={detail}
         provider={provider}
         detailAvailable={detailResult.available}
@@ -596,6 +602,7 @@ async function UrlPasteMode({
   srcWeb,
   urlcut,
   rsDefault,
+  fxRates,
   detail,
   provider,
   detailAvailable,
@@ -603,6 +610,7 @@ async function UrlPasteMode({
   srcWeb: string | null;
   urlcut: string;
   rsDefault: number;
+  fxRates: Record<string, number>;
   detail: ChinaProductDetail | null;
   provider: string;
   detailAvailable: boolean;
@@ -807,6 +815,7 @@ async function UrlPasteMode({
                     priceCny={priceCny}
                     priceThb={priceThb}
                     rsDefault={rsDefault}
+                    fxRates={fxRates}
                     minQty={1}
                     maxQty={999}
                     detailAvailable={detailAvailable}

@@ -34,6 +34,7 @@ import { useTranslations } from "next-intl";
 import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem, addCartItemsBulk } from "@/actions/cart";
+import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
@@ -75,6 +76,7 @@ export function UrlPasteAddToCart({
   skuMap,
   basePriceCny,
   promoPriceCny,
+  fxRates,
 }: {
   url:        string;
   provider:   Provider;
@@ -86,6 +88,10 @@ export function UrlPasteAddToCart({
   rsDefault:  number;
   minQty:     number;
   maxQty:     number;
+  /** customs.fx_rates (THB per 1 unit) — powers the price-per-piece
+   *  currency selector. Manual price entered in USD/THB/EUR/… → normalised
+   *  to a ¥-equivalent (server re-derives on submit). */
+  fxRates?:   Record<string, number>;
   /** True when TAMIT returned a product detail · false when TAMIT
    *  failed (URL not supported, vendor down, scraper blocked).
    *  When false the island shows an error fallback + link to the
@@ -127,6 +133,8 @@ export function UrlPasteAddToCart({
   // TAMIT didn't return base/promo. Pre-filled with TAMIT's value
   // when present.
   const [manualPrice, setManualPrice] = useState<string>(priceCny > 0 ? String(priceCny) : "");
+  // Currency selector for the manual price entry (default CNY = หยวน).
+  const [currency, setCurrency] = useState<string>("CNY");
   const [error,      setError]      = useState<string | null>(null);
   const [success,    setSuccess]    = useState<boolean>(false);
   // Running count of rows added THIS session — powers a persistent
@@ -134,6 +142,19 @@ export function UrlPasteAddToCart({
   // transient-toast auto-hide (so the customer never loses the cart link).
   const [addedCount, setAddedCount] = useState<number>(0);
   const [pending,    startTransition] = useTransition();
+
+  // Currency options for the manual-price selector: CNY + THB always, then
+  // whatever the customs FX pool carries (USD/EUR/JPY/…), deduped.
+  const currencyOptions = useMemo(() => {
+    const keys = ["CNY", "THB", ...Object.keys(fxRates ?? {})];
+    return Array.from(new Set(keys.map((k) => k.toUpperCase())));
+  }, [fxRates]);
+  // ¥-equivalent of the manual price in the chosen currency (display preview;
+  // the SERVER re-derives the same on submit — client value is not trusted).
+  const manualConversion = useMemo(
+    () => toYuanEquivalent(Number(manualPrice), currency, fxRates ?? {}),
+    [manualPrice, currency, fxRates],
+  );
 
   // ── Derived: matched SKU + effective price/image ──────────────────
   const matchedSku = useMemo<SkuRow | undefined>(() => {
@@ -245,9 +266,12 @@ export function UrlPasteAddToCart({
     if (promoPriceCny && promoPriceCny > 0)                return promoPriceCny;
     if (basePriceCny  && basePriceCny  > 0)                return basePriceCny;
     if (priceCny      && priceCny      > 0)                return priceCny;
-    const n = Number(manualPrice);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    // Manual entry → normalise the chosen currency to ¥-equivalent.
+    return manualConversion.yuan;
   })();
+  // Visible warning when the currency couldn't be resolved (fell back to
+  // CNY-as-entered) — never silently mis-convert.
+  const conversionFlagged = manualConversion.flagged && Number(manualPrice) > 0;
   const effectivePriceThb = effectivePriceCny * rsDefault;
   // Show the manual price input only when SKU picker can't supply a
   // price (no axes OR axes complete but matched row has 0) AND TAMIT
@@ -368,6 +392,12 @@ export function UrlPasteAddToCart({
         price_cny:  effectivePriceCny,
         amount:     qty,
         details:    finalDetails,
+        // Only send when the manual-price block is shown AND a non-CNY currency
+        // was picked → server re-derives cprice from the FX pool. CNY / SKU /
+        // marketplace price → omitted → server keeps price_cny (no regression).
+        ...(priceMissing && currency !== "CNY"
+          ? { input_currency: currency, input_price: Number(manualPrice) || 0 }
+          : {}),
       });
       if (res.ok) {
         setSuccess(true);
@@ -592,13 +622,34 @@ export function UrlPasteAddToCart({
               inputMode="decimal"
               className="flex-1 rounded-lg border border-amber-400 bg-white px-3 py-2 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
-            <span className="text-lg font-bold text-amber-700">¥</span>
-            {effectivePriceCny > 0 && (
-              <span className="text-sm text-amber-800">
-                ≈ {effectivePriceThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿
-              </span>
-            )}
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              aria-label="สกุลเงิน"
+              className="rounded-lg border border-amber-400 bg-white px-2 py-2 text-base font-semibold min-h-[44px] focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            >
+              {currencyOptions.map((c) => (
+                <option key={c} value={c}>{c === "CNY" ? "หยวน (CNY/RMB)" : c}</option>
+              ))}
+            </select>
           </div>
+          {/* Transparency: original → ¥-equivalent → ฿ (×rsdefault) */}
+          {Number(manualPrice) > 0 && effectivePriceCny > 0 && (
+            <p className="mt-1.5 text-xs text-amber-800">
+              {currency !== "CNY" && (
+                <>{Number(manualPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency} → </>
+              )}
+              <b>¥{effectivePriceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+              {" → ฿"}
+              {effectivePriceThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          )}
+          {conversionFlagged && (
+            <p className="mt-1 text-xs font-semibold text-red-600 flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              ไม่พบเรตสกุลเงินนี้ — บันทึกเป็นหยวนตามที่กรอก
+            </p>
+          )}
         </label>
       ) : null}
 

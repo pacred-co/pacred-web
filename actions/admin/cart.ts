@@ -49,6 +49,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
+import { toYuanEquivalent, normalizeCurrency } from "@/lib/forwarder/currency-convert";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
@@ -144,6 +146,17 @@ export async function adminAddItemToCart(
   return withAdmin<{ id: number }>([...CART_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
+    // Currency-selector normalisation — when CS picked a non-CNY currency,
+    // RE-DERIVE the ¥-equivalent cprice server-side from the customs FX pool
+    // (never trust the client's cprice for a converted currency). CNY /
+    // omitted → cprice verbatim (byte-identical to today).
+    let cpriceYuan = item.cprice;
+    const normInputCur = normalizeCurrency(item.input_currency);
+    if (item.input_currency && normInputCur !== "CNY" && normInputCur !== "") {
+      const fx = fxRateMap(await getCustomsFxRates());
+      cpriceYuan = toYuanEquivalent(item.input_price ?? 0, item.input_currency, fx).yuan;
+    }
+
     const { data: row, error } = await admin
       .from("tb_cart")
       .insert({
@@ -153,7 +166,7 @@ export async function adminAddItemToCart(
         cnameshop: item.cnameshop,
         cprovider: item.cprovider,
         cimages:   item.cimages,
-        cprice:    item.cprice,
+        cprice:    cpriceYuan,
         camount:   item.camount,
         ccolor:    item.ccolor,
         csize:     item.csize,
@@ -169,8 +182,10 @@ export async function adminAddItemToCart(
       cprovider: item.cprovider,
       cnameshop: item.cnameshop,
       ctitle:    item.ctitle,
-      cprice:    item.cprice,
+      cprice:    cpriceYuan,
       camount:   item.camount,
+      input_currency: item.input_currency ?? "CNY",
+      input_price:    item.input_price ?? item.cprice,
     });
 
     // Revalidate the cart view — both the admin's own cart + the customer

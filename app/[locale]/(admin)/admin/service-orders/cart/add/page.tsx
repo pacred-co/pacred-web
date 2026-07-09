@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminAddCartForm from "./add-form";
 import { AdminLinkPasteSearch } from "./link-paste-search";
+import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
 
 /**
  * Admin > เพิ่มสินค้าในรถเข็น — CS staff manual add-to-cart form.
@@ -61,6 +62,9 @@ export default async function AdminCartAddPage({
     console.error(`[tb_settings lookup] failed`, { code: settingsErr.code, message: settingsErr.message });
   }
   const rsDefault = Number(settings?.rsdefault ?? 0) || 5.0;
+
+  // customs.fx_rates (THB per 1 unit) — the manual price currency selector.
+  const fxRates = fxRateMap(await getCustomsFxRates());
 
   const initialUserId = (sp.userid ?? sp.userID ?? "").trim();
 
@@ -137,7 +141,7 @@ export default async function AdminCartAddPage({
           </span>
           <h2 className="text-sm font-semibold tracking-wide">✏️ กรอกฟิลด์เองทีละชิ้น</h2>
         </div>
-        <AdminAddCartForm initialUserId={initialUserId} myAdminId={myAdminId} />
+        <AdminAddCartForm initialUserId={initialUserId} myAdminId={myAdminId} fxRates={fxRates} rsDefault={rsDefault} />
       </section>
     </main>
   );
