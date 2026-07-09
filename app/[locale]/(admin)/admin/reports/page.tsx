@@ -1196,9 +1196,9 @@ function DataTable({
       {empty ? (
         <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+        <div className="overflow-x-auto scrollbar-x-visible">
+          <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+            <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
               <tr>
                 {headers.map((h) => (
                   <th key={h} className="px-4 py-3">{h}</th>

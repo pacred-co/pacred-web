@@ -592,9 +592,9 @@ export default async function AdminAccountingWithdrawPage({
                               <input type="hidden" name="id" id="arrID" />
                               <table
                                 id="myTable"
-                                className="table display table-bordered table-striped dataTable no-footer dtr-inline header-fixed border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60"
+                                className="table display table-bordered table-striped dataTable no-footer dtr-inline header-fixed border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60"
                               >
-                                <thead>
+                                <thead className="bg-orange-500 text-white">
                                   <tr className="text-center">
                                     <th>วันที่ทำรายการ</th>
                                     <th>วันที่โอนคืน</th>

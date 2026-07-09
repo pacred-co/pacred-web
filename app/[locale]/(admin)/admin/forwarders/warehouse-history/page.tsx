@@ -798,8 +798,8 @@ export default async function AdminForwardersWarehouseHistoryPage({
 
             <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="min-w-[1400px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                  <thead className="bg-surface-alt text-foreground">
+                <table className="min-w-[1400px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                  <thead className="bg-orange-500 text-white">
                     <tr>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">ID</th>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">วันที่บันทึก</th>
