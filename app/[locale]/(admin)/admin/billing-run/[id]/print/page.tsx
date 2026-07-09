@@ -103,6 +103,7 @@ export default async function BillingRunPrintPage({
         buyerName={header.buyer_name || header.userid}
         buyerTaxId={header.buyer_tax_id}
         buyerAddress={header.buyer_address}
+        deliveryAddress={header.delivery_address}
         isJuristic={header.is_juristic}
         subtotal={header.subtotal_thb}
         maoFee={header.mao_fee_thb}

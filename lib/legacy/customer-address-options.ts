@@ -101,6 +101,85 @@ export async function loadCustomerAddressOptions(
 }
 
 /**
+ * The customer's FULL saved-address rows (structured fields), for the reusable
+ * <CustomerAddressPicker> (forwarder detail + billing-run document). Returns
+ * every active tb_address row with the readable detail fields + an `isDefault`
+ * flag (tb_address_main), MAIN address first then addressid asc. Soft-fails to
+ * an empty list. Shared so both surfaces load an identical shape.
+ */
+export type CustomerAddressRow = {
+  addressID: number;
+  name: string;
+  lastname: string;
+  addressno: string;
+  subdistrict: string;
+  district: string;
+  province: string;
+  zipcode: string;
+  tel: string;
+  tel2: string;
+  note: string;
+  isDefault: boolean;
+};
+
+export async function loadCustomerAddressRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: SupabaseClient<any, any, any>,
+  memberCode: string,
+): Promise<CustomerAddressRow[]> {
+  if (!memberCode) return [];
+
+  const { data: mainRow, error: mainErr } = await admin
+    .from("tb_address_main")
+    .select("addressid")
+    .eq("userid", memberCode)
+    .maybeSingle<{ addressid: number | string | null }>();
+  if (mainErr) {
+    console.error(`[customer-address-rows tb_address_main] memberCode=${memberCode}`, { code: mainErr.code, message: mainErr.message });
+  }
+  const mainId = mainRow?.addressid ?? null;
+
+  const { data: rows, error } = await admin
+    .from("tb_address")
+    .select("addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote")
+    .eq("userid", memberCode)
+    .eq("addressstatus", "1");
+  if (error) {
+    console.error(`[customer-address-rows tb_address] memberCode=${memberCode}`, { code: error.code, message: error.message });
+    return [];
+  }
+
+  const list = (rows ?? []) as FullAddrRow[];
+
+  // MAIN first, then addressid asc (matches loadCustomerAddressOptions sort).
+  let mainIdx = -1;
+  for (let i = 0; i < list.length; i++) {
+    if (mainId != null && String(list[i].addressid) === String(mainId)) { mainIdx = i; break; }
+  }
+  const sorted: FullAddrRow[] = [];
+  if (mainIdx >= 0) sorted.push(list[mainIdx]);
+  list
+    .filter((_, i) => i !== mainIdx)
+    .sort((a, b) => Number(a.addressid) - Number(b.addressid))
+    .forEach((a) => sorted.push(a));
+
+  return sorted.map((a) => ({
+    addressID:   Number(a.addressid),
+    name:        a.addressname ?? "",
+    lastname:    a.addresslastname ?? "",
+    addressno:   a.addressno ?? "",
+    subdistrict: a.addresssubdistrict ?? "",
+    district:    a.addressdistrict ?? "",
+    province:    a.addressprovince ?? "",
+    zipcode:     a.addresszipcode ?? "",
+    tel:         a.addresstel ?? "",
+    tel2:        a.addresstel2 ?? "",
+    note:        a.addressnote ?? "",
+    isDefault:   mainId != null && String(a.addressid) === String(mainId),
+  }));
+}
+
+/**
  * The customer's saved PRIMARY (ที่อยู่หลัก) delivery address, with the full
  * structured fields needed to render it (the option list above returns only a
  * concatenated label). MAIN address first (tb_address_main), else the lowest

@@ -11,7 +11,8 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
 // the customer's saved ที่อยู่หลัก (profile) instead of showing "รับที่โกดัง".
-import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress } from "@/lib/legacy/customer-address-options";
+import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress, loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
+import { nameShipBy } from "@/lib/freight/shipping-methods";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -467,27 +468,29 @@ async function tryRenderTbForwarder(
   // Staff can re-pick from the customer's saved tb_address (like the ship-by edit) OR type a
   // new one OR switch to รับเองที่โกดัง. Fetched for EVERY row (incl. self-pickup PCS rows —
   // picking a real address flips it off self-pickup). The actions re-verify ownership.
-  const savedAddresses: { addressID: number; label: string; province: string }[] = [];
+  // 2026-07-09: now the shared rich rows (reusable <CustomerAddressPicker>).
+  const savedAddresses = await loadCustomerAddressRows(admin, r.userid);
+
+  // ── ประวัติการจัดส่ง (read-only) — this customer's recent carriers + destinations ──
+  const deliveryHistory: Array<{ id: number; carrier: string; province: string; date: string }> = [];
   {
-    const { data: addrList, error: addrListErr } = await admin
-      .from("tb_address")
-      .select("addressid, addressname, addresslastname, addressprovince, addresszipcode")
+    const { data: histRows, error: histErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fshipby, faddressprovince, fdate")
       .eq("userid", r.userid)
-      .eq("addressstatus", "1")
-      .order("addressid", { ascending: true });
-    if (addrListErr) {
-      console.error("[forwarder detail] saved-address list failed", { code: addrListErr.code, userid: r.userid });
+      .order("fdate", { ascending: false })
+      .limit(8);
+    if (histErr) {
+      console.error("[forwarder detail] delivery-history failed", { code: histErr.code, userid: r.userid });
     }
-    for (const a of (addrList ?? []) as Array<{
-      addressid: number; addressname: string | null; addresslastname: string | null;
-      addressprovince: string | null; addresszipcode: string | null;
+    for (const h of (histRows ?? []) as Array<{
+      id: number; fshipby: string | null; faddressprovince: string | null; fdate: string | null;
     }>) {
-      const province = (a.addressprovince ?? "").trim();
-      const nm = `${a.addressname ?? ""} ${a.addresslastname ?? ""}`.trim();
-      savedAddresses.push({
-        addressID: a.addressid,
-        province,
-        label: [nm || "(ไม่มีชื่อ)", province || "—", (a.addresszipcode ?? "").trim()].filter(Boolean).join(" · "),
+      deliveryHistory.push({
+        id: h.id,
+        carrier: nameShipBy((h.fshipby ?? "").trim()) || "—",
+        province: (h.faddressprovince ?? "").trim() || "—",
+        date: (h.fdate ?? "").slice(0, 10) || "—",
       });
     }
   }
@@ -1069,6 +1072,7 @@ async function tryRenderTbForwarder(
               </div>
               <EditDeliveryAddressField
                 fId={r.id}
+                userid={r.userid}
                 fshipby={r.fshipby}
                 addresses={savedAddresses}
                 current={{
@@ -1079,6 +1083,16 @@ async function tryRenderTbForwarder(
                   tel2: r.faddresstel2 ?? "", note: r.faddressnote ?? "",
                 }}
               />
+              {deliveryHistory.length > 0 && (
+                <details className="mt-1 text-[11px] text-muted">
+                  <summary className="cursor-pointer text-sky-600 hover:underline">📦 ประวัติการจัดส่ง ({deliveryHistory.length})</summary>
+                  <ul className="mt-1 space-y-0.5">
+                    {deliveryHistory.map((h) => (
+                      <li key={h.id}>#{h.id} · {h.carrier} · {h.province} · {h.date}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
             <p className="text-foreground"><b className="font-semibold">เลขพัสดุในไทย : </b>{r.ftrackingth ?? "—"}</p>
           </div>

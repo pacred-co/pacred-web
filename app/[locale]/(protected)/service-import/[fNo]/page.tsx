@@ -1549,7 +1549,7 @@ export default async function ServiceImportDetailPage({
                               <dt className="text-muted">{t("colWeight")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
                               <dt className="text-muted">{t("colDimensions")}</dt>
-                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} {t("unitCm")}</dd>
+                              <dd className="text-right font-medium tabular-nums">{fWidth > 0 || fLength > 0 || fHeight > 0 ? <>{fWidth} × {fLength} × {fHeight} {t("unitCm")}</> : <span className="text-muted">—</span>}</dd>
                               <dt className="text-muted">{t("colVolume")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fVolume}</dd>
                               <dt className="text-muted">{t("colPriceBasis")}</dt>
@@ -1837,7 +1837,7 @@ export default async function ServiceImportDetailPage({
                               <dt className="text-muted">{t("colWeight")}</dt>
                               <dd className="text-right font-medium tabular-nums">{fWeight} kg.</dd>
                               <dt className="text-muted">{t("colDimensions")}</dt>
-                              <dd className="text-right font-medium tabular-nums">{fWidth} × {fLength} × {fHeight} {t("unitCm")}</dd>
+                              <dd className="text-right font-medium tabular-nums">{fWidth > 0 || fLength > 0 || fHeight > 0 ? <>{fWidth} × {fLength} × {fHeight} {t("unitCm")}</> : <span className="text-muted">—</span>}</dd>
                               <dt className="text-muted">{t("colVolume")}</dt>
                               <dd className="text-right font-medium tabular-nums">
                                 {row.famountcount === "1"

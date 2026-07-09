@@ -76,6 +76,8 @@ import {
   type TaxDocMode,
 } from "@/lib/tax/tax-doc-mode";
 import { TaxDocBadge } from "@/components/admin/tax-doc-badge";
+import { CustomerAddressPicker } from "@/components/admin/customer-address-picker";
+import type { CustomerAddressRow } from "@/lib/legacy/customer-address-options";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error?: string };
 
@@ -1118,13 +1120,15 @@ type DeliveryAddr = {
 
 export function EditDeliveryAddressField({
   fId,
+  userid,
   fshipby,
   addresses,
   current,
 }: {
   fId: number;
+  userid: string;
   fshipby: string | null;
-  addresses: { addressID: number; label: string; province: string }[];
+  addresses: CustomerAddressRow[];
   /** the order's CURRENT snapshot address (tb_forwarder.fAddress*) — seeds the inline editor. */
   current: DeliveryAddr;
 }) {
@@ -1132,23 +1136,21 @@ export function EditDeliveryAddressField({
   const [editing, setEditing] = useState(false);
   // mode: 'pick' = เลือกจากที่อยู่ลูกค้า · 'manual' = แก้ไขเอง (พิมพ์)
   const [mode, setMode] = useState<"pick" | "manual">(addresses.length > 0 ? "pick" : "manual");
-  const [sel, setSel] = useState<string>(addresses[0]?.addressID ? String(addresses[0].addressID) : "");
   const [form, setForm] = useState<DeliveryAddr>(current);
   const isPcs = (fshipby ?? "").trim() === "PCS";
   const set = (k: keyof DeliveryAddr) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  async function onPickSave(close: () => void) {
-    const addressId = Number(sel);
-    if (!Number.isInteger(addressId) || addressId <= 0) {
-      run(() => Promise.resolve({ ok: false, error: "กรุณาเลือกที่อยู่" }), () => {});
-      return;
-    }
+  // onPick from the reusable <CustomerAddressPicker> — confirm + snapshot via the
+  // existing adminPickForwarderAddress (ownership+active-guarded · no new write path).
+  async function onPickApply(addressId: number) {
+    if (!Number.isInteger(addressId) || addressId <= 0) return;
     const picked = addresses.find((a) => a.addressID === addressId);
+    const label = picked ? `${picked.name} ${picked.lastname} · ${picked.province} ${picked.zipcode}` : `#${addressId}`;
     if (!(await confirm(
-      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${picked?.label ?? `#${addressId}`}\n\n• ดึงที่อยู่ลูกค้ามาใส่ออเดอร์นี้\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
+      `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${label}\n\n• ดึงที่อยู่ลูกค้ามาใส่ออเดอร์นี้\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
     ))) return;
-    run(() => adminPickForwarderAddress({ fId, addressId }), close);
+    run(() => adminPickForwarderAddress({ fId, addressId }), () => setEditing(false));
   }
   async function onManualSave(close: () => void) {
     if (!(await confirm(
@@ -1195,11 +1197,15 @@ export function EditDeliveryAddressField({
 
           {mode === "pick" && addresses.length > 0 ? (
             <div className="space-y-1.5">
-              <select className={selectCls} value={sel} onChange={(e) => setSel(e.target.value)}>
-                {addresses.map((a) => <option key={a.addressID} value={a.addressID}>{a.label}</option>)}
-              </select>
+              <CustomerAddressPicker
+                userid={userid}
+                addresses={addresses}
+                busy={pending}
+                revalidate={`/admin/forwarders/${fId}`}
+                applyLabel="ใช้ที่อยู่นี้กับออเดอร์"
+                onPick={onPickApply}
+              />
               <p className="text-[11px] text-muted">บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)</p>
-              <button type="button" disabled={pending || !sel} className={btnSave} onClick={() => onPickSave(() => setEditing(false))}>บันทึก</button>
             </div>
           ) : (
             <div className="space-y-1.5">
