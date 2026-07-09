@@ -1,28 +1,30 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { CommBatchPayForm } from "@/components/admin/comm-batch/comm-batch-pay-form";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
 
 /**
  * /admin/accounting/withdraw/comm-interpreter/[id] — Interpreter batch detail.
  *
- * READ-ONLY · MVP per brief §2. CREATE + PAY DEFERRED next sitting.
+ * Detail + slip-upload pay-out (status '1' รอดำเนินการ → '2' จ่ายแล้ว) —
+ * faithful-port of withdraw-commission-interpreter.php case 'detail' (2026-07-09).
  */
 
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
-  "1": "สร้างแล้ว · รอแนบสลิป",
-  "2": "รอจ่าย (slip uploaded)",
-  "3": "จ่ายแล้ว",
+  "1": "รอดำเนินการ · รอแนบสลิป+จ่าย",
+  "2": "จ่ายแล้ว",
+  "3": "ไม่สำเร็จ",
 };
 const STATUS_BADGE: Record<string, string> = {
-  "1": "bg-slate-100 text-slate-700 border border-slate-300",
-  "2": "bg-amber-50 text-amber-700 border border-amber-200",
-  "3": "bg-green-50 text-green-700 border border-green-200",
+  "1": "bg-amber-50 text-amber-700 border border-amber-200",
+  "2": "bg-green-50 text-green-700 border border-green-200",
+  "3": "bg-rose-50 text-rose-700 border border-rose-200",
 };
 
 function thb(n: number): string {
@@ -46,6 +48,8 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
   // the commission derives from) = money-internal (owner 2026-06-18): only
   // ultra/accounting/pricing.
   const showMoney = canViewProfit(roles);
+  // Pay-out (slip upload → status 1→2) is gated ["super","accounting"] server-side.
+  const canPay = isGodRole(roles) || roles.includes("accounting");
   const { id: idStr } = await params;
   const id = Number.parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -108,6 +112,10 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
               <p className="text-[11px] text-muted mt-1">⚠️ Slip download เร็วๆ นี้</p>
             </div>
           )}
+          {/* Pay-out — attach slip + flip status 1→2 (only while pending) */}
+          {header.status === "1" && canPay && (
+            <CommBatchPayForm kind="interpreter" batchId={header.id} amount={header.amount} />
+          )}
         </section>
 
         <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
@@ -165,8 +173,9 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
         </section>
 
         <p className="text-[11px] text-muted">
-          📌 MVP read-only · CREATE + PAY DEFERRED — ต้อง ก๊อต co-sign + ดู legacy
-          <code className="bg-surface-alt px-1 rounded ml-1">withdraw-commission-interpreter.php</code> ก่อน
+          📌 faithful-port ตาม legacy
+          <code className="bg-surface-alt px-1 rounded mx-1">withdraw-commission-interpreter.php</code>
+          · สร้าง batch จากหน้ารายการ · จ่ายเงิน (แนบสลิป → &quot;จ่ายแล้ว&quot;) ได้ที่การ์ดธนาคารด้านบน (เฉพาะบัญชี/super)
         </p>
       </main>
     </>

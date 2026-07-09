@@ -629,7 +629,7 @@ const blockRevenueRecognition: MenuItem = {
       labelKey: "revenueRec.forwarder",
       icon: "Package",
       children: [
-        { labelKey: "revenueRec.forwarderInvoice",  href: "/admin/accounting/receipts",  icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderInvoice",  href: "/admin/billing-run",          icon: "Receipt" },
         { labelKey: "revenueRec.forwarderReceipts", href: "/admin/accounting/receipts",  icon: "Receipt" },
         { labelKey: "revenueRec.forwarderTotal",    href: "/admin/accounting/forwarder", icon: "BarChart3" },
       ],
@@ -839,8 +839,10 @@ const blockWithdrawalList: MenuItem = {
         // freight commission 50/50 policy · isFreightCommissionEnabled).
         { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th-list",  icon: "Truck", phase: 2 },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
-        // Phase 2 — sales-only commissions / payouts (not live to customers).
-        { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
+        // Phase 2 — 2026-07-09 (faithful-look · ภูม C3): ค่าคอมเซลล์ = withdraw-commission-sale.php
+        // (admin-push sales-rep commission BATCH) → /admin/accounting/withdraw/comm-sale (was
+        // /admin/sales-payouts = the agent-commission-PULL report-user-sales-history port).
+        { labelKey: "withdrawal.salesBonus",  href: "/admin/accounting/withdraw/comm-sale",  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
         // 2026-07-09 (faithful-look · ภูม) — was /admin/commissions (= SALES-rep commission, wrong feature).
         // ค่าคอมล่ามจีน = withdraw-commission-interpreter.php → /admin/accounting/withdraw/comm-interpreter.
         { labelKey: "withdrawal.interpreterBonus", href: "/admin/accounting/withdraw/comm-interpreter", icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
