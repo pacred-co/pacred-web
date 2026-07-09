@@ -9,10 +9,12 @@
  */
 
 export type QuoteConditions = {
-  service: string; // IMPORT SEA FCL / SEA LCL / AIR / TRUCK
+  direction: string; // IMPORT / EXPORT (ตอนนี้เปิดเฉพาะ IMPORT · EXPORT เร็วๆนี้)
+  service: string; // SEA / AIR / TRUCK (ขนส่ง · เลือกก่อน)
+  loadType: string; // LCL / FCL (เฉพาะทางเรือ SEA · โหมดอื่นบังคับ LCL)
   term: string; // EXW / FOB / CIF / DDP
   port: string; // PAT / LCB / BKK / SUV
-  container: string; // LCL / 1×20' / 1×40'HC / 2×40' / Mixed
+  container: string; // ขนาดตู้ (เฉพาะ SEA FCL): 1×20' / 1×40'HC / 2×40' / Mixed
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime
 };
@@ -29,10 +31,12 @@ export type QuoteLine = {
   note?: string;
 };
 
-export const SERVICE_OPTIONS = ["IMPORT SEA FCL", "IMPORT SEA LCL", "IMPORT AIR", "IMPORT TRUCK"];
+export const DIRECTION_OPTIONS = ["IMPORT", "EXPORT"]; // EXPORT ปิดไว้ (เร็วๆนี้)
+export const SERVICE_OPTIONS = ["SEA", "AIR", "TRUCK"]; // ขนส่ง (mode · เลือกก่อน)
+export const LOAD_TYPE_OPTIONS = ["LCL", "FCL"]; // ประเภท (เฉพาะทางเรือ SEA)
 export const TERM_OPTIONS = ["EXW", "FOB", "CIF", "DDP"];
 export const PORT_OPTIONS = ["PAT", "LCB", "BKK", "SUV"];
-export const CONTAINER_OPTIONS = ["LCL", "1×20'", "1×40'HC", "2×40'", "Mixed"];
+export const CONTAINER_OPTIONS = ["1×20'", "1×40'HC", "2×40'", "Mixed"]; // ขนาดตู้ (เฉพาะ SEA FCL)
 export const ENTER_OPTIONS = ["Normal", "Change Status", "Document Amend", "Direct", "Indirect"];
 export const SPECIAL_OPTIONS = ["License", "Manpower", "Local Transport", "Overtime"];
 
@@ -93,13 +97,18 @@ export const IMPORT_QUOTE_TEMPLATES: Record<string, QuoteLine[]> = {
   EXW_LCL: EXW_LCL_LINES,
 };
 
-/** container ที่ขึ้นต้น/มีคำว่า LCL = LCL, อื่นๆ = FCL. */
-export function sizeClassOf(container: string): "LCL" | "FCL" {
-  return container.toUpperCase().includes("LCL") ? "LCL" : "FCL";
+/** LCL/FCL มีเฉพาะทางเรือ (SEA) · AIR/TRUCK = รวม (LCL) เสมอ. */
+export function usesLoadType(service: string): boolean {
+  return /SEA/i.test(service);
+}
+
+/** ขนาดตู้เกี่ยวเฉพาะ FCL (เหมาตู้). */
+export function usesContainer(loadType: string): boolean {
+  return /FCL/i.test(loadType);
 }
 
 export function templateKeyOf(c: QuoteConditions): string {
-  return `${c.term}_${sizeClassOf(c.container)}`;
+  return `${c.term}_${c.loadType}`;
 }
 
 /** โหลด line-item เริ่มต้นตามเงื่อนไข (clone เพื่อแก้ได้อิสระ). */

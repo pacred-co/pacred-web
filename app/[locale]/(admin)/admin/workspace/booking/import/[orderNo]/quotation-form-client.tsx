@@ -2,50 +2,48 @@
 
 /**
  * ฟอร์มสร้าง/ดู ใบเสนอราคา (Quotation) — งานนำเข้า.
- * 2026-07-09 (ปอน · owner brief) — FIRST CUT. หน้าตา: สถานะด้านบน (stepper) + ใบเสนอราคาข้างล่าง
- *   (สไตล์ Peak). รายการราคาเปลี่ยนตามเงื่อนไข (Condition Builder) — TERM/PORT/ประเภทตู้/ENTER.
+ * 2026-07-09 (ปอน · owner brief) — FIRST CUT.
+ * 2026-07-09 (ปอน · 1:1) — reproduce quotation_booking_mockup.html เป๊ะ:
+ *   topbar + flow 4 ขั้น + grid 3 คอลัมน์ (Condition Builder / เอกสาร Peak / Booking Payload).
+ *   สไตล์เอาจาก mockup ตรงๆ ผ่าน CSS Module (quotation-mockup.module.css).
+ *   คงส่วน "สถานะ Booking" (stepper) ไว้แบบเดิม (owner: ยกเว้นสถานะ booking).
  *   ราคาที่โชว์ = SELL · COST/PROFIT ไม่โชว์บนใบลูกค้า. ยัง prototype (client-state · ยังไม่ต่อ DB).
- *   ปุ่ม flow (บันทึก/ส่งราคา/คอนเฟิร์ม) จะทำใน step ถัดไป — ตอนนี้ทำแค่ฟอร์ม.
  */
 
 import { useMemo, useState, type ReactNode, type ChangeEvent } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { ArrowLeft, Plus, Trash2, Paperclip, X, Ship, Plane, Truck, Package, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Paperclip, Trash2 } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  SERVICE_OPTIONS, TERM_OPTIONS, PORT_OPTIONS, CONTAINER_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS,
-  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, IMPORT_QUOTE_TEMPLATES,
+  DIRECTION_OPTIONS, SERVICE_OPTIONS, LOAD_TYPE_OPTIONS, TERM_OPTIONS, PORT_OPTIONS, CONTAINER_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS,
+  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, IMPORT_QUOTE_TEMPLATES, PACRED_ISSUER,
   type QuoteConditions, type QuoteLine,
 } from "../quotation-data";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
+import styles from "./quotation-mockup.module.css";
 
 // ลำดับ stepper (ตัด "ยกเลิก" ออก — โชว์เป็น banner แยก)
 const STEPPER: BookingStatus[] = [
   "customer_created", "pending_pricing", "awaiting_confirm", "awaiting_booking", "booking_confirmed", "success",
 ];
 
-// บนฟอร์ม (admin สร้างเอง) สถานะ customer_created แสดงเป็น "กำลังสร้าง QT/Booking";
-// ป้ายบนบอร์ด (BOOKING_STATUS_META) คงเดิม "ลูกค้าสร้าง Booking" — ไว้สำหรับลูกค้าสร้างจากหน้าเว็บในอนาคต (owner 2026-07-09).
 function formStatusLabel(s: BookingStatus): string {
   return s === "customer_created" ? "กำลังสร้าง QT/Booking" : BOOKING_STATUS_META[s].label;
 }
 
-function serviceIcon(service: string): LucideIcon {
-  if (/AIR/i.test(service)) return Plane;
-  if (/TRUCK/i.test(service)) return Truck;
-  if (/SEA/i.test(service)) return Ship;
-  return Package;
+function deriveConditions(b: Booking | null): QuoteConditions {
+  if (!b) return { direction: "IMPORT", service: "SEA", loadType: "LCL", term: "CIF", port: "PAT", container: "1×20'", enter: "Normal", special: [] };
+  const term = (b.term.match(/EXW|FOB|CIF|DDP/i)?.[0] || "CIF").toUpperCase();
+  const service = /AIR/i.test(b.transport) ? "AIR" : /TRUCK/i.test(b.transport) ? "TRUCK" : "SEA";
+  const loadType = service === "SEA" && /FCL/i.test(b.fclLcl) ? "FCL" : "LCL"; // FCL เฉพาะทางเรือ
+  const port = (b.pod.match(/PAT|LCB|BKK|SUV/i)?.[0] || "PAT").toUpperCase();
+  return { direction: "IMPORT", service, loadType, term, port, container: "1×20'", enter: "Normal", special: [] };
 }
 
-function deriveConditions(b: Booking | null): QuoteConditions {
-  if (!b) return { service: "IMPORT SEA LCL", term: "CIF", port: "PAT", container: "LCL", enter: "Normal", special: [] };
-  const term = (b.term.match(/EXW|FOB|CIF|DDP/i)?.[0] || "CIF").toUpperCase();
-  const isFcl = /FCL/i.test(b.fclLcl);
-  const service = /AIR/i.test(b.transport) ? "IMPORT AIR" : /TRUCK/i.test(b.transport) ? "IMPORT TRUCK" : isFcl ? "IMPORT SEA FCL" : "IMPORT SEA LCL";
-  const container = isFcl ? "1×20'" : "LCL";
-  const port = (b.pod.match(/PAT|LCB|BKK|SUV/i)?.[0] || "PAT").toUpperCase();
-  return { service, term, port, container, enter: "Normal", special: [] };
-}
+const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
+
+// สี pill พิเศษ (mockup): ENTER แต่ละตัวมีสีประจำ (Normal=active/แดง)
+const ENTER_COLOR: Record<string, string> = { "Change Status": "amber", "Document Amend": "purple", "Direct": "blue", "Indirect": "green" };
 
 export function QuotationFormClient({
   booking, isNew, docNo, salesName,
@@ -56,24 +54,13 @@ export function QuotationFormClient({
   const [cond, setCond] = useState<QuoteConditions>(initCond);
   const [lines, setLines] = useState<QuoteLine[]>(() => linesForConditions(initCond));
   const [doc, setDoc] = useState({
-    phone: "",
-    memberCode: "",
+    phone: "", memberCode: "",
     billName: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
-    taxId: "",
-    shipper: "",
+    taxId: "", shipper: "",
     consignee: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
-    product: booking?.product ?? "",
-    pol: booking?.pol ?? "",
-    pickupAddress: "",
-    pod: booking?.pod ?? "",
-    address: "",
-    carrierAgent: "",
-    transportAgent: "",
-    useDate: "",
-    acceptDate: "",
-    validUntil: "",
-    reference: "",
-    remark: "",
+    product: booking?.product ?? "", pol: booking?.pol ?? "", pickupAddress: "",
+    pod: booking?.pod ?? "", address: "", carrierAgent: "", transportAgent: "",
+    useDate: "", acceptDate: "", validUntil: "", reference: "", remark: "",
   });
   const [lookupState, setLookupState] = useState<"idle" | "found" | "notfound">("idle");
   const [looking, setLooking] = useState(false);
@@ -96,7 +83,6 @@ export function QuotationFormClient({
     }
   }
 
-  // เอกสารแนบ (prototype: โชว์ชื่อไฟล์ client-state · ยังไม่อัปโหลดจริง)
   const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
   function onFiles(e: ChangeEvent<HTMLInputElement>) {
     const list = e.target.files;
@@ -112,12 +98,10 @@ export function QuotationFormClient({
   const meta = BOOKING_STATUS_META[status];
   const totals = useMemo(() => computeQuoteTotals(lines), [lines]);
   const hasTemplate = (IMPORT_QUOTE_TEMPLATES[templateKeyOf(cond)] ?? []).length > 0;
-  const SIcon = serviceIcon(cond.service);
   const router = useRouter();
   const canSave = doc.billName.trim() !== "" && doc.product.trim() !== "";
+  const hasGroup = (g: string) => lines.some((l) => l.group === g);
 
-  // บันทึกใบเสนอราคา → รายการเข้าสถานะ "รอดำเนินการ (ทำราคา)" ให้ Pricing ตรวจ
-  // (prototype · เก็บ localStorage แล้วบอร์ดโหลดขึ้น · ต่อ DB จริง step ถัดไป)
   function saveQuotation() {
     if (!canSave) return;
     const now = new Date();
@@ -127,40 +111,30 @@ export function QuotationFormClient({
     const draft: Booking = {
       id: `draft-${now.getTime()}`,
       orderNo: isNew ? `${ymd}-${String(now.getTime()).slice(-3)}` : (booking?.orderNo ?? `${ymd}-000`),
-      date: dateStr,
-      status: "pending_pricing",
-      company: "PACRED",
-      customerName: doc.billName || doc.consignee,
-      product: doc.product,
-      sales: salesName,
-      pricing: booking?.pricing || "WEB",
-      term: `IM ${cond.term}`,
+      date: dateStr, status: "pending_pricing", company: "PACRED",
+      customerName: doc.billName || doc.consignee, product: doc.product, sales: salesName,
+      pricing: booking?.pricing || "WEB", term: `IM ${cond.term}`,
       transport: /AIR/i.test(svc) ? "AIR" : /TRUCK/i.test(svc) ? "TRUCK" : "SEA",
-      fclLcl: cond.container.toUpperCase().includes("LCL") ? "LCL" : "FCL",
-      size: cond.container,
-      warehouse: "",
-      pol: doc.pol,
-      pod: doc.pod,
-      price: `ยอดเสนอราคา ${bahtFmt(totals.grand)}`,
-      hsCode: "",
-      note: doc.remark,
+      fclLcl: cond.loadType,
+      size: usesContainer(cond.loadType) ? cond.container : "ตามขนาดสินค้า", warehouse: "", pol: doc.pol, pod: cond.port,
+      price: `ยอดเสนอราคา ${bahtFmt(totals.grand)}`, hsCode: "", note: doc.remark,
     };
     try {
       const raw = localStorage.getItem("pacred_booking_drafts_import");
       const arr: Booking[] = raw ? JSON.parse(raw) : [];
-      const next = [draft, ...arr.filter((d) => d?.orderNo !== draft.orderNo)]; // ทำราคาซ้ำ = แทนที่ orderNo เดิม
+      const next = [draft, ...arr.filter((d) => d?.orderNo !== draft.orderNo)];
       localStorage.setItem("pacred_booking_drafts_import", JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     router.push("/admin/workspace/booking/import?tab=pending_pricing");
   }
 
   function setC<K extends keyof QuoteConditions>(k: K, v: QuoteConditions[K]) {
-    const next = { ...cond, [k]: v } as QuoteConditions;
+    let next = { ...cond, [k]: v } as QuoteConditions;
+    // เลือกขนส่งที่ไม่ใช่ทางเรือ (AIR/TRUCK) → บังคับ LCL (FCL เฉพาะ SEA)
+    if (k === "service" && !usesLoadType(v as string)) next = { ...next, loadType: "LCL" };
     setCond(next);
-    // term/ประเภทตู้/service เปลี่ยน → โหลดชุดรายการใหม่จาก template (first cut)
-    if (k === "term" || k === "container" || k === "service") setLines(linesForConditions(next));
+    // template ขึ้นกับ term + loadType (LCL/FCL) → reload เมื่อ term/service/loadType เปลี่ยน
+    if (k === "term" || k === "service" || k === "loadType") setLines(linesForConditions(next));
   }
   function toggleSpecial(s: string) {
     setCond((p) => ({ ...p, special: p.special.includes(s) ? p.special.filter((x) => x !== s) : [...p.special, s] }));
@@ -171,6 +145,10 @@ export function QuotationFormClient({
   function addLine() {
     setLines((prev) => [...prev, { id: `new-${prev.length}-${Math.round(totals.grand)}`, group: "Special", desc: "", qty: 1, unitPrice: 0, vat: true, wht: 0 }]);
   }
+  const setF = (k: keyof typeof doc) => (v: string) => setDoc((d) => ({ ...d, [k]: v }));
+
+  const webShort = PACRED_ISSUER.web.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const carrierLabel = /AIR/i.test(cond.service) ? "สายการบิน" : /TRUCK/i.test(cond.service) ? "บ.ขนส่ง" : "สายเรือ";
 
   return (
     <div className="space-y-5">
@@ -187,298 +165,318 @@ export function QuotationFormClient({
         </Link>
       </div>
 
-      {/* ── สถานะ (stepper) ด้านบน ────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-white p-4 shadow-sm dark:bg-surface md:p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-foreground">สถานะ Booking</h2>
-          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${meta.pill}`}>{formStatusLabel(status)}</span>
-        </div>
-        {status === "cancelled" ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-            🛑 รายการนี้ถูกยกเลิก{booking?.note ? ` — ${booking.note}` : ""}
-          </div>
-        ) : (
-          <ol className="flex items-start gap-1 overflow-x-auto scrollbar-x-visible pb-1">
-            {STEPPER.map((s, i) => {
-              const activeIdx = STEPPER.indexOf(status);
-              const state = i < activeIdx ? "done" : i === activeIdx ? "current" : "todo";
-              return (
-                <li key={s} className="flex min-w-[92px] flex-1 flex-col items-center text-center">
-                  <div className="flex w-full items-center">
-                    <span className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : state === "todo" ? "bg-border" : "bg-primary-400"}`} />
-                    <span className={[
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                      state === "current" ? "bg-primary-600 text-white ring-4 ring-primary-100 dark:ring-primary-900/40"
-                        : state === "done" ? "bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
-                          : "bg-surface-alt text-muted",
-                    ].join(" ")}>{i + 1}</span>
-                    <span className={`h-0.5 flex-1 ${i === STEPPER.length - 1 ? "opacity-0" : i < activeIdx ? "bg-primary-400" : "bg-border"}`} />
-                  </div>
-                  <span className={`mt-1.5 text-[11px] leading-tight ${state === "current" ? "font-semibold text-foreground" : "text-muted"}`}>{formStatusLabel(s)}</span>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
-
-      {/* ── 2 คอลัมน์: ใบเสนอราคา (หลัก) + เงื่อนไข Shipment (แถบขวา) ── */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      {/* ── ใบเสนอราคา (main · แก้ inline ได้) ─────────────── */}
-      <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
-        {/* ── หัวเอกสาร (slim) ─────────────────────────────── */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-primary-600">ใบเสนอราคา</span>
-            <span className="rounded-md border border-border bg-surface-alt px-2 py-0.5 text-[12px] font-bold text-foreground">{docNo}</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge>{cond.service}</Badge>
-            <Badge>{cond.term} · {cond.container}</Badge>
-            <Badge>PORT: {cond.port}</Badge>
-          </div>
-        </div>
-
-        {/* ── info cards 4 กล่อง (compact · reference) ─────── */}
-        <div className="grid items-start gap-3 border-b border-border p-5 sm:grid-cols-2">
-          {/* ลูกค้า (Customer · สมาชิก) — ซ้าย */}
-          <InfoCard title="ลูกค้า (Customer)">
-            <div>
-              <span className="text-[11px] text-muted">รหัสสมาชิก (PR) — พิมพ์เพื่อค้นหา *</span>
-              <div className="mt-0.5 flex gap-1.5">
-                <input
-                  value={doc.memberCode}
-                  onChange={(e) => { setDoc((d) => ({ ...d, memberCode: e.target.value })); setLookupState("idle"); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doLookup(); } }}
-                  placeholder="เช่น PR10190"
-                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-[13px] text-foreground outline-none placeholder:text-muted/60 focus:border-primary-400"
-                />
-                <button onClick={doLookup} disabled={looking} className="shrink-0 rounded-md bg-primary-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50">{looking ? "…" : "ค้นหา"}</button>
+      {/* ══ MOCKUP 1:1 (quotation_booking_mockup.html) — topbar/flow เอาออก · สถานะย้ายเข้าหัวเอกสาร (owner) ══ */}
+      <div className={styles.wrap}>
+        {/* grid: เอกสาร (ซ้าย · หลัก) + แถบขวา (Condition Builder + Booking Payload) */}
+        <div className={styles.grid}>
+          {/* ── เอกสาร Peak (ใบเสนอราคา) — คอลัมน์ซ้าย (หลัก) ── */}
+          <div className={styles.doc}>
+            {/* สถานะ Booking (stepper) — วางบนหัวใบเสนอราคา (owner) · สีคงที่ (เอกสารสว่างเสมอ) */}
+            <div className="border-b border-[#e9e9ee] px-7 py-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-[#1f2937]">สถานะ Booking</h2>
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${meta.pill}`}>{formStatusLabel(status)}</span>
               </div>
-              {looking && <p className="mt-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">⏳ กำลังค้นหา…</p>}
-              {!looking && lookupState === "found" && <p className="mt-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">✓ พบสมาชิก — ดึงข้อมูลให้แล้ว</p>}
-              {!looking && lookupState === "notfound" && <p className="mt-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">⚠ ไม่พบ — กรอกชื่อ+เบอร์เพื่อสมัครใหม่ (ได้รหัส PR)</p>}
-              {!looking && lookupState === "idle" && <p className="mt-0.5 text-[10px] leading-snug text-muted">สมาชิกเดิม พิมพ์ PR → ข้อมูลขึ้นเอง</p>}
-            </div>
-            <Field label="ชื่อลูกค้า *" value={doc.billName} onChange={(v) => setDoc((d) => ({ ...d, billName: v }))} placeholder="ชื่อ / บริษัท (ตามสมาชิก)" />
-            <Field label="เบอร์โทร *" value={doc.phone} onChange={(v) => setDoc((d) => ({ ...d, phone: v }))} placeholder="08x-xxx-xxxx" />
-            <Field label="เลขผู้เสียภาษี" value={doc.taxId} onChange={(v) => setDoc((d) => ({ ...d, taxId: v }))} placeholder="Tax ID" />
-            <Field label="ที่อยู่จัดส่ง" value={doc.address} onChange={(v) => setDoc((d) => ({ ...d, address: v }))} placeholder="ที่อยู่ปลายทาง" />
-          </InfoCard>
-
-          {/* Shipment (ข้อมูลขนส่ง) — ขวา */}
-          <InfoCard title="Shipment (ข้อมูลขนส่ง)">
-            <Field label="Shipper (ชื่อลูกค้าต้นทาง)" value={doc.shipper} onChange={(v) => setDoc((d) => ({ ...d, shipper: v }))} placeholder="ผู้ส่งออก / โรงงานต้นทาง" />
-            <Field label="Consignee (ชื่อลูกค้าปลายทาง)" value={doc.consignee} onChange={(v) => setDoc((d) => ({ ...d, consignee: v }))} placeholder="ผู้รับปลายทาง (มักเป็นลูกค้า)" />
-            <Field label="Description (สินค้า)" value={doc.product} onChange={(v) => setDoc((d) => ({ ...d, product: v }))} placeholder="ชื่อสินค้า" />
-            <Field label="POL (ต้นทาง)" value={doc.pol} onChange={(v) => setDoc((d) => ({ ...d, pol: v }))} placeholder="ท่า / เมืองต้นทาง" />
-            <Field label="ที่อยู่รับสินค้า (ต้นทาง)" value={doc.pickupAddress} onChange={(v) => setDoc((d) => ({ ...d, pickupAddress: v }))} placeholder="ที่อยู่รับของต้นทาง" />
-            <Field label="POD (ปลายทาง)" value={doc.pod} onChange={(v) => setDoc((d) => ({ ...d, pod: v }))} placeholder="ท่าปลายทาง" />
-            <Field label="Carrier Agent (ชื่อสายเรือ)" value={doc.carrierAgent} onChange={(v) => setDoc((d) => ({ ...d, carrierAgent: v }))} placeholder="ชื่อสายเรือ" />
-            <Field label="Transport Agent (ขนส่งในไทย)" value={doc.transportAgent} onChange={(v) => setDoc((d) => ({ ...d, transportAgent: v }))} placeholder="ชื่อขนส่งในไทย" />
-          </InfoCard>
-        </div>
-
-        {/* ตารางรายการราคา (dynamic · แก้ได้) */}
-        <div className="p-5">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">รายการราคา (ตามเงื่อนไข)</p>
-              <p className="text-[11px] text-muted">template: <span className="font-mono">{templateKeyOf(cond)}</span> · แก้จำนวน/ราคาได้ · เพิ่ม-ลบบรรทัดได้</p>
-            </div>
-            <button onClick={addLine} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-surface-alt">
-              <Plus className="h-3.5 w-3.5" /> เพิ่มบรรทัด
-            </button>
-          </div>
-
-          {!hasTemplate && lines.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-surface-alt/40 px-4 py-8 text-center text-sm text-muted">
-              ยังไม่มีเรทตั้งต้นสำหรับ <span className="font-mono">{templateKeyOf(cond)}</span> — จะใส่ matrix เต็มใน step ถัดไป<br />
-              (ตอนนี้ seed ไว้ CIF_LCL / EXW_LCL) · กด “เพิ่มบรรทัด” เพื่อกรอกเองได้
-            </div>
-          ) : (
-            <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
-              <table className="w-full min-w-[720px] text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-2 py-2 text-left">กลุ่ม</th>
-                    <th className="px-2 py-2 text-left">คำอธิบาย</th>
-                    <th className="w-16 px-2 py-2 text-center">จำนวน</th>
-                    <th className="w-28 px-2 py-2 text-right">ราคา/หน่วย</th>
-                    <th className="w-28 px-2 py-2 text-right">รวม</th>
-                    <th className="w-16 px-2 py-2 text-center">VAT</th>
-                    <th className="w-10 px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => {
-                    const amt = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0);
+              {status === "cancelled" ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  🛑 รายการนี้ถูกยกเลิก{booking?.note ? ` — ${booking.note}` : ""}
+                </div>
+              ) : (
+                <ol className="flex items-start gap-1 overflow-x-auto scrollbar-x-visible pb-1">
+                  {STEPPER.map((s, i) => {
+                    const activeIdx = STEPPER.indexOf(status);
+                    const state = i < activeIdx ? "done" : i === activeIdx ? "current" : "todo";
                     return (
-                      <tr key={l.id} className="even:bg-surface-alt/20">
-                        <td className="px-2 py-1.5"><span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">{l.group}</span></td>
-                        <td className="px-2 py-1.5">
-                          <input value={l.desc} onChange={(e) => editLine(l.id, { desc: e.target.value })}
-                            className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-foreground hover:border-border focus:border-primary-400 focus:outline-none" placeholder="คำอธิบายรายการ" />
-                          {l.note && <span className="px-1 text-[10px] text-amber-600 dark:text-amber-400">⚠ {l.note}</span>}
-                        </td>
-                        <td className="px-1 py-1.5 text-center">
-                          <input type="number" value={l.qty} onChange={(e) => editLine(l.id, { qty: Number(e.target.value) })}
-                            className="w-14 rounded border border-border bg-background px-1 py-0.5 text-center text-xs tabular-nums focus:border-primary-400 focus:outline-none" />
-                        </td>
-                        <td className="px-1 py-1.5 text-right">
-                          <input type="number" value={l.unitPrice} onChange={(e) => editLine(l.id, { unitPrice: Number(e.target.value) })}
-                            className="w-24 rounded border border-border bg-background px-1 py-0.5 text-right text-xs tabular-nums focus:border-primary-400 focus:outline-none" />
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{bahtFmt(amt)}</td>
-                        <td className="px-2 py-1.5 text-center text-[10px]">{l.receipt ? <span className="text-muted">ทดลองจ่าย</span> : l.vat ? "7%" : "—"}</td>
-                        <td className="px-1 py-1.5 text-center">
-                          <button onClick={() => setLines((prev) => prev.filter((x) => x.id !== l.id))} aria-label="ลบบรรทัด" className="text-muted transition-colors hover:text-rose-600">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      </tr>
+                      <li key={s} className="flex min-w-[92px] flex-1 flex-col items-center text-center">
+                        <div className="flex w-full items-center">
+                          <span className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : state === "todo" ? "bg-[#e9e9ee]" : "bg-primary-400"}`} />
+                          <span className={[
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                            state === "current" ? "bg-primary-600 text-white ring-4 ring-primary-100"
+                              : state === "done" ? "bg-primary-100 text-primary-700"
+                                : "bg-[#f2f3f7] text-[#6f7278]",
+                          ].join(" ")}>{i + 1}</span>
+                          <span className={`h-0.5 flex-1 ${i === STEPPER.length - 1 ? "opacity-0" : i < activeIdx ? "bg-primary-400" : "bg-[#e9e9ee]"}`} />
+                        </div>
+                        <span className={`mt-1.5 text-[11px] leading-tight ${state === "current" ? "font-semibold text-[#1f2937]" : "text-[#6f7278]"}`}>{formStatusLabel(s)}</span>
+                      </li>
                     );
                   })}
+                </ol>
+              )}
+            </div>
+            {/* docHeader */}
+            <div className={styles.docHeader}>
+              <div className={styles.docBrand}>
+                <div className={styles.docMark}>PR</div>
+                <div>
+                  <h2>{PACRED_ISSUER.name}</h2>
+                  <p>{PACRED_ISSUER.address}<br />Tax ID: {PACRED_ISSUER.taxId} • Tel: {PACRED_ISSUER.tel} • {webShort}</p>
+                </div>
+              </div>
+              <div className={styles.docRight}>
+                <h1>ใบเสนอราคา</h1>
+                <div className={styles.docNo}>{docNo}</div>
+              </div>
+            </div>
+
+            {/* info 3 iboxes */}
+            <div className={styles.info}>
+              <div className={styles.ibox}>
+                <h3>ลูกค้า / Customer</h3>
+                <div className={styles.kv}>
+                  <div className={styles.k}>รหัสสมาชิก</div>
+                  <div className={styles.v}>
+                    <div className={styles.searchRow}>
+                      <input className={styles.inp} value={doc.memberCode} placeholder="เช่น PR10190"
+                        onChange={(e) => { setF("memberCode")(e.target.value); setLookupState("idle"); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doLookup(); } }} />
+                      <button type="button" className={styles.searchBtn} onClick={doLookup} disabled={looking}>{looking ? "…" : "ค้นหา"}</button>
+                    </div>
+                    {looking && <p className={styles.hintTxt} style={{ color: "#0284c7" }}>⏳ กำลังค้นหา…</p>}
+                    {!looking && lookupState === "found" && <p className={styles.hintTxt} style={{ color: "#059669" }}>✓ พบสมาชิก — ดึงข้อมูลให้แล้ว</p>}
+                    {!looking && lookupState === "notfound" && <p className={styles.hintTxt} style={{ color: "#d97706" }}>⚠ ไม่พบ — กรอกใหม่เพื่อสมัคร (ได้รหัส PR)</p>}
+                  </div>
+                  <KvInput label="ชื่อลูกค้า" value={doc.billName} onChange={setF("billName")} placeholder="ชื่อ / บริษัท" />
+                  <KvInput label="เบอร์โทร" value={doc.phone} onChange={setF("phone")} placeholder="08x-xxx-xxxx" />
+                  <KvInput label="Tax ID" value={doc.taxId} onChange={setF("taxId")} placeholder="เลขผู้เสียภาษี" />
+                  <KvInput label="ที่อยู่" value={doc.address} onChange={setF("address")} placeholder="ที่อยู่จัดส่ง" />
+                </div>
+              </div>
+
+              <div className={styles.ibox}>
+                <h3>Shipment Data</h3>
+                <div className={styles.kv}>
+                  <KvInput label="Shipper" value={doc.shipper} onChange={setF("shipper")} placeholder="ผู้ส่งออกต้นทาง" />
+                  <KvInput label="Consignee" value={doc.consignee} onChange={setF("consignee")} placeholder="ผู้รับปลายทาง" />
+                  <KvInput label="Commodity" value={doc.product} onChange={setF("product")} placeholder="ชื่อสินค้า" />
+                  <KvInput label="POL" value={doc.pol} onChange={setF("pol")} placeholder="ท่า/เมืองต้นทาง" />
+                  <div className={styles.k}>POD</div>
+                  <div className={styles.v}>{cond.port} <span style={{ color: "#9aa0a8", fontWeight: 400, fontSize: 11 }}>← จาก PORT</span></div>
+                  <KvInput label="ที่อยู่รับ" value={doc.pickupAddress} onChange={setF("pickupAddress")} placeholder="ที่อยู่รับของต้นทาง" />
+                  <KvInput label={carrierLabel} value={doc.carrierAgent} onChange={setF("carrierAgent")} placeholder={`${carrierLabel} (Carrier)`} />
+                  <KvInput label="ขนส่งไทย" value={doc.transportAgent} onChange={setF("transportAgent")} placeholder="Transport Agent" />
+                </div>
+              </div>
+
+              <div className={styles.ibox}>
+                <h3>เอกสาร / Owner</h3>
+                <div className={styles.kv}>
+                  <KvInput label="วันที่ออก" value={doc.useDate} onChange={setF("useDate")} placeholder="วว/ดด/ปปปป" />
+                  <KvInput label="ใช้ได้ถึง" value={doc.validUntil} onChange={setF("validUntil")} placeholder="วว/ดด/ปปปป" />
+                  <div className={styles.k}>Sale</div><div className={styles.v}>{salesName}</div>
+                  <div className={styles.k}>Pricing</div><div className={styles.v}>{booking?.pricing || "WEB"}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* quoteTable */}
+            <div className={styles.quoteTable}>
+              <div className={styles.qtHead}>
+                <div>
+                  <span className={styles.sectionTag}>Dynamic quotation lines</span>
+                  <div className={styles.sub}>รายการขึ้นตามเงื่อนไขที่เลือก ไม่ fix เป็นแบบเดียว</div>
+                </div>
+                <div className={styles.sourceWrap}>
+                  <button type="button" className={styles.addBtn} onClick={addLine}>+ เพิ่มบรรทัด</button>
+                </div>
+              </div>
+
+              {!hasTemplate && lines.length === 0 ? (
+                <div style={{ border: "1px dashed #d9dce3", borderRadius: 16, padding: "28px 16px", textAlign: "center", color: "#6f7278", fontSize: 13 }}>
+                  ยังไม่มีเรทตั้งต้นสำหรับ <b>{templateKeyOf(cond)}</b> — กด “เพิ่มบรรทัด” เพื่อกรอกเอง<br />(seed ไว้ CIF_LCL / EXW_LCL · matrix เต็ม step ถัดไป)
+                </div>
+              ) : (
+                <div className={styles.qtScroll}>
+                  <table className={styles.qt}>
+                    <thead>
+                      <tr>
+                        <th>#</th><th>คำอธิบาย</th>
+                        <th className={styles.center}>Qty</th><th className={styles.money}>ราคา</th>
+                        <th className={styles.center}>VAT</th><th className={styles.center}>WHT</th><th className={styles.center} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((l, idx) => {
+                        return (
+                          <tr key={l.id}>
+                            <td className={styles.no}>{idx + 1}</td>
+                            <td>
+                              <input className={styles.descIn} value={l.desc} onChange={(e) => editLine(l.id, { desc: e.target.value })} placeholder="คำอธิบายรายการ" />
+                              {l.note && <span className={styles.descNote}>⚠ {l.note}</span>}
+                            </td>
+                            <td className={styles.center}>
+                              <input type="number" className={cx(styles.cellIn, styles.qtyIn)} value={l.qty} onChange={(e) => editLine(l.id, { qty: Number(e.target.value) })} />
+                            </td>
+                            <td className={styles.money}>
+                              <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.unitPrice} onChange={(e) => editLine(l.id, { unitPrice: Number(e.target.value) })} />
+                            </td>
+                            <td className={styles.center}>{l.receipt ? "ไม่มี" : l.vat ? "7%" : "—"}</td>
+                            <td className={styles.center}>{l.wht ? `${l.wht}%` : "-"}</td>
+                            <td className={styles.center}>
+                              <button type="button" className={styles.delBtn} onClick={() => setLines((prev) => prev.filter((x) => x.id !== l.id))} aria-label="ลบบรรทัด"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* summary */}
+            <div className={styles.summary}>
+              <div className={styles.totalBox}>
+                <div className={styles.totalLine}><span>มูลค่าที่คำนวณ VAT</span><span className={styles.amt}>{bahtFmt(totals.vatBase)}</span></div>
+                <div className={styles.totalLine}><span>VAT 7%</span><span className={styles.amt}>{bahtFmt(totals.vat)}</span></div>
+                {totals.nonVat > 0 && <div className={styles.totalLine}><span>บริการไม่คิด VAT</span><span className={styles.amt}>{bahtFmt(totals.nonVat)}</span></div>}
+                <div className={styles.totalLine}><span>เงินทดลองจ่าย / ใบเสร็จจริง</span><span className={styles.amt}>{bahtFmt(totals.receiptTotal)}</span></div>
+                <div className={cx(styles.totalLine, styles.big)}><span>ยอดเสนอราคา</span><span className={styles.amt}>{bahtFmt(totals.grand)}</span></div>
+              </div>
+            </div>
+
+            {/* sign */}
+            <div className={styles.sign}>
+              <div className={styles.signBox}>ผู้ออกเอกสาร<b>{salesName}</b></div>
+              <div className={styles.signBox}>ผู้อนุมัติ<b>Account Pacred</b></div>
+              <div className={styles.signBox}>ผู้รับเอกสาร<b>ลูกค้า / Customer</b></div>
+            </div>
+          </div>
+
+          {/* ── แถบขวา: ย้าย Condition Builder มากองรวมกับ Booking Payload (owner: ซ้าย→ขวา) ── */}
+          <div className={styles.rail}>
+          {/* ── Condition Builder (ฟอร์มฝั่งแอดมิน) ── */}
+          <div className={styles.card}>
+            <div className={styles.cardHead}><h2>Condition Builder</h2><small>ฟอร์มฝั่งแอดมิน</small></div>
+            <div className={styles.cardBody}>
+              <div className={styles.selector}>
+                <SelRow label="ทิศทาง" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
+                <SelRow label="ขนส่ง" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
+                {usesLoadType(cond.service) && (
+                  <SelRow label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} note="เฉพาะทางเรือ · LCL=รวมตู้ · FCL=เหมาตู้" onPick={(v) => setC("loadType", v)} />
+                )}
+                {usesContainer(cond.loadType) && (
+                  <SelRow label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} note="เลือกขนาดตู้ (FCL)" onPick={(v) => setC("container", v)} />
+                )}
+                <SelRow label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
+                <SelRow label="PORT" options={PORT_OPTIONS} value={cond.port} onPick={(v) => setC("port", v)} />
+                <SelRow label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+                <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
+              </div>
+
+              {/* หมายเหตุ + แนบไฟล์ + บันทึก (แอดมิน) */}
+              <div className={styles.adminBlock}>
+                <div>
+                  <p className={styles.fieldLbl}>หมายเหตุ (แสดงในใบเสนอราคา)</p>
+                  <textarea className={styles.remarkArea} rows={3} value={doc.remark} onChange={(e) => setF("remark")(e.target.value)}
+                    placeholder="เงื่อนไข / โน้ตเพิ่มเติม เช่น ยังไม่รวมค่าขนส่งในจีน · ราคายืนยัน 7 วัน · ขอ PL & INV / MSDS …" />
+                </div>
+                <div>
+                  <p className={styles.fieldLbl}>แนบเอกสาร (PL / INV / MSDS / รูปสินค้า …)</p>
+                  <label className={styles.attach}>
+                    <Paperclip className="h-4 w-4" /> คลิกเพื่อเลือกไฟล์ (แนบได้หลายไฟล์)
+                    <input type="file" multiple className="hidden" onChange={onFiles} />
+                  </label>
+                  {files.length > 0 && (
+                    <ul className={styles.fileList}>
+                      {files.map((f, i) => (
+                        <li key={`${f.name}-${i}`} className={styles.fileItem}>
+                          <Paperclip className="h-3 w-3 shrink-0" />
+                          <span>{f.name}</span>
+                          <button type="button" className={styles.delBtn} onClick={() => removeFile(i)} aria-label="ลบไฟล์">✕</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button type="button" className={styles.saveBtn} onClick={saveQuotation} disabled={!canSave} title={canSave ? "" : "กรอก ชื่อลูกค้า + สินค้า ก่อน"}>
+                  บันทึกใบเสนอราคา → ส่ง Pricing
+                </button>
+                <p className={styles.saveHint}>💾 บันทึกแล้วเข้าสถานะ “รอดำเนินการ (ทำราคา)” ให้ Pricing ตรวจ · prototype เก็บชั่วคราวในเครื่อง (ต่อ DB จริง step ถัดไป)</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Booking Payload ── */}
+          <div className={styles.card}>
+            <div className={styles.cardHead}><h2>Booking Payload</h2><span className={styles.sync}>Auto Sync</span></div>
+            <div className={styles.cardBody}>
+              <div className={styles.payloadTitle}>
+                <span className={styles.sectionTag}>Fields sent to Booking</span>
+                <small style={{ color: "#6f7278", fontSize: 12 }}>ไม่เอาราคาไป Booking</small>
+              </div>
+              <table className={styles.mapTable}>
+                <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
+                <tbody>
+                  <PayRow field="booking_ref" value={docNo} src="Quote Header" />
+                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
+                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
+                  <PayRow field="term" value={cond.term} src="Term Chip" />
+                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
+                  <PayRow field="destination_port" value={cond.port} src="PORT" />
+                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
+                  <PayRow field="commodity" value={doc.product || "—"} src="Description" />
+                  <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
+                  <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
+                  <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
+                  <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
+                  <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
                 </tbody>
               </table>
             </div>
-          )}
-
-          {/* สรุปยอด */}
-          <div className="mt-4 flex flex-col gap-4 md:flex-row md:justify-between">
-            <div className="max-w-md rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3 text-[12px] leading-relaxed text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-200">
-              <b>หมายเหตุ:</b> ราคานี้เป็นราคาขาย (SELL) ที่โชว์ลูกค้า — ต้นทุน/กำไร (COST/PROFIT) เป็นข้อมูลภายใน ไม่แสดงบนใบนี้ · “เงินทดลองจ่าย” เก็บตามใบเสร็จจริง (ไม่มี VAT)
-            </div>
-            <div className="w-full max-w-xs rounded-xl border border-border bg-surface-alt/40 p-4 text-sm">
-              <TotalLine k="มูลค่าที่คิด VAT" v={bahtFmt(totals.vatBase)} />
-              <TotalLine k="VAT 7%" v={bahtFmt(totals.vat)} />
-              {totals.nonVat > 0 && <TotalLine k="บริการไม่คิด VAT" v={bahtFmt(totals.nonVat)} />}
-              <TotalLine k="เงินทดลองจ่าย / ใบเสร็จจริง" v={bahtFmt(totals.receiptTotal)} />
-              <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-lg font-bold text-foreground">
-                <span>ยอดเสนอราคา</span><span className="tabular-nums">{bahtFmt(totals.grand)}</span>
-              </div>
-            </div>
           </div>
-
-          {/* หมายเหตุ (แก้ได้) + แนบเอกสาร */}
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="text-[11px] font-semibold text-muted">หมายเหตุ (แสดงในใบเสนอราคา)</label>
-              <textarea
-                value={doc.remark} onChange={(e) => setDoc((d) => ({ ...d, remark: e.target.value }))} rows={4}
-                placeholder="เงื่อนไข / โน้ตเพิ่มเติม เช่น ยังไม่รวมค่าขนส่งในจีน · ราคายืนยัน 7 วัน · ขอ PL & INV / MSDS …"
-                className="mt-1 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground outline-none placeholder:text-muted/60 focus:border-primary-400"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-muted">แนบเอกสาร (PL / INV / MSDS / รูปสินค้า …)</label>
-              <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-surface-alt/40 px-3 py-4 text-xs text-muted transition-colors hover:border-primary-400 hover:text-foreground">
-                <Paperclip className="h-4 w-4" /> คลิกเพื่อเลือกไฟล์ (แนบได้หลายไฟล์)
-                <input type="file" multiple className="hidden" onChange={onFiles} />
-              </label>
-              {files.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {files.map((f, i) => (
-                    <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-md bg-surface-alt/50 px-2 py-1 text-[11px]">
-                      <Paperclip className="h-3 w-3 shrink-0 text-muted" />
-                      <span className="min-w-0 flex-1 truncate text-foreground/90">{f.name}</span>
-                      <span className="shrink-0 text-muted">{(f.size / 1024).toFixed(0)} KB</span>
-                      <button onClick={() => removeFile(i)} aria-label="ลบไฟล์" className="shrink-0 text-muted transition-colors hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="mt-1 text-[10px] text-muted">⚠️ prototype — โชว์ชื่อไฟล์ · ยังไม่อัปโหลดจริง (ต่อ storage step ถัดไป)</p>
-            </div>
           </div>
         </div>
-
-        {/* actions (step ถัดไป) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-alt/30 px-5 py-3">
-          <p className="text-[11px] text-muted">💾 บันทึกแล้วรายการเข้าสถานะ <b>“รอดำเนินการ (ทำราคา)”</b> ให้ Pricing ตรวจราคา · prototype เก็บชั่วคราวในเครื่อง (ต่อ DB จริง step ถัดไป)</p>
-          <button
-            onClick={saveQuotation}
-            disabled={!canSave}
-            title={canSave ? "" : "กรอก ชื่อผู้ออกบิล + สินค้า ก่อน"}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            บันทึกใบเสนอราคา → ส่ง Pricing
-          </button>
-        </div>
-      </section>
-
-      {/* ── เงื่อนไข Shipment (แถบขวา · sticky) ────────────── */}
-      <aside className="self-start rounded-2xl border border-border bg-white p-4 shadow-sm dark:bg-surface lg:sticky lg:top-4">
-        <div className="mb-1 flex items-center gap-2">
-          <SIcon className="h-4 w-4 text-primary-600" />
-          <h2 className="text-sm font-bold text-foreground">เงื่อนไข Shipment</h2>
-        </div>
-        <p className="mb-3 text-[11px] leading-snug text-muted">เลือกแล้วรายการราคาในใบเปลี่ยนตามเงื่อนไข</p>
-        <div className="grid gap-2.5">
-          <PillRow label="SERVICE" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
-          <PillRow label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
-          <PillRow label="PORT" options={PORT_OPTIONS} value={cond.port} onPick={(v) => setC("port", v)} />
-          <PillRow label="ประเภทตู้" options={CONTAINER_OPTIONS} value={cond.container} onPick={(v) => setC("container", v)} />
-          <PillRow label="ENTER" options={ENTER_OPTIONS} value={cond.enter} onPick={(v) => setC("enter", v)} />
-          <PillRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
-        </div>
-      </aside>
       </div>
     </div>
   );
 }
 
 // ── helpers ─────────────────────────────────────────────────
-function PillRow({
-  label, options, value, values, multi, onPick,
+function SelRow({
+  label, options, value, values, multi, colorMap, disabledOpts, note, onPick,
 }: {
-  label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; onPick: (v: string) => void;
+  label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; colorMap?: Record<string, string>; disabledOpts?: string[]; note?: string; onPick: (v: string) => void;
 }) {
   const isActive = (o: string) => (multi ? (values ?? []).includes(o) : value === o);
+  const isDisabled = (o: string) => (disabledOpts ?? []).includes(o);
   return (
-    <div>
-      <span className="mb-1 block text-[11px] font-bold text-muted">{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((o) => (
-          <button key={o} onClick={() => onPick(o)}
-            className={[
-              "rounded-full border px-2.5 py-1 text-xs transition-colors",
-              isActive(o) ? "border-primary-300 bg-primary-50 font-semibold text-primary-700 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-primary-300"
-                : "border-border bg-white text-muted hover:text-foreground dark:bg-surface",
-            ].join(" ")}>{o}</button>
-        ))}
+    <div className={styles.selrow}>
+      <div className={styles.label}>{label}</div>
+      <div>
+        <div className={styles.pillWrap}>
+          {options.map((o) => {
+            const color = colorMap?.[o];
+            const dis = isDisabled(o);
+            return (
+              <button key={o} type="button" disabled={dis} onClick={() => { if (!dis) onPick(o); }}
+                className={cx(styles.pill, dis ? styles.pillDisabled : isActive(o) ? styles.active : color ? styles[color] : undefined)}>{o}</button>
+            );
+          })}
+        </div>
+        {note && <div className={styles.rowNote}>{note}</div>}
       </div>
     </div>
   );
 }
 
-function Badge({ children }: { children: ReactNode }) {
-  return <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-foreground/70">{children}</span>;
-}
-
-function InfoCard({ title, children }: { title: string; children: ReactNode }) {
+function KvInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-alt/30 p-3">
-      <h3 className="mb-2 text-[12px] font-bold text-foreground">{title}</h3>
-      <div className="space-y-1.5">{children}</div>
-    </div>
+    <>
+      <div className={styles.k}>{label}</div>
+      <div className={styles.v}>
+        <input className={styles.inp} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      </div>
+    </>
   );
 }
 
-function Field({ label, value, onChange, placeholder, type }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function PayRow({ field, value, ok }: { field: string; value: ReactNode; src?: string; ok?: boolean }) {
   return (
-    <label className="block">
-      <span className="text-[11px] text-muted">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="mt-0.5 w-full rounded-md border border-border bg-background px-2 py-1 text-[13px] text-foreground outline-none placeholder:text-muted/60 focus:border-primary-400" />
-    </label>
-  );
-}
-
-function TotalLine({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-center justify-between py-0.5 text-[13px] text-muted">
-      <span>{k}</span><span className="tabular-nums text-foreground">{v}</span>
-    </div>
+    <tr>
+      <td className={styles.field}>{field}</td>
+      <td className={ok ? styles.ok : undefined}>{value}</td>
+    </tr>
   );
 }

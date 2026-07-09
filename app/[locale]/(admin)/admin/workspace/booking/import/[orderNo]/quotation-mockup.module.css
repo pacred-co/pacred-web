@@ -1,0 +1,176 @@
+/* ใบเสนอราคา Peak — 1:1 port ของ quotation_booking_mockup.html (ปอน 2026-07-09).
+   สี/ระยะ/เส้น เอาจาก mockup ตรงๆ · scope ด้วย CSS Module (ไม่หลุด global).
+   ปรับแค่ .grid ให้ responsive (mockup เป็น canvas 2400px คงที่). */
+
+.wrap {
+  --red: #c5161d; --muted: #6f7278; --line: #e9e9ee;
+  --pink: #ffe7ea; --green: #eaf8f0; --blue: #eef4ff; --amber: #fff6df; --purple: #f4efff;
+  color: #27272a;
+}
+
+/* ── topbar ── */
+.topbar { background: var(--red); border-radius: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 30px 18px 26px; color: #fff; box-shadow: 0 16px 35px rgba(197,22,29,.20); flex-wrap: wrap; }
+.logo { display: flex; align-items: center; gap: 16px; }
+.logoMark { width: 52px; height: 52px; border-radius: 15px; background: #fff; color: var(--red); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 24px; letter-spacing: -1px; flex-shrink: 0; }
+.logoText { line-height: 1.2; }
+.logoText b { display: block; font-size: 21px; }
+.logoText span { display: block; font-size: 13.5px; opacity: .85; }
+.topTitle { text-align: right; }
+.topTitle h1 { margin: 0; font-size: 23px; font-weight: 800; }
+.topTitle p { margin: 4px 0 0; font-size: 13.5px; opacity: .9; }
+
+/* ── flow ── */
+.flow { margin: 20px 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.step { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 8px 20px rgba(15,23,42,.05); }
+.step .num { width: 34px; height: 34px; border-radius: 999px; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+.step b { display: block; font-size: 15px; color: #1f2937; }
+.step span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+@media (max-width: 900px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .flow { grid-template-columns: 1fr; } }
+
+/* ── grid: เอกสาร (ซ้าย · กว้าง) + แถบขวา (Condition + Payload) ── */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (min-width: 1180px) { .grid { grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr); } }
+.rail { display: grid; gap: 22px; align-content: start; }
+
+/* ── card (Condition Builder / Booking Payload) ── */
+.card { background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 12px 28px rgba(15,23,42,.07); overflow: hidden; }
+.cardHead { padding: 18px 22px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cardHead h2 { margin: 0; font-size: 19px; color: #1f2937; }
+.cardHead small { font-size: 13px; color: var(--muted); }
+.cardBody { padding: 20px 22px; }
+
+/* ── selector ── */
+.selector { display: grid; gap: 13px; }
+.selrow { display: grid; grid-template-columns: 98px 1fr; gap: 12px; align-items: start; }
+.label { font-size: 13px; color: #61656d; font-weight: 700; padding-top: 6px; }
+.pillWrap { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { padding: 7px 12px; border-radius: 999px; border: 1px solid #dedee6; background: #fff; font: inherit; font-size: 13px; color: #374151; cursor: pointer; transition: all .12s; }
+.pill:hover { border-color: #c9ccd6; }
+.pill.active { background: var(--pink); border-color: #ffb8bf; color: #b11117; font-weight: 800; }
+.pill.blue { background: var(--blue); border-color: #cadcff; color: #2250a3; }
+.pill.green { background: var(--green); border-color: #bee9cd; color: #176b37; }
+.pill.amber { background: var(--amber); border-color: #f1d189; color: #7a5400; }
+.pill.purple { background: var(--purple); border-color: #d9c7ff; color: #5b39a5; }
+.pill:disabled, .pillDisabled { opacity: 0.55; cursor: not-allowed; background: #f2f3f7; border-color: #e5e5ea; color: #9aa0a8; }
+.pill:disabled:hover, .pillDisabled:hover { border-color: #e5e5ea; }
+.rowNote { margin-top: 5px; font-size: 11px; color: #9aa0a8; line-height: 1.4; }
+
+/* ── ruleBox ── */
+.ruleBox { margin-top: 18px; background: #fbfbfc; border: 1px dashed #d9dce3; border-radius: 18px; padding: 16px; }
+.ruleBox h3 { margin: 0 0 10px; font-size: 16px; color: #1f2937; }
+.rule { display: flex; gap: 10px; margin: 9px 0; font-size: 12.8px; line-height: 1.42; color: #3f434b; }
+.dot { min-width: 10px; width: 10px; height: 10px; border-radius: 99px; background: var(--red); margin-top: 6px; }
+.dot.green { background: #22a06b; } .dot.blue { background: #3b82f6; } .dot.amber { background: #f59e0b; } .dot.purple { background: #8b5cf6; }
+
+/* ── admin extras (หมายเหตุ / แนบไฟล์ / บันทึก) ── */
+.adminBlock { margin-top: 18px; display: grid; gap: 12px; }
+.fieldLbl { font-size: 12.5px; color: #61656d; font-weight: 700; margin: 0 0 6px; }
+.remarkArea { width: 100%; border: 1px solid #e2e4ea; border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 13px; resize: vertical; outline: none; min-height: 72px; background: #fff; color: #26272a; }
+.remarkArea:focus { border-color: var(--red); }
+.attach { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed #d9dce3; border-radius: 12px; padding: 15px; color: #6f7278; font-size: 13px; cursor: pointer; background: #fbfbfc; }
+.attach:hover { border-color: var(--red); color: #374151; }
+.fileList { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.fileItem { display: flex; align-items: center; gap: 8px; background: #f6f7fa; border-radius: 9px; padding: 6px 9px; font-size: 12px; color: #374151; }
+.fileItem span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saveBtn { width: 100%; border: none; background: var(--red); color: #fff; font: inherit; font-weight: 800; font-size: 15px; padding: 13px; border-radius: 14px; cursor: pointer; box-shadow: 0 10px 22px rgba(197,22,29,.22); }
+.saveBtn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.saveHint { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+/* ── doc (ใบเสนอราคา Peak) ── */
+.doc { background: #fff; border: 1px solid #dadde6; border-radius: 24px; overflow: hidden; box-shadow: 0 18px 40px rgba(15,23,42,.1); }
+.docHeader { padding: 24px 28px 18px; border-bottom: 1px solid #ececf2; display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+.docBrand { display: flex; gap: 16px; align-items: flex-start; }
+.docMark { width: 52px; height: 52px; border-radius: 16px; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 24px; flex-shrink: 0; }
+.docBrand h2 { margin: 0; color: #111827; font-size: 22px; }
+.docBrand p { margin: 4px 0 0; color: #5d6270; font-size: 12.5px; line-height: 1.55; }
+.docRight { text-align: right; }
+.docRight h1 { margin: 0 0 10px; font-size: 28px; color: var(--red); }
+.docNo { display: inline-block; background: #f7f8fb; border: 1px solid #e2e4ea; border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 800; }
+.badges { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+.badge { border-radius: 999px; background: #f0f2f6; padding: 6px 11px; font-size: 12px; font-weight: 700; color: #3b414d; }
+.badge.red { background: #ffe7ea; color: #b11117; } .badge.blue { background: #eaf1ff; color: #1c4b9a; } .badge.green { background: #eaf8f0; color: #176b37; }
+@media (max-width: 720px) { .docHeader { grid-template-columns: 1fr; } .docRight { text-align: left; } .badges { justify-content: flex-start; } }
+
+/* ── info (3 iboxes) ── */
+.info { padding: 20px 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; border-bottom: 1px solid #ececf2; }
+.ibox { background: #fafafa; border: 1px solid #eeeef4; border-radius: 16px; padding: 15px; }
+.ibox h3 { font-size: 14px; margin: 0 0 10px; color: #1f2937; }
+.kv { display: grid; grid-template-columns: 92px 1fr; gap: 8px 10px; font-size: 13px; line-height: 1.45; align-items: center; }
+.kv .k { color: #727782; }
+.kv .v { color: #26272a; font-weight: 700; min-width: 0; }
+.inp { width: 100%; border: 1px solid transparent; background: transparent; font: inherit; font-size: 13px; color: #26272a; font-weight: 700; padding: 3px 5px; border-radius: 7px; outline: none; }
+.inp::placeholder { color: #b6b9c1; font-weight: 400; }
+.inp:hover { border-color: #e2e4ea; }
+.inp:focus { border-color: var(--red); background: #fff; }
+.searchRow { display: flex; gap: 6px; }
+.searchBtn { border: none; background: var(--red); color: #fff; font: inherit; font-weight: 800; font-size: 12px; padding: 0 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.searchBtn:disabled { opacity: .5; }
+.hintTxt { font-size: 11px; margin: 3px 0 0; }
+@media (max-width: 900px) { .info { grid-template-columns: 1fr; } }
+
+/* ── quoteTable ── */
+.quoteTable { padding: 0 28px 22px; }
+.qtHead { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 16px 0 10px; flex-wrap: wrap; }
+.sectionTag { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #a0a4ad; font-weight: 900; }
+.qtHead .sub { font-size: 13px; color: #667085; margin-top: 3px; }
+.sourceWrap { display: flex; align-items: center; gap: 8px; }
+.sourceTag { font-size: 11px; border-radius: 7px; padding: 3px 6px; background: #f1f5f9; color: #5b6472; font-weight: 700; white-space: nowrap; }
+.addBtn { border: 1px solid #dedee6; background: #fff; color: #374151; font: inherit; font-weight: 700; font-size: 12.5px; padding: 6px 11px; border-radius: 10px; cursor: pointer; }
+.addBtn:hover { border-color: var(--red); color: var(--red); }
+.qtScroll { overflow-x: auto; }
+.qt { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 660px; }
+.qt th { background: #f4f5f7; color: #525761; border-top: 1px solid #e2e4ea; border-bottom: 1px solid #e2e4ea; font-size: 12px; padding: 10px 8px; text-align: left; white-space: nowrap; }
+.qt th:first-child { border-left: 1px solid #e2e4ea; border-radius: 12px 0 0 0; }
+.qt th:last-child { border-right: 1px solid #e2e4ea; border-radius: 0 12px 0 0; }
+.qt td { border-bottom: 1px solid #eeeef3; font-size: 12.8px; padding: 9px 8px; vertical-align: top; }
+.qt .no { width: 30px; color: #6b7280; font-weight: 700; }
+.qt .cat { font-weight: 800; color: #23272f; white-space: nowrap; }
+.qt .cond { min-width: 118px; }
+.chip { display: inline-block; border-radius: 999px; padding: 3px 7px; margin: 0 3px 4px 0; background: #f2f4f8; color: #475569; font-size: 11px; font-weight: 700; }
+.chip.red { background: #ffe7ea; color: #aa1218; } .chip.blue { background: #eaf1ff; color: #1c4b9a; } .chip.green { background: #eaf8f0; color: #176b37; } .chip.amber { background: #fff6df; color: #7a5400; } .chip.purple { background: #f4efff; color: #5b39a5; }
+.cellIn { width: 100%; border: 1px solid #e2e4ea; background: #fff; font: inherit; font-size: 12.8px; padding: 5px 6px; border-radius: 8px; outline: none; text-align: right; }
+.cellIn:focus { border-color: var(--red); }
+.qtyIn { text-align: center; width: 54px; }
+.priceIn { width: 94px; }
+.descIn { width: 100%; border: 1px solid transparent; background: transparent; font: inherit; font-size: 12.8px; font-weight: 650; color: #1f2937; padding: 3px 5px; border-radius: 7px; outline: none; }
+.descIn:hover { border-color: #e2e4ea; } .descIn:focus { border-color: var(--red); }
+.descNote { display: block; color: #b7791f; font-weight: 600; margin-top: 2px; font-size: 11px; }
+.money { text-align: right; white-space: nowrap; }
+.center { text-align: center; }
+.toggle { font-weight: 800; color: #159447; }
+.mapCell { min-width: 130px; }
+.map { font-size: 11.5px; color: #5b6472; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.delBtn { border: none; background: transparent; color: #c0c4cd; cursor: pointer; font-size: 15px; padding: 4px 5px; border-radius: 6px; line-height: 1; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.delBtn:hover { color: var(--red); background: #ffe7ea; }
+
+/* ── summary ── */
+.summary { display: flex; justify-content: flex-end; padding: 0 28px 26px; }
+.totalBox { background: #f9fafb; border: 1px solid #e4e6ee; border-radius: 16px; padding: 16px; width: 340px; max-width: 100%; }
+.totalLine { display: flex; justify-content: space-between; font-size: 13px; margin: 5px 0; color: #5f6670; }
+.totalLine .amt { font-weight: 700; color: #26272a; }
+.totalLine.big { border-top: 1px solid #e4e6ee; margin-top: 10px; padding-top: 10px; font-size: 20px; color: #111827; font-weight: 900; }
+.totalLine.big .amt { font-weight: 900; color: #111827; }
+@media (max-width: 720px) { .totalBox { width: 100%; } }
+
+/* ── sign ── */
+.sign { padding: 0 28px 26px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.signBox { height: 82px; border: 1px dashed #cdd1db; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 10px; font-size: 12.5px; color: #646b75; text-align: center; }
+.signBox b { font-weight: 700; color: #4b515c; }
+@media (max-width: 560px) { .sign { grid-template-columns: 1fr; } }
+
+/* ── Booking Payload ── */
+.payloadTitle { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
+.sync { background: #e9fbf0; color: #197646; border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 900; white-space: nowrap; }
+.mapTable { width: 100%; border-collapse: collapse; }
+.mapTable th { font-size: 11.5px; color: #6b7280; text-align: left; background: #f7f8fb; border-bottom: 1px solid #e6e8ef; padding: 8px; }
+.mapTable td { font-size: 12.5px; border-bottom: 1px solid #eff0f4; padding: 8px; vertical-align: top; word-break: break-word; }
+.mapTable .field { font-weight: 800; color: #1f2937; }
+.mapTable .src { color: #626975; font-size: 11.5px; }
+.mapTable .ok { font-weight: 800; color: #159447; }
+.callout { background: #fff7e6; border: 1px solid #ffe0a6; border-radius: 18px; padding: 15px; font-size: 13px; line-height: 1.5; color: #5a420d; margin-top: 14px; }
+.callout b { color: #8a5b00; }
+.miniFlow { display: grid; gap: 10px; margin-top: 12px; }
+.mini { border: 1px solid #e5e7ef; background: #fcfcfd; border-radius: 14px; padding: 11px; }
+.mini b { display: block; font-size: 13px; color: #1f2937; }
+.mini span { display: block; font-size: 11.5px; color: #6b7280; margin-top: 3px; }
