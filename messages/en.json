@@ -3405,6 +3405,21 @@
       "closing": "Monthly closing",
       "periods": "Periods + Reconcile"
     },
+    "revenueRec": {
+      "title": "Revenue Recognition",
+      "incomeExpense": "Income - Expense",
+      "topup": "Top-up records",
+      "shop": "Shop-order report",
+      "forwarder": "Import goods",
+      "forwarderInvoice": "Invoice",
+      "forwarderReceipts": "Receipt history",
+      "forwarderTotal": "Grand total",
+      "payment": "Yuan transfer",
+      "withdraw": "Direct withdrawal",
+      "walletRefund": "Refund to Wallet",
+      "shopRefund": "Shop-order refund",
+      "forwarderRefund": "Import refund"
+    },
     "manageCustomersAll": {
       "title": "All customers"
     },

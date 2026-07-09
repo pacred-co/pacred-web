@@ -26,6 +26,7 @@ import {
   deriveTransportTypeFromCabinet,
   buildTrackingCabinetMap,
   aggregateTrackDetailMetrics,
+  deriveMomoMemberCode,
   MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
@@ -42,6 +43,18 @@ function check(label: string, cond: boolean, detail = ""): void {
 }
 
 console.log("=== Wave 30.5 · momo-raw-helpers ===");
+
+// ── deriveMomoMemberCode — normalise MOMO's mangled user_group (2026-07-09) ──
+check('clean ("PR","121") → "PR121"', deriveMomoMemberCode("PR", "121") === "PR121");
+check('doubled ("PR+PR","9903") → "PR9903"', deriveMomoMemberCode("PR+PR", "9903") === "PR9903");
+check('tripled ("PR+PR+PR","5") → "PR5"', deriveMomoMemberCode("PR+PR+PR", "5") === "PR5");
+check('space-joined ("PR PR","42") → "PR42"', deriveMomoMemberCode("PR PR", "42") === "PR42");
+check('padded code ("PR","009") → "PR009"', deriveMomoMemberCode("PR", "009") === "PR009");
+check('null group ("","121") → "121"', deriveMomoMemberCode("", "121") === "121");
+check('null code ("PR","") → "PR"', deriveMomoMemberCode("PR", "") === "PR");
+check("both null → ''", deriveMomoMemberCode(null, null) === "");
+check("undefined → ''", deriveMomoMemberCode(undefined, undefined) === "");
+check('trims ("  PR+PR  ","9903") → "PR9903"', deriveMomoMemberCode("  PR+PR  ", "9903") === "PR9903");
 
 // ── deriveTransportTypeFromMomoRaw — defaults to "1" ────────────────
 check("null → '1'", deriveTransportTypeFromMomoRaw(null) === "1");

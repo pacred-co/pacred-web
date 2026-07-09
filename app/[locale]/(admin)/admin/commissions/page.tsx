@@ -266,8 +266,8 @@ export default async function AdminCommissionsPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[700px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-3 py-2">ทีม (useridmain)</th>
                     <th className="px-3 py-2 text-right">#รายการ</th>
@@ -362,8 +362,8 @@ export default async function AdminCommissionsPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[700px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-3 py-2">เลขที่</th>
                     <th className="px-3 py-2">ทีม</th>

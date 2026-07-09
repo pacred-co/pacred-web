@@ -25,6 +25,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
+import { deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
 import type { CsvRow } from "@/components/admin/csv-button";
 import {
   resolveBillingIdentity,
@@ -100,7 +101,8 @@ export async function exportMomoHistoryAll(
     if (r.shipment_status === "WAITING_SELLER_SHIP") continue;
     const userCode = typeof r.raw?.user_code === "string" ? r.raw.user_code : "—";
     const userGroup = typeof r.raw?.user_group === "string" ? r.raw.user_group : "PR";
-    const guessedPr = `${userGroup}${userCode}`;
+    // Normalise MOMO's mangled "PR+PR" group → "PR" (2026-07-09).
+    const guessedPr = deriveMomoMemberCode(userGroup, userCode);
 
     const cbm = Number(r.cbm ?? 0);
     const kgs = Number(r.weight_kg ?? 0);

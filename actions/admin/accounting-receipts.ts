@@ -115,6 +115,15 @@ export type ReceiptListRow = {
   ramount: number;
   whtAmount: number;           // totalBeforeWithholding − ramount
   itemCount: number;
+  // ── Legacy hs-receipt-forwarder.php columns (L277-282 · faithful superset) ──
+  // เลขที่ฝากนำเข้า — the forwarder no(s) on this receipt. Legacy builds this
+  // from tb_receipt_item.fID (rID → fID list · L224-234) and links each to
+  // forwarder/detail/<fID>. fID = tb_forwarder.id → /admin/forwarders/[fNo].
+  forwarderIds: number[];
+  // สถานะพิมพ์ต้นฉบับ (legacy statusPrint/rDatePrint/adminIDprint · L339-347)
+  printOriginal: { done: boolean; date: string | null; adminId: string | null };
+  // สถานะพิมพ์สำเนา (legacy statusPrintCopy/rDatePrintCopy/adminIDprintCopy · L348-356)
+  printCopy: { done: boolean; date: string | null; adminId: string | null };
 };
 
 export type ReceiptTabCounts = {
@@ -375,7 +384,9 @@ export async function getReceiptList(
 
   let q = admin.from("tb_receipt").select(
     "id, rid, refid, rdate, rdatecreate, rstatus, userid, ramount, " +
-      "totalbeforewithholding, recompname, recompnumber, corporatetype, refwhid",
+      "totalbeforewithholding, recompname, recompnumber, corporatetype, refwhid, " +
+      // legacy print-status columns (0081 L4144-4149) — สถานะพิมพ์ต้นฉบับ/สำเนา
+      "statusprint, adminidprint, rdateprint, statusprintcopy, rdateprintcopy, adminidprintcopy",
     { count: "exact" },
   );
 
@@ -430,6 +441,12 @@ export async function getReceiptList(
     recompnumber: string | null;
     corporatetype: string | null;
     refwhid: number | string | null;
+    statusprint: string | null;
+    adminidprint: string | null;
+    rdateprint: string | null;
+    statusprintcopy: string | null;
+    rdateprintcopy: string | null;
+    adminidprintcopy: string | null;
   };
   const receipts = (receiptRows ?? []) as unknown as RawReceipt[];
 
@@ -449,19 +466,26 @@ export async function getReceiptList(
     }
   }
 
-  // ── Per-row item counts via tb_receipt_item IN-batch ─────────
+  // ── Per-row item counts + forwarder-id list via tb_receipt_item IN-batch ──
+  // The fid list backs the เลขที่ฝากนำเข้า column (legacy L224-234 · rID→fID).
   const ridList = receipts.map((r) => r.rid).filter(Boolean);
   const itemCountByRid = new Map<string, number>();
+  const fidsByRid = new Map<string, number[]>();
   if (ridList.length > 0) {
     const { data: items, error: itErr } = await admin
       .from("tb_receipt_item")
-      .select("rid")
+      .select("rid, fid")
       .in("rid", ridList);
     if (itErr) {
       console.error(`[tb_receipt_item count] failed`, { code: itErr.code, message: itErr.message });
     }
-    for (const it of (items ?? []) as Array<{ rid: string }>) {
+    for (const it of (items ?? []) as Array<{ rid: string; fid: number | null }>) {
       itemCountByRid.set(it.rid, (itemCountByRid.get(it.rid) ?? 0) + 1);
+      if (it.fid != null) {
+        const arr = fidsByRid.get(it.rid) ?? [];
+        arr.push(it.fid);
+        fidsByRid.set(it.rid, arr);
+      }
     }
   }
 
@@ -485,6 +509,17 @@ export async function getReceiptList(
       ramount:                amt,
       whtAmount:              tb - amt,
       itemCount:              itemCountByRid.get(r.rid) ?? 0,
+      forwarderIds:           fidsByRid.get(r.rid) ?? [],
+      printOriginal: {
+        done:    r.statusprint === "1",
+        date:    r.rdateprint,
+        adminId: (r.adminidprint ?? "").trim() || null,
+      },
+      printCopy: {
+        done:    r.statusprintcopy === "1",
+        date:    r.rdateprintcopy,
+        adminId: (r.adminidprintcopy ?? "").trim() || null,
+      },
     };
   });
 

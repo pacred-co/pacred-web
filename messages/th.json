@@ -3405,6 +3405,21 @@
       "closing": "ปิดงบรายเดือน",
       "periods": "งวดบัญชี + กระทบยอด"
     },
+    "revenueRec": {
+      "title": "รายงานรับรู้รายได้",
+      "incomeExpense": "รายรับ - รายจ่าย",
+      "topup": "รายการเติมเงิน",
+      "shop": "รายงานฝากสั่ง",
+      "forwarder": "ฝากนำเข้าสินค้า",
+      "forwarderInvoice": "ใบแจ้งหนี้",
+      "forwarderReceipts": "ประวัติใบเสร็จ",
+      "forwarderTotal": "ยอดทั้งหมด",
+      "payment": "ฝากชำระ/โอนหยวน",
+      "withdraw": "ถอนเงิน โอนโดยตรง",
+      "walletRefund": "คืนเงินเข้า Wallet",
+      "shopRefund": "คืนเงินฝากสั่ง",
+      "forwarderRefund": "คืนเงินฝากนำเข้า"
+    },
     "manageCustomersAll": {
       "title": "ลูกค้าทั้งหมด"
     },

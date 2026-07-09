@@ -267,9 +267,6 @@ export default async function CntHsDetailPage({
               {cabinetNumbers.length} ตู้
             </span>
           </div>
-          <p className="text-xs text-muted mt-1">
-            Wave 12-A · slip-upload + auto-approve เปิดใช้งานแล้ว · cntFile upload → Wave 13
-          </p>
         </div>
         <Link href="/admin/cnt-hs" className="text-xs text-primary-600 hover:underline">
           ← รายการ
@@ -395,8 +392,8 @@ export default async function CntHsDetailPage({
           <p className="p-8 text-center text-sm text-muted">ไม่มีรายการ ตู้</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
+            <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+              <thead className="bg-orange-500 text-[11px] uppercase text-white">
                 <tr>
                   <th className="px-3 py-2 text-left">เลขตู้</th>
                   <th className="px-3 py-2 text-right">จำนวน forwarder</th>
@@ -463,8 +460,8 @@ export default async function CntHsDetailPage({
             <h2 className="text-sm font-semibold">รายการ ฝากนำเข้า (แสดง 50 รายการแรก)</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
+            <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+              <thead className="bg-orange-500 text-[11px] uppercase text-white">
                 <tr>
                   <th className="px-3 py-2 text-left">วันที่</th>
                   <th className="px-3 py-2 text-left">F-no</th>
