@@ -26,8 +26,6 @@
  * (so a BKK shop order was NOT force-set to ต้นทาง). One helper, both paths.
  */
 
-import { classifyDomesticZone } from "./domestic-shipping";
-
 /** Carrier ids/codes that bill at ORIGIN (sender pays · payMethod='1'). */
 export const PAY_AT_ORIGIN_CARRIERS: ReadonlySet<string> = new Set([
   "PCS",   // รับเองที่โกดัง (self-pickup)
@@ -55,43 +53,29 @@ export function derivePayMethod(fShipBy: string | null | undefined): "1" | "2" {
 }
 
 /**
- * Pacred's OWN-FLEET / self-pickup family — these stay PREPAID ต้นทาง everywhere
- * (matches `domesticShippingOptions`: upcountry PCSE = ต้นทาง "1" L160; PRF เหมาๆ
- * is in-zone-only). Delivery zone must NOT flip these to COD.
- */
-const OWN_FLEET_CARRIERS: ReadonlySet<string> = new Set([
-  "PCS",   // รับเองที่โกดัง (self-pickup)
-  "PCSF",  // PCS เหมาๆ (legacy)
-  "PRF",   // PR เหมาๆ (rebrand)
-  "PCSE",  // PCS/PRE Express (Pacred truck)
-]);
-
-/**
- * derivePayMethodForDelivery — the ZONE-AWARE payMethod for an in-Thailand
- * delivery. Extends `derivePayMethod` (carrier-only) with the owner's
- * "ใน กทม → ต้นทาง · ต่างจังหวัด → เก็บปลายทาง (COD)" rule that the carrier map
- * alone can't encode: an origin-billing EXTERNAL courier (Flash 2 / J&T 24 /
- * ไปรษณีย์ 11) delivered UPCOUNTRY is collected at the door, so it must be COD
- * ('2'), even though `derivePayMethod` would say ต้นทาง ('1').
+ * derivePayMethodForDelivery — the DEFAULT payMethod for an in-Thailand delivery.
  *
- *   • Pacred own-fleet / self-pickup (PCS/PCSF/PRF/PCSE) → ALWAYS carrier-derived
- *     (never zone-flipped — upcountry PCSE stays ต้นทาง, faithful to
- *     domesticShippingOptions).
- *   • external courier + UPCOUNTRY zone → '2' (ปลายทาง / COD).
- *   • external courier + BKK/metro (maomao) zone → carrier-derived (unchanged).
+ * Owner 2026-07-09: the DEFAULT is **ต้นทาง "1" (prepaid)** for BOTH in-zone AND
+ * upcountry, ALL carriers (external Flash/J&T/… + own-fleet เหมาๆ/PCS/PCSE). The
+ * real Flash cost + margin is auto-filled into ftransportprice and billed upfront
+ * (see resolveThShippingAutoPrice / resolveAutoThShippingFill in domestic-shipping.ts),
+ * so the domestic leg is collected at ORIGIN, not at the door.
  *
- * Money note: this is a display/collection FLAG only (WHERE/WHEN the domestic
- * leg is collected — COD-at-door vs prepaid) — it changes no price. Zone is
- * decided by `classifyDomesticZone` (ZIP-keyed · prefix-immune).
+ * The old zone-based "upcountry external courier → COD" auto-flip (ad31a708) is
+ * REMOVED. COD "2" is now a **MANUAL admin choice only** — set per request via
+ * `EditPayMethodField` when the customer asks for เอกชน ปลายทาง COD. A stored
+ * paymethod "2" is respected (the field stays editable); this helper only supplies
+ * the default when none is chosen.
+ *
+ * Money note: this is a display/collection FLAG only (WHERE/WHEN the domestic leg
+ * is collected) — it changes no price.
+ *
+ * @param _fShipBy carrier code — no longer read (kept for call-site compat).
+ * @param _addr    delivery address — no longer read (zone no longer forces COD).
  */
 export function derivePayMethodForDelivery(
-  fShipBy: string | null | undefined,
-  addr: { addressID?: string | number | null; zip?: string | null },
+  _fShipBy: string | null | undefined,
+  _addr: { addressID?: string | number | null; zip?: string | null },
 ): "1" | "2" {
-  if (OWN_FLEET_CARRIERS.has((fShipBy ?? "").trim())) return derivePayMethod(fShipBy);
-  const zone = classifyDomesticZone({
-    addressID: addr.addressID != null ? String(addr.addressID) : null,
-    zip: addr.zip,
-  });
-  return zone === "upcountry" ? "2" : derivePayMethod(fShipBy);
+  return "1";
 }

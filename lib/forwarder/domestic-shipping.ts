@@ -26,7 +26,7 @@
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { calPriceFlash } from "@/lib/tools/flash-price";
 import { resolveShipByCarriers } from "@/lib/tools/thai-shipby-rules";
-import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
+import { MAO_FLAT_FEE, MAO_CARRIER_CODE, isMaoCarrier } from "./mao-fee";
 
 export type DomesticZone = "self_pickup" | "maomao" | "upcountry";
 
@@ -247,9 +247,59 @@ export type AutoThShippingFill = {
 };
 
 /**
+ * TH_SHIPPING_PROFIT_MARGIN — the % markup added on top of the REAL Flash cost for
+ * the auto-filled ftransportprice. Owner 2026-07-09: "บวกกำไร 5-20 แล้วแต่ความ
+ * เหมาะสม". 15 is a sensible default in that range; the auto value is a DEFAULT,
+ * not a lock — the admin edits ftransportprice per carrier/discretion.
+ */
+export const TH_SHIPPING_PROFIT_MARGIN = 15;
+
+/**
+ * TH_SHIPPING_MIN_FLOOR — the ฿ fallback the auto-fill uses when Flash can't quote
+ * (zone/weight unresolvable, or the parcel exceeds Flash's 50kg/280cm cap → price
+ * 0). Never auto-fill ฿0 (guardrail: no crash, no 0); this editable floor keeps the
+ * bill flowing and the operator adjusts it.
+ */
+export const TH_SHIPPING_MIN_FLOOR = 50;
+
+/**
+ * resolveThShippingAutoPrice — the REAL external-courier (Flash) cost + margin for
+ * a zone/weight/size, as the auto-fill ftransportprice. Owner 2026-07-09.
+ *
+ * Uses `calPriceFlash` for the destination zip (BKK column in-zone · ตจว column
+ * upcountry · +50 remote/tourist surcharge) → cost → + TH_SHIPPING_PROFIT_MARGIN%.
+ * Falls back to TH_SHIPPING_MIN_FLOOR when Flash returns 0 (over-limit) or the
+ * inputs are unresolvable — never returns 0. Pure + testable.
+ */
+export function resolveThShippingAutoPrice(args: {
+  zip?: string | null;
+  kg?: number | null;
+  sizeCm?: number | null;
+}): number {
+  const zip = (args.zip ?? "").trim();
+  const kg = Math.max(0, Number(args.kg) || 0);
+  const size = Math.max(0, Number(args.sizeCm) || 0);
+  if (kg <= 0 && size <= 0) return TH_SHIPPING_MIN_FLOOR;
+  // Feed the whole girth into one dim so `w+l+h === size` (calPriceFlash sums them).
+  const f = calPriceFlash(1, "", zip, size, 0, 0, kg, 0, 1);
+  if (f.price <= 0) return TH_SHIPPING_MIN_FLOOR; // over 50kg / 280cm → floor
+  const cost = f.price + (f.remoteArea ? 50 : 0) + (f.touristArea ? 50 : 0);
+  const withMargin = Math.round(cost * (1 + TH_SHIPPING_PROFIT_MARGIN / 100));
+  return Math.max(withMargin, TH_SHIPPING_MIN_FLOOR);
+}
+
+/**
  * Resolve the auto-fill ค่าส่งไทย for a forwarder row, or null when it can't /
- * shouldn't auto-fill (already set · self-pickup · manual carrier · no address).
+ * shouldn't auto-fill (already set · self-pickup · PCSE express-manual).
  * Pure + testable — the server helper reads the row and applies this.
+ *
+ * Owner 2026-07-09 — the DEFAULT is now **ต้นทาง "1"** (the real Flash cost + margin
+ * is billed upfront) for every case, and:
+ *   • in-zone เหมาๆ (or an own-fleet เหมาๆ carrier PCSF/PRF) → flat ฿100 · ต้นทาง
+ *     (weight-agnostic, collected by Pacred — NEVER Flash-priced).
+ *   • PCSE express → null (Pacred truck, amount is operator-set · gate stays backstop).
+ *   • external courier (Flash/J&T/others/unset) → Flash cost + TH_SHIPPING_PROFIT_MARGIN,
+ *     stored under carrier "2" (Flash) · ต้นทาง · ฿50 floor when Flash can't quote.
  */
 export function resolveAutoThShippingFill(args: {
   fshipby: string | null | undefined;
@@ -258,30 +308,51 @@ export function resolveAutoThShippingFill(args: {
   province?: string | null;
   amphoe?: string | null;
   weightKg?: number | null;
+  sizeCm?: number | null;
   parcels?: DomesticShipArgs["parcels"];
 }): AutoThShippingFill | null {
   // Already has a TH cost → leave it (never overwrite).
   const existing = Number(args.ftransportprice);
   if (Number.isFinite(existing) && existing > 0) return null;
+  const carrier = (args.fshipby ?? "").trim().toUpperCase();
   // Self-pickup → ฿0 legit, nothing to auto-fill.
-  if ((args.fshipby ?? "").trim().toUpperCase() === SELF_PICKUP_CARRIER) return null;
+  if (carrier === SELF_PICKUP_CARRIER) return null;
 
-  // v1 SCOPE — auto-fill ONLY the in-zone เหมาๆ case. It is the single fully-safe
-  // auto: a FLAT ฿100 (weight-agnostic), PREPAID ต้นทาง, collected by PACRED, so it
-  // unambiguously belongs in the customer's bill. Upcountry is Flash/J&T = ปลายทาง
-  // COD (collected at the door by the carrier, NOT by Pacred), address+weight
-  // dependent → do NOT auto-add a guessed amount to the Pacred bill; the operator
-  // sets it (the "ห้ามลืมค่าส่งไทย" gate stays the backstop). Missing zip → can't
-  // classify → null. This keeps ตรวจตู้→เก็บเงิน continuous for the common in-zone
-  // customer while never mis-billing an out-of-zone one.
   const zone = classifyDomesticZone({ addressID: null, zip: args.zip });
-  if (zone !== "maomao") return null;
 
+  // เหมาๆ — in-zone (กทม.-ปริมณฑล) OR an own-fleet เหมาๆ carrier (PCSF/PRF) → flat
+  // ฿100, PREPAID ต้นทาง, collected by Pacred. Weight-agnostic · NEVER Flash-priced.
+  if (zone === "maomao" || isMaoCarrier(carrier)) {
+    return {
+      carrier: MAO_CARRIER_CODE, // PRF เหมาๆ
+      cost: MAO_FLAT_FEE,        // ฿100 flat
+      payMethod: "1",            // ต้นทาง (prepaid)
+      zone,
+      label: `เหมาๆ (กทม.-ปริมณฑล) · ฿${MAO_FLAT_FEE.toLocaleString("th-TH")}`,
+    };
+  }
+
+  // PCSE express (Pacred truck, near-zone) — amount is operator-set (needs CBM×rate)
+  // → leave the "ห้ามลืมค่าส่งไทย" gate as the backstop, don't guess.
+  if (carrier === "PCSE") return null;
+
+  // External courier (Flash/J&T/others or unset) → Flash cost + margin (฿50 floor).
+  // Stored under carrier "2" (Flash) — the deterministic auto-quote source. ต้นทาง:
+  // the domestic leg is billed upfront (COD is a manual admin choice only now).
+  const sizeCm =
+    args.sizeCm != null && Number.isFinite(Number(args.sizeCm))
+      ? Number(args.sizeCm)
+      : 0;
+  const cost = resolveThShippingAutoPrice({
+    zip: args.zip,
+    kg: args.weightKg,
+    sizeCm,
+  });
   return {
-    carrier: MAO_CARRIER_CODE, // PRF เหมาๆ
-    cost: MAO_FLAT_FEE,        // ฿100 flat
-    payMethod: "1",            // ต้นทาง (prepaid)
+    carrier: "2", // Flash Express (the auto-quoted external courier)
+    cost,
+    payMethod: "1", // ต้นทาง (prepaid · the real cost + margin is billed)
     zone,
-    label: `เหมาๆ (กทม.-ปริมณฑล) · ฿${MAO_FLAT_FEE.toLocaleString("th-TH")}`,
+    label: `Flash ${DOMESTIC_ZONE_LABEL[zone]} · ฿${cost.toLocaleString("th-TH")}`,
   };
 }
