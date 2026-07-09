@@ -93,6 +93,11 @@ export default function CartSubmitButton({ cartOwnerUserid }: Props) {
         haddressnote:         String(fd.get("addressNote") ?? ""),
         haddresstel:          String(fd.get("addressTel") ?? ""),
         haddresstel2:         String(fd.get("addressTel2") ?? ""),
+        // Tax-document choice from <CartTaxDocPref> hidden inputs (this form).
+        taxDocPref:        (() => { const v = String(fd.get("taxDocPref") ?? "receipt"); return v === "tax_invoice" || v === "customs" ? v : "receipt"; })(),
+        taxDocTaxId:       String(fd.get("taxDocTaxId") ?? ""),
+        taxDocBillingName: String(fd.get("taxDocBillingName") ?? ""),
+        taxDocAddress:     String(fd.get("taxDocAddress") ?? ""),
       });
 
       if (!res.ok) {

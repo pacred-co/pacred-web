@@ -112,5 +112,14 @@ export const adminSubmitCartSchema = z.object({
   haddressnote:         z.string().trim().max(2000).default(""),
   haddresstel:          z.string().trim().max(10).default(""),
   haddresstel2:         z.string().trim().max(10).default(""),
+
+  // Tax-document choice (รับ/ไม่รับ ใบกำกับภาษี) — mirrors the customer /cart path
+  // (actions/cart.ts). 'tax_invoice' → TRADING account + VAT 7% at pay time;
+  // 'receipt' (default = ไม่รับ) → SERVICE. Persisted on tb_header_order.tax_doc_*
+  // via mapTaxDocColumns; the payment routing fires later at the pay surface.
+  taxDocPref:        z.enum(["receipt", "tax_invoice", "customs"]).default("receipt"),
+  taxDocTaxId:       z.string().trim().max(13).default(""),
+  taxDocBillingName: z.string().trim().max(300).default(""),
+  taxDocAddress:     z.string().trim().max(500).default(""),
 });
 export type AdminSubmitCartInput = z.infer<typeof adminSubmitCartSchema>;

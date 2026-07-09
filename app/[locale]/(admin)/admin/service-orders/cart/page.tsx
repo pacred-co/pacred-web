@@ -5,6 +5,7 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import CartRowActions, { CartRowRemove } from "./cart-row-actions";
 import CartSubmitButton from "./cart-submit-button";
 import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
+import { CartTaxDocPref, type TaxDocDefaults } from "@/app/[locale]/(protected)/cart/cart-tax-doc-pref";
 
 /**
  * Admin > "รถเข็นสินค้า" — CS staff add-to-customer-cart surface.
@@ -154,6 +155,10 @@ export default async function AdminCartPage({
   // path is unchanged). Only when viewing a specific customer's cart.
   let customerName = "";
   let customerCoId = "";
+  // Tax-doc defaults for the <CartTaxDocPref> toggle (juristic pre-fill).
+  let taxDocTaxId = "";
+  let taxDocAddress = "";
+  let taxDocIsJuristic = false;
   if (viewingCustomer && targetUserId) {
     const [{ data: custRow, error: custErr }, { data: corpRow, error: corpErr }] = await Promise.all([
       admin
@@ -181,7 +186,19 @@ export default async function AdminCartPage({
       corp: corpRow ?? null,
     }).name;
     customerCoId = (custRow?.coID ?? "").trim();
+    // Juristic → pre-fill the ใบกำกับ snapshot (13-digit tax id + address). The
+    // customer opts INTO ใบกำกับ; default stays ไม่รับ (defaultMode="none").
+    taxDocTaxId = (corpRow?.corporatenumber ?? "").trim();
+    taxDocAddress = (corpRow?.corporateaddress ?? "").trim();
+    taxDocIsJuristic = taxDocTaxId !== "";
   }
+
+  const taxDocDefaults: TaxDocDefaults = {
+    isJuristic: taxDocIsJuristic,
+    taxId: taxDocTaxId,
+    companyName: customerName,
+    companyAddress: taxDocAddress,
+  };
 
   // tb_settings — exchange rate + free-shipping flag.
   const { data: settingsData, error: settingsErr } = await admin
@@ -484,6 +501,13 @@ export default async function AdminCartPage({
               </div>
             ))}
           </div>
+
+          {/* Tax-document choice (รับ/ไม่รับ ใบกำกับภาษี) — same toggle as the
+              customer /cart. defaultMode="none" honors the owner rule "default
+              ไม่รับ" (a juristic customer opts INTO ใบกำกับ). The hidden inputs
+              (taxDocPref/taxId/name/address) live inside this <form> so
+              CartSubmitButton picks them up via new FormData(form). */}
+          <CartTaxDocPref defaults={taxDocDefaults} defaultMode="none" />
 
           {/* Shipping + totals strip */}
           <div className="grid md:grid-cols-2 gap-5">

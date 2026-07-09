@@ -51,6 +51,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
+import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -608,6 +609,16 @@ export async function adminSubmitCartAsOrder(
           paymethod:           "",
           crate:               "",
           fshippingservice:    0,
+          // Tax-document choice (maps to tax_doc_pref/tax_id/address · same cols
+          // the customer /cart path writes). Captures the choice only — the pay
+          // routing (SERVICE vs TRADING+VAT7%) fires later at the pay surface
+          // via resolvePaymentAccount. Empty billing fields persist as null.
+          ...mapTaxDocColumns({
+            taxDocPref:        d.taxDocPref,
+            taxDocTaxId:       d.taxDocTaxId,
+            taxDocBillingName: d.taxDocBillingName,
+            taxDocAddress:     d.taxDocAddress,
+          }),
         });
 
       if (insHeaderErr) return { ok: false, error: `header insert failed: ${insHeaderErr.message}` };

@@ -16,17 +16,17 @@
  *             buildServicePromptPayQrDataUrl / getForwarderPaymentQr, passed in
  *             via `serviceQrDataUrl`. Never a static K-Shop image (owner rule).
  *   LOGISTICS (225-2-91144-0) / TRADING (232-1-07669-9) → a static Thai-QR/K-Shop
- *             PNG at /images/payment/qr-{logistics,trading}.png. The PNGs are not
- *             on disk yet → onError hides the <img> and the account-number block
- *             (always shown) carries the destination.
- *
- * The amount is NOT encoded in the LOGISTICS/TRADING QR (static merchant QR) — the
- * customer types it themselves, same as the existing static company QR. The
- * `amountThb` prop is shown as the "โอนยอด" hint only.
+ *             image at /images/payment/qr-{logistics,trading}.jpg. When a positive
+ *             amount is known we decode that static QR client-side and re-render an
+ *             AMOUNT-encoded QR (lib/qr/amount-qr.ts → lib/payment/emvco-amount.ts)
+ *             so all 3 lanes present a scan-and-amount-pre-filled QR. On ANY decode/
+ *             inject failure we degrade to the original static image (never a wrong
+ *             amount); the account-number block (always shown) carries the destination.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { OUTPUT_VAT_RATE, type PacredBankAccount } from "@/lib/payment/bank-accounts";
+import { buildAmountQrFromStaticImage } from "@/lib/qr/amount-qr";
 
 const fmtThb = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,13 +44,35 @@ export function PayDestination({
   serviceQrDataUrl?: string | null;
   className?: string;
 }) {
-  // LOGISTICS / TRADING serve a static K-Shop PNG that may not be on disk yet.
+  // LOGISTICS / TRADING serve a static K-Shop image that may not be on disk yet.
   const [qrImgOk, setQrImgOk] = useState(true);
+  // …and, when an amount is known, an amount-encoded QR decoded+rebuilt from it.
+  const [genQr, setGenQr] = useState<string | null>(null);
 
   const isPromptPay = account.channel === "promptpay";
+  const hasAmount = amountThb != null && amountThb > 0;
+
+  // For the QR-image lanes with a positive amount: decode the static merchant QR
+  // and re-render one that encodes the exact payable. Failure → null → static PNG.
+  useEffect(() => {
+    if (isPromptPay || !account.qrImagePath || !hasAmount) {
+      setGenQr(null);
+      return;
+    }
+    let alive = true;
+    setGenQr(null);
+    buildAmountQrFromStaticImage(account.qrImagePath, amountThb!).then((url) => {
+      if (alive) setGenQr(url);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isPromptPay, account.qrImagePath, hasAmount, amountThb]);
+
+  const isGeneratedAmountQr = !isPromptPay && genQr != null;
   const qrToShow = isPromptPay
     ? (serviceQrDataUrl ?? null)
-    : (qrImgOk && account.qrImagePath ? account.qrImagePath : null);
+    : (genQr ?? (qrImgOk && account.qrImagePath ? account.qrImagePath : null));
 
   return (
     <div
@@ -59,7 +81,7 @@ export function PayDestination({
       <p className="text-sm font-bold text-foreground">สแกน QR หรือโอนเข้าบัญชีบริษัท</p>
 
       {qrToShow && (
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-1">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qrToShow}
@@ -67,6 +89,11 @@ export function PayDestination({
             className="w-36 h-36 rounded-lg border border-amber-300 bg-white object-contain"
             onError={() => setQrImgOk(false)}
           />
+          {isGeneratedAmountQr && hasAmount && (
+            <p className="text-xs font-medium text-emerald-700 text-center">
+              สแกนจ่ายยอด ฿{fmtThb(amountThb!)} (ใส่ยอดอัตโนมัติ)
+            </p>
+          )}
         </div>
       )}
 
