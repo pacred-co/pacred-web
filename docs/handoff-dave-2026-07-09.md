@@ -48,34 +48,51 @@ Commits session นี้:
 - **`createBillingRunInvoice` ไม่สร้างใบเสร็จตอน issue** → ใบเสร็จของบิลนี้ขึ้นกับ `autoIssueReceiptOnPaymentLand` ตอน "ตัดจ่าย" สำเร็จล้วนๆ. มันเป็น **best-effort** (อยู่ใน try/catch · fail ไม่ roll back paid flip) → บิลขึ้น "รับชำระแล้ว" ได้ทั้งที่ใบเสร็จเงียบไม่ออก. **ตรงอาการเป๊ะ.**
 - PR086 = ลูกค้าเคส void→re-bill (บุคคล→นิติ) พอดี → มีโอกาสสูงว่า fids ของบิลนี้ยังติดใบเสร็จเก่า (ยกเลิก '2' หรือ pending '3'/'0') อยู่ → auto-issue คืน `already_issued` หรือ insert 23505 → ไม่มีใบเสร็จใหม่.
 
-**สาเหตุที่เป็นไปได้ (เรียงตามน่าจะเป็น) + query เช็ค prod (READ-ONLY · ปลอดภัย):**
+> ✅ **ยืนยันด้วย adversarial code-review (workflow 2026-07-09):** โค้ด fix money-safe. แต่ review จับ 2 อย่างสำคัญ — (a) **"ค้นหาไม่เจอ" ไม่ได้แปลว่าใบเสร็จไม่ถูกสร้าง** เพราะหน้าใบเสร็จ default กรอง **เดือนปัจจุบัน** ทุกแท็บยกเว้น "ล่าสุด" (`getReceiptList` `.gte/.lte rdate`) → **ต้องค้นแบบไม่กรองเดือนก่อน** · (b) S2 ที่ผมเดา (insert 23505 จาก fid ติดใบเสร็จนอก priorRids) **เป็นไปไม่ได้เชิงโครงสร้าง** (priorRids สร้างจากทุก rid ที่คลุม fids อยู่แล้ว) — insert จะพังก็ต่อเมื่อ free-delete เองพัง (best-effort).
+
+**เช็ค prod ตามลำดับ (READ-ONLY · ปลอดภัย):**
 ```sql
--- (0) หา invoice + userid + items ของ FRI2607-00015
+-- (0) ⭐ เช็คก่อน: ใบเสร็จ "อาจมีจริงแต่ถูกกรองเดือน" — ค้น userid ไม่กรองวันเลย
+select rid, rstatus, rdate, rdatecreate, recompname, ramount
+  from tb_receipt where userid = 'PR086' order by rdatecreate desc;
+--   ถ้าเจอ rstatus '1' = ใบเสร็จออกแล้ว แค่หน้าค้นกรองเดือนบัง → ค้นแท็บ "ล่าสุด" / ปรับช่วงวันก็เจอ (ไม่ใช่บั๊ก)
+--   ถ้าเจอ rstatus '3'/'0' = มีใบเสร็จค้าง "รอชำระ/ร่าง" → กด sync/ออกใบเสร็จให้เป็น '1'
+
+-- (1) invoice + userid + items
 select id, doc_no, status, userid, total_thb, is_juristic, mao_fee_thb, slip_status, slip_reviewed_at, paid_at
   from tb_forwarder_invoice where doc_no = 'FRI2607-00015';
-select forwarder_id from tb_forwarder_invoice_item where invoice_id = <id ข้างบน>;   -- S3: ถ้าว่าง = ไม่มี items → auto-receipt ข้ามทั้งก้อน
+select forwarder_id from tb_forwarder_invoice_item where invoice_id = <id>;   -- ว่าง = ไม่มี items → auto-receipt ข้าม
 
--- (1·S1 most-likely) มีใบเสร็จเก่าคลุม fids พวกนี้ที่สถานะไหน? ('2'=ยกเลิก '3'=รอชำระ '1'=ออกแล้ว '0'=ร่าง)
+-- (2) ใบเสร็จเก่าคลุม fids พวกนี้สถานะไหน + คลุมครบ/ไม่ครบ ('2'ยกเลิก '3'รอชำระ '1'ออกแล้ว '0'ร่าง)
 select ri.fid, ri.rid, r.rstatus, r.rdatecreate
   from tb_receipt_item ri join tb_receipt r on r.rid = ri.rid
- where ri.fid in (<forwarder_ids จาก item ข้างบน>) order by r.rdatecreate desc;
---   → ถ้ามี rstatus '3'/'0'/'1' (ไม่ใช่ '2') คลุม fid ≥1 → auto-issue คืน already_issued → ไม่สร้างใหม่
---     (ถ้าเป็น '3' = ใบเสร็จมีอยู่แต่ "รอชำระ" · manual search แท็บ "ออกแล้ว" เลยไม่เจอ → กด sync/ออกใบเสร็จให้เป็น '1')
+ where ri.fid in (<forwarder_ids จาก (1)>) order by r.rdatecreate desc;
+--   ถ้ามีใบเสร็จ '3'/'0'/'1' (ไม่ใช่ '2') คลุม fid ≥1 → auto-issue คืน already_issued → ไม่สร้างใหม่
+--   ⭐ เคสน่าจะเป็นที่สุด: ใบเสร็จ '3' ที่ item มี fid นอกใบวางบิลนี้ (คลุมไม่ครบ) → Path A ข้ามไม่ flip → ค้าง '3'
+--     ดู item ของ rid นั้น: select fid from tb_receipt_item where rid = '<rid>';  (มี fid นอก (1) = คลุมไม่ครบ)
 
--- (2·S2) forwarder rows userid ตรงกับ invoice.userid ไหม (ถ้าไม่ตรง → no_matching_forwarder_rows → error เงียบ)
+-- (3) forwarder rows userid ตรง invoice.userid ไหม (ถ้าไม่ตรง → no_matching_forwarder_rows → error เงียบ)
 select id, userid, fstatus from tb_forwarder where id in (<forwarder_ids>);
 
--- (3) audit log บอกผลจริง
+-- (4) audit log บอกผลจริง — ⚠️ mark_paid เก็บ invoice id ใน target_id · receipt_auto_created เก็บใน payload.invoice_id
 select action, target_id, payload, created_at from admin_audit_log
- where action in ('billing_run.receipt_auto_created','billing_run.mark_paid')
-   and payload->>'invoice_id' = '<id>' order by created_at desc;
+ where (action = 'billing_run.mark_paid' and target_id = '<id>')
+    or (action in ('billing_run.receipt_auto_created','billing_run.receipt_synced_paid') and payload->>'invoice_id' = '<id>')
+ order by created_at desc;
 ```
 **วิธีแก้ (เดฟ บน prod ตาม scenario):**
-- S1 เจอใบเสร็จ '3'/'0' คลุม fids → กด "ออกใบเสร็จ/sync" ให้ flip เป็น '1' (มีอยู่แล้วแค่ค้าง) · หรือถ้าใบเสร็จเก่าผิด → void แล้ว re-run รับชำระ.
-- S1 เจอเฉพาะใบเสร็จ '2' (ยกเลิก) → ควร re-issue ได้เอง; ถ้าไม่ได้ = insert ชน UNIQUE(fid) → ดู server log `[auto-receipt: tb_receipt_item insert] failed` → ปลด item เก่าออกแล้ว re-run.
-- S3 items ว่าง / S2 userid ไม่ตรง → แก้ linkage ก่อนแล้วออกใบเสร็จเอง.
+- (0) เจอใบเสร็จ '1' ของ PR086 นอกเดือน → **ไม่ใช่บั๊ก** ใบเสร็จออกแล้ว · บอก ภูม ค้นแท็บ "ล่าสุด"/ปรับช่วงวัน.
+- (2) เจอใบเสร็จ '3'/'0' คลุม fids → กด "ออกใบเสร็จ/sync" ให้เป็น '1' (มีอยู่แล้วแค่ค้าง). ถ้าคลุมไม่ครบ (มี fid นอกบิล) → นั่นคือเหตุที่ Path A ไม่ flip → ต้องออกใบเสร็จของบิลนี้แยก หรือรวมรายการให้ตรง.
+- (2) เจอเฉพาะใบเสร็จ '2' (ยกเลิก) → auto re-issue ควรทำได้เอง; ถ้าไม่ได้ = free-delete พัง → ดู server log `[auto-receipt: free cancelled-receipt items] failed` / `tb_receipt_item insert] failed` → ปลด item เก่าแล้ว re-run รับชำระ.
+- (3) forwarder userid ไม่ตรง / (1) items ว่าง → แก้ linkage ก่อนแล้วออกใบเสร็จเอง.
+- **overrideRid ซ้ำ:** ถ้าบัญชีเลือกเลขที่ใบเสร็จเองแล้วเลขซ้ำ → auto-issue คืน `rid_duplicate` (เงียบก่อน fix นี้) → เลือกเลขใหม่.
 
-**ฝั่งโค้ด (ผมทำแล้ว commit นี้ · Poom-pacred lane):** เพิ่มการ **surface warning** — ตอนนี้ถ้า auto-receipt พลาด/ข้าม `markBillingRunPaid` จะคืน `receiptWarning` → หน้า billing-run โชว์ "✓ รับชำระแล้ว · ⚠️ ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (...) — กรุณาออกใบเสร็จเอง" (เดิมเงียบ · staff ไม่รู้ตัว = ต้นเหตุที่ ภูม เจอ). ปลอดภัย · ไม่แตะเงิน · ไม่ roll back paid flip. gate เขียว (tsc 0 · lint 0). ⚠️ ยัง **ไม่ได้ authed-test สด** (headless ไม่ authed · ผมอยู่ DEV) — เดฟ/owner verify บน prod ตอนตัดจ่ายบิลจริง.
+**ฝั่งโค้ด (ผมทำแล้ว · Poom-pacred lane):** `markBillingRunPaid` คืน `receiptRid`/`receiptWarning` → หน้า billing-run:
+- auto-receipt พลาดจริง (error/no items/no userid) → "✓ รับชำระแล้ว · ⚠️ ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (...) — กรุณาออกใบเสร็จเอง"
+- **already_issued แต่ Path A ไม่ได้ sync** (= เคส stuck '3' คลุมไม่ครบ · ที่ review จับ) → "⚠️ มีใบเสร็จเดิมอยู่แล้วแต่ยังไม่ 'ออกแล้ว' — ค้นแบบไม่กรองเดือน (แท็บ ล่าสุด) หรือกด sync"
+- สำเร็จ/sync แล้ว → "· ออกใบเสร็จ <rID> อัตโนมัติแล้ว"
+
+ปลอดภัย · ไม่แตะเงิน · ไม่ roll back paid flip · gate เขียว (tsc 0 · lint 0 · **test:unit ทั้ง suite ผ่าน**). ⚠️ ยังไม่ authed-test สด (headless ไม่ authed · env=DEV) — verify บน prod ตอนตัดจ่ายบิลจริง.
 
 ## ⚠️ 7. หมายเหตุ: session นี้ผม query อยู่ DEV ไม่ใช่ prod
 `.env.local` บนเครื่องนี้ = **DEV** (`lozntlidlqqzzcaathnm`) ไม่ใช่ prod. ที่ผมเคยรายงานว่า "prod มี 0 batch / tb_set_comm_interpreter ว่าง / เซล 5 คน" = **ตัวเลข DEV** (โค้ด fix ยังถูกต้อง). row จริงเช่น FRI2607-00015 อยู่ prod ผม query ไม่เห็น — เลย diagnose จากโค้ด + ส่ง query ให้เดฟ (prod = โดเมนเดฟ).

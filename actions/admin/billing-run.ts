@@ -1770,6 +1770,10 @@ async function markBillingRunPaidImpl(
       // FRI2607-00015 symptom). Track the result so the UI can warn + prompt a manual issue.
       let receiptRid: string | null = null;
       let receiptWarning: string | null = null;
+      // Path A (below) may flip an EXISTING pending receipt '3'→'1' for a fully-covered rid.
+      // Track it so the already_issued branch can tell "a valid receipt now exists" (findable)
+      // apart from "an old receipt covers these fids but was NOT synced" (stuck '3'/'0' · invisible).
+      let receiptSyncedRid: string | null = null;
       try {
         const { data: invItems, error: invErr } = await admin
           .from("tb_forwarder_invoice_item")
@@ -1835,6 +1839,7 @@ async function markBillingRunPaidImpl(
             if (rcptErr) {
               console.error("[markBillingRunPaid receipt-sync]", { code: rcptErr.code, message: rcptErr.message, rid });
             } else {
+              receiptSyncedRid = rid;
               await logAdminAction(adminId, "billing_run.receipt_synced_paid", "tb_receipt", rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no,
               });
@@ -1890,8 +1895,19 @@ async function markBillingRunPaidImpl(
               receiptWarning =
                 `ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (${rcpt.error}) — กรุณากด "ออกใบเสร็จ" เอง หรือเช็ครายการใบเสร็จที่ค้าง`;
               console.error("[markBillingRunPaid auto-receipt] failed", { error: rcpt.error, invoiceId: v.invoiceId });
+            } else if (receiptSyncedRid) {
+              // alreadyIssued because Path A flipped a fully-covered '3'→'1' → a valid receipt
+              // now exists + is findable ("ออกแล้ว") → surface it as success, no warning.
+              receiptRid = receiptSyncedRid;
+            } else {
+              // alreadyIssued but Path A did NOT sync a covering receipt → an existing receipt
+              // covers these fids yet is NOT "ออกแล้ว" (a partially-covered '3'/'0' the sync-guard
+              // skipped, per the adversarial review 2026-07-09). It likely sits invisible on the
+              // "ออกแล้ว" tab, or outside the receipt search's default current-month window →
+              // tell staff WHERE to look instead of a silent "✓ รับชำระแล้ว" (the PR086 case).
+              receiptWarning =
+                'มีใบเสร็จเดิมของรายการนี้อยู่แล้ว แต่ยังไม่แสดงเป็น "ออกแล้ว" — ค้นหาใบเสร็จลูกค้ารายนี้แบบไม่กรองเดือน (แท็บ "ล่าสุด") หรือกดออก/sync ใบเสร็จ';
             }
-            // rcpt.alreadyIssued → a receipt already covers these rows (synced above) → no warning.
           } else {
             receiptWarning =
               "ใบวางบิลนี้ไม่มีรหัสลูกค้า (userid) — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาออกใบเสร็จเอง";
