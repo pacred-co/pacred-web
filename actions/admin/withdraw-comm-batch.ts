@@ -292,8 +292,9 @@ export async function getBatchDetail(
     const itemRows = (itemRaw ?? []) as Array<{ id: number; fid: number }>;
     const fIds = Array.from(new Set(itemRows.map((i) => i.fid)));
 
+    // tb_forwarder PK = `id`; there is NO `fid` column (verified prod 2026-07-09).
     type FwdRow = {
-      id: number; fid: string | null;
+      id: number;
       fdetail: string | null; ftrackingchn: string | null;
       fvolume: number | string | null; fweight: number | string | null;
       fcosttotalprice: number | string | null; ftotalprice: number | string | null;
@@ -305,7 +306,7 @@ export async function getBatchDetail(
       const { data: fwdRaw, error: fwdErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fid, fdetail, ftrackingchn, fvolume, fweight, fcosttotalprice, ftotalprice, fdiscount, fstatus, fdate",
+          "id, fdetail, ftrackingchn, fvolume, fweight, fcosttotalprice, ftotalprice, fdiscount, fstatus, fdate",
         )
         .in("id", fIds);
       if (fwdErr) {
@@ -321,7 +322,7 @@ export async function getBatchDetail(
         fid: it.fid,
         forwarder: f
           ? {
-              fid:             f.fid,
+              fid:             String(f.id),
               fdetail:         f.fdetail,
               ftrackingchn:    f.ftrackingchn,
               fvolume:         Number(f.fvolume ?? 0),
@@ -815,9 +816,10 @@ export async function getSaleBatchEligible(
     const candidateFids = Array.from(new Set(walletPairs.map((p) => p.fid)));
 
     // (3) load the candidate forwarders (tb_forwarder is LOWERCASE).
+    // NOTE: tb_forwarder's primary key is `id` — there is NO `fid` column
+    // (verified prod schema 2026-07-09). The display "doc id" = the id itself.
     type FwdRow = {
       id: number;
-      fid: string | null;
       ftrackingchn: string | null;
       fcabinetnumber: string | null;
       fdate: string | null;
@@ -832,7 +834,7 @@ export async function getSaleBatchEligible(
       const { data, error } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fid, ftrackingchn, fcabinetnumber, fdate, ftotalprice, fdiscount, fstatus, userid",
+          "id, ftrackingchn, fcabinetnumber, fdate, ftotalprice, fdiscount, fstatus, userid",
         )
         .in("id", slice);
       if (error) {
@@ -875,7 +877,7 @@ export async function getSaleBatchEligible(
       const priceNet = round2(ftotalprice - fdiscount);
       items.push({
         fid: Number(f.id),
-        fdocId: f.fid,
+        fdocId: String(f.id),
         ftrackingchn: f.ftrackingchn,
         fcabinetnumber: f.fcabinetnumber,
         fdate: f.fdate,
