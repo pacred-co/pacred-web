@@ -29,6 +29,10 @@ const STEPPER: BookingStatus[] = [
   "customer_created", "pending_pricing", "awaiting_confirm", "awaiting_booking", "booking_confirmed", "success",
 ];
 
+// ไอคอนประจำแต่ละสถานะ = รูปจริง /images/status-icon/1-6.png (owner 2026-07-10)
+// เทา (grayscale) ตอนยังไม่ถึง · มีสีเมื่อถึง/ผ่าน.
+const STEP_ICON_SRC = (i: number) => `/images/status-icon/${i + 1}.png`;
+
 function formStatusLabel(s: BookingStatus): string {
   return s === "customer_created" ? "กำลังสร้าง QT/Booking" : BOOKING_STATUS_META[s].label;
 }
@@ -48,6 +52,15 @@ function deriveConditions(b: Booking | null): QuoteConditions {
 }
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
+
+// ประเภทเอกสารที่แนบ — แยกช่องชัดๆ (owner 2026-07-10) · ผูกกับ Booking Payload
+const DOC_TYPES: { key: string; label: string; short: string }[] = [
+  { key: "inv", label: "INV — ใบแจ้งหนี้/Invoice", short: "INV" },
+  { key: "pl", label: "Packing List — ใบแพ็คกิ้ง", short: "PL" },
+  { key: "msds", label: "MSDS — เอกสารความปลอดภัย", short: "MSDS" },
+  { key: "photo", label: "รูปสินค้า", short: "รูป" },
+  { key: "other", label: "อื่นๆ", short: "อื่นๆ" },
+];
 
 // สี pill พิเศษ (mockup): ENTER แต่ละตัวมีสีประจำ (Normal=active/แดง)
 const ENTER_COLOR: Record<string, string> = { "Change Status": "amber", "Document Amend": "purple", "Direct": "blue", "Indirect": "green" };
@@ -92,16 +105,24 @@ export function QuotationFormClient({
     }
   }
 
-  const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
-  function onFiles(e: ChangeEvent<HTMLInputElement>) {
+  // แนบเอกสารแยกประเภท (owner 2026-07-10) — INV / Packing List / MSDS / รูปสินค้า / อื่นๆ
+  // ผูกกับ Booking Payload (ด้านขวา) = ตัวเดียวกัน (โชว์สรุปที่แนบไปด้วย).
+  const [docFiles, setDocFiles] = useState<Record<string, { name: string; size: number }[]>>({});
+  const filesFor = (type: string) => docFiles[type] ?? [];
+  function onFilesFor(type: string, e: ChangeEvent<HTMLInputElement>) {
     const list = e.target.files;
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list).map((f) => ({ name: f.name, size: f.size }))]);
+    const added = Array.from(list).map((f) => ({ name: f.name, size: f.size }));
+    setDocFiles((prev) => ({ ...prev, [type]: [...(prev[type] ?? []), ...added] }));
     e.target.value = "";
   }
-  function removeFile(i: number) {
-    setFiles((prev) => prev.filter((_, idx) => idx !== i));
+  function removeDocFile(type: string, i: number) {
+    setDocFiles((prev) => ({ ...prev, [type]: (prev[type] ?? []).filter((_, idx) => idx !== i) }));
   }
+  const attachedSummary = DOC_TYPES
+    .filter((dt) => filesFor(dt.key).length > 0)
+    .map((dt) => `${dt.short}×${filesFor(dt.key).length}`)
+    .join(" · ");
 
   const status: BookingStatus = booking?.status ?? "customer_created";
   const meta = BOOKING_STATUS_META[status];
@@ -305,12 +326,13 @@ export function QuotationFormClient({
                       <li key={s} className="flex min-w-[92px] flex-1 flex-col items-center text-center">
                         <div className="flex w-full items-center">
                           <span className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : state === "todo" ? "bg-[#e9e9ee]" : "bg-primary-400"}`} />
-                          <span className={[
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                            state === "current" ? "bg-primary-600 text-white ring-4 ring-primary-100"
-                              : state === "done" ? "bg-primary-100 text-primary-700"
-                                : "bg-[#f2f3f7] text-[#6f7278]",
-                          ].join(" ")}>{i + 1}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={STEP_ICON_SRC(i)} alt={formStatusLabel(s)}
+                            className={cx(
+                              "h-11 w-11 shrink-0 rounded-xl object-cover transition-all",
+                              state === "current" && "ring-2 ring-primary-400 ring-offset-2",
+                            )}
+                            style={{ filter: state === "todo" ? "grayscale(1) opacity(0.5)" : "none" }} />
                           <span className={`h-0.5 flex-1 ${i === STEPPER.length - 1 ? "opacity-0" : i < activeIdx ? "bg-primary-400" : "bg-[#e9e9ee]"}`} />
                         </div>
                         <span className={`mt-1.5 text-[11px] leading-tight ${state === "current" ? "font-semibold text-[#1f2937]" : "text-[#6f7278]"}`}>{formStatusLabel(s)}</span>
@@ -515,6 +537,7 @@ export function QuotationFormClient({
                   <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
                   <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
                   <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
+                  <PayRow field="attached_docs" value={attachedSummary || "—"} ok={attachedSummary.length > 0} src="แนบเอกสาร (ตัวเดียวกับฝั่งซ้าย)" />
                   <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
                   <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
                 </tbody>
@@ -537,22 +560,31 @@ export function QuotationFormClient({
                     placeholder="เงื่อนไข / โน้ตเพิ่มเติม เช่น ยังไม่รวมค่าขนส่งในจีน · ราคายืนยัน 7 วัน · ขอ PL & INV / MSDS …" />
                 </div>
                 <div>
-                  <p className={styles.fieldLbl}>แนบเอกสาร (PL / INV / MSDS / รูปสินค้า …)</p>
-                  <label className={styles.attach}>
-                    <Paperclip className="h-4 w-4" /> คลิกเพื่อเลือกไฟล์ (แนบได้หลายไฟล์)
-                    <input type="file" multiple className="hidden" onChange={onFiles} />
-                  </label>
-                  {files.length > 0 && (
-                    <ul className={styles.fileList}>
-                      {files.map((f, i) => (
-                        <li key={`${f.name}-${i}`} className={styles.fileItem}>
-                          <Paperclip className="h-3 w-3 shrink-0" />
-                          <span>{f.name}</span>
-                          <button type="button" className={styles.delBtn} onClick={() => removeFile(i)} aria-label="ลบไฟล์">✕</button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <p className={styles.fieldLbl}>แนบเอกสาร — แยกช่องตามประเภท (โชว์ตรงกับ Booking Payload ด้านขวา)</p>
+                  <div className={styles.docSlots}>
+                    {DOC_TYPES.map((dt) => {
+                      const list = filesFor(dt.key);
+                      return (
+                        <div key={dt.key} className={styles.docSlot}>
+                          <div className={styles.docSlotHead}>
+                            <span className={styles.docSlotName}>{dt.label}</span>
+                            {list.length > 0 && <span className={styles.docSlotCount}>{list.length}</span>}
+                          </div>
+                          <label className={styles.docUpload}>
+                            <Paperclip className="h-3.5 w-3.5" /> {list.length ? "เพิ่มไฟล์" : "แนบไฟล์"}
+                            <input type="file" multiple className="hidden" onChange={(e) => onFilesFor(dt.key, e)} />
+                          </label>
+                          {list.map((f, i) => (
+                            <div key={`${f.name}-${i}`} className={styles.docFileItem}>
+                              <Paperclip className="h-3 w-3 shrink-0" />
+                              <span>{f.name}</span>
+                              <button type="button" className={styles.delBtn} onClick={() => removeDocFile(dt.key, i)} aria-label="ลบไฟล์">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <button type="button" className={styles.saveBtn} onClick={saveQuotation} disabled={!canSave} title={canSave ? "" : "กรอก ชื่อลูกค้า + สินค้า ก่อน"}>
                   บันทึกใบเสนอราคา → ส่ง Pricing
