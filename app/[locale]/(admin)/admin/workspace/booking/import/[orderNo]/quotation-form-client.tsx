@@ -12,12 +12,13 @@
 
 import { useMemo, useState, type ReactNode, type ChangeEvent } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { ArrowLeft, Paperclip, Trash2, Settings } from "lucide-react";
+import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  DIRECTION_OPTIONS, SERVICE_OPTIONS, LOAD_TYPE_OPTIONS, TERM_OPTIONS, PORT_OPTIONS, CONTAINER_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS,
+  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
+  CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
-  type QuoteConditions, type QuoteLine,
+  type QuoteConditions, type PortSel, type QuoteLine,
 } from "../quotation-data";
 import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
@@ -33,12 +34,17 @@ function formStatusLabel(s: BookingStatus): string {
 }
 
 function deriveConditions(b: Booking | null): QuoteConditions {
-  if (!b) return { direction: "IMPORT", service: "SEA", loadType: "LCL", term: "CIF", port: "PAT", container: "1×20'", enter: "Normal", special: [] };
-  const term = (b.term.match(/EXW|FOB|CIF|DDP/i)?.[0] || "CIF").toUpperCase();
-  const service = /AIR/i.test(b.transport) ? "AIR" : /TRUCK/i.test(b.transport) ? "TRUCK" : "SEA";
-  const loadType = service === "SEA" && /FCL/i.test(b.fclLcl) ? "FCL" : "LCL"; // FCL เฉพาะทางเรือ
-  const port = (b.pod.match(/PAT|LCB|BKK|SUV/i)?.[0] || "PAT").toUpperCase();
-  return { direction: "IMPORT", service, loadType, term, port, container: "1×20'", enter: "Normal", special: [] };
+  const term = (b?.term.match(/EXW|FOB|CIF|DDP/i)?.[0] || "CIF").toUpperCase();
+  const service = !b ? "SEA" : /AIR/i.test(b.transport) ? "AIR" : /TRUCK/i.test(b.transport) ? "TRUCK" : "SEA";
+  const loadType = service === "SEA" && /FCL/i.test(b?.fclLcl ?? "") ? "FCL" : "LCL"; // FCL เฉพาะทางเรือ
+  // POL/POD จิ้มเลือก — default จีน→ไทย (นำเข้า) ตามพอร์ทตัวแรกของขนส่งนั้น
+  return {
+    service,
+    pol: { country: "จีน", port: firstPort("จีน", service) },
+    pod: { country: "ไทย", port: firstPort("ไทย", service) },
+    loadType, container: "1×20'", carrier: "", weight: "", agent: "",
+    term, enter: "Normal", special: [],
+  };
 }
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
@@ -58,6 +64,7 @@ export function QuotationFormClient({
   const [doc, setDoc] = useState({
     phone: "", memberCode: "",
     billName: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
+    billTo: "", // ชื่อผู้วางบิล (ถ้าต่างจากลูกค้า)
     taxId: "", shipper: "",
     consignee: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
     product: booking?.product ?? "", pol: booking?.pol ?? "", pickupAddress: "",
@@ -125,7 +132,7 @@ export function QuotationFormClient({
       pricing: booking?.pricing || "WEB", term: `IM ${cond.term}`,
       transport: /AIR/i.test(svc) ? "AIR" : /TRUCK/i.test(svc) ? "TRUCK" : "SEA",
       fclLcl: cond.loadType,
-      size: usesContainer(cond.loadType) ? cond.container : "ตามขนาดสินค้า", warehouse: "", pol: doc.pol, pod: cond.port,
+      size: usesContainer(cond.loadType) ? cond.container : "ตามขนาดสินค้า", warehouse: "", pol: cond.pol.port, pod: cond.pod.port,
       price: `ยอดเสนอราคา ${bahtFmt(totals.grand)}`, hsCode: "", note: doc.remark,
     };
     try {
@@ -137,10 +144,19 @@ export function QuotationFormClient({
     router.push("/admin/workspace/booking/import?tab=pending_pricing");
   }
 
+  function revalidatePort(p: PortSel, service: string): PortSel {
+    // สลับขนส่ง → พอร์ทที่มีเปลี่ยน · ถ้าพอร์ทเดิมไม่อยู่ในขนส่งใหม่ ให้เด้งไปพอร์ทแรก
+    const ports = PORT_CATALOG[p.country]?.[service] ?? [];
+    return ports.includes(p.port) ? p : { country: p.country, port: firstPort(p.country, service) };
+  }
   function setC<K extends keyof QuoteConditions>(k: K, v: QuoteConditions[K]) {
     let next = { ...cond, [k]: v } as QuoteConditions;
-    // เลือกขนส่งที่ไม่ใช่ทางเรือ (AIR/TRUCK) → บังคับ LCL (FCL เฉพาะ SEA)
-    if (k === "service" && !usesLoadType(v as string)) next = { ...next, loadType: "LCL" };
+    if (k === "service") {
+      const svc = v as string;
+      if (!usesLoadType(svc)) next = { ...next, loadType: "LCL" }; // FCL เฉพาะ SEA
+      next = { ...next, pol: revalidatePort(next.pol, svc), pod: revalidatePort(next.pod, svc) };
+      if (!carrierValidFor(next.carrier, svc)) next = { ...next, carrier: "" }; // สายเรือ/สายการบิน/สายรถ เปลี่ยนตามขนส่ง
+    }
     setCond(next);
     // template ขึ้นกับ term + ขนส่ง + loadType → reload line + note เมื่อ combo เปลี่ยน
     if (k === "term" || k === "service" || k === "loadType") {
@@ -149,6 +165,16 @@ export function QuotationFormClient({
       const prevNote = noteForConditions(cond, catalog);
       setDoc((d) => (d.remark === "" || d.remark === prevNote ? { ...d, remark: noteForConditions(next, catalog) } : d));
     }
+  }
+  const setPol = (v: PortSel) => setCond((p) => ({ ...p, pol: v }));
+  const setPod = (v: PortSel) => setCond((p) => ({ ...p, pod: v }));
+  function setLoadType(v: { loadType: string; container: string }) {
+    const next = { ...cond, loadType: v.loadType, container: v.container };
+    setCond(next);
+    // loadType อยู่ใน catalog key → reload line + note
+    setLines(linesForConditions(next, catalog));
+    const prevNote = noteForConditions(cond, catalog);
+    setDoc((d) => (d.remark === "" || d.remark === prevNote ? { ...d, remark: noteForConditions(next, catalog) } : d));
   }
   function toggleSpecial(s: string) {
     setCond((p) => ({ ...p, special: p.special.includes(s) ? p.special.filter((x) => x !== s) : [...p.special, s] }));
@@ -183,10 +209,11 @@ export function QuotationFormClient({
 
       {/* ══ MOCKUP 1:1 (quotation_booking_mockup.html) — topbar/flow เอาออก · สถานะย้ายเข้าหัวเอกสาร (owner) ══ */}
       <div className={styles.wrap}>
-        {/* ── ตัวเลือกบริการ (Condition) — ย้ายขึ้นบน · ดร็อปดาวน์ (owner 2026-07-10) ── */}
-        <div className={styles.card} style={{ marginBottom: 22 }}>
+        {/* ── เงื่อนไขงาน (Trip-style · owner 2026-07-10: หัว=ขนส่ง · POL/POD จิ้มเลือก · ตัด "บริการ" [ทิศทางอนุมานจาก POL/POD]) ── */}
+        {/* overflow:visible — ให้ popover ของ POL/POD โผล่พ้นการ์ดได้ (ไม่โดน overflow:hidden ตัด) */}
+        <div className={styles.card} style={{ marginBottom: 22, overflow: "visible" }}>
           <div className={styles.cardHead}>
-            <h2>ตัวเลือกบริการ</h2>
+            <h2>เงื่อนไขงาน</h2>
             {showCost ? (
               <Link href="/admin/workspace/booking/import/settings" className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:text-primary-700">
                 <Settings className="h-3.5 w-3.5" /> ตั้งค่าเรท
@@ -194,20 +221,43 @@ export function QuotationFormClient({
             ) : <small>ฟอร์มฝั่งแอดมิน</small>}
           </div>
           <div className={styles.cardBody}>
-            <div className={styles.condGrid}>
-              <SelRow stack label="บริการ" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
-              <SelRow stack label="ขนส่ง" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
-              {usesLoadType(cond.service) && (
-                <SelRow stack label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} note="เฉพาะทางเรือ · LCL=รวมตู้ · FCL=เหมาตู้" onPick={(v) => setC("loadType", v)} />
-              )}
-              {usesContainer(cond.loadType) && (
-                <SelRow stack label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} note="เลือกขนาดตู้ (FCL)" onPick={(v) => setC("container", v)} />
-              )}
-              <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
-              <SelRow stack label="PORT" options={PORT_OPTIONS} value={cond.port} onPick={(v) => setC("port", v)} />
-              <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+            {/* ขนส่ง — หัวข้อหลัก (Trip-style tab) · กดแล้วพอร์ทด้านในเปลี่ยนตาม */}
+            <div className={styles.transportTabs}>
+              {TRANSPORT_TABS.map((t) => (
+                <button key={t.id} type="button"
+                  className={cx(styles.transportTab, cond.service === t.id && styles.transportTabActive)}
+                  onClick={() => setC("service", t.id)}>
+                  <span className={styles.transportIcon}>{t.icon}</span> {t.label}
+                </button>
+              ))}
             </div>
-            {/* SPECIAL = เลือกได้หลายอย่าง → คงเป็นชิป (ดร็อปดาวน์เลือกหลายอย่างไม่สะดวก) */}
+
+            {/* ข้อมูลบรรทัดเดียว (owner 2026-07-10): POL → POD · TERM · ENTER · ประเภท · ขนาดตู้ */}
+            <div className={styles.condLine}>
+              <PortPicker label="ต้นทาง (POL)" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} />
+              <div className={styles.routeArrow}>
+                <span className={styles.routeArrowIcon}>→</span>
+                <span className={styles.routeDir}>{directionOf(cond).label}</span>
+              </div>
+              <PortPicker label="ปลายทาง (POD)" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} />
+              <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
+              <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+              {usesLoadType(cond.service) && (
+                <LoadTypePicker loadType={cond.loadType} container={cond.container} onChange={setLoadType} />
+              )}
+              {/* สายเรือ/สายการบิน/สายรถ — ป้าย+ตัวเลือกเปลี่ยนตามขนส่ง */}
+              <SelRow stack label={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} options={CARRIER_CATALOG[cond.service] ?? []} value={cond.carrier} ph="— เลือก —" onPick={(v) => setC("carrier", v)} />
+              {/* น้ำหนัก — บอกว่าใช้รถอะไรไปรับ/ลากตู้ */}
+              <div className={styles.ddCell}>
+                <div className={styles.label}>น้ำหนัก (กก.)</div>
+                <input className={styles.dropdown} type="text" inputMode="decimal" value={cond.weight} placeholder="เช่น 5000"
+                  onChange={(e) => setC("weight", e.target.value)} />
+              </div>
+              {/* เอเจนต์ */}
+              <SelRow stack label="เอเจนต์" options={AGENT_OPTIONS} value={cond.agent} ph="— เลือก —" onPick={(v) => setC("agent", v)} />
+            </div>
+
+            {/* SPECIAL — ชิป (เลือกหลายอย่าง) */}
             <div style={{ marginTop: 14 }}>
               <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
             </div>
@@ -290,6 +340,7 @@ export function QuotationFormClient({
                     {!looking && lookupState === "notfound" && <p className={styles.hintTxt} style={{ color: "#d97706" }}>⚠ ไม่พบ — กรอกใหม่เพื่อสมัคร (ได้รหัส PR)</p>}
                   </div>
                   <KvInput label="ชื่อลูกค้า" value={doc.billName} onChange={setF("billName")} placeholder="ชื่อ / บริษัท" />
+                  <KvInput label="ชื่อผู้วางบิล" value={doc.billTo} onChange={setF("billTo")} placeholder="ชื่อผู้วางบิล (ถ้าต่างจากลูกค้า)" />
                   <KvInput label="เบอร์โทร" value={doc.phone} onChange={setF("phone")} placeholder="08x-xxx-xxxx" />
                 </div>
               </div>
@@ -302,7 +353,7 @@ export function QuotationFormClient({
                   <KvInput label="Commodity" value={doc.product} onChange={setF("product")} placeholder="ชื่อสินค้า" />
                   <KvInput label="POL" value={doc.pol} onChange={setF("pol")} placeholder="ท่า/เมืองต้นทาง" />
                   <div className={styles.k}>POD</div>
-                  <div className={styles.v}>{cond.port} <span style={{ color: "#9aa0a8", fontWeight: 400, fontSize: 11 }}>← จาก PORT</span></div>
+                  <div className={styles.v}>{cond.pod.country} · {cond.pod.port} <span style={{ color: "#9aa0a8", fontWeight: 400, fontSize: 11 }}>← จาก POD</span></div>
                 </div>
               </div>
 
@@ -451,12 +502,15 @@ export function QuotationFormClient({
                 <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
                 <tbody>
                   <PayRow field="booking_ref" value={docNo} src="Quote Header" />
-                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
-                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
-                  <PayRow field="term" value={cond.term} src="Term Chip" />
-                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
-                  <PayRow field="destination_port" value={cond.port} src="PORT" />
-                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
+                  <PayRow field="direction" value={directionOf(cond).code || "—"} src="POL/POD" />
+                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="ขนส่ง" />
+                  <PayRow field="term" value={cond.term} src="Term" />
+                  <PayRow field="port_of_loading" value={`${cond.pol.country} · ${cond.pol.port}`} src="POL" />
+                  <PayRow field="destination_port" value={`${cond.pod.country} · ${cond.pod.port}`} src="POD" />
+                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="ขนาดตู้" />
+                  <PayRow field="carrier" value={cond.carrier || "—"} src={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} />
+                  <PayRow field="gross_weight" value={cond.weight ? `${cond.weight} กก.` : "—"} src="น้ำหนัก" />
+                  <PayRow field="agent" value={cond.agent || "—"} src="เอเจนต์" />
                   <PayRow field="commodity" value={doc.product || "—"} src="Description" />
                   <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
                   <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
@@ -515,12 +569,110 @@ export function QuotationFormClient({
 }
 
 // ── helpers ─────────────────────────────────────────────────
+// POL/POD picker — จิ้มเลือก ประเทศ + พอร์ท (ไม่พิมพ์ · Trip-style · owner 2026-07-10).
+// พอร์ทที่เลือกได้ขึ้นกับ "ขนส่ง" (transport) ที่เลือกด้านบน.
+function PortPicker({
+  label, placeholder, value, transport, onChange,
+}: {
+  label: string; placeholder: string; value: PortSel; transport: string; onChange: (v: PortSel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeCountry, setActiveCountry] = useState(value.country || PORT_COUNTRIES[0]);
+  const ports = PORT_CATALOG[activeCountry]?.[transport] ?? [];
+  return (
+    <div className={styles.portField}>
+      <div className={styles.portLabel}>{label}</div>
+      <button type="button" className={styles.portBtn}
+        onClick={() => { setActiveCountry(value.country || PORT_COUNTRIES[0]); setOpen((o) => !o); }}>
+        {value.port
+          ? <span className={styles.portVal}><b>{value.country}</b><span className={styles.portSep}>·</span>{value.port}</span>
+          : <span className={styles.portPlaceholder}>{placeholder}</span>}
+        <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "#9aa0a8" }} />
+      </button>
+      {open && (
+        <>
+          <div className={styles.portBackdrop} onClick={() => setOpen(false)} />
+          <div className={styles.portPop}>
+            <div className={styles.portCountries}>
+              {PORT_COUNTRIES.map((c) => (
+                <button key={c} type="button"
+                  className={cx(styles.portCountry, c === activeCountry && styles.portCountryActive)}
+                  onClick={() => setActiveCountry(c)}>{c}</button>
+              ))}
+            </div>
+            <div className={styles.portList}>
+              {ports.length ? ports.map((p) => (
+                <button key={p} type="button"
+                  className={cx(styles.portItem, value.country === activeCountry && value.port === p && styles.portItemActive)}
+                  onClick={() => { onChange({ country: activeCountry, port: p }); setOpen(false); }}>{p}</button>
+              )) : <div className={styles.portEmpty}>ยังไม่มีพอร์ทสำหรับขนส่งนี้</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ประเภท + ขนาดตู้ = picker เดียว (สไตล์เดียวกับ PortPicker · owner 2026-07-10).
+// ซ้าย = LCL / FCL · ขวา = ถ้า FCL → ขนาดตู้ให้จิ้มเลย · LCL = รวมตู้ (ไม่มีขนาด → เลือกแล้วปิด).
+function LoadTypePicker({
+  loadType, container, onChange,
+}: {
+  loadType: string; container: string; onChange: (v: { loadType: string; container: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeType, setActiveType] = useState(loadType || "LCL");
+  return (
+    <div className={styles.portField}>
+      <div className={styles.portLabel}>ประเภท / ขนาดตู้</div>
+      <button type="button" className={styles.portBtn}
+        onClick={() => { setActiveType(loadType || "LCL"); setOpen((o) => !o); }}>
+        <span className={styles.portVal}>
+          <b>{loadType}</b>{loadType === "FCL" && container ? <><span className={styles.portSep}>·</span>{container}</> : null}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "#9aa0a8" }} />
+      </button>
+      {open && (
+        <>
+          <div className={styles.portBackdrop} onClick={() => setOpen(false)} />
+          <div className={styles.portPop}>
+            <div className={styles.portCountries}>
+              {LOAD_TYPE_OPTIONS.map((lt) => (
+                <button key={lt} type="button"
+                  className={cx(styles.portCountry, lt === activeType && styles.portCountryActive)}
+                  onClick={() => {
+                    if (lt === "LCL") { onChange({ loadType: "LCL", container }); setOpen(false); } // LCL = ไม่มีขนาด → เลือกเลย
+                    else setActiveType("FCL"); // FCL → โชว์ขนาดตู้ด้านขวา
+                  }}>{lt}</button>
+              ))}
+            </div>
+            <div className={styles.portList}>
+              {activeType === "FCL" ? (
+                CONTAINER_OPTIONS.map((c) => (
+                  <button key={c} type="button"
+                    className={cx(styles.portItem, loadType === "FCL" && container === c && styles.portItemActive)}
+                    onClick={() => { onChange({ loadType: "FCL", container: c }); setOpen(false); }}>{c}</button>
+                ))
+              ) : (
+                <div className={styles.portEmpty}>LCL = รวมตู้ · ไม่มีขนาดตู้</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SelRow({
-  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack,
+  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack, ph,
 }: {
   label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; colorMap?: Record<string, string>; disabledOpts?: string[]; note?: string; onPick: (v: string) => void;
   /** stack = label above the control (top condition bar) · default = label beside (row). */
   stack?: boolean;
+  /** placeholder option (dropdown เท่านั้น) — โชว์ "— เลือก —" ตอนค่ายังว่าง. */
+  ph?: string;
 }) {
   const isActive = (o: string) => (multi ? (values ?? []).includes(o) : value === o);
   const isDisabled = (o: string) => (disabledOpts ?? []).includes(o);
@@ -543,6 +695,7 @@ function SelRow({
         ) : (
           // เลือกอย่างเดียว → ดร็อปดาวน์ (owner 2026-07-10)
           <select className={styles.dropdown} value={value ?? ""} onChange={(e) => onPick(e.target.value)}>
+            {ph ? <option value="">{ph}</option> : null}
             {options.map((o) => (
               <option key={o} value={o} disabled={isDisabled(o)}>{o}</option>
             ))}
