@@ -29,6 +29,7 @@ export type QuoteConditions = {
   term: string; // EXW / FOB / CIF / DDP
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime
+  productType: string; // ประเภทสินค้า: ทั่วไป / มอก. / อย. / ลิขสิทธิ์ ("ลิขสิทธิ์" → เรท licensed ในโปร)
 };
 
 export type QuoteLine = {
@@ -54,6 +55,7 @@ export const PORT_OPTIONS = ["PAT", "LCB", "BKK", "SUV"];
 export const CONTAINER_OPTIONS = ["1×20'", "1×40'HC", "2×40'", "Mixed"]; // ขนาดตู้ (เฉพาะ SEA FCL)
 export const ENTER_OPTIONS = ["Normal", "Change Status", "Document Amend", "Direct", "Indirect"];
 export const SPECIAL_OPTIONS = ["License", "Manpower", "Local Transport", "Overtime"];
+export const PRODUCT_TYPE_OPTIONS = ["ทั่วไป", "มอก.", "อย.", "ลิขสิทธิ์"]; // ประเภทสินค้า (fproductstype) · "ลิขสิทธิ์" = เรทพิเศษในโปร
 
 /** ขนส่ง = หัวข้อหลัก (Trip-style tab) · id ตรงกับ service เดิม (SEA/AIR/TRUCK). */
 export const TRANSPORT_TABS: { id: string; label: string; icon: string }[] = [

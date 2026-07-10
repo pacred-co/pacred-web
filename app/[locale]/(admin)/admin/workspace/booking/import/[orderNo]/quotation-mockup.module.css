@@ -120,7 +120,7 @@
 .fileItem span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── แนบเอกสารแยกช่อง (owner 2026-07-10 · ผูกกับ Booking Payload) ── */
-.docSlots { display: grid; gap: 8px; }
+.docSlots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .docSlot { border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; background: #fdfdfe; }
 .docSlotHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .docSlotName { font-size: 12px; font-weight: 800; color: #1f2937; }
