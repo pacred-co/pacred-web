@@ -1102,7 +1102,7 @@ async function tryRenderTbForwarder(
             <EditTransportTypeField fId={r.id} ftransporttype={r.ftransporttype} />
             <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{chinaWarehouseDisplay}</p>
             <EditCabinetField fId={r.id} fcabinetnumber={r.fcabinetnumber} fcabinetLocked={r.fcabinet_locked === true} />
-            <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} />
+            <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} fcabinetnumber={r.fcabinetnumber} />
             <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
             {/* ภูม 2026-07-03: แตกกล่อง MOMO เป็นแถวแยก (money-neutral) — MOMO ส่งหลายกล่อง
