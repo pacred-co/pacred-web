@@ -21,7 +21,8 @@ export type QuoteConditions = {
   service: string; // SEA / AIR / TRUCK (ขนส่ง · หัว · รถ/เรือ/แอร์)
   pol: PortSel; // ต้นทาง (Port of Loading)
   pod: PortSel; // ปลายทาง (Port of Discharge)
-  loadType: string; // LCL / FCL (default LCL · ซ่อน UI ชั่วคราว · owner 2026-07-10 ตัดประเภทออก)
+  loadType: string; // LCL / FCL (เฉพาะทางเรือ SEA · โหมดอื่นบังคับ LCL)
+  container: string; // ขนาดตู้ (เฉพาะ FCL): 1×20' / 1×40'HC / 2×40' / Mixed
   term: string; // EXW / FOB / CIF / DDP
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime

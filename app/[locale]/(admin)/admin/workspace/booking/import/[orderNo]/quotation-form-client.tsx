@@ -15,8 +15,8 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
-  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, noteForConditions, PACRED_ISSUER,
+  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
+  linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
 } from "../quotation-data";
 import type { CatalogTemplate } from "@/lib/booking/catalog";
@@ -41,7 +41,7 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     service,
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
-    loadType, term, enter: "Normal", special: [],
+    loadType, container: "1×20'", term, enter: "Normal", special: [],
   };
 }
 
@@ -129,7 +129,7 @@ export function QuotationFormClient({
       pricing: booking?.pricing || "WEB", term: `IM ${cond.term}`,
       transport: /AIR/i.test(svc) ? "AIR" : /TRUCK/i.test(svc) ? "TRUCK" : "SEA",
       fclLcl: cond.loadType,
-      size: cond.loadType === "FCL" ? "เหมาตู้ (FCL)" : "ตามขนาดสินค้า", warehouse: "", pol: cond.pol.port, pod: cond.pod.port,
+      size: usesContainer(cond.loadType) ? cond.container : "ตามขนาดสินค้า", warehouse: "", pol: cond.pol.port, pod: cond.pod.port,
       price: `ยอดเสนอราคา ${bahtFmt(totals.grand)}`, hsCode: "", note: doc.remark,
     };
     try {
@@ -219,20 +219,22 @@ export function QuotationFormClient({
               ))}
             </div>
 
-            {/* POL → POD (จิ้มเลือก ประเทศ + พอร์ท · ไม่พิมพ์) + ทิศทาง (อนุมาน) */}
-            <div className={styles.routeRow}>
+            {/* ข้อมูลบรรทัดเดียว (owner 2026-07-10): POL → POD · TERM · ENTER · ประเภท · ขนาดตู้ */}
+            <div className={styles.condLine}>
               <PortPicker label="ต้นทาง (POL)" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} />
               <div className={styles.routeArrow}>
                 <span className={styles.routeArrowIcon}>→</span>
                 <span className={styles.routeDir}>{directionOf(cond).label}</span>
               </div>
               <PortPicker label="ปลายทาง (POD)" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} />
-            </div>
-
-            {/* TERM + ENTER (ดร็อปดาวน์) */}
-            <div className={styles.condGrid} style={{ marginTop: 14 }}>
               <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
               <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+              {usesLoadType(cond.service) && (
+                <SelRow stack label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} onPick={(v) => setC("loadType", v)} />
+              )}
+              {usesContainer(cond.loadType) && (
+                <SelRow stack label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} onPick={(v) => setC("container", v)} />
+              )}
             </div>
 
             {/* SPECIAL — ชิป (เลือกหลายอย่าง) */}
@@ -484,6 +486,7 @@ export function QuotationFormClient({
                   <PayRow field="term" value={cond.term} src="Term" />
                   <PayRow field="port_of_loading" value={`${cond.pol.country} · ${cond.pol.port}`} src="POL" />
                   <PayRow field="destination_port" value={`${cond.pod.country} · ${cond.pod.port}`} src="POD" />
+                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="ขนาดตู้" />
                   <PayRow field="commodity" value={doc.product || "—"} src="Description" />
                   <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
                   <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
