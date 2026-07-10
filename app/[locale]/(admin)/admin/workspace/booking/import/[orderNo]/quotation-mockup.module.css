@@ -127,8 +127,8 @@
 /* docHeader — Peak-style (owner 2026-07-10: โลโก้สี Pacred + หน้า/ต้นฉบับ/Quotation เหมือน EditableQuoteCard) */
 .docHeader { padding: 24px 28px 18px; border-bottom: 1px solid #ececf2; display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
 .docBrand { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.docLogo { height: 100px; width: auto; }
-@media (min-width: 640px) { .docLogo { height: 144px; } }
+.docLogo { height: 88px; width: auto; max-width: 100%; object-fit: contain; }
+@media (min-width: 640px) { .docLogo { height: 120px; } }
 .docBrand h2 { margin: 0; color: #111827; font-size: 18px; }
 .docBrand p { margin: 4px 0 0; color: #5d6270; font-size: 12px; line-height: 1.55; }
 .docRight { text-align: right; line-height: 1.2; }
