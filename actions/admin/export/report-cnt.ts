@@ -266,10 +266,28 @@ export async function exportReportCntAll(
   if (truncated) grouped = grouped.slice(0, EXPORT_CAP);
 
   // ── Step 3b: resolve SEA0x placeholders → real container/sack + etd/eta
-  //    (report-cnt #4 · IDENTICAL to the page's momoInfoByCab). One round-trip. ──
+  //    (report-cnt #4 · IDENTICAL to the page's momoInfoByCab). ──
+  // 2026-07-10 (ภูม dup-container fix): pass the per-cabinet trackings so a
+  // placeholder resolves to a real container from ITS OWN parcels only (mirrors
+  // the page — keeps the CSV's เลขตู้/กระสอบจริง consistent with the on-screen view).
+  const tracksByCab: Record<string, string[]> = {};
+  if (grouped.length > 0) {
+    const { data: trackRows, error: trackErr } = await admin
+      .from("tb_forwarder")
+      .select("fcabinetnumber,ftrackingchn")
+      .in("fcabinetnumber", grouped.map((g) => g.fcabinetnumber))
+      .limit(50_000);
+    if (trackErr) {
+      console.error("[export report-cnt tracksByCab] failed", { code: trackErr.code, message: trackErr.message });
+    }
+    for (const tr of (trackRows ?? []) as { fcabinetnumber: string; ftrackingchn: string | null }[]) {
+      if (!tr.ftrackingchn) continue;
+      (tracksByCab[tr.fcabinetnumber] ??= []).push(tr.ftrackingchn);
+    }
+  }
   const momoInfoByCab: Record<string, MomoContainerInfo> =
     grouped.length > 0
-      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
+      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber), tracksByCab)
       : {};
 
   // ── Step 4: map to CSV rows — IDENTICAL keys/labels/value-mapping + showMoney gate ──

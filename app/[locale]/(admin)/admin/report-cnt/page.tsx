@@ -355,23 +355,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
         )
       : {};
 
-  // report-cnt #4 (owner 2026-06-19/20) — resolve MOMO routing-batch placeholder
-  // cabinets (the "SEA0x" rows like PR20260605-SEA03 / MO20260523-SEA02 that
-  // MOMO generates BEFORE the container closes) → the REAL container code
-  // (container_batch_no · GZS260601-1) or, while the container is still open, the
-  // sack number (เลขกระสอบ · CBX260523-EK01). ALSO pulls ETD/ETA — แต้ม-primary
-  // (taem_container_etd_eta) + MOMO-fallback from momo_container_details (the
-  // Container Closed sync · 0120 · ETD_CN_KODANG / ESTIMATE_DATE). The old
-  // momo_import_tracks.etd/eta read was DEAD (per-tracking · always NULL) — that's
-  // why ETD/ETA showed "—" even though the MOMO sync page had them (ภูม 2026-06-20).
-  const momoInfoByCab: Record<string, MomoContainerInfo> =
-    grouped.length > 0
-      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber))
-      : {};
-
   // Search support (ภูม 2026-06-23) — each visible cabinet's tracking numbers so
   // the client search box matches by แทรคกิง too (not only เลขตู้). Two tiny
   // columns scoped to the visible cabinets — cheap next to the avoided 50k pull.
+  // Computed BEFORE resolveMomoContainerInfo (2026-07-10) because the resolver now
+  // needs the per-cabinet trackings to resolve a placeholder from ITS OWN parcels.
   const tracksByCab: Record<string, string[]> = {};
   if (grouped.length > 0) {
     const { data: trackRows, error: trackErr } = await admin
@@ -387,6 +375,22 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       (tracksByCab[tr.fcabinetnumber] ??= []).push(tr.ftrackingchn);
     }
   }
+
+  // report-cnt #4 (owner 2026-06-19/20) — resolve MOMO routing-batch placeholder
+  // cabinets (the "SEA0x" rows like PR20260605-SEA03 / MO20260523-SEA02 that
+  // MOMO generates BEFORE the container closes) → the REAL container code
+  // (container_batch_no · GZS260601-1) or, while the container is still open, the
+  // sack number (เลขกระสอบ · CBX260523-EK01). ALSO pulls ETD/ETA — แต้ม-primary
+  // (taem_container_etd_eta) + MOMO-fallback from momo_container_details (the
+  // Container Closed sync · 0120 · ETD_CN_KODANG / ESTIMATE_DATE). The old
+  // momo_import_tracks.etd/eta read was DEAD (per-tracking · always NULL) — that's
+  // why ETD/ETA showed "—" even though the MOMO sync page had them (ภูม 2026-06-20).
+  // 2026-07-10: pass tracksByCab so a placeholder resolves to a real container only
+  // from ITS OWN under-placeholder parcels (fixes the "ตู้ซ้ำ 2 แถว" false dupe).
+  const momoInfoByCab: Record<string, MomoContainerInfo> =
+    grouped.length > 0
+      ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber), tracksByCab)
+      : {};
 
   // G1 combo-flow (2026-07-08) — which of the visible containers have a MOMO packing-list
   // reconcile stamp (mig 0245). Drives the "📦 packing ✓ / ⏳ ยังไม่อัพ" badge so staff

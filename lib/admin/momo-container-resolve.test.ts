@@ -67,6 +67,21 @@ it("ignores rows with no momo_container_no key", () => {
   assert.deepEqual(out, {});
 });
 
+it("no-borrow: a placeholder fed only its OWN pending (null-container) rows resolves realContainer=null", () => {
+  // 🔴 ภูม 2026-07-10 ("ตู้ GZE260704-1 ซ้ำ 2 แถว") — resolveMomoContainerInfo now
+  // queries momo_import_tracks by the trackings STILL under a placeholder (all NULL
+  // container_batch_no while pending), so fold receives ONLY those rows and must NOT
+  // claim a real container. This locks that the pending placeholder shows itself
+  // (รอเลขตู้จริง), never masquerading as a real container that other (moved-out)
+  // parcels of the same MOMO routing batch went into.
+  const out = foldMomoContainerInfo([
+    { momo_container_no: "PR20260701-EK01", container_batch_no: null, momo_sack_no: null, momo_tracking_no: "1783051207-12", etd: null, eta: null },
+    { momo_container_no: "PR20260701-EK01", container_batch_no: null, momo_sack_no: null, momo_tracking_no: "1783051207-13", etd: null, eta: null },
+  ]);
+  assert.equal(out["PR20260701-EK01"]?.realContainer, null);
+  assert.equal(out["PR20260701-EK01"]?.sackNo, null);
+});
+
 console.log("momo-container-resolve — mergeTaemEtdEta (แต้ม-primary · MOMO-fallback):");
 
 it("แต้ม ETD/ETA OVERRIDE MOMO on the same container", () => {

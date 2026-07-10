@@ -674,11 +674,29 @@ export function CntListTable({
                           </Link>
                           <span className="text-[11px] text-amber-600">เลขกระสอบ · เลขตู้จริงรอจากแต้ม</span>
                         </span>
+                      ) : isPlaceholder ? (
+                        // Unresolved MOMO routing placeholder (2026-07-10 · ภูม) — its
+                        // parcels have NO real container assigned by MOMO yet (the
+                        // resolver only claims a real container from the placeholder's
+                        // OWN under-parcels · all NULL while pending). Show the routing
+                        // batch id + a clear "รอ MOMO ผูกเลขตู้จริง" note so it never
+                        // masquerades as a real container (the "ตู้ซ้ำ" false dupe).
+                        // Auto-swaps to the real container row once MOMO closes the tู้.
+                        <span className="flex flex-col leading-tight">
+                          <Link
+                            href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                            className="font-semibold text-primary-600 hover:underline"
+                            title="ตู้นี้ยังไม่ปิด — MOMO ยังไม่ให้เลขตู้จริง · จะเปลี่ยนเป็นเลขตู้จริงให้อัตโนมัติเมื่อ MOMO ปิดตู้/ผูกเลขตู้"
+                          >
+                            {r.fcabinetnumber}
+                          </Link>
+                          <span className="text-[11px] text-amber-600">⏳ รอ MOMO ผูกเลขตู้จริง</span>
+                        </span>
                       ) : (
                         <Link
                           href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
                           className="font-semibold text-primary-600 hover:underline"
-                          title={isPlaceholder ? "เลขตู้จริงรอจากแต้ม (ตู้ยังไม่ปิด)" : "ดูรายละเอียดตู้นี้"}
+                          title="ดูรายละเอียดตู้นี้"
                         >
                           {r.fcabinetnumber}
                         </Link>
