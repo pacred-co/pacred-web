@@ -568,7 +568,7 @@ export type CommPayAccount = {
 };
 
 /** A payee (sales rep or interpreter) available for a batch. */
-export type CommPayee = { adminId: string };
+export type CommPayee = { adminId: string; name?: string };
 
 export type EligibleSaleForwarder = {
   /** tb_forwarder.id — the checkbox value the create form posts. */
@@ -657,13 +657,57 @@ export async function listCommPayAccounts(): Promise<
 //
 // tb_admin is CAMELCASE (adminID, companyType, department, section). The
 // migrated tb_admin's companyType/department/section codes DON'T match the
-// legacy filter values (prod: the strict filter returns 0). So for SALE we
-// fall back to the DATA-DRIVEN source of truth — the distinct tb_users.adminIDSale
-// (the reps who actually own customers) — which is EXACTLY what the eligible
-// query keys on. INTERPRETER has no reliable data source today (adminidip is
-// placeholder 'customer'/'admin_web' + tb_set_comm_interpreter is unseeded) →
-// its list stays legacy-filtered + the create is guarded by the empty rate table.
+// legacy filter values (prod: the strict filter returns 0 for BOTH kinds). So
+// each kind falls back to a DATA-DRIVEN source of truth — the same column the
+// eligible query keys on — so the dropdown never renders empty when real payees
+// exist (GAP 2 · §0d/§0f "อย่ามั่ว"):
+//   SALE        → distinct tb_users.adminIDSale (reps who actually own customers)
+//   INTERPRETER → distinct tb_header_order.adminidip (the admins actually assigned
+//                 as interpreter on orders) EXCLUDING the placeholders
+//                 'customer'/'admin_web'/'' that the migration wrote onto
+//                 non-interpreter orders.
+// Display names are resolved best-effort from tb_admin (adminName/adminNickname).
 // ────────────────────────────────────────────────────────────────────────
+
+/** Placeholder adminidip values the migration wrote onto non-interpreter orders. */
+const NON_INTERPRETER_PLACEHOLDERS = new Set(["", "customer", "admin_web", "admin", "system"]);
+
+/**
+ * Best-effort display-name lookup for a set of adminIDs (tb_admin CAMELCASE).
+ * Returns a Map<adminID, "ชื่อ (ชื่อเล่น)"> — missing rows are simply omitted so
+ * the caller falls back to the bare code. Never throws (name is cosmetic).
+ */
+async function resolvePayeeNames(
+  admin: ReturnType<typeof createAdminClient>,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  for (let i = 0; i < unique.length; i += IN_CHUNK) {
+    const slice = unique.slice(i, i + IN_CHUNK);
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminNickname")
+      .in("adminID", slice);
+    if (error) {
+      console.error("[withdraw-comm-batch] payee name lookup failed (cosmetic)", {
+        code: error.code,
+        message: error.message,
+      });
+      continue; // names stay bare — never blocks the dropdown
+    }
+    for (const r of (data ?? []) as Array<{ adminID: string | null; adminName: string | null; adminNickname: string | null }>) {
+      const id = (r.adminID ?? "").trim();
+      if (!id) continue;
+      const full = (r.adminName ?? "").trim();
+      const nick = (r.adminNickname ?? "").trim();
+      const label = full && nick ? `${full} (${nick})` : full || nick;
+      if (label) names.set(id, label);
+    }
+  }
+  return names;
+}
+
 export async function listCommissionPayees(
   kind: BatchKind,
 ): Promise<AdminActionResult<{ payees: CommPayee[] }>> {
@@ -719,12 +763,82 @@ export async function listCommissionPayees(
             payees.push({ adminId: id });
           }
         }
-        payees.sort((a, b) => a.adminId.localeCompare(b.adminId));
       }
     }
 
+    // INTERPRETER fallback — legacy org-filter empty on migrated data → use the
+    // real interpreters (distinct tb_header_order.adminidip, the exact column the
+    // eligible query keys on), excluding the migration placeholders. Keeps the
+    // create form usable §0d (GAP 2).
+    if (kind !== "sale" && payees.length === 0) {
+      const { data: ipRows, error: ipErr } = await admin
+        .from("tb_header_order")
+        .select("adminidip")
+        .not("adminidip", "is", null)
+        .neq("adminidip", "")
+        .limit(20000);
+      if (ipErr) {
+        console.error("[withdraw-comm-batch] interpreter payee fallback failed", {
+          code: ipErr.code,
+          message: ipErr.message,
+        });
+      } else {
+        for (const r of (ipRows ?? []) as Array<{ adminidip: string | null }>) {
+          const id = (r.adminidip ?? "").trim();
+          if (!id || NON_INTERPRETER_PLACEHOLDERS.has(id.toLowerCase())) continue;
+          if (!seen.has(id)) {
+            seen.add(id);
+            payees.push({ adminId: id });
+          }
+        }
+      }
+    }
+
+    // Resolve display names best-effort (never blocks the dropdown).
+    if (payees.length > 0) {
+      const names = await resolvePayeeNames(admin, payees.map((p) => p.adminId));
+      for (const p of payees) {
+        const name = names.get(p.adminId);
+        if (name) p.name = name;
+      }
+    }
+    payees.sort((a, b) => a.adminId.localeCompare(b.adminId));
+
     return { ok: true, data: { payees } };
   });
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// READ — interpreter-commission config presence (for the settings CTA banner).
+//
+// tb_set_comm_interpreter holds one row per interpreter with their `percom` %.
+// If NO interpreter has a usable rate seeded, the whole เบิกค่าคอมล่าม flow
+// fails-closed (getInterpreterBatchEligible/createInterpreterCommBatch refuse).
+// The interpreter page calls this to render a clear "go set it up" CTA instead
+// of leaving the user at a silent dead-end (GAP 1). Once the owner seeds the
+// rate (per admin, via the ⚙️ cog on /admin/admins/[id]) this returns true with
+// NO further dev change.
+// ────────────────────────────────────────────────────────────────────────
+export async function hasInterpreterCommConfig(): Promise<boolean> {
+  const res = await withAdmin<boolean>(["super", "accounting", "sales_admin"], async () => {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("tb_set_comm_interpreter")
+      .select("adminid, percom")
+      .gt("percom", 0)
+      .limit(1);
+    if (error) {
+      console.error("[withdraw-comm-batch] interpreter config probe failed", {
+        code: error.code,
+        message: error.message,
+      });
+      // Fail-open on a probe error → don't nag with a false CTA; the create/
+      // eligible paths still fail-closed if the rate is truly missing.
+      return { ok: true, data: true };
+    }
+    return { ok: true, data: (data ?? []).length > 0 };
+  });
+  return res.ok ? (res.data ?? true) : true;
 }
 
 // ────────────────────────────────────────────────────────────────────────

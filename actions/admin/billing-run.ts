@@ -1940,6 +1940,140 @@ async function markBillingRunPaidImpl(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 6b. ENSURE RECEIPT — one-click "ออก/พิมพ์ใบเสร็จ" from the bill detail page
+//     (ภูม 2026-07-10). Paid bills only. If a receipt already covers the bill's
+//     forwarders → return it. Else issue it NOW from the bill's FROZEN totals +
+//     buyer identity (the SAME overrides markBillingRunPaid's auto-issue uses) so
+//     the receipt is always in-sync with the bill — one click, no navigating to
+//     the receipt page. Directly fixes the PR086 บุคคล↔นิติ pain: the receipt
+//     header/total follow the bill, and a bill whose auto-issue failed can be
+//     issued on demand. Returns receiptId for the print route.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Find an ACTIVE (non-cancelled) receipt covering ANY of these forwarder ids. */
+async function findActiveReceiptForFids(
+  admin: ReturnType<typeof createAdminClient>,
+  fids: number[],
+): Promise<{ receiptId: number; rid: string } | null> {
+  if (fids.length === 0) return null;
+  const { data: items, error: itemErr } = await admin
+    .from("tb_receipt_item")
+    .select("rid")
+    .in("fid", fids);
+  if (itemErr) {
+    console.error("[findActiveReceiptForFids items]", { code: itemErr.code, message: itemErr.message });
+    return null;
+  }
+  const rids = Array.from(
+    new Set(((items ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x)),
+  );
+  if (rids.length === 0) return null;
+  const { data: receipts, error: rErr } = await admin
+    .from("tb_receipt")
+    .select("id, rid, rstatus")
+    .in("rid", rids)
+    .neq("rstatus", "2") // '2' = ยกเลิก — a cancelled receipt does not count
+    .order("id", { ascending: false });
+  if (rErr) {
+    console.error("[findActiveReceiptForFids receipts]", { code: rErr.code, message: rErr.message });
+    return null;
+  }
+  const first = ((receipts ?? []) as Array<{ id: number; rid: string }>)[0];
+  return first ? { receiptId: first.id, rid: first.rid } : null;
+}
+
+export async function ensureBillingRunReceipt(
+  input: { invoiceId: number },
+): Promise<AdminActionResult<{ receiptId: number; rid: string; created: boolean }>> {
+  const invoiceId = Number((input as { invoiceId?: unknown })?.invoiceId);
+  if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+
+  return withAdmin<{ receiptId: number; rid: string; created: boolean }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Load the invoice — the button is only ENABLED at status='paid' (slip
+      //    verified + settled), but re-assert server-side (never trust the client).
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, userid, total_thb, is_juristic, mao_fee_thb, paid_at, buyer_name, buyer_tax_id, buyer_address")
+        .eq("id", invoiceId)
+        .maybeSingle<{
+          id: number; doc_no: string; status: string; userid: string | null;
+          total_thb: number | string; is_juristic: boolean; mao_fee_thb: number | string | null;
+          paid_at: string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null;
+        }>();
+      if (curErr) {
+        console.error("[ensureBillingRunReceipt current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.status !== "paid") {
+        return { ok: false, error: "ต้องรับชำระ (ตรวจสลิป + ยืนยันการชำระ) ก่อน ถึงจะออกใบเสร็จได้" };
+      }
+      if (!cur.userid) {
+        return { ok: false, error: "ใบวางบิลนี้ไม่มีรหัสลูกค้า — ออกใบเสร็จไม่ได้" };
+      }
+
+      // 2. The forwarder rows this bill covers.
+      const { data: invItems, error: invErr } = await admin
+        .from("tb_forwarder_invoice_item")
+        .select("forwarder_id")
+        .eq("invoice_id", invoiceId);
+      if (invErr) {
+        console.error("[ensureBillingRunReceipt items] failed", { code: invErr.code, message: invErr.message });
+        return { ok: false, error: invErr.message };
+      }
+      const fids = Array.from(new Set(((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id)));
+      if (fids.length === 0) {
+        return { ok: false, error: "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้" };
+      }
+
+      // 3. Already have an active receipt → return it (open/print, don't re-create).
+      const existing = await findActiveReceiptForFids(admin, fids);
+      if (existing) {
+        return { ok: true, data: { receiptId: existing.receiptId, rid: existing.rid, created: false } };
+      }
+
+      // 4. None yet → issue NOW, PINNED to the bill's frozen totals + buyer identity
+      //    (identical overrides to markBillingRunPaid's auto-issue) → receipt == bill.
+      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
+      const dateSlip = cur.paid_at ? new Date(cur.paid_at) : new Date();
+      const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+        userid: cur.userid,
+        fids,
+        dateSlip,
+        source: "billing_run.ensure_receipt",
+        maoFeeOverride: Number(cur.mao_fee_thb ?? 0),
+        totalOverride: Number(cur.total_thb),
+        netOverride: paidWht.net_payable,
+        isJuristicOverride: cur.is_juristic,
+        recompNameOverride: cur.buyer_name ?? undefined,
+        recompNumberOverride: cur.buyer_tax_id ?? undefined,
+        recompAddressOverride: cur.buyer_address ?? undefined,
+      });
+      if (rcpt.ok) {
+        await logAdminAction(adminId, "billing_run.receipt_issued_manual", "tb_receipt", rcpt.data.rid, {
+          invoice_id: invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
+        });
+        revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+        revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
+        return { ok: true, data: { receiptId: rcpt.data.receiptId, rid: rcpt.data.rid, created: true } };
+      }
+      // Race: a receipt got created between our check + issue → re-find + return it.
+      if (rcpt.alreadyIssued) {
+        const again = await findActiveReceiptForFids(admin, fids);
+        if (again) return { ok: true, data: { receiptId: again.receiptId, rid: again.rid, created: false } };
+      }
+      return { ok: false, error: `ออกใบเสร็จไม่สำเร็จ: ${rcpt.error}` };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 7. CANCEL — soft-cancel with reason
 // ────────────────────────────────────────────────────────────────────────
 

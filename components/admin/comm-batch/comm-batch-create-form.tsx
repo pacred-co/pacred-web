@@ -253,7 +253,7 @@ export function CommBatchCreateForm({
                 <option value="">— เลือก{payeeLabel} —</option>
                 {payees.map((p) => (
                   <option key={p.adminId} value={p.adminId}>
-                    {p.adminId}
+                    {p.name ? `${p.adminId} · ${p.name}` : p.adminId}
                   </option>
                 ))}
               </select>

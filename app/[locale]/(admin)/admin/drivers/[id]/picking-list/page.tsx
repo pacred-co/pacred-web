@@ -35,6 +35,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { PrintButton } from "@/components/print-button";
 import { SITE_NAME, ADDRESSES, CONTACT } from "@/components/seo/site";
 
@@ -58,10 +59,11 @@ type Forwarder = {
   fvolume: number | string | null;
   fpallet: string | null;
   fnote: string | null;
+  fcover: string | null;
 };
 
 const FORWARDER_COLS =
-  "id, userid, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, fpallet, fnote";
+  "id, userid, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, fpallet, fnote, fcover";
 
 // Rows with no assigned location sort last, under a clear "ยังไม่ระบุตำแหน่ง"
 // bucket, so the assembler sees exactly what still needs a shelf.
@@ -158,6 +160,19 @@ export default async function DriverPickingListPrintPage({
     }
     forwarders = (fwdData ?? []) as unknown as Forwarder[];
   }
+
+  // 3b. รูปสินค้า (fcover) → signed/legacy URL per parcel (ภูม 2026-07-10:
+  //     "แสดงรูป พนักงานจะได้เห็นว่าของหน้าตาประมาณไหน หาในโกดังง่ายๆ").
+  //     Resolve in parallel; a parcel with no cover shows a placeholder box.
+  const coverByFid = new Map<number, string>();
+  await Promise.all(
+    forwarders.map(async (f) => {
+      if (f.fcover) {
+        const u = await resolveLegacyUrl(f.fcover, "cover");
+        if (u) coverByFid.set(f.id, u);
+      }
+    }),
+  );
 
   // 4. Group by storage LOCATION (fpallet) — the assembler's walk-path.
   //    Within a location, order by container then tracking (physical proximity).
@@ -298,6 +313,7 @@ export default async function DriverPickingListPrintPage({
             <tr className="bg-gray-100 text-center">
               <th className="border border-gray-400 px-1 py-1 w-8">☐</th>
               <th className="border border-gray-400 px-1 py-1 w-10">ลำดับ</th>
+              <th className="border border-gray-400 px-1 py-1 w-16">รูปสินค้า</th>
               <th className="border border-gray-400 px-2 py-1 w-24">รหัสลูกค้า</th>
               <th className="border border-gray-400 px-2 py-1">เลขแทรคกิ้ง</th>
               <th className="border border-gray-400 px-2 py-1 w-24">ตู้</th>
@@ -310,7 +326,7 @@ export default async function DriverPickingListPrintPage({
             {groups.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="border border-gray-400 px-2 py-6 text-center text-gray-500"
                 >
                   ไม่มีรายการในรอบนี้
@@ -334,6 +350,21 @@ export default async function DriverPickingListPrintPage({
                           </td>
                           <td className="border border-gray-400 px-1 py-1 text-center font-mono">
                             {rowNo}
+                          </td>
+                          {/* รูปสินค้า — ให้พนักงานเห็นหน้าตากล่อง หาของในโกดังง่าย */}
+                          <td className="border border-gray-400 px-1 py-1 text-center">
+                            {coverByFid.has(r.id) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={coverByFid.get(r.id)}
+                                alt={r.ftrackingchn ?? "รูปสินค้า"}
+                                className="mx-auto h-12 w-12 rounded object-cover border border-gray-300"
+                              />
+                            ) : (
+                              <span className="inline-flex h-12 w-12 items-center justify-center rounded border border-dashed border-gray-300 text-[11px] text-gray-400">
+                                ไม่มีรูป
+                              </span>
+                            )}
                           </td>
                           <td className="border border-gray-400 px-2 py-1">
                             <div className="font-bold font-mono">
@@ -367,7 +398,7 @@ export default async function DriverPickingListPrintPage({
                     <tr className="bg-gray-50 font-semibold">
                       <td
                         className="border border-gray-400 px-2 py-1 text-right"
-                        colSpan={5}
+                        colSpan={6}
                       >
                         รวมตำแหน่ง {g.label} · {g.rows.length} รายการ
                       </td>
@@ -404,7 +435,7 @@ function LocationGroup({
     <>
       <tr className="bg-primary-50">
         <td
-          colSpan={8}
+          colSpan={9}
           className="border border-gray-400 px-2 py-1.5 font-bold text-primary-800"
         >
           📍 ตำแหน่งจัดเก็บ: {location}
