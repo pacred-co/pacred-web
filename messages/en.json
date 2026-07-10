@@ -4141,6 +4141,8 @@
     "viewWarehouseMap": "View Pacred Thailand warehouse map",
     "viewWarehouseMapCargo": "View Pacred Cargo Thailand warehouse map",
     "addAddressOrPickup": "Add address or pick up at Pacred warehouse",
+    "addNewAddress": "Add a new address",
+    "setAddressFirst": "Please set a delivery address before ordering",
     "carrierLabel": "Thailand carrier",
     "selectCarrier": "Please select a carrier",
     "outOfAreaNote": "Note: outside Pacred's delivery zone we collect on delivery only",

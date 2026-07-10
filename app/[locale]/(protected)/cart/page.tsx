@@ -262,6 +262,13 @@ export default async function CartPage() {
       })
     : null;
 
+  // Force-address gate — an address counts as EXPLICITLY chosen only when
+  // the resolved block is a saved address OR an explicitly-saved warehouse
+  // pickup; "warehouse-default"/"none" are silent fall-throughs that must be
+  // gated (owner 2026-07-10).
+  const addressChosenInitial =
+    addressBlock?.mode === "saved" || addressBlock?.mode === "warehouse-saved";
+
   // ── All addresses (for the เปลี่ยนที่อยู่ modal — cart.php's
   //   option-address-thai.php) + per-address shipBy/maomao maps.
   //   Server-rendered ONCE; the client filters on selection so the
@@ -495,6 +502,7 @@ export default async function CartPage() {
                 shippingCard={
                   <ShippingOptionsCard userTransportType={userTransportType} />
                 }
+                initialAddressChosen={addressChosenInitial}
               />
             </>
           ) : (

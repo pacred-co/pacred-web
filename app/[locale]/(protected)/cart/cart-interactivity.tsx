@@ -100,6 +100,12 @@ export type CartInteractivityProps = {
       passed through as JSX so it stays SSR — the cart-list + the summary
       sit on either side of it; the structural markup is a server concern. */
   shippingCard: ReactNode;
+  /** Whether a delivery address is EXPLICITLY chosen at initial render
+      (saved OR explicitly-saved warehouse pickup). Drives the force-address
+      gate — the submit stays disabled + addOrder refuses until true. Kept in
+      sync with the sibling <CartAddressShipBy> via a `cart-address-chosen`
+      CustomEvent. */
+  initialAddressChosen: boolean;
 };
 
 type AppliedPromo = {
@@ -118,6 +124,7 @@ export function CartInteractivity({
   promo33Active,
   memberCode,
   shippingCard,
+  initialAddressChosen,
 }: CartInteractivityProps) {
   const t = useTranslations("cartPage");
   // Selected row IDs — cart.php's `$("input:checkbox[name='ID[]']")`
@@ -165,6 +172,19 @@ export function CartInteractivity({
     }
     window.addEventListener("cart-maomao-accepted", handler);
     return () => window.removeEventListener("cart-maomao-accepted", handler);
+  }, []);
+
+  // Force-address gate — mirrors the sibling <CartAddressShipBy> chosen
+  // state (they share no React parent). Un-chosen (silent warehouse-default
+  // / none) blocks the submit + the addOrder handler.
+  const [addressChosen, setAddressChosen] = useState(initialAddressChosen);
+  useEffect(() => {
+    function handler(e: Event) {
+      const d = (e as CustomEvent).detail as { chosen?: boolean } | undefined;
+      if (d && typeof d.chosen === "boolean") setAddressChosen(d.chosen);
+    }
+    window.addEventListener("cart-address-chosen", handler);
+    return () => window.removeEventListener("cart-address-chosen", handler);
   }, []);
 
   // ── G1 promo-code input — typed legacy `tagPro()` codes ──
@@ -330,7 +350,7 @@ export function CartInteractivity({
 
   // cart.php L895-899: the "สั่งซื้อสินค้า" submit is disabled while
   // nothing is selected.
-  const submitDisabled = selectedIds.size === 0;
+  const submitDisabled = selectedIds.size === 0 || !addressChosen;
 
   // ── deleteItem.php wire — remove a row from tb_cart. ──
   const router = useRouter();
@@ -440,8 +460,12 @@ export function CartInteractivity({
       }
     }
 
-    if (!addressID) {
-      await alert(t("selectAddress"));
+    // Force-address gate — refuse while no address is EXPLICITLY chosen
+    // (silent warehouse-default / none). The hidden `addressChosen` field is
+    // written by <CartAddressShipBy> alongside `addressID`.
+    const addressChosenField = String(fd.get("addressChosen") ?? "0") === "1";
+    if (!addressChosenField || !addressID) {
+      await alert(t("setAddressFirst"));
       return;
     }
     if (!hTransportType) {
@@ -1008,7 +1032,9 @@ export function CartInteractivity({
           {submitDisabled && (
             <p className="mt-2 text-[11px] text-rose-600 text-center inline-flex items-center justify-center gap-1">
               <X className="w-3 h-3" strokeWidth={2.5} />
-              {t("selectAtLeastOne")}
+              {selectedIds.size === 0
+                ? t("selectAtLeastOne")
+                : t("setAddressFirst")}
             </p>
           )}
         </div>
