@@ -14,7 +14,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import {
-  Plus, Ship, Plane, Truck, Package, Search,
+  Plus, Settings, Ship, Plane, Truck, Package, Search,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import { Explain } from "@/components/ui/tooltip";
@@ -91,7 +91,7 @@ function directionLabel(dir: string): string {
 }
 const COL_COUNT = 15;
 
-export function BookingImportBoard({ initial }: { initial: Booking[] }) {
+export function BookingImportBoard({ initial, canManageCatalog = false }: { initial: Booking[]; canManageCatalog?: boolean }) {
   const [bookings, setBookings] = useState<Booking[]>(initial);
   const [filter, setFilter] = useState<Filter>("all");
   // ตัวกรองย่อยในแท็บ "ประวัติ" (owner 2026-07-09): ทั้งหมด / สำเร็จ / ยกเลิก
@@ -109,6 +109,8 @@ export function BookingImportBoard({ initial }: { initial: Booking[] }) {
       if (raw) {
         const drafts: Booking[] = JSON.parse(raw);
         if (Array.isArray(drafts) && drafts.length) {
+          // hydrate จาก localStorage (external store) ตอน mount/URL เปลี่ยน — legit exception
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setBookings((prev) => {
             const byOrderNo = new Map(drafts.filter((d) => d?.orderNo).map((d) => [d.orderNo, d]));
             const merged = prev.map((b) => byOrderNo.get(b.orderNo) ?? b);
@@ -210,12 +212,23 @@ export function BookingImportBoard({ initial }: { initial: Booking[] }) {
           className="text-xs text-muted" label="Booking คืออะไร?"
           def="Booking = ลูปใบเสนอราคา→จองงานนำเข้า · ลูกค้าสร้าง → Pricing เคาะราคา Net → ลูกค้าคอนเฟิร์ม → รอ/คอนเฟิร์ม Booking → สำเร็จ (มีเลข Shipment PR…) เข้าหน้ารายการ · ยกเลิก = ถังรวม · ทำราคาซ้ำ = วนกลับ รอดำเนินการ"
         />
-        <Link
-          href="/admin/workspace/booking/import/new"
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" /> เพิ่ม Quotation / Booking
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          {/* ปุ่ม "ตั้งค่า" → จัดการเรทตั้งต้น (Pricing catalog) · เห็นต้นทุน/กำไร (canViewCost · 2026-07-10 ปอน) */}
+          {canManageCatalog && (
+            <Link
+              href="/admin/workspace/booking/import/settings"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-surface-alt dark:bg-surface"
+            >
+              <Settings className="h-4 w-4" /> ตั้งค่าเรท
+            </Link>
+          )}
+          <Link
+            href="/admin/workspace/booking/import/new"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" /> เพิ่ม Quotation / Booking
+          </Link>
+        </div>
       </div>
 
       {/* ── table (report-cnt style) ────────────────────────── */}
