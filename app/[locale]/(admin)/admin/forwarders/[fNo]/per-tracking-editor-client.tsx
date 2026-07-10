@@ -105,6 +105,11 @@ type Props = {
   modeExpectedCbmRate?: number | null;
   /** System ฿/CBM for the OTHER mode (null = air / none). */
   modeOtherCbmRate?: number | null;
+  // ── หาค่าเทียบ line (ภูม 2026-07-10 · PCS ราคานำเข้า block) ──
+  /** order KG/CBM ratio (Σweight ÷ Σcbm) resolved server-side · display fallback. */
+  profileKgPerCbm?: number;
+  /** the ค่าเทียบ threshold in effect (customer's value or system default 250). */
+  profileComparisonValue?: number;
 };
 
 const WAREHOUSE_CHINA = [
@@ -150,6 +155,8 @@ export function PerTrackingEditorClient({
   derivedMode = null,
   modeExpectedCbmRate = null,
   modeOtherCbmRate = null,
+  profileKgPerCbm = 0,
+  profileComparisonValue = 0,
 }: Props) {
   const router = useRouter();
   const { confirm, dialogs } = useConfirmDialogs();
@@ -318,16 +325,19 @@ export function PerTrackingEditorClient({
     // ยอดจริง (>0) — ยอด 0 (ยังไม่คำนวณ/ไม่มีเรท) ไม่แตะ.
     if (transport > 0 && transport < 50) transport = 50;
     const subtotal = transport + chnThb + service + other + thai;
+    // หาค่าเทียบ line — the threshold in effect (custom ค่าเทียบ when ticked, else
+    // the resolver's threshold = the customer's ค่าเทียบ or the system default 250).
+    const compareThreshold = comparisonOn ? threshold : (profileComparisonValue || 250);
     return {
       cr, useProfile, profileRate, profileBasis,
-      rateKg, rateCbm, comparisonOn, threshold, count: rows.length,
+      rateKg, rateCbm, comparisonOn, threshold, compareThreshold, count: rows.length,
       label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
       w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
     };
   }, [
     rows, isMao, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
     profileResolved, profileRateMissing, profileRate, profileBasis, profileTransportTotal,
-    profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate,
+    profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate, profileComparisonValue,
   ]);
 
   // ภูม 2026-07-01 — ONE save routine, TWO buttons:
@@ -586,9 +596,13 @@ export function PerTrackingEditorClient({
               {!calc.cr && calc.useProfile && <span className="ml-1 text-[11px] text-emerald-600">· เรทระบบ (โปรไฟล์ลูกค้า)</span>}
               {calc.comparisonOn && <span className="ml-1 text-[11px] text-amber-600">· คิดค่าเทียบแบบกำหนดเอง</span>}
             </p>
-            {calc.comparisonOn && (
+            {/* หาค่าเทียบ — ALWAYS shown (PCS ราคานำเข้า block · ภูม 2026-07-10). The
+                KG/CBM ratio vs the threshold explains WHY weight-vs-volume was picked.
+                Under system pricing the threshold = the customer's ค่าเทียบ (or 250);
+                under a manual ค่าเทียบ = the typed value. Basis = the actual chosen one. */}
+            {calc.v > 0 && (
               <p className="text-amber-700">
-                หาค่าเทียบ {nf(calc.w, 2)}÷{nf(calc.v, 5)} = {nf(calc.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.threshold, 0)} คิดตาม{calc.byWeight ? "น้ำหนัก" : "ปริมาตร"})
+                หาค่าเทียบ {nf(calc.w, 2)}÷{nf(calc.v, 5)} = {nf(calc.kgPerCbm, 2)} (เกณฑ์ที่ตั้ง {nf(calc.compareThreshold, 0)} คิดตาม{calc.byWeight ? "น้ำหนัก" : "ปริมาตร"})
               </p>
             )}
             {/* คิดตามน้ำหนัก / ปริมาตร — BOTH lines show a real computed amount.

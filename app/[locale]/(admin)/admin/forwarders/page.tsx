@@ -38,7 +38,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { fstatusVivid } from "@/lib/admin/forwarder-status";
+import { fstatusVivid, fstatusTabBadge } from "@/lib/admin/forwarder-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -748,14 +748,21 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
           const activeCls = o.v && /^[1-7]$/.test(o.v) ? fstatusVivid(o.v) : "bg-primary-600 text-white";
+          // Every tab carries a COLOURED count pill (faithful to legacy PCS
+          // pcs-badge-{color} · ภูม 2026-07-10). On the active (vivid-filled) tab
+          // the pill turns translucent-white so it stays readable on the fill.
+          const badgeCls = active ? "bg-white/25 text-white" : fstatusTabBadge(o.v);
           return (
             <Link key={o.v ?? "all"} href={href}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
                 active
                   ? `${activeCls} shadow-md ring-2 ring-black/10`
                   : "bg-white border border-border text-foreground hover:bg-surface-alt hover:border-primary-300"
               }`}>
-              {o.l}{o.n > 0 && <span className="ml-1 opacity-80 font-bold">{o.n.toLocaleString("th-TH")}</span>}
+              {o.l}
+              <span className={`inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${badgeCls}`}>
+                {o.n.toLocaleString("th-TH")}
+              </span>
             </Link>
           );
         })}
@@ -1583,10 +1590,15 @@ async function loadStatusCounts(
   // filter uses (fstatus='6' ∩ open-driver-item set) so the badge matches
   // the rows the 6.1 tab shows (§0f). Count-only · no mutation.
   async function countDriverInProgress6(): Promise<number> {
-    const { data: di } = await admin
+    const { data: di, error: diErr } = await admin
       .from("tb_forwarder_driver_item")
       .select("fid")
       .eq("fdistatus", "");
+    if (diErr) {
+      console.error("[forwarders] countDriverInProgress6 driver-item read failed", {
+        code: diErr.code, message: diErr.message,
+      });
+    }
     const fids = Array.from(
       new Set(
         (di ?? [])

@@ -210,8 +210,9 @@ export function ForwarderStatusWorkflow(p: Props) {
         {/* ── owner 2026-06-11 "เอาเลขตู้ + หมายเหตุ ออก": ฟอร์มสถานะเหลือแค่ สถานะใหม่ + บันทึก
             (เลขตู้แก้ inline ในกล่องข้อมูลด้านบนแทน). ── */}
         <div className="flex flex-wrap items-end gap-3">
-          {/* สถานะ */}
-          <label className="flex-1 min-w-[180px]">
+          {/* สถานะ — compact width (ภูม 2026-07-10 "หลอดสถานะยาวไป กระชับหน่อย"):
+              was flex-1 (stretched the dropdown to the full row) → bounded to ~18rem. */}
+          <label className="w-full sm:w-72">
             <span className="block text-[11px] font-medium text-muted mb-1 whitespace-nowrap">สถานะใหม่</span>
             <select
               id="fsw_status"

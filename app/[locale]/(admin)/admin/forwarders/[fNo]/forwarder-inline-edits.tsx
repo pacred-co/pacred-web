@@ -69,6 +69,7 @@ import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { deriveContainerCloseDate } from "@/lib/admin/forwarder-status";
 import {
   TAX_DOC_MODES,
   TAX_DOC_MODE_META,
@@ -1486,15 +1487,18 @@ export function EditTransportTypeField({ fId, ftransporttype }: { fId: number; f
   );
 }
 
-/** วันที่ปิดตู้ · PCS L1541 — fdatecontainerclose + fdatetothai. */
-export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; fdatecontainerclose: string | null }) {
+/** วันที่ปิดตู้ · PCS L1541 — fdatecontainerclose + fdatetothai.
+ *  ภูม 2026-07-10: ถ้า MOMO ไม่ได้ส่งวันปิดตู้มา (null) ให้ดึงจากเลขตู้แทน
+ *  (GZS260529-1 → 2026-05-29) เป็น fallback แสดงผล — รายการที่ MOMO ส่งมาแล้วไม่แตะ. */
+export function EditDateCloseField({ fId, fdatecontainerclose, fcabinetnumber }: { fId: number; fdatecontainerclose: string | null; fcabinetnumber?: string | null }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const [dateCloseVal, setDateCloseVal] = useState<string>(
-    fdatecontainerclose && /^\d{4}-\d{2}-\d{2}/.test(fdatecontainerclose)
-      ? fdatecontainerclose.slice(0, 10)
-      : "",
-  );
+  const hasRealClose = !!(fdatecontainerclose && /^\d{4}-\d{2}-\d{2}/.test(fdatecontainerclose));
+  const derivedClose = hasRealClose ? null : deriveContainerCloseDate(fcabinetnumber);
+  // The effective close date the field shows/edits from: real MOMO date wins,
+  // else the date embedded in the cabinet code.
+  const effectiveClose = hasRealClose ? fdatecontainerclose!.slice(0, 10) : (derivedClose ?? "");
+  const [dateCloseVal, setDateCloseVal] = useState<string>(effectiveClose);
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -1504,9 +1508,16 @@ export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; 
         editing={editing}
         setEditing={setEditing}
         display={
-          fdatecontainerclose && fdatecontainerclose.length >= 10
-            ? <span className="font-mono">{new Date(fdatecontainerclose).toLocaleDateString("th-TH")}</span>
-            : <span className="text-muted">—</span>
+          hasRealClose ? (
+            <span className="font-mono">{new Date(fdatecontainerclose!).toLocaleDateString("th-TH")}</span>
+          ) : derivedClose ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="font-mono">{new Date(derivedClose).toLocaleDateString("th-TH")}</span>
+              <span className="rounded bg-amber-100 px-1 py-0.5 text-[11px] text-amber-700 border border-amber-300">จากเลขตู้</span>
+            </span>
+          ) : (
+            <span className="text-muted">—</span>
+          )
         }
       >
         {(close) => (
@@ -1521,11 +1532,7 @@ export function EditDateCloseField({ fId, fdatecontainerclose }: { fId: number; 
                 onClick={() => run(() => adminUpdateForwarderDateToThai({ fId, fdatecontainerclose: dateCloseVal }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel}
                 onClick={() => {
-                  setDateCloseVal(
-                    fdatecontainerclose && /^\d{4}-\d{2}-\d{2}/.test(fdatecontainerclose)
-                      ? fdatecontainerclose.slice(0, 10)
-                      : "",
-                  );
+                  setDateCloseVal(effectiveClose);
                   close();
                 }}>ยกเลิก</button>
             </div>

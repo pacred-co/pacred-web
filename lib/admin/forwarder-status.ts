@@ -78,6 +78,52 @@ export function fstatusVivid(fstatus: string): string {
 }
 
 /**
+ * Status-filter TAB count-badge colours — faithful to legacy `forwarder.php`
+ * L428-498 (`<div class="pcs-badge badge-{color} pcs-badge-pill">`). Every status
+ * tab carries a COLOURED count pill so the whole strip reads at a glance — the
+ * PCS look (ภูม 2026-07-10 "ใส่สีแบบ PCS ให้เป๊ะ"), not a plain grey number.
+ * Legacy → Tailwind map:
+ *   all=secondary(grey) · 1=warning(yellow) · 2=info(cyan) · 3=pink · 4=brown
+ *   5=danger(red) · 6=primary(blue) · 6.1=info2(teal) · 7=success(green)
+ *   c(เครดิต)=danger(red) · p(พิเศษ)=warning(amber)
+ */
+export const FSTATUS_TAB_BADGE: Record<string, string> = {
+  all:   "bg-slate-500 text-white",
+  "1":   "bg-yellow-400 text-yellow-950",
+  "2":   "bg-cyan-500 text-white",
+  "3":   "bg-pink-500 text-white",
+  "4":   "bg-[#8d6e63] text-white",
+  "5":   "bg-red-600 text-white",
+  "6":   "bg-blue-600 text-white",
+  "6.1": "bg-teal-500 text-white",
+  "7":   "bg-emerald-600 text-white",
+  "c":   "bg-red-600 text-white",
+  "p":   "bg-amber-500 text-white",
+};
+export function fstatusTabBadge(v: string | undefined): string {
+  return FSTATUS_TAB_BADGE[v ?? "all"] ?? "bg-slate-500 text-white";
+}
+
+/**
+ * วันที่ปิดตู้ derived from the container code when MOMO didn't send one
+ * (ภูม 2026-07-10). A Pacred/MOMO cabinet code embeds the close date as the
+ * 6 digits right after the 3-letter prefix in `YYMMDD` (พ.ศ.-style 25xx→20xx):
+ *   GZS`260529`-1 → 2026-05-29 · GZE`260701`-2 → 2026-07-01.
+ * Returns an ISO `YYYY-MM-DD` or null when the code has no parseable date.
+ * ONLY a display fallback — never overwrites a real MOMO close date.
+ */
+export function deriveContainerCloseDate(cabinet: string | null | undefined): string | null {
+  const m = (cabinet ?? "").trim().match(/[A-Za-z]{2,4}(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const [, yy, mm, dd] = m;
+  const year = 2000 + Number(yy);
+  const month = Number(mm);
+  const day = Number(dd);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
  * Cnt-payment status (2-state) — legacy function.php L2141-2149 (statusCNT)
  * + report-cnt.php LIST mode showing สถานะจ่ายค่าตู้ column.
  */
