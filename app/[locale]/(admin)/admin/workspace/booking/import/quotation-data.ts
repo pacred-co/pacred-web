@@ -23,6 +23,9 @@ export type QuoteConditions = {
   pod: PortSel; // ปลายทาง (Port of Discharge)
   loadType: string; // LCL / FCL (เฉพาะทางเรือ SEA · โหมดอื่นบังคับ LCL)
   container: string; // ขนาดตู้ (เฉพาะ FCL): 1×20' / 1×40'HC / 2×40' / Mixed
+  carrier: string; // สายเรือ / สายการบิน / สายรถ (เปลี่ยนตามขนส่ง)
+  weight: string; // น้ำหนัก (กก.) — บอกว่าใช้รถอะไรไปรับ/ลากตู้
+  agent: string; // เอเจนต์
   term: string; // EXW / FOB / CIF / DDP
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime
@@ -79,6 +82,24 @@ export const PORT_CATALOG: Record<string, Record<string, string[]>> = {
 /** พอร์ทตัวแรกของ ประเทศ × ขนส่ง (ใช้ default + revalidate ตอนสลับขนส่ง). */
 export function firstPort(country: string, service: string): string {
   return PORT_CATALOG[country]?.[service]?.[0] ?? "";
+}
+
+/** ป้ายชื่อ carrier ต่อขนส่ง (เปลี่ยนตาม รถ/เรือ/แอร์). */
+export const CARRIER_LABEL: Record<string, string> = { SEA: "สายเรือ", AIR: "สายการบิน", TRUCK: "สายรถ" };
+
+/** ตัวเลือก carrier ต่อขนส่ง (starter · owner เพิ่มเองภายหลัง). */
+export const CARRIER_CATALOG: Record<string, string[]> = {
+  SEA: ["Maersk", "MSC", "ONE", "Evergreen", "Wan Hai", "COSCO", "Yang Ming", "OOCL", "Hapag-Lloyd", "SITC", "อื่นๆ"],
+  AIR: ["Thai Airways (TG)", "Cathay Pacific (CX)", "China Airlines (CI)", "EVA Air (BR)", "Emirates (EK)", "Singapore (SQ)", "อื่นๆ"],
+  TRUCK: ["รถบริษัท (Pacred)", "รถร่วม", "Kerry", "อื่นๆ"],
+};
+
+/** เอเจนต์ (starter · owner เพิ่มเองภายหลัง). */
+export const AGENT_OPTIONS = ["Pacred", "TTP", "AXELRA", "HUAHAI", "FEISHENG", "อื่นๆ"];
+
+/** carrier ในลิสต์ของขนส่งนั้นหรือไม่ (ใช้ revalidate ตอนสลับขนส่ง). */
+export function carrierValidFor(carrier: string, service: string): boolean {
+  return !carrier || (CARRIER_CATALOG[service] ?? []).includes(carrier);
 }
 
 /** ทิศทาง = อนุมานจาก POL/POD (POD ไทย = นำเข้า · POL ไทย = ส่งออก). */

@@ -16,6 +16,7 @@ import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown } from "lucide-reac
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
   TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
+  CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
 } from "../quotation-data";
@@ -41,7 +42,8 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     service,
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
-    loadType, container: "1×20'", term, enter: "Normal", special: [],
+    loadType, container: "1×20'", carrier: "", weight: "", agent: "",
+    term, enter: "Normal", special: [],
   };
 }
 
@@ -153,6 +155,7 @@ export function QuotationFormClient({
       const svc = v as string;
       if (!usesLoadType(svc)) next = { ...next, loadType: "LCL" }; // FCL เฉพาะ SEA
       next = { ...next, pol: revalidatePort(next.pol, svc), pod: revalidatePort(next.pod, svc) };
+      if (!carrierValidFor(next.carrier, svc)) next = { ...next, carrier: "" }; // สายเรือ/สายการบิน/สายรถ เปลี่ยนตามขนส่ง
     }
     setCond(next);
     // template ขึ้นกับ term + ขนส่ง + loadType → reload line + note เมื่อ combo เปลี่ยน
@@ -242,6 +245,16 @@ export function QuotationFormClient({
               {usesLoadType(cond.service) && (
                 <LoadTypePicker loadType={cond.loadType} container={cond.container} onChange={setLoadType} />
               )}
+              {/* สายเรือ/สายการบิน/สายรถ — ป้าย+ตัวเลือกเปลี่ยนตามขนส่ง */}
+              <SelRow stack label={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} options={CARRIER_CATALOG[cond.service] ?? []} value={cond.carrier} ph="— เลือก —" onPick={(v) => setC("carrier", v)} />
+              {/* น้ำหนัก — บอกว่าใช้รถอะไรไปรับ/ลากตู้ */}
+              <div className={styles.ddCell}>
+                <div className={styles.label}>น้ำหนัก (กก.)</div>
+                <input className={styles.dropdown} type="text" inputMode="decimal" value={cond.weight} placeholder="เช่น 5000"
+                  onChange={(e) => setC("weight", e.target.value)} />
+              </div>
+              {/* เอเจนต์ */}
+              <SelRow stack label="เอเจนต์" options={AGENT_OPTIONS} value={cond.agent} ph="— เลือก —" onPick={(v) => setC("agent", v)} />
             </div>
 
             {/* SPECIAL — ชิป (เลือกหลายอย่าง) */}
@@ -495,6 +508,9 @@ export function QuotationFormClient({
                   <PayRow field="port_of_loading" value={`${cond.pol.country} · ${cond.pol.port}`} src="POL" />
                   <PayRow field="destination_port" value={`${cond.pod.country} · ${cond.pod.port}`} src="POD" />
                   <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="ขนาดตู้" />
+                  <PayRow field="carrier" value={cond.carrier || "—"} src={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} />
+                  <PayRow field="gross_weight" value={cond.weight ? `${cond.weight} กก.` : "—"} src="น้ำหนัก" />
+                  <PayRow field="agent" value={cond.agent || "—"} src="เอเจนต์" />
                   <PayRow field="commodity" value={doc.product || "—"} src="Description" />
                   <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
                   <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
@@ -650,11 +666,13 @@ function LoadTypePicker({
 }
 
 function SelRow({
-  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack,
+  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack, ph,
 }: {
   label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; colorMap?: Record<string, string>; disabledOpts?: string[]; note?: string; onPick: (v: string) => void;
   /** stack = label above the control (top condition bar) · default = label beside (row). */
   stack?: boolean;
+  /** placeholder option (dropdown เท่านั้น) — โชว์ "— เลือก —" ตอนค่ายังว่าง. */
+  ph?: string;
 }) {
   const isActive = (o: string) => (multi ? (values ?? []).includes(o) : value === o);
   const isDisabled = (o: string) => (disabledOpts ?? []).includes(o);
@@ -677,6 +695,7 @@ function SelRow({
         ) : (
           // เลือกอย่างเดียว → ดร็อปดาวน์ (owner 2026-07-10)
           <select className={styles.dropdown} value={value ?? ""} onChange={(e) => onPick(e.target.value)}>
+            {ph ? <option value="">{ph}</option> : null}
             {options.map((o) => (
               <option key={o} value={o} disabled={isDisabled(o)}>{o}</option>
             ))}
