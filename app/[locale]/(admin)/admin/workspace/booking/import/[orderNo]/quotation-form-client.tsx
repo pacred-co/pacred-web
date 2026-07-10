@@ -164,6 +164,14 @@ export function QuotationFormClient({
   }
   const setPol = (v: PortSel) => setCond((p) => ({ ...p, pol: v }));
   const setPod = (v: PortSel) => setCond((p) => ({ ...p, pod: v }));
+  function setLoadType(v: { loadType: string; container: string }) {
+    const next = { ...cond, loadType: v.loadType, container: v.container };
+    setCond(next);
+    // loadType อยู่ใน catalog key → reload line + note
+    setLines(linesForConditions(next, catalog));
+    const prevNote = noteForConditions(cond, catalog);
+    setDoc((d) => (d.remark === "" || d.remark === prevNote ? { ...d, remark: noteForConditions(next, catalog) } : d));
+  }
   function toggleSpecial(s: string) {
     setCond((p) => ({ ...p, special: p.special.includes(s) ? p.special.filter((x) => x !== s) : [...p.special, s] }));
   }
@@ -231,10 +239,7 @@ export function QuotationFormClient({
               <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
               <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
               {usesLoadType(cond.service) && (
-                <SelRow stack label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} onPick={(v) => setC("loadType", v)} />
-              )}
-              {usesContainer(cond.loadType) && (
-                <SelRow stack label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} onPick={(v) => setC("container", v)} />
+                <LoadTypePicker loadType={cond.loadType} container={cond.container} onChange={setLoadType} />
               )}
             </div>
 
@@ -583,6 +588,57 @@ function PortPicker({
                   className={cx(styles.portItem, value.country === activeCountry && value.port === p && styles.portItemActive)}
                   onClick={() => { onChange({ country: activeCountry, port: p }); setOpen(false); }}>{p}</button>
               )) : <div className={styles.portEmpty}>ยังไม่มีพอร์ทสำหรับขนส่งนี้</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ประเภท + ขนาดตู้ = picker เดียว (สไตล์เดียวกับ PortPicker · owner 2026-07-10).
+// ซ้าย = LCL / FCL · ขวา = ถ้า FCL → ขนาดตู้ให้จิ้มเลย · LCL = รวมตู้ (ไม่มีขนาด → เลือกแล้วปิด).
+function LoadTypePicker({
+  loadType, container, onChange,
+}: {
+  loadType: string; container: string; onChange: (v: { loadType: string; container: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeType, setActiveType] = useState(loadType || "LCL");
+  return (
+    <div className={styles.portField}>
+      <div className={styles.portLabel}>ประเภท / ขนาดตู้</div>
+      <button type="button" className={styles.portBtn}
+        onClick={() => { setActiveType(loadType || "LCL"); setOpen((o) => !o); }}>
+        <span className={styles.portVal}>
+          <b>{loadType}</b>{loadType === "FCL" && container ? <><span className={styles.portSep}>·</span>{container}</> : null}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "#9aa0a8" }} />
+      </button>
+      {open && (
+        <>
+          <div className={styles.portBackdrop} onClick={() => setOpen(false)} />
+          <div className={styles.portPop}>
+            <div className={styles.portCountries}>
+              {LOAD_TYPE_OPTIONS.map((lt) => (
+                <button key={lt} type="button"
+                  className={cx(styles.portCountry, lt === activeType && styles.portCountryActive)}
+                  onClick={() => {
+                    if (lt === "LCL") { onChange({ loadType: "LCL", container }); setOpen(false); } // LCL = ไม่มีขนาด → เลือกเลย
+                    else setActiveType("FCL"); // FCL → โชว์ขนาดตู้ด้านขวา
+                  }}>{lt}</button>
+              ))}
+            </div>
+            <div className={styles.portList}>
+              {activeType === "FCL" ? (
+                CONTAINER_OPTIONS.map((c) => (
+                  <button key={c} type="button"
+                    className={cx(styles.portItem, loadType === "FCL" && container === c && styles.portItemActive)}
+                    onClick={() => { onChange({ loadType: "FCL", container: c }); setOpen(false); }}>{c}</button>
+                ))
+              ) : (
+                <div className={styles.portEmpty}>LCL = รวมตู้ · ไม่มีขนาดตู้</div>
+              )}
             </div>
           </div>
         </>
