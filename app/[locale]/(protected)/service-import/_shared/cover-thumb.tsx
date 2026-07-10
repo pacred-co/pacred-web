@@ -25,12 +25,15 @@ export function CoverThumb({
   className,
   width,
   height,
+  alt = "",
 }: {
   /** Already resolved via `forwarderCoverUrl()` (empty covers are the placeholder). */
   src: string;
   className?: string;
   width?: number;
   height?: number;
+  /** Optional alt text (defaults to "" for decorative covers). */
+  alt?: string;
 }) {
   const [errored, setErrored] = useState(false);
   const finalSrc = errored ? NO_COVER_IMAGE : src;
@@ -38,7 +41,7 @@ export function CoverThumb({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={finalSrc}
-      alt=""
+      alt={alt}
       className={className}
       width={width}
       height={height}
