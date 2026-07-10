@@ -336,7 +336,7 @@ function CustomerBadges({
           className="rounded-full border border-pink-300 bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-700"
           title="ลูกค้าคิดราคาแบบส่วนตัว"
         >
-          SVIP
+          เรทเฉพาะตัว
         </span>
       )}
       {isComparison && (

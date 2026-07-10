@@ -235,7 +235,7 @@ export type AdminUpdateForwarderDimensionsData = {
   /** 1 = billed by KG · 2 = billed by CBM (legacy fRefPrice). */
   frefprice: 1 | 2;
   basis: "kg" | "cbm";
-  rateSource: "manual" | "svip" | "vip" | "general";
+  rateSource: "manual" | "svip" | "general";
   /** Recomputed grand total (transport + adders − discount). */
   grandTotal: number;
   /** ภูม 2026-06-25 — did this save advance ถึงไทยแล้ว(4)→รอชำระเงิน(5)? false when
@@ -855,7 +855,7 @@ export async function adminUpdateForwarderDimensions(
               frefprice:   String(resolved.refPrice),
             },
             basis:           resolved.basis,
-            rate_source:     resolved.source,   // manual | svip | vip | general
+            rate_source:     resolved.source,   // manual | svip | general (vip-group retired 2026-07-10)
             custom_rate:     customRateSwitch,
             // per-order ค่าเทียบ override (compute-only · no tb_forwarder column)
             custom_comparison:       customComparisonSwitch,

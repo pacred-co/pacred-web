@@ -32,7 +32,7 @@ import {
   resolveForwarderRate,
   type ResolveRateCandidates,
 } from "@/lib/forwarder/resolve-rate";
-import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -55,7 +55,7 @@ export type MultiModeInput = {
   basis: MultiModeBasis;
   weightKg: number;
   volumeCbm: number;
-  customerUserid?: string;           // optional → VIP/SVIP rate waterfall
+  customerUserid?: string;           // optional → per-customer (SVIP) rate waterfall
   // Add-on services (THB) the customer wants — added on top of every mode's
   // transport subtotal so the all-in compare is apples-to-apples.
   addons: {
@@ -81,7 +81,7 @@ export type ModeLine = {
   /** Whether a rate resolved for this mode (false → no rate set for the route). */
   hasRate: boolean;
   basisUsed: "kg" | "cbm";
-  rateSource: "manual" | "svip" | "vip" | "general";
+  rateSource: "manual" | "svip" | "general";
   unitRate: number;                  // THB per kg / per cbm
   billableValue: number;             // kg or cbm the rate multiplied
   transportSubtotal: number;         // unitRate × billableValue (China→TH transport)
@@ -131,15 +131,14 @@ async function readCandidates(
   admin: ReturnType<typeof createAdminClient>,
   opts: {
     userid: string | null;
-    coID: string;          // 'PCS' = general
-    isGeneral: boolean;
+    coID: string;          // 'PR' = general
     isSvip: boolean;
     wh: MinSellWarehouse;
     transport: MinSellTransport;
     product: string;       // '1'..'4'
   },
 ): Promise<ResolveRateCandidates> {
-  const { userid, coID, isGeneral, isSvip, wh, transport: tt, product: pt } = opts;
+  const { userid, coID, isSvip, wh, transport: tt, product: pt } = opts;
   const candidates: ResolveRateCandidates = {
     manualOverride: false,
     manualKg: null,
@@ -147,11 +146,8 @@ async function readCandidates(
     isSvip,
     svipKg: null,
     svipCbm: null,
-    isGeneral,
     generalKg: null,
     generalCbm: null,
-    vipKg: null,
-    vipCbm: null,
   };
 
   if (isSvip && userid) {
@@ -167,7 +163,9 @@ async function readCandidates(
     if (cbmErr) console.error(`[quote-multimode tb_rate_custom_cbm] failed`, { code: cbmErr.code, message: cbmErr.message });
     candidates.svipKg = kg?.rkg ?? null;
     candidates.svipCbm = cbm?.rcbm ?? null;
-  } else if (isGeneral) {
+  } else {
+    // General tiered — the final fallback for ANY non-SVIP customer (the
+    // VIP-group tier was retired 2026-07-10).
     const { data: gKg, error: gKgErr } = await admin
       .from("tb_rate_g_kg").select("rgkg1, rgkg2, rgkg3")
       .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt)
@@ -180,19 +178,6 @@ async function readCandidates(
     if (gCbmErr) console.error(`[quote-multimode tb_rate_g_cbm] failed`, { code: gCbmErr.code, message: gCbmErr.message });
     candidates.generalKg = gKg ? { tier1: gKg.rgkg1, tier2: gKg.rgkg2, tier3: gKg.rgkg3 } : null;
     candidates.generalCbm = gCbm ? { tier1: gCbm.rgcbm1, tier2: gCbm.rgcbm2, tier3: gCbm.rgcbm3 } : null;
-  } else {
-    const { data: vKg, error: vKgErr } = await admin
-      .from("tb_rate_vip_kg").select("rkg")
-      .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-      .maybeSingle<{ rkg: number | string | null }>();
-    if (vKgErr) console.error(`[quote-multimode tb_rate_vip_kg] failed`, { code: vKgErr.code, message: vKgErr.message });
-    const { data: vCbm, error: vCbmErr } = await admin
-      .from("tb_rate_vip_cbm").select("rcbm")
-      .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-      .maybeSingle<{ rcbm: number | string | null }>();
-    if (vCbmErr) console.error(`[quote-multimode tb_rate_vip_cbm] failed`, { code: vCbmErr.code, message: vCbmErr.message });
-    candidates.vipKg = vKg?.rkg ?? null;
-    candidates.vipCbm = vCbm?.rcbm ?? null;
   }
   return candidates;
 }
@@ -225,12 +210,9 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
     if (svipErr) console.error(`[quote-multimode svip-probe] failed`, { code: svipErr.code, message: svipErr.message });
     isSvip = svip != null;
   }
-  const isGeneral = !isSvip && isGeneralCoid(coID);
   const rateContextNote = isSvip
-    ? `SVIP per-user (tb_rate_custom_*) · ${userid}`
-    : !isGeneralCoid(coID)
-      ? `VIP group ${coID} (tb_rate_vip_*)`
-      : `General tiered (tb_rate_g_*) · ${coID}`;
+    ? `เรทเฉพาะตัว (tb_rate_custom_*) · ${userid}`
+    : `General tiered (tb_rate_g_*) · ${coID}`;
 
   // ── Comparison flags to force the chargeable basis ──
   // The legacy engine, when comparisonEnabled, bills by KG if KGPerCBM >
@@ -262,7 +244,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
   const modes: ModeLine[] = [];
   for (const T of TRANSPORTS) {
     const candidates = await readCandidates(admin, {
-      userid, coID, isGeneral, isSvip, wh: input.warehouse, transport: T.id, product: pt,
+      userid, coID, isSvip, wh: input.warehouse, transport: T.id, product: pt,
     });
     const resolved = resolveForwarderRate(candidates, {
       weightKg: input.weightKg,

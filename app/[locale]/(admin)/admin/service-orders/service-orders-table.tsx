@@ -461,10 +461,10 @@ export function ServiceOrdersTable({
                               {r.vipTier}
                             </span>
                           )}
-                          {/* Legacy badgeVIP2 — SVIP (ราคาส่วนตัว) · CPS (คิดตามค่าเทียบ) */}
+                          {/* Legacy badgeVIP2 — เรทเฉพาะตัว (ราคาส่วนตัว) · CPS (คิดตามค่าเทียบ) */}
                           {r.isSvip && (
                             <span className="rounded-full bg-pink-50 text-pink-700 border border-pink-200 px-1.5 py-0.5 text-[11px] font-semibold" title="ลูกค้าคิดราคาแบบส่วนตัว">
-                              SVIP
+                              เรทเฉพาะตัว
                             </span>
                           )}
                           {r.isCps && (

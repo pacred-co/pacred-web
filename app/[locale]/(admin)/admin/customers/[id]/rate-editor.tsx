@@ -219,7 +219,7 @@ export function CustomerRateEditor({
       const repricedNote = res.data?.repriced ? ` · คิดราคาใหม่ให้ออเดอร์ที่ยังไม่วางบิล ${res.data.repriced} รายการ` : "";
       setSuccess(
         (res.data?.created
-          ? `สร้างเรทเฉพาะตัว (SVIP) สำหรับโกดัง${whShort} แล้ว — ${res.data.changed} ช่องเปลี่ยน`
+          ? `สร้างเรทเฉพาะตัว สำหรับโกดัง${whShort} แล้ว — ${res.data.changed} ช่องเปลี่ยน`
           : `บันทึกเรทโกดัง${whShort} แล้ว — ${res.data?.changed ?? 0} ช่องเปลี่ยน`) + repricedNote,
       );
       router.refresh();
@@ -239,7 +239,7 @@ export function CustomerRateEditor({
         <Settings className="w-3.5 h-3.5" /> ตั้งค่าเรทขนส่ง
         {matrix.isSvip ? (
           <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-primary-600 text-white px-1.5 py-0.5 text-[11px] font-semibold">
-            <BadgeCheck className="w-2.5 h-2.5" /> SVIP
+            <BadgeCheck className="w-2.5 h-2.5" /> เรทเฉพาะตัว
           </span>
         ) : null}
       </button>
@@ -266,7 +266,7 @@ export function CustomerRateEditor({
                 <span className="text-[11px] text-muted font-mono">{userid}</span>
                 {matrix.isSvip ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-primary-600 text-white px-2 py-0.5 text-[11px] font-semibold">
-                    <BadgeCheck className="w-3 h-3" /> SVIP · มีเรทเฉพาะตัว
+                    <BadgeCheck className="w-3 h-3" /> เรทเฉพาะตัว
                   </span>
                 ) : (
                   <span className="rounded-full bg-surface-alt text-muted px-2 py-0.5 text-[11px]">
@@ -323,7 +323,7 @@ export function CustomerRateEditor({
                 <Settings className="w-3.5 h-3.5 text-primary-600" /> ตั้งค่าเรทลูกค้า (โกดัง · ค่าเทียบ · ราคาขั้นต่ำ)
                 {matrix.isSvip ? (
                   <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-primary-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                    <BadgeCheck className="w-2.5 h-2.5" /> SVIP
+                    <BadgeCheck className="w-2.5 h-2.5" /> เรทเฉพาะตัว
                   </span>
                 ) : null}
               </summary>
@@ -379,8 +379,8 @@ export function CustomerRateEditor({
                     <div key={wh} className="space-y-3">
                       {!whHasCustom(wh) && (
                         <p className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                          ลูกค้ายังไม่มีเรทเฉพาะตัวสำหรับโกดังนี้ (ใช้เรทกลุ่ม/default) — กดบันทึกจะ
-                          <strong> สร้างเรทเฉพาะตัว</strong> ทำให้เป็น SVIP
+                          ลูกค้ายังไม่มีเรทเฉพาะตัวสำหรับโกดังนี้ (ใช้เรท default) — กดบันทึกจะ
+                          <strong> สร้างเรทเฉพาะตัว</strong> ให้ลูกค้ารายนี้
                         </p>
                       )}
                       <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} floorMatrix={floorMatrix} />
@@ -776,8 +776,8 @@ function InfoTab({
             (เพราะราคาเรียกเก็บถูกล็อกตั้งแต่ทราบขนาด+น้ำหนัก)
           </li>
           <li>ต้องกด <strong>บันทึก</strong> เรทถึงจะมีผล</li>
-          <li>ลูกค้าที่ปรับเรทเฉพาะตัว จะกลายเป็น <strong>SVIP (Super VIP)</strong></li>
-          <li><strong>ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ</strong> — ระบบจะกดบันทึกไม่ได้ (จะ VIP แค่ไหนก็ห้ามต่ำกว่านี้). แก้ราคาขั้นต่ำเองได้เฉพาะ <strong>Ultra Admin Z</strong></li>
+          <li>ลูกค้าที่ปรับเรทเฉพาะตัว จะมี <strong>เรทเฉพาะตัว</strong> (แยกจากเรท default)</li>
+          <li><strong>ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ</strong> — ระบบจะกดบันทึกไม่ได้ (ห้ามต่ำกว่านี้เสมอ). แก้ราคาขั้นต่ำเองได้เฉพาะ <strong>Ultra Admin Z</strong></li>
         </ol>
       </div>
       <div>

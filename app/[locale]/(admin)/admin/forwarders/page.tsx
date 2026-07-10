@@ -825,7 +825,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
             customer_flags: [
               r.customer?.is_juristic ? "นิติฯ" : "",
               r.customer?.is_corporate ? "นิติบุคคล" : "",
-              r.customer?.is_svip ? "SVIP" : "",
+              r.customer?.is_svip ? "เรทเฉพาะตัว" : "",
               r.customer?.coid ?? "",
             ].filter(Boolean).join(" / "),
             sales_rep: r.customer?.sale_admin ?? "",

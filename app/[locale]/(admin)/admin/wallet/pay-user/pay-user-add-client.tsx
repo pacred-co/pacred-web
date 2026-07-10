@@ -652,7 +652,7 @@ function ForwarderTable({
                     <div className="mt-1 flex flex-wrap gap-1">
                       {r.is_svip && (
                         <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium text-purple-700">
-                          SVIP
+                          เรทเฉพาะตัว
                         </span>
                       )}
                       {r.is_credit && (

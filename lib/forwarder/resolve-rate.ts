@@ -11,9 +11,16 @@
  * EXACTLY so we can wire automatic pricing into `adminUpdateForwarderDimensions`.
  *
  * PURITY: like calc-price.ts, this module is PURE + unit-testable. The CALLER
- * does the SQL waterfall (reads tb_rate_custom / tb_rate_vip / tb_rate_g tables
- * + tb_users.coID) and hands us the resolved candidate rates. We only do the
- * legacy decision logic (precedence + tier + KG/CBM selection). No server-only.
+ * does the SQL waterfall (reads tb_rate_custom / tb_rate_g tables + tb_users.coID)
+ * and hands us the resolved candidate rates. We only do the legacy decision logic
+ * (precedence + tier + KG/CBM selection). No server-only.
+ *
+ * ⚠️ VIP-GROUP TIER RETIRED (owner 2026-07-10): the legacy per-coID VIP group
+ * (tb_rate_vip_*) was DROPPED. All 154 VIP-group customers were materialized to
+ * per-customer SVIP rows (their old group rate) + coID='PR', so ZERO live customer
+ * is on a VIP group. The waterfall is now: manual ▸ SVIP (per-customer/profile rate,
+ * tb_rate_custom_*) ▸ general tiered (tb_rate_g_*). Prices are unchanged — a former
+ * VIP-group customer now resolves via their materialized SVIP rate.
  *
  * ──────────────────────────────────────────────────────────────────────────
  * LEGACY WATERFALL (verbatim from forwarder.php `getPrice()` L1806-1931):
@@ -24,18 +31,18 @@
  *     price = value * rate. HIGHEST precedence. coID is forced to 'CUSTOM'.
  *  Else (system pricing · getPrice L1830-1931):
  *  1. SVIP probe (L1841-1843):  SELECT ID FROM tb_rate_custom_cbm WHERE userID.
- *     - num_rows == 0  → general / VIP path (step 2/3)
- *     - num_rows  > 0  → SVIP path (step 4)
- *  2. general (coID == 'PCS', L1844-1882):  tiered.
+ *     - num_rows == 0  → general path (step 2)
+ *     - num_rows  > 0  → SVIP path (step 3)
+ *  2. general (L1844-1882):  tiered. (Applies to ANY non-SVIP customer now —
+ *     the legacy `coID == 'PCS'` gate is gone since the VIP-group tier retired.)
  *       compare==1 (KG):  value<=100 → rgKG1 ; value>100 && value<500 → rgKG2 ; else → rgKG3
  *       compare==2 (CBM): value<=2  → rgCBM1; value>2  && value<5   → rgCBM2; else → rgCBM3
- *  3. VIP (coID != 'PCS', L1883-1905):  flat by coID.
- *       compare==1 (KG):  tb_rate_vip_kg.rKG  (FALLBACK: if rKG==0 → use rCBM + set compare2=1)
- *       compare==2 (CBM): tb_rate_vip_cbm.rCBM
- *  4. SVIP (L1906-1929):  flat by userID.
+ *  3. SVIP (L1906-1929):  flat by userID (= the per-customer/profile rate).
  *       compare==1 (KG):  tb_rate_custom_kg.rKG   (SVIP KG-fallback is COMMENTED OUT in legacy)
  *       compare==2 (CBM): tb_rate_custom_cbm.rCBM
  *  → price = number_format(value * rate, 2)   (L1882/1904/1927)
+ *  ── VIP-group tier (legacy step 3, `coID != 'PCS'`, tb_rate_vip_*) REMOVED
+ *     2026-07-10 (materialized to per-customer SVIP · zero customers on a group).
  *
  * KG vs CBM SELECTION (the `update_data` caller body, forwarder.php L1934-2013):
  *   CBMProduct = (fAmountCount==1) ? fVolume : fVolume*fAmount        (L1935-1941)
@@ -73,8 +80,8 @@
 /** Which physical basis a price was computed on. */
 export type RateBasis = "kg" | "cbm";
 
-/** Where the rate came from (legacy waterfall tier). */
-export type RateSource = "manual" | "svip" | "vip" | "general";
+/** Where the rate came from (waterfall tier). VIP-group retired 2026-07-10. */
+export type RateSource = "manual" | "svip" | "general";
 
 /**
  * The candidate rates the CALLER resolves from SQL and hands in. Each is the
@@ -102,19 +109,13 @@ export interface ResolveRateCandidates {
   svipCbm: number | string | null;
 
   /**
-   * General-customer flag — legacy `coID == 'PCS'` (forwarder.php L1844).
-   * When NOT SVIP: true → tiered general (tb_rate_g_*); false → VIP group.
+   * General tiered KG rates (tb_rate_g_kg.rgKG1/2/3). Applied to ANY non-SVIP
+   * customer (the legacy VIP-group tier retired 2026-07-10 — the `isGeneral`
+   * gate is gone; a non-SVIP row is always priced on the general tiers).
    */
-  isGeneral: boolean;
-  /** General tiered KG rates (tb_rate_g_kg.rgKG1/2/3). */
   generalKg: { tier1: number | string | null; tier2: number | string | null; tier3: number | string | null } | null;
   /** General tiered CBM rates (tb_rate_g_cbm.rgCBM1/2/3). */
   generalCbm: { tier1: number | string | null; tier2: number | string | null; tier3: number | string | null } | null;
-
-  /** VIP-group KG rate (tb_rate_vip_kg.rKG) for the coID + tuple. */
-  vipKg: number | string | null;
-  /** VIP-group CBM rate (tb_rate_vip_cbm.rCBM) for the coID + tuple. */
-  vipCbm: number | string | null;
 }
 
 /** The shipment measurements + comparison flags the selection logic needs. */
@@ -283,11 +284,12 @@ function applyDocTierCbmDiscount(
 
 /**
  * Resolve the unit rate for ONE basis, mirroring legacy `getPrice()`. Returns
- * the rate AND `compare2` (legacy VIP KG-rate==0 → CBM fallback flag).
+ * the rate AND `compare2` (a legacy VIP KG-rate==0 → CBM fallback flag; always
+ * false now that the VIP-group tier is retired — kept for the caller's shape).
  *
- * Precedence inside one basis call: manual → SVIP → general/VIP. (Whether the
- * row is SVIP/general/VIP is decided by the candidate flags the caller built
- * from the same probes the legacy ran.)
+ * Precedence inside one basis call: manual → SVIP → general. (Whether the row is
+ * SVIP is decided by the candidate flag the caller built from the same probe the
+ * legacy ran; a non-SVIP row is always priced on the general tiers.)
  */
 function rateForBasis(
   basis: RateBasis,
@@ -300,29 +302,18 @@ function rateForBasis(
     return { rate, source: "manual", compare2: false };
   }
 
-  // 4. SVIP (forwarder.php L1906-1929) — flat per-user. SVIP KG-fallback is
-  //    commented out in legacy, so NO compare2 here.
+  // SVIP (forwarder.php L1906-1929) — flat per-user (= the per-customer/profile
+  //   rate). SVIP KG-fallback is commented out in legacy, so NO compare2 here.
   if (c.isSvip) {
     const rate = basis === "kg" ? n(c.svipKg) : n(c.svipCbm);
     return { rate, source: "svip", compare2: false };
   }
 
-  // 2. general tiered (forwarder.php L1844-1882)
-  if (c.isGeneral) {
-    const rate = generalTierRate(basis, value, basis === "kg" ? c.generalKg : c.generalCbm);
-    return { rate, source: "general", compare2: false };
-  }
-
-  // 3. VIP group (forwarder.php L1883-1905). KG path: if rKG==0 → use rCBM +
-  //    set compare2=1 (the legacy KG→CBM fallback, L1890-1896).
-  if (basis === "kg") {
-    const rKg = n(c.vipKg);
-    if (rKg === 0) {
-      return { rate: n(c.vipCbm), source: "vip", compare2: true };
-    }
-    return { rate: rKg, source: "vip", compare2: false };
-  }
-  return { rate: n(c.vipCbm), source: "vip", compare2: false };
+  // general tiered (forwarder.php L1844-1882) — the final fallback for ANY
+  //   non-SVIP customer. The legacy VIP-group tier (tb_rate_vip_*) was retired
+  //   2026-07-10 (materialized to per-customer SVIP · zero customers on a group).
+  const rate = generalTierRate(basis, value, basis === "kg" ? c.generalKg : c.generalCbm);
+  return { rate, source: "general", compare2: false };
 }
 
 /**

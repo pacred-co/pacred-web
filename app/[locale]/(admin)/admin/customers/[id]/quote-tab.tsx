@@ -272,7 +272,7 @@ export function QuoteTab({
     const whNames = [...byWh.keys()].map(whShortName).join(" + ");
     const ok = await confirmRate(
       `บันทึกเรทเทียบราคานี้เข้า "เรทตั้งค่าลูกค้า" ${userid} (โกดัง ${whNames})? · ` +
-      `ทั่วไป·มอก. และ อย.·พิเศษ จะถูกตั้งเป็นราคาเดียวกันในแต่ละกลุ่ม · ลูกค้าเป็น SVIP · ใช้กับออเดอร์ใหม่`,
+      `ทั่วไป·มอก. และ อย.·พิเศษ จะถูกตั้งเป็นราคาเดียวกันในแต่ละกลุ่ม · ลูกค้ามีเรทเฉพาะตัว · ใช้กับออเดอร์ใหม่`,
     );
     if (!ok) return;
     setSavingRates(true);
@@ -289,7 +289,7 @@ export function QuoteTab({
         if (cells.length !== 8) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ตารางไม่ครบ 2 กลุ่มสินค้า — เพิ่มให้ครบก่อนบันทึก`); setSavingRates(false); return; }
         const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wid, cells });
         if (!res.ok) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ${res.error}`); setSavingRates(false); return; }
-        done.push(`${whShortName(wid)} ${res.data?.changed ?? 0} ช่อง${res.data?.created ? " (สร้าง SVIP)" : ""}${res.data?.repriced ? ` · คิดราคาใหม่ ${res.data.repriced}` : ""}`);
+        done.push(`${whShortName(wid)} ${res.data?.changed ?? 0} ช่อง${res.data?.created ? " (สร้างเรทเฉพาะตัว)" : ""}${res.data?.repriced ? ` · คิดราคาใหม่ ${res.data.repriced}` : ""}`);
       }
       setRateSaveMsg(`✓ บันทึกเข้าเรทลูกค้าแล้ว — ${done.join(" · ")}`);
     } finally {

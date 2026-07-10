@@ -1,77 +1,50 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { VipTiersClient, type VipTierRow } from "./vip-tiers-client";
+import { Info } from "lucide-react";
 
 // ────────────────────────────────────────────────────────────────────
-// /admin/settings/vip-tiers — "ประเภทสมาชิก VIP"
-// Faithful port of legacy pcs-admin `settings-vip.php`:
-//   list tb_co tiers (coStatus='1') + create / rename / delete. Creating a
-//   tier auto-seeds 16+16 tb_rate_vip_kg/cbm rows (the per-tier rate-override
-//   grid); deleting refuses while any customer still uses the tier, then
-//   hard-deletes the tier + its rate rows. All via actions/admin/settings-vip.ts.
+// /admin/settings/vip-tiers — RETIRED (owner 2026-07-10).
 //
-// tb_co casing (camelCase pilot batch 1): ID / coStatus / coID / coName.
-// RBAC: super + accounting (legacy gated CEO/Manager/QA/Accounting/ITDT).
+// The VIP-group tier (tb_rate_vip_* keyed by coID) was dropped: all 154
+// VIP-group customers were materialized to a per-customer "เรทเฉพาะตัว"
+// (tb_rate_custom_*) + coID='PR', so no customer is on a group tier anymore.
+// The pricing waterfall is now: manual ▸ เรทเฉพาะตัว (per-customer) ▸ general.
 //
-// Each tier's per-cell kg/cbm rates are edited on the existing VIP-rate editor
-// (/admin/rates/custom-user → tb_rate_vip_*); this page manages the TIERS only.
+// This page + its CRUD (vip-tiers-client.tsx · actions/admin/settings-vip.ts)
+// are kept in place but unwired (no sidebar entry). The tb_rate_vip_* / tb_co
+// data is NOT deleted (historical). Staff set a customer's rate at the profile.
 // ────────────────────────────────────────────────────────────────────
 
-export default async function AdminVipTiersPage() {
+export default async function AdminVipTiersRetiredPage() {
   await requireAdmin(["super", "accounting"]);
-  const admin = createAdminClient();
-
-  // Legacy list: WHERE coStatus='1' AND ID<>'0' (the ID=0 sentinel = ลูกค้าทั่วไป).
-  const { data: rowsRaw, error: rowsErr } = await admin
-    .from("tb_co")
-    .select("ID, coID, coName")
-    .eq("coStatus", "1")
-    .neq("ID", 0)
-    .order("ID", { ascending: true });
-  if (rowsErr) {
-    console.error(`[vip-tiers list] failed`, { code: rowsErr.code, message: rowsErr.message });
-  }
-  type CoRow = { ID: number; coID: string; coName: string | null };
-  const coRows = (rowsRaw ?? []) as CoRow[];
-  const coIds = coRows.map((c) => c.coID);
-
-  // Count how many customers belong to each tier (so the UI can warn / disable
-  // delete before the action refuses — same guard as legacy deleteCo.php).
-  const usageByCoid = new Map<string, number>();
-  for (const coid of coIds) {
-    const { count, error: cntErr } = await admin
-      .from("tb_users")
-      .select("userID", { count: "exact", head: true })
-      .eq("coID", coid);
-    if (cntErr) {
-      console.error(`[vip-tiers usage count] failed`, { coid, code: cntErr.code, message: cntErr.message });
-    }
-    usageByCoid.set(coid, count ?? 0);
-  }
-
-  const rows: VipTierRow[] = coRows.map((c) => ({
-    id: c.ID,
-    coID: c.coID,
-    coName: c.coName ?? "",
-    memberCount: usageByCoid.get(c.coID) ?? 0,
-  }));
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ตั้งค่า</p>
-          <h1 className="mt-1 text-2xl font-bold">ประเภทสมาชิก VIP</h1>
-          <p className="mt-1 text-sm text-muted">
-            จัดการประเภทสมาชิก (VIP/SVIP) — เพิ่มประเภทใหม่จะสร้างตารางเรทราคา (กก./คิว) ให้อัตโนมัติ ·
-            แก้เรทรายช่องที่ <Link href="/admin/rates/custom-user" className="text-primary-600 hover:underline">Rate Override ตามกลุ่ม VIP</Link>
-          </p>
-        </div>
-        <Link href="/admin/settings" className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-alt">← ตั้งค่าระบบ</Link>
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ตั้งค่า</p>
+        <h1 className="mt-1 text-2xl font-bold">ประเภทสมาชิก VIP (ยกเลิกแล้ว)</h1>
       </div>
 
-      <VipTiersClient rows={rows} />
+      <div className="max-w-2xl rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+        <div className="flex items-start gap-2">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="space-y-2">
+            <p className="font-semibold">ระบบ tier VIP ยกเลิกแล้ว (2026-07-10)</p>
+            <p>
+              ตอนนี้ใช้ <strong>เรทเฉพาะตัวต่อลูกค้า</strong> แทน — ตั้งเรทให้ลูกค้าแต่ละรายที่หน้าโปรไฟล์ลูกค้า
+              (ปุ่ม “ตั้งค่าเรทขนส่ง”). ลูกค้ากลุ่ม VIP เดิมถูกย้ายเป็นเรทเฉพาะตัวให้เรียบร้อยแล้ว ราคาไม่เปลี่ยน.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link href="/admin/customers" className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700">
+                ไปหน้าลูกค้า → ตั้งเรทเฉพาะตัว
+              </Link>
+              <Link href="/admin/settings" className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt">
+                ← ตั้งค่าระบบ
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

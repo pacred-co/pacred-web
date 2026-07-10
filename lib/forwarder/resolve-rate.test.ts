@@ -2,9 +2,9 @@
 // Run: tsx lib/forwarder/resolve-rate.test.ts
 //
 // Faithful to forwarder.php `update_data` getPrice() waterfall + KG/CBM
-// selection. Covers each waterfall branch (manual · SVIP · general-tiered ·
-// VIP) + KG-vs-CBM selection (ราคามากสุด + comparison) + the SVIP-but-
-// warehouse-missing edge (legacy returns rate 0 → rateMissing flag).
+// selection. Covers each waterfall branch (manual · SVIP · general-tiered) +
+// KG-vs-CBM selection (ราคามากสุด + comparison) + the SVIP-but-warehouse-missing
+// edge (legacy returns rate 0 → rateMissing flag). VIP-group tier retired 2026-07-10.
 import { resolveForwarderRate, resolveBothBasisRates, type ResolveRateCandidates, type ResolveRateInput } from "./resolve-rate";
 
 let pass = 0, fail = 0;
@@ -24,8 +24,7 @@ function cand(over: Partial<ResolveRateCandidates> = {}): ResolveRateCandidates 
   return {
     manualOverride: false, manualKg: null, manualCbm: null,
     isSvip: false, svipKg: null, svipCbm: null,
-    isGeneral: false, generalKg: null, generalCbm: null,
-    vipKg: null, vipCbm: null,
+    generalKg: null, generalCbm: null,
     ...over,
   };
 }
@@ -58,7 +57,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 {
   // SVIP KG=15, CBM=4000. weight 100, cbm 1 → priceKg=1500, priceCbm=4000 → CBM.
   const r = resolveForwarderRate(
-    cand({ isSvip: true, svipKg: 15, svipCbm: 4000, isGeneral: true, generalKg: { tier1: 99, tier2: 99, tier3: 99 } }),
+    cand({ isSvip: true, svipKg: 15, svipCbm: 4000, generalKg: { tier1: 99, tier2: 99, tier3: 99 } }),
     inp({ weightKg: 100, volumeCbm: 1 }),
   );
   eq("svip: source=svip (beats general)", r.source, "svip");
@@ -75,21 +74,21 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   const g = { generalKg: { tier1: 50, tier2: 40, tier3: 30 } as const, generalCbm: { tier1: 0, tier2: 0, tier3: 0 } as const };
   const kgOn = (w: number) => inp({ weightKg: w, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 0 });
   // value<=100 → tier1
-  let r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(100));
+  let r = resolveForwarderRate(cand({ ...g }), kgOn(100));
   near("general KG tier1 (w=100 → rate 50)", r.rate, 50);
   eq("general KG tier1 basis=kg", r.basis, "kg");
   // value>100 && value<500 → tier2
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(300));
+  r = resolveForwarderRate(cand({ ...g }), kgOn(300));
   near("general KG tier2 (w=300 → rate 40)", r.rate, 40);
   // value>=500 → tier3
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), kgOn(500));
+  r = resolveForwarderRate(cand({ ...g }), kgOn(500));
   near("general KG tier3 (w=500 → rate 30)", r.rate, 30);
 }
 
 // ── 3b. General tiered CBM — tier boundaries (forwarder.php L1863-1880) ──
 {
   // Make CBM win by zeroing KG. cbm<=2 → tier1 ; >2&&<5 → tier2 ; >=5 → tier3.
-  const base = (over: Partial<ResolveRateCandidates>) => cand({ isGeneral: true, generalKg: { tier1: 0, tier2: 0, tier3: 0 }, ...over });
+  const base = (over: Partial<ResolveRateCandidates>) => cand({ generalKg: { tier1: 0, tier2: 0, tier3: 0 }, ...over });
   const g = { generalCbm: { tier1: 5000, tier2: 4500, tier3: 4000 } as const };
   let r = resolveForwarderRate(base(g), inp({ weightKg: 1, volumeCbm: 2 }));
   near("general CBM tier1 (cbm=2 → 5000)", r.rate, 5000);
@@ -100,30 +99,8 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("general CBM tier3 (cbm=5 → 4000)", r.rate, 4000);
 }
 
-// ── 4. VIP group flat (forwarder.php L1883-1905) ──
-{
-  // VIP KG=12, CBM=3500. weight 100, cbm 1 → priceKg=1200, priceCbm=3500 → CBM.
-  const r = resolveForwarderRate(
-    cand({ isGeneral: false, vipKg: 12, vipCbm: 3500 }),
-    inp({ weightKg: 100, volumeCbm: 1 }),
-  );
-  eq("vip: source=vip", r.source, "vip");
-  eq("vip: basis=cbm (3500>1200)", r.basis, "cbm");
-  near("vip: rate=3500", r.rate, 3500);
-}
-
-// ── 4b. VIP KG-rate==0 → CBM fallback (compare2) under comparison (L1890-1896) ──
-{
-  // comparison ON, threshold 150, KGPerCBM = 300/1 = 300 > 150 → KG branch.
-  // But VIP rKG=0 → fallback to rCBM=3000, switch value to CBMProduct(=1).
-  const r = resolveForwarderRate(
-    cand({ isGeneral: false, vipKg: 0, vipCbm: 3000 }),
-    inp({ weightKg: 300, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 150 }),
-  );
-  eq("vip-fallback: basis flips to cbm", r.basis, "cbm");
-  near("vip-fallback: rate=3000 (rCBM)", r.rate, 3000);
-  near("vip-fallback: subtotal = 1*3000", r.transportSubtotal, 3000);
-}
+// ── 4. VIP-group tier RETIRED 2026-07-10 — a non-SVIP customer now always
+//      prices on the general tiers (see §3a/§3b). No VIP branch remains. ──
 
 // ── 5. DEFAULT = คิดตามคิว (owner 2026-06-23) — no tick + no manual → CBM ──
 {
@@ -225,7 +202,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 // ── 7b. General-missing (no tier rows) → rateMissing ──
 {
   const r = resolveForwarderRate(
-    cand({ isGeneral: true, generalKg: null, generalCbm: null }),
+    cand({ generalKg: null, generalCbm: null }),
     inp({ weightKg: 100, volumeCbm: 1 }),
   );
   eq("general-missing: rateMissing=true", r.rateMissing, true);
@@ -275,20 +252,20 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 3700, tier2: 3700, tier3: 3700 } as const };
 
   // (a) NOT eligible (flag off) → rate stays 3700, no discount.
-  let r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1 }));
+  let r = resolveForwarderRate(cand({ ...g }), inp({ weightKg: 0, volumeCbm: 1 }));
   near("doctier OFF: rate=3700 (base unchanged)", r.rate, 3700);
   near("doctier OFF: subtotal=3700", r.transportSubtotal, 3700);
   near("doctier OFF: discountApplied=0", r.docDiscountApplied, 0);
 
   // (b) eligible → −800/CBM → 2900.
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
+  r = resolveForwarderRate(cand({ ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
   eq("doctier ON: basis=cbm", r.basis, "cbm");
   near("doctier ON: rate=2900 (3700−800)", r.rate, 2900);
   near("doctier ON: subtotal=2900 (cbm 1)", r.transportSubtotal, 2900);
   near("doctier ON: discountApplied=800", r.docDiscountApplied, 800);
 
   // (c) eligible but flag set with 0 amount → no-op.
-  r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 0 }));
+  r = resolveForwarderRate(cand({ ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 0 }));
   near("doctier ON amount=0: rate=3700 (no-op)", r.rate, 3700);
   near("doctier ON amount=0: discountApplied=0", r.docDiscountApplied, 0);
 }
@@ -296,7 +273,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 // ── 10b. รถ rate 5700 → 4900, cbm=2 → subtotal 9800 ──
 {
   const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 5700, tier2: 5700, tier3: 5700 } as const };
-  const r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 2, docTierEligible: true, docTierDiscountCbm: 800 }));
+  const r = resolveForwarderRate(cand({ ...g }), inp({ weightKg: 0, volumeCbm: 2, docTierEligible: true, docTierDiscountCbm: 800 }));
   near("รถ doctier: rate=4900 (5700−800)", r.rate, 4900);
   near("รถ doctier: subtotal=9800 (4900×2)", r.transportSubtotal, 9800);
   near("รถ doctier: discountApplied=800", r.docDiscountApplied, 800);
@@ -306,7 +283,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 {
   // KG rate 50, cbm rate 0 → comparison forces KG. weight 200, cbm 1 → KG wins.
   const r = resolveForwarderRate(
-    cand({ isGeneral: true, generalKg: { tier1: 50, tier2: 50, tier3: 50 }, generalCbm: { tier1: 0, tier2: 0, tier3: 0 } }),
+    cand({ generalKg: { tier1: 50, tier2: 50, tier3: 50 }, generalCbm: { tier1: 0, tier2: 0, tier3: 0 } }),
     inp({ weightKg: 200, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 0, docTierEligible: true, docTierDiscountCbm: 800 }),
   );
   eq("kg-path doctier: basis=kg", r.basis, "kg");
@@ -318,7 +295,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
 // ── 10d. floor at 0 — discount larger than rate clamps to 0 ──
 {
   const g = { generalKg: { tier1: 0, tier2: 0, tier3: 0 } as const, generalCbm: { tier1: 500, tier2: 500, tier3: 500 } as const };
-  const r = resolveForwarderRate(cand({ isGeneral: true, ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
+  const r = resolveForwarderRate(cand({ ...g }), inp({ weightKg: 0, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }));
   near("floor: rate=0 (500−800 floored)", r.rate, 0);
   near("floor: subtotal=0", r.transportSubtotal, 0);
   near("floor: discountApplied=500 (only what could be subtracted)", r.docDiscountApplied, 500);
@@ -340,7 +317,7 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   // KG would be 60×100=6000; CBM 6500−800=5700. Pre-2026-06-23 max-of-both would
   // FLIP to KG (6000>5700); the new default ignores KG → bills the discounted CBM.
   const r = resolveForwarderRate(
-    cand({ isGeneral: true, generalKg: { tier1: 60, tier2: 60, tier3: 60 }, generalCbm: { tier1: 6500, tier2: 6500, tier3: 6500 } }),
+    cand({ generalKg: { tier1: 60, tier2: 60, tier3: 60 }, generalCbm: { tier1: 6500, tier2: 6500, tier3: 6500 } }),
     inp({ weightKg: 100, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }),
   );
   eq("default-CBM+doctier: basis=cbm (no flip)", r.basis, "cbm");

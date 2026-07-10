@@ -461,7 +461,7 @@ function BadgeVIP2({
       {row.hasSvip ? (
         <>
           {" "}
-          <span className={vipChip}>SVIP</span>
+          <span className={vipChip}>เรทเฉพาะตัว</span>
         </>
       ) : null}
       {row.hasCorporate ? (

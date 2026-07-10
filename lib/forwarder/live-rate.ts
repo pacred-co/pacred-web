@@ -9,9 +9,9 @@ import "server-only";
  *
  * The DECISION logic (precedence + tier + KG/CBM selection) lives in the PURE,
  * unit-tested `lib/forwarder/resolve-rate.ts`. THIS module does the SQL
- * waterfall (reads tb_users.coID + the tb_rate_custom / tb_rate_vip / tb_rate_g
- * tables · exactly the probes legacy `forwarder.php` getPrice() ran) and hands
- * the resolver the candidate rates.
+ * waterfall (reads tb_users.coID + the tb_rate_custom / tb_rate_g tables · the
+ * probes legacy `forwarder.php` getPrice() ran, minus the VIP-group tier retired
+ * 2026-07-10) and hands the resolver the candidate rates.
  *
  * ⚠️ MONEY PATH — server-only. `resolveLiveForwarderRate` is a READ; the only
  *    WRITE here is `computeAndFillForwarderImportRate`, which persists ONLY the
@@ -34,7 +34,7 @@ import {
   type ResolveRateInput,
   type ResolvedRate,
 } from "@/lib/forwarder/resolve-rate";
-import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 import { transportModeFromCabinetName, resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 
@@ -163,7 +163,6 @@ export async function resolveLiveForwarderRate(
     return { error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${userErr.message}` };
   }
   const coID = (userRow?.coID ?? "").trim() || GENERAL_COID;
-  const isGeneral = isGeneralCoid(coID);
 
   const wh = ctx.fwarehousechina;
   const tt = ctx.ftransporttype;
@@ -176,11 +175,8 @@ export async function resolveLiveForwarderRate(
     isSvip: false,
     svipKg: null,
     svipCbm: null,
-    isGeneral,
     generalKg: null,
     generalCbm: null,
-    vipKg: null,
-    vipCbm: null,
   };
 
   if (!ctx.customRateSwitch) {
@@ -216,9 +212,11 @@ export async function resolveLiveForwarderRate(
       if (svipCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_custom_cbm rate] failed`, { code: svipCbmErr.code, message: svipCbmErr.message });
       candidates.svipKg = svipKgRow?.rkg ?? null;
       candidates.svipCbm = svipCbmRow?.rcbm ?? null;
-    } else if (isGeneral) {
-      // General tiered rates (forwarder.php L1846-1880). tb_rate_g_* keyed
-      // by coid (not userid) — here coid='PR', the general bucket.
+    } else {
+      // General tiered rates (forwarder.php L1846-1880). tb_rate_g_* keyed by
+      // coid (not userid) — here coid='PR', the general bucket. This is the final
+      // fallback for ANY non-SVIP customer (the VIP-group tier was retired
+      // 2026-07-10 — its 154 customers were materialized to per-customer SVIP).
       const { data: gKg, error: gKgErr } = await admin
         .from("tb_rate_g_kg")
         .select("rgkg1, rgkg2, rgkg3")
@@ -233,22 +231,6 @@ export async function resolveLiveForwarderRate(
       if (gCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_g_cbm] failed`, { code: gCbmErr.code, message: gCbmErr.message });
       candidates.generalKg = gKg ? { tier1: gKg.rgkg1, tier2: gKg.rgkg2, tier3: gKg.rgkg3 } : null;
       candidates.generalCbm = gCbm ? { tier1: gCbm.rgcbm1, tier2: gCbm.rgcbm2, tier3: gCbm.rgcbm3 } : null;
-    } else {
-      // VIP-group flat rates by coID (forwarder.php L1884-1904).
-      const { data: vKg, error: vKgErr } = await admin
-        .from("tb_rate_vip_kg")
-        .select("rkg")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rkg: number | string | null }>();
-      if (vKgErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_kg] failed`, { code: vKgErr.code, message: vKgErr.message });
-      const { data: vCbm, error: vCbmErr } = await admin
-        .from("tb_rate_vip_cbm")
-        .select("rcbm")
-        .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt)
-        .maybeSingle<{ rcbm: number | string | null }>();
-      if (vCbmErr) console.error(`[resolveLiveForwarderRate: tb_rate_vip_cbm] failed`, { code: vCbmErr.code, message: vCbmErr.message });
-      candidates.vipKg = vKg?.rkg ?? null;
-      candidates.vipCbm = vCbm?.rcbm ?? null;
     }
   }
 

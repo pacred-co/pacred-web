@@ -215,9 +215,8 @@ export default async function AdminQuoteComparePage({
                 <div className="text-right">
                   <p className="text-[11px] uppercase tracking-wider text-muted">ประเภท rate</p>
                   <p className="font-mono text-sm font-medium">
-                    {report.saleSource === "general"  && "🟦 General (PCS tiered)"}
-                    {report.saleSource === "vip"      && "🟣 VIP (กลุ่ม)"}
-                    {report.saleSource === "svip"     && "🟢 SVIP (per-user)"}
+                    {report.saleSource === "general"  && "🟦 General (PR tiered)"}
+                    {report.saleSource === "svip"     && "🟢 เรทเฉพาะตัว"}
                     {report.saleSource === "manual"   && "✏️ Manual override"}
                     {report.saleSource === "missing"  && "🔴 No rate"}
                   </p>

@@ -444,7 +444,7 @@ function CompareEditor({ model, onChange, onSaveToRates, savingToRates }: { mode
         </button>
         {onSaveToRates && (
           <button type="button" onClick={onSaveToRates} disabled={savingToRates} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
-            <Save className="h-3.5 w-3.5" /> {savingToRates ? "กำลังบันทึก..." : "บันทึกเข้าเรทลูกค้า (SVIP)"}
+            <Save className="h-3.5 w-3.5" /> {savingToRates ? "กำลังบันทึก..." : "บันทึกเข้าเรทลูกค้า"}
           </button>
         )}
       </div>

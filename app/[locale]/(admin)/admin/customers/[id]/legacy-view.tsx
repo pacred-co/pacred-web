@@ -646,7 +646,7 @@ export async function renderLegacyCustomerView(
               </span>
               {rateMatrix.isSvip ? (
                 <span className="rounded-full bg-primary-600 text-white px-3 py-1 text-xs font-semibold">
-                  SVIP · เรทเฉพาะตัว
+                  เรทเฉพาะตัว
                 </span>
               ) : null}
               {/* owner 2026-06-25 — tag บุคคล/นิติ + เงินสด/เครดิต ข้าง Sales/CS

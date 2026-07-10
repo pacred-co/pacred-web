@@ -13,7 +13,8 @@
  *
  * It REUSES the verified, faithful rate engine (Lane C):
  *   - `resolveForwarderRate` (lib/forwarder/resolve-rate.ts) — the legacy
- *     SVIP→VIP→general waterfall + KG-vs-CBM "ราคามากสุด" rule.
+ *     SVIP→general waterfall + KG-vs-CBM "ราคามากสุด" rule (VIP-group tier
+ *     retired 2026-07-10).
  *   - the candidate-read mirrors actions/admin/quote-multimode.ts:readCandidates
  *     (same tb_rate_* tables, keyed by warehouse × transport × product).
  *
@@ -29,7 +30,7 @@ import {
   resolveForwarderRate,
   type ResolveRateCandidates,
 } from "@/lib/forwarder/resolve-rate";
-import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
+import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 
 export type CustomerEstimateInput = {
@@ -94,18 +95,18 @@ const TRANSPORTS: { id: "1" | "2" | "3"; label: string; comingSoon: boolean }[] 
 /**
  * Read the rate candidates for ONE (warehouse, transport, product) for THIS
  * customer. Mirrors actions/admin/quote-multimode.ts:readCandidates — same
- * tables, same waterfall (SVIP per-user → VIP by coID → general PCS tiered).
+ * tables, same waterfall (SVIP per-user → general tiered · VIP-group tier
+ * retired 2026-07-10).
  */
 async function readCandidates(
   admin: ReturnType<typeof createAdminClient>,
-  opts: { userid: string; coID: string; isSvip: boolean; isGeneral: boolean; wh: string; tt: string; pt: string },
+  opts: { userid: string; coID: string; isSvip: boolean; wh: string; tt: string; pt: string },
 ): Promise<ResolveRateCandidates> {
-  const { userid, coID, isSvip, isGeneral, wh, tt, pt } = opts;
+  const { userid, coID, isSvip, wh, tt, pt } = opts;
   const c: ResolveRateCandidates = {
     manualOverride: false, manualKg: null, manualCbm: null,
     isSvip, svipKg: null, svipCbm: null,
-    isGeneral, generalKg: null, generalCbm: null,
-    vipKg: null, vipCbm: null,
+    generalKg: null, generalCbm: null,
   };
   if (isSvip) {
     const { data: kg, error: kgErr } = await admin.from("tb_rate_custom_kg").select("rkg")
@@ -115,7 +116,8 @@ async function readCandidates(
       .eq("userid", userid).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt).maybeSingle<{ rcbm: number | string | null }>();
     if (cbmErr) console.error(`[customer-estimate tb_rate_custom_cbm] failed`, { code: cbmErr.code, message: cbmErr.message });
     c.svipKg = kg?.rkg ?? null; c.svipCbm = cbm?.rcbm ?? null;
-  } else if (isGeneral) {
+  } else {
+    // General tiered — the final fallback for ANY non-SVIP customer.
     const { data: gKg, error: gKgErr } = await admin.from("tb_rate_g_kg").select("rgkg1, rgkg2, rgkg3")
       .eq("coid", coID).eq("sourcewarehouse", wh).eq("rgtransporttype", tt).eq("rgproductstype", pt).maybeSingle<{ rgkg1: number|string|null; rgkg2: number|string|null; rgkg3: number|string|null }>();
     if (gKgErr) console.error(`[customer-estimate tb_rate_g_kg] failed`, { code: gKgErr.code, message: gKgErr.message });
@@ -124,14 +126,6 @@ async function readCandidates(
     if (gCbmErr) console.error(`[customer-estimate tb_rate_g_cbm] failed`, { code: gCbmErr.code, message: gCbmErr.message });
     c.generalKg = gKg ? { tier1: gKg.rgkg1, tier2: gKg.rgkg2, tier3: gKg.rgkg3 } : null;
     c.generalCbm = gCbm ? { tier1: gCbm.rgcbm1, tier2: gCbm.rgcbm2, tier3: gCbm.rgcbm3 } : null;
-  } else {
-    const { data: vKg, error: vKgErr } = await admin.from("tb_rate_vip_kg").select("rkg")
-      .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt).maybeSingle<{ rkg: number | string | null }>();
-    if (vKgErr) console.error(`[customer-estimate tb_rate_vip_kg] failed`, { code: vKgErr.code, message: vKgErr.message });
-    const { data: vCbm, error: vCbmErr } = await admin.from("tb_rate_vip_cbm").select("rcbm")
-      .eq("coid", coID).eq("sourcewarehouse", wh).eq("rtransporttype", tt).eq("rproductstype", pt).maybeSingle<{ rcbm: number | string | null }>();
-    if (vCbmErr) console.error(`[customer-estimate tb_rate_vip_cbm] failed`, { code: vCbmErr.code, message: vCbmErr.message });
-    c.vipKg = vKg?.rkg ?? null; c.vipCbm = vCbm?.rcbm ?? null;
   }
   return c;
 }
@@ -163,7 +157,6 @@ export async function getCustomerImportEstimate(
     .from("tb_rate_custom_cbm").select("id").eq("userid", userid).limit(1).maybeSingle<{ id: number }>();
   if (svipErr) console.error(`[customer-estimate svip-probe] failed`, { code: svipErr.code, message: svipErr.message });
   const isSvip = svip != null;
-  const isGeneral = !isSvip && isGeneralCoid(coID);
 
   // Pin basis (auto = legacy "ราคามากสุด"; kg/cbm pinned via extreme threshold).
   const pinKg = input.basis === "kg";
@@ -180,7 +173,7 @@ export async function getCustomerImportEstimate(
 
   const modes: CustomerEstimateMode[] = [];
   for (const T of TRANSPORTS) {
-    const candidates = await readCandidates(admin, { userid, coID, isSvip, isGeneral, wh, tt: T.id, pt });
+    const candidates = await readCandidates(admin, { userid, coID, isSvip, wh, tt: T.id, pt });
     const r = resolveForwarderRate(candidates, {
       weightKg, volumeCbm, comparisonEnabled, comparisonValue,
       docTierEligible: docTierApplied,

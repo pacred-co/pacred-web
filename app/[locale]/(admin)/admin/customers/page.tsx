@@ -70,8 +70,9 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
     label: "ตามประเภท",
     children: [
       { label: "ลูกค้าทั่วไป",        href: "/admin/customers?group=general" },
-      { label: "VIP",                href: "/admin/customers?group=vip" },
-      { label: "SVIP",               href: "/admin/customers?group=svip" },
+      // VIP/SVIP tier tabs RETIRED 2026-07-10 (owner: ยกเลิก tier · ยึดเรทเฉพาะตัว) —
+      // "เรทเฉพาะตัว" = ลูกค้าที่มีเรทของตัวเอง (tb_rate_custom_* · = เรทหน้า profile).
+      { label: "เรทเฉพาะตัว",         href: "/admin/customers?group=svip" },
       { label: "นิติบุคคล",          href: "/admin/customers?group=corporate" },
       // 2026-06-05 (LANE C) — point เครดิต/คิดค่าเทียบ at their dedicated
       // faithful-port pages (legacy users-credit.php / users-comparison.php),

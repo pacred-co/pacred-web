@@ -31,7 +31,6 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { GENERAL_COID, isGeneralCoid } from "@/lib/forwarder/coid";
 import { CARRIERS, costColumn } from "@/app/[locale]/(admin)/admin/settings/forwarder-costs/costs-model";
 
 // ────────────────────────────────────────────────────────────────────────
@@ -68,7 +67,7 @@ export type QuoteReport = {
   asOf:             string;
   input:            QuoteInput;
   // SALE side (what Pacred charges the customer)
-  saleSource:       "manual" | "svip" | "vip" | "general" | "missing";
+  saleSource:       "manual" | "svip" | "general" | "missing";
   saleRate:         number;
   saleSubtotal:     number;
   saleNote:         string;         // explanation of which rate tier resolved
@@ -130,31 +129,18 @@ export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport
   // ── 1. SALE rate — Pacred → customer ──
   // Follows the same waterfall as lib/forwarder/resolve-rate.ts:
   //   manual override (skipped here — admin-typed-per-order only) →
-  //   SVIP (tb_rate_custom_*) → VIP (tb_rate_vip_*) → general (tb_rate_g_*)
+  //   SVIP (tb_rate_custom_*) → general (tb_rate_g_*)
+  //   (VIP-group tier tb_rate_vip_* retired 2026-07-10.)
   let saleRate = 0;
   let saleSource: QuoteReport["saleSource"] = "general";
   let saleNote = "";
 
   // Build SQL-friendly tuple constants
-  // tb_rate_g_*  / tb_rate_vip_*  / tb_rate_custom_*  all share keys:
+  // tb_rate_g_*  / tb_rate_custom_*  share keys:
   //   fSourceWarehouse · fTransportType · fProductsType
   const sourceWh    = input.warehouse;       // "1" or "2"
   const transportTy = input.transport;       // "1" or "2"
   const productTy   = String(input.productType);
-
-  // 1a. If customer provided, probe SVIP first (resolve-rate.ts step 4)
-  let coid: string = "PCS";   // default = general
-  if (input.customerUserid && input.customerUserid.trim() !== "") {
-    const { data: u, error: uErr } = await admin
-      .from("tb_users")
-      .select("coID")
-      .eq("userID", input.customerUserid.trim())
-      .maybeSingle<{ coID: string | null }>();
-    if (uErr) {
-      console.error("[quote-compare tb_users] failed", { code: uErr.code, message: uErr.message });
-    }
-    coid = (u?.coID ?? GENERAL_COID).trim() || GENERAL_COID;
-  }
 
   // 1b. SVIP probe (any tb_rate_custom_cbm row for the user)
   let isSvip = false;
@@ -189,30 +175,11 @@ export async function getQuoteComparison(input: QuoteInput): Promise<QuoteReport
     saleRate   = n(row?.[col]);
     saleSource = saleRate > 0 ? "svip" : "missing";
     saleNote   = saleRate > 0
-      ? `SVIP per-user rate (tb_rate_custom_${input.basis})`
-      : "SVIP cell empty — admin needs to set it";
-  } else if (!isGeneralCoid(coid)) {
-    // VIP — coID-group flat rate (tb_rate_vip_*)
-    const table = input.basis === "kg" ? "tb_rate_vip_kg" : "tb_rate_vip_cbm";
-    const col   = input.basis === "kg" ? "rkg" : "rcbm";
-    const { data: row, error: rErr } = await admin
-      .from(table)
-      .select(`${col}`)
-      .eq("coid",             coid)
-      .eq("fsourcewarehouse", sourceWh)
-      .eq("ftransporttype",   transportTy)
-      .eq("fproductstype",    productTy)
-      .maybeSingle<Record<string, number | string | null>>();
-    if (rErr) {
-      console.error(`[quote-compare ${table}] failed`, { code: rErr.code, message: rErr.message });
-    }
-    saleRate   = n(row?.[col]);
-    saleSource = saleRate > 0 ? "vip" : "missing";
-    saleNote   = saleRate > 0
-      ? `VIP group ${coid} (tb_rate_vip_${input.basis})`
-      : `VIP cell for ${coid} empty — falling back may be needed`;
+      ? `เรทเฉพาะตัว (tb_rate_custom_${input.basis})`
+      : "เรทเฉพาะตัวยังว่าง — admin ต้องตั้งเรท";
   } else {
-    // General tiered (tb_rate_g_*)
+    // General tiered (tb_rate_g_*) — the final fallback for ANY non-SVIP
+    // customer (VIP-group tier retired 2026-07-10).
     const table = input.basis === "kg" ? "tb_rate_g_kg" : "tb_rate_g_cbm";
     const c1    = input.basis === "kg" ? "rgkg1" : "rgcbm1";
     const c2    = input.basis === "kg" ? "rgkg2" : "rgcbm2";

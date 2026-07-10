@@ -670,17 +670,16 @@ const blockSettingsCargo: MenuItem = {
       icon: "SlidersHorizontal",
       children: [
         { labelKey: "settingsCargo.rateGeneral", href: "/admin/rates/general", icon: "Users" },
-        // rateVip removed 2026-06-01 (Wave-A §0e) — it pointed at /admin/rates/vip which
-        // wrote the DEAD rebuilt `rate_vip`; the live VIP-group editor is rateCustomUser
-        // below (→ tb_rate_vip_*). /admin/rates/vip now redirects there.
-        { labelKey: "settingsCargo.rateCustomUser", href: "/admin/rates/custom-user", icon: "Users" },
+        // rateVip removed 2026-06-01 · rateCustomUser (VIP-group editor → tb_rate_vip_*)
+        // RETIRED 2026-07-10 (owner: ยกเลิก tier VIP → ยึดเรทเฉพาะตัวหน้า profile) — the
+        // VIP-group tier is no longer read by the pricing resolver, so that editor became
+        // a dead-write and is unwired here (its page now banners/redirects · data kept).
         { labelKey: "settingsCargo.rateCustomHs",   href: "/admin/rates/custom-hs",   icon: "Users" },
       ],
     },
-    // 2026-06-05 (LANE C) — repointed from the /admin/settings/business-config
-    // placeholder to the faithful VIP-tier CRUD page (port of legacy
-    // settings-vip.php → tb_co + auto-seeded tb_rate_vip_kg/cbm).
-    { labelKey: "settingsCargo.vipTiers",  href: "/admin/settings/vip-tiers",        icon: "Users" },
+    // VIP-group tier RETIRED (owner 2026-07-10) — the tb_rate_vip_* tier was
+    // dropped (all 154 customers materialized to per-customer เรทเฉพาะตัว). The
+    // /admin/settings/vip-tiers nav entry is removed; the page redirects.
     {
       labelKey: "settingsCargo.system",
       icon: "Activity",
@@ -1155,7 +1154,6 @@ const SETTINGS_TO_MARKETING = [
   "settingsCargo.popup",
   "settingsCargo.promos",
   "settingsCargo.rates",
-  "settingsCargo.vipTiers",
 ];
 const settingsByKey = (key: string): MenuItem =>
   blockSettingsCargo.children!.find((c) => c.labelKey === key)!;
@@ -1198,7 +1196,6 @@ const wrapClassMarketing: MenuItem = {
       children: [
         settingsByKey("settingsCargo.general"),
         settingsByKey("settingsCargo.rates"),
-        settingsByKey("settingsCargo.vipTiers"),
       ],
     },
     {
