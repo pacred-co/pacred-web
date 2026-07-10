@@ -88,8 +88,8 @@ export function QuoteCard({ model, qrDataUrl }: { model: QuoteModel; qrDataUrl?:
           <div className="text-right leading-tight">
             <div className="text-[11px] text-slate-500">หน้า 1/1</div>
             <div className="text-[10px] text-slate-400">(ต้นฉบับ)</div>
-            <div className="mt-1 text-[26px] font-black sm:text-[34px]" style={{ color: ACCENT }}>{isCalc ? "ใบเสนอราคา" : "ใบประเมินราคา"}</div>
-            <div className="text-[11px] tracking-wide text-slate-400">Quotation</div>
+            <div className="mt-1 text-[26px] font-black sm:text-[34px]" style={{ color: ACCENT }}>{isCalc ? "ใบประเมินราคา" : "ใบเสนอราคา"}</div>
+            <div className="text-[11px] tracking-wide text-slate-400">{isCalc ? "Price Assessment" : "Quotation"}</div>
           </div>
         </div>
 
@@ -368,7 +368,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export function buildQuoteText(m: QuoteModel): string {
   const L: string[] = [];
   L.push(`🚛🚢 ${QUOTE_HEADER}`);
-  L.push(`ใบเสนอราคา — PACRED (${m.refNo}) · วันที่ ${m.dateLabel} · ใช้ได้ถึง ${m.validUntil}`);
+  L.push(`${m.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา"} — PACRED (${m.refNo}) · วันที่ ${m.dateLabel} · ใช้ได้ถึง ${m.validUntil}`);
   L.push(`เรียน: ${m.buyerName || "ลูกค้า"}${m.juristic ? " (นิติบุคคล)" : ""}`);
   if (m.customerCode) L.push(`รหัสลูกค้า: ${m.customerCode}`);
   L.push(m.packageLabel);
@@ -458,7 +458,7 @@ export function buildPrintHtml(m: QuoteModel): string {
   const howTo = `<p class="h">วิธีการใช้บริการ</p><ul>${QUOTE_HOW_TO.map((s) => `<li>${esc(s.text)}${s.link ? ` <span class="lk">${esc(s.link)}</span>` : ""}</li>`).join("")}</ul>`;
   const extra = m.extraNote ? `<div class="amber">${esc(m.extraNote)}</div>` : "";
 
-  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบเสนอราคา ${esc(m.refNo)}</title>
+  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${m.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา"} ${esc(m.refNo)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Sarabun','Prompt',sans-serif}
@@ -503,7 +503,7 @@ table{width:100%;border-collapse:collapse}small{font-size:8px;color:#777}
 @page{size:A4;margin:14mm 12mm;@top-right{content:"หน้า " counter(page) "/" counter(pages);font-family:'Sarabun',sans-serif;font-size:9px;color:#999}}
 @media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body><div class="doc">
-  <div class="top"><img src="${origin}${QUOTE_LOGO}" alt="Pacred"><div><div class="ti">ใบเสนอราคา</div><div class="bs r">Quotation</div></div></div>
+  <div class="top"><img src="${origin}${QUOTE_LOGO}" alt="Pacred"><div><div class="ti">${m.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา"}</div><div class="bs r">${m.view === "calc" ? "Price Assessment" : "Quotation"}</div></div></div>
   <div class="grid">
     <div class="box"><div class="t">ผู้ขาย</div>${esc(SELLER.nameTh)}<br><span class="mut">${esc(SELLER.address)}</span><br><span class="mut mono">เลขภาษี ${esc(SELLER.taxId)}</span><br><span class="mut">โทร ${esc(SELLER.phone)} · ${esc(SELLER.email)}</span></div>
     <div class="box"><table><tr><td class="mut" style="width:34%">เลขที่</td><td class="b" style="color:#b30000">${esc(m.refNo)}</td></tr>

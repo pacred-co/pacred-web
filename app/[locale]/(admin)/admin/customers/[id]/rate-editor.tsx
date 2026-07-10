@@ -457,13 +457,16 @@ export function CustomerRateEditor({
 }
 
 // ── rate grid for one warehouse ───────────────────────────────────────────
-// Product-type rows collapsed to 2 (ปอน 2026-07-04): ทั่วไป/อย./มอก. share ONE
-// rate — an edit mirrors into product columns 1·2·3 — and พิเศษ (4) stays its own.
+// Product-type rows (ปอน 2026-07-10 — pulled อย. out into its own row so Pricing
+// can set it independently): ทั่วไป+มอก. share ONE rate (an edit mirrors into product
+// columns 1·2) · อย./น้ำยา (3) is its OWN row · พิเศษ (4) its own.
 // Display-only + non-destructive: the DB still stores all 4 per-product columns and
-// the resolver reads per-product, so columns 2·3 keep their loaded value until the
-// merged row is actually edited. ราคาขั้นต่ำ is identical for every product → one floor.
+// the resolver reads per-product, so col 2 (มอก.) keeps its loaded value until the
+// merged row is edited, and col 3 (อย.) now shows/saves its OWN value. ราคาขั้นต่ำ is
+// identical for every product → one floor per cell.
 const RATE_ROWS: { label: string; products: ProductId[] }[] = [
-  { label: "ทั่วไป · อย. · มอก.", products: ["1", "2", "3"] },
+  { label: "ทั่วไป · มอก.", products: ["1", "2"] },
+  { label: "อย./น้ำยา", products: ["3"] },
   { label: "พิเศษ", products: ["4"] },
 ];
 
