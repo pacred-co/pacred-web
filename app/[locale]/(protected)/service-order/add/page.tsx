@@ -395,14 +395,22 @@ export default async function ServiceOrderAddPage({
         </nav>
 
         <div className="content-body">
-            {corporatePending ? (
-              // shops.php L1090 — juristic-pending message.
-              <div className="mx-auto max-w-[670px] mt-8 md:mt-12 text-center">
-                <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-sm">
-                  {tp("corporatePendingLine1")} <br /> {tp("corporatePendingLine2")}
-                </h2>
+            {/* juristic-pending — NON-blocking notice (owner 2026-07-10: a customer
+                awaiting นิติบุคคล approval must still be able to use the service ·
+                was a full-screen gate that hid the whole add-order form). */}
+            {corporatePending && (
+              <div className="mx-auto max-w-[670px] mb-4">
+                <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-center">
+                  <p className="text-[14px] font-bold text-amber-900 dark:text-amber-300">
+                    {tp("corporatePendingLine1")}
+                  </p>
+                  <p className="text-[12px] mt-1 text-amber-800/90 dark:text-amber-200/70">
+                    {tp("corporatePendingLine2")}
+                  </p>
+                </div>
               </div>
-            ) : (
+            )}
+            {(
               <section>
                 {/* D1 fidelity §4 — link-paste product search.
                     Placed ABOVE the order list because the legacy

@@ -355,17 +355,20 @@ export default async function ServiceOrderPage({
           </Link>
         </div>
 
-        {corporatePending ? (
-          /* shops.php L1090 — juristic-pending gate. */
-          <div className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-700 text-white px-6 py-8 text-center shadow-md max-w-[670px] mx-auto mt-10">
-            <p className="text-[16px] md:text-[18px] font-bold leading-relaxed">
+        {/* shops.php L1090 juristic-pending — NON-blocking NOTICE (owner 2026-07-10:
+            a customer awaiting นิติบุคคล approval must STILL see their orders + status ·
+            was a full-screen gate that hid the whole order list). */}
+        {corporatePending && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 mb-4">
+            <p className="text-[14px] font-bold text-amber-900 dark:text-amber-300">
               {tp("juristicPending")}
             </p>
-            <p className="text-[13px] mt-2 opacity-90">
+            <p className="text-[12px] mt-1 text-amber-800/90 dark:text-amber-200/70">
               {tp("juristicPendingNote")}
             </p>
           </div>
-        ) : (
+        )}
+        {(
           <BulkActionsProvider
             payableHNos={payableHNos}
             cancelableHNos={cancelableHNos}
