@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * wrote tb_rate_vip_* keyed by coID group). The pricing resolver no longer reads the
  * VIP-group tier (all 154 group customers were materialized to per-customer เรทเฉพาะตัว
  * tb_rate_custom_*), so this editor became a dead-write. It is unwired from the sidebar
- * and now shows this banner. The tb_rate_vip_*/tb_co data is KEPT (historical · not deleted).
+ * and now shows this banner. The VIP-group data (tb_rate_vip tables + tb_co) is KEPT
+ * (historical · not deleted).
  * Set a customer's own rate at their profile → เรทเฉพาะตัว instead.
  */
 export default async function CustomUserRatesPage() {
