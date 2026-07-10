@@ -101,6 +101,22 @@ export function forwarderCoverUrl(cover: string | null | undefined, size = ""): 
 }
 
 /**
+ * True for an Alibaba / Taobao / Tmall OSS-CDN image URL.
+ *
+ * Those CDNs accept a `_WxH.jpg` filename SUFFIX as an on-the-fly resize
+ * directive (`.../x.jpg` → `.../x.jpg_80x80.jpg`). The legacy `convertIMGCHN`
+ * helper appends that suffix to the stored `cImages` value to render a
+ * thumbnail. Appending it to ANY OTHER host's URL — a pasted postimg / imgur /
+ * Google-Drive link — yields a 404 (that host has no such resize convention).
+ * So a caller must gate the resize suffix on this predicate and pass every
+ * other absolute URL through unchanged (owner-reported 2026-07-10: pasted
+ * external product images not rendering).
+ */
+export function isAlibabaCdnUrl(u: string): boolean {
+  return /(?:alicdn\.com|taobaocdn|tbcdn|img\.alibaba|tmall\.com|taobao\.com)/i.test(u);
+}
+
+/**
  * Resolve a customer profile-picture column (`tb_users.userPicture`) to a
  * renderable URL, handling the filename-vs-URL ambiguity.
  *

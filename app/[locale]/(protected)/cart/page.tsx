@@ -5,7 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { ADDRESSES } from "@/components/seo/site";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { legacyMemberUrl, isAlibabaCdnUrl } from "@/lib/legacy-image";
 import {
   getShipByOptionsForAddress,
   isMaomaoEligibleForAddress,
@@ -157,7 +157,11 @@ function convertIMGCHN(url: string | null, size: string): string {
     // never leak the legacy host name.
     const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
     if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
-    return u + size;
+    // The `$size` suffix (`_80x80.jpg`) is an Alibaba/Taobao CDN resize
+    // directive — appending it to a pasted external image link (postimg/imgur/
+    // Google Drive) 404s it. Apply the suffix ONLY for Alibaba-CDN URLs; pass
+    // every other absolute URL through unchanged (owner-reported 2026-07-10).
+    return isAlibabaCdnUrl(u) ? u + size : u;
   }
   // a bare filename — legacy stored under images/shops/. Resolved via
   // the Supabase mirror (ภูม upload 2026-05-24, see lib/legacy-image.ts).

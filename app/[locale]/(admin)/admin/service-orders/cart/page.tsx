@@ -7,6 +7,7 @@ import CartSubmitButton from "./cart-submit-button";
 import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 import { CartTaxDocPref, type TaxDocDefaults } from "@/app/[locale]/(protected)/cart/cart-tax-doc-pref";
 import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
+import { CoverThumb } from "@/app/[locale]/(protected)/service-import/_shared/cover-thumb";
 
 /**
  * Admin > "รถเข็นสินค้า" — CS staff add-to-customer-cart surface.
@@ -273,12 +274,20 @@ export default async function AdminCartPage({
   const subtotalYuan = cartRows.reduce((acc, r) => acc + r.cprice * r.camount, 0);
   const totalThb = subtotalYuan * Number(rsDefault);
 
-  // Cart-image URL resolver — unchanged.
+  // Cart-image URL resolver.
   function resolveImageUrl(row: CartRow): string {
-    const isLocal = row.cprovider === "4";
-    if (!isLocal && row.cimages) return row.cimages;
-    if (isLocal && !row.cimages) return "/legacy/pcs/admin/images/shops/default.png";
-    if (isLocal && row.cimages)  return `/legacy/pcs/admin/images/shops/${row.cimages}`;
+    const v = (row.cimages ?? "").trim();
+    // An already-absolute image URL (marketplace CDN, the Supabase mirror, or a
+    // pasted external link) or a root-absolute path is used VERBATIM. Guard added
+    // 2026-07-10 (owner-reported 404): the old code unconditionally prepended the
+    // legacy base for provider "4" (Shops), producing
+    //   /legacy/pcs/admin/images/shops/https://drive.google.com/...  → 404.
+    // (A Google-Drive FOLDER link still can't render as an image — the <CoverThumb>
+    //  onError below degrades it to the no-image placeholder — but it no longer
+    //  404s on the pacred host, and a real pasted image URL now renders.)
+    if (/^(https?:\/\/|\/)/i.test(v)) return v;
+    // A bare filename → the legacy admin shop-image folder (unchanged).
+    if (v) return `/legacy/pcs/admin/images/shops/${v}`;
     return "/legacy/pcs/admin/images/shops/default.png";
   }
 
@@ -462,8 +471,11 @@ export default async function AdminCartPage({
                           {/* Image */}
                           <div className="md:col-span-2">
                             <a href={imgUrl} target="_blank" rel="noreferrer" className="block">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
+                              {/* CoverThumb degrades a non-loading src (e.g. a
+                                  Google-Drive folder link, or a dead host) to the
+                                  neutral no-image placeholder instead of a broken
+                                  icon; the link still opens the original URL. */}
+                              <CoverThumb
                                 src={imgUrl}
                                 alt={titleText}
                                 className="w-full max-w-[120px] rounded-lg border border-border object-cover"
