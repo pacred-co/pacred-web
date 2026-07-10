@@ -62,6 +62,7 @@ export function QuotationFormClient({
   const [doc, setDoc] = useState({
     phone: "", memberCode: "",
     billName: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
+    billTo: "", // ชื่อผู้วางบิล (ถ้าต่างจากลูกค้า)
     taxId: "", shipper: "",
     consignee: booking?.customerName && booking.customerName !== "—" ? booking.customerName : "",
     product: booking?.product ?? "", pol: booking?.pol ?? "", pickupAddress: "",
@@ -326,6 +327,7 @@ export function QuotationFormClient({
                     {!looking && lookupState === "notfound" && <p className={styles.hintTxt} style={{ color: "#d97706" }}>⚠ ไม่พบ — กรอกใหม่เพื่อสมัคร (ได้รหัส PR)</p>}
                   </div>
                   <KvInput label="ชื่อลูกค้า" value={doc.billName} onChange={setF("billName")} placeholder="ชื่อ / บริษัท" />
+                  <KvInput label="ชื่อผู้วางบิล" value={doc.billTo} onChange={setF("billTo")} placeholder="ชื่อผู้วางบิล (ถ้าต่างจากลูกค้า)" />
                   <KvInput label="เบอร์โทร" value={doc.phone} onChange={setF("phone")} placeholder="08x-xxx-xxxx" />
                 </div>
               </div>
