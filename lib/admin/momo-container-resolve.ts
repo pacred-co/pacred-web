@@ -69,6 +69,7 @@ type ImportTrackRow = {
   momo_container_no: string | null;
   container_batch_no: string | null;
   momo_sack_no: string | null;
+  momo_tracking_no?: string | null;
   etd: string | null;
   eta: string | null;
 };
@@ -214,22 +215,68 @@ export function mergeTaemEtdEta(
 export async function resolveMomoContainerInfo(
   admin: AdminClient,
   cabinetCodes: string[],
+  /**
+   * The tracking numbers STILL under each cabinet (keyed by fcabinetnumber ·
+   * report-cnt already computes this as `tracksByCab`). When supplied, a
+   * placeholder's real container is resolved from ONLY these trackings' MOMO rows
+   * — see the block comment below. Omit (unit tests / other callers) → falls back
+   * to the whole-batch resolution (the pre-2026-07-10 behaviour).
+   */
+  trackingsByCab?: Record<string, string[]>,
 ): Promise<Record<string, MomoContainerInfo>> {
   const allCabs = Array.from(new Set(cabinetCodes.map((c) => c.trim()).filter(Boolean)));
   const placeholders = allCabs.filter((c) => isMomoRoutingPlaceholder(c));
 
   // ── MOMO layer (container/sack/momoEtd/momoEta) — placeholders only ──
+  //
+  // 🔴 DUPLICATE-CONTAINER FIX (ภูม 2026-07-10 · "ตู้ GZE260704-1 ซ้ำ 2 แถว").
+  // Resolve a placeholder's REAL container from ONLY the trackings STILL under
+  // that placeholder in tb_forwarder (trackingsByCab), NOT the whole MOMO routing
+  // batch. WHY: one MOMO routing batch (e.g. PR20260701-EK01) is closed into
+  // SEVERAL real containers, per-tracking + progressively. The propagate cron
+  // (momo-isolated/propagate.ts) moves each parcel OUT of the placeholder the
+  // moment its OWN tracking gets a real container_batch_no. So a parcel STILL under
+  // a placeholder is one MOMO has NOT assigned a container to yet (its own
+  // tracking's container_batch_no is NULL · verified on prod: 0 placeholder rows
+  // have an own-tracking real container). The OLD fold read the batch's WHOLE
+  // momo_container_no set and "borrowed" the FIRST non-null container from a parcel
+  // that had already moved out → the genuinely-pending parcels masqueraded as that
+  // real container → a FALSE duplicate row (placeholder-shown-as-real + the real
+  // container's own row). Querying by the under-placeholder trackings resolves each
+  // placeholder to ITS OWN parcels only → NULL while pending → the row shows the
+  // placeholder (รอเลขตู้จริง), no duplicate. Auto-heals: once MOMO assigns the
+  // container, propagate rewrites fcabinetnumber → the parcels join the real row.
   let base: Record<string, MomoContainerInfo> = {};
   if (placeholders.length > 0) {
-    const { data, error } = await admin
+    const placeholderSet = new Set(placeholders);
+    // Own trackings = every tracking under a placeholder cabinet (deduped). null
+    // signals "no per-cabinet trackings supplied" → whole-batch fallback.
+    const ownTrackings = trackingsByCab
+      ? Array.from(new Set(
+          placeholders.flatMap((c) => (trackingsByCab[c] ?? []).map((t) => t.trim()).filter(Boolean)),
+        ))
+      : null;
+    let query = admin
       .from("momo_import_tracks")
-      .select("momo_container_no, container_batch_no, momo_sack_no, etd, eta")
-      .in("momo_container_no", placeholders)
+      .select("momo_container_no, container_batch_no, momo_sack_no, momo_tracking_no, etd, eta")
       .limit(50_000);
+    query = ownTrackings != null
+      // Restrict to the parcels STILL under a placeholder (["__none__"] guards an
+      // empty list so .in() doesn't degrade to "match everything").
+      ? query.in("momo_tracking_no", ownTrackings.length > 0 ? ownTrackings : ["__none__"])
+      : query.in("momo_container_no", placeholders);
+    const { data, error } = await query;
     if (error) {
       console.error("[resolveMomoContainerInfo · momo] failed", { code: error.code, message: error.message });
     } else {
-      base = foldMomoContainerInfo((data ?? []) as ImportTrackRow[]);
+      // When queried by tracking, keep only rows whose container_no is one of OUR
+      // placeholders (a reassigned tracking's row may carry a real container_no →
+      // not ours to fold under a placeholder key).
+      const rows = ((data ?? []) as ImportTrackRow[]).filter(
+        (r) => ownTrackings == null
+          || (r.momo_container_no != null && placeholderSet.has(r.momo_container_no.trim())),
+      );
+      base = foldMomoContainerInfo(rows);
     }
   }
 

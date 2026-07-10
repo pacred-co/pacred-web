@@ -622,7 +622,14 @@ export default async function AdminReportCntDetailPage({
   // Resolve ETD/ETA (แต้ม-primary · MOMO-fallback) for this single cabinet, fold
   // the rows' date stamps into the ordered stage strip, and pull the China-ops
   // WeChat messages that mention this container for the mini-feed. All read-only.
-  const momoInfo = (await resolveMomoContainerInfo(admin, [fCabinetNumber]))[fCabinetNumber];
+  // 2026-07-10 (ภูม dup-container fix): pass THIS cabinet's own trackings so a
+  // placeholder resolves its real container from its own parcels only (consistent
+  // with the list). The detail here only reads etd/eta (unaffected), but keeping
+  // the call shape identical avoids the resolver borrowing another parcel's tู้.
+  const detailTracksByCab: Record<string, string[]> = {
+    [fCabinetNumber]: cntRows.map((r) => r.ftrackingchn).filter((s): s is string => Boolean(s)),
+  };
+  const momoInfo = (await resolveMomoContainerInfo(admin, [fCabinetNumber], detailTracksByCab))[fCabinetNumber];
   const journeyEtd = momoInfo?.etd ?? null;
   const journeyEta = momoInfo?.eta ?? null;
   const journey = buildContainerJourney(
