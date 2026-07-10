@@ -283,14 +283,17 @@ export async function loadReceiptDocument(
     ? [userRow.userName, userRow.userLastName].filter(Boolean).join(" ").trim()
     : "";
 
-  // Name: prefer recompname (legacy reCompName), then PCS<id>+corporate, then
-  // PCS<id>+personal name, then bare userid.
+  // Name: the buyer IDENTITY block shows ONLY the name/company — NO PR customer
+  // code (ภูม 2026-07-10: ลูกค้าโทรมาแจ้ง — ช่วงนี้เป็นข้อมูลบริษัทลูกค้า ไม่ควรมีรหัสลูกค้า
+  // ปน). The PR/userid belongs to the อ้างอิง (order refs), not the identity line.
+  // prefer recompname (legacy reCompName) → personal name → bare userid ONLY as a
+  // last resort so the block is never blank when a customer has no stored name.
   const customerName = (() => {
     if (receipt.recompname && receipt.recompname.trim()) {
-      return `${receipt.userid} ${receipt.recompname.trim()}`;
+      return receipt.recompname.trim();
     }
     if (fallbackPersonalName) {
-      return `${receipt.userid} ${fallbackPersonalName}`;
+      return fallbackPersonalName;
     }
     return receipt.userid;
   })();
