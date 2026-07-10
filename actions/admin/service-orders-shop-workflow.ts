@@ -417,14 +417,48 @@ export async function adminSaveShopOrderItemsAndQuote(
     let rowsUpdated      = 0;
     let sumTotalChnAll   = 0;
     let sumShippingChnAll = 0;
+
+    // mig 0248 — a line may carry the ORIGINAL currency + amount it was priced in
+    // (e.g. "$544.00 USD") next to the ¥-equivalent `cprice`. If an admin now
+    // overrides `cprice` directly, that original no longer describes this line, so
+    // the order pages would render a STALE "$544.00 USD". Read the current values
+    // so a real price change can drop the original (→ a plain ¥ row).
+    const editIds = d.items.filter((it) => it.cAmount > 0).map((it) => it.id);
+    const beforeById = new Map<number, { cprice: number; input_currency: string }>();
+    if (editIds.length > 0) {
+      const { data: beforeRows, error: beforeErr } = await admin
+        .from("tb_order")
+        .select("id, cprice, input_currency")
+        .eq("hno", d.hNo)
+        .in("id", editIds);
+      if (beforeErr) {
+        console.error(`[tb_order pre-read for input_currency] failed`, {
+          code: beforeErr.code, message: beforeErr.message,
+        });
+        return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+      }
+      for (const b of (beforeRows ?? []) as Array<{ id: number; cprice: number | string | null; input_currency: string | null }>) {
+        beforeById.set(b.id, {
+          cprice: Number(b.cprice ?? 0),
+          input_currency: (b.input_currency ?? "").trim(),
+        });
+      }
+    }
+
     for (const it of d.items) {
       if (it.cAmount <= 0) continue;
+      const before = beforeById.get(it.id);
+      const priceChanged = before !== undefined && Math.abs(before.cprice - it.cPrice) > 0.004;
+      const dropOriginal = before !== undefined && priceChanged && before.input_currency !== "";
       const { error: itemUpdErr } = await admin
         .from("tb_order")
         .update({
           camount:      it.cAmount,
           cprice:       it.cPrice,
           cshippingchn: it.cShippingCHN,
+          // Display-only columns — cleared so a hand-edited ¥ price can never be
+          // shown as a stale foreign amount. Never touched when the price is unchanged.
+          ...(dropOriginal ? { input_currency: "", input_price: 0 } : {}),
         })
         .eq("id", it.id)
         .eq("hno", d.hNo); // belt-and-suspenders — scope to this order

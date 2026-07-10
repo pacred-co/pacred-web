@@ -196,6 +196,7 @@ type ORow = {
   cdetails: string | null; camount: number | null; cprice: number | null;
   cshippingchn: number | null; cpriceupdate: number | null; crewallet: string | null;
   cnote: string | null; cshippingnumber: string | null; ctrackingnumber: string | null;
+  input_currency: string | null; input_price: number | string | null;
 };
 
 export default async function AdminServiceOrderEditPage({
@@ -284,7 +285,7 @@ export default async function AdminServiceOrderEditPage({
     .select(
       "id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails," +
       "camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote," +
-      "cshippingnumber,ctrackingnumber",
+      "cshippingnumber,ctrackingnumber,input_currency,input_price",
     )
     .eq("hno", r.hno)
     .order("id", { ascending: true })
@@ -325,6 +326,10 @@ export default async function AdminServiceOrderEditPage({
     cshippingchn: Number(it.cshippingchn ?? 0),
     cpriceupdate: Number(it.cpriceupdate ?? 0),
     crewallet:    it.crewallet,
+    // mig 0248 — original currency + amount (display only; the editable price
+    // input below stays the ¥-equivalent `cprice` that pricing runs on).
+    inputCurrency: it.input_currency,
+    inputPrice:    Number(it.input_price ?? 0),
   }));
 
   // Spawn rows (status 4) + refundable items (status 3/4/5).

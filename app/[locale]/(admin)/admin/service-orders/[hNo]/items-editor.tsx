@@ -63,6 +63,10 @@ export type EditorItem = {
   cshippingchn: number;
   cpriceupdate: number;
   crewallet:    string | null;   // '1' = full-refunded (locked)
+  // mig 0248 — the ORIGINAL currency + amount the price was entered in ('' / 0 for
+  // a plain ¥ row). `cprice` above stays the ¥-equivalent that pricing runs on.
+  inputCurrency: string | null;
+  inputPrice:    number;
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
