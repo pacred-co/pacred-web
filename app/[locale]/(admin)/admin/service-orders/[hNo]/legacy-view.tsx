@@ -545,12 +545,28 @@ export async function renderLegacyServiceOrderView(hno: string) {
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-2 text-sm">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-muted" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
-            <span className="text-right">
-              <span className="font-mono tabular-nums">
-                {rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            {/* mig 0248 — when the order was opened in a foreign currency (USD/…), show the
+                effective บาท/{cur} rate as PRIMARY (owner: "ต้องขึ้นเป็นอัตราเรทดอลลาร์") +
+                the ¥ rate as the small secondary. บาท/USD = ราคารวมสุทธิสินค้า(฿) ÷ ยอด USD =
+                (productYuan × rsRate) ÷ foreignSubtotal. DISPLAY-only — ¥ pricing untouched. */}
+            {orderCur && orderForeignSubtotal > 0 ? (
+              <span className="text-right">
+                <span className="font-mono tabular-nums">
+                  {((orderProductYuan * rate) / orderForeignSubtotal).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-muted"> บาท/{orderCur}</span>
+                <div className="text-[11px] text-muted">
+                  (¥ {rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท/หยวน)
+                </div>
               </span>
-              <span className="text-muted"> บาท/หยวน</span>
-            </span>
+            ) : (
+              <span className="text-right">
+                <span className="font-mono tabular-nums">
+                  {rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </span>
+                <span className="text-muted"> บาท/หยวน</span>
+              </span>
+            )}
           </div>
           {/* mig 0248 — when every line was priced in ONE foreign currency and no
               ค่าขนส่งจีน is folded in, show the amount the order was actually opened
