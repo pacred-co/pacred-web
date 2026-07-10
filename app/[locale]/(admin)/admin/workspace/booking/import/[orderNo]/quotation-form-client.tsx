@@ -221,14 +221,18 @@ export function QuotationFormClient({
             {/* docHeader (หัวจดหมาย) — บนสุดของใบ */}
             <div className={styles.docHeader}>
               <div className={styles.docBrand}>
-                <div className={styles.docMark}>PR</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/pacred-logo-red.png" alt="Pacred" className={styles.docLogo} />
                 <div>
                   <h2>{PACRED_ISSUER.name}</h2>
                   <p>{PACRED_ISSUER.address}<br />Tax ID: {PACRED_ISSUER.taxId} • Tel: {PACRED_ISSUER.tel} • {webShort}</p>
                 </div>
               </div>
               <div className={styles.docRight}>
+                <div className={styles.docPage}>หน้า 1/1</div>
+                <div className={styles.docOrig}>(ต้นฉบับ)</div>
                 <h1>ใบเสนอราคา</h1>
+                <div className={styles.docSub}>Quotation</div>
                 <div className={styles.docNo}>{docNo}</div>
               </div>
             </div>

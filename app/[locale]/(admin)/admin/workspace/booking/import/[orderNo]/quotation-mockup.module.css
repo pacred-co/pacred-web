@@ -88,14 +88,18 @@
 
 /* ── doc (ใบเสนอราคา Peak) ── */
 .doc { background: #fff; border: 1px solid #dadde6; border-radius: 24px; overflow: hidden; box-shadow: 0 18px 40px rgba(15,23,42,.1); }
-.docHeader { padding: 24px 28px 18px; border-bottom: 1px solid #ececf2; display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
-.docBrand { display: flex; gap: 16px; align-items: flex-start; }
-.docMark { width: 52px; height: 52px; border-radius: 16px; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 24px; flex-shrink: 0; }
-.docBrand h2 { margin: 0; color: #111827; font-size: 22px; }
-.docBrand p { margin: 4px 0 0; color: #5d6270; font-size: 12.5px; line-height: 1.55; }
-.docRight { text-align: right; }
-.docRight h1 { margin: 0 0 10px; font-size: 28px; color: var(--red); }
-.docNo { display: inline-block; background: #f7f8fb; border: 1px solid #e2e4ea; border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 800; }
+/* docHeader — Peak-style (owner 2026-07-10: โลโก้สี Pacred + หน้า/ต้นฉบับ/Quotation เหมือน EditableQuoteCard) */
+.docHeader { padding: 24px 28px 18px; border-bottom: 1px solid #ececf2; display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+.docBrand { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.docLogo { height: 60px; width: auto; }
+.docBrand h2 { margin: 0; color: #111827; font-size: 18px; }
+.docBrand p { margin: 4px 0 0; color: #5d6270; font-size: 12px; line-height: 1.55; }
+.docRight { text-align: right; line-height: 1.2; }
+.docPage { font-size: 11px; color: #8a8f99; }
+.docOrig { font-size: 10px; color: #a3a7b0; }
+.docRight h1 { margin: 6px 0 0; font-size: 32px; font-weight: 900; color: var(--red); line-height: 1.05; }
+.docSub { font-size: 11px; letter-spacing: .05em; color: #a3a7b0; margin-bottom: 11px; }
+.docNo { display: inline-block; background: var(--pink); border: 1px solid #efd1d1; border-radius: 12px; padding: 8px 12px; font-size: 13px; font-weight: 800; color: var(--red); }
 .badges { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
 .badge { border-radius: 999px; background: #f0f2f6; padding: 6px 11px; font-size: 12px; font-weight: 700; color: #3b414d; }
 .badge.red { background: #ffe7ea; color: #b11117; } .badge.blue { background: #eaf1ff; color: #1c4b9a; } .badge.green { background: #eaf8f0; color: #176b37; }
