@@ -95,10 +95,11 @@ export const CARGO_PROMO_PACKAGES: CargoPromoPackage[] = [
 
 /** หมายเหตุ ที่ใช้ร่วมทุกแพ็คเกจ. */
 export const QUOTE_NOTES: string[] = [
-  "อี้อู (ทางรถ) +เพิ่ม 2–3 วัน",
+  // "อี้อู (ทางรถ) +เพิ่ม 2–3 วัน" — removed: the extra transit days are now folded
+  // straight into the อี้อู·ทางรถ "ระยะเวลา" column (owner 2026-07-10 · ไม่เขียนแยก).
   "1 CBM ไม่เกิน 250 กก. (เกินคิดเป็นกิโล)",
   "ส่งปลายทาง กทม. / ปริมณฑล เริ่มต้น 100 บาท (ไม่มีขั้นต่ำ)",
-  "ค่าขั้นต่ำ 25 บาท / shipment",
+  "ขั้นต่ำ 50 บาท / shipment",
   "ออกใบกำกับภาษี / ใบขนเสียภาษี ในชื่อลูกค้าได้",
 ];
 
@@ -165,8 +166,8 @@ export const MODE_LABEL: Record<QuoteMode, string> = {
  *  เฉพาะตัว (=0 → แสดง/ใช้ 250 · บิลจริงยังอ่าน tb_users.userComparisonValue ต่อคน).
  *  เพดานยังคง 350 (COMPARISON_CAP / COMPARISON_MAX). */
 export const DEFAULT_COMPARISON = 250;
-/** ค่าขั้นต่ำต่อ shipment (บาท). */
-export const MIN_CHARGE = 25;
+/** ค่าขั้นต่ำต่อ shipment (บาท) — quote/ใบประเมิน เท่านั้น (owner 2026-07-10: 25 → 50). */
+export const MIN_CHARGE = 50;
 /** อี้อู เฉพาะทางรถ — บาท/คิว ที่พับเข้าราคารถ-อี้อู (owner ปอน: +600 · 4,900→5,500). */
 export const YIWU_TRUCK_SURCHARGE_CBM = 600;
 /** ปลายทาง กทม./ปริมณฑล เริ่มต้น (บาท · ไม่มีขั้นต่ำ). */

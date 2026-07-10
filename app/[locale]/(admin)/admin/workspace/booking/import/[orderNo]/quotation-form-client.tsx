@@ -183,21 +183,56 @@ export function QuotationFormClient({
 
       {/* ══ MOCKUP 1:1 (quotation_booking_mockup.html) — topbar/flow เอาออก · สถานะย้ายเข้าหัวเอกสาร (owner) ══ */}
       <div className={styles.wrap}>
-        {/* grid: เอกสาร (ซ้าย · หลัก) + แถบขวา (Condition Builder + Booking Payload) */}
+        {/* ── ตัวเลือกบริการ (Condition) — ย้ายขึ้นบน · ดร็อปดาวน์ (owner 2026-07-10) ── */}
+        <div className={styles.card} style={{ marginBottom: 22 }}>
+          <div className={styles.cardHead}>
+            <h2>ตัวเลือกบริการ</h2>
+            {showCost ? (
+              <Link href="/admin/workspace/booking/import/settings" className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:text-primary-700">
+                <Settings className="h-3.5 w-3.5" /> ตั้งค่าเรท
+              </Link>
+            ) : <small>ฟอร์มฝั่งแอดมิน</small>}
+          </div>
+          <div className={styles.cardBody}>
+            <div className={styles.condGrid}>
+              <SelRow stack label="บริการ" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
+              <SelRow stack label="ขนส่ง" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
+              {usesLoadType(cond.service) && (
+                <SelRow stack label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} note="เฉพาะทางเรือ · LCL=รวมตู้ · FCL=เหมาตู้" onPick={(v) => setC("loadType", v)} />
+              )}
+              {usesContainer(cond.loadType) && (
+                <SelRow stack label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} note="เลือกขนาดตู้ (FCL)" onPick={(v) => setC("container", v)} />
+              )}
+              <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
+              <SelRow stack label="PORT" options={PORT_OPTIONS} value={cond.port} onPick={(v) => setC("port", v)} />
+              <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+            </div>
+            {/* SPECIAL = เลือกได้หลายอย่าง → คงเป็นชิป (ดร็อปดาวน์เลือกหลายอย่างไม่สะดวก) */}
+            <div style={{ marginTop: 14 }}>
+              <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
+            </div>
+          </div>
+        </div>
+
+        {/* grid: เอกสาร (ซ้าย · หลัก) + แถบขวา (หมายเหตุ/บันทึก + Booking Payload) */}
         <div className={styles.grid}>
           {/* ── เอกสาร Peak (ใบเสนอราคา) — คอลัมน์ซ้าย (หลัก) ── */}
           <div className={styles.doc}>
             {/* docHeader (หัวจดหมาย) — บนสุดของใบ */}
             <div className={styles.docHeader}>
               <div className={styles.docBrand}>
-                <div className={styles.docMark}>PR</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/pacred-logo-red.png" alt="Pacred" className={styles.docLogo} />
                 <div>
                   <h2>{PACRED_ISSUER.name}</h2>
                   <p>{PACRED_ISSUER.address}<br />Tax ID: {PACRED_ISSUER.taxId} • Tel: {PACRED_ISSUER.tel} • {webShort}</p>
                 </div>
               </div>
               <div className={styles.docRight}>
+                <div className={styles.docPage}>หน้า 1/1</div>
+                <div className={styles.docOrig}>(ต้นฉบับ)</div>
                 <h1>ใบเสนอราคา</h1>
+                <div className={styles.docSub}>Quotation</div>
                 <div className={styles.docNo}>{docNo}</div>
               </div>
             </div>
@@ -404,33 +439,42 @@ export function QuotationFormClient({
 
           {/* ── แถบขวา: ย้าย Condition Builder มากองรวมกับ Booking Payload (owner: ซ้าย→ขวา) ── */}
           <div className={styles.rail}>
-          {/* ── Condition Builder (ฟอร์มฝั่งแอดมิน) ── */}
+          {/* ── Booking Payload (สลับขึ้นบน · owner 2026-07-10) ── */}
+          <div className={styles.card}>
+            <div className={styles.cardHead}><h2>Booking Payload</h2><span className={styles.sync}>Auto Sync</span></div>
+            <div className={styles.cardBody}>
+              <div className={styles.payloadTitle}>
+                <span className={styles.sectionTag}>Fields sent to Booking</span>
+                <small style={{ color: "#6f7278", fontSize: 12 }}>ไม่เอาราคาไป Booking</small>
+              </div>
+              <table className={styles.mapTable}>
+                <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
+                <tbody>
+                  <PayRow field="booking_ref" value={docNo} src="Quote Header" />
+                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
+                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
+                  <PayRow field="term" value={cond.term} src="Term Chip" />
+                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
+                  <PayRow field="destination_port" value={cond.port} src="PORT" />
+                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
+                  <PayRow field="commodity" value={doc.product || "—"} src="Description" />
+                  <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
+                  <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
+                  <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
+                  <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
+                  <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── หมายเหตุ + บันทึก (ฟอร์มฝั่งแอดมิน) — ตัวเลือกบริการย้ายขึ้นบนแล้ว ── */}
           <div className={styles.card}>
             <div className={styles.cardHead}>
-              <h2>Condition Builder</h2>
-              {/* ลิงก์ไปหน้าตั้งค่าเรท — เฉพาะ role ที่เข้าถึงหน้านั้นได้ (canViewCost) กัน super เด้ง 404 */}
-              {showCost ? (
-                <Link href="/admin/workspace/booking/import/settings" className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:text-primary-700">
-                  <Settings className="h-3.5 w-3.5" /> ตั้งค่าเรท
-                </Link>
-              ) : <small>ฟอร์มฝั่งแอดมิน</small>}
+              <h2>หมายเหตุ + บันทึก</h2>
+              <small>ฟอร์มฝั่งแอดมิน</small>
             </div>
             <div className={styles.cardBody}>
-              <div className={styles.selector}>
-                <SelRow label="บริการ" options={DIRECTION_OPTIONS} value={cond.direction} disabledOpts={["EXPORT"]} note="ส่งออก (Export) เปิดเร็วๆ นี้" onPick={(v) => setC("direction", v)} />
-                <SelRow label="ขนส่ง" options={SERVICE_OPTIONS} value={cond.service} onPick={(v) => setC("service", v)} />
-                {usesLoadType(cond.service) && (
-                  <SelRow label="ประเภท" options={LOAD_TYPE_OPTIONS} value={cond.loadType} note="เฉพาะทางเรือ · LCL=รวมตู้ · FCL=เหมาตู้" onPick={(v) => setC("loadType", v)} />
-                )}
-                {usesContainer(cond.loadType) && (
-                  <SelRow label="ขนาดตู้" options={CONTAINER_OPTIONS} value={cond.container} note="เลือกขนาดตู้ (FCL)" onPick={(v) => setC("container", v)} />
-                )}
-                <SelRow label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
-                <SelRow label="PORT" options={PORT_OPTIONS} value={cond.port} onPick={(v) => setC("port", v)} />
-                <SelRow label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
-                <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
-              </div>
-
               {/* หมายเหตุ + แนบไฟล์ + บันทึก (แอดมิน) */}
               <div className={styles.adminBlock}>
                 <div>
@@ -463,35 +507,6 @@ export function QuotationFormClient({
               </div>
             </div>
           </div>
-
-          {/* ── Booking Payload ── */}
-          <div className={styles.card}>
-            <div className={styles.cardHead}><h2>Booking Payload</h2><span className={styles.sync}>Auto Sync</span></div>
-            <div className={styles.cardBody}>
-              <div className={styles.payloadTitle}>
-                <span className={styles.sectionTag}>Fields sent to Booking</span>
-                <small style={{ color: "#6f7278", fontSize: 12 }}>ไม่เอาราคาไป Booking</small>
-              </div>
-              <table className={styles.mapTable}>
-                <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
-                <tbody>
-                  <PayRow field="booking_ref" value={docNo} src="Quote Header" />
-                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
-                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
-                  <PayRow field="term" value={cond.term} src="Term Chip" />
-                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
-                  <PayRow field="destination_port" value={cond.port} src="PORT" />
-                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
-                  <PayRow field="commodity" value={doc.product || "—"} src="Description" />
-                  <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
-                  <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
-                  <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
-                  <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
-                  <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
-                </tbody>
-              </table>
-            </div>
-          </div>
           </div>
         </div>
       </div>
@@ -501,26 +516,38 @@ export function QuotationFormClient({
 
 // ── helpers ─────────────────────────────────────────────────
 function SelRow({
-  label, options, value, values, multi, colorMap, disabledOpts, note, onPick,
+  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack,
 }: {
   label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; colorMap?: Record<string, string>; disabledOpts?: string[]; note?: string; onPick: (v: string) => void;
+  /** stack = label above the control (top condition bar) · default = label beside (row). */
+  stack?: boolean;
 }) {
   const isActive = (o: string) => (multi ? (values ?? []).includes(o) : value === o);
   const isDisabled = (o: string) => (disabledOpts ?? []).includes(o);
   return (
-    <div className={styles.selrow}>
+    <div className={stack ? styles.ddCell : styles.selrow}>
       <div className={styles.label}>{label}</div>
       <div>
-        <div className={styles.pillWrap}>
-          {options.map((o) => {
-            const color = colorMap?.[o];
-            const dis = isDisabled(o);
-            return (
-              <button key={o} type="button" disabled={dis} onClick={() => { if (!dis) onPick(o); }}
-                className={cx(styles.pill, dis ? styles.pillDisabled : isActive(o) ? styles.active : color ? styles[color] : undefined)}>{o}</button>
-            );
-          })}
-        </div>
+        {multi ? (
+          // เลือกหลายอย่าง → ชิป (ดร็อปดาวน์ multi ไม่สะดวก)
+          <div className={styles.pillWrap}>
+            {options.map((o) => {
+              const color = colorMap?.[o];
+              const dis = isDisabled(o);
+              return (
+                <button key={o} type="button" disabled={dis} onClick={() => { if (!dis) onPick(o); }}
+                  className={cx(styles.pill, dis ? styles.pillDisabled : isActive(o) ? styles.active : color ? styles[color] : undefined)}>{o}</button>
+              );
+            })}
+          </div>
+        ) : (
+          // เลือกอย่างเดียว → ดร็อปดาวน์ (owner 2026-07-10)
+          <select className={styles.dropdown} value={value ?? ""} onChange={(e) => onPick(e.target.value)}>
+            {options.map((o) => (
+              <option key={o} value={o} disabled={isDisabled(o)}>{o}</option>
+            ))}
+          </select>
+        )}
         {note && <div className={styles.rowNote}>{note}</div>}
       </div>
     </div>

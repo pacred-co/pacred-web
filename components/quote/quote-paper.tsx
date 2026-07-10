@@ -42,7 +42,15 @@ export type View = "compare" | "calc";
 // totals engine reads `amount`, so `discount` is display-only breakdown metadata.
 // Optional so older stored payloads (no discount) round-trip as 0.
 export type DisplayLine = { desc: string; qtyLabel: string; price: number; amount: number; vat: boolean; whtApplicable: boolean; discount?: number };
-export type CompareRow = { warehouse: string; isYiwu: boolean; truck: PackageRate; ship: PackageRate };
+export type CompareRow = {
+  warehouse: string; isYiwu: boolean; truck: PackageRate; ship: PackageRate;
+  /** Product-category label, e.g. "ทั่วไป · มอก." | "อย. · พิเศษ" — optional so older
+   *  stored payloads (one warehouse row · no category) round-trip unchanged. */
+  category?: string;
+  /** Write-back metadata (admin quote tab only · ignored by the read-only render):
+   *  the source warehouse id "1"|"2" + the product ids this row maps to (["1","2"]). */
+  warehouseId?: string; products?: string[];
+};
 
 /**
  * The complete render model — serialized into `customer_quotations.payload`.
@@ -193,28 +201,34 @@ function CompareTable({ model }: { model: QuoteModel }) {
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <table className="w-full text-[11px] sm:text-[12px]">
         <thead className="border-b text-[11px] text-slate-700" style={{ background: TINT, borderColor: TINT_BD }}>
-          <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
+          <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ประเภทสินค้า</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
-          {model.compareRows.map((r, i) => (
-            <tr key={i} className="border-t border-slate-100 align-top">
-              <td className="px-2 sm:px-3 py-2 font-semibold whitespace-nowrap">{r.warehouse}</td>
-              <td className="px-2 sm:px-3 py-2"><RateCell r={r.truck} extraDays={r.isYiwu ? "+2–3 วัน" : undefined} /></td>
-              <td className="px-2 sm:px-3 py-2"><RateCell r={r.ship} /></td>
-            </tr>
-          ))}
+          {model.compareRows.map((r, i) => {
+            // Show the warehouse name only on the first row of each warehouse group
+            // (the 2 category rows share it) — cleaner than repeating it.
+            const showWh = i === 0 || model.compareRows[i - 1].warehouse !== r.warehouse;
+            return (
+              <tr key={i} className="border-t border-slate-100 align-top">
+                <td className="px-2 sm:px-3 py-2 font-semibold whitespace-nowrap">{showWh ? r.warehouse : ""}</td>
+                <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-slate-600">{r.category ?? ""}</td>
+                <td className="px-2 sm:px-3 py-2"><RateCell r={r.truck} /></td>
+                <td className="px-2 sm:px-3 py-2"><RateCell r={r.ship} /></td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function RateCell({ r, extraDays }: { r: PackageRate; extraDays?: string }) {
+function RateCell({ r }: { r: PackageRate }) {
   return (
     <div>
       <div className="font-mono font-bold" style={{ color: ACCENT }}>฿{BAHT(r.cbm)}<span className="text-[11px] font-normal text-slate-500">/คิว</span></div>
       <div className="font-mono text-[11px]">฿{BAHT(r.kg)}<span className="text-[11px] text-slate-500">/กก.</span></div>
-      <div className="text-[11px] text-slate-500">{r.days}{extraDays ? ` ${extraDays}` : ""}</div>
+      <div className="text-[11px] text-slate-500">{r.days}</div>
     </div>
   );
 }
@@ -376,7 +390,7 @@ export function buildQuoteText(m: QuoteModel): string {
   if (m.view === "compare") {
     L.push("เทียบราคา (บาท/คิว · บาท/กก. · ระยะเวลา):");
     m.compareRows.forEach((r) => {
-      L.push(` • ${r.warehouse} · รถ ฿${BAHT(r.truck.cbm)}/คิว ฿${BAHT(r.truck.kg)}/กก. (${r.truck.days}${r.isYiwu ? " +2–3 วัน" : ""})`);
+      L.push(` • ${r.warehouse}${r.category ? ` · ${r.category}` : ""} · รถ ฿${BAHT(r.truck.cbm)}/คิว ฿${BAHT(r.truck.kg)}/กก. (${r.truck.days})`);
       L.push(`            เรือ ฿${BAHT(r.ship.cbm)}/คิว ฿${BAHT(r.ship.kg)}/กก. (${r.ship.days})`);
     });
     if (m.showCustomsInfo) {
@@ -418,11 +432,14 @@ export function buildPrintHtml(m: QuoteModel): string {
   let body = "";
   if (m.view === "compare") {
     const rows = m.compareRows
-      .map((r) => `<tr><td class="b">${esc(r.warehouse)}</td>
-        <td>${BAHT(r.truck.cbm)}<small>/คิว</small> · ${BAHT(r.truck.kg)}<small>/กก.</small><br><span class="mut">${esc(r.truck.days)}${r.isYiwu ? " +2–3 วัน" : ""}</span></td>
-        <td>${BAHT(r.ship.cbm)}<small>/คิว</small> · ${BAHT(r.ship.kg)}<small>/กก.</small><br><span class="mut">${esc(r.ship.days)}</span></td></tr>`)
+      .map((r, i) => {
+        const showWh = i === 0 || m.compareRows[i - 1].warehouse !== r.warehouse;
+        return `<tr><td class="b">${showWh ? esc(r.warehouse) : ""}</td><td class="mut">${esc(r.category ?? "")}</td>
+        <td>${BAHT(r.truck.cbm)}<small>/คิว</small> · ${BAHT(r.truck.kg)}<small>/กก.</small><br><span class="mut">${esc(r.truck.days)}</span></td>
+        <td>${BAHT(r.ship.cbm)}<small>/คิว</small> · ${BAHT(r.ship.kg)}<small>/กก.</small><br><span class="mut">${esc(r.ship.days)}</span></td></tr>`;
+      })
       .join("");
-    body = `<table class="items"><colgroup><col style="width:120px"><col><col></colgroup><thead><tr><th>โกดัง</th><th>ทางรถ 🚛</th><th>ทางเรือ 🚢</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body = `<table class="items"><colgroup><col style="width:96px"><col style="width:92px"><col><col></colgroup><thead><tr><th>โกดัง</th><th>ประเภทสินค้า</th><th>ทางรถ 🚛</th><th>ทางเรือ 🚢</th></tr></thead><tbody>${rows}</tbody></table>`;
     if (m.showCustomsInfo) {
       body += `<div class="box blk" style="margin-top:8px"><p class="b">📦 ${esc(CUSTOMS_ADDON.title)}</p><table class="cost">${CUSTOMS_ADDON.costs.map((c) => `<tr><td>${esc(c.label)}</td><td class="r b">${BAHT(c.amount)}</td><td class="mut">${esc(c.note ?? "")}</td></tr>`).join("")}</table><p class="b red">✅ ${esc(CUSTOMS_ADDON.summary)}</p></div>`;
     }

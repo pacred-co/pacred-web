@@ -31,8 +31,35 @@ import {
 } from "@/components/quote/quote-paper";
 import { EditableQuoteCard } from "@/components/quote/editable-quote-card";
 import { saveQuotationForShare } from "@/actions/admin/save-quotation";
+import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import type { CustomerRateMatrix, ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 
 const JURISTIC_WHT = 0.01;
+
+// The 2 product-category groups shown in the quote's เทียบราคา (mirror the rate
+// editor's RATE_ROWS): each row seeds from the customer's configured rate for its
+// representative product, and — on write-back — sets BOTH products in the group.
+const QUOTE_RATE_GROUPS: { category: string; products: ProductId[]; rep: ProductId }[] = [
+  { category: "ทั่วไป · มอก.", products: ["1", "2"], rep: "1" },
+  { category: "อย. · พิเศษ", products: ["3", "4"], rep: "3" },
+];
+const WH_KEY_TO_ID: Record<WarehouseKey, WarehouseId> = { guangzhou: "1", yiwu: "2" };
+
+// อี้อู·ทางรถ ใช้เวลาเพิ่ม 2–3 วัน — พับเข้าช่วง "ระยะเวลา" เลย ไม่เขียน "+2–3" แยก
+// (owner 2026-07-10). "5–7 วัน" → "7–10 วัน".
+function foldExtraDays(days: string, addLo: number, addHi: number): string {
+  const range = days.match(/(\d+)\s*[–-]\s*(\d+)/);
+  if (range) {
+    return days.replace(/\d+\s*[–-]\s*\d+/, `${parseInt(range[1], 10) + addLo}–${parseInt(range[2], 10) + addHi}`);
+  }
+  const single = days.match(/\d+/);
+  if (single) {
+    const n = parseInt(single[0], 10);
+    return days.replace(/\d+/, `${n + addLo}–${n + addHi}`);
+  }
+  return days;
+}
 
 const THB = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const BAHT = (n: number) => n.toLocaleString("th-TH");
@@ -48,6 +75,7 @@ export function QuoteTab({
   buyerAddress: buyerAddressInit = "",
   buyerIsJuristic = false,
   buyerPhone: buyerPhoneInit = "",
+  matrix,
 }: {
   customerName: string;
   userid: string;
@@ -60,6 +88,9 @@ export function QuoteTab({
   buyerIsJuristic?: boolean;
   /** Customer phone — seeds the buyer phone (default ''). */
   buyerPhone?: string;
+  /** The customer's CONFIGURED rate matrix — the เทียบราคา table seeds from this
+   *  (per product-category) so the quote shows the real rate, not promo defaults. */
+  matrix?: CustomerRateMatrix;
 }) {
   const [view, setView] = useState<View>("compare");
   // ประเภทบริการ — Cargo เปิดใช้อย่างเดียว · Freight/Clearance เทาไว้ (เร็วๆ นี้ · ปอน 2026-07-03)
@@ -129,10 +160,31 @@ export function QuoteTab({
   }), [cbm, kg, comparison, ratePerCbm, ratePerKg]);
 
   const autoModel: QuoteModel = useMemo(() => {
-    const compareRows: CompareRow[] = WAREHOUSE_KEYS.map((w) => ({
-      warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
-      truck: rateFor(pkg, effLicensed, w, "truck"), ship: rateFor(pkg, effLicensed, w, "ship"),
-    }));
+    // เทียบราคา — 2 category rows per warehouse (ทั่วไป·มอก. / อย.·พิเศษ), each seeded
+    // from the customer's CONFIGURED rate (matrix) for its representative product,
+    // falling back to the selected promo package's rate where none is configured.
+    // "days" always comes from the promo package (not stored per-customer).
+    const compareRows: CompareRow[] = WAREHOUSE_KEYS.flatMap((w) => {
+      const whId = WH_KEY_TO_ID[w];
+      const wh = matrix?.byWarehouse?.[whId];
+      const promoTruck = rateFor(pkg, effLicensed, w, "truck");
+      const promoShip = rateFor(pkg, effLicensed, w, "ship");
+      return QUOTE_RATE_GROUPS.map((g) => ({
+        warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
+        category: g.category, warehouseId: whId, products: [...g.products],
+        truck: {
+          cbm: wh?.cbm["1"][g.rep] ?? promoTruck.cbm,
+          kg: wh?.kg["1"][g.rep] ?? promoTruck.kg,
+          // อี้อู·ทางรถ: fold the +2–3 transit days into the range (owner 2026-07-10).
+          days: w === "yiwu" ? foldExtraDays(promoTruck.days, 2, 3) : promoTruck.days,
+        },
+        ship: {
+          cbm: wh?.cbm["2"][g.rep] ?? promoShip.cbm,
+          kg: wh?.kg["2"][g.rep] ?? promoShip.kg,
+          days: promoShip.days,
+        },
+      }));
+    });
 
     const lines: DisplayLine[] = [];
     if (view === "calc" && (num(cbm) > 0 || num(kg) > 0)) {
@@ -165,7 +217,7 @@ export function QuoteTab({
       conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
     };
   }, [view, service, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo]);
+    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, matrix]);
 
   // The rep's inline edits — a field-level override merged over the auto-model.
   // Calc-derived fields (lines · compareRows · route · package · conditions) are
@@ -197,6 +249,53 @@ export function QuoteTab({
   // no longer matches the doc → the rep must re-issue to log/send the new version).
   const patchModel = (p: Partial<QuoteModel>) => { setOverrides((o) => ({ ...o, ...p })); setIssued(false); };
   const hasEdits = Object.keys(overrides).length > 0;
+
+  // ── write-back: save the edited เทียบราคา rows into the customer's CONFIGURED
+  // rate (tb_rate_custom_*) — explicit button + confirm (§0f · owner 2026-07-10).
+  // Each category row sets BOTH its products (ทั่วไป·มอก. → 1,2 · อย.·พิเศษ → 3,4),
+  // so the group ends up "ราคาเดียวกัน". Only the auto-seeded rows (carrying
+  // warehouseId + products) write back; a manually-added row is skipped.
+  const { confirm: confirmRate, dialogs: rateDialogs } = useConfirmDialogs();
+  const [savingRates, setSavingRates] = useState(false);
+  const [rateSaveMsg, setRateSaveMsg] = useState<string | null>(null);
+  const whShortName = (w: WarehouseId) => (w === "1" ? "กวางโจว" : "อี้อู");
+
+  async function saveCompareToRates() {
+    setRateSaveMsg(null);
+    const byWh = new Map<WarehouseId, CompareRow[]>();
+    for (const r of model.compareRows) {
+      if (!r.warehouseId || !r.products?.length) continue; // manually-added row → skip
+      const wid = r.warehouseId as WarehouseId;
+      byWh.set(wid, [...(byWh.get(wid) ?? []), r]);
+    }
+    if (byWh.size === 0) { setRateSaveMsg("ไม่มีแถวที่ผูกกับการตั้งค่า (แถวที่เพิ่มเองบันทึกกลับไม่ได้)"); return; }
+    const whNames = [...byWh.keys()].map(whShortName).join(" + ");
+    const ok = await confirmRate(
+      `บันทึกเรทเทียบราคานี้เข้า "เรทตั้งค่าลูกค้า" ${userid} (โกดัง ${whNames})? · ` +
+      `ทั่วไป·มอก. และ อย.·พิเศษ จะถูกตั้งเป็นราคาเดียวกันในแต่ละกลุ่ม · ลูกค้าเป็น SVIP · ใช้กับออเดอร์ใหม่`,
+    );
+    if (!ok) return;
+    setSavingRates(true);
+    try {
+      const done: string[] = [];
+      for (const [wid, rowsForWh] of byWh) {
+        const cells: { t: TransportId; p: ProductId; rkg: number; rcbm: number }[] = [];
+        for (const r of rowsForWh) {
+          for (const p of (r.products as ProductId[])) {
+            cells.push({ t: "1", p, rkg: r.truck.kg, rcbm: r.truck.cbm });
+            cells.push({ t: "2", p, rkg: r.ship.kg, rcbm: r.ship.cbm });
+          }
+        }
+        if (cells.length !== 8) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ตารางไม่ครบ 2 กลุ่มสินค้า — เพิ่มให้ครบก่อนบันทึก`); setSavingRates(false); return; }
+        const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wid, cells });
+        if (!res.ok) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ${res.error}`); setSavingRates(false); return; }
+        done.push(`${whShortName(wid)} ${res.data?.changed ?? 0} ช่อง${res.data?.created ? " (สร้าง SVIP)" : ""}${res.data?.repriced ? ` · คิดราคาใหม่ ${res.data.repriced}` : ""}`);
+      }
+      setRateSaveMsg(`✓ บันทึกเข้าเรทลูกค้าแล้ว — ${done.join(" · ")}`);
+    } finally {
+      setSavingRates(false);
+    }
+  }
   const docEmpty = model.view === "calc" ? model.lines.length === 0 : model.compareRows.length === 0;
   const docTitle = model.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา";
 
@@ -395,8 +494,19 @@ export function QuoteTab({
         </div>
       )}
       {actionMsg && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">{actionMsg}</div>}
+      {rateSaveMsg && (
+        <div className={`rounded-lg border px-3 py-2 text-[12px] ${rateSaveMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+          {rateSaveMsg}
+        </div>
+      )}
 
-      <EditableQuoteCard model={model} onChange={patchModel} />
+      <EditableQuoteCard
+        model={model}
+        onChange={patchModel}
+        onSaveToRates={view === "compare" ? saveCompareToRates : undefined}
+        savingToRates={savingRates}
+      />
+      {rateDialogs}
     </div>
   );
 }
