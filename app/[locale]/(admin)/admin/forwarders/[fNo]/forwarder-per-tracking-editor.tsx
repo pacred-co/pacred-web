@@ -305,6 +305,11 @@ export async function ForwarderPerTrackingEditor({
   let modeDerived: "1" | "2" | "3" | null = null;
   let modeExpectedCbmRate: number | null = null;
   let modeOtherCbmRate: number | null = null;
+  // ภูม 2026-07-10 — the "หาค่าเทียบ" line (PCS ราคานำเข้า block) needs the order
+  // KG/CBM ratio + the threshold the resolver compared it against. Hoisted so the
+  // client can show หาค่าเทียบ ALWAYS (not only under a manual ค่าเทียบ override).
+  let orderKgPerCbmOut = 0;
+  let effectiveComparisonValue = 0;
   if (r.userid && display.length > 0) {
     // Σweight / Σcbm across display rows — the order-total ค่าเทียบ ratio (same
     // aggregate the client preview box sums). cbmProduct per row = famountcount==1
@@ -332,6 +337,10 @@ export async function ForwarderPerTrackingEditor({
     }
     const userComparison = String(cmpRow?.userComparison ?? "0").trim() === "1";
     const userComparisonValue = num(cmpRow?.userComparisonValue);
+    // For the "หาค่าเทียบ" display line: the ratio + the threshold in effect. Use the
+    // customer's ค่าเทียบ when set, else the system default 250 (owner 2026-07-08).
+    orderKgPerCbmOut = orderKgPerCbm;
+    effectiveComparisonValue = userComparisonValue > 0 ? userComparisonValue : 250;
 
     let allMissing = display.length > 0;
     let firstSet = false;
@@ -479,6 +488,10 @@ export async function ForwarderPerTrackingEditor({
       derivedMode={modeDerived}
       modeExpectedCbmRate={modeExpectedCbmRate}
       modeOtherCbmRate={modeOtherCbmRate}
+      // หาค่าเทียบ line (ภูม 2026-07-10) — the order KG/CBM ratio + the threshold
+      // the resolver used, so the breakdown shows WHY weight-vs-volume was chosen.
+      profileKgPerCbm={Math.round(orderKgPerCbmOut * 100) / 100}
+      profileComparisonValue={effectiveComparisonValue}
     />
   );
 }

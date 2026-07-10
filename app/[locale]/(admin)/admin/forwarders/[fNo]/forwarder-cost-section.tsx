@@ -316,10 +316,12 @@ export async function ForwarderCostSection({
 
   return (
     <section className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm overflow-hidden">
-      {/* Collapsible (ปอน 2026-06-12) — default-folded: only the green bar shows;
-          click it to expand. Native <details>/<summary> keeps this a Server
-          Component (no client JS needed). */}
-      <details className="group">
+      {/* Collapsible (ปอน 2026-06-12) — default-OPEN (ภูม 2026-07-10 "ต้นทุน+กำไร
+          ต้องเห็นเลยแบบ PCS · ไม่ใช่ซ่อน") so the ต้นทุน + กำไร blocks read together
+          with the sell breakdown like the legacy ราคานำเข้าจีน-ไทย box. The ต้นทุน
+          numbers stay PIN-blurred (CostRevealRegion · owner 2026-06-16). Native
+          <details>/<summary> keeps this a Server Component (no client JS). */}
+      <details className="group" open>
       <summary className="bg-emerald-600 text-white px-4 py-2.5 flex items-center gap-2 flex-wrap cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
         <span className="text-base">💲</span>
         <h2 className="text-sm font-bold">ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน)</h2>
