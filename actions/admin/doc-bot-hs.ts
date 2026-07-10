@@ -44,6 +44,9 @@ export type DocBotHsRow = {
   stat:        string | null; // statistical code (รหัสสถิติ)
   note:        string | null;
   imported_at: string;
+  /** origin of the row: 'doc_bot' (the 749 bot rows) or 'ไฟล์:<sheet>' (the owner's
+   *  "พิกัด อัพเดท.xlsx" import · mig 0251). Shown as a badge in the merged browse. */
+  source:      string | null;
 };
 
 /**
@@ -55,12 +58,13 @@ export type DocBotHsRow = {
 export async function listDocBotHsLibrary(): Promise<AdminActionResult<DocBotHsRow[]>> {
   return withAdmin([...DOC_BOT_HS_ROLES], async () => {
     const admin = createAdminClient();
-    // The table is ~749 rows; cap well above it so nothing is lost.
+    // ~5,335 rows now (749 doc_bot + 4,586 from the owner's Excel · mig 0251);
+    // cap well above it so nothing is lost.
     const { data, error } = await admin
       .from("doc_bot_hs_codes")
-      .select("id, hs_code, th, en, fe, no, stat, note, imported_at")
+      .select("id, hs_code, th, en, fe, no, stat, note, imported_at, source")
       .order("imported_at", { ascending: false })
-      .limit(3000);
+      .limit(8000);
     if (error) {
       console.error("[doc_bot_hs_codes list]", { code: error.code, message: error.message });
       return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
