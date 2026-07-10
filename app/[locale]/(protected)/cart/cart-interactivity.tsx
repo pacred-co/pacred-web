@@ -23,6 +23,7 @@ import {
   submitCartOrder,
 } from "@/actions/cart";
 import { confirm, alert } from "@/components/ui/confirm";
+import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 
 /**
  * Client-side interactivity for /cart — Tailwind-rebuilt (ปอน 2026-05-26).
@@ -63,6 +64,9 @@ export type CartInteractiveRow = {
   camount: number;
   ccolor: string | null;
   csize: string | null;
+  /** mig 0248 — ORIGINAL currency + amount entered (display only · '' / 0 = plain ¥ row). */
+  inputCurrency?: string;
+  inputPrice?: number;
   imageThumbUrl: string;
   imageFullUrl: string;
   providerImg: { kind: "img"; src: string } | { kind: "text"; text: string };
@@ -547,7 +551,22 @@ export function CartInteractivity({
                     const lineTotal = r.cprice * amt;
                     // Display-only ฿ line-total using the same rate the summary
                     // uses (no persisted value / no money-math change).
-                    const lineTotalThb = lineTotal * (Number(totals.rate) || 0);
+                    const rate = Number(totals.rate) || 0;
+                    const lineTotalThb = lineTotal * rate;
+                    // mig 0248 — when a foreign currency was entered, show the
+                    // ORIGINAL as primary + ¥/฿ small (else keep the ¥ JSX).
+                    const priceDisp = formatCartPriceDisplay({
+                      inputCurrency: r.inputCurrency ?? "",
+                      inputPrice: r.inputPrice ?? 0,
+                      cpriceYuan: r.cprice,
+                      rsDefault: rate,
+                    });
+                    const lineDisp = formatCartPriceDisplay({
+                      inputCurrency: r.inputCurrency ?? "",
+                      inputPrice: (r.inputPrice ?? 0) * amt,
+                      cpriceYuan: lineTotal,
+                      rsDefault: rate,
+                    });
                     return (
                       <div
                         key={r.id}
@@ -618,7 +637,11 @@ export function CartInteractivity({
                             {/* Mobile-only inline price + qty row */}
                             <div className="md:hidden mt-2 flex items-center justify-between gap-2 flex-wrap">
                               <div className="text-[11.5px] text-muted">
-                                <span className="notranslate font-mono">{numberFormat(r.cprice)}</span> ¥ ×
+                                {priceDisp.isForeign ? (
+                                  <span className="notranslate font-semibold text-foreground">{priceDisp.primary}</span>
+                                ) : (
+                                  <><span className="notranslate font-mono">{numberFormat(r.cprice)}</span> ¥</>
+                                )}{" "}×
                                 <input
                                   type="number"
                                   value={amt}
@@ -635,12 +658,25 @@ export function CartInteractivity({
                                 />
                               </div>
                               <div className="text-right">
-                                <div className="text-[13px] font-black text-primary-600 notranslate">
-                                  {numberFormat(lineTotal)} ¥
-                                </div>
-                                <div className="text-[11px] text-muted notranslate">
-                                  ฿{numberFormat(lineTotalThb)}
-                                </div>
+                                {lineDisp.isForeign ? (
+                                  <>
+                                    <div className="text-[13px] font-black text-primary-600 notranslate">
+                                      {lineDisp.primary}
+                                    </div>
+                                    <div className="text-[11px] text-muted notranslate">
+                                      {lineDisp.secondary}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-[13px] font-black text-primary-600 notranslate">
+                                      {numberFormat(lineTotal)} ¥
+                                    </div>
+                                    <div className="text-[11px] text-muted notranslate">
+                                      ฿{numberFormat(lineTotalThb)}
+                                    </div>
+                                  </>
+                                )}
                               </div>
                               <button
                                 type="button"
@@ -657,9 +693,20 @@ export function CartInteractivity({
                           {/* Desktop-only — price, qty, remove, line-total columns */}
                           <div className="hidden md:flex flex-col items-end pt-1">
                             <div className="text-[12px] text-muted">{t("pricePerPiece")}</div>
-                            <div className="text-[13px] font-bold notranslate font-mono">
-                              {numberFormat(r.cprice)}
-                            </div>
+                            {priceDisp.isForeign ? (
+                              <>
+                                <div className="text-[13px] font-bold text-foreground notranslate">
+                                  {priceDisp.primary}
+                                </div>
+                                <div className="text-[11px] text-muted notranslate">
+                                  {priceDisp.secondary}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-[13px] font-bold notranslate font-mono">
+                                {numberFormat(r.cprice)}
+                              </div>
+                            )}
                           </div>
                           <div className="hidden md:flex flex-col items-center pt-1">
                             <div className="text-[12px] text-muted mb-1">{t("quantity")}</div>
@@ -680,12 +727,25 @@ export function CartInteractivity({
                           </div>
                           <div className="hidden md:flex flex-col items-end pt-1">
                             <div className="text-[12px] text-muted mb-1">{t("lineTotal")}</div>
-                            <div className="text-[13.5px] font-black text-primary-600 notranslate font-mono">
-                              {numberFormat(lineTotal)}
-                            </div>
-                            <div className="text-[11px] text-muted notranslate font-mono">
-                              ฿{numberFormat(lineTotalThb)}
-                            </div>
+                            {lineDisp.isForeign ? (
+                              <>
+                                <div className="text-[13.5px] font-black text-primary-600 notranslate">
+                                  {lineDisp.primary}
+                                </div>
+                                <div className="text-[11px] text-muted notranslate">
+                                  {lineDisp.secondary}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-[13.5px] font-black text-primary-600 notranslate font-mono">
+                                  {numberFormat(lineTotal)}
+                                </div>
+                                <div className="text-[11px] text-muted notranslate font-mono">
+                                  ฿{numberFormat(lineTotalThb)}
+                                </div>
+                              </>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleDelete(r.id)}
