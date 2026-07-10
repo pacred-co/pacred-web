@@ -27,6 +27,7 @@ import {
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
+import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
@@ -484,8 +485,10 @@ export default async function AdminDriverBatchDetailPage({
               {fdstatus === "3" && <XCircle className="h-3.5 w-3.5" />}
               {BATCH_STATUS_LABEL[fdstatus]}
             </span>
-            {/* legacy L1644 "ส่งของก่อนเวลา :" — shown while the run is still open */}
-            {batch.endtime && fdstatus === "1" && (
+            {/* legacy L1644-1652 "ส่งของก่อนเวลา :" + live counter — legacy renders this for
+                ANY status (ticks down while open · shows หมดเวลา once passed), so we show it
+                whenever the batch has a deadline, not only while open (ภูม 2026-07-10). */}
+            {batch.endtime && (
               <>
                 <span className="text-[11px] text-muted">
                   ส่งของก่อนเวลา : {formatThaiDateTime(batch.endtime)}
@@ -670,6 +673,16 @@ export default async function AdminDriverBatchDetailPage({
                         <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
                       </div>
                     )}
+                    {/* ถ่าย/แก้ไขภาพส่งสินค้า (legacy takePhoto → update_fPhotoEnd · ภูม 2026-07-10)
+                        — applies to the stop's non-failed (fdistatus≠'3') driver-items. */}
+                    {(() => {
+                      const editableIds = stop.items
+                        .filter((e) => e.item.fdistatus !== "3")
+                        .map((e) => e.item.id);
+                      return editableIds.length > 0 ? (
+                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* ZONE 2 — ลูกค้า (PR + ชื่อ) + บริษัทขนส่ง + ผู้รับ + ที่อยู่ + โทร */}
