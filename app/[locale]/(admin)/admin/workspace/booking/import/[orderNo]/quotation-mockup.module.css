@@ -56,6 +56,15 @@
 .pill:disabled:hover, .pillDisabled:hover { border-color: #e5e5ea; }
 .rowNote { margin-top: 5px; font-size: 11px; color: #9aa0a8; line-height: 1.4; }
 
+/* ── condition dropdowns (top bar · owner 2026-07-10: ย้ายขึ้นบน + ดร็อปดาวน์) ── */
+.condGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 14px; }
+.ddCell { display: grid; gap: 5px; align-content: start; }
+.ddCell .label { padding-top: 0; }
+.dropdown { width: 100%; border: 1px solid #dedee6; background: #fff; font: inherit; font-size: 13px; color: #374151; padding: 9px 11px; border-radius: 10px; outline: none; cursor: pointer; }
+.dropdown:hover { border-color: #c9ccd6; }
+.dropdown:focus { border-color: var(--red); }
+.dropdown:disabled { opacity: .55; background: #f2f3f7; cursor: not-allowed; }
+
 /* ── ruleBox ── */
 .ruleBox { margin-top: 18px; background: #fbfbfc; border: 1px dashed #d9dce3; border-radius: 18px; padding: 16px; }
 .ruleBox h3 { margin: 0 0 10px; font-size: 16px; color: #1f2937; }
