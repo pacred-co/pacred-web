@@ -435,6 +435,35 @@ export function QuotationFormClient({
 
           {/* ── แถบขวา: ย้าย Condition Builder มากองรวมกับ Booking Payload (owner: ซ้าย→ขวา) ── */}
           <div className={styles.rail}>
+          {/* ── Booking Payload (สลับขึ้นบน · owner 2026-07-10) ── */}
+          <div className={styles.card}>
+            <div className={styles.cardHead}><h2>Booking Payload</h2><span className={styles.sync}>Auto Sync</span></div>
+            <div className={styles.cardBody}>
+              <div className={styles.payloadTitle}>
+                <span className={styles.sectionTag}>Fields sent to Booking</span>
+                <small style={{ color: "#6f7278", fontSize: 12 }}>ไม่เอาราคาไป Booking</small>
+              </div>
+              <table className={styles.mapTable}>
+                <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
+                <tbody>
+                  <PayRow field="booking_ref" value={docNo} src="Quote Header" />
+                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
+                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
+                  <PayRow field="term" value={cond.term} src="Term Chip" />
+                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
+                  <PayRow field="destination_port" value={cond.port} src="PORT" />
+                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
+                  <PayRow field="commodity" value={doc.product || "—"} src="Description" />
+                  <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
+                  <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
+                  <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
+                  <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
+                  <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* ── หมายเหตุ + บันทึก (ฟอร์มฝั่งแอดมิน) — ตัวเลือกบริการย้ายขึ้นบนแล้ว ── */}
           <div className={styles.card}>
             <div className={styles.cardHead}>
@@ -472,35 +501,6 @@ export function QuotationFormClient({
                 </button>
                 <p className={styles.saveHint}>💾 บันทึกแล้วเข้าสถานะ “รอดำเนินการ (ทำราคา)” ให้ Pricing ตรวจ · prototype เก็บชั่วคราวในเครื่อง (ต่อ DB จริง step ถัดไป)</p>
               </div>
-            </div>
-          </div>
-
-          {/* ── Booking Payload ── */}
-          <div className={styles.card}>
-            <div className={styles.cardHead}><h2>Booking Payload</h2><span className={styles.sync}>Auto Sync</span></div>
-            <div className={styles.cardBody}>
-              <div className={styles.payloadTitle}>
-                <span className={styles.sectionTag}>Fields sent to Booking</span>
-                <small style={{ color: "#6f7278", fontSize: 12 }}>ไม่เอาราคาไป Booking</small>
-              </div>
-              <table className={styles.mapTable}>
-                <thead><tr><th>Booking Field</th><th>Value</th></tr></thead>
-                <tbody>
-                  <PayRow field="booking_ref" value={docNo} src="Quote Header" />
-                  <PayRow field="direction" value={cond.direction} src="Condition Builder" />
-                  <PayRow field="service_type" value={usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service} src="Condition Builder" />
-                  <PayRow field="term" value={cond.term} src="Term Chip" />
-                  <PayRow field="port_of_loading" value={doc.pol || "—"} src="Shipment Data" />
-                  <PayRow field="destination_port" value={cond.port} src="PORT" />
-                  <PayRow field="container" value={usesContainer(cond.loadType) ? cond.container : "—"} src="Container Selector" />
-                  <PayRow field="commodity" value={doc.product || "—"} src="Description" />
-                  <PayRow field="local_logistics" value={hasGroup("Transport") ? "Yes" : "—"} ok={hasGroup("Transport")} src="Transport line item" />
-                  <PayRow field="customs_clearance" value={hasGroup("Customs") ? "Yes" : "—"} ok={hasGroup("Customs")} src="Customs line item" />
-                  <PayRow field="paperless_doc" value={hasGroup("Document") ? "Required" : "—"} ok={hasGroup("Document")} src="Document line item" />
-                  <PayRow field="warehouse_rent" value={hasGroup("Receipt") ? "Estimate / collect actual" : "—"} src="Receipt line item" />
-                  <PayRow field="remark" value={doc.remark || "ตรวจใบอนุญาต / ปัญหาเฉพาะ shipment"} src="Special rules" />
-                </tbody>
-              </table>
             </div>
           </div>
           </div>
