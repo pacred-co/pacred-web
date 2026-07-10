@@ -198,7 +198,8 @@ export function QuotationFormClient({
       {/* ══ MOCKUP 1:1 (quotation_booking_mockup.html) — topbar/flow เอาออก · สถานะย้ายเข้าหัวเอกสาร (owner) ══ */}
       <div className={styles.wrap}>
         {/* ── เงื่อนไขงาน (Trip-style · owner 2026-07-10: หัว=ขนส่ง · POL/POD จิ้มเลือก · ตัด "บริการ" [ทิศทางอนุมานจาก POL/POD]) ── */}
-        <div className={styles.card} style={{ marginBottom: 22 }}>
+        {/* overflow:visible — ให้ popover ของ POL/POD โผล่พ้นการ์ดได้ (ไม่โดน overflow:hidden ตัด) */}
+        <div className={styles.card} style={{ marginBottom: 22, overflow: "visible" }}>
           <div className={styles.cardHead}>
             <h2>เงื่อนไขงาน</h2>
             {showCost ? (
