@@ -1,5 +1,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+import { Bot } from "lucide-react";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { HsLibraryClient, type HsRow } from "./hs-library-client";
@@ -54,7 +56,15 @@ export default async function HsLibraryPage() {
       <AccountingMenubar activeHref="/admin/accounting/hs-library" />
       <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
         <header>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · คลัง HS</p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · คลัง HS</p>
+            <Link
+              href="/admin/accounting/hs-library/bot"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50/40 dark:bg-primary-950/10 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100"
+            >
+              <Bot className="h-3.5 w-3.5" /> คลัง HS รวม (บอท+ไฟล์ · 5,335) →
+            </Link>
+          </div>
           <h1 className="mt-1 text-2xl font-bold">คลัง HS (พิกัด + อากร)</h1>
           <p className="text-xs text-muted mt-1">
             คลังพิกัดศุลกากร (HS Code) พร้อม <b>อากรปกติ</b> · <b>อากร Form-E / ACFTA</b> และฟอร์มอื่นๆ ·
