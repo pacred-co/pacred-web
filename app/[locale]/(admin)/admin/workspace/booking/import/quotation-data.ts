@@ -14,13 +14,15 @@ import {
   type CatalogTemplate,
 } from "@/lib/booking/catalog";
 
+/** ต้นทาง/ปลายทาง = ประเทศ + พอร์ท (จิ้มเลือก · ไม่พิมพ์ · owner 2026-07-10). */
+export type PortSel = { country: string; port: string };
+
 export type QuoteConditions = {
-  direction: string; // IMPORT / EXPORT (ตอนนี้เปิดเฉพาะ IMPORT · EXPORT เร็วๆนี้)
-  service: string; // SEA / AIR / TRUCK (ขนส่ง · เลือกก่อน)
-  loadType: string; // LCL / FCL (เฉพาะทางเรือ SEA · โหมดอื่นบังคับ LCL)
+  service: string; // SEA / AIR / TRUCK (ขนส่ง · หัว · รถ/เรือ/แอร์)
+  pol: PortSel; // ต้นทาง (Port of Loading)
+  pod: PortSel; // ปลายทาง (Port of Discharge)
+  loadType: string; // LCL / FCL (default LCL · ซ่อน UI ชั่วคราว · owner 2026-07-10 ตัดประเภทออก)
   term: string; // EXW / FOB / CIF / DDP
-  port: string; // PAT / LCB / BKK / SUV
-  container: string; // ขนาดตู้ (เฉพาะ SEA FCL): 1×20' / 1×40'HC / 2×40' / Mixed
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime
 };
@@ -48,6 +50,44 @@ export const PORT_OPTIONS = ["PAT", "LCB", "BKK", "SUV"];
 export const CONTAINER_OPTIONS = ["1×20'", "1×40'HC", "2×40'", "Mixed"]; // ขนาดตู้ (เฉพาะ SEA FCL)
 export const ENTER_OPTIONS = ["Normal", "Change Status", "Document Amend", "Direct", "Indirect"];
 export const SPECIAL_OPTIONS = ["License", "Manpower", "Local Transport", "Overtime"];
+
+/** ขนส่ง = หัวข้อหลัก (Trip-style tab) · id ตรงกับ service เดิม (SEA/AIR/TRUCK). */
+export const TRANSPORT_TABS: { id: string; label: string; icon: string }[] = [
+  { id: "TRUCK", label: "รถ", icon: "🚚" },
+  { id: "SEA", label: "เรือ", icon: "🚢" },
+  { id: "AIR", label: "แอร์", icon: "✈️" },
+];
+
+/** ประเทศที่เลือก POL/POD ได้ (จิ้มเลือก · เพิ่มภายหลัง). */
+export const PORT_COUNTRIES = ["จีน", "ไทย"];
+
+/** พอร์ทต่อประเทศ × ขนส่ง (starter dataset · owner ปรับเพิ่มภายหลัง). */
+export const PORT_CATALOG: Record<string, Record<string, string[]>> = {
+  จีน: {
+    SEA: ["กวางโจว", "อี้อู", "หนิงโบ", "หนานซา", "เซินเจิ้น", "เซี่ยงไฮ้", "ชิงเต่า"],
+    TRUCK: ["กวางโจว", "คุนหมิง", "หนานหนิง"],
+    AIR: ["กวางโจว (CAN)", "เซินเจิ้น (SZX)", "เซี่ยงไฮ้ (PVG)", "ปักกิ่ง (PEK)"],
+  },
+  ไทย: {
+    SEA: ["แหลมฉบัง", "กรุงเทพ (คลองเตย)"],
+    TRUCK: ["กรุงเทพฯ", "เชียงของ", "นครพนม", "มุกดาหาร"],
+    AIR: ["สุวรรณภูมิ (BKK)", "ดอนเมือง (DMK)"],
+  },
+};
+
+/** พอร์ทตัวแรกของ ประเทศ × ขนส่ง (ใช้ default + revalidate ตอนสลับขนส่ง). */
+export function firstPort(country: string, service: string): string {
+  return PORT_CATALOG[country]?.[service]?.[0] ?? "";
+}
+
+/** ทิศทาง = อนุมานจาก POL/POD (POD ไทย = นำเข้า · POL ไทย = ส่งออก). */
+export function directionOf(c: QuoteConditions): { code: string; label: string } {
+  const polTH = c.pol.country === "ไทย";
+  const podTH = c.pod.country === "ไทย";
+  if (podTH && !polTH) return { code: "IMPORT", label: "นำเข้า" };
+  if (polTH && !podTH) return { code: "EXPORT", label: "ส่งออก" };
+  return { code: "", label: "—" };
+}
 
 /** ผู้ออกเอกสาร (หัวใบเสนอราคา) — จาก CSV/mockup. */
 export const PACRED_ISSUER = {
