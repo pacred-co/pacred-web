@@ -215,10 +215,20 @@ export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rs
           <input
             id="cImages"
             name="cImages"
-            type="text"
+            type="url"
             className={INPUT_CLS}
-            placeholder="https://... (เว้นว่างได้)"
+            placeholder="https://i.postimg.cc/xxx/yyy.jpg (เว้นว่างได้)"
           />
+          {/* The free-text paste here is the origin of every broken product image
+              (owner 2026-07-10): staff pasted a Google-Drive FOLDER link, which was
+              stored verbatim and copied into tb_order.cimages → hcover → fcover.
+              The server now rejects those (lib/validators/image-url.ts); this hint
+              stops the mistake one step earlier. */}
+          <p className="mt-1 text-[11px] leading-snug text-muted">
+            ต้องเป็นลิงก์ <strong>ไฟล์รูปโดยตรง</strong> (คลิกขวาที่รูป → คัดลอกที่อยู่รูปภาพ) ·
+            ใช้ไม่ได้: ลิงก์โฟลเดอร์ Google&nbsp;Drive, ลิงก์หน้าเว็บสินค้า,
+            หรือ <code>postimg.cc/xxx</code> (ต้องเป็น <code>i.postimg.cc/…</code>)
+          </p>
         </div>
         <div>
           <label htmlFor="cDetails" className={LABEL_CLS}>

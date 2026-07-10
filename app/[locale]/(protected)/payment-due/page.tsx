@@ -4,7 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { Wallet } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { legacyMemberUrl, normalizeImageUrl, applyResizeSuffix } from "@/lib/legacy-image";
 import { PaymentDueList, type PaymentDueItem } from "./payment-due-list";
 import type { ForwarderRow } from "../service-import/forwarder-row-view";
 
@@ -64,15 +64,22 @@ function resolveCover(
 ): string | null {
   const c = (cover ?? "").trim();
   if (c === "" || c === "-") return null;
-  // Full URL / path (Taobao·1688 OSS, or already-absolute). Clean the OSS
-  // style params + size down to a 150px thumbnail; pcscargo URLs pass through.
+  // Full URL / path (Taobao·1688 OSS, or already-absolute). pcscargo URLs pass
+  // through. Everything else is normalised (Drive file link → embeddable thumb;
+  // Drive folder link → null) and the `_150x150.jpg` resize suffix is applied ONLY
+  // to Alibaba-CDN hosts — appending it to a pasted postimg/imgur/Drive/MOMO URL
+  // 404s the image (fixed 2026-07-10; the ungated append was the recurring
+  // "แนบรูปแล้วไม่ขึ้น" bug).
   if (c.includes("/")) {
-    const cleaned = c
-      .replace("?x-oss-process=style/alsy", "")
-      .replace("?x-oss-process=style/tbsy", "")
-      .replace("_250x250.jpg", "");
-    if (/pcscargo\.co\.th/i.test(cleaned)) return cleaned;
-    return cleaned + "_150x150.jpg";
+    if (/pcscargo\.co\.th/i.test(c)) {
+      return c
+        .replace("?x-oss-process=style/alsy", "")
+        .replace("?x-oss-process=style/tbsy", "")
+        .replace("_250x250.jpg", "");
+    }
+    const normalized = normalizeImageUrl(c);
+    if (!normalized) return null;
+    return applyResizeSuffix(normalized, "_150x150.jpg");
   }
   // Bare filename. Forwarder (import) admin-uploaded covers live ONLY on the
   // legacy host — they were NOT in ภูม's 2026-05-24 Supabase mirror (verified

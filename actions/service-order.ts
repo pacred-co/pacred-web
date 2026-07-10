@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { shopImageUrl } from "@/lib/legacy-image";
 import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -122,7 +123,8 @@ function headerRowToSummary(r: LegacyHeaderRow): ServiceOrderSummary {
     h_no: r.hno,
     status: (r.hstatus as OrderStatus) ?? "1",
     title: r.htitle,
-    cover_image_path: r.hcover && r.hcover.trim() ? r.hcover : null,
+    // List thumbnail — the `_150x150.jpg` resize is applied only to Alibaba CDNs.
+    cover_image_path: resolveItemImage(r.hcover, "_150x150.jpg"),
     item_count: Number(r.hcount ?? 0),
     warehouse_china: legacyWarehouseToCity(r.hwarehousechina),
     transport_type: r.htransporttype ?? "",
@@ -217,6 +219,20 @@ function legacyProvider(code: string | null): Provider {
   return LEGACY_PROVIDER[code ?? "4"] ?? "shop";
 }
 
+/**
+ * Resolve a legacy `cimages` / `hcover` value to a URL the customer's `<img>` can
+ * actually load, or `null` when there is no usable image (the callers render a
+ * "no image" box on null).
+ *
+ * These three mappers used to hand the RAW column straight to `<img src>`, so a
+ * bare legacy filename became a page-relative 404 and an un-renderable value (a
+ * pasted Google-Drive folder link) showed a broken-image icon. `shopImageUrl` is
+ * the shared SOT — see lib/legacy-image.ts.
+ */
+function resolveItemImage(raw: string | null | undefined, size = ""): string | null {
+  return shopImageUrl(raw, { size, emptyFallback: "" }) || null;
+}
+
 /** Map a legacy tb_order row → a ServiceOrderDetail item. */
 function orderItemRow(r: LegacyOrderItemRow): ServiceOrderDetail["items"][number] {
   return {
@@ -225,7 +241,7 @@ function orderItemRow(r: LegacyOrderItemRow): ServiceOrderDetail["items"][number
     shop_name: r.cnameshop && r.cnameshop !== "pcs" ? r.cnameshop : "",
     title: r.ctitle,
     url: r.curl && r.curl.trim() ? r.curl : null,
-    image_path: r.cimages && r.cimages.trim() ? r.cimages : null,
+    image_path: resolveItemImage(r.cimages),
     color: r.ccolor && r.ccolor.trim() ? r.ccolor : null,
     size: r.csize && r.csize.trim() ? r.csize : null,
     price_cny: Number(r.cprice ?? 0),
@@ -614,7 +630,7 @@ export async function getServiceOrderForReceipt(
         domestic_china_cny: Number(it.cshippingchn ?? 0),
         shipping_number:    it.cshippingnumber && it.cshippingnumber.trim() ? it.cshippingnumber : null,
         tracking_number:    it.ctrackingnumber && it.ctrackingnumber.trim() ? it.ctrackingnumber : null,
-        image_path:         it.cimages && it.cimages.trim() ? it.cimages : null,
+        image_path:         resolveItemImage(it.cimages),
       })),
     },
   };

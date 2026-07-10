@@ -26,6 +26,7 @@ export function CoverThumb({
   width,
   height,
   alt = "",
+  loading,
 }: {
   /** Already resolved via `forwarderCoverUrl()` (empty covers are the placeholder). */
   src: string;
@@ -34,6 +35,8 @@ export function CoverThumb({
   height?: number;
   /** Optional alt text (defaults to "" for decorative covers). */
   alt?: string;
+  /** Native `<img loading>` hint — pass "lazy" for long list thumbnails. */
+  loading?: "lazy" | "eager";
 }) {
   const [errored, setErrored] = useState(false);
   const finalSrc = errored ? NO_COVER_IMAGE : src;
@@ -45,6 +48,7 @@ export function CoverThumb({
       className={className}
       width={width}
       height={height}
+      loading={loading}
       onError={() => {
         // Guard: don't loop if the placeholder itself somehow fails.
         if (!errored) setErrored(true);

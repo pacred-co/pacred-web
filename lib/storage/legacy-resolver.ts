@@ -38,6 +38,7 @@
 
 import "server-only";
 import { getSignedBucketUrl } from "./upload";
+import { normalizeImageUrl, applyResizeSuffix, isAlibabaCdnUrl } from "@/lib/legacy-image";
 
 export type LegacyKind =
   | "slip"          // wallet / cnt / yuan slip image
@@ -153,34 +154,28 @@ export async function resolveLegacyUrl(
  * @param url  Already-trimmed HTTP/HTTPS URL from a legacy fcover column.
  * @param kind Resolver kind — only "cover" gets the thumb suffix.
  */
-function rewriteLegacyCoverUrl(url: string, kind: LegacyKind): string {
-  let out = url;
+function rewriteLegacyCoverUrl(url: string, kind: LegacyKind): string | null {
+  // 1. Shared normalisation (lib/legacy-image.ts — the SOT used by every other
+  //    shop-image surface): zzqss proxy → alicdn, strip `?x-oss-process=` params
+  //    and the legacy `_250x250.jpg` marker, a Google-Drive FILE link → its
+  //    embeddable thumbnail endpoint, a Google-Drive FOLDER link → "" (never an
+  //    image — the caller renders "ไม่มีรูป" instead of a broken <img>).
+  const normalized = normalizeImageUrl(url);
+  if (!normalized) return null;
 
-  // 1. zzqss proxy → alicdn passthrough
-  //    Pattern: https://[anything]zzqss[anything]/img/ibank/Oxxx
-  //          → https://img.alicdn.com/img/ibank/Oxxx
-  if (/zzqss/i.test(out)) {
-    const m = out.match(/(\/img\/(ibank|bao)\/[^?#]+)/i);
-    if (m) {
-      out = `https://img.alicdn.com${m[1]}`;
-    }
+  let out = normalized;
+
+  // 2. Strip a stale `_WxH.jpg(.webp)` size suffix — Alibaba CDNs ONLY. Other
+  //    hosts may legitimately end in a dimension-shaped filename
+  //    (`.../photo_1920x1080.jpg`), and rewriting it to `.jpg` would 404 it.
+  if (isAlibabaCdnUrl(out)) {
+    out = out.replace(/_\d+x\d+\.jpg(\.webp)?$/i, ".jpg");
   }
 
-  // 2. Strip OSS process params (everything after the first `?x-oss-process=`)
-  if (out.includes("?x-oss-process=")) {
-    out = out.split("?x-oss-process=")[0]!;
-  }
-  // Also strip the .webp / @W_H_jpg suffix some legacy code added
-  out = out.replace(/_\d+x\d+\.jpg(\.webp)?$/i, ".jpg");
-
-  // 3. Thumb suffix for list views (kind === "cover" only)
-  //    Only alicdn / taobao CDN URLs support this — skip for unknown hosts.
-  if (kind === "cover" && /^(https?:\/\/[^/]*(alicdn|taobaocdn|tbcdn|tmall)\.com)/i.test(out)) {
-    // Avoid double-appending if already present
-    if (!/_\d+x\d+\.jpg$/i.test(out)) {
-      out = out + "_150x150.jpg";
-    }
-  }
+  // 3. Thumb suffix for list views (kind === "cover" only). `applyResizeSuffix`
+  //    gates this on the Alibaba CDNs that implement the directive and never
+  //    double-appends.
+  if (kind === "cover") out = applyResizeSuffix(out, "_150x150.jpg");
 
   return out;
 }

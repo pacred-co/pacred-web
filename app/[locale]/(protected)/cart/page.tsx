@@ -5,7 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { ADDRESSES } from "@/components/seo/site";
-import { legacyMemberUrl, isAlibabaCdnUrl } from "@/lib/legacy-image";
+import { shopImageUrl } from "@/lib/legacy-image";
 import {
   getShipByOptionsForAddress,
   isMaomaoEligibleForAddress,
@@ -139,31 +139,16 @@ function buildFullAddressFromRow(r: AddressRow): string {
  * The PHP basePath maps to the `/legacy/pcs/` static mount.
  */
 function convertIMGCHN(url: string | null, size: string): string {
-  if (!url || url === "") {
-    return "/legacy/pcs/images/shops/default.png";
-  }
-  const u = url
-    .split("?x-oss-process=style/alsy")
-    .join("")
-    .split("?x-oss-process=style/tbsy")
-    .join("")
-    .split("_250x250.jpg")
-    .join("");
-  if (u.includes("/")) {
-    // Old data may store full legacy `pcscargo.co.th/member/...` URLs —
-    // re-resolve through the Supabase mirror so customer-visible URLs
-    // never leak the legacy host name.
-    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
-    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
-    // The `$size` suffix (`_80x80.jpg`) is an Alibaba/Taobao CDN resize
-    // directive — appending it to a pasted external image link (postimg/imgur/
-    // Google Drive) 404s it. Apply the suffix ONLY for Alibaba-CDN URLs; pass
-    // every other absolute URL through unchanged (owner-reported 2026-07-10).
-    return isAlibabaCdnUrl(u) ? u + size : u;
-  }
-  // a bare filename — legacy stored under images/shops/. Resolved via
-  // the Supabase mirror (ภูม upload 2026-05-24, see lib/legacy-image.ts).
-  return legacyMemberUrl(`images/shops/${u}`);
+  // Delegates to the shared SOT (lib/legacy-image.ts `shopImageUrl`): the resize
+  // suffix is applied only to Alibaba-CDN hosts, a legacy pcscargo URL is
+  // re-pointed at the Supabase mirror, a Google-Drive file link is normalised to
+  // an embeddable thumbnail (a folder link → the neutral placeholder), and a bare
+  // filename resolves to the mirrored `images/shops/` folder.
+  //
+  // The empty-value fallback is now the neutral NO_COVER_IMAGE (the default of
+  // `shopImageUrl`) instead of the legacy `/legacy/pcs/images/shops/default.png`
+  // PCS-branded logo the owner flagged as a brand leak (2026-07-03).
+  return shopImageUrl(url, { size });
 }
 
 export default async function CartPage() {

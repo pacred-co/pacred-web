@@ -314,6 +314,7 @@ export default async function AdminServiceOrderEditPage({
     cnameshop:    it.cnameshop,
     ctitle:       it.ctitle,
     curl:         it.curl,
+    cimages:      it.cimages,               // RAW — the <ItemImageEditor> edits this
     coverUrl:     coverUrls[i] ?? null,
     ccolor:       it.ccolor,
     csize:        it.csize,

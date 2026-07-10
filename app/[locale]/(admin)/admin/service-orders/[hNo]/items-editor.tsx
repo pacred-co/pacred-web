@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { Trash2, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveShopOrderItemsAndQuote } from "@/actions/admin/service-orders-shop-workflow";
+import { ItemImageEditor } from "./item-image-editor";
 import { adminDeleteOrderItem } from "@/actions/admin/service-orders-governance";
 import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 
@@ -51,6 +52,7 @@ export type EditorItem = {
   cnameshop:    string | null;
   ctitle:       string | null;
   curl:         string | null;
+  cimages:      string | null;   // RAW stored value — editable via <ItemImageEditor>
   coverUrl:     string | null;   // resolved cimages → displayable URL
   ccolor:       string | null;
   csize:        string | null;
@@ -268,16 +270,15 @@ export function ShopItemsEditor({
                           <td className="px-2 py-2 text-muted">{rowNo}</td>
                           <td className="px-2 py-2">
                             <div className="flex gap-2">
-                              {it.coverUrl ? (
-                                <a href={it.coverUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={it.coverUrl}
-                                    alt={it.ctitle ?? "สินค้า"}
-                                    className="h-12 w-12 rounded border border-border object-cover"
-                                  />
-                                </a>
-                              ) : null}
+                              {/* Repairable product image — a broken/missing cover
+                                  shows the neutral placeholder + an amber "แก้รูป"
+                                  button (tb_order.cimages used to be write-once). */}
+                              <ItemImageEditor
+                                tbOrderId={it.id}
+                                cimages={it.cimages}
+                                coverUrl={it.coverUrl}
+                                ctitle={it.ctitle}
+                              />
                               <div className="min-w-0">
                                 {refunded && it.cnote ? (
                                   <p className="mb-1 inline-block rounded bg-red-600 px-1.5 py-0.5 text-[11px] text-white">

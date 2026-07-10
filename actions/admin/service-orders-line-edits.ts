@@ -88,6 +88,8 @@ import {
   lineEditStatusGate,
   trackingEditStatusGate,
 } from "@/lib/service-order/line-edit-gates";
+import { SHOP_ORDER_EDIT_ROLES } from "@/lib/admin/shop-order-access";
+import { imageUrlField } from "@/lib/validators/image-url";
 
 // Status-gate helpers live in lib/service-order/line-edit-gates.ts —
 // they're pure, exported, and importable by the test file without
@@ -906,6 +908,178 @@ export async function adminUpdateCartItemShippingNumber(
           c_name_shop:        d.c_name_shop,
           c_shipping_number:  d.c_shipping_number,
           rows_touched:       rowsTouched,
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// 4. adminUpdateCartItemImage — repair a broken product image
+// ────────────────────────────────────────────────────────────
+//
+// NEW 2026-07-10 (owner: "งานตัวเก่าที่เคยแนบรูป ช่วยแก้อันเก่าให้ด้วยที่ไม่ขึ้นรูป").
+//
+// Until now `cimages` was WRITE-ONCE: it was set on INSERT (cart add → order
+// submit) and no UI or server action could ever change it again. So a bad image
+// value — the CS add-form's free-text field happily accepted a Google-Drive
+// FOLDER link — permanently broke the product image on every downstream surface
+// (order detail, order list, customer portal, and the `hcover`/`fcover` copies).
+//
+// This writer closes that gap. It is DISPLAY-ONLY and money-safe:
+//   - touches `tb_order.cimages` and (only when it is the order's cover)
+//     `tb_header_order.hcover`
+//   - never touches price / qty / status / tracking / wallet
+//   - therefore NO status gate: the whole point is repairing historic orders,
+//     including completed ones. (`crewallet='1'` refunded lines are still
+//     editable — a refunded line's photo is still worth fixing.)
+//
+// The value is validated + normalised by the shared `imageUrlField` (rejects a
+// Drive folder link / share page; converts a Drive FILE link into its embeddable
+// thumbnail URL), so a repair can never re-introduce an un-renderable value.
+const updateItemImageSchema = z.object({
+  tb_order_id: z.coerce.number().int().positive(),
+  // "" is allowed and means "ไม่มีรูป" (clears the image).
+  cimages:     imageUrlField(300),
+});
+export type AdminUpdateCartItemImageInput = z.infer<typeof updateItemImageSchema>;
+
+type UpdateItemImageData = {
+  tb_order_id:    number;
+  hno:            string;
+  before_cimages: string;
+  after_cimages:  string;
+  hcover_synced:  boolean;
+};
+
+export async function adminUpdateCartItemImage(
+  input: AdminUpdateCartItemImageInput,
+): Promise<AdminActionResult<UpdateItemImageData>> {
+  const parsed = updateItemImageSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<UpdateItemImageData>(
+    [...SHOP_ORDER_EDIT_ROLES],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+      // 1. Load the tb_order line.
+      const { data: itemRow, error: itemErr } = await admin
+        .from("tb_order")
+        .select("id, hno, userid, ctitle, cimages")
+        .eq("id", d.tb_order_id)
+        .maybeSingle<{
+          id: number; hno: string; userid: string;
+          ctitle: string | null; cimages: string | null;
+        }>() as unknown as {
+          data: {
+            id: number; hno: string; userid: string;
+            ctitle: string | null; cimages: string | null;
+          } | null;
+          error: { code?: string; message?: string } | null;
+        };
+      if (itemErr) {
+        console.error(`[tb_order image lookup] failed`, {
+          code: itemErr.code, message: itemErr.message,
+        });
+        return { ok: false, error: `db_error:${itemErr.code ?? "unknown"}` };
+      }
+      if (!itemRow) return { ok: false, error: "ไม่พบรายการสินค้านี้ (tb_order.id ไม่ตรง)" };
+
+      const beforeCimages = (itemRow.cimages ?? "").trim();
+      const afterCimages  = d.cimages;
+
+      // Idempotency — nothing to do.
+      if (beforeCimages === afterCimages) {
+        return {
+          ok: true,
+          data: {
+            tb_order_id: itemRow.id, hno: itemRow.hno,
+            before_cimages: beforeCimages, after_cimages: afterCimages,
+            hcover_synced: false,
+          },
+        };
+      }
+
+      // 2. UPDATE the line image (scoped on id + hno, per the sibling writers).
+      const { error: itemUpdErr } = await admin
+        .from("tb_order")
+        .update({ cimages: afterCimages })
+        .eq("id", itemRow.id)
+        .eq("hno", itemRow.hno);
+      if (itemUpdErr) {
+        console.error(`[tb_order cimages update] failed`, {
+          code: itemUpdErr.code, message: itemUpdErr.message,
+        });
+        return { ok: false, error: `บันทึกรูปสินค้าล้มเหลว: ${itemUpdErr.message}` };
+      }
+
+      // 3. Sync tb_header_order.hcover ONLY when it is exactly the value we just
+      //    replaced — i.e. this line was the order's cover image. (submitCartOrder
+      //    copies the FIRST row's cimages into hcover; the admin twin copies the
+      //    LAST. Matching on value instead of position works for both.)
+      let hcoverSynced = false;
+      const { data: header, error: headerErr } = await admin
+        .from("tb_header_order")
+        .select("hno, hcover")
+        .eq("hno", itemRow.hno)
+        .maybeSingle<{ hno: string; hcover: string | null }>() as unknown as {
+          data: { hno: string; hcover: string | null } | null;
+          error: { code?: string; message?: string } | null;
+        };
+      if (headerErr) {
+        // Non-fatal: the line image is already fixed; the cover just stays stale.
+        console.error(`[tb_header_order hcover lookup] failed`, {
+          code: headerErr.code, message: headerErr.message,
+        });
+      } else if (header && (header.hcover ?? "").trim() === beforeCimages) {
+        const { error: hcoverErr } = await admin
+          .from("tb_header_order")
+          .update({
+            hcover:        afterCimages,
+            hdateupdate:   new Date().toISOString(),
+            adminidupdate: legacyAdminId,
+          })
+          .eq("hno", itemRow.hno);
+        if (hcoverErr) {
+          console.error(`[tb_header_order hcover update] failed`, {
+            code: hcoverErr.code, message: hcoverErr.message,
+          });
+        } else {
+          hcoverSynced = true;
+        }
+      }
+
+      // 4. Audit log.
+      await logAdminAction(
+        adminId,
+        "tb_order.update_cimages",
+        "tb_order",
+        String(itemRow.id),
+        {
+          hno:            itemRow.hno,
+          userid:         itemRow.userid,
+          ctitle:         itemRow.ctitle ?? "",
+          before_cimages: beforeCimages,
+          after_cimages:  afterCimages,
+          hcover_synced:  hcoverSynced,
+        },
+      );
+
+      revalidatePath("/admin/service-orders");
+      revalidatePath(`/admin/service-orders/${itemRow.hno}`);
+      revalidatePath("/service-order");
+      revalidatePath(`/service-order/${itemRow.hno}`);
+      return {
+        ok: true,
+        data: {
+          tb_order_id: itemRow.id, hno: itemRow.hno,
+          before_cimages: beforeCimages, after_cimages: afterCimages,
+          hcover_synced: hcoverSynced,
         },
       };
     },
