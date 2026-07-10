@@ -9,6 +9,7 @@ import {
   getBatchList,
   listCommPayAccounts,
   listCommissionPayees,
+  hasInterpreterCommConfig,
 } from "@/actions/admin/withdraw-comm-batch";
 
 /**
@@ -73,11 +74,19 @@ export default async function AdminWithdrawCommInterpreterPage({
   // Create + pay are gated ["super","accounting"] (money write). Only load the
   // payee/account lists + render the create button when the viewer can create.
   const canCreate = isGodRole(roles) || roles.includes("accounting");
-  const [payeesRes, accountsRes] = canCreate
-    ? await Promise.all([listCommissionPayees("interpreter"), listCommPayAccounts()])
-    : [null, null];
+  const [payeesRes, accountsRes, commConfigured] = canCreate
+    ? await Promise.all([
+        listCommissionPayees("interpreter"),
+        listCommPayAccounts(),
+        hasInterpreterCommConfig(),
+      ])
+    : [null, null, true];
   const payees = payeesRes?.ok ? payeesRes.data?.payees ?? [] : [];
   const accounts = accountsRes?.ok ? accountsRes.data?.accounts ?? [] : [];
+  // GAP 1: when NO interpreter has a % ค่าคอมล่าม seeded, the whole เบิกค่าคอมล่าม
+  // flow fails-closed → show a clear CTA to go set it up (per admin, via the ⚙️
+  // cog on /admin/admins/[id]) instead of a silent dead-end.
+  const showCommSetupCta = canCreate && commConfigured === false;
 
   const total = (result.counts["1"] ?? 0) + (result.counts["2"] ?? 0) + (result.counts["3"] ?? 0);
   const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
@@ -131,6 +140,25 @@ export default async function AdminWithdrawCommInterpreterPage({
             </span>
           )}
         </header>
+
+        {showCommSetupCta && (
+          <Link
+            href="/admin/admins"
+            className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 hover:bg-amber-100/70 transition-colors"
+          >
+            <span aria-hidden className="text-xl leading-none">⚙️</span>
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-amber-900">
+                ยังไม่ได้ตั้งค่า % ค่าคอมล่าม — ตั้งค่าก่อนถึงจะเบิกได้ →
+              </span>
+              <span className="mt-1 block text-xs text-amber-800">
+                ระบบยังไม่มีล่ามคนไหนตั้ง % ค่าคอม (<code className="bg-amber-100 px-1 rounded">tb_set_comm_interpreter</code>) ·
+                กดที่นี่เพื่อไปหน้า <span className="font-semibold">รายชื่อพนักงาน</span> → เลือกล่าม → กดไอคอนตั้งค่า (⚙️) “ตั้งค่า ค่าคอมล่ามจีน”
+                เพื่อกรอก % · เมื่อตั้งเสร็จจะเบิกได้ทันที
+              </span>
+            </span>
+          </Link>
+        )}
 
         <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
           <Stat label="ทั้งหมด" value={total.toLocaleString("th-TH")} />
