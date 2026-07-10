@@ -118,6 +118,17 @@
 .fileList { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .fileItem { display: flex; align-items: center; gap: 8px; background: #f6f7fa; border-radius: 9px; padding: 6px 9px; font-size: 12px; color: #374151; }
 .fileItem span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── แนบเอกสารแยกช่อง (owner 2026-07-10 · ผูกกับ Booking Payload) ── */
+.docSlots { display: grid; gap: 8px; }
+.docSlot { border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; background: #fdfdfe; }
+.docSlotHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.docSlotName { font-size: 12px; font-weight: 800; color: #1f2937; }
+.docSlotCount { background: var(--pink); color: var(--red); border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 800; }
+.docUpload { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px dashed #d9dce3; border-radius: 9px; padding: 7px; font-size: 12px; color: #6f7278; cursor: pointer; background: #fbfbfc; }
+.docUpload:hover { border-color: var(--red); color: #374151; }
+.docFileItem { display: flex; align-items: center; gap: 7px; background: #f6f7fa; border-radius: 8px; padding: 5px 8px; font-size: 11.5px; color: #374151; margin-top: 6px; }
+.docFileItem span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .saveBtn { width: 100%; border: none; background: var(--red); color: #fff; font: inherit; font-weight: 800; font-size: 15px; padding: 13px; border-radius: 14px; cursor: pointer; box-shadow: 0 10px 22px rgba(197,22,29,.22); }
 .saveBtn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 .saveHint { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin: 0; }
