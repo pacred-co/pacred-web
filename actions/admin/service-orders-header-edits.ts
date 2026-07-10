@@ -779,3 +779,133 @@ export async function adminUpdateOrderCrate(
     },
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// 4b. Per-ITEM / per-SHOP crate flag (ตีลังไม้) — fix #4 (2026-07-10)
+//
+//   The header-level crate flag above (tb_header_order.crate) applies to the
+//   WHOLE order. Staff also need to mark ตีลังไม้ on a SPECIFIC item or a
+//   SPECIFIC shop-group (each shop ships separately). tb_order carries a
+//   per-line `hcrate char(1)` flag ('1'=ตีลังไม้ · '2'=ไม่ตีลังไม้ · DEFAULT '2';
+//   mig 0081) that has had NO writer/consumer — these two actions wire it.
+//
+//   ⚠️ FLAG-ONLY. tb_order has no per-line crate PRICE column, so a per-item /
+//   per-shop crate *price* is out of scope (would need a new migration — NOT
+//   invented). The crate PRICE stays header-level (tb_header_order.pricecrate ·
+//   CratePriceBox). These writers touch ONLY tb_order.hcrate → they never move
+//   any SELL/COST total. Confirm-gated in the UI (§0f). No status gate (legacy
+//   crate had none; hcrate is a data flag editable at any status except '6').
+// ════════════════════════════════════════════════════════════════════════
+
+const HCRATE_VALUES = ["1", "2"] as const;
+
+// ── per-item ──────────────────────────────────────────────────────────────
+const updateItemCrateSchema = z.object({
+  h_no:        hnoSchema,
+  tb_order_id: z.number().int().positive(),
+  hcrate:      z.enum(HCRATE_VALUES, { message: "ค่าตีลังต้องเป็น 1=ตีลังไม้ หรือ 2=ไม่ตีลังไม้" }),
+});
+export type AdminUpdateOrderItemCrateInput = z.infer<typeof updateItemCrateSchema>;
+
+export async function adminUpdateOrderItemCrate(
+  input: AdminUpdateOrderItemCrateInput,
+): Promise<AdminActionResult<{ tb_order_id: number; hcrate: "1" | "2" }>> {
+  const parsed = updateItemCrateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{ tb_order_id: number; hcrate: "1" | "2" }>(
+    [...HEADER_EDIT_ROLES],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // Verify the item exists AND belongs to this order (scope guard).
+      const { data: before, error: readErr } = await admin
+        .from("tb_order")
+        .select("id, hno, hcrate")
+        .eq("id", d.tb_order_id)
+        .eq("hno", d.h_no)
+        .maybeSingle<{ id: number; hno: string; hcrate: string | null }>();
+      if (readErr) {
+        console.error(`[adminUpdateOrderItemCrate read] failed`, { code: readErr.code, message: readErr.message });
+        return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${readErr.message}` };
+      }
+      if (!before) return { ok: false, error: "ไม่พบรายการสินค้านี้ในออเดอร์" };
+
+      const beforeCrate = (before.hcrate ?? "").trim();
+      if (beforeCrate === d.hcrate) {
+        return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าตีลังเดิม)" };
+      }
+
+      // Write ONLY hcrate — never any money column.
+      const { error: updErr } = await admin
+        .from("tb_order")
+        .update({ hcrate: d.hcrate })
+        .eq("id", before.id)
+        .eq("hno", d.h_no);
+      if (updErr) {
+        console.error(`[adminUpdateOrderItemCrate update] failed`, { code: updErr.code, message: updErr.message });
+        return { ok: false, error: `บันทึกค่าตีลังรายการไม่สำเร็จ: ${updErr.message}` };
+      }
+
+      await logAdminAction(adminId, "tb_order.update_item_crate", "tb_order", String(before.id), {
+        hno: d.h_no, before: beforeCrate, after: d.hcrate,
+      });
+
+      revalidatePath(`/admin/service-orders/${d.h_no}`);
+      revalidatePath(`/admin/service-orders/${d.h_no}/edit`);
+      return { ok: true, data: { tb_order_id: before.id, hcrate: d.hcrate } };
+    },
+  );
+}
+
+// ── per-shop (all items of one cnameshop) ───────────────────────────────────
+const updateShopCrateSchema = z.object({
+  h_no:      hnoSchema,
+  cnameshop: z.string().trim().min(1, "ต้องระบุชื่อร้าน").max(300),
+  hcrate:    z.enum(HCRATE_VALUES, { message: "ค่าตีลังต้องเป็น 1=ตีลังไม้ หรือ 2=ไม่ตีลังไม้" }),
+});
+export type AdminUpdateShopItemsCrateInput = z.infer<typeof updateShopCrateSchema>;
+
+export async function adminUpdateShopItemsCrate(
+  input: AdminUpdateShopItemsCrateInput,
+): Promise<AdminActionResult<{ h_no: string; cnameshop: string; hcrate: "1" | "2"; rows_updated: number }>> {
+  const parsed = updateShopCrateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{ h_no: string; cnameshop: string; hcrate: "1" | "2"; rows_updated: number }>(
+    [...HEADER_EDIT_ROLES],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // UPDATE all lines of this shop-group in the order. Write ONLY hcrate.
+      const { data: updated, error: updErr } = await admin
+        .from("tb_order")
+        .update({ hcrate: d.hcrate })
+        .eq("hno", d.h_no)
+        .eq("cnameshop", d.cnameshop)
+        .select("id");
+      if (updErr) {
+        console.error(`[adminUpdateShopItemsCrate update] failed`, { code: updErr.code, message: updErr.message });
+        return { ok: false, error: `บันทึกค่าตีลังทั้งร้านไม่สำเร็จ: ${updErr.message}` };
+      }
+      const rowsUpdated = (updated ?? []).length;
+      if (rowsUpdated === 0) {
+        return { ok: false, error: `ไม่พบรายการของร้าน "${d.cnameshop}" ในออเดอร์นี้` };
+      }
+
+      await logAdminAction(adminId, "tb_order.update_shop_crate", "tb_header_order", d.h_no, {
+        hno: d.h_no, cnameshop: d.cnameshop, after: d.hcrate, rows_updated: rowsUpdated,
+      });
+
+      revalidatePath(`/admin/service-orders/${d.h_no}`);
+      revalidatePath(`/admin/service-orders/${d.h_no}/edit`);
+      return { ok: true, data: { h_no: d.h_no, cnameshop: d.cnameshop, hcrate: d.hcrate, rows_updated: rowsUpdated } };
+    },
+  );
+}

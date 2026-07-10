@@ -59,6 +59,7 @@ import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
 import { buildTrackingGroups } from "@/lib/admin/shop-order-tracking-groups";
 import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
+import { ShippingRefundBox } from "../shipping-refund-box";
 import { MarkPaidTbForm } from "../mark-paid-tb-form";
 import { MarkArrivedChinaButton } from "@/components/admin/mark-arrived-china-button";
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
@@ -197,6 +198,7 @@ type ORow = {
   cshippingchn: number | null; cpriceupdate: number | null; crewallet: string | null;
   cnote: string | null; cshippingnumber: string | null; ctrackingnumber: string | null;
   input_currency: string | null; input_price: number | string | null;
+  hcrate: string | null;
 };
 
 export default async function AdminServiceOrderEditPage({
@@ -285,7 +287,7 @@ export default async function AdminServiceOrderEditPage({
     .select(
       "id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails," +
       "camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote," +
-      "cshippingnumber,ctrackingnumber,input_currency,input_price",
+      "cshippingnumber,ctrackingnumber,input_currency,input_price,hcrate",
     )
     .eq("hno", r.hno)
     .order("id", { ascending: true })
@@ -330,6 +332,8 @@ export default async function AdminServiceOrderEditPage({
     // input below stays the ¥-equivalent `cprice` that pricing runs on).
     inputCurrency: it.input_currency,
     inputPrice:    Number(it.input_price ?? 0),
+    // per-line ตีลังไม้ flag (fix #4 · tb_order.hcrate · '1'=ตีลัง · '2'=ไม่ตีลัง).
+    hcrate:        it.hcrate,
   }));
 
   // Spawn rows (status 4) + refundable items (status 3/4/5).
@@ -849,10 +853,14 @@ export default async function AdminServiceOrderEditPage({
       )}
 
       {/* ── 6. Refund (status 3/4/5) ── self-hides via internal guard.
-          id="refund" = the anchor the detail page's "คืนเงินลูกค้า" link jumps to. */}
+          id="refund" = the anchor the detail page's "คืนเงินลูกค้า" link jumps to.
+          orderHrate = the rate the customer PAID → the refund is ¥ × this rate
+          (fix #1 · not ¥-as-฿). The shipping-refund box (fix #3) sits alongside
+          so staff can also refund a reduced ค่าส่งจีน at the same rate. */}
       {showRefund && (
-        <div id="refund" className="scroll-mt-24">
-          <AdminRefundItemPanel hNo={r.hno} hstatus={status} refundableItems={refundableItems} />
+        <div id="refund" className="scroll-mt-24 space-y-4">
+          <AdminRefundItemPanel hNo={r.hno} hstatus={status} orderHrate={rate} refundableItems={refundableItems} />
+          <ShippingRefundBox hNo={r.hno} hstatus={status} currentShippingChn={shipChn} orderHrate={rate} />
         </div>
       )}
 

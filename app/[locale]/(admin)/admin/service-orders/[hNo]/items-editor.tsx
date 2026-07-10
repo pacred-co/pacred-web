@@ -25,9 +25,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, RotateCcw, Save } from "lucide-react";
+import { Trash2, RotateCcw, Save, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminSaveShopOrderItemsAndQuote } from "@/actions/admin/service-orders-shop-workflow";
+import {
+  adminUpdateOrderItemCrate,
+  adminUpdateShopItemsCrate,
+} from "@/actions/admin/service-orders-header-edits";
 import { ItemImageEditor } from "./item-image-editor";
 import { adminDeleteOrderItem } from "@/actions/admin/service-orders-governance";
 import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
@@ -67,6 +71,8 @@ export type EditorItem = {
   // a plain ¥ row). `cprice` above stays the ¥-equivalent that pricing runs on.
   inputCurrency: string | null;
   inputPrice:    number;
+  // fix #4 — per-line ตีลังไม้ flag (tb_order.hcrate · '1'=ตีลัง · '2'/null=ไม่ตีลัง).
+  hcrate:        string | null;
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -206,6 +212,52 @@ export function ShopItemsEditor({
     });
   }
 
+  // fix #4 — per-ITEM / per-SHOP ตีลังไม้ toggle (writes ONLY tb_order.hcrate ·
+  // no money moves). Confirm-before-write (§0f). router.refresh re-reads the
+  // authoritative hcrate (no optimistic drift · consistent with onDelete).
+  const [cratePending, startCrate] = useTransition();
+
+  function toggleItemCrate(it: EditorItem) {
+    const next = it.hcrate === "1" ? "2" : "1";
+    if (!confirm(next === "1" ? "ตั้งรายการนี้เป็น “ตีลังไม้”?" : "ยกเลิก “ตีลังไม้” รายการนี้?")) return;
+    setMsg(null);
+    setErr(null);
+    startCrate(async () => {
+      const res = await adminUpdateOrderItemCrate({ h_no: hNo, tb_order_id: it.id, hcrate: next });
+      if (res.ok) {
+        setMsg(next === "1" ? "ตั้งตีลังไม้รายการแล้ว" : "ยกเลิกตีลังไม้รายการแล้ว");
+        router.refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
+  function toggleShopCrate(shop: string, shopItems: EditorItem[]) {
+    const allCrated = shopItems.length > 0 && shopItems.every((i) => i.hcrate === "1");
+    const next = allCrated ? "2" : "1";
+    if (
+      !confirm(
+        next === "1"
+          ? `ตั้ง “ตีลังไม้” ทั้งร้าน "${shop}" (${shopItems.length} รายการ)?`
+          : `ยกเลิก “ตีลังไม้” ทั้งร้าน "${shop}"?`,
+      )
+    ) {
+      return;
+    }
+    setMsg(null);
+    setErr(null);
+    startCrate(async () => {
+      const res = await adminUpdateShopItemsCrate({ h_no: hNo, cnameshop: shop, hcrate: next });
+      if (res.ok) {
+        setMsg(`อัปเดตตีลังไม้ทั้งร้าน (${res.data?.rows_updated ?? 0} รายการ)`);
+        router.refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
   // Group items by provider → shop (legacy update1.php layout).
   const grouped = useMemo(() => {
     const byProvider = new Map<string, Map<string, EditorItem[]>>();
@@ -261,7 +313,13 @@ export function ShopItemsEditor({
             {[...grouped.entries()].map(([provider, shops]) => (
               <ProviderGroup key={provider} provider={provider}>
                 {[...shops.entries()].map(([shop, shopItems]) => (
-                  <ShopGroup key={`${provider}-${shop}`} shop={shop}>
+                  <ShopGroup
+                    key={`${provider}-${shop}`}
+                    shop={shop}
+                    crated={shopItems.length > 0 && shopItems.every((i) => i.hcrate === "1")}
+                    crateBusy={cratePending}
+                    onToggleCrate={() => toggleShopCrate(shop, shopItems)}
+                  >
                     {shopItems.map((it) => {
                       rowNo += 1;
                       const s = rows[it.id];
@@ -367,6 +425,20 @@ export function ShopItemsEditor({
                           </td>
                           <td className="px-2 py-2">
                             <div className="flex justify-center gap-1">
+                              {/* fix #4 — per-item ตีลังไม้ toggle (amber when on). */}
+                              <button
+                                type="button"
+                                onClick={() => toggleItemCrate(it)}
+                                disabled={pending || cratePending || refunded}
+                                title={it.hcrate === "1" ? "ตีลังไม้ (กดเพื่อยกเลิก)" : "ตั้งตีลังไม้รายการนี้"}
+                                className={`rounded-md border p-1.5 disabled:opacity-50 ${
+                                  it.hcrate === "1"
+                                    ? "border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                    : "border-border text-muted hover:bg-surface-alt"
+                                }`}
+                              >
+                                <Package className="h-3.5 w-3.5" />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => onDelete(it.id)}
@@ -495,12 +567,39 @@ function ProviderGroup({ provider, children }: { provider: string; children: Rea
     </>
   );
 }
-function ShopGroup({ shop, children }: { shop: string; children: React.ReactNode }) {
+function ShopGroup({
+  shop,
+  children,
+  crated,
+  crateBusy,
+  onToggleCrate,
+}: {
+  shop: string;
+  children: React.ReactNode;
+  crated: boolean;
+  crateBusy: boolean;
+  onToggleCrate: () => void;
+}) {
   return (
     <>
       <tr className="bg-surface-alt/40">
-        <td colSpan={8} className="px-2 py-1 text-center text-[11px] font-medium text-muted">
-          ชื่อร้าน : {shop}
+        <td colSpan={8} className="px-2 py-1">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <span className="text-[11px] font-medium text-muted">ชื่อร้าน : {shop}</span>
+            {/* fix #4 — per-shop ตีลังไม้ toggle (sets hcrate on every item of the shop). */}
+            <button
+              type="button"
+              onClick={onToggleCrate}
+              disabled={crateBusy}
+              className={`rounded border px-2 py-0.5 text-[11px] disabled:opacity-50 ${
+                crated
+                  ? "border-amber-300 bg-amber-100 text-amber-800"
+                  : "border-border text-muted hover:bg-surface-alt"
+              }`}
+            >
+              🪵 {crated ? "ตีลังไม้ทั้งร้าน ✓ (กดเพื่อยกเลิก)" : "ตั้งตีลังไม้ทั้งร้าน"}
+            </button>
+          </div>
         </td>
       </tr>
       {children}

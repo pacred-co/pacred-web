@@ -155,6 +155,7 @@ type ORow = {
   cshippingchn: number | null; cpriceupdate: number | null; crewallet: string | null;
   cnote: string | null; cshippingnumber: string | null; ctrackingnumber: string | null;
   input_currency: string | null; input_price: number | string | null;
+  hcrate: string | null;
 };
 
 export async function renderLegacyServiceOrderView(hno: string) {
@@ -198,7 +199,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   const { data: itemsRaw, error: itemsErr } = await admin
     .from("tb_order")
-    .select("id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails,camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote,cshippingnumber,ctrackingnumber,input_currency,input_price")
+    .select("id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails,camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote,cshippingnumber,ctrackingnumber,input_currency,input_price,hcrate")
     .eq("hno", r.hno)
     .order("id", { ascending: true })
     .limit(500);
@@ -231,6 +232,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
     // mig 0248 — original currency + amount (display only; pricing uses cprice).
     inputCurrency: it.input_currency,
     inputPrice:    Number(it.input_price ?? 0),
+    hcrate:        it.hcrate,
   }));
 
   // Bill-to default — for juristic customers the receipt/PDF uses the company

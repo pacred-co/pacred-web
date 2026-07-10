@@ -52,6 +52,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — third caller after wallet-hs.ts + tb-bulk.ts.
@@ -145,14 +146,21 @@ export async function adminRefundShopOrderItem(
       };
     }
 
-    // Parent header — for hstatus check + total recompute.
+    // Parent header — for hstatus check + total recompute. (fix #1/#2)
+    // We need hrate (the rate the customer PAID for this order) to convert the
+    // refunded ¥ into THB, plus the cost-side columns to recompute the header
+    // totals from the remaining lines (canonical formula, not a delta-subtract).
     const { data: header, error: headerErr } = await admin
       .from("tb_header_order")
-      .select("id, hno, hstatus, htotalpriceuser")
+      .select("id, hno, hstatus, htotalpriceuser, hrate, htotalpricechn, hshippingchn, hshippingservice")
       .eq("hno", item.hno)
       .maybeSingle<{
         id: number; hno: string;
         hstatus: string | null; htotalpriceuser: number | null;
+        hrate: number | string | null;
+        htotalpricechn: number | string | null;
+        hshippingchn: number | string | null;
+        hshippingservice: number | string | null;
       }>();
     if (headerErr) {
       console.error(`[tb_header_order mutation lookup] failed`, { code: headerErr.code, message: headerErr.message });
@@ -171,6 +179,18 @@ export async function adminRefundShopOrderItem(
       };
     }
 
+    // ── fix #1: refund at the ORDER rate ───────────────────────────
+    // `item.cprice` is the YUAN unit price. The customer paid THB for it at the
+    // order's hrate, so the refund = ¥ × the ORDER rate (NEVER the live/current
+    // rate, NEVER ¥-as-THB). Guard hrate > 0 — a 0/NaN rate would credit 0/NaN.
+    const orderHrate = Number(header.hrate ?? 0);
+    if (!(orderHrate > 0)) {
+      return {
+        ok: false,
+        error: "ออเดอร์นี้ยังไม่มีอัตราแลกเปลี่ยน (hrate) — คืนเงินไม่ได้ ต้องตั้งเรทก่อน",
+      };
+    }
+
     // Customer wallet (current settled balance).
     const { data: walletBefore, error: walletReadErr } = await admin
       .from("tb_wallet")
@@ -183,13 +203,12 @@ export async function adminRefundShopOrderItem(
     }
 
     const currentBalance     = Number(walletBefore?.wallettotal ?? 0);
-    const refundAmountThb    = Math.round(Number(item.cprice) * d.refundQty * 100) / 100;
+    const refundCny          = Math.round(Number(item.cprice) * d.refundQty * 100) / 100;
+    const refundAmountThb    = roundUp(Number(item.cprice) * d.refundQty * orderHrate, 2);
     const newBalance         = Math.round((currentBalance + refundAmountThb) * 100) / 100;
     const currentHeaderTotal = Number(header.htotalpriceuser ?? 0);
-    const newHeaderTotal     = Math.max(
-      0,
-      Math.round((currentHeaderTotal - refundAmountThb) * 100) / 100,
-    );
+    // newHeaderTotal is recomputed from the REMAINING lines AFTER the item
+    // update (fix #2 · Step 4b) — not a delta-subtraction that can drift.
 
     const nowIso          = new Date().toISOString();
     const isFullItemQty   = d.refundQty === item.camount;
@@ -215,7 +234,7 @@ export async function adminRefundShopOrderItem(
         depositnamebank: "",
         nameuserbank:    "",
         nouserbank:      "",
-        note:            `คืนเงินรายการ #${item.id} "${itemTitleShort}" จำนวน ${d.refundQty} · เหตุผล: ${d.reason}`,
+        note:            `คืนเงินรายการ #${item.id} "${itemTitleShort}" จำนวน ${d.refundQty} · ¥${refundCny.toFixed(2)} × เรท ${orderHrate} = ฿${refundAmountThb.toFixed(2)} · เหตุผล: ${d.reason}`,
         adminid:         legacyAdminId,
         adminidupdate:   legacyAdminId,
         session:         "admin-refund-item",
@@ -286,12 +305,48 @@ export async function adminRefundShopOrderItem(
       };
     }
 
-    // ── Step 5: UPDATE tb_header_order.htotalpriceuser ──────────────
-    // Recompute parent total so the per-order summary + reports match
-    // reality. Bounded ≥ 0 — defensive against weird historic data.
+    // ── Step 4b: recompute totals from the REMAINING lines (fix #2) ─
+    // Front (customer) + back (admin) totals are re-derived from the canonical
+    // formula over the remaining product lines — NOT a delta-subtraction that
+    // drifts. A fully-refunded line now has camount=0 (contributes 0); a partial
+    // keeps its reduced camount. Mirrors the spawn accumulation
+    // (service-orders-shop-workflow.ts L475: Σ roundUp(cprice×camount,2)) +
+    // the canonical net formula (service-orders-header-edits.ts L369:
+    // roundUp((chn+shipChn)×rate+svc, 2)). Shipping (hshippingchn) is left
+    // as-is here — a shipping refund/adjust is its own action (fix #3).
+    const { data: remLines, error: remErr } = await admin
+      .from("tb_order")
+      .select("cprice, camount, crewallet")
+      .eq("hno", header.hno);
+    if (remErr) {
+      console.error(`[tb_order remaining-lines recompute] failed`, {
+        code: remErr.code, message: remErr.message, hno: header.hno,
+      });
+      return {
+        ok: false,
+        error: `ยอด wallet + tb_order ปรับแล้ว แต่รวมยอดใหม่ไม่สำเร็จ: ${remErr.message} (ติดต่อ ops)`,
+      };
+    }
+    let sumChn = 0; // Σ roundUp(cprice × camount, 2) over remaining product lines
+    for (const ln of (remLines ?? []) as Array<{
+      cprice: number | string | null; camount: number | string | null; crewallet: string | null;
+    }>) {
+      if (ln.crewallet === "1") continue; // fully-refunded — excluded
+      const amt = Number(ln.camount ?? 0);
+      const prc = Number(ln.cprice ?? 0);
+      if (amt > 0) sumChn = roundUp(sumChn + roundUp(prc * amt, 2), 2);
+    }
+    const shipChn        = Number(header.hshippingchn ?? 0);
+    const svc            = Number(header.hshippingservice ?? 0);
+    const newHeaderTotal = roundUp((sumChn + shipChn) * orderHrate + svc, 2);
+
+    // ── Step 5: UPDATE tb_header_order (htotalpricechn + htotalpriceuser) ──
+    // Recompute parent totals so the per-order summary + reports match reality
+    // (both the ¥ subtotal and the THB net, front+back consistent).
     const { error: headerUpdErr } = await admin
       .from("tb_header_order")
       .update({
+        htotalpricechn:  sumChn,
         htotalpriceuser: newHeaderTotal,
         adminidupdate:   legacyAdminId,
       })
@@ -312,6 +367,8 @@ export async function adminRefundShopOrderItem(
       refund_qty:         d.refundQty,
       remaining_qty:      newItemCamount,
       cprice:             item.cprice,
+      cprice_cny:         refundCny,
+      order_hrate:        orderHrate,
       refund_amount_thb:  refundAmountThb,
       wallet_before:      currentBalance,
       wallet_after:       newBalance,
@@ -340,6 +397,241 @@ export async function adminRefundShopOrderItem(
         refundAmountThb:   refundAmountThb,
         newWalletBalance:  newBalance,
         newHeaderTotalThb: newHeaderTotal,
+      },
+    };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// fix #3 — adminRefundShopOrderShipping — ปรับลดค่าส่งจีน + คืนเงินส่วนต่าง
+//
+// When items are removed / the shipment shrinks, staff reduce the china
+// shipping (hshippingchn ¥). The reduced delta is refunded to the customer's
+// wallet at the ORDER rate (same money model as the per-item refund), and the
+// header net total is recomputed with the new shipping so front (customer) +
+// back (admin) agree. Staff-controlled (they type the new ค่าส่งจีน) but the
+// money math (Δ¥ × order rate) + the recompute + the wallet credit are
+// automatic + consistent.
+//
+// REDUCE-ONLY: new_hshippingchn must be ≤ the current value (this is a refund,
+// not a top-up — a shipping INCREASE is a re-charge, not this action's job).
+// Status gate mirrors the per-item refund: post-payment paid statuses only
+// (3/4/5). hshippingchn is a HEADER column (Σ of the per-line cshippingchn); at
+// 3/4/5 the per-line items editor is not shown, so writing the header value has
+// no per-line editor to clobber it.
+// ════════════════════════════════════════════════════════════════════════
+
+const shippingRefundHnoSchema = z
+  .string()
+  .trim()
+  .regex(/^P\d+$/, "hno ไม่ถูกต้อง (ต้องขึ้นต้นด้วย P ตามด้วยตัวเลข)")
+  .max(30);
+
+const refundShippingSchema = z.object({
+  h_no:             shippingRefundHnoSchema,
+  new_hshippingchn: z.coerce.number().nonnegative("ค่าส่งจีนต้องไม่ติดลบ").max(9_999_999, "ค่าส่งจีนเกินช่วงที่ยอมรับ"),
+  reason:           z.string().trim().min(1, "ต้องบันทึกเหตุผลคืนเงิน").max(500),
+});
+export type AdminRefundShopOrderShippingInput = z.infer<typeof refundShippingSchema>;
+
+type ShippingRefundResult = {
+  hno:                 string;
+  refundCny:           number;
+  refundAmountThb:     number;
+  newWalletBalance:    number;
+  newHeaderTotalThb:   number;
+  newHshippingChn:     number;
+};
+
+export async function adminRefundShopOrderShipping(
+  input: AdminRefundShopOrderShippingInput,
+): Promise<AdminActionResult<ShippingRefundResult>> {
+  const parsed = refundShippingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  // Same role set as the per-item refund — both are refund surfaces on the same
+  // panel; a "you can refund items but not shipping" split would confuse staff.
+  return withAdmin<ShippingRefundResult>(["super", "accounting", "ops"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+
+    // 1. Load header — rate + cost-side columns for the recompute.
+    const { data: header, error: headerErr } = await admin
+      .from("tb_header_order")
+      .select("id, hno, userid, hstatus, hrate, htotalpricechn, hshippingchn, hshippingservice, htotalpriceuser")
+      .eq("hno", d.h_no)
+      .maybeSingle<{
+        id: number; hno: string; userid: string | null;
+        hstatus: string | null;
+        hrate: number | string | null;
+        htotalpricechn: number | string | null;
+        hshippingchn: number | string | null;
+        hshippingservice: number | string | null;
+        htotalpriceuser: number | string | null;
+      }>();
+    if (headerErr) {
+      console.error(`[adminRefundShopOrderShipping header read] failed`, { code: headerErr.code, message: headerErr.message });
+      return { ok: false, error: `db_error:${headerErr.code ?? "unknown"}` };
+    }
+    if (!header) return { ok: false, error: "not_found: ไม่พบใบฝากสั่งซื้อ" };
+    if (!header.userid) return { ok: false, error: "ออเดอร์นี้ไม่มีรหัสลูกค้า — คืนเงินไม่ได้" };
+
+    // Status gate — post-payment paid only (mirror per-item refund).
+    const refundAllowedStatuses = new Set(["3", "4", "5"]);
+    if (!refundAllowedStatuses.has(header.hstatus ?? "")) {
+      return {
+        ok: false,
+        error: `คืนเงินค่าส่งไม่ได้ — สถานะปัจจุบัน '${header.hstatus ?? "?"}' (อนุญาตเฉพาะ 3/4/5)`,
+      };
+    }
+
+    // hrate guard (same as fix #1) — a 0/NaN rate would credit 0/NaN.
+    const orderHrate = Number(header.hrate ?? 0);
+    if (!(orderHrate > 0)) {
+      return { ok: false, error: "ออเดอร์นี้ยังไม่มีอัตราแลกเปลี่ยน (hrate) — คืนเงินไม่ได้ ต้องตั้งเรทก่อน" };
+    }
+
+    const currentShipChn = Number(header.hshippingchn ?? 0);
+    if (!Number.isFinite(currentShipChn)) {
+      return { ok: false, error: "ค่าส่งจีนปัจจุบันไม่ถูกต้อง — ตรวจข้อมูลออเดอร์ก่อน" };
+    }
+    // REDUCE-ONLY guard.
+    if (d.new_hshippingchn > currentShipChn + 0.004) {
+      return {
+        ok: false,
+        error: `ค่าส่งจีนใหม่ (¥${d.new_hshippingchn.toFixed(2)}) มากกว่าเดิม (¥${currentShipChn.toFixed(2)}) — เมนูนี้ใช้ปรับลด/คืนเงินเท่านั้น`,
+      };
+    }
+    const deltaCny = Math.round((currentShipChn - d.new_hshippingchn) * 100) / 100;
+    if (deltaCny <= 0) {
+      return { ok: false, error: "ไม่มีส่วนต่างค่าส่งให้คืน (ค่าส่งจีนเท่าเดิม)" };
+    }
+    const refundAmountThb = roundUp(deltaCny * orderHrate, 2);
+
+    // 2. Customer wallet.
+    const { data: walletBefore, error: walletReadErr } = await admin
+      .from("tb_wallet")
+      .select("userid, wallettotal")
+      .eq("userid", header.userid)
+      .maybeSingle<{ userid: string; wallettotal: number }>();
+    if (walletReadErr) {
+      console.error(`[adminRefundShopOrderShipping wallet read] failed`, { code: walletReadErr.code, message: walletReadErr.message });
+      return { ok: false, error: `db_error:${walletReadErr.code ?? "unknown"}` };
+    }
+    const currentBalance = Number(walletBefore?.wallettotal ?? 0);
+    const newBalance     = Math.round((currentBalance + refundAmountThb) * 100) / 100;
+
+    const nowIso = new Date().toISOString();
+
+    // 3. INSERT tb_wallet_hs type='5' (same shape as the per-item refund).
+    const { data: insertedHs, error: hsErr } = await admin
+      .from("tb_wallet_hs")
+      .insert({
+        date:            nowIso,
+        amount:          refundAmountThb,
+        status:          "2",
+        type:            "5",
+        typenew:         "2",
+        typeservice:     "1",
+        paydeposit:      "0",
+        imagesslip:      "",
+        depositnamebank: "",
+        nameuserbank:    "",
+        nouserbank:      "",
+        note:            `คืนเงินค่าส่งจีน ${header.hno} · ¥${currentShipChn.toFixed(2)} → ¥${d.new_hshippingchn.toFixed(2)} (Δ¥${deltaCny.toFixed(2)}) × เรท ${orderHrate} = ฿${refundAmountThb.toFixed(2)} · เหตุผล: ${d.reason}`,
+        adminid:         legacyAdminId,
+        adminidupdate:   legacyAdminId,
+        session:         "admin-refund-shipping",
+        reforder:        header.hno,
+        whno:            "",
+        wusercredit:     "0",
+        userid:          header.userid,
+        adminidcrate:    legacyAdminId,
+      })
+      .select("id")
+      .single<{ id: number }>();
+    if (hsErr || !insertedHs) {
+      return { ok: false, error: `บันทึก tb_wallet_hs ล้มเหลว: ${hsErr?.message ?? "insert failed"}` };
+    }
+
+    // 4. UPDATE tb_wallet (+refund) — rollback the hs row if it fails.
+    if (!walletBefore) {
+      const { error: walletInsErr } = await admin
+        .from("tb_wallet")
+        .insert({ userid: header.userid, wallettotal: refundAmountThb });
+      if (walletInsErr) {
+        await admin.from("tb_wallet_hs").delete().eq("id", insertedHs.id);
+        return { ok: false, error: `tb_wallet insert ล้มเหลว · ยกเลิก tb_wallet_hs id=${insertedHs.id}: ${walletInsErr.message}` };
+      }
+    } else {
+      const { error: walletUpdErr } = await admin
+        .from("tb_wallet")
+        .update({ wallettotal: newBalance })
+        .eq("userid", header.userid);
+      if (walletUpdErr) {
+        await admin.from("tb_wallet_hs").delete().eq("id", insertedHs.id);
+        return { ok: false, error: `tb_wallet update ล้มเหลว · ยกเลิก tb_wallet_hs id=${insertedHs.id}: ${walletUpdErr.message}` };
+      }
+    }
+
+    // 5. UPDATE header — new hshippingchn + recomputed htotalpriceuser
+    //    (canonical formula: (chn + newShip) × rate + svc). htotalpricechn is
+    //    the product subtotal — unchanged by a shipping adjust.
+    const chn            = Number(header.htotalpricechn ?? 0);
+    const svc            = Number(header.hshippingservice ?? 0);
+    const newHeaderTotal = roundUp((chn + d.new_hshippingchn) * orderHrate + svc, 2);
+    const { error: headerUpdErr } = await admin
+      .from("tb_header_order")
+      .update({
+        hshippingchn:    d.new_hshippingchn,
+        htotalpriceuser: newHeaderTotal,
+        adminidupdate:   legacyAdminId,
+      })
+      .eq("id", header.id);
+    if (headerUpdErr) {
+      return {
+        ok: false,
+        error: `ยอด wallet คืนแล้ว (+${refundAmountThb.toFixed(2)}) แต่ tb_header_order update ล้มเหลว: ${headerUpdErr.message} (ติดต่อ ops)`,
+      };
+    }
+
+    // 6. audit
+    await logAdminAction(adminId, "tb_header_order.refund_shipping", "tb_header_order", header.hno, {
+      hno:                 header.hno,
+      userid:              header.userid,
+      before_shipping_cny: currentShipChn,
+      after_shipping_cny:  d.new_hshippingchn,
+      delta_cny:           deltaCny,
+      order_hrate:         orderHrate,
+      refund_amount_thb:   refundAmountThb,
+      wallet_before:       currentBalance,
+      wallet_after:        newBalance,
+      header_total_before: Number(header.htotalpriceuser ?? 0),
+      header_total_after:  newHeaderTotal,
+      reason:              d.reason,
+      wallet_hs_id:        insertedHs.id,
+    });
+
+    revalidatePath("/admin/service-orders");
+    revalidatePath(`/admin/service-orders/${header.hno}`);
+    revalidatePath(`/admin/service-orders/${header.hno}/edit`);
+    revalidatePath(`/service-order/${header.hno}`);
+    revalidatePath("/admin/wallet");
+    revalidatePath(`/admin/wallet/${header.userid}`);
+    revalidatePath("/admin");
+
+    return {
+      ok: true,
+      data: {
+        hno:               header.hno,
+        refundCny:         deltaCny,
+        refundAmountThb:   refundAmountThb,
+        newWalletBalance:  newBalance,
+        newHeaderTotalThb: newHeaderTotal,
+        newHshippingChn:   d.new_hshippingchn,
       },
     };
   });

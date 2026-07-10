@@ -31,15 +31,29 @@ type RefundableItem = {
 type Props = {
   hNo:              string;
   hstatus:          string;
+  orderHrate:       number;   // the rate the customer PAID (tb_header_order.hrate)
   refundableItems:  RefundableItem[];
 };
 
+// cprice is the ¥ unit price → show ¥, not ฿ (the bug the money-fix addresses).
+function cny(n: number): string {
+  return "¥" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+}
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
+// roundUp(x,2) — CEIL to 2dp · mirrors the server refund math so the preview
+// matches the credited amount to the satang.
+function bahtFromCny(cnyAmount: number, hrate: number): number {
+  const v = cnyAmount * hrate;
+  if (!Number.isFinite(v)) return 0;
+  const eps = 1e-9 * Math.max(1, Math.abs(v * 100));
+  const r = Math.ceil(v * 100 - eps) / 100;
+  return r === 0 ? 0 : r;
+}
 
 export function AdminRefundItemPanel(props: Props) {
-  const { refundableItems } = props;
+  const { refundableItems, orderHrate } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [openItemId, setOpenItemId] = useState<number | null>(null);
@@ -118,22 +132,25 @@ export function AdminRefundItemPanel(props: Props) {
             <tr>
               <th className="px-2 py-1.5">รายการ</th>
               <th className="px-2 py-1.5">ร้าน</th>
-              <th className="px-2 py-1.5 text-right">ราคา/ชิ้น</th>
+              <th className="px-2 py-1.5 text-right">¥ ราคา/ชิ้น</th>
               <th className="px-2 py-1.5 text-right">เหลือ</th>
-              <th className="px-2 py-1.5 text-right">ยอดรวม</th>
+              <th className="px-2 py-1.5 text-right">รวม (¥ / ฿ที่จ่าย)</th>
               <th className="px-2 py-1.5"> </th>
             </tr>
           </thead>
           <tbody>
             {refundableItems.map((it) => {
-              const lineTotal = it.cprice * it.camount;
+              const lineCny = it.cprice * it.camount;
               return (
                 <tr key={it.id} className="border-t border-border hover:bg-surface-alt/30">
                   <td className="px-2 py-1.5 max-w-[300px] truncate" title={it.title}>{it.title || "—"}</td>
                   <td className="px-2 py-1.5 text-muted text-[11px]">{it.cnameshop || "—"}</td>
-                  <td className="px-2 py-1.5 text-right font-mono">{thb(it.cprice)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono">{cny(it.cprice)}</td>
                   <td className="px-2 py-1.5 text-right font-mono">{it.camount}</td>
-                  <td className="px-2 py-1.5 text-right font-mono">{thb(lineTotal)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono">
+                    {cny(lineCny)}
+                    <span className="block text-[11px] text-muted">{thb(bahtFromCny(lineCny, orderHrate))}</span>
+                  </td>
                   <td className="px-2 py-1.5 text-right">
                     <Button size="sm" variant="outline" type="button" onClick={() => openRefund(it)} disabled={pending}>
                       คืน
@@ -150,7 +167,7 @@ export function AdminRefundItemPanel(props: Props) {
         <div className="rounded-md border border-amber-300 bg-white dark:bg-surface p-3 space-y-2 text-xs">
           <p className="font-semibold">คืนเงิน — {activeItem.title}</p>
           <p className="text-muted">
-            ราคา ฿{activeItem.cprice.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต่อชิ้น · เหลือ {activeItem.camount} ชิ้น
+            ราคา ¥{activeItem.cprice.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต่อชิ้น · เหลือ {activeItem.camount} ชิ้น · เรทออเดอร์ {orderHrate.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท/หยวน
           </p>
           <div className="grid grid-cols-2 gap-2 items-end">
             <label className="flex flex-col gap-1">
@@ -165,7 +182,8 @@ export function AdminRefundItemPanel(props: Props) {
               />
             </label>
             <p className="text-right text-muted">
-              ยอดคืน: ฿{(activeItem.cprice * qty).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              ยอดคืน: <span className="font-mono">¥{(activeItem.cprice * qty).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+              <span className="block font-semibold text-amber-700">= ฿{bahtFromCny(activeItem.cprice * qty, orderHrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
             </p>
           </div>
           <label className="flex flex-col gap-1">
@@ -179,7 +197,7 @@ export function AdminRefundItemPanel(props: Props) {
           </label>
           <div className="flex gap-2 flex-wrap pt-1">
             <Button size="sm" type="button" onClick={fire} disabled={pending}>
-              {pending ? "กำลังคืนเงิน..." : `ยืนยันคืน ${qty} ชิ้น = ฿${(activeItem.cprice * qty).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+              {pending ? "กำลังคืนเงิน..." : `ยืนยันคืน ${qty} ชิ้น = ฿${bahtFromCny(activeItem.cprice * qty, orderHrate).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
             </Button>
             <Button size="sm" variant="outline" type="button" onClick={closeRefund} disabled={pending}>
               ยกเลิก

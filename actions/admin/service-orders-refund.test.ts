@@ -47,6 +47,16 @@ function section(name: string) {
   console.log(`\n${name}`);
 }
 
+// roundUp(x,2) — CEIL to 2dp (mirrors lib/admin/shop-disbursement-calc roundUp,
+// the helper the refund + recompute now use).
+function roundUp2(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const scaled = value * 100;
+  const eps = 1e-9 * Math.max(1, Math.abs(scaled));
+  const r = Math.ceil(scaled - eps) / 100;
+  return r === 0 ? 0 : r;
+}
+
 console.log("=== adminRefundShopOrderItem — P0-16 per-item refund contract ===");
 
 // ════════════════════════════════════════════════════════════════
@@ -85,18 +95,23 @@ assertEq("hstatus='6' ยกเลิก → block",            canRefundAt("6")
 assertEq("hstatus=null → block (defensive)",      canRefundAt(null), false);
 
 // ════════════════════════════════════════════════════════════════
-// C. Money math — refundAmountThb = round(cprice × refundQty, 2)
+// C. Money math (fix #1) — refundAmountThb = roundUp(cprice¥ × qty × ORDER hrate, 2)
+//    cprice is the YUAN unit price → the refund converts ¥→THB at the rate the
+//    customer PAID. NOT ¥-as-THB (the bug), NOT the live/current rate.
 // ════════════════════════════════════════════════════════════════
-section("C. Money math");
+section("C. Money math — ¥ × order rate → THB (ceil to satang)");
 
-const computeRefund = (cprice: number, refundQty: number): number =>
-  Math.round(cprice * refundQty * 100) / 100;
+const computeRefund = (cpriceCny: number, refundQty: number, orderHrate: number): number =>
+  roundUp2(cpriceCny * refundQty * orderHrate);
 
-assertEq("฿100 × 3 = ฿300",            computeRefund(100, 3), 300);
-assertEq("฿55.50 × 2 = ฿111",          computeRefund(55.50, 2), 111);
-assertEq("฿33.33 × 3 = ฿99.99",        computeRefund(33.33, 3), 99.99);
-assertEq("฿0.01 × 100 = ฿1",           computeRefund(0.01, 100), 1);
-assertEq("฿1234.56 × 7 = ฿8641.92",    computeRefund(1234.56, 7), 8641.92);
+// ¥100/pc × 3 × 5.00 = ¥300 → ฿1,500 (NOT ฿300 — the ¥-as-฿ bug credited 5× short)
+assertEq("¥100 × 3 × 5.00 = ฿1500",       computeRefund(100, 3, 5.0), 1500);
+assertEq("¥55.50 × 2 × 4.90 = ฿543.90",   computeRefund(55.5, 2, 4.9), 543.9);
+// ceil-to-satang: 33.33 × 3 × 4.93 = 492.95…07 → 492.96 (rounds UP)
+assertEq("¥33.33 × 3 × 4.93 → ฿492.96",   computeRefund(33.33, 3, 4.93), 492.96);
+assertEq("¥1 × 1 × 4.88 = ฿4.88",         computeRefund(1, 1, 4.88), 4.88);
+// the bug: without the rate a ¥ was credited as ฿ (5× short) — proves the fix
+assertTrue("with rate ≠ ¥-as-฿ (bug)",    computeRefund(100, 3, 5.0) !== (100 * 3));
 
 // ════════════════════════════════════════════════════════════════
 // D. Wallet bump direction (balance ADDS the refund)
@@ -136,18 +151,50 @@ assertEq("singleton full (1 of 1) → crewallet='1'",   singletonFullUpdate.crew
 assertEq("singleton full (1 of 1) → camount=0",       singletonFullUpdate.camount, 0);
 
 // ════════════════════════════════════════════════════════════════
-// F. Header total recompute — bounded ≥ 0
+// F. Header total recompute (fix #2) — re-derived from the REMAINING lines
+//    via the canonical formula, NOT a delta-subtraction that drifts:
+//      htotalpricechn = Σ roundUp(cprice × camount, 2)  (remaining product lines)
+//      htotalpriceuser = roundUp((chn + shipChn) × rate + svc, 2)
 // ════════════════════════════════════════════════════════════════
-section("F. Header total recompute (bounded ≥ 0)");
+section("F. Header recompute from remaining lines");
 
-const computeNewHeaderTotal = (current: number, refund: number): number =>
-  Math.max(0, Math.round((current - refund) * 100) / 100);
+// Σ roundUp(cprice × camount, 2) over remaining non-refunded lines.
+const sumChn = (lines: Array<{ cprice: number; camount: number }>): number => {
+  let s = 0;
+  for (const ln of lines) if (ln.camount > 0) s = roundUp2(s + roundUp2(ln.cprice * ln.camount));
+  return s;
+};
+const computeHeaderTotal = (chn: number, shipChn: number, rate: number, svc: number): number =>
+  roundUp2((chn + shipChn) * rate + svc);
 
-assertEq("฿1000 - ฿300 = ฿700",         computeNewHeaderTotal(1000, 300), 700);
-assertEq("฿500 - ฿111 = ฿389",          computeNewHeaderTotal(500, 111), 389);
-assertEq("฿100 - ฿100 = ฿0",            computeNewHeaderTotal(100, 100), 0);
-assertEq("฿50 - ฿100 = ฿0 (clamped)",   computeNewHeaderTotal(50, 100), 0);
-assertEq("฿0 - ฿0 = ฿0",                 computeNewHeaderTotal(0, 0), 0);
+// Order: 2 lines (¥100×3, ¥50×2), ship ¥20, rate 5, svc 0.
+// Full order chn = 300+100 = 400 → total (400+20)×5 = 2100.
+const allLines = [{ cprice: 100, camount: 3 }, { cprice: 50, camount: 2 }];
+assertEq("chn all lines = ¥400",         sumChn(allLines), 400);
+assertEq("total all = ฿2100",            computeHeaderTotal(sumChn(allLines), 20, 5, 0), 2100);
+
+// Refund the ¥50×2 line fully (camount→0) → remaining chn = ¥300 → total (300+20)×5 = 1600.
+const afterFullRefund = [{ cprice: 100, camount: 3 }, { cprice: 50, camount: 0 }];
+assertEq("chn after full refund = ¥300", sumChn(afterFullRefund), 300);
+assertEq("total after full = ฿1600",     computeHeaderTotal(sumChn(afterFullRefund), 20, 5, 0), 1600);
+
+// Partial: reduce ¥100 line 3→1 → remaining chn = 100 + 100 = ¥200 → (200+20)×5 = 1100.
+const afterPartial = [{ cprice: 100, camount: 1 }, { cprice: 50, camount: 2 }];
+assertEq("chn after partial = ¥200",     sumChn(afterPartial), 200);
+assertEq("total after partial = ฿1100",  computeHeaderTotal(sumChn(afterPartial), 20, 5, 0), 1100);
+
+// ════════════════════════════════════════════════════════════════
+// F2. Shipping refund (fix #3) — refund = Δ¥ × order rate; new total uses new ship.
+// ════════════════════════════════════════════════════════════════
+section("F2. Shipping refund at order rate");
+
+const shippingRefund = (curShipChn: number, newShipChn: number, rate: number): number =>
+  roundUp2(Math.max(0, Math.round((curShipChn - newShipChn) * 100) / 100) * rate);
+
+assertEq("ship ¥50 → ¥20, rate 5 → ฿150 refund", shippingRefund(50, 20, 5), 150);
+assertEq("ship unchanged → ฿0",                  shippingRefund(30, 30, 5), 0);
+// new header total after shipping reduce (chn 400, newShip 20, rate 5) = 2100
+assertEq("header after ship reduce = ฿2100",     computeHeaderTotal(400, 20, 5, 0), 2100);
 
 // ════════════════════════════════════════════════════════════════
 // G. tb_wallet_hs INSERT payload shape (type/status/typenew/typeservice)

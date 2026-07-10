@@ -44,6 +44,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
+import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 
@@ -370,13 +371,17 @@ export async function adminDeleteOrderItem(
       //    htotalpricechn + hcount (read-then-write decrement).
       const { data: header, error: headerErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, hcover, htotalpricechn, hcount, hstatus, userid")
+        .select("id, hno, hcover, htotalpricechn, htotalpriceuser, hrate, hshippingchn, hshippingservice, hcount, hstatus, userid")
         .eq("hno", d.h_no)
         .maybeSingle<{
           id:               number;
           hno:              string;
           hcover:           string | null;
           htotalpricechn:   number | string | null;
+          htotalpriceuser:  number | string | null;
+          hrate:            number | string | null;
+          hshippingchn:     number | string | null;
+          hshippingservice: number | string | null;
           hcount:           number | null;
           hstatus:          string | null;
           userid:           string;
@@ -391,9 +396,6 @@ export async function adminDeleteOrderItem(
 
       const cPriceRemoved = Number(line.cprice ?? 0);
       const oldTotal      = Number(header.htotalpricechn ?? 0);
-      const newTotal      = Number.isFinite(oldTotal - cPriceRemoved)
-        ? oldTotal - cPriceRemoved
-        : oldTotal;
       const newCount      = Math.max(0, Number(header.hcount ?? 0) - 1);
 
       // 4. DELETE the line.
@@ -409,14 +411,30 @@ export async function adminDeleteOrderItem(
         return { ok: false, error: `db_error:${delErr.code ?? "unknown"}` };
       }
 
-      // 5. UPDATE header — decrement totals + stamp adminidupdate.
+      // 5. RECOMPUTE htotalpricechn (Σ ¥ per line) + htotalpriceuser (THB) from the
+      //    REMAINING non-refunded lines via the canonical formula — the old code
+      //    subtracted ONE unit of cprice (ignoring qty) and NEVER recomputed the THB
+      //    total (front/back drift · owner 2026-07-10: ข้อมูลต้องตรงกัน). Mirrors the
+      //    per-item refund recompute in service-orders-refund.ts.
+      const { data: remain } = await admin
+        .from("tb_order")
+        .select("cprice, camount, crewallet")
+        .eq("hno", d.h_no);
+      const sumChn = (remain ?? [])
+        .filter((r) => String((r as { crewallet?: string | null }).crewallet ?? "") !== "1")
+        .reduce((a, r) => a + roundUp(Number((r as { cprice?: number | string | null }).cprice ?? 0) * Number((r as { camount?: number | null }).camount ?? 0), 2), 0);
+      const hrate = Number(header.hrate ?? 0);
+      const newTotalUser = roundUp((sumChn + Number(header.hshippingchn ?? 0)) * hrate + Number(header.hshippingservice ?? 0), 2);
+
+      // 6. UPDATE header — recomputed totals + stamp adminidupdate.
       const { error: hdrUpdErr } = await admin
         .from("tb_header_order")
         .update({
-          htotalpricechn: newTotal,
-          hcount:         newCount,
-          adminidupdate:  legacyAdminId,
-          hdateupdate:    new Date().toISOString(),
+          htotalpricechn:  sumChn,
+          htotalpriceuser: newTotalUser,
+          hcount:          newCount,
+          adminidupdate:   legacyAdminId,
+          hdateupdate:     new Date().toISOString(),
         })
         .eq("id", header.id);
       if (hdrUpdErr) {
@@ -463,7 +481,7 @@ export async function adminDeleteOrderItem(
           tb_order_id:         line.id,
           cprice_removed:      cPriceRemoved,
           before_total:        oldTotal,
-          after_total:         newTotal,
+          after_total:         sumChn,
           before_count:        Number(header.hcount ?? 0),
           after_count:         newCount,
           cimages:             cImages || null,
@@ -480,7 +498,7 @@ export async function adminDeleteOrderItem(
           h_no:                header.hno,
           deleted_order_id:    line.id,
           cprice_removed:      cPriceRemoved,
-          new_htotalpricechn:  newTotal,
+          new_htotalpricechn:  sumChn,
           new_hcount:          newCount,
           image_file_unlinked: imageFileUnlinked,
         },
