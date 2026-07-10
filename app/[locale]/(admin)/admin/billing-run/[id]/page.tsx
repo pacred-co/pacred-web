@@ -13,6 +13,7 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { isGodRole } from "@/lib/admin/god-role";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
+import { BillingRunReceiptButton } from "./billing-run-receipt-button";
 import { BillingRunDeliveryAddressEditor } from "./billing-run-delivery-address-editor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
@@ -142,6 +143,11 @@ export default async function BillingRunDetailPage({
           >
             🖨 พิมพ์ใบวางบิล
           </Link>
+          {/* ออก/พิมพ์ใบเสร็จ ในคลิกเดียว — เปิดใช้เมื่อ "ชำระแล้ว" · ยังไม่มีใบเสร็จ = สร้างให้
+              (sync ยอด/ชื่อ บุคคล↔นิติ กับใบวางบิล · ภูม 2026-07-10 · แก้ราก PR086). */}
+          {header.status !== "cancelled" && (
+            <BillingRunReceiptButton invoiceId={invoiceId} status={header.status} />
+          )}
         </div>
       </header>
 
