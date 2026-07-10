@@ -28,6 +28,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "luci
 import { adminReportCntAddCheck, adminReportCntBillToCustomer, adminReportCntBillGroupToCustomer } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
+import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 import {
@@ -181,6 +182,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, start] = useTransition();
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const [confirmAddCheck, setConfirmAddCheck] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   // ภูม 2026-06-18 — which multi-tracking orders are expanded (collapsed by
@@ -1038,7 +1040,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               <button
                 type="button"
                 disabled={pending || selected.size === 0}
-                onClick={bulkCheck}
+                onClick={() => {
+                  if (selected.size === 0) {
+                    setBulkMsg("กรุณาเลือกอย่างน้อย 1 รายการ");
+                    return;
+                  }
+                  setBulkMsg(null);
+                  setConfirmAddCheck(true);
+                }}
                 className="rounded-full bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
               >
                 {pending ? "กำลังเพิ่ม…" : "เพิ่มในรายการตรวจสอบแล้ว"}
@@ -1086,6 +1095,31 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
           </Link>
           {checkInteractive && bulkMsg && <span className="text-muted">{bulkMsg}</span>}
         </div>
+      )}
+
+      {/* Itemized confirm-before-mutate popup (§0f) — lists the ticked rows about
+          to be added to the check-queue. On confirm → the unchanged bulkCheck()
+          (adminReportCntAddCheck). */}
+      {checkInteractive && (
+        <SelectedItemsConfirmDialog
+          open={confirmAddCheck}
+          title={`รายการที่เลือก ${selected.size}/${eligibleFilteredIds.length} รายการ`}
+          rows={rows
+            .filter((r) => selected.has(r.id))
+            .map((r) => ({
+              orderNo: r.fidorco ?? `#${r.id}`,
+              tracking: r.ftrackingchn ?? "-",
+              customerCode: r.userid,
+              status: FSTATUS_LABEL[r.fstatus] ?? (r.fstatus || "-"),
+            }))}
+          confirmLabel="เพิ่มไปยังรายการตรวจสอบแล้ว"
+          busy={pending}
+          onCancel={() => setConfirmAddCheck(false)}
+          onConfirm={() => {
+            setConfirmAddCheck(false);
+            bulkCheck();
+          }}
+        />
       )}
     </div>
   );

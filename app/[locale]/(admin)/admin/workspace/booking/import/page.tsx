@@ -15,7 +15,7 @@
  * shows it auto (locked), no manual entry.
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { PageHeader } from "@/components/admin/page-header";
 import { BookingImportBoard } from "./booking-import-board";
 import { SEED_IMPORT_BOOKINGS } from "./booking-data";
@@ -23,27 +23,23 @@ import { SEED_IMPORT_BOOKINGS } from "./booking-data";
 export const dynamic = "force-dynamic";
 
 export default async function WorkspaceBookingImportPage() {
-  await requireAdmin();
-
-  // The logged-in staffer = the Sales for bookings they create (auto · no select).
-  const withProfile = await getCurrentUserWithProfile();
-  const p = withProfile?.profile ?? null;
-  const salesId = p?.member_code || withProfile?.user.email || "me";
-  const salesName = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim() || salesId;
+  // ปุ่ม "ตั้งค่า" (จัดการเรทตั้งต้น) = เห็นต้นทุน/กำไร → Pricing/Ultra/Accounting (canViewCost)
+  const { roles } = await requireAdmin();
+  const canManageCatalog = canViewCost(roles);
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="WORKSPACE · BOOKING"
         title="สถานะ Booking · นำเข้า"
-        subtitle="รายการขอใบเสนอราคางานนำเข้า — Sales ขอราคา → Pricing ทำใบเสนอราคา → ลูกค้าเฟิร์ม → เปิดงานเข้า “รายการ”"
+        subtitle="ลูปใบเสนอราคา → จอง งานนำเข้า — ลูกค้าสร้าง → Pricing เคาะราคา Net → ลูกค้าคอนเฟิร์ม → รอ/คอนเฟิร์ม Booking → สำเร็จ (เปิดงานเข้า “รายการ”)"
         badges={
           <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
             ตัวอย่างข้อมูล · รอเชื่อมฐานข้อมูลจริง
           </span>
         }
       />
-      <BookingImportBoard initial={SEED_IMPORT_BOOKINGS} currentSales={{ id: salesId, name: salesName }} />
+      <BookingImportBoard initial={SEED_IMPORT_BOOKINGS} canManageCatalog={canManageCatalog} />
     </div>
   );
 }

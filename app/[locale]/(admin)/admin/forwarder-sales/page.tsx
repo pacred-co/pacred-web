@@ -9,6 +9,7 @@ import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { computeCommission } from "@/lib/sales-commission/calc";
 
 /**
  * /admin/forwarder-sales — sales-rep attribution report.
@@ -57,6 +58,23 @@ type ReportRow = {
 
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+}
+
+/**
+ * Legacy sales-rep commission rate — `$percen = 0.01` (1%) in
+ * `pcs-admin/forwarder-sale.php`. This is the report's core purpose: 1% of the
+ * forwarder net (ยอดขาย − ส่วนลด). GROUP B (2026-07-09) — restores the ค่าคอม
+ * column + total the port had dropped. READ-ONLY at render; NO DB write.
+ */
+const COMMISSION_PERCEN = 0.01;
+
+/**
+ * 1% of the forwarder net — mirrors `computeCommission` (lib/sales-commission/calc.ts),
+ * the single source of truth for legacy commission math. Base field = the net
+ * (`ftotalprice − fdiscount`), i.e. the same "หลังหักลด" the page already loads.
+ */
+function commissionOf(net: number): number {
+  return computeCommission(net, COMMISSION_PERCEN).commission;
 }
 
 export default async function AdminForwarderSalesPage({
@@ -236,6 +254,11 @@ export default async function AdminForwarderSalesPage({
     })
     .sort((a, b) => b.net - a.net);
 
+  // GROUP B — the commission TOTAL (full-set, all pages). Legacy sums the net
+  // first then applies percen (sumGross → ×0.01), so compute over `totalNet`,
+  // not per-row-then-sum (avoids float dust drifting the total).
+  const totalCommission = commissionOf(totalNet);
+
   // PERF (2026-06-03): paginate the DISPLAYED detail table (50/page). The
   // leaderboard rollup + gross/net totals + CSV stay full-set-correct because
   // they reduce over the full `rows`; only the rendered detail tbody is sliced.
@@ -252,6 +275,7 @@ export default async function AdminForwarderSalesPage({
     ftotalprice:   r.ftotalprice,
     fdiscount:     r.fdiscount,
     net:           r.ftotalprice - r.fdiscount,
+    commission:    commissionOf(r.ftotalprice - r.fdiscount),
     fstatus:       r.fstatus ?? "",
   }));
 
@@ -311,11 +335,12 @@ export default async function AdminForwarderSalesPage({
         </section>
 
         {/* Summary cards */}
-        <section className="grid sm:grid-cols-4 gap-3">
+        <section className="grid sm:grid-cols-5 gap-3">
           <Stat label="จำนวนรายการ" value={rows.length.toLocaleString("th-TH")} />
           <Stat label="Reps ที่ active" value={repBoard.length.toLocaleString("th-TH")} />
           <Stat label="ยอดขายรวม (gross)" value={thb(totalGross)} small />
-          <Stat label="หลังหักส่วนลด (net)" value={thb(totalNet)} />
+          <Stat label="หลังหักส่วนลด (net)" value={thb(totalNet)} small />
+          <Stat label="ค่าคอมรวม (1%)" value={thb(totalCommission)} />
         </section>
 
         {/* Leaderboard */}
@@ -323,14 +348,15 @@ export default async function AdminForwarderSalesPage({
           <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
             <h2 className="font-bold text-sm mb-3">🏆 อันดับ Sales Rep ในช่วงนี้</h2>
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[600px] text-sm">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[600px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-white text-left text-[11px] uppercase tracking-wide">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">Sales Rep</th>
                     <th className="px-3 py-2 text-right">จำนวนออเดอร์</th>
                     <th className="px-3 py-2 text-right">ยอดขาย (gross)</th>
                     <th className="px-3 py-2 text-right">หลังหักลด (net)</th>
+                    <th className="px-3 py-2 text-right">ค่าคอม (1%)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -341,6 +367,7 @@ export default async function AdminForwarderSalesPage({
                       <td className="px-3 py-2 text-right font-mono text-xs">{r.count.toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.gross)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(r.net)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-bold text-orange-700">{thb(commissionOf(r.net))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -362,6 +389,7 @@ export default async function AdminForwarderSalesPage({
               { key: "ftotalprice", label: "ยอดขาย (gross)" },
               { key: "fdiscount",   label: "ส่วนลด" },
               { key: "net",         label: "หลังหักลด" },
+              { key: "commission",  label: "ค่าคอม (1%)" },
               { key: "fstatus",     label: "fStatus" },
             ]}
             filename={`pacred-forwarder-sales-${dateFrom}-to-${dateTo}${repId ? `-${repId}` : ""}.csv`}
@@ -374,8 +402,8 @@ export default async function AdminForwarderSalesPage({
             <h2 className="font-bold text-sm">📋 รายการ ({rows.length.toLocaleString("th-TH")})</h2>
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full min-w-[800px] text-xs sm:text-sm">
-              <thead className="bg-surface-alt/50 text-left uppercase tracking-wide text-[11px] sm:text-[11px] text-muted">
+            <table className="w-full min-w-[800px] text-xs sm:text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+              <thead className="bg-orange-500 text-white text-left uppercase tracking-wide text-[11px] sm:text-[11px]">
                 <tr>
                   <th className="px-3 py-2.5">วันที่ชำระ</th>
                   <th className="px-3 py-2.5">Forwarder</th>
@@ -384,13 +412,14 @@ export default async function AdminForwarderSalesPage({
                   <th className="px-3 py-2.5">Sales Rep</th>
                   <th className="px-3 py-2.5 text-right">ยอดขาย</th>
                   <th className="px-3 py-2.5 text-right">หลังหักลด</th>
+                  <th className="px-3 py-2.5 text-right">ค่าคอม (1%)</th>
                   <th className="px-3 py-2.5">fStatus</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-muted">
+                    <td colSpan={9} className="p-8 text-center text-muted">
                       ไม่มี <code className="bg-surface-alt px-1 rounded text-xs">tb_sales_report</code> ในช่วงที่เลือก
                     </td>
                   </tr>
@@ -418,6 +447,9 @@ export default async function AdminForwarderSalesPage({
                       <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-primary-700">
                         {thb(r.ftotalprice - r.fdiscount)}
                       </td>
+                      <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-orange-700">
+                        {thb(commissionOf(r.ftotalprice - r.fdiscount))}
+                      </td>
                       <td className="px-3 py-2.5">
                         <span className="rounded-full bg-surface-alt text-foreground border border-border px-2 py-0.5 text-[11px]">
                           {r.fstatus ?? "—"}
@@ -425,6 +457,18 @@ export default async function AdminForwarderSalesPage({
                       </td>
                     </tr>
                   ))
+                )}
+                {/* GROUP B — full-set TOTALS band (all pages · legacy summary row). */}
+                {rows.length > 0 && (
+                  <tr className="bg-cyan-100 text-cyan-900 font-bold">
+                    <td className="px-3 py-2.5 text-xs" colSpan={5}>
+                      รวมทั้งหมด (ทุกหน้า · {rows.length.toLocaleString("th-TH")} รายการ)
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs">{thb(totalGross)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs">{thb(totalNet)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs">{thb(totalCommission)}</td>
+                    <td className="px-3 py-2.5"></td>
+                  </tr>
                 )}
               </tbody>
             </table>

@@ -10,10 +10,11 @@
  * only (prototype · not persisted) until the real table/action lands.
  */
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
+import { useSearchParams } from "next/navigation";
 import {
-  Plus, Ship, Plane, Truck, Package, X, Search,
+  Plus, Settings, Ship, Plane, Truck, Package, Search,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import { Explain } from "@/components/ui/tooltip";
@@ -21,10 +22,14 @@ import {
   BOOKING_STATUS_META, BOOKING_STATUS_ORDER, type Booking,
 } from "./booking-data";
 
-// Tabs = the 3 ACTIVE quotation stages + a single "ประวัติ" bucket (= สำเร็จ + ไม่สำเร็จ,
-// the closed outcomes · owner 2026-07-08: "สำเร็จ/ไม่สำเร็จ คือประวัติ · รวมเป็นแท็บเดียว").
-type Filter = "all" | "quote_requested" | "quote_in_progress" | "awaiting_confirm" | "history";
-const ACTIVE_TAB_STATUSES = ["quote_requested", "quote_in_progress", "awaiting_confirm"] as const;
+// Tabs = the 5 ACTIVE pipeline stages + a single "ประวัติ" bucket (= สำเร็จ + ยกเลิก, the
+// closed outcomes · owner 2026-07-09). ยกเลิก = ถังรวมทุกสถานะ · ทำราคาซ้ำ = วนกลับ รอดำเนินการ.
+type Filter =
+  | "all" | "customer_created" | "pending_pricing" | "awaiting_confirm"
+  | "awaiting_booking" | "booking_confirmed" | "history";
+const ACTIVE_TAB_STATUSES = [
+  "customer_created", "pending_pricing", "awaiting_confirm", "awaiting_booking", "booking_confirmed",
+] as const;
 const HISTORY_TAB_META = {
   pill: "bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300",
   dot: "bg-zinc-400",
@@ -86,23 +91,49 @@ function directionLabel(dir: string): string {
 }
 const COL_COUNT = 15;
 
-export function BookingImportBoard({ initial, currentSales }: { initial: Booking[]; currentSales: { id: string; name: string } }) {
+export function BookingImportBoard({ initial, canManageCatalog = false }: { initial: Booking[]; canManageCatalog?: boolean }) {
   const [bookings, setBookings] = useState<Booking[]>(initial);
   const [filter, setFilter] = useState<Filter>("all");
-  // ตัวกรองย่อยในแท็บ "ประวัติ" (owner 2026-07-08): ทั้งหมด / สำเร็จ / ไม่คอนเฟิร์ม
-  const [historyOutcome, setHistoryOutcome] = useState<"all" | "success" | "failed">("all");
+  // ตัวกรองย่อยในแท็บ "ประวัติ" (owner 2026-07-09): ทั้งหมด / สำเร็จ / ยกเลิก
+  const [historyOutcome, setHistoryOutcome] = useState<"all" | "success" | "cancelled">("all");
   const [q, setQ] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // prototype bridge: โหลด draft ที่ save จากฟอร์มใบเสนอราคา (localStorage) + เปิดแท็บตาม ?tab=
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("pacred_booking_drafts_import");
+      if (raw) {
+        const drafts: Booking[] = JSON.parse(raw);
+        if (Array.isArray(drafts) && drafts.length) {
+          // hydrate จาก localStorage (external store) ตอน mount/URL เปลี่ยน — legit exception
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setBookings((prev) => {
+            const byOrderNo = new Map(drafts.filter((d) => d?.orderNo).map((d) => [d.orderNo, d]));
+            const merged = prev.map((b) => byOrderNo.get(b.orderNo) ?? b);
+            const existing = new Set(prev.map((b) => b.orderNo));
+            const brandNew = drafts.filter((d) => d?.orderNo && !existing.has(d.orderNo));
+            return [...brandNew, ...merged];
+          });
+        }
+      }
+    } catch {
+      /* ignore malformed drafts */
+    }
+    const tab = searchParams.get("tab");
+    const validTabs = ["all", "customer_created", "pending_pricing", "awaiting_confirm", "awaiting_booking", "booking_confirmed", "history"];
+    if (tab && validTabs.includes(tab)) setFilter(tab as Filter);
+  }, [searchParams]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: bookings.length, history: 0 };
     for (const s of BOOKING_STATUS_ORDER) c[s] = 0;
     for (const b of bookings) {
       c[b.status] = (c[b.status] ?? 0) + 1;
-      if (b.status === "success" || b.status === "failed") c.history += 1;
+      if (b.status === "success" || b.status === "cancelled") c.history += 1;
     }
     return c;
   }, [bookings]);
@@ -113,7 +144,7 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
       const passesFilter =
         filter === "all" ? true
           : filter === "history"
-            ? (b.status === "success" || b.status === "failed") && (historyOutcome === "all" || b.status === historyOutcome)
+            ? (b.status === "success" || b.status === "cancelled") && (historyOutcome === "all" || b.status === historyOutcome)
             : b.status === filter;
       if (!passesFilter) return false;
       if (!needle) return true;
@@ -139,16 +170,10 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
   function toggleExpand(id: string) {
     setExpanded((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
-  // ลูกค้าไม่คอนเฟิร์ม → เด้งกลับ "กำลังทำใบเสนอราคา" เพื่อทำราคาที่ดีที่สุดใหม่
-  // (owner 2026-07-08). Prototype: client-state only.
-  function reQuote(id: string) {
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "quote_in_progress" } : b)));
-    setFilter("quote_in_progress");
-  }
 
   return (
     <div className="space-y-4">
-      {/* ── status tabs (3 active stages + ประวัติ) ─────────── */}
+      {/* ── status tabs (5 active stages + ประวัติ) ─────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <TabPill active={filter === "all"} onClick={() => setFilter("all")} label="ทั้งหมด" count={counts.all} />
         {ACTIVE_TAB_STATUSES.map((s) => (
@@ -172,27 +197,38 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
             สถานะงาน
             <select
               value={historyOutcome}
-              onChange={(e) => setHistoryOutcome(e.target.value as "all" | "success" | "failed")}
+              onChange={(e) => setHistoryOutcome(e.target.value as "all" | "success" | "cancelled")}
               aria-label="กรองสถานะงาน (ประวัติ)"
               className="h-9 rounded-lg border border-border bg-white px-2 text-sm text-foreground outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-300 dark:bg-surface"
             >
               <option value="all">ทั้งหมด ({counts.history})</option>
               <option value="success">สำเร็จ ({counts.success})</option>
-              <option value="failed">ไม่คอนเฟิร์ม ({counts.failed})</option>
+              <option value="cancelled">ยกเลิก ({counts.cancelled})</option>
             </select>
           </label>
         )}
         {q && <span className="whitespace-nowrap text-xs text-muted">พบ {visible.length} รายการ</span>}
         <Explain
           className="text-xs text-muted" label="Booking คืออะไร?"
-          def="Booking = รายการขอใบเสนอราคางานนำเข้า · Sales ขอราคา → Pricing ทำใบเสนอราคา → ลูกค้าเฟิร์ม → เปิดงาน (มีเลข Shipment PR…) เข้าหน้ารายการ"
+          def="Booking = ลูปใบเสนอราคา→จองงานนำเข้า · ลูกค้าสร้าง → Pricing เคาะราคา Net → ลูกค้าคอนเฟิร์ม → รอ/คอนเฟิร์ม Booking → สำเร็จ (มีเลข Shipment PR…) เข้าหน้ารายการ · ยกเลิก = ถังรวม · ทำราคาซ้ำ = วนกลับ รอดำเนินการ"
         />
-        <button
-          onClick={() => setAddOpen(true)}
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" /> เพิ่ม Booking
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {/* ปุ่ม "ตั้งค่า" → จัดการเรทตั้งต้น (Pricing catalog) · เห็นต้นทุน/กำไร (canViewCost · 2026-07-10 ปอน) */}
+          {canManageCatalog && (
+            <Link
+              href="/admin/workspace/booking/import/settings"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-surface-alt dark:bg-surface"
+            >
+              <Settings className="h-4 w-4" /> ตั้งค่าเรท
+            </Link>
+          )}
+          <Link
+            href="/admin/workspace/booking/import/new"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" /> เพิ่ม Quotation / Booking
+          </Link>
+        </div>
       </div>
 
       {/* ── table (report-cnt style) ────────────────────────── */}
@@ -214,7 +250,7 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
               <SortableTH sortKeyValue="sales"        align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>Sale</SortableTH>
               <th className="whitespace-nowrap px-2 py-2 text-left">Pricing</th>
               <SortableTH sortKeyValue="shipmentNo"   align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>Shipment</SortableTH>
-              <th className="whitespace-nowrap px-2 py-2 text-left">ขั้นถัดไป</th>
+              <th className="whitespace-nowrap px-2 py-2 text-center">จัดการ</th>
             </tr>
           </thead>
           <tbody>
@@ -222,7 +258,7 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
             <tr className="border-y-2 border-border bg-white text-sm font-bold text-foreground dark:bg-surface">
               <td className="px-2 py-2 text-base font-bold" colSpan={2}>รวม ({q ? `${visible.length}/${bookings.length}` : bookings.length} รายการ)</td>
               <td className="px-2 py-2 text-[11px] font-normal text-muted" colSpan={13}>
-                ⏳ กำลังทำอยู่ {counts.quote_requested + counts.quote_in_progress + counts.awaiting_confirm} · 📁 ประวัติ {counts.history} (🎉 สำเร็จ {counts.success} · 🛑 ไม่คอนเฟิร์ม {counts.failed})
+                ⏳ กำลังทำอยู่ {counts.customer_created + counts.pending_pricing + counts.awaiting_confirm + counts.awaiting_booking + counts.booking_confirmed} · 📁 ประวัติ {counts.history} (🎉 สำเร็จ {counts.success} · 🛑 ยกเลิก {counts.cancelled})
               </td>
             </tr>
 
@@ -291,23 +327,14 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
                     <td className="whitespace-nowrap px-2 py-2 font-mono">
                       {b.shipmentNo ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">{b.shipmentNo}</span> : <span className="text-muted">—</span>}
                     </td>
-                    {/* ขั้นถัดไป (§0g) */}
-                    <td className="min-w-[11rem] px-2 py-2 text-[11px]">
-                      {b.status === "success" && b.shipmentNo ? (
-                        <Link href="/admin/workspace/list/import" className="font-medium text-emerald-600 hover:underline dark:text-emerald-400">🎉 เปิดงานแล้ว · ดูในรายการ →</Link>
-                      ) : b.status === "failed" ? (
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="text-muted">🛑 ไม่คอนเฟิร์ม{b.note ? `: ${b.note}` : ""}</span>
-                          <ReQuoteButton onClick={() => reQuote(b.id)} />
-                        </div>
-                      ) : b.status === "awaiting_confirm" ? (
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="font-semibold text-rose-600 dark:text-rose-400">🔔 {meta.next}</span>
-                          <ReQuoteButton onClick={() => reQuote(b.id)} />
-                        </div>
-                      ) : (
-                        <span className="font-semibold text-rose-600 dark:text-rose-400">🔔 {meta.next}</span>
-                      )}
+                    {/* จัดการ — ดูข้อมูล → หน้ารายละเอียด booking */}
+                    <td className="whitespace-nowrap px-2 py-2 text-center">
+                      <Link
+                        href={`/admin/workspace/booking/import/${encodeURIComponent(b.orderNo)}`}
+                        className="inline-block rounded border border-green-500 bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700 transition-colors hover:bg-green-100 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20"
+                      >
+                        ดูข้อมูล
+                      </Link>
                     </td>
                   </tr>
 
@@ -333,14 +360,6 @@ export function BookingImportBoard({ initial, currentSales }: { initial: Booking
         </table>
       </div>
 
-      {addOpen && (
-        <AddBookingModal
-          existingCount={bookings.length}
-          currentSales={currentSales}
-          onClose={() => setAddOpen(false)}
-          onAdd={(b) => { setBookings((prev) => [b, ...prev]); setAddOpen(false); setFilter("quote_requested"); }}
-        />
-      )}
     </div>
   );
 }
@@ -351,19 +370,6 @@ function Detail({ label, value, mono, preLine }: { label: string; value: string;
       <span className="text-muted">{label}</span>
       <span className={`text-foreground/90 ${mono ? "font-mono" : ""} ${preLine ? "whitespace-pre-line" : ""}`}>{value || "—"}</span>
     </div>
-  );
-}
-
-// ↩ ทำราคาใหม่ — ไม่คอนเฟิร์ม → เด้งกลับ "กำลังทำใบเสนอราคา" (owner 2026-07-08).
-function ReQuoteButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button" onClick={onClick}
-      className="inline-flex items-center gap-0.5 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-      title="ลูกค้าไม่คอนเฟิร์ม → เด้งกลับ ‘กำลังทำใบเสนอราคา’ เพื่อทำราคาที่ดีที่สุดใหม่"
-    >
-      ↩ ทำราคาใหม่
-    </button>
   );
 }
 
@@ -391,125 +397,4 @@ function TabPill({
   );
 }
 
-// ── add-booking modal (prototype · client-state only) ───────
-const COMPANIES = ["PACRED", "PCS", "AXELRA"];
-const INCOTERMS = ["CIF", "EXW", "FOB", "DDP", "FCA", "DAP"];
-const TRANSPORTS = ["SEA", "AIR", "TRUCK", "SEA&TRUCK"];
-const FCLLCL = ["FCL", "LCL"];
-
-function AddBookingModal({
-  existingCount, currentSales, onClose, onAdd,
-}: { existingCount: number; currentSales: { id: string; name: string }; onClose: () => void; onAdd: (b: Booking) => void }) {
-  // Sales is NOT a form field — it's the logged-in user (owner 2026-07-08).
-  const [f, setF] = useState({
-    customerName: "", product: "", company: "PACRED", pricing: "",
-    direction: "IM", incoterm: "CIF", transport: "SEA", fclLcl: "FCL", size: "", warehouse: "",
-    pol: "", pod: "", hsCode: "", price: "", note: "",
-  });
-  const set = (k: keyof typeof f) => (v: string) => setF((prev) => ({ ...prev, [k]: v }));
-  const valid = f.customerName.trim() !== "" && f.product.trim() !== "";
-
-  function submit() {
-    if (!valid) return;
-    const d = new Date();
-    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    onAdd({
-      id: `b-new-${d.getTime()}`,
-      orderNo: `${ymd}-${String(existingCount + 1).padStart(3, "0")}`,
-      date: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`,
-      status: "quote_requested",
-      company: f.company, customerName: f.customerName.trim(), product: f.product.trim(),
-      sales: currentSales.id, pricing: f.pricing.trim(), term: `${f.direction} ${f.incoterm}`, transport: f.transport,
-      fclLcl: f.fclLcl, size: f.size.trim(), warehouse: f.warehouse.trim(),
-      pol: f.pol.trim(), pod: f.pod.trim(), price: f.price.trim(), hsCode: f.hsCode.trim(), note: f.note.trim(),
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-surface shadow-xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <div>
-            <h2 className="text-base font-bold text-foreground">เพิ่ม Booking · นำเข้า</h2>
-            <p className="text-[11px] text-muted">เซลขอใบเสนอราคา → เข้าสถานะ “ขอใบเสนอราคา”</p>
-          </div>
-          <button onClick={onClose} className="rounded-md p-1 text-muted hover:bg-surface-alt hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-
-        <div className="grid gap-3 overflow-y-auto px-5 py-4 sm:grid-cols-2">
-          <Field label="ชื่อลูกค้า" required><Input value={f.customerName} onChange={set("customerName")} placeholder="ชื่อ / บริษัท ลูกค้า" /></Field>
-          <Field label="สินค้า" required><Input value={f.product} onChange={set("product")} placeholder="สินค้าคืออะไร" /></Field>
-          <Field label="บริษัท"><Select value={f.company} onChange={set("company")} options={COMPANIES} /></Field>
-          <Field label="นำเข้า / ส่งออก"><Select value={f.direction} onChange={set("direction")} options={["IM", "EX"]} labels={{ IM: "นำเข้า (IM)", EX: "ส่งออก (EX)" }} /></Field>
-          <Field label="Term (Incoterm)"><Select value={f.incoterm} onChange={set("incoterm")} options={INCOTERMS} /></Field>
-          <Field label="เซล (Sales)">
-            <div className="flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface-alt/50 px-2.5 text-sm">
-              <span className="truncate font-medium text-foreground">{currentSales.name}</span>
-              <span className="shrink-0 text-[11px] text-muted">({currentSales.id})</span>
-              <span className="ml-auto shrink-0 rounded bg-primary-100 px-1.5 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">คุณ · อัตโนมัติ</span>
-            </div>
-          </Field>
-          <Field label="Pricing"><Input value={f.pricing} onChange={set("pricing")} placeholder="ชื่อ pricing" /></Field>
-          <Field label="ขนส่งทาง"><Select value={f.transport} onChange={set("transport")} options={TRANSPORTS} /></Field>
-          <Field label="FCL / LCL"><Select value={f.fclLcl} onChange={set("fclLcl")} options={FCLLCL} /></Field>
-          <Field label="ขนาดตู้"><Input value={f.size} onChange={set("size")} placeholder="40HQ / 20HQ / ตามขนาดสินค้า" /></Field>
-          <Field label="คลัง"><Input value={f.warehouse} onChange={set("warehouse")} placeholder="PAT / เรือ / BFS …" /></Field>
-          <Field label="ต้นทาง (POL)"><Input value={f.pol} onChange={set("pol")} placeholder="ที่อยู่/ท่าต้นทาง" /></Field>
-          <Field label="ปลายทาง (POD)"><Input value={f.pod} onChange={set("pod")} placeholder="ที่อยู่/ท่าปลายทาง" /></Field>
-          <Field label="HS Code"><Input value={f.hsCode} onChange={set("hsCode")} placeholder="เช่น 9504.40.00" /></Field>
-          <Field label="ราคา / ใบเสนอราคา" full><Textarea value={f.price} onChange={set("price")} placeholder="ราคาที่เสนอ / รายละเอียด" /></Field>
-          <Field label="หมายเหตุ" full><Textarea value={f.note} onChange={set("note")} placeholder="โน้ตเพิ่มเติม" /></Field>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
-          <p className="text-[11px] text-muted">⚠️ ตัวอย่าง — บันทึกในหน้านี้ชั่วคราว (ยังไม่ต่อฐานข้อมูล)</p>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-alt hover:text-foreground">ยกเลิก</button>
-            <button onClick={submit} disabled={!valid} className="rounded-md bg-primary-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40">บันทึก Booking</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, required, full, children }: { label: string; required?: boolean; full?: boolean; children: ReactNode }) {
-  return (
-    <label className={`flex flex-col gap-1 ${full ? "sm:col-span-2" : ""}`}>
-      <span className="text-[11px] font-medium text-muted">{label}{required && <span className="text-primary-600"> *</span>}</span>
-      {children}
-    </label>
-  );
-}
-
-function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <input
-      value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-      className="h-9 rounded-md border border-border bg-background px-2.5 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/40"
-    />
-  );
-}
-
-function Textarea({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <textarea
-      value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={2}
-      className="resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/70 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/40"
-    />
-  );
-}
-
-function Select({ value, onChange, options, labels }: { value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string> }) {
-  return (
-    <select
-      value={value} onChange={(e) => onChange(e.target.value)}
-      className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/40"
-    >
-      {options.map((o) => <option key={o} value={o}>{labels?.[o] ?? o}</option>)}
-    </select>
-  );
-}
+// (add-booking modal ถูกแทนที่ด้วยหน้าฟอร์มใบเสนอราคา /admin/workspace/booking/import/new · 2026-07-09)

@@ -883,6 +883,96 @@ export async function getInvoiceDetail(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 4a2. SET DELIVERY ADDRESS (DISPLAY-only ship-to on the ใบวางบิล · mig 0247)
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Snapshot a chosen tb_address row (belonging to the invoice customer) into
+ * tb_forwarder_invoice.delivery_address so <BillingRunPaper> renders a "ที่อยู่จัดส่ง"
+ * line. DISPLAY-only — touches NOTHING else (no amount/subtotal/total/tax/status/
+ * buyer_*). Distinct from buyer_address (the tax billing identity).
+ *
+ * Ownership: the chosen address MUST belong to the invoice's userid + be active.
+ */
+export async function adminSetBillingRunDeliveryAddress(
+  invoiceId: number,
+  addressId: number,
+): Promise<AdminActionResult> {
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) return { ok: false, error: "invalid_invoice_id" };
+  if (!Number.isInteger(addressId) || addressId <= 0) return { ok: false, error: "invalid_address_id" };
+
+  return withAdmin(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Read the invoice → userid (ownership scope).
+      const { data: inv, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, userid")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; userid: string }>();
+      if (invErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress invoice] failed`, { code: invErr.code, message: invErr.message, invoiceId });
+        return { ok: false, error: `อ่านใบวางบิลไม่สำเร็จ: ${invErr.message}` };
+      }
+      if (!inv) return { ok: false, error: "ไม่พบใบวางบิล" };
+
+      // 2. Read the chosen address — MUST belong to the invoice customer + be active.
+      const { data: addr, error: addrErr } = await admin
+        .from("tb_address")
+        .select("addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
+        .eq("addressid", addressId)
+        .eq("userid", inv.userid)
+        .eq("addressstatus", "1")
+        .maybeSingle<{
+          addressname: string | null; addresslastname: string | null;
+          addresstel: string | null; addresstel2: string | null; addressno: string | null;
+          addresssubdistrict: string | null; addressdistrict: string | null;
+          addressprovince: string | null; addresszipcode: string | null;
+        }>();
+      if (addrErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress address] failed`, { code: addrErr.code, message: addrErr.message, addressId });
+        return { ok: false, error: `อ่านที่อยู่ไม่สำเร็จ: ${addrErr.message}` };
+      }
+      if (!addr) return { ok: false, error: "ไม่พบที่อยู่ของลูกค้ารายนี้ (หรือถูกลบไปแล้ว)" };
+
+      // 3. Compose the readable ship-to snapshot string.
+      const name = `${addr.addressname ?? ""} ${addr.addresslastname ?? ""}`.trim();
+      const line = [
+        addr.addressno,
+        addr.addresssubdistrict && `ตำบล/แขวง ${addr.addresssubdistrict}`,
+        addr.addressdistrict && `อำเภอ/เขต ${addr.addressdistrict}`,
+        addr.addressprovince && `จังหวัด ${addr.addressprovince}`,
+        addr.addresszipcode,
+      ].filter(Boolean).join(" ");
+      const tel = (addr.addresstel ?? "").trim();
+      const tel2 = (addr.addresstel2 ?? "").trim();
+      const telLine = tel || tel2 ? `โทร. ${tel || "—"}${tel2 ? `, ${tel2}` : ""}` : "";
+      const snapshot = [name, line, telLine].filter(Boolean).join("\n");
+
+      // 4. UPDATE ONLY delivery_address — no amount/tax/status/buyer_* touched.
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({ delivery_address: snapshot })
+        .eq("id", invoiceId);
+      if (updErr) {
+        console.error(`[adminSetBillingRunDeliveryAddress update] failed`, { code: updErr.code, message: updErr.message, invoiceId });
+        return { ok: false, error: `บันทึกที่อยู่จัดส่งไม่สำเร็จ: ${updErr.message}` };
+      }
+
+      await logAdminAction(adminId, "tb_forwarder_invoice.set_delivery_address", "tb_forwarder_invoice", String(invoiceId), {
+        addressId, userid: inv.userid, province: addr.addressprovince ?? "",
+      });
+
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      revalidatePath(`/admin/billing-run/${invoiceId}/print`);
+      return { ok: true };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 4b. DUP-slip WARNING (READ-ONLY · display gate for the 3-step slip review)
 // ────────────────────────────────────────────────────────────────────────
 
@@ -1279,7 +1369,7 @@ async function createBillingRunInvoiceImpl(
       const corpNumber = identity.taxId;
       const isJuristic = identity.isJuristic;
 
-      let buyerName = identity.name;
+      const buyerName = identity.name;
       let buyerAddress = "";
       const buyerBranch  = ""; // tb_corporate has no `corporatebranch` column
 
@@ -1559,14 +1649,14 @@ async function createBillingRunInvoiceImpl(
 
 export async function markBillingRunPaid(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
   return withObservability("markBillingRunPaid", markBillingRunPaidImpl)(input);
 }
 
 async function markBillingRunPaidImpl(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   const parsed = markBillingRunPaidSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -1673,6 +1763,17 @@ async function markBillingRunPaidImpl(
       // but FRG2606-00001 stuck). Link = tb_receipt_item (rid, fid) ↔ the invoice's
       // forwarders. Flips ONLY a receipt FULLY covered by this paid invoice. Best-effort
       // — never fails the invoice flip; only '3'→'1' (never touches cancelled/already-paid).
+      // ภูม 2026-07-09 — SURFACE the auto-receipt outcome to the admin. The receipt
+      // auto-issue below is BEST-EFFORT (a failure must never roll back the money-safe
+      // paid flip), but the old code swallowed a failure into a console.error → staff saw
+      // "✓ รับชำระแล้ว" while NO ใบเสร็จ was created + never knew (the exact PR086 /
+      // FRI2607-00015 symptom). Track the result so the UI can warn + prompt a manual issue.
+      let receiptRid: string | null = null;
+      let receiptWarning: string | null = null;
+      // Path A (below) may flip an EXISTING pending receipt '3'→'1' for a fully-covered rid.
+      // Track it so the already_issued branch can tell "a valid receipt now exists" (findable)
+      // apart from "an old receipt covers these fids but was NOT synced" (stuck '3'/'0' · invisible).
+      let receiptSyncedRid: string | null = null;
       try {
         const { data: invItems, error: invErr } = await admin
           .from("tb_forwarder_invoice_item")
@@ -1738,6 +1839,7 @@ async function markBillingRunPaidImpl(
             if (rcptErr) {
               console.error("[markBillingRunPaid receipt-sync]", { code: rcptErr.code, message: rcptErr.message, rid });
             } else {
+              receiptSyncedRid = rid;
               await logAdminAction(adminId, "billing_run.receipt_synced_paid", "tb_receipt", rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no,
               });
@@ -1781,16 +1883,43 @@ async function markBillingRunPaidImpl(
               recompAddressOverride: cur.buyer_address ?? undefined,
             });
             if (rcpt.ok) {
+              receiptRid = rcpt.data.rid;
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
               });
             } else if (!rcpt.alreadyIssued) {
+              // Real failure (no_matching_forwarder_rows / mint_failed / insert error /
+              // rid_duplicate). Money already moved → NEVER roll back the paid flip; instead
+              // SURFACE the miss so accounting issues the receipt manually (the PR086 /
+              // FRI2607-00015 case: bill = รับชำระแล้ว but no ใบเสร็จ, silently).
+              receiptWarning =
+                `ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (${rcpt.error}) — กรุณากด "ออกใบเสร็จ" เอง หรือเช็ครายการใบเสร็จที่ค้าง`;
               console.error("[markBillingRunPaid auto-receipt] failed", { error: rcpt.error, invoiceId: v.invoiceId });
+            } else if (receiptSyncedRid) {
+              // alreadyIssued because Path A flipped a fully-covered '3'→'1' → a valid receipt
+              // now exists + is findable ("ออกแล้ว") → surface it as success, no warning.
+              receiptRid = receiptSyncedRid;
+            } else {
+              // alreadyIssued but Path A did NOT sync a covering receipt → an existing receipt
+              // covers these fids yet is NOT "ออกแล้ว" (a partially-covered '3'/'0' the sync-guard
+              // skipped, per the adversarial review 2026-07-09). It likely sits invisible on the
+              // "ออกแล้ว" tab, or outside the receipt search's default current-month window →
+              // tell staff WHERE to look instead of a silent "✓ รับชำระแล้ว" (the PR086 case).
+              receiptWarning =
+                'มีใบเสร็จเดิมของรายการนี้อยู่แล้ว แต่ยังไม่แสดงเป็น "ออกแล้ว" — ค้นหาใบเสร็จลูกค้ารายนี้แบบไม่กรองเดือน (แท็บ "ล่าสุด") หรือกดออก/sync ใบเสร็จ';
             }
+          } else {
+            receiptWarning =
+              "ใบวางบิลนี้ไม่มีรหัสลูกค้า (userid) — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาออกใบเสร็จเอง";
           }
+        } else {
+          receiptWarning =
+            "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้ — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาตรวจสอบใบวางบิล";
         }
       } catch (e) {
         console.error("[markBillingRunPaid receipt-sync] unexpected", { message: String(e), invoiceId: v.invoiceId });
+        receiptWarning =
+          "เกิดข้อผิดพลาดระหว่างออกใบเสร็จอัตโนมัติ — บันทึกการรับชำระแล้ว · กรุณาตรวจสอบใบเสร็จ/ออกเอง";
       }
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
@@ -1798,7 +1927,148 @@ async function markBillingRunPaidImpl(
       revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
       revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
-      return { ok: true, data: { invoiceId: v.invoiceId } };
+      return {
+        ok: true,
+        data: {
+          invoiceId: v.invoiceId,
+          ...(receiptRid ? { receiptRid } : {}),
+          ...(receiptWarning ? { receiptWarning } : {}),
+        },
+      };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 6b. ENSURE RECEIPT — one-click "ออก/พิมพ์ใบเสร็จ" from the bill detail page
+//     (ภูม 2026-07-10). Paid bills only. If a receipt already covers the bill's
+//     forwarders → return it. Else issue it NOW from the bill's FROZEN totals +
+//     buyer identity (the SAME overrides markBillingRunPaid's auto-issue uses) so
+//     the receipt is always in-sync with the bill — one click, no navigating to
+//     the receipt page. Directly fixes the PR086 บุคคล↔นิติ pain: the receipt
+//     header/total follow the bill, and a bill whose auto-issue failed can be
+//     issued on demand. Returns receiptId for the print route.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Find an ACTIVE (non-cancelled) receipt covering ANY of these forwarder ids. */
+async function findActiveReceiptForFids(
+  admin: ReturnType<typeof createAdminClient>,
+  fids: number[],
+): Promise<{ receiptId: number; rid: string } | null> {
+  if (fids.length === 0) return null;
+  const { data: items, error: itemErr } = await admin
+    .from("tb_receipt_item")
+    .select("rid")
+    .in("fid", fids);
+  if (itemErr) {
+    console.error("[findActiveReceiptForFids items]", { code: itemErr.code, message: itemErr.message });
+    return null;
+  }
+  const rids = Array.from(
+    new Set(((items ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x)),
+  );
+  if (rids.length === 0) return null;
+  const { data: receipts, error: rErr } = await admin
+    .from("tb_receipt")
+    .select("id, rid, rstatus")
+    .in("rid", rids)
+    .neq("rstatus", "2") // '2' = ยกเลิก — a cancelled receipt does not count
+    .order("id", { ascending: false });
+  if (rErr) {
+    console.error("[findActiveReceiptForFids receipts]", { code: rErr.code, message: rErr.message });
+    return null;
+  }
+  const first = ((receipts ?? []) as Array<{ id: number; rid: string }>)[0];
+  return first ? { receiptId: first.id, rid: first.rid } : null;
+}
+
+export async function ensureBillingRunReceipt(
+  input: { invoiceId: number },
+): Promise<AdminActionResult<{ receiptId: number; rid: string; created: boolean }>> {
+  const invoiceId = Number((input as { invoiceId?: unknown })?.invoiceId);
+  if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
+    return { ok: false, error: "invalid_invoice_id" };
+  }
+
+  return withAdmin<{ receiptId: number; rid: string; created: boolean }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Load the invoice — the button is only ENABLED at status='paid' (slip
+      //    verified + settled), but re-assert server-side (never trust the client).
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, userid, total_thb, is_juristic, mao_fee_thb, paid_at, buyer_name, buyer_tax_id, buyer_address")
+        .eq("id", invoiceId)
+        .maybeSingle<{
+          id: number; doc_no: string; status: string; userid: string | null;
+          total_thb: number | string; is_juristic: boolean; mao_fee_thb: number | string | null;
+          paid_at: string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null;
+        }>();
+      if (curErr) {
+        console.error("[ensureBillingRunReceipt current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.status !== "paid") {
+        return { ok: false, error: "ต้องรับชำระ (ตรวจสลิป + ยืนยันการชำระ) ก่อน ถึงจะออกใบเสร็จได้" };
+      }
+      if (!cur.userid) {
+        return { ok: false, error: "ใบวางบิลนี้ไม่มีรหัสลูกค้า — ออกใบเสร็จไม่ได้" };
+      }
+
+      // 2. The forwarder rows this bill covers.
+      const { data: invItems, error: invErr } = await admin
+        .from("tb_forwarder_invoice_item")
+        .select("forwarder_id")
+        .eq("invoice_id", invoiceId);
+      if (invErr) {
+        console.error("[ensureBillingRunReceipt items] failed", { code: invErr.code, message: invErr.message });
+        return { ok: false, error: invErr.message };
+      }
+      const fids = Array.from(new Set(((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id)));
+      if (fids.length === 0) {
+        return { ok: false, error: "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้" };
+      }
+
+      // 3. Already have an active receipt → return it (open/print, don't re-create).
+      const existing = await findActiveReceiptForFids(admin, fids);
+      if (existing) {
+        return { ok: true, data: { receiptId: existing.receiptId, rid: existing.rid, created: false } };
+      }
+
+      // 4. None yet → issue NOW, PINNED to the bill's frozen totals + buyer identity
+      //    (identical overrides to markBillingRunPaid's auto-issue) → receipt == bill.
+      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
+      const dateSlip = cur.paid_at ? new Date(cur.paid_at) : new Date();
+      const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+        userid: cur.userid,
+        fids,
+        dateSlip,
+        source: "billing_run.ensure_receipt",
+        maoFeeOverride: Number(cur.mao_fee_thb ?? 0),
+        totalOverride: Number(cur.total_thb),
+        netOverride: paidWht.net_payable,
+        isJuristicOverride: cur.is_juristic,
+        recompNameOverride: cur.buyer_name ?? undefined,
+        recompNumberOverride: cur.buyer_tax_id ?? undefined,
+        recompAddressOverride: cur.buyer_address ?? undefined,
+      });
+      if (rcpt.ok) {
+        await logAdminAction(adminId, "billing_run.receipt_issued_manual", "tb_receipt", rcpt.data.rid, {
+          invoice_id: invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
+        });
+        revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+        revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
+        return { ok: true, data: { receiptId: rcpt.data.receiptId, rid: rcpt.data.rid, created: true } };
+      }
+      // Race: a receipt got created between our check + issue → re-find + return it.
+      if (rcpt.alreadyIssued) {
+        const again = await findActiveReceiptForFids(admin, fids);
+        if (again) return { ok: true, data: { receiptId: again.receiptId, rid: again.rid, created: false } };
+      }
+      return { ok: false, error: `ออกใบเสร็จไม่สำเร็จ: ${rcpt.error}` };
     },
   );
 }

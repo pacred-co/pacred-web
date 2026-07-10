@@ -19,6 +19,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
+import { deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
 import { ReviewGridClient, type PendingRow } from "./review-client";
 
 export const dynamic = "force-dynamic";
@@ -104,9 +105,11 @@ export default async function AdminMomoReviewPage() {
         : [];
 
     // Guess userID from MOMO's `user_group + user_code` — e.g. user_group="PR"
-    // + user_code="032" → "PR032". Admin should still verify before commit.
+    // + user_code="032" → "PR032". deriveMomoMemberCode normalises MOMO's
+    // mangled "PR+PR" group (2026-07 API regression · ภูม flag 2026-07-09) →
+    // clean "PR<code>" so the commit's ^PR\d+$ guard passes. Admin still verifies.
     const guessedUserId =
-      userGroupRaw && userCodeRaw ? `${userGroupRaw}${userCodeRaw}` : null;
+      userGroupRaw && userCodeRaw ? deriveMomoMemberCode(userGroupRaw, userCodeRaw) : null;
 
     // 2026-06-29 (ภูม) — น้ำหนัก/คิว/ขนาด จาก raw → ให้ตาราง review ตรวจง่ายขึ้น.
     // (raw มี kg/cbm/width/length/height · 0 = MOMO ยังไม่ได้ชั่ง.)

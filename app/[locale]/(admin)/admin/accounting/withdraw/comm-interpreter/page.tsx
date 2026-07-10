@@ -1,10 +1,16 @@
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { getBatchList } from "@/actions/admin/withdraw-comm-batch";
+import { CommBatchCreateForm } from "@/components/admin/comm-batch/comm-batch-create-form";
+import {
+  getBatchList,
+  listCommPayAccounts,
+  listCommissionPayees,
+  hasInterpreterCommConfig,
+} from "@/actions/admin/withdraw-comm-batch";
 
 /**
  * /admin/accounting/withdraw/comm-interpreter — Interpreter (ล่าม) batch
@@ -15,7 +21,7 @@ import { getBatchList } from "@/actions/admin/withdraw-comm-batch";
  * yuan margin) × `tb_set_comm_interpreter.perCom` (per-interpreter %). Items
  * link to `tb_header_order` by hno (yuan orders) instead of `tb_forwarder`.
  *
- * Per brief §2 — MVP read-only. CREATE + PAY DEFERRED.
+ * สร้าง batch + จ่ายเงิน (แนบสลิป) ได้แล้ว (faithful-port · 2026-07-09).
  *
  * Roles per ADR-0006 §1.4: accounting | sales_admin (super implicit).
  */
@@ -23,14 +29,14 @@ import { getBatchList } from "@/actions/admin/withdraw-comm-batch";
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
-  "1": "สร้างแล้ว",
-  "2": "รอจ่าย",
-  "3": "จ่ายแล้ว",
+  "1": "รอดำเนินการ",
+  "2": "จ่ายแล้ว",
+  "3": "ไม่สำเร็จ",
 };
 const STATUS_BADGE: Record<string, string> = {
-  "1": "bg-slate-100 text-slate-700 border border-slate-300",
-  "2": "bg-amber-50 text-amber-700 border border-amber-200",
-  "3": "bg-green-50 text-green-700 border border-green-200",
+  "1": "bg-amber-50 text-amber-700 border border-amber-200",
+  "2": "bg-green-50 text-green-700 border border-green-200",
+  "3": "bg-rose-50 text-rose-700 border border-rose-200",
 };
 
 function thb(n: number): string {
@@ -64,6 +70,23 @@ export default async function AdminWithdrawCommInterpreterPage({
     adminId: repId,
     limit: 500,
   });
+
+  // Create + pay are gated ["super","accounting"] (money write). Only load the
+  // payee/account lists + render the create button when the viewer can create.
+  const canCreate = isGodRole(roles) || roles.includes("accounting");
+  const [payeesRes, accountsRes, commConfigured] = canCreate
+    ? await Promise.all([
+        listCommissionPayees("interpreter"),
+        listCommPayAccounts(),
+        hasInterpreterCommConfig(),
+      ])
+    : [null, null, true];
+  const payees = payeesRes?.ok ? payeesRes.data?.payees ?? [] : [];
+  const accounts = accountsRes?.ok ? accountsRes.data?.accounts ?? [] : [];
+  // GAP 1: when NO interpreter has a % ค่าคอมล่าม seeded, the whole เบิกค่าคอมล่าม
+  // flow fails-closed → show a clear CTA to go set it up (per admin, via the ⚙️
+  // cog on /admin/admins/[id]) instead of a silent dead-end.
+  const showCommSetupCta = canCreate && commConfigured === false;
 
   const total = (result.counts["1"] ?? 0) + (result.counts["2"] ?? 0) + (result.counts["3"] ?? 0);
   const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
@@ -105,16 +128,37 @@ export default async function AdminWithdrawCommInterpreterPage({
             </p>
             <p className="text-[11px] text-muted mt-1">
               📊 อ่านจาก <code className="bg-surface-alt px-1 rounded">tb_withdraw_comm_interpreter_h</code> + <code className="bg-surface-alt px-1 rounded">_item</code>
-              {" "}(legacy 46 batches · 2,947 รายการ) · MVP read-only · ⚠️ สร้าง batch DEFER ครั้งหน้า
+              {" "}(faithful-port ตาม legacy <code className="bg-surface-alt px-1 rounded">withdraw-commission-interpreter.php</code>) ·
+              สร้าง batch + จ่ายเงิน (แนบสลิป) ได้แล้ว
             </p>
           </div>
-          <span
-            className="cursor-not-allowed rounded-lg border border-border bg-surface-alt/40 px-3 py-2 text-xs font-medium text-muted"
-            title="DEFERRED · สร้าง batch ต้องคุย ก๊อต ก่อน + ต้องดู legacy PHP source"
-          >
-            + สร้าง batch (เร็วๆ นี้)
-          </span>
+          {canCreate ? (
+            <CommBatchCreateForm kind="interpreter" payees={payees} accounts={accounts} />
+          ) : (
+            <span className="rounded-lg border border-border bg-surface-alt/40 px-3 py-2 text-xs font-medium text-muted">
+              👁 ดูอย่างเดียว (สร้าง/จ่าย = บัญชี)
+            </span>
+          )}
         </header>
+
+        {showCommSetupCta && (
+          <Link
+            href="/admin/admins"
+            className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 hover:bg-amber-100/70 transition-colors"
+          >
+            <span aria-hidden className="text-xl leading-none">⚙️</span>
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-amber-900">
+                ยังไม่ได้ตั้งค่า % ค่าคอมล่าม — ตั้งค่าก่อนถึงจะเบิกได้ →
+              </span>
+              <span className="mt-1 block text-xs text-amber-800">
+                ระบบยังไม่มีล่ามคนไหนตั้ง % ค่าคอม (<code className="bg-amber-100 px-1 rounded">tb_set_comm_interpreter</code>) ·
+                กดที่นี่เพื่อไปหน้า <span className="font-semibold">รายชื่อพนักงาน</span> → เลือกล่าม → กดไอคอนตั้งค่า (⚙️) “ตั้งค่า ค่าคอมล่ามจีน”
+                เพื่อกรอก % · เมื่อตั้งเสร็จจะเบิกได้ทันที
+              </span>
+            </span>
+          </Link>
+        )}
 
         <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
           <Stat label="ทั้งหมด" value={total.toLocaleString("th-TH")} />
@@ -169,8 +213,8 @@ export default async function AdminWithdrawCommInterpreterPage({
             </p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">วันที่</th>

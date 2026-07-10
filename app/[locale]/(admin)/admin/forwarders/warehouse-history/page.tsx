@@ -733,18 +733,6 @@ export default async function AdminForwardersWarehouseHistoryPage({
           </span>
         </form>
 
-        {/* Wave 20 status banner — proactive transparency (AGENTS §0a). */}
-        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
-          <span aria-hidden>ℹ️</span>
-          <div className="flex-1">
-            <span className="font-medium">Wave 20 P1:</span>{" "}
-            ✅ Tailwind v4 chrome · 3-mode date filter · relink modal · ลบยิงเข้า · ดู/อัปเดต ·{" "}
-            <span className="opacity-75">
-              ⏳ Wave 21: bulk-print PDF (พิมพ์จากหน้ากล่อง) · &ldquo;Mark as no-match&rdquo; sentinel · DataTables sort
-            </span>
-          </div>
-        </div>
-
         {/* Mode = all → cap warning so staff know to narrow the range. */}
         {mode === "all" && totalRows >= ALL_MODE_CAP && (
           <div className="rounded-md border border-orange-200 bg-orange-50/70 p-2.5 text-xs text-orange-800">
@@ -760,21 +748,17 @@ export default async function AdminForwardersWarehouseHistoryPage({
           <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
             กล่องที่ยิง {noBoxAll.toLocaleString("th-TH")} กล่อง
           </span>
-          {countBoxLackAll > 0 && (
-            <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-3 py-1 text-xs font-medium">
-              กล่องไม่ครบ {countBoxLackAll} รายการ
-            </span>
-          )}
-          {countBoxOverflowAll > 0 && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
-              กล่องเกินมา {countBoxOverflowAll} รายการ
-            </span>
-          )}
-          {countErrorReAll > 0 && (
-            <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-3 py-1 text-xs font-medium">
-              รายการซ้ำ {countErrorReAll} รายการ
-            </span>
-          )}
+          {/* faithful-look: legacy shows these 3 chips always (even at 0) —
+              forwarder-import-warehouse.php L483-485. Drop the >0 guards. */}
+          <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-3 py-1 text-xs font-medium">
+            กล่องไม่ครบ {countBoxLackAll} รายการ
+          </span>
+          <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
+            กล่องเกินมา {countBoxOverflowAll} รายการ
+          </span>
+          <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-3 py-1 text-xs font-medium">
+            รายการซ้ำ {countErrorReAll} รายการ
+          </span>
           {orphanRaw.length > 0 && (
             <span className="inline-flex items-center rounded-full bg-rose-100 text-rose-800 px-3 py-1 text-xs font-medium">
               รอเชื่อม (orphan) {orphanRaw.length} รายการ
@@ -798,8 +782,12 @@ export default async function AdminForwardersWarehouseHistoryPage({
 
             <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
               <div className="overflow-x-auto scrollbar-x-visible">
-                <table className="min-w-[1400px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                  <thead className="bg-surface-alt text-foreground">
+                {/* faithful-look 2026-07-09 (ภูม#2): tighten to legacy density.
+                    Legacy .table td/th = 0.25rem/0.5rem padding + font-12 + zebra.
+                    The [&>…]:px-2/py-1 table-level variants have higher specificity
+                    than the per-cell px-3/py-2, so they compress every cell at once. */}
+                <table className="min-w-[1150px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>thead>tr>th]:px-2 [&>thead>tr>th]:py-1.5 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr>td]:px-2 [&>tbody>tr>td]:py-1 [&>tbody>tr>td]:align-top">
+                  <thead className="bg-orange-500 text-white">
                     <tr>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">ID</th>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">วันที่บันทึก</th>
@@ -849,7 +837,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                     })}
 
                     {/* MATCHED section (L233-348) */}
-                    {matchedRows.map((row) => {
+                    {matchedRows.map((row, idx) => {
                       const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
                       const lacking = row.f_famount != null && row.fi2amount < row.f_famount;
                       const over    = row.f_famount != null && row.fi2amount > row.f_famount;
@@ -871,7 +859,9 @@ export default async function AdminForwardersWarehouseHistoryPage({
                         ? "bg-rose-50/30 hover:bg-rose-50"
                         : hasDupes
                           ? "bg-indigo-50/30 hover:bg-indigo-50"
-                          : "hover:bg-surface-alt";
+                          : idx % 2 === 1
+                            ? "bg-muted/20 hover:bg-surface-alt"
+                            : "hover:bg-surface-alt";
 
                       return (
                         <tr key={`matched-${row.id}`} className={rowClass}>
@@ -968,7 +958,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                 >
                                   เลขที่รายการ #{row.f_id ?? ""}
                                 </Link>
-                                <div className="text-[11px] text-muted line-clamp-2 mt-0.5">
+                                <div className="max-w-[220px] text-[11px] text-muted line-clamp-2 mt-0.5">
                                   {row.f_fdetail ?? ""}
                                 </div>
                                 <div className="text-[11px] text-muted mt-0.5">

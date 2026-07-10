@@ -524,3 +524,170 @@ export async function markDriverItemFailed(input: MarkFailedInput): Promise<Admi
     return { ok: true };
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// ADMIN — ถ่าย/แก้ไขภาพส่งสินค้า (per delivery-point · ภูม 2026-07-10)
+//
+// Legacy: forwarder-driver.php `update_fPhotoEnd` (L1273-1331) — takes ONE photo
+// for a delivery point and applies it to ALL fids in the group:
+//   UPDATE tb_forwarder SET fPhotoEnd='..', fStatus='7', fDateStatus7=NOW() WHERE ID IN(..)
+//   + tb_forwarder_driver_item fdiStatus='2'.
+// The "ถ่ายส่งสินค้า" / "แก้ภาพ" buttons on the detail page both POST here.
+//
+// Why a SEPARATE entrypoint (vs transitionItemStatus): the mobile driver deliver
+// path only moves '1'→'2' and NO-OPS on an already-delivered item — so it can't
+// REPLACE a photo. This admin path works on ANY current status: it always (re)writes
+// the delivery photo on every covered driver-item + its forwarder, and for any item
+// not yet delivered it ALSO marks it delivered (fdistatus '2' + fstatus '7' +
+// earn-trigger + batch auto-complete), faithful to legacy.
+//
+// MONEY/STATUS-SAFE: the fstatus 6→7 flip is (a) gated by canAnyRoleFlipFstatus (same
+// as the driver path), (b) idempotent (`.neq('fstatus','7')` — a re-edit of an
+// already-delivered row only replaces the photo, never re-fires the flip/earn/log).
+// ────────────────────────────────────────────────────────────────────────
+
+/** Delivery-capable roles (mirror the fstatus 6→7 matrix + warehouse section). */
+const PHOTO_EDIT_ROLES = ["driver", "ops", "super", "warehouse", "manager"] as const;
+
+export async function adminEditDriverDeliveryPhoto(
+  formData: FormData,
+): Promise<AdminActionResult<{ updated: number }>> {
+  // itemIds = comma-separated tb_forwarder_driver_item.id for ONE delivery point.
+  const idsRaw = formData.get("itemIds");
+  const itemIds =
+    typeof idsRaw === "string"
+      ? Array.from(
+          new Set(
+            idsRaw
+              .split(",")
+              .map((s) => Number.parseInt(s.trim(), 10))
+              .filter((n) => Number.isFinite(n) && n > 0),
+          ),
+        )
+      : [];
+  if (itemIds.length === 0) return { ok: false, error: "invalid_item_ids" };
+
+  const fileVal = formData.get("photo");
+  const photo = fileVal instanceof File && fileVal.size > 0 ? fileVal : null;
+  if (!photo) return { ok: false, error: "กรุณาแนบรูปถ่ายส่งสินค้า" };
+
+  return withAdmin<{ updated: number }>([...PHOTO_EDIT_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Caller roles — for the fstatus 6→7 gate + the batch-owner check inside
+    // loadItemAndAuthorise (a driver may only edit a batch they own).
+    const { data: rolesRows, error: rolesRowsErr } = await admin
+      .from("admins")
+      .select("role")
+      .eq("profile_id", adminId)
+      .eq("is_active", true);
+    if (rolesRowsErr) {
+      console.error(`[admins list] failed`, { code: rolesRowsErr.code, message: rolesRowsErr.message });
+    }
+    const callerRoles = (rolesRows ?? []).map((r) => (r as { role: string }).role);
+    const canFlip = canAnyRoleFlipFstatus(callerRoles as readonly AdminRole[], "6", "7");
+
+    // Upload ONCE — legacy applies a single photo to the whole delivery point.
+    const up = await uploadToBucket(photo, "forwarder-covers", `driver/edit-${itemIds[0]}-off`);
+    if (!up.ok) return { ok: false, error: `อัปโหลดรูปไม่สำเร็จ: ${up.error}` };
+    const filename = up.filename;
+
+    const nowIso = new Date().toISOString();
+    const adminIdShort = String(adminId).slice(0, 10);
+    let updated = 0;
+    const touchedFdids = new Set<number>();
+    const newlyDeliveredFids: number[] = [];
+
+    for (const itemId of itemIds) {
+      const authz = await loadItemAndAuthorise(itemId, adminId, callerRoles);
+      if (!authz.ok) continue; // skip items the caller isn't allowed to touch
+      const { fdid, fid, fdistatus } = authz.row;
+      const wasDelivered = fdistatus === "2";
+
+      // (a) driver-item — ALWAYS replace the delivery photo; mark delivered if not yet.
+      const itemUpdate: Record<string, string> = { fdipictureoff: filename };
+      if (!wasDelivered) {
+        itemUpdate.fdistatus = "2";
+        itemUpdate.fdicompletedat = nowIso;
+      }
+      const { error: itemErr } = await admin
+        .from("tb_forwarder_driver_item")
+        .update(itemUpdate)
+        .eq("id", itemId);
+      if (itemErr) {
+        console.error(`[adminEditDriverDeliveryPhoto item]`, { itemId, message: itemErr.message });
+        continue;
+      }
+      updated++;
+      touchedFdids.add(fdid);
+
+      // (b1) forwarder photo — ALWAYS replace the proof photo (this is the "แก้ภาพ" case).
+      const { error: photoErr } = await admin
+        .from("tb_forwarder")
+        .update({ fphotoend: filename, adminidupdate: adminIdShort })
+        .eq("id", fid);
+      if (photoErr) {
+        console.error(`[adminEditDriverDeliveryPhoto fphotoend]`, { fid, message: photoErr.message });
+      }
+
+      // (b2) forwarder status 6→7 — only for a NOT-yet-delivered item, gated + idempotent.
+      if (!wasDelivered && canFlip) {
+        const { data: flipped, error: flipErr } = await admin
+          .from("tb_forwarder")
+          .update({ fstatus: "7", fdatestatus7: nowIso })
+          .eq("id", fid)
+          .neq("fstatus", "7") // idempotent — never re-stamp an already-delivered row
+          .select("id");
+        if (flipErr) {
+          console.error(`[adminEditDriverDeliveryPhoto fstatus7]`, { fid, message: flipErr.message });
+        } else if ((flipped ?? []).length > 0) {
+          newlyDeliveredFids.push(fid);
+        }
+      }
+    }
+
+    if (updated === 0) {
+      return { ok: false, error: "ไม่มีรายการที่แก้ไขได้ (สิทธิ์ไม่ถึง หรือไม่พบรายการ)" };
+    }
+
+    // (c) For rows that FRESHLY flipped 6→7: append the canonical status log + fire the
+    //     VIP earn-trigger (same as the driver deliver path) so audit + commission stay
+    //     consistent. Best-effort — never rolls back the (committed) photo/status writes.
+    if (newlyDeliveredFids.length > 0) {
+      try {
+        const { appendStatusLog } = await import("@/lib/notifications/status-flip-helper");
+        for (const fid of newlyDeliveredFids) {
+          await appendStatusLog(admin, fid, "6", "7", adminIdShort);
+        }
+      } catch (e) {
+        console.error(`[adminEditDriverDeliveryPhoto status-log]`, { error: e instanceof Error ? e.message : String(e) });
+      }
+      try {
+        const earn = await fireUserSalesEarnTriggerOnDelivery(admin, newlyDeliveredFids);
+        if (earn.errors.length > 0 || earn.inserted > 0) {
+          console.info(`[adminEditDriverDeliveryPhoto earn] inserted=${earn.inserted} skipped=${earn.skipped}`, { errors: earn.errors });
+        }
+      } catch (e) {
+        console.error(`[adminEditDriverDeliveryPhoto earn threw]`, { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    // (d) Auto-complete each touched batch when its last stop is now delivered.
+    for (const fdid of touchedFdids) {
+      await maybeAutoCompleteDriverBatch(admin, fdid);
+    }
+
+    await logAdminAction(adminId, "tb_forwarder_driver_item.edit_photo", "tb_forwarder_driver_item", itemIds.join(","), {
+      item_ids: itemIds,
+      photo: filename,
+      updated,
+      newly_delivered_fids: newlyDeliveredFids,
+    });
+
+    revalidatePath("/admin/drivers/work");
+    revalidatePath("/admin/forwarders");
+    revalidatePath("/admin/drivers");
+    for (const fdid of touchedFdids) revalidatePath(`/admin/drivers/${fdid}`);
+    return { ok: true, data: { updated } };
+  });
+}

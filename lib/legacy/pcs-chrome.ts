@@ -203,9 +203,9 @@ async function resolveSalesRep(
     await Promise.all([
       admin
         .from("tb_admin")
-        .select("adminNickname, adminPicture, adminTel")
+        .select("adminNickname, adminPicture, adminTel, adminStatusA, adminStatusSale")
         .eq("adminID", adminIdSale)
-        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null; adminTel: string | null }>(),
+        .maybeSingle<{ adminNickname: string | null; adminPicture: string | null; adminTel: string | null; adminStatusA: string | null; adminStatusSale: string | null }>(),
       admin
         .from("admin_contact_extras")
         .select("profile_id, nickname, work_phone, direct_phone")
@@ -216,6 +216,13 @@ async function resolveSalesRep(
   if (adminRowErr) console.error(`[tb_admin] failed`, adminRowErr.message);
   if (bridgeErr) console.error(`[admin_contact_extras] failed`, bridgeErr.message);
   if (!adminRow) return { ...SALES_FALLBACK };
+
+  // Retired rep (adminStatusA='0') / de-flagged as sales (adminStatusSale='0')
+  // → DISPLAY the CENTRAL sales line, not the retired person (owner 2026-07-09).
+  // DISPLAY-only: the stored adminIdSale is untouched (reassign is separate).
+  if (adminRow.adminStatusA !== "1" || adminRow.adminStatusSale !== "1") {
+    return { ...SALES_FALLBACK };
+  }
 
   // Modern profile (avatar/name/phone) depends on bridgeRow.profile_id.
   let profile: { avatar_url: string | null; phone: string | null } | null = null;

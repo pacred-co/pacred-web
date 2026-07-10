@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   MapPin,
@@ -85,12 +85,20 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
     switch (initialAddressBlock.mode) {
       case "saved":             return initialAddressBlock.addressID;
       case "warehouse-saved":   return "PCS";
-      case "warehouse-default": return "PCS";
+      case "warehouse-default": return "";
       case "none":              return "";
     }
   }, [initialAddressBlock]);
 
   const [selectedID, setSelectedID]   = useState<string>(initialAddressID);
+  // An address counts as EXPLICITLY chosen when the resolved block is a
+  // saved address OR an explicitly-saved warehouse pickup — the silent
+  // "warehouse-default"/"none" fall-through does NOT count (owner 2026-07-10:
+  // force the customer to set a real delivery address before checkout).
+  const initialChosen =
+    initialAddressBlock.mode === "saved" ||
+    initialAddressBlock.mode === "warehouse-saved";
+  const [addressChosen, setAddressChosen] = useState<boolean>(initialChosen);
   const [modalOpen,   setModalOpen]   = useState<boolean>(false);
   // Tracks the LAST `selectedID` we dismissed/accepted; when the
   // selection changes to a new eligible address the popup re-opens.
@@ -110,10 +118,24 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
   // the user hasn't dismissed/accepted it for THIS address.
   const maomaoOpen = eligible && maomaoDismissedFor !== selectedID;
 
+  // Bridge to the sibling <CartInteractivity> island (they share no React
+  // parent — same pattern as `cart-maomao-accepted`). Broadcasts whether a
+  // delivery address has been explicitly chosen so the submit button + the
+  // addOrder handler can gate on it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("cart-address-chosen", { detail: { chosen: addressChosen } }),
+    );
+  }, [addressChosen]);
+
   function openModal() { setModalOpen(true); }
   function closeModal() { setModalOpen(false); }
   function selectAddress(addressID: string) {
     setSelectedID(addressID);
+    // Any explicit pick in the modal (incl. "PCS" warehouse pickup) is a
+    // deliberate choice → clears the force-address gate.
+    setAddressChosen(true);
     setModalOpen(false);
     if (maomaoByAddress[addressID] !== true) {
       setProMaomao(false);
@@ -197,6 +219,14 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
             readOnly
             hidden
           />
+          {/* Force-address gate signal — the addOrder handler refuses to
+              submit while this is "0" (un-chosen warehouse-default / none). */}
+          <input
+            type="hidden"
+            name="addressChosen"
+            value={addressChosen ? "1" : "0"}
+            readOnly
+          />
 
           {/* Address display */}
           {display.kind === "saved" && (
@@ -259,21 +289,34 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
           )}
 
           {display.kind === "none" && (
-            <div className="text-center py-3">
-              <button
-                type="button"
-                onClick={openModal}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
-              >
-                <MapPin className="w-4 h-4" strokeWidth={2.2} />
-                {t("addAddressOrPickup")}
-              </button>
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3.5">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-amber-900">
+                <span className="text-rose-600">🔴</span>
+                {t("setAddressFirst")}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+                >
+                  <MapPin className="w-4 h-4" strokeWidth={2.2} />
+                  {t("addAddressOrPickup")}
+                </button>
+                <a
+                  href="/addresses"
+                  className="inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12.5px] font-bold px-3.5 py-2 hover:bg-primary-50 transition-colors"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  {t("addNewAddress")}
+                </a>
+              </div>
             </div>
           )}
 
           {/* Ship-by carrier — cart.php L488 / L982-994 */}
           <div className="mt-3 pt-3 border-t border-border">
-            {selectedID === "PCS" ? (
+            {selectedID === "" ? null : selectedID === "PCS" ? (
               <a
                 href={warehouseMapUrl || "https://www.google.com/maps/place/13%C2%B042'40.5%22N+100%C2%B019'26.6%22E/@13.7112396,100.3237324,211m/data=!3m1!1e3!4m4!3m3!8m2!3d13.71125!4d100.3240556?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D"}
                 target="_blank"

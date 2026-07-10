@@ -33,6 +33,8 @@ export type BillingRunInvoiceDetail = {
     buyer_name: string;
     buyer_tax_id: string;
     buyer_address: string;
+    /** DISPLAY-only ship-to snapshot (mig 0247) — distinct from buyer_address (tax identity). */
+    delivery_address: string;
     buyer_branch: string;
     is_juristic: boolean;
     date_issued: string;
@@ -135,6 +137,7 @@ type HeaderRaw = {
   buyer_name: string;
   buyer_tax_id: string;
   buyer_address: string;
+  delivery_address: string | null;
   buyer_branch: string;
   is_juristic: boolean;
   date_issued: string;
@@ -276,6 +279,7 @@ export async function loadBillingRunDocument(
       buyer_name:         hdrRaw.buyer_name,
       buyer_tax_id:       hdrRaw.buyer_tax_id,
       buyer_address:      hdrRaw.buyer_address,
+      delivery_address:   hdrRaw.delivery_address ?? "",
       buyer_branch:       hdrRaw.buyer_branch,
       is_juristic:        hdrRaw.is_juristic,
       date_issued:        hdrRaw.date_issued,

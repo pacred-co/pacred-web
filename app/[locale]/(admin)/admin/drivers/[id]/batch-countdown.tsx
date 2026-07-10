@@ -9,12 +9,24 @@
  */
 
 import { useEffect, useState } from "react";
-import { Clock, AlertTriangle } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-export function BatchCountdown({ endTimeIso }: { endTimeIso: string }) {
+export function BatchCountdown({
+  endTimeIso,
+  /** batch fdstatus — '1' running (tick) · '2' สำเร็จ · '3' ไม่สำเร็จ (both freeze). */
+  status = "1",
+}: {
+  endTimeIso: string;
+  status?: string;
+}) {
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  // The clock ticks ONLY while the run is still open. Once the batch is สำเร็จ ('2')
+  // or ไม่สำเร็จ ('3') the job is done → freeze it, no live clock (ภูม 2026-07-10:
+  // "สำเร็จแล้วก็ควรหยุดเวลาไปเลย"). Legacy stops its setInterval on a closed run too.
+  const isOpen = status !== "2" && status !== "3";
 
   useEffect(() => {
+    if (!isOpen) return; // closed run → don't start the interval
     const tgt = new Date(endTimeIso).getTime();
     function tick() {
       setRemainingMs(tgt - Date.now());
@@ -22,7 +34,25 @@ export function BatchCountdown({ endTimeIso }: { endTimeIso: string }) {
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [endTimeIso]);
+  }, [endTimeIso, isOpen]);
+
+  // ── Closed run → a STATIC terminal pill (frozen), never a live clock. ──
+  if (status === "2") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 text-xs font-semibold">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        จบงานแล้ว
+      </span>
+    );
+  }
+  if (status === "3") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 px-3 py-1 text-xs font-semibold">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        หมดเวลาแล้ว
+      </span>
+    );
+  }
 
   if (remainingMs === null) {
     return (

@@ -614,10 +614,12 @@ async function submitCartOrderImpl(
     ccolor: string | null;
     camount: number | string | null;
     cdetails: string | null;
+    input_currency: string | null;
+    input_price: number | string | null;
   }>(() => admin
     .from("tb_cart")
     .select(
-      "id, ctitle, cnameshop, curl, cprovider, cimages, csize, cprice, ccolor, camount, cdetails",
+      "id, ctitle, cnameshop, curl, cprovider, cimages, csize, cprice, ccolor, camount, cdetails, input_currency, input_price",
     )
     .in("id", input.ids)
     .eq("userid", userID)
@@ -640,6 +642,8 @@ async function submitCartOrderImpl(
     ccolor: string | null;
     camount: number | string | null;
     cdetails: string | null;
+    input_currency: string | null;
+    input_price: number | string | null;
   }>).map((r) => ({
     ctitle: r.ctitle ?? "",
     cnameshop: r.cnameshop ?? "",
@@ -651,6 +655,9 @@ async function submitCartOrderImpl(
     ccolor: r.ccolor ?? "",
     camount: Number(r.camount ?? 0),
     cdetails: r.cdetails ?? "",
+    // mig 0248 — carry the ORIGINAL currency + amount tb_cart → tb_order.
+    input_currency: r.input_currency ?? "",
+    input_price: Number(r.input_price ?? 0),
     userid: userID,
     hno: hNo,
     // MySQL-implicit NOT-NULL defaults (Postgres needs them explicit) — same
@@ -942,6 +949,11 @@ export async function addCartItem(
       ccolor:    d.color ?? "",
       csize:     d.size ?? "",
       userid:    userID,
+      // mig 0248 — persist the ORIGINAL currency + amount for display
+      // (cprice above stays the ¥-equiv pricing runs on). CNY / no-selector
+      // → '' / 0 = a plain ¥ row, byte-identical to today.
+      input_currency: (d.input_currency && normInputCur !== "CNY" && normInputCur !== "") ? normInputCur : "",
+      input_price:    (d.input_currency && normInputCur !== "CNY" && normInputCur !== "") ? (d.input_price ?? 0) : 0,
     })
     .select("id")
     .single<{ id: number }>();

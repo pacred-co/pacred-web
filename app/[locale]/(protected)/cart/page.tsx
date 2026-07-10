@@ -88,6 +88,8 @@ type CartRow = {
   ccolor: string | null;
   csize: string | null;
   userid: string | null;
+  input_currency: string | null;
+  input_price: number | null;
 };
 
 /**
@@ -245,6 +247,13 @@ export default async function CartPage() {
       })
     : null;
 
+  // Force-address gate — an address counts as EXPLICITLY chosen only when
+  // the resolved block is a saved address OR an explicitly-saved warehouse
+  // pickup; "warehouse-default"/"none" are silent fall-throughs that must be
+  // gated (owner 2026-07-10).
+  const addressChosenInitial =
+    addressBlock?.mode === "saved" || addressBlock?.mode === "warehouse-saved";
+
   // ── All addresses (for the เปลี่ยนที่อยู่ modal — cart.php's
   //   option-address-thai.php) + per-address shipBy/maomao maps.
   //   Server-rendered ONCE; the client filters on selection so the
@@ -303,7 +312,7 @@ export default async function CartPage() {
     () => admin
       .from("tb_cart")
       .select(
-        "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
+        "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid, input_currency, input_price",
       )
       .eq("userid", userID)
       .order("id", { ascending: true }),
@@ -375,6 +384,8 @@ export default async function CartPage() {
           camount: Number(row.camount ?? 0),
           ccolor: row.ccolor,
           csize: row.csize,
+          inputCurrency: row.input_currency ?? "",
+          inputPrice: Number(row.input_price ?? 0),
           imageThumbUrl: convertIMGCHN(row.cimages, "_80x80.jpg"),
           imageFullUrl: convertIMGCHN(row.cimages, ""),
           providerImg:
@@ -476,6 +487,7 @@ export default async function CartPage() {
                 shippingCard={
                   <ShippingOptionsCard userTransportType={userTransportType} />
                 }
+                initialAddressChosen={addressChosenInitial}
               />
             </>
           ) : (

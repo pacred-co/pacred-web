@@ -3,12 +3,14 @@
 /**
  * ใบเสนอราคา tab — cargo LCL quotation (owner ปอน 2026-06-21, simplified v3).
  *
- * Two modes, clean UI:
- *  • 📋 ใบประเมินราคา (default · view=compare) — new customers don't know CBM/KG
+ * Two modes, clean UI (2026-07-10 ปอน — the two doc-type NAMES were swapped:
+ * the rate-comparison IS the price offer = ใบเสนอราคา; the specific line-item calc
+ * is the assessment = ใบประเมินราคา. The `view` VALUES keep their content/payload):
+ *  • 📋 ใบเสนอราคา (default · view=compare) — new customers don't know CBM/KG
  *    yet, so this just COMPARES the rates side-by-side (กว่างโจว/อี้อู × รถ/เรือ) for
- *    the chosen package + conditions → a ready-to-send quotation, no numbers needed.
- *  • 🧮 ออกใบเสนอราคา (view=calc) — when CBM/KG are known: density (ค่าเทียบ) billing → a Peak
- *    line-item quote with VAT/WHT totals.
+ *    the chosen package + conditions → a ready-to-send price offer, no numbers needed.
+ *  • 🧮 ใบประเมินราคา (view=calc) — when CBM/KG are known: density (ค่าเทียบ) billing → a Peak
+ *    line-item assessment with VAT/WHT totals.
  * นิติบุคคล toggle → หัก ณ ที่จ่าย 1% auto. อี้อู·รถ +600 is folded into the rate
  * (5,500), not a condition. Pacred logo. Pure client, no DB write (prod-safe).
  */
@@ -196,7 +198,7 @@ export function QuoteTab({
   const patchModel = (p: Partial<QuoteModel>) => { setOverrides((o) => ({ ...o, ...p })); setIssued(false); };
   const hasEdits = Object.keys(overrides).length > 0;
   const docEmpty = model.view === "calc" ? model.lines.length === 0 : model.compareRows.length === 0;
-  const docTitle = model.view === "calc" ? "ใบเสนอราคา" : "ใบประเมินราคา";
+  const docTitle = model.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา";
 
   async function copyText() {
     try { await navigator.clipboard.writeText(buildQuoteText(model)); setActionMsg(null); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -268,8 +270,8 @@ export function QuoteTab({
         <label className="inline-flex items-center gap-2">
           <span className="text-[12px] font-semibold text-foreground whitespace-nowrap">รูปแบบ:</span>
           <select value={view} onChange={(e) => setView(e.target.value as View)} className={selectCls}>
-            <option value="compare">ใบประเมินราคา</option>
-            <option value="calc">ออกใบเสนอราคา</option>
+            <option value="compare">ใบเสนอราคา</option>
+            <option value="calc">ใบประเมินราคา</option>
           </select>
         </label>
         <label className="inline-flex items-center gap-1.5 text-[12px] ml-auto">

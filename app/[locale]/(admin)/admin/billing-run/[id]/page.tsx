@@ -13,6 +13,10 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { isGodRole } from "@/lib/admin/god-role";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
+import { BillingRunReceiptButton } from "./billing-run-receipt-button";
+import { BillingRunDeliveryAddressEditor } from "./billing-run-delivery-address-editor";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +81,10 @@ export default async function BillingRunDetailPage({
 
   const { header, items } = res.data!;
 
+  // Customer saved-address rows for the reusable <CustomerAddressPicker> on the
+  // "แก้ที่อยู่จัดส่ง (บนใบ)" editor (ship-to snapshot · DISPLAY-only).
+  const custAddresses = await loadCustomerAddressRows(createAdminClient(), header.userid);
+
   // Sign EVERY slip (multi · ภูม 2026-06-30) via the service-role client so any
   // accounting admin can view slips the SALES uploaded (private "slips" bucket,
   // stored under the uploader's uid — an anon client could only sign its own).
@@ -135,6 +143,11 @@ export default async function BillingRunDetailPage({
           >
             🖨 พิมพ์ใบวางบิล
           </Link>
+          {/* ออก/พิมพ์ใบเสร็จ ในคลิกเดียว — เปิดใช้เมื่อ "ชำระแล้ว" · ยังไม่มีใบเสร็จ = สร้างให้
+              (sync ยอด/ชื่อ บุคคล↔นิติ กับใบวางบิล · ภูม 2026-07-10 · แก้ราก PR086). */}
+          {header.status !== "cancelled" && (
+            <BillingRunReceiptButton invoiceId={invoiceId} status={header.status} />
+          )}
         </div>
       </header>
 
@@ -201,10 +214,16 @@ export default async function BillingRunDetailPage({
             </>
           )}
           <div className="md:col-span-2">
-            <div className="text-xs text-muted">ที่อยู่</div>
+            <div className="text-xs text-muted">ที่อยู่ (ออกบิล/ภาษี)</div>
             <div>{header.buyer_address || "—"}</div>
           </div>
         </div>
+        <BillingRunDeliveryAddressEditor
+          invoiceId={header.id}
+          customerId={header.userid}
+          addresses={custAddresses}
+          currentDelivery={header.delivery_address}
+        />
       </section>
 
       {/* Line items */}

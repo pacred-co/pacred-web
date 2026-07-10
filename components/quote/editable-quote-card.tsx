@@ -158,8 +158,8 @@ export function EditableQuoteCard({
           <div className="text-right leading-tight">
             <div className="text-[11px] text-slate-500">หน้า 1/1</div>
             <div className="text-[10px] text-slate-400">(ต้นฉบับ)</div>
-            <div className="mt-1 text-[26px] font-black sm:text-[34px]" style={{ color: ACCENT }}>{isCalc ? "ใบเสนอราคา" : "ใบประเมินราคา"}</div>
-            <div className="text-[11px] tracking-wide text-slate-400">Quotation</div>
+            <div className="mt-1 text-[26px] font-black sm:text-[34px]" style={{ color: ACCENT }}>{isCalc ? "ใบประเมินราคา" : "ใบเสนอราคา"}</div>
+            <div className="text-[11px] tracking-wide text-slate-400">{isCalc ? "Price Assessment" : "Quotation"}</div>
           </div>
         </div>
 

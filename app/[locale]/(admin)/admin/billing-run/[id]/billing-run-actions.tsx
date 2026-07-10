@@ -254,7 +254,16 @@ export function BillingRunActions({
         offlineReason: offlineReason.trim(),
       });
       if (res.ok) {
-        setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
+        // ภูม 2026-07-09 — SURFACE the auto-receipt outcome. A best-effort receipt
+        // failure used to be invisible (staff saw only "✓ รับชำระแล้ว" while no ใบเสร็จ
+        // was created — the PR086/FRI2607-00015 case). Now warn + prompt a manual issue.
+        if (res.data?.receiptWarning) {
+          setMsg({ kind: "err", text: `✓ บันทึกการรับชำระแล้ว · ⚠️ ${res.data.receiptWarning}` });
+        } else if (res.data?.receiptRid) {
+          setMsg({ kind: "ok", text: `✓ บันทึกการรับชำระแล้ว · ออกใบเสร็จ ${res.data.receiptRid} อัตโนมัติแล้ว` });
+        } else {
+          setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
+        }
         router.refresh();
       } else {
         setMsg({ kind: "err", text: res.error });

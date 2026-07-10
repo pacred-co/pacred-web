@@ -1,12 +1,8 @@
 /**
- * /admin/reports/user-sales-history — ประวัติการขายต่อลูกค้า
- * (Wave 23 P1 batch 2-B Tailwind rewrite · 2026-05-27 ค่ำ).
+ * /admin/reports/user-sales-history — ประวัติการขายต่อลูกค้า.
  *
- * **Wave 23 P1 batch 2-B (2026-05-27 ค่ำ):** UI rewrite only — the
- * underlying tb_users + tb_forwarder + tb_header_order + tb_payment
- * cohort aggregate stays intact. Replaces the .pcs-legacy / Bootstrap-4 /
- * admin-base.css chrome (~470 LOC) with the Pacred Tailwind v4 reports
- * template (mirrors `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
+ * The tb_users + tb_forwarder + tb_header_order + tb_payment cohort
+ * aggregate renders on the Pacred Tailwind v4 reports template.
  *
  * **Workflow preserved (per AGENTS §0a):** same logic, same filters
  * (cohort YYYY-MM · q text search · limit), same data shape, same
@@ -18,9 +14,9 @@
  *   `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-user-sales-history.php`
  *   — note: that legacy file actually serves a sales-rep commission
  *   payout flow (`tb_user_sales_admin_pay`). This Pacred slot is the
- *   V-G6 #4 customer-cohort drill-down (Wave 8 backlog #8) that
- *   replaces the Wave 7.2 redirect to `/admin/customers/...`. The URL
- *   is reused; the legacy commission flow lives elsewhere.
+ *   customer-cohort drill-down that replaces the earlier redirect to
+ *   `/admin/customers/...`. The URL is reused; the legacy commission
+ *   flow lives elsewhere.
  *
  * **§0c compliance:** every Supabase query destructures { data, error },
  * logs + throws on load-bearing reads; uses datetime-helpers `nowMs`
@@ -35,6 +31,11 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { computeCommission } from "@/lib/sales-commission/calc";
+
+// The legacy per-team commission rate (`$percen` — report-user-sales-history.php
+// L46-55 · 0.01 for every VIP team). Single point of truth mirrored here.
+const SALES_COMMISSION_PERCEN = 0.01;
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ type URow = {
   userCompany: string | null;
 };
 
-type FRow = { userid: string | null; fdate: string | null; ftotalprice: number | null };
+type FRow = { userid: string | null; fdate: string | null; ftotalprice: number | null; fdiscount: number | null };
 type HRow = { userid: string | null; hdate: string | null; htotalpriceuser: number | null };
 type PRow = { userid: string | null; paydate: string | null; paythb: number | null };
 
@@ -105,6 +106,11 @@ type CustomerAggregate = {
   shop_count: number;
   payment_count: number;
   total_revenue_thb: number;
+  /** Σ(fTotalPrice − fDiscount) over the delivered forwarders — the legacy
+   *  `$priceUserAllCHN` China-shipping base the 1% commission is taken on
+   *  (report-user-sales-history.php L405-407). NOT total_revenue_thb (which
+   *  mixes ฝากสั่ง/ฝากโอน). */
+  chn_commission_gross: number;
   days_since_last: number | null;
 };
 
@@ -191,7 +197,7 @@ export default async function UserSalesHistoryEntry({
     ] = await Promise.all([
       admin
         .from("tb_forwarder")
-        .select("userid, fdate, ftotalprice")
+        .select("userid, fdate, ftotalprice, fdiscount")
         .in("userid", userids)
         .in("fstatus", ["6", "7"]),
       admin
@@ -239,6 +245,7 @@ export default async function UserSalesHistoryEntry({
       shop_count: 0,
       payment_count: 0,
       total_revenue_thb: 0,
+      chn_commission_gross: 0,
       days_since_last: null,
     });
   }
@@ -255,6 +262,8 @@ export default async function UserSalesHistoryEntry({
     if (!a) continue;
     a.forwarder_count += 1;
     a.total_revenue_thb += Number(r.ftotalprice ?? 0);
+    // Legacy 1% commission base = Σ(fTotalPrice − fDiscount), China-shipping only.
+    a.chn_commission_gross += Number(r.ftotalprice ?? 0) - Number(r.fdiscount ?? 0);
     pushDate(a, r.fdate);
   }
   for (const r of hRows) {
@@ -311,6 +320,7 @@ export default async function UserSalesHistoryEntry({
     shop_count: a.shop_count,
     payment_count: a.payment_count,
     total_revenue_thb: Number(a.total_revenue_thb.toFixed(2)),
+    commission_1pct: computeCommission(a.chn_commission_gross, SALES_COMMISSION_PERCEN).commission,
     adminidsale: a.adminidsale ?? "",
     is_juristic: a.is_juristic ? "นิติบุคคล" : "",
   }));
@@ -327,6 +337,7 @@ export default async function UserSalesHistoryEntry({
     { key: "shop_count",        label: "ฝากสั่ง (ครั้ง)" },
     { key: "payment_count",     label: "ฝากโอน (ครั้ง)" },
     { key: "total_revenue_thb", label: "รวมรายได้ (บาท)" },
+    { key: "commission_1pct",   label: "ค่าคอม 1% (บาท)" },
     { key: "adminidsale",       label: "เซลล์" },
     { key: "is_juristic",       label: "นิติบุคคล" },
   ];
@@ -452,8 +463,8 @@ export default async function UserSalesHistoryEntry({
           </p>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+              <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
                 <tr>
                   <th className="px-4 py-3">รหัส</th>
                   <th className="px-4 py-3">ชื่อ</th>
@@ -462,6 +473,12 @@ export default async function UserSalesHistoryEntry({
                   <th className="px-4 py-3">ออเดอร์แรก</th>
                   <th className="px-4 py-3">ล่าสุด</th>
                   <th className="px-4 py-3 text-right">รวมรายได้ (บาท)</th>
+                  <th
+                    className="px-4 py-3 text-right whitespace-nowrap"
+                    title="ส่วนแบ่ง 1% ของค่าขนส่งจีน Σ(ค่าฝากนำเข้า − ส่วนลด) — report-user-sales-history.php"
+                  >
+                    ค่าคอม 1%
+                  </th>
                   <th
                     className="px-4 py-3 text-right whitespace-nowrap"
                     title="ฝากนำเข้า / ฝากสั่ง / ฝากโอน (จำนวนครั้ง)"
@@ -510,6 +527,9 @@ export default async function UserSalesHistoryEntry({
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap">
                         {thb(a.total_revenue_thb)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap text-emerald-700">
+                        {thb(computeCommission(a.chn_commission_gross, SALES_COMMISSION_PERCEN).commission)}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap text-muted">
                         {a.forwarder_count}/{a.shop_count}/{a.payment_count}

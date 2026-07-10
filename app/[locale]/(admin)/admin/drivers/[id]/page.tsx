@@ -27,6 +27,8 @@ import {
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
+import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
@@ -273,6 +275,38 @@ export default async function AdminDriverBatchDetailPage({
     }
   }
 
+  // 4a. Resolve the STAFF display names for ดำเนินงาน (คนขับ = fdadminid) +
+  // มอบหมายงาน (ผู้สั่งงาน = fdadmincreator). Both are admin member_codes (AD###)
+  // that live in `profiles`, NOT tb_users — so the tb_users driver lookup above
+  // returns "—" for a real staff driver (ภูม 2026-07-10 "อยากให้ขึ้นเป็นชื่อ ไม่ใช่รหัส").
+  // One `profiles` .in() covers both codes.
+  const adminCodes = Array.from(
+    new Set([batch.fdadminid, batch.fdadmincreator].map((c) => (c ?? "").trim()).filter(Boolean)),
+  );
+  const adminNameByCode = new Map<string, string>();
+  if (adminCodes.length > 0) {
+    const { data: adminRows, error: adminNameErr } = await admin
+      .from("profiles")
+      .select("member_code, first_name, last_name")
+      .in("member_code", adminCodes);
+    if (adminNameErr) {
+      console.error(`/admin/drivers/${id}: staff name lookup failed`, {
+        code: adminNameErr.code, message: adminNameErr.message,
+      });
+    }
+    for (const p of (adminRows ?? []) as { member_code: string | null; first_name: string | null; last_name: string | null }[]) {
+      const code = (p.member_code ?? "").trim();
+      const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
+      if (code && name) adminNameByCode.set(code, name);
+    }
+  }
+  const adminNameOf = (code: string | null | undefined): string =>
+    adminNameByCode.get((code ?? "").trim()) ?? "";
+  // Prefer the profiles staff name; fall back to the tb_users driver name (for a
+  // customer-driver) then to the raw code so the field is never blank.
+  const driverDisplayName = adminNameOf(batch.fdadminid) || (driverName !== "—" ? driverName : "") || (batch.fdadminid ?? "");
+  const creatorDisplayName = adminNameOf(batch.fdadmincreator) || (batch.fdadmincreator ?? "");
+
   // 4b. Active driver roster — for the "เปลี่ยนคนขับ" dropdown (ops only).
   let driverOptions: { code: string; name: string }[] = [];
   if (isOpsOverride) {
@@ -356,6 +390,28 @@ export default async function AdminDriverBatchDetailPage({
     }),
   );
 
+  // 6b. รูปตอนขึ้นรถ (fdipictureon) — ภูม 2026-07-10: the header's top-right area
+  // shows a neat gallery of the LOADING photos (proof of what got put on the
+  // truck for this run). If the driver snapped no loading photo yet, fall back
+  // to the delivery photos so the panel is never pointlessly empty when photos
+  // DO exist. Each thumbnail is labelled by kind (ขึ้นรถ / ส่งแล้ว).
+  type RunPhoto = { url: string; kind: "on" | "off"; tracking: string };
+  const loadPhotos: RunPhoto[] = [];
+  const deliverPhotos: RunPhoto[] = [];
+  for (const stop of stopsWithPhotos) {
+    for (const entry of stop.items) {
+      const tracking = entry.forwarder.ftrackingchn ?? "";
+      if (entry.photoOnUrl) loadPhotos.push({ url: entry.photoOnUrl, kind: "on", tracking });
+      if (entry.photoOffUrl) deliverPhotos.push({ url: entry.photoOffUrl, kind: "off", tracking });
+    }
+  }
+  const runPhotos = loadPhotos.length > 0 ? loadPhotos : deliverPhotos;
+  const photoPanelLabel = loadPhotos.length > 0
+    ? "รูปตอนขึ้นรถ"
+    : deliverPhotos.length > 0
+      ? "รูปส่งของ (ยังไม่มีรูปขึ้นรถ)"
+      : "รูปตอนขึ้นรถ";
+
   // 7. Aggregates for header
   const totalItems     = items.length;
   const totalBoxes     = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
@@ -436,6 +492,44 @@ export default async function AdminDriverBatchDetailPage({
     googleMapsHref ? `นำทางทุกจุด: ${googleMapsHref}` : "",
   ].filter((l) => l !== undefined && l !== null).join("\n");
 
+  // "ดูบิลใบเสร็จในรายการนี้" — consolidated grouped view (legacy addFromBill action=3 ·
+  // ภูม 2026-07-10). Reuses the already-loaded stops (no extra fetch).
+  const billGroups = stopsWithPhotos.map((stop) => {
+    const f = stop.forwarder;
+    const address = [
+      f.faddressno,
+      f.faddresssubdistrict ? `ตำบล/แขวง ${f.faddresssubdistrict}` : "",
+      f.faddressdistrict ? `อำเภอ/เขต ${f.faddressdistrict}` : "",
+      f.faddressprovince ? `จังหวัด ${f.faddressprovince}` : "",
+      f.faddresszipcode,
+    ].filter(Boolean).join(" ");
+    const phones = [f.faddresstel, f.faddresstel2]
+      .map((p) => (p ?? "").trim())
+      .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+    return {
+      key: stop.addressKey,
+      pr: f.userid ?? "—",
+      customerName: customerNameOf(f.userid),
+      carrier: shipByLabel(f.fshipby),
+      address,
+      phones,
+      items: stop.items.map(({ forwarder }, i) => ({
+        no: i + 1,
+        orderNo: forwarder.fidorco ?? `#${forwarder.id}`,
+        pr: forwarder.userid ?? "—",
+        customerName: customerNameOf(forwarder.userid),
+        tracking: forwarder.ftrackingchn ?? "—",
+        location: forwarder.fpallet ?? "",
+        boxes: Number(forwarder.famount ?? 0),
+        weight: Number(forwarder.fweight ?? 0),
+        cbm: Number(forwarder.fvolume ?? 0),
+      })),
+      totalBoxes: stop.totalBoxes,
+      totalWeight: stop.totalWeight,
+      totalCbm: stop.totalVolume,
+    };
+  });
+
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
       {/* Breadcrumb */}
@@ -462,11 +556,18 @@ export default async function AdminDriverBatchDetailPage({
                 <span className="font-medium">ชื่อเรื่อง :</span> {batch.fdname ?? `รอบ #${batch.id}`}
               </div>
               <div>
-                <span className="font-medium">ดำเนินงาน :</span>{" "}
-                <span className="font-mono">{batch.fdadminid ?? "—"}</span> · {driverName}
+                <span className="font-medium">ดำเนินงาน (คนขับ) :</span>{" "}
+                <span className="font-semibold text-foreground">{driverDisplayName || "—"}</span>
+                {batch.fdadminid && (
+                  <span className="font-mono text-[11px] text-muted"> ({batch.fdadminid})</span>
+                )}
               </div>
               <div>
-                <span className="font-medium">มอบหมายงาน :</span> {batch.fdadmincreator ?? "—"}
+                <span className="font-medium">มอบหมายงาน :</span>{" "}
+                <span className="font-semibold text-foreground">{creatorDisplayName || "—"}</span>
+                {batch.fdadmincreator && (
+                  <span className="font-mono text-[11px] text-muted"> ({batch.fdadmincreator})</span>
+                )}
               </div>
               {batch.fddate && (
                 <div>
@@ -477,6 +578,9 @@ export default async function AdminDriverBatchDetailPage({
             </div>
           </div>
 
+          {/* right cluster: รูปขึ้นรถ panel (ภูม 2026-07-10) + status/countdown col */}
+          <div className="flex items-start gap-4 flex-wrap justify-end">
+          <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
           <div className="flex flex-col items-end gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${BATCH_STATUS_CLS[fdstatus]}`}>
               {fdstatus === "1" && <Clock className="h-3.5 w-3.5" />}
@@ -484,15 +588,18 @@ export default async function AdminDriverBatchDetailPage({
               {fdstatus === "3" && <XCircle className="h-3.5 w-3.5" />}
               {BATCH_STATUS_LABEL[fdstatus]}
             </span>
-            {/* legacy L1644 "ส่งของก่อนเวลา :" — shown while the run is still open */}
-            {batch.endtime && fdstatus === "1" && (
+            {/* legacy L1644-1652 "ส่งของก่อนเวลา :" + live counter — legacy renders this for
+                ANY status (ticks down while open · shows หมดเวลา once passed), so we show it
+                whenever the batch has a deadline, not only while open (ภูม 2026-07-10). */}
+            {batch.endtime && (
               <>
                 <span className="text-[11px] text-muted">
                   ส่งของก่อนเวลา : {formatThaiDateTime(batch.endtime)}
                 </span>
-                <BatchCountdown endTimeIso={batch.endtime} />
+                <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} />
               </>
             )}
+          </div>
           </div>
         </div>
 
@@ -568,6 +675,13 @@ export default async function AdminDriverBatchDetailPage({
             <Tag className="h-3.5 w-3.5" />
             พิมพ์สติกเกอร์ที่อยู่ (เรียงตามเส้นทาง)
           </Link>
+          {/* ดูบิลใบเสร็จในรายการนี้ (legacy #listBill → addFromBill action=3 · ภูม 2026-07-10):
+              modal รวมทุกจุดส่ง จัดกลุ่มตามลูกค้า + ปุ่มพิมพ์บิลจัดส่ง. */}
+          <DriverBillViewModal
+            groups={billGroups}
+            batchName={batch.fdname ?? `#${batch.id}`}
+            printHref={`/admin/drivers/${batch.id}/print`}
+          />
           {isOpsOverride && (
             <BatchManage
               batchId={batch.id}
@@ -670,6 +784,16 @@ export default async function AdminDriverBatchDetailPage({
                         <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
                       </div>
                     )}
+                    {/* ถ่าย/แก้ไขภาพส่งสินค้า (legacy takePhoto → update_fPhotoEnd · ภูม 2026-07-10)
+                        — applies to the stop's non-failed (fdistatus≠'3') driver-items. */}
+                    {(() => {
+                      const editableIds = stop.items
+                        .filter((e) => e.item.fdistatus !== "3")
+                        .map((e) => e.item.id);
+                      return editableIds.length > 0 ? (
+                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* ZONE 2 — ลูกค้า (PR + ชื่อ) + บริษัทขนส่ง + ผู้รับ + ที่อยู่ + โทร */}
@@ -891,6 +1015,63 @@ function Metric({
         {label}
       </div>
       <div className="text-lg font-bold mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * รูปตอนขึ้นรถ — the header's top-right visual panel (ภูม 2026-07-10). A neat 2-col
+ * thumbnail grid of the run's loading photos (fdipictureon); falls back to the
+ * delivery photos so it's never pointlessly empty when photos DO exist. Each
+ * thumbnail links to the full image + is badged by kind (ขึ้นรถ / ส่งแล้ว).
+ */
+function LoadingPhotoPanel({
+  photos,
+  label,
+}: {
+  photos: { url: string; kind: "on" | "off"; tracking: string }[];
+  label: string;
+}) {
+  const shown = photos.slice(0, 4);
+  const extra = photos.length - shown.length;
+  return (
+    <div className="w-40 sm:w-44 shrink-0">
+      <div className="flex items-center gap-1 text-[11px] font-medium text-muted mb-1">
+        <Camera className="h-3.5 w-3.5" /> {label}
+      </div>
+      {shown.length > 0 ? (
+        <div className="grid grid-cols-2 gap-1.5">
+          {shown.map((p, i) => (
+            <a
+              key={i}
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${p.kind === "on" ? "รูปขึ้นรถ" : "รูปส่งแล้ว"} · ${p.tracking}`}
+              className="group relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-alt"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={p.tracking || label} className="h-full w-full object-cover transition group-hover:scale-105" />
+              <span
+                className={`absolute inset-x-0 bottom-0 px-1 py-0.5 text-center text-[11px] font-medium text-white ${
+                  p.kind === "on" ? "bg-emerald-600/85" : "bg-blue-600/85"
+                }`}
+              >
+                {p.kind === "on" ? "ขึ้นรถ" : "ส่งแล้ว"}
+              </span>
+            </a>
+          ))}
+          {extra > 0 && (
+            <div className="col-span-2 text-[11px] text-muted text-center">
+              +{extra} รูป
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex aspect-video items-center justify-center rounded-lg border border-dashed border-border bg-surface-alt/50 px-2 text-center text-[11px] text-muted">
+          ยังไม่มีรูปขึ้นรถ · คนขับถ่ายตอนโหลดของขึ้นรถ
+        </div>
+      )}
     </div>
   );
 }

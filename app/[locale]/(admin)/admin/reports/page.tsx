@@ -61,103 +61,78 @@ export const dynamic = "force-dynamic";
 // sidebar stays slim (Pacred-is-one-company pattern · matches
 // /admin/customers + /admin/accounting/cargo pattern).
 // ─────────────────────────────────────────────────────────────────────
+// 2026-07-09 (faithful-look · ภูม#4) — RE-GROUPED to mirror the legacy
+// "ออกรายงาน" menu (menu-report.php) EXACTLY: legacy's by-SERVICE axis + its
+// exact Thai labels + order come FIRST (ฝากสั่งซื้อ/ฝากนำเข้า/ฝากโอน → ยอด
+// พนักงานขาย → ยอดรวมทุกบริการ → ยอดขายรวมตามรหัส → คนขับ → การเข้าถึงเว็บไซต์ →
+// SMS → OTP). Every Pacred-native BI/extra report (cockpit·AR·profit·SLA·etc.)
+// is KEPT in a trailing "เพิ่มเติม (Pacred)" group — no route lost (§0d).
+// The 3 legacy โปรโมชัน one-offs (Survey/3-Year/Oh-My-Ghost, 2023) are dead
+// campaigns with no data + no Pacred route → intentionally not surfaced.
 const REPORTS_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/reports" },
-  // Wave C BI (2026-06-01 · §0d) — the exec/finance BI surfaces. The exec
-  // cockpit (at-a-glance MTD revenue/profit/funnel/wallet/AR/leads) + AR-aging
-  // (ลูกหนี้การค้าตามอายุหนี้) both read LIVE tb_*. Placed first after "หน้าหลัก"
-  // so leadership reaches the cockpit in ≤3 clicks (sidebar ออกรายงาน → BI →
-  // cockpit). Sibling profit-analytics + sla-cycle-time stay in กำไร/มอนิเตอร์.
+  // ── Legacy "ออกรายงาน" — by-service axis (menu-report.php L3-49) ──
   {
-    label: "BI / ผู้บริหาร",
+    label: "ฝากสั่งซื้อ",
+    children: [
+      { label: "ข้อมูลทั่วไป", href: "/admin/reports/shop" },
+    ],
+  },
+  {
+    label: "ฝากนำเข้า",
+    children: [
+      { label: "ข้อมูลทั่วไป", href: "/admin/reports/forwarder" },
+    ],
+  },
+  {
+    label: "ฝากโอน",
+    children: [
+      { label: "ข้อมูลทั่วไป", href: "/admin/reports/payment" },
+    ],
+  },
+  { label: "ยอดพนักงานขาย", href: "/admin/reports/sales-monthly" },
+  { label: "ยอดรวมทุกบริการ", href: "/admin/reports/user-all" },
+  { label: "ยอดขายรวมตามรหัส", href: "/admin/reports/sales-group" },
+  { label: "รายงานคนขับรถ", href: "/admin/driver-runs" },
+  {
+    label: "การเข้าถึงเว็บไซต์",
+    children: [
+      { label: "การเข้าถึงเว็บไซต์", href: "/admin/reports/system" },
+      { label: "ยอดการใช้ API จีน",  href: "/admin/reports/api-china" },
+      { label: "ยอดการค้นหาสินค้า",  href: "/admin/reports/search-demand" },
+    ],
+  },
+  { label: "ยอดการใช้ SMS", href: "/admin/reports/sms-usage" },
+  {
+    label: "รายงาน SMS OTP",
+    children: [
+      { label: "ลูกค้าสมัครใหม่ OTP ไม่ผ่าน", href: "/admin/reports/otp-failed" },
+      { label: "ลูกค้ายืนยัน OTP แล้ว",       href: "/admin/reports/otp-success" },
+    ],
+  },
+  // ── Pacred-native extras (NOT in the legacy menu · kept for §0d no-loss) ──
+  {
+    label: "เพิ่มเติม (Pacred)",
     children: [
       { label: "🧭 แดชบอร์ดผู้บริหาร", href: "/admin/reports/cockpit" },
       { label: "💰 ลูกหนี้การค้า (AR-aging)", href: "/admin/accounting/ar-aging" },
-      // 2026-06-09 (เดฟ · marketing/CRM North-Star · §0d) — lead-source
-      // attribution: which acquisition channel drives leads→orders→revenue.
-      // The data (tb_users.userregisterwith/userrecom) was captured but no page
-      // surfaced it. ≤3 clicks: sidebar ออกรายงาน → BI → แหล่งที่มาของลูกค้า.
       { label: "📣 แหล่งที่มาของลูกค้า (Lead Source)", href: "/admin/reports/lead-source" },
-    ],
-  },
-  {
-    label: "ฝั่งบัญชี",
-    children: [
-      { label: "ฝากสั่ง",                   href: "/admin/reports/shop" },
-      { label: "ฝากนำเข้า",                 href: "/admin/reports/forwarder" },
-      { label: "ฝากชำระ",                   href: "/admin/reports/payment" },
-      // Wave 23 P1 batch 3 (2026-05-27 · port report-shops-profit-pay.php)
-      { label: "เบิกเงินส่วนแบ่งร้านค้า",   href: "/admin/reports/shops-profit-pay" },
-    ],
-  },
-  // Theme B reachability (2026-05-31 · เดฟ · §0d): the 5 profit/analysis
-  // reports read real tb_* now (P0-20) but were ORPHANS — no inbound link.
-  // Wired into the menubar here so staff can reach them in ≤3 clicks.
-  {
-    label: "กำไร",
-    children: [
       { label: "กำไรฝากนำเข้า", href: "/admin/reports/forwarder-profit" },
       { label: "กำไรฝากสั่งซื้อ", href: "/admin/reports/shops-profit" },
       { label: "กำไรฝากโอนหยวน", href: "/admin/reports/yuan-profit" },
-      // Wave C BI (2026-06-01 · §0d): aggregated profit/margin analytics
-      // (กำไร/ต้นทุน/margin ตาม carrier·warehouse·mode) — Theme 1.
       { label: "📊 วิเคราะห์กำไร/มาร์จิ้น", href: "/admin/reports/profit-analytics" },
-    ],
-  },
-  {
-    label: "การเข้าถึงระบบ",
-    children: [
-      { label: "เข้าใช้ระบบ",       href: "/admin/reports/system" },
-      { label: "ยืนยัน OTP สำเร็จ", href: "/admin/reports/otp-success" },
-      // Wave 1 gap-fill (2026-06-12 · port report-otp-not-pass.php)
-      { label: "OTP ไม่ผ่าน (สมัครใหม่)", href: "/admin/reports/otp-failed" },
-    ],
-  },
-  // Re-sweep A2 #24 (2026-05-31 · §0d reachability): 2 monitoring reports
-  // that had NO Pacred equivalent — faithful ports of report-search.php +
-  // report-api-sms.php. Wired here so staff reach them in ≤3 clicks.
-  {
-    label: "มอนิเตอร์",
-    children: [
-      { label: "ค้นหาสินค้า (ดีมานด์)", href: "/admin/reports/search-demand" },
-      { label: "การใช้ API SMS",        href: "/admin/reports/sms-usage" },
-      // Wave C BI (2026-06-01 · §0d): per-stage dwell + stuck-order alerts
-      // (fdatestatus2..7) — Theme 1 SLA/cycle-time intelligence.
+      { label: "เบิกเงินส่วนแบ่งร้านค้า", href: "/admin/reports/shops-profit-pay" },
+      { label: "ฝากนำเข้า (ปริมาณ)", href: "/admin/reports/forwarder-volume" },
+      { label: "ยอดขายต่อเซล (sales-by-rep)", href: "/admin/reports/sales-by-rep" },
+      { label: "ตู้ตาม HS code", href: "/admin/reports/containers-hs" },
       { label: "⏱ SLA / เวลาต่อสเตจ", href: "/admin/reports/sla-cycle-time" },
-      // Wave 1 gap-fill (2026-06-12 · port report-api-china.php + hs-customrate.php)
-      { label: "การใช้ API จีน",        href: "/admin/reports/api-china" },
-      { label: "ประวัติปรับเรทลูกค้า",  href: "/admin/reports/rate-change-history" },
+      { label: "ประวัติปรับเรทลูกค้า", href: "/admin/reports/rate-change-history" },
+      { label: "ยอดต่อลูกค้า (ประวัติ)", href: "/admin/reports/user-sales-history" },
+      { label: "ตัวแทน/คอมมิชชั่น", href: "/admin/reports/agent-payouts" },
+      { label: "📦 ประวัติการส่งสินค้า", href: "/admin/reports/delivery-history" },
+      { label: "📝 Feedback การจัดส่ง", href: "/admin/reports/delivery-feedback" },
     ],
   },
-  {
-    label: "ปริมาณ",
-    children: [
-      { label: "ฝากนำเข้า (volume)", href: "/admin/reports/forwarder-volume" },
-      { label: "sales-by-rep",       href: "/admin/reports/sales-by-rep" },
-      { label: "ยอดพนักงานขาย (รายเดือน)", href: "/admin/reports/sales-monthly" },
-      // Wave 7.3 (2026-05-22): wired containers-hs orphan per ภูม decision
-      // in page-inventory-2026-05-21-night.md §🔴 DEAD.
-      { label: "ตู้ตาม HS code",      href: "/admin/reports/containers-hs" },
-      // Wave 1 gap-fill (2026-06-12 · port report-user-all.php + report-sales-group-by-user.php)
-      { label: "ยอดรวมทุกบริการ/ลูกค้า", href: "/admin/reports/user-all" },
-      { label: "ยอดขายรวมตามรหัส",      href: "/admin/reports/sales-group" },
-    ],
-  },
-  { label: "ลูกค้า", href: "/admin/reports/user-sales-history" },
-  // Re-sweep A2 #22 (2026-05-31 · §0d reachability): the agent-commission
-  // PAYOUT report — port of report-user-sales.php + report-user-sales-history.php.
-  // (The "ลูกค้า" leaf above is the name-collision per-customer cohort SUM, NOT
-  // this.) Wired here so staff reach it in ≤2 clicks.
-  { label: "ตัวแทน/คอมมิชชั่น", href: "/admin/reports/agent-payouts" },
-  { label: "คนขับ", href: "/admin/driver-runs" },
-  // 2026-06-19 (ภูม · §0d) — port of legacy history.php: ประวัติการส่งสินค้า.
-  // Pacred had no delivery-history report; this surfaces forwarder shipments
-  // that reached เตรียมส่ง/ส่งแล้ว (default fstatus 6,7 · last 30 days).
-  { label: "📦 ประวัติการส่งสินค้า", href: "/admin/reports/delivery-history" },
-  // Phase 4a (2026-06-08 · ops-workflow audit §32): customer delivery
-  // feedback rollup — rating + comment + photo submitted from
-  // /service-import/[fNo] after fstatus=7. ≤2 clicks from sidebar.
-  { label: "📝 Feedback การจัดส่ง", href: "/admin/reports/delivery-feedback" },
 ];
 
 // Profile (Pacred-native — used only by the sales/payouts tab which keeps
@@ -1196,9 +1171,9 @@ function DataTable({
       {empty ? (
         <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+        <div className="overflow-x-auto scrollbar-x-visible">
+          <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+            <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
               <tr>
                 {headers.map((h) => (
                   <th key={h} className="px-4 py-3">{h}</th>

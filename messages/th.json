@@ -3405,6 +3405,21 @@
       "closing": "ปิดงบรายเดือน",
       "periods": "งวดบัญชี + กระทบยอด"
     },
+    "revenueRec": {
+      "title": "รายงานรับรู้รายได้",
+      "incomeExpense": "รายรับ - รายจ่าย",
+      "topup": "รายการเติมเงิน",
+      "shop": "รายงานฝากสั่ง",
+      "forwarder": "ฝากนำเข้าสินค้า",
+      "forwarderInvoice": "ใบแจ้งหนี้",
+      "forwarderReceipts": "ประวัติใบเสร็จ",
+      "forwarderTotal": "ยอดทั้งหมด",
+      "payment": "ฝากชำระ/โอนหยวน",
+      "withdraw": "ถอนเงิน โอนโดยตรง",
+      "walletRefund": "คืนเงินเข้า Wallet",
+      "shopRefund": "คืนเงินฝากสั่ง",
+      "forwarderRefund": "คืนเงินฝากนำเข้า"
+    },
     "manageCustomersAll": {
       "title": "ลูกค้าทั้งหมด"
     },
@@ -4126,6 +4141,8 @@
     "viewWarehouseMap": "ดูแผนที่โกดัง Pacred ในไทย",
     "viewWarehouseMapCargo": "ดูแผนที่โกดัง Pacred Cargo ในไทย",
     "addAddressOrPickup": "เพิ่มที่อยู่ หรือเลือกรับเองโกดัง Pacred",
+    "addNewAddress": "เพิ่มที่อยู่ใหม่",
+    "setAddressFirst": "กรุณาตั้งค่าที่อยู่จัดส่งก่อนสั่งซื้อ",
     "carrierLabel": "บริษัทขนส่งในไทย",
     "selectCarrier": "กรุณาเลือกบริษัทขนส่ง",
     "outOfAreaNote": "หมายเหตุ: หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น",

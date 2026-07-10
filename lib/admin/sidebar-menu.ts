@@ -612,6 +612,41 @@ const blockAccounting: MenuItem = {
   icon: "Landmark",
 };
 
+/** legacy OOP/Cargo/menu-acc.php — "รายงานรับรู้รายได้ Cargo" sidebar group.
+ *  2026-07-09 (faithful-look · ภูม): legacy hosts these revenue-recognition
+ *  report leaves as a LEFT-SIDEBAR group (not a top-menu) → surfaced here to
+ *  match. Each leaf = a faithful acc-*.php port under /admin/accounting/*
+ *  (topup/shop/forwarder/payment/withdraw/shop-refund) + the invoice/receipt
+ *  history. Read-only reports over the wallet ledger. */
+const blockRevenueRecognition: MenuItem = {
+  labelKey: "revenueRec.title",
+  icon: "BarChart3",
+  children: [
+    { labelKey: "revenueRec.incomeExpense", href: "/admin/accounting?view=overview", icon: "BarChart3" },
+    { labelKey: "revenueRec.topup",         href: "/admin/accounting/topup",         icon: "Wallet" },
+    { labelKey: "revenueRec.shop",          href: "/admin/accounting/shop",          icon: "ShoppingCart" },
+    {
+      labelKey: "revenueRec.forwarder",
+      icon: "Package",
+      children: [
+        { labelKey: "revenueRec.forwarderInvoice",  href: "/admin/billing-run",          icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderReceipts", href: "/admin/accounting/receipts",  icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderTotal",    href: "/admin/accounting/forwarder", icon: "BarChart3" },
+      ],
+    },
+    { labelKey: "revenueRec.payment",  href: "/admin/accounting/payment",  icon: "Coins" },
+    { labelKey: "revenueRec.withdraw", href: "/admin/accounting/withdraw", icon: "Banknote" },
+    {
+      labelKey: "revenueRec.walletRefund",
+      icon: "Undo2",
+      children: [
+        { labelKey: "revenueRec.shopRefund",      href: "/admin/accounting/shop-refund", icon: "Receipt" },
+        { labelKey: "revenueRec.forwarderRefund", href: "/admin/reports/refunds",        icon: "Receipt" },
+      ],
+    },
+  ],
+};
+
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo
  *
  * 2026-05-22 (Wave 7.3 orphan wiring): added 2 new groups — "ระบบ" (cron
@@ -792,7 +827,10 @@ const blockWithdrawalList: MenuItem = {
       icon: "Banknote",
       badge: "withdrawalAll",
       children: [
-        { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
+        // 2026-07-09 (faithful-look · ภูม · withdrawal-audit) — was /admin/sales-payouts?kind=shop-goods
+        // but that route ignores ?kind (it's the report-user-sales-history port). The real faithful
+        // เบิกเงินค่าสินค้า (report-shops-profit-pay.php · full เบิก→จ่าย→พิมพ์ loop) is /admin/shop-disbursement.
+        { labelKey: "withdrawal.shopGoods",   href: "/admin/shop-disbursement",  icon: "HandCoins", badge: "shopPayout" },
         // Phase 3 — container-costs deeper-future per 2026-05-20 brief.
         { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney", phase: 3 },
         // Phase 2 — Wave 2 (2026-06-12) repointed from the Tailwind placeholder
@@ -801,9 +839,13 @@ const blockWithdrawalList: MenuItem = {
         // freight commission 50/50 policy · isFreightCommissionEnabled).
         { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th-list",  icon: "Truck", phase: 2 },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
-        // Phase 2 — sales-only commissions / payouts (not live to customers).
-        { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
-        { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
+        // Phase 2 — 2026-07-09 (faithful-look · ภูม C3): ค่าคอมเซลล์ = withdraw-commission-sale.php
+        // (admin-push sales-rep commission BATCH) → /admin/accounting/withdraw/comm-sale (was
+        // /admin/sales-payouts = the agent-commission-PULL report-user-sales-history port).
+        { labelKey: "withdrawal.salesBonus",  href: "/admin/accounting/withdraw/comm-sale",  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
+        // 2026-07-09 (faithful-look · ภูม) — was /admin/commissions (= SALES-rep commission, wrong feature).
+        // ค่าคอมล่ามจีน = withdraw-commission-interpreter.php → /admin/accounting/withdraw/comm-interpreter.
+        { labelKey: "withdrawal.interpreterBonus", href: "/admin/accounting/withdraw/comm-interpreter", icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
         { labelKey: "withdrawal.driver",      href: "/admin/driver-runs",                    icon: "Truck",                                     phase: 2 },
       ],
     },
@@ -1090,6 +1132,8 @@ const wrapClassAcc: MenuItem = {
   badge: "withdrawalAll",
   children: [
     blockAccounting,
+    // 2026-07-09 (faithful-look · ภูม) — "รายงานรับรู้รายได้ Cargo" group.
+    blockRevenueRecognition,
     itemWalletAll,
     itemPayUser,
     blockWithdrawalList,
@@ -1458,6 +1502,7 @@ const menuManager: MenuSection[] = [
       blockPayment,
       itemReportsAll,
       blockAccounting,
+      blockRevenueRecognition,
     ],
   },
   // NOTE: Settings section intentionally dropped — manager doesn't configure
@@ -1555,6 +1600,7 @@ const menuAccounting: MenuSection[] = [
       blockPayment,
       itemReportsAll,
       blockAccounting,
+      blockRevenueRecognition,
       // 2026-06-09 (เดฟ · freight net-margin unlock) — accounting has read access
       // to the China freight cost rates (RLS: super/ops/accounting read · the page
       // disables write controls for non-super/ops roles).

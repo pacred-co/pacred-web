@@ -72,6 +72,8 @@ export type BillingRunCommonProps = {
   buyerName:     string;
   buyerTaxId:    string;
   buyerAddress:  string;
+  /** DISPLAY-only ship-to snapshot (mig 0247) — rendered only when non-empty. */
+  deliveryAddress: string;
   isJuristic:    boolean;
   subtotal:      number;
   /** ค่าส่งเหมาๆ (PCSF flat ฿100/shipment) — own summary line · included in total. */
@@ -194,6 +196,7 @@ function BillingRunPage({
             <div>
               <InfoLine k="ลูกค้า :" v={p.buyerName || "-"} bold />
               <InfoLine k="ที่อยู่ :" v={p.buyerAddress || "-"} pre />
+              {p.deliveryAddress && <InfoLine k="ที่อยู่จัดส่ง :" v={p.deliveryAddress} pre />}
               <InfoLine k="เลขที่ภาษี :" v={p.buyerTaxId || "-"} />
               <InfoLine k="ประเภท :" v={p.isJuristic ? "นิติบุคคล" : "บุคคลธรรมดา"} />
             </div>
