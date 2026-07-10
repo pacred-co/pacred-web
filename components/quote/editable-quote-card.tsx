@@ -18,7 +18,7 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { Phone, Mail, Globe, User, Plus, Trash2 } from "lucide-react";
+import { Phone, Mail, Globe, User, Plus, Trash2, Save } from "lucide-react";
 import { CONTACT, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, TAX_ID } from "@/components/seo/site";
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
 import { readThaiBaht } from "@/lib/utils/thai-number";
@@ -140,9 +140,15 @@ function NumInput({
 export function EditableQuoteCard({
   model,
   onChange,
+  onSaveToRates,
+  savingToRates,
 }: {
   model: QuoteModel;
   onChange: (patch: Partial<QuoteModel>) => void;
+  /** Compare mode only — when provided, the เทียบราคา table shows a "บันทึกเข้าเรทลูกค้า"
+   *  button that writes the edited rates back to the customer's configured rate. */
+  onSaveToRates?: () => void;
+  savingToRates?: boolean;
 }) {
   const t = model.totals;
   const isCalc = model.view === "calc";
@@ -192,7 +198,7 @@ export function EditableQuoteCard({
           <TextInput value={model.packageLabel} onChange={(v) => onChange({ packageLabel: v })} placeholder="ชื่อแพ็คเกจ" className="text-[11px] font-bold" />
         </div>
 
-        {isCalc ? <LineItemsEditor model={model} onChange={onChange} /> : <CompareEditor model={model} onChange={onChange} />}
+        {isCalc ? <LineItemsEditor model={model} onChange={onChange} /> : <CompareEditor model={model} onChange={onChange} onSaveToRates={onSaveToRates} savingToRates={savingToRates} />}
 
         {/* Customs add-on info (compare mode · read-only reference) */}
         {!isCalc && model.showCustomsInfo && (
@@ -387,7 +393,7 @@ function LineItemsEditor({ model, onChange }: { model: QuoteModel; onChange: (p:
 }
 
 // ── ใบประเมิน (compare) — editable เทียบราคา table ──────────────────────────
-function CompareEditor({ model, onChange }: { model: QuoteModel; onChange: (p: Partial<QuoteModel>) => void }) {
+function CompareEditor({ model, onChange, onSaveToRates, savingToRates }: { model: QuoteModel; onChange: (p: Partial<QuoteModel>) => void; onSaveToRates?: () => void; savingToRates?: boolean }) {
   const rows = model.compareRows;
   const setRows = (next: CompareRow[]) => onChange({ compareRows: next });
   const patchRow = (i: number, changes: Partial<CompareRow>) => setRows(rows.map((r, idx) => (idx === i ? { ...r, ...changes } : r)));
@@ -404,7 +410,8 @@ function CompareEditor({ model, onChange }: { model: QuoteModel; onChange: (p: P
         <table className="w-full min-w-[600px] table-fixed text-[11px] sm:text-[12px]">
           <thead className="border-b text-[11px] text-slate-700" style={{ background: TINT, borderColor: TINT_BD }}>
             <tr>
-              <th className="w-[104px] px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th>
+              <th className="w-[92px] px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th>
+              <th className="w-[88px] px-2 sm:px-3 py-1.5 text-left font-semibold">ประเภทสินค้า</th>
               <th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th>
               <th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th>
               <th className="w-8 px-1 py-1.5" />
@@ -416,7 +423,9 @@ function CompareEditor({ model, onChange }: { model: QuoteModel; onChange: (p: P
                 <td className="px-2 sm:px-3 py-2 font-semibold">
                   <TextInput value={r.warehouse} onChange={(v) => patchRow(i, { warehouse: v })} placeholder="ชื่อโกดัง" className="font-semibold" />
                 </td>
-                <td className="px-2 sm:px-3 py-2"><RateCellEdit r={r.truck} onChange={(c) => patchRate(i, "truck", c)} yiwuHint={r.isYiwu} /></td>
+                {/* ประเภท — read-only (it maps to the product columns for the write-back) */}
+                <td className="px-2 sm:px-3 py-2 text-[11px] font-medium text-slate-600 whitespace-nowrap">{r.category ?? "—"}</td>
+                <td className="px-2 sm:px-3 py-2"><RateCellEdit r={r.truck} onChange={(c) => patchRate(i, "truck", c)} /></td>
                 <td className="px-2 sm:px-3 py-2"><RateCellEdit r={r.ship} onChange={(c) => patchRate(i, "ship", c)} /></td>
                 <td className="px-1 py-2 text-center">
                   <button type="button" onClick={() => removeRow(i)} className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500" title="ลบแถว"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -424,21 +433,33 @@ function CompareEditor({ model, onChange }: { model: QuoteModel; onChange: (p: P
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={4} className="px-2 py-4 text-center text-[11px] text-slate-400">ยังไม่มีแถว — กด “เพิ่มแถว” ด้านล่าง</td></tr>
+              <tr><td colSpan={5} className="px-2 py-4 text-center text-[11px] text-slate-400">ยังไม่มีแถว — กด “เพิ่มแถว” ด้านล่าง</td></tr>
             )}
           </tbody>
         </table>
       </div>
-      <button type="button" onClick={addRow} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-primary-300 px-3 py-1.5 text-[12px] font-semibold text-primary-700 hover:bg-primary-50">
-        <Plus className="h-3.5 w-3.5" /> เพิ่มแถว
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={addRow} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-primary-300 px-3 py-1.5 text-[12px] font-semibold text-primary-700 hover:bg-primary-50">
+          <Plus className="h-3.5 w-3.5" /> เพิ่มแถว
+        </button>
+        {onSaveToRates && (
+          <button type="button" onClick={onSaveToRates} disabled={savingToRates} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
+            <Save className="h-3.5 w-3.5" /> {savingToRates ? "กำลังบันทึก..." : "บันทึกเข้าเรทลูกค้า (SVIP)"}
+          </button>
+        )}
+      </div>
+      {onSaveToRates && (
+        <p className="text-[11px] text-slate-400">
+          แก้เรทในตารางนี้ แล้วกด “บันทึกเข้าเรทลูกค้า” เพื่ออัปเดตเรทตั้งค่าของลูกค้า (ทั่วไป·มอก. และ อย.·พิเศษ ตั้งเป็นราคาเดียวกันในกลุ่ม)
+        </p>
+      )}
     </div>
   );
 }
 
 // One tidy line: ฿cbm/คิว · ฿kg/กก. · ระยะเวลา (wraps gracefully only if the cell
 // gets very narrow) — the stacked 3-row version read as bulky/แปลกๆ (ปอน 2026-07-04).
-function RateCellEdit({ r, onChange, yiwuHint }: { r: CompareRow["truck"]; onChange: (c: Partial<CompareRow["truck"]>) => void; yiwuHint?: boolean }) {
+function RateCellEdit({ r, onChange }: { r: CompareRow["truck"]; onChange: (c: Partial<CompareRow["truck"]>) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight">
       <span className="inline-flex items-center whitespace-nowrap font-mono font-bold" style={{ color: ACCENT }}>
@@ -449,8 +470,7 @@ function RateCellEdit({ r, onChange, yiwuHint }: { r: CompareRow["truck"]; onCha
       </span>
       <span className="inline-flex items-center gap-0.5 text-slate-500">
         {/* fixed-width wrapper — TextInput is w-full, so this caps the days field */}
-        <span className="inline-block w-[64px] shrink-0"><TextInput value={r.days} onChange={(v) => onChange({ days: v })} placeholder="ระยะเวลา" /></span>
-        {yiwuHint && <span className="text-[10px] text-slate-400 whitespace-nowrap">+2–3</span>}
+        <span className="inline-block w-[76px] shrink-0"><TextInput value={r.days} onChange={(v) => onChange({ days: v })} placeholder="ระยะเวลา" /></span>
       </span>
     </div>
   );

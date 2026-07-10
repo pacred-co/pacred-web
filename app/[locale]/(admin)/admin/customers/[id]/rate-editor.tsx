@@ -315,7 +315,7 @@ export function CustomerRateEditor({
         {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
         {tab === "quote" && (
           <div className="space-y-3">
-            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} />
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} />
 
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">
@@ -457,17 +457,17 @@ export function CustomerRateEditor({
 }
 
 // ── rate grid for one warehouse ───────────────────────────────────────────
-// Product-type rows (ปอน 2026-07-10 — pulled อย. out into its own row so Pricing
-// can set it independently): ทั่วไป+มอก. share ONE rate (an edit mirrors into product
-// columns 1·2) · อย./น้ำยา (3) is its OWN row · พิเศษ (4) its own.
+// Product-type rows grouped into 2 (owner 2026-07-10): each pair shares ONE rate.
+//   • ทั่วไป + มอก. (products 1·2) — an edit mirrors into both columns.
+//   • อย. + พิเศษ (products 3·4) — an edit mirrors into both columns.
 // Display-only + non-destructive: the DB still stores all 4 per-product columns and
-// the resolver reads per-product, so col 2 (มอก.) keeps its loaded value until the
-// merged row is edited, and col 3 (อย.) now shows/saves its OWN value. ราคาขั้นต่ำ is
-// identical for every product → one floor per cell.
+// the resolver reads per-product, so the 2nd column of each pair (มอก.=2 · พิเศษ=4)
+// keeps its loaded value until the merged row is edited, at which point the edit
+// writes the SAME rate to both products in the pair. ราคาขั้นต่ำ is identical for
+// every product → one floor per cell.
 const RATE_ROWS: { label: string; products: ProductId[] }[] = [
   { label: "ทั่วไป · มอก.", products: ["1", "2"] },
-  { label: "อย./น้ำยา", products: ["3"] },
-  { label: "พิเศษ", products: ["4"] },
+  { label: "อย. · พิเศษ", products: ["3", "4"] },
 ];
 
 function RateGrid({
@@ -513,7 +513,7 @@ function RateGrid({
                           value={raw}
                           disabled={pending}
                           // Mirror the edit into every product column in this group
-                          // (ทั่วไป·อย·มอก share one rate).
+                          // (both products in the pair share one rate).
                           onChange={(e) => row.products.forEach((p) => setVal(vKey(wh, meas, t, p), e.target.value))}
                           className={`w-20 rounded-md border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 ${
                             isBelow
