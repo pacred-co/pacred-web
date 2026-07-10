@@ -54,6 +54,7 @@ import { toYuanEquivalent, normalizeCurrency } from "@/lib/forwarder/currency-co
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
+import { imageUrlField } from "@/lib/validators/image-url";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -221,7 +222,10 @@ const adminAddItemsToCartBulkSchema = z.object({
     ctitle:    z.string().trim().max(500),
     cnameshop: z.string().trim().max(120),
     cprovider: z.string().max(20),
-    cimages:   z.string().max(2000).default(""),
+    // Was max(2000) — 7x the real tb_cart.cimages varchar(300), so a long URL
+    // passed zod then 22001-failed the INSERT. Now validated + normalised +
+    // capped by the shared field (lib/validators/image-url.ts).
+    cimages:   imageUrlField(300).default(""),
     cprice:    z.number().nonnegative(),
     camount:   z.number().int().positive().max(99999),
     ccolor:    z.string().max(120).default(""),

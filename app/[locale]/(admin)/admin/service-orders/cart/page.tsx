@@ -8,6 +8,7 @@ import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/c
 import { CartTaxDocPref, type TaxDocDefaults } from "@/app/[locale]/(protected)/cart/cart-tax-doc-pref";
 import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 import { CoverThumb } from "@/app/[locale]/(protected)/service-import/_shared/cover-thumb";
+import { shopImageUrl } from "@/lib/legacy-image";
 
 /**
  * Admin > "รถเข็นสินค้า" — CS staff add-to-customer-cart surface.
@@ -274,22 +275,13 @@ export default async function AdminCartPage({
   const subtotalYuan = cartRows.reduce((acc, r) => acc + r.cprice * r.camount, 0);
   const totalThb = subtotalYuan * Number(rsDefault);
 
-  // Cart-image URL resolver.
-  function resolveImageUrl(row: CartRow): string {
-    const v = (row.cimages ?? "").trim();
-    // An already-absolute image URL (marketplace CDN, the Supabase mirror, or a
-    // pasted external link) or a root-absolute path is used VERBATIM. Guard added
-    // 2026-07-10 (owner-reported 404): the old code unconditionally prepended the
-    // legacy base for provider "4" (Shops), producing
-    //   /legacy/pcs/admin/images/shops/https://drive.google.com/...  → 404.
-    // (A Google-Drive FOLDER link still can't render as an image — the <CoverThumb>
-    //  onError below degrades it to the no-image placeholder — but it no longer
-    //  404s on the pacred host, and a real pasted image URL now renders.)
-    if (/^(https?:\/\/|\/)/i.test(v)) return v;
-    // A bare filename → the legacy admin shop-image folder (unchanged).
-    if (v) return `/legacy/pcs/admin/images/shops/${v}`;
-    return "/legacy/pcs/admin/images/shops/default.png";
-  }
+  // Cart-image URL resolver — the shared SOT (lib/legacy-image.ts). Full-size, so
+  // no Alibaba resize suffix. Fixed 2026-07-10: this used to prepend the legacy
+  // base to an already-absolute URL for provider "4" (Shops), producing
+  // `/legacy/pcs/admin/images/shops/https://drive.google.com/...` → 404; and it
+  // sent a bare filename to a local static dir that was never populated, while the
+  // CUSTOMER cart resolved the same column against the Supabase mirror.
+  const resolveImageUrl = (row: CartRow): string => shopImageUrl(row.cimages);
 
   let noRow = 1;
 

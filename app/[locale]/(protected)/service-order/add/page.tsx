@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { Link } from "@/i18n/navigation";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { legacyMemberUrl, shopImageUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "@/app/[locale]/(protected)/service-import/_shared/cover-thumb";
 import {
   BulkActionsProvider,
   BulkCancelButton,
@@ -635,20 +636,11 @@ export default async function ServiceOrderAddPage({
                                               Number(row.hshippingservice ?? 0);
                                             const pricePay = numberFormat2(pricePayNum);
 
-                                            // shops.php L969-978 — hCover URL resolution
-                                            let hCover: string;
-                                            const cover = row.hcover ?? "";
-                                            if (/https|http/m.test(cover)) {
-                                              const cleaned = cover
-                                                .replace("?x-oss-process=style/alsy", "")
-                                                .replace("?x-oss-process=style/tbsy", "")
-                                                .replace("_250x250.jpg", "");
-                                              hCover = cleaned + "_150x150.jpg";
-                                            } else if (cover !== "") {
-                                              hCover = legacyMemberUrl(`images/shops/${cover}`);
-                                            } else {
-                                              hCover = "/images/no-cover.svg";
-                                            }
+                                            // hCover URL resolution — shared SOT (lib/legacy-image.ts).
+                                            // The old inline copy appended `_150x150.jpg` to EVERY http
+                                            // cover, so a non-Alibaba image (postimg/imgur/Drive/MOMO) 404'd.
+                                            const hCover = shopImageUrl(row.hcover, { size: "_150x150.jpg" });
+                                            const hCoverFull = shopImageUrl(row.hcover);
                                             const promoId = promoMap.get(row.hno);
                                             return (
                                               <tr
@@ -711,10 +703,14 @@ export default async function ServiceOrderAddPage({
                                                   <div className="float-right ml-2">
                                                     <a
                                                       className="image-popup-vertical-fit el-link"
-                                                      href={hCover.replace("_150x150.jpg", "")}
+                                                      href={hCoverFull}
                                                     >
-                                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                      <img className="rounded-lg border border-border" src={hCover} width={60} alt="" />
+                                                      <CoverThumb
+                                                        className="rounded-lg border border-border"
+                                                        src={hCover}
+                                                        width={60}
+                                                        loading="lazy"
+                                                      />
                                                     </a>
                                                   </div>
                                                   <Link
@@ -817,20 +813,9 @@ export default async function ServiceOrderAddPage({
                                           Number(row.hshippingservice ?? 0);
                                         const pricePay = numberFormat2(pricePayNum);
 
-                                        // shops.php L969-978 — hCover URL resolution
-                                        let hCover: string;
-                                        const cover = row.hcover ?? "";
-                                        if (/https|http/m.test(cover)) {
-                                          const cleaned = cover
-                                            .replace("?x-oss-process=style/alsy", "")
-                                            .replace("?x-oss-process=style/tbsy", "")
-                                            .replace("_250x250.jpg", "");
-                                          hCover = cleaned + "_150x150.jpg";
-                                        } else if (cover !== "") {
-                                          hCover = legacyMemberUrl(`images/shops/${cover}`);
-                                        } else {
-                                          hCover = "/images/no-cover.svg";
-                                        }
+                                        // hCover URL resolution — shared SOT (see the desktop twin above).
+                                        const hCover = shopImageUrl(row.hcover, { size: "_150x150.jpg" });
+                                        const hCoverFull = shopImageUrl(row.hcover);
                                         const promoId = promoMap.get(row.hno);
                                         return (
                                           <div
@@ -844,10 +829,14 @@ export default async function ServiceOrderAddPage({
                                             <div className="flex gap-3">
                                               <a
                                                 className="image-popup-vertical-fit el-link shrink-0"
-                                                href={hCover.replace("_150x150.jpg", "")}
+                                                href={hCoverFull}
                                               >
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img className="rounded-lg border border-border" src={hCover} width={64} alt="" />
+                                                <CoverThumb
+                                                  className="rounded-lg border border-border"
+                                                  src={hCover}
+                                                  width={64}
+                                                  loading="lazy"
+                                                />
                                               </a>
                                               <div className="min-w-0 flex-1">
                                                 <div className="flex items-center justify-between gap-2">

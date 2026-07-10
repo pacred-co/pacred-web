@@ -17,7 +17,8 @@ import {
 // <BulkPayBar> on this page; /add keeps its own pay-only bar.
 import { ServiceOrderBulkActionsBar } from "./service-order-bulk-pay-bar";
 import { Link } from "@/i18n/navigation";
-import { legacyMemberUrl } from "@/lib/legacy-image";
+import { shopImageUrl } from "@/lib/legacy-image";
+import { CoverThumb } from "@/app/[locale]/(protected)/service-import/_shared/cover-thumb";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import {
@@ -515,20 +516,10 @@ function OrderCard({
   const pricePayNum = computeShopOrderPayableThb(row);
   const pricePay = numberFormat2(pricePayNum);
 
-  // hCover URL resolution (preserved from legacy shops.php L969-978).
-  let hCover: string;
-  const cover = row.hcover ?? "";
-  if (/https|http/m.test(cover)) {
-    const cleaned = cover
-      .replace("?x-oss-process=style/alsy", "")
-      .replace("?x-oss-process=style/tbsy", "")
-      .replace("_250x250.jpg", "");
-    hCover = cleaned + "_150x150.jpg";
-  } else if (cover !== "") {
-    hCover = legacyMemberUrl(`images/shops/${cover}`);
-  } else {
-    hCover = "/images/no-cover.svg";
-  }
+  // hCover URL resolution — the shared SOT (lib/legacy-image.ts). The old inline
+  // copy appended the `_150x150.jpg` Alibaba resize suffix to EVERY http cover, so
+  // any non-Alibaba image (a pasted postimg/imgur/Drive link, a MOMO cover) 404'd.
+  const hCover = shopImageUrl(row.hcover, { size: "_150x150.jpg" });
 
   const itemTitle = (row.htitle ?? "") + moreItems;
 
@@ -542,12 +533,13 @@ function OrderCard({
       <div className="grid grid-cols-[72px_1fr] md:grid-cols-[88px_1fr_auto] gap-3 md:gap-4 p-3">
         {/* Product image */}
         <div className="relative w-[72px] h-[72px] md:w-[88px] md:h-[88px] rounded-xl overflow-hidden bg-surface border border-border shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          {/* CoverThumb: a cover that fails to load (dead external link, a file
+              never mirrored) degrades to the neutral no-image placeholder instead
+              of a broken-image icon. */}
+          <CoverThumb
             src={hCover}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         </div>
 

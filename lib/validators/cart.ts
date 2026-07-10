@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod";
+import { imageUrlField } from "@/lib/validators/image-url";
 
 export const PROVIDERS = ["1688", "taobao", "tmall", "shop", "nice"] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -86,7 +87,11 @@ export const cartItemSchema = z.object({
   shop_name:  z.string().trim().max(300).default("pacred"),
   url:        z.string().trim().max(2000).optional().or(z.literal("").transform(() => undefined)),
   title:      z.string().trim().max(300).optional().or(z.literal("").transform(() => undefined)),
-  image_path: z.string().trim().max(500).optional().or(z.literal("").transform(() => undefined)),
+  // Validated + normalised by the shared image-URL field (lib/validators/image-url.ts):
+  // rejects a Drive-folder/share-page link, normalises a Drive file link to its
+  // embeddable thumbnail, and enforces the real `tb_cart.cimages` varchar(300)
+  // ceiling (the old max(500) passed zod then 22001-failed the INSERT).
+  image_path: imageUrlField(300).optional().or(z.literal("").transform(() => undefined)),
   color:      z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
   size:       z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
   price_cny:  z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),

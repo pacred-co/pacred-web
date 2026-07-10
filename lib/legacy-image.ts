@@ -94,7 +94,12 @@ export function forwarderCoverUrl(cover: string | null | undefined, size = ""): 
     // mirror so customer-visible URLs never leak the legacy host.
     const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
     if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
-    return u + size;
+    // `size` is an Alibaba-CDN resize directive — appending it to any other host
+    // (a MOMO api.momocargo.com cover, a pasted postimg/Drive link) 404s the
+    // image. Gate it, and drop values that can never render (Drive folder link).
+    const normalized = normalizeImageUrl(u);
+    if (!normalized) return NO_COVER_IMAGE;
+    return applyResizeSuffix(normalized, size);
   }
   // a bare filename — legacy stores forwarder covers under images/shops/
   return legacyMemberUrl(`images/shops/${u}`);
@@ -114,6 +119,160 @@ export function forwarderCoverUrl(cover: string | null | undefined, size = ""): 
  */
 export function isAlibabaCdnUrl(u: string): boolean {
   return /(?:alicdn\.com|taobaocdn|tbcdn|img\.alibaba|tmall\.com|taobao\.com)/i.test(u);
+}
+
+/** Google-Drive link shapes that point at a SINGLE FILE (normalisable → an image). */
+const DRIVE_FILE_ID_PATTERNS = [
+  /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/i,
+  /drive\.google\.com\/open\?(?:[^#]*&)?id=([A-Za-z0-9_-]{10,})/i,
+  /drive\.google\.com\/uc\?(?:[^#]*&)?id=([A-Za-z0-9_-]{10,})/i,
+  /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([A-Za-z0-9_-]{10,})/i,
+];
+
+/** A Google-Drive FOLDER link — a directory listing, never an image. */
+const DRIVE_FOLDER_RE = /drive\.google\.com\/drive\/folders\//i;
+
+/**
+ * Hosts whose bare URL is an HTML *page*, not the image itself. Staff paste these
+ * by mistake (the share link) instead of the direct-image link. They can never be
+ * embedded, and — unlike a Drive file link — cannot be normalised without fetching
+ * the page, so the writer rejects them with a hint to use the direct link.
+ */
+const NON_IMAGE_PAGE_PATTERNS = [
+  DRIVE_FOLDER_RE,
+  /^https?:\/\/(?:www\.)?postimg\.cc\//i,        // direct form is i.postimg.cc/...
+  /^https?:\/\/(?:www\.)?imgur\.com\//i,         // direct form is i.imgur.com/...
+  /^https?:\/\/(?:www\.)?dropbox\.com\/(?:scl\/fo|sh)\//i,
+  /^https?:\/\/(?:www\.)?(?:1688|taobao|tmall)\.com\//i,  // product page, not image
+  /^https?:\/\/item\.taobao\.com\//i,
+  /^https?:\/\/detail\.(?:tmall|1688)\.com\//i,
+];
+
+function matchDriveFileId(u: string): string | null {
+  for (const re of DRIVE_FILE_ID_PATTERNS) {
+    const m = u.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Normalise a stored/pasted image URL into something an `<img>` can actually load.
+ *
+ * Steps (each observed in real prod data):
+ *   - the dead `zzqss` proxy → the original alicdn URL
+ *   - strip Aliyun OSS `?x-oss-process=…` params + the legacy `_250x250.jpg` marker
+ *   - a Google-Drive **file** link (`/file/d/<id>/view`, `open?id=`, `uc?id=`) →
+ *     `drive.google.com/thumbnail?id=<id>` (the only Drive form that embeds)
+ *   - a Google-Drive **folder** link → `""` (a directory listing is NOT an image)
+ *
+ * @returns the renderable URL, or `""` when the value can never render as an image.
+ */
+export function normalizeImageUrl(raw: string | null | undefined): string {
+  let u = (raw ?? "").trim();
+  if (!u || u === "-" || u === "0") return "";
+
+  // Protocol-relative marketplace URLs are REAL stored data: TAMIT/1688/Taobao
+  // hand back `//img.alicdn.com/...`. A browser resolves them, but our validators
+  // and `new URL()` consumers do not — `lib/pdf/prefetch-image.ts` already had to
+  // special-case this (ภูม 2026-06-05). Upgrade once, here, at the SOT.
+  if (u.startsWith("//")) u = `https:${u}`;
+
+  if (/zzqss/i.test(u)) {
+    const m = u.match(/(\/img\/(?:ibank|bao)\/[^?#]+)/i);
+    if (m) u = `https://img.alicdn.com${m[1]}`;
+  }
+  u = u.split("?x-oss-process=")[0] ?? u;
+  u = u.replace("_250x250.jpg", "");
+
+  if (DRIVE_FOLDER_RE.test(u)) return "";
+  const driveId = matchDriveFileId(u);
+  if (driveId) return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+
+  return u;
+}
+
+/**
+ * True when `raw` is an absolute URL that can plausibly be embedded as an image.
+ *
+ * Used to VALIDATE what staff/customers paste into an image field, so a broken
+ * value never enters `tb_cart.cimages` (it is copied verbatim into
+ * `tb_order.cimages` → `tb_header_order.hcover` → `tb_forwarder.fcover`, so one bad
+ * paste breaks every downstream surface). Empty is allowed (= "no image").
+ *
+ * Fail-OPEN for unknown hosts (an image CDN need not have a file extension); only
+ * the known page/folder shapes are rejected.
+ */
+export function isDirectImageUrl(raw: string | null | undefined): boolean {
+  const v = (raw ?? "").trim();
+  if (!v) return true;                          // no image supplied — allowed
+  // Accept protocol-relative marketplace URLs (`//img.alicdn.com/…`) — they are
+  // real TAMIT/1688 data. `normalizeImageUrl` upgrades them to https, so the
+  // stored value is always absolute.
+  const s = v.startsWith("//") ? `https:${v}` : v;
+  if (!/^https?:\/\//i.test(s)) return false;   // must be an absolute http(s) URL
+  const normalized = normalizeImageUrl(s);
+  if (!normalized) return false;                // e.g. a Drive folder link
+  return !NON_IMAGE_PAGE_PATTERNS.some((re) => re.test(normalized));
+}
+
+/**
+ * Append the legacy `_WxH.jpg` resize suffix — but ONLY for the Alibaba/Taobao
+ * CDNs that implement it (see {@link isAlibabaCdnUrl}). Appending it to any other
+ * host 404s the image; that ungated append is the bug behind the owner's
+ * 2026-07-10 "แนบรูปแล้วไม่ขึ้น" reports.
+ */
+export function applyResizeSuffix(url: string, size: string): string {
+  if (!size || !isAlibabaCdnUrl(url)) return url;
+  if (/_\d+x\d+\.jpg$/i.test(url)) return url;  // already sized — don't double-append
+  return url + size;
+}
+
+/**
+ * **THE** resolver for legacy shop/product image columns — `tb_cart.cimages`,
+ * `tb_order.cimages`, `tb_header_order.hcover`.
+ *
+ * Every surface must go through this one function. Before 2026-07-10 there were
+ * six divergent copies (some prepended a legacy base to an already-absolute URL,
+ * some appended an Alibaba resize suffix to non-Alibaba hosts, some sent a bare
+ * filename to a directory it was never deployed to) — each producing a broken or
+ * 404 image on a different page for the same stored value.
+ *
+ * Resolution order:
+ *   1. empty / `-` / `0`                  → `emptyFallback`
+ *   2. a legacy `pcscargo.co.th/member/…` → the Supabase mirror (never leak the host)
+ *   3. any other absolute URL / path      → {@link normalizeImageUrl} + a
+ *                                           host-gated {@link applyResizeSuffix}
+ *                                           (an un-renderable value → `emptyFallback`)
+ *   4. a bare filename                    → the mirrored legacy `images/shops/` folder
+ *
+ * @param size Optional Alibaba resize suffix for thumbnails (e.g. `"_150x150.jpg"`).
+ *             Ignored for every non-Alibaba host.
+ */
+export function shopImageUrl(
+  value: string | null | undefined,
+  opts: { size?: string; emptyFallback?: string } = {},
+): string {
+  const emptyFallback = opts.emptyFallback ?? NO_COVER_IMAGE;
+  const size = opts.size ?? "";
+  const raw = (value ?? "").trim();
+  if (!raw || raw === "-" || raw === "0") return emptyFallback;
+
+  if (raw.includes("/")) {
+    // Old rows may hold a full legacy URL — re-point at the mirror so a
+    // customer-visible URL never names the legacy host (and never 404s once it
+    // is decommissioned).
+    const legacyMatch = raw.match(/pcscargo\.co\.th\/member\/(.+)$/i);
+    if (legacyMatch?.[1]) return legacyMemberUrl(legacyMatch[1]);
+
+    const normalized = normalizeImageUrl(raw);
+    if (!normalized) return emptyFallback;   // Drive folder link, sentinel, …
+    return applyResizeSuffix(normalized, size);
+  }
+
+  // A bare filename — the legacy `member/images/shops/` folder, mirrored to
+  // Supabase Storage by ภูม 2026-05-24.
+  return legacyMemberUrl(`images/shops/${raw}`);
 }
 
 /**

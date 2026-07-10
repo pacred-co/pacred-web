@@ -64,6 +64,7 @@ import { ShopOrderCostSection } from "./shop-cost-section";
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
 import { ProductDetailLines } from "@/components/shop/product-detail-lines";
 import { TranslateButton } from "@/components/translate/translate-button";
+import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -153,6 +154,7 @@ type ORow = {
   cdetails: string | null; camount: number | null; cprice: number | null;
   cshippingchn: number | null; cpriceupdate: number | null; crewallet: string | null;
   cnote: string | null; cshippingnumber: string | null; ctrackingnumber: string | null;
+  input_currency: string | null; input_price: number | string | null;
 };
 
 export async function renderLegacyServiceOrderView(hno: string) {
@@ -196,7 +198,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   const { data: itemsRaw, error: itemsErr } = await admin
     .from("tb_order")
-    .select("id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails,camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote,cshippingnumber,ctrackingnumber")
+    .select("id,cprovider,cnameshop,ctitle,curl,cimages,ccolor,csize,cdetails,camount,cprice,cshippingchn,cpriceupdate,crewallet,cnote,cshippingnumber,ctrackingnumber,input_currency,input_price")
     .eq("hno", r.hno)
     .order("id", { ascending: true })
     .limit(500);
@@ -215,6 +217,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
     cnameshop:    it.cnameshop,
     ctitle:       it.ctitle,
     curl:         it.curl,
+    cimages:      it.cimages,
     coverUrl:     coverUrls[i] ?? null,
     ccolor:       it.ccolor,
     csize:        it.csize,
@@ -225,6 +228,9 @@ export async function renderLegacyServiceOrderView(hno: string) {
     cshippingchn: Number(it.cshippingchn ?? 0),
     cpriceupdate: Number(it.cpriceupdate ?? 0),
     crewallet:    it.crewallet,
+    // mig 0248 — original currency + amount (display only; pricing uses cprice).
+    inputCurrency: it.input_currency,
+    inputPrice:    Number(it.input_price ?? 0),
   }));
 
   // Bill-to default — for juristic customers the receipt/PDF uses the company
@@ -324,6 +330,22 @@ export async function renderLegacyServiceOrderView(hno: string) {
   // ภูม 2026-07-01 — ค่าลังไม้ (ตีลังไม้) เก็บเป็น ¥ (pricecrate) · เข้าทั้งฝั่งขาย
   // (× เรทขาย) และฝั่งต้นทุน (× เรทจริง) เพื่อให้ราคารวมสุทธิทั้งสองฝั่ง + กำไรถูกต้อง.
   const crateCny = r.crate === "1" ? Number(r.pricecrate ?? 0) : 0;
+
+  // mig 0248 — the ORIGINAL currency of the whole order, if it has exactly one and
+  // the ¥ product subtotal is not polluted by ค่าขนส่งจีน. Display only.
+  const orderCur = editorItems.length > 0 && isPureProductTotal(editorItems)
+    ? uniformForeignCurrency(editorItems)
+    : "";
+  const orderForeignSubtotal = orderCur ? foreignSubtotal(editorItems) : 0;
+  // The ¥ shown NEXT TO that original amount must describe the SAME money. The
+  // stored header rollup `chn` (htotalpricechn) is refund-BLIND — a refund updates
+  // htotalpriceuser + the row, never htotalpricechn — while foreignSubtotal()
+  // EXCLUDES refunded rows. Pairing them would print "$545 ≈ ¥7,373.57" on an order
+  // whose item table says "$545 ≈ ¥3,690.17". So re-sum the ¥ from the same rows.
+  // (isPureProductTotal already guarantees cshippingchn === 0 on every row here.)
+  const orderProductYuan = orderCur
+    ? editorItems.reduce((s, it) => s + (it.crewallet === "1" ? 0 : roundUp2(it.camount * it.cprice)), 0)
+    : 0;
   const chnCny   = chn + shipChn + crateCny;           // ¥รวม (สินค้า + ค่าส่งจีน + ลังไม้)
   const netThb   = roundUp2(chnCny * rate + svc);       // ราคารวมสุทธิ (ขาย)
   const costNet  = rateCost * (costAll + crateCny);     // ราคารวมสุทธิ (ต้นทุน)
@@ -528,7 +550,18 @@ export async function renderLegacyServiceOrderView(hno: string) {
               <span className="text-muted"> บาท/หยวน</span>
             </span>
           </div>
-          <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
+          {/* mig 0248 — when every line was priced in ONE foreign currency and no
+              ค่าขนส่งจีน is folded in, show the amount the order was actually opened
+              in (owner: "ฉันเพิ่มราคาสินค้ามาเป็น USD"). ¥/฿ stay as the secondary. */}
+          {orderCur ? (
+            <KV
+              label="ราคาสินค้า"
+              value={<ForeignPrice cur={orderCur} amount={orderForeignSubtotal} yuan={orderProductYuan} rate={rate} />}
+              mono
+            />
+          ) : (
+            <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
+          )}
           <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
           {/* ภูม 2026-07-01 — ค่าลังไม้ (¥) ใต้ค่าขนส่งในจีน · แยกให้เห็นชัด. */}
           {r.crate === "1" && <KV label="ค่าลังไม้ (ตีลังไม้)" value={`¥${cny(crateCny)}`} mono />}
@@ -568,7 +601,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
       {/* ── Items — READ-ONLY on detail (to edit prices/qty, advance status,
           spawn, refund, or settle from wallet → click "แก้ไข/อัปเดต" สีแดง
           มุมขวาบนของหน้า · top-of-page CTA cover นี้แล้ว) ── */}
-      <ItemSummary items={editorItems} completed={status === "5"} />
+      <ItemSummary items={editorItems} completed={status === "5"} rate={rate} />
 
       {/* ── Pacred extras (ย้ายลงใต้ core · 2026-07-06 · legacy ไม่มีการ์ดพวกนี้)
           ให้ ลูกค้า | ราคา | รายการสินค้า นำก่อน แล้วค่อยตามด้วยข้อมูลสถานะ/เอกสารเสริม
@@ -723,11 +756,63 @@ const PROVIDER_LABEL: Record<string, string> = {
   "5": "Nice",
 };
 
+/* ── mig 0248 · original-currency display ─────────────────────────────────────
+ * A line whose price was entered in USD/EUR/… stores the ORIGINAL amount in
+ * `input_price` + `input_currency`, alongside the ¥-equivalent `cprice` that all
+ * pricing runs on. The cart already shows the original as the primary figure;
+ * these helpers give the ORDER pages the same treatment (owner 2026-07-10:
+ * "เพิ่มราคาสินค้ามาเป็น USD แต่หน้างานขึ้นเป็นหยวน"). Display-only. */
+
+/** "" when the row is a plain ¥/CNY row — else the ORIGINAL currency code. */
+function foreignCurrencyOf(it: EditorItem): string {
+  const c = (it.inputCurrency ?? "").trim().toUpperCase();
+  return c === "" || c === "CNY" ? "" : c;
+}
+
+/** The one foreign currency shared by EVERY row, or "" when ¥ / mixed. Only a
+ *  uniform group may show its total in the original currency. */
+function uniformForeignCurrency(rows: EditorItem[]): string {
+  const curs = new Set(rows.map(foreignCurrencyOf));
+  return curs.size === 1 ? ([...curs][0] ?? "") : "";
+}
+
+/** True when a ¥ total over these rows is PURELY the product price — no
+ *  ค่าขนส่งจีน folded in. Only then does the original-currency subtotal describe
+ *  the same money as the ¥ figure, so it may be shown as the primary. */
+function isPureProductTotal(rows: EditorItem[]): boolean {
+  return rows.every((it) => (it.cshippingchn ?? 0) === 0);
+}
+
+/** Sum of the ORIGINAL amounts (refunded rows count as 0, mirroring `lineOf`). */
+function foreignSubtotal(rows: EditorItem[]): number {
+  return rows.reduce((s, it) => s + (it.crewallet === "1" ? 0 : it.inputPrice * it.camount), 0);
+}
+
+/** Big original-currency figure + a small "≈ ¥… · ฿…" line. */
+function ForeignPrice({ cur, amount, yuan, rate }: { cur: string; amount: number; yuan: number; rate: number }) {
+  const d = formatCartPriceDisplay({ inputCurrency: cur, inputPrice: amount, cpriceYuan: yuan, rsDefault: rate });
+  return (
+    <span className="inline-flex flex-col items-end leading-tight">
+      <span className="font-semibold text-foreground">{d.primary}</span>
+      <span className="text-[11px] font-normal text-muted">{d.secondary}</span>
+    </span>
+  );
+}
+
 /** Read-only item list for non-editable steps (3/4/5).
  *  2026-07-06 — faithful to legacy shops/detail: 2-level grouping
  *  มาร์เก็ตเพลส (nameProvider) → ร้าน (cnameshop), คอลัมน์
  *  ลำดับ · ข้อมูลสินค้า · จำนวน · ราคาต่อชิ้น · ค่าขนส่งจีน · เพิ่ม/ลด เงิน · ราคารวม. */
-function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: boolean }) {
+function ItemSummary({
+  items,
+  completed,
+  rate,
+}: {
+  items: EditorItem[];
+  completed?: boolean;
+  /** tb_header_order.hrate — the ฿/¥ SELL rate, for the "≈ ฿…" secondary line. */
+  rate: number;
+}) {
   if (items.length === 0) return null;
 
   const lineOf = (it: EditorItem) =>
@@ -769,6 +854,14 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
           </div>
           {pg.shops.map((g) => {
             const shopYuan = g.rows.reduce((s, it) => s + lineOf(it), 0);
+            // Show the shop total in the ORIGINAL currency only when every row
+            // shares it AND no ค่าขนส่งจีน is folded into the ¥ figure — otherwise
+            // the two numbers would describe different money.
+            const groupCur = uniformForeignCurrency(g.rows);
+            const groupForeign = groupCur !== "" && isPureProductTotal(g.rows);
+            // Any row at all carrying an original currency → the price columns must
+            // widen + drop the "(¥)" header unit (a MIXED group still hits this).
+            const groupAnyForeign = g.rows.some((it) => foreignCurrencyOf(it) !== "");
             return (
               <details key={g.shop} open className="rounded-lg border border-border overflow-hidden">
                 <summary className="flex items-center justify-between gap-2 cursor-pointer select-none bg-surface-alt/60 px-3 py-2 text-xs">
@@ -776,9 +869,16 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                     🏪 {g.shop}
                     <span className="ml-1.5 text-muted font-normal">({g.rows.length} รายการ)</span>
                   </span>
-                  <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
-                    รวม ¥{cny(shopYuan)}
-                  </span>
+                  {groupForeign ? (
+                    <span className="font-mono tabular-nums text-primary-600 shrink-0 text-right">
+                      <span className="text-muted font-sans font-normal mr-1">รวม</span>
+                      <ForeignPrice cur={groupCur} amount={foreignSubtotal(g.rows)} yuan={shopYuan} rate={rate} />
+                    </span>
+                  ) : (
+                    <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
+                      รวม ¥{cny(shopYuan)}
+                    </span>
+                  )}
                 </summary>
                 <div className="overflow-x-auto scrollbar-x-visible">
                   <table className="w-full min-w-[720px] text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
@@ -787,10 +887,16 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                         <th className="px-2 py-2 text-center w-10">ลำดับ</th>
                         <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
                         <th className="px-2 py-2 text-right w-14">จำนวน</th>
-                        <th className="px-2 py-2 text-right w-20">ราคาต่อชิ้น</th>
+                        {/* A ¥-only group keeps its original narrow columns (zero
+                            visual regression); only a group carrying an original
+                            currency (mig 0248) widens to fit "$544.00 USD" + the
+                            "≈ ¥… · ฿…" line, and drops the "(¥)" header unit. */}
+                        <th className={`px-2 py-2 text-right ${groupAnyForeign ? "w-28" : "w-20"}`}>ราคาต่อชิ้น</th>
                         <th className="px-2 py-2 text-right w-20">ค่าขนส่งจีน</th>
                         <th className="px-2 py-2 text-right w-24">เพิ่ม/ลด เงิน</th>
-                        <th className="px-2 py-2 text-right w-24">ราคารวม (¥)</th>
+                        <th className={`px-2 py-2 text-right ${groupAnyForeign ? "w-32" : "w-24"}`}>
+                          ราคารวม{groupAnyForeign ? "" : " (¥)"}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -798,6 +904,11 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                         const refunded = it.crewallet === "1";
                         const line = lineOf(it);
                         const adj = it.cpriceupdate ?? 0;
+                        // mig 0248 — the ORIGINAL currency this line was priced in.
+                        const rowCur = foreignCurrencyOf(it);
+                        // The line total may only be shown in the original currency
+                        // when no ค่าขนส่งจีน is folded into the ¥ figure.
+                        const lineForeign = rowCur !== "" && (it.cshippingchn ?? 0) === 0;
                         return (
                           <tr key={it.id} className={refunded ? "bg-red-50/40" : ""}>
                             <td className="px-2 py-2 text-center font-mono tabular-nums text-muted">{seqById.get(it.id)}</td>
@@ -832,14 +943,27 @@ function ItemSummary({ items, completed }: { items: EditorItem[]; completed?: bo
                               </div>
                             </td>
                             <td className="px-2 py-2 text-right font-mono tabular-nums">{refunded ? 0 : it.camount}</td>
-                            <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cprice)}</td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">
+                              {rowCur
+                                ? <ForeignPrice cur={rowCur} amount={it.inputPrice} yuan={it.cprice} rate={rate} />
+                                : cny(it.cprice)}
+                            </td>
                             <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(it.cshippingchn)}</td>
                             <td className="px-2 py-2 text-right font-mono tabular-nums">
                               {adj > 0 ? <span className="text-green-600">+{cny(adj)}</span>
                                 : adj < 0 ? <span className="text-red-600">{cny(adj)}</span>
                                 : <span className="text-muted">—</span>}
                             </td>
-                            <td className="px-2 py-2 text-right font-mono tabular-nums">{cny(line)}</td>
+                            <td className="px-2 py-2 text-right font-mono tabular-nums">
+                              {lineForeign
+                                ? <ForeignPrice
+                                    cur={rowCur}
+                                    amount={refunded ? 0 : it.inputPrice * it.camount}
+                                    yuan={line}
+                                    rate={rate}
+                                  />
+                                : cny(line)}
+                            </td>
                           </tr>
                         );
                       })}

@@ -23,6 +23,7 @@
  */
 
 import { z } from "zod";
+import { imageUrlField } from "@/lib/validators/image-url";
 
 // Provider codes — legacy `tb_cart.cprovider` is a 1-char string code.
 // '4'=Shops is the catch-all/admin-custom default.
@@ -37,7 +38,10 @@ export const adminCartItemSchema = z.object({
   ctitle:    z.string().trim().max(300).default(""),
   cnameshop: z.string().trim().max(300).default("pcs"),
   cprovider: z.enum(ADMIN_CART_PROVIDERS).default("4"),
-  cimages:   z.string().trim().max(300).default(""),
+  // The CS manual add-form's free-text "URL รูปภาพ" field — the primary vector for
+  // an un-renderable image (a Google-Drive FOLDER link, a product webpage URL).
+  // Validated + normalised by the shared field (lib/validators/image-url.ts).
+  cimages:   imageUrlField(300).default(""),
   cprice:    z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
   camount:   z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }),
   ccolor:    z.string().trim().max(200).default(""),
