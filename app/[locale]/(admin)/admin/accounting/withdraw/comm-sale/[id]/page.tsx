@@ -1,29 +1,30 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { canViewProfit } from "@/lib/admin/money-visibility";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
+import { CommBatchPayForm } from "@/components/admin/comm-batch/comm-batch-pay-form";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
 
 /**
  * /admin/accounting/withdraw/comm-sale/[id] — Sales-rep batch detail.
  *
- * READ-ONLY · MVP per `docs/briefs/poom-wave-2026-06-01.md` §2. The slip upload
- * + pay action is DEFERRED next sitting (money-safe write needs ก๊อต co-sign).
+ * Detail + slip-upload pay-out (status '1' รอดำเนินการ → '2' จ่ายแล้ว) —
+ * faithful-port of withdraw-commission-sale.php case 'detail' (2026-07-09).
  */
 
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
-  "1": "สร้างแล้ว · รอแนบสลิป",
-  "2": "รอจ่าย (slip uploaded)",
-  "3": "จ่ายแล้ว",
+  "1": "รอดำเนินการ · รอแนบสลิป+จ่าย",
+  "2": "จ่ายแล้ว",
+  "3": "ไม่สำเร็จ",
 };
 const STATUS_BADGE: Record<string, string> = {
-  "1": "bg-slate-100 text-slate-700 border border-slate-300",
-  "2": "bg-amber-50 text-amber-700 border border-amber-200",
-  "3": "bg-green-50 text-green-700 border border-green-200",
+  "1": "bg-amber-50 text-amber-700 border border-amber-200",
+  "2": "bg-green-50 text-green-700 border border-green-200",
+  "3": "bg-rose-50 text-rose-700 border border-rose-200",
 };
 
 function thb(n: number): string {
@@ -47,6 +48,8 @@ export default async function AdminWithdrawCommSaleDetailPage({
   // (owner 2026-06-18): only ultra/accounting/pricing. Selling-price item columns
   // (ยอดขาย CHN / ส่วนลด / หลังหักลด) stay visible to all.
   const showMoney = canViewProfit(roles);
+  // Pay-out (slip upload → status 1→2) is gated ["super","accounting"] server-side.
+  const canPay = isGodRole(roles) || roles.includes("accounting");
   const { id: idStr } = await params;
   const id = Number.parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -111,6 +114,10 @@ export default async function AdminWithdrawCommSaleDetailPage({
               <p className="text-[11px] text-muted mt-1">⚠️ Slip download/view เร็วๆ นี้ (storage path mapping)</p>
             </div>
           )}
+          {/* Pay-out — attach slip + flip status 1→2 (only while pending) */}
+          {header.status === "1" && canPay && (
+            <CommBatchPayForm kind="sale" batchId={header.id} amount={header.amount} />
+          )}
         </section>
 
         {/* Items */}
@@ -128,8 +135,8 @@ export default async function AdminWithdrawCommSaleDetailPage({
             <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-                <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+              <table className="w-full min-w-[800px] text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-[11px] uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-3 py-2">Forwarder</th>
                     <th className="px-3 py-2">Tracking CHN</th>
@@ -178,8 +185,9 @@ export default async function AdminWithdrawCommSaleDetailPage({
         </section>
 
         <p className="text-[11px] text-muted">
-          📌 MVP read-only (brief §2 · เก่า 0 Pacred reader) · CREATE batch + PAY slip DEFERRED — money-safe write ต้อง ก๊อต co-sign + ดู legacy
-          <code className="bg-surface-alt px-1 rounded ml-1">withdraw-commission-sale.php</code> source ก่อน
+          📌 faithful-port ตาม legacy
+          <code className="bg-surface-alt px-1 rounded mx-1">withdraw-commission-sale.php</code>
+          · สร้าง batch จากหน้ารายการ · จ่ายเงิน (แนบสลิป → &quot;จ่ายแล้ว&quot;) ได้ที่การ์ดธนาคารด้านบน (เฉพาะบัญชี/super)
         </p>
       </main>
     </>

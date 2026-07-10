@@ -130,27 +130,23 @@ export default async function AdminRefundsListPage({
         }
       />
 
-      {/* Status filter chips */}
+      {/* Status filter chips — PCS house-style (dashed-red pills + count badge) */}
       <nav className="flex flex-wrap gap-2">
-        <Link
-          href="/admin/refunds"
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-            status === null ? "bg-primary-600 text-white" : "bg-surface-alt text-foreground hover:bg-surface-alt/80"
-          }`}
-        >
-          ทั้งหมด <span className="ml-1 text-[11px]">({totalAll})</span>
-        </Link>
-        {REFUND_STATUSES.map((s) => (
-          <Link
-            key={s}
-            href={`/admin/refunds?status=${s}`}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-              s === status ? STATUS_BADGE[s] : "bg-white text-foreground border-border hover:bg-surface-alt"
-            }`}
-          >
-            {REFUND_STATUS_LABEL[s]} <span className="ml-1 text-[11px] opacity-75">({counts[s]})</span>
-          </Link>
-        ))}
+        {[{ key: null as RefundStatus | null, label: "ทั้งหมด", count: totalAll }, ...REFUND_STATUSES.map((s) => ({ key: s, label: REFUND_STATUS_LABEL[s], count: counts[s] }))].map((t) => {
+          const active = t.key === status;
+          return (
+            <Link
+              key={t.key ?? "all"}
+              href={t.key ? `/admin/refunds?status=${t.key}` : "/admin/refunds"}
+              className={`inline-flex items-center gap-1.5 rounded-2xl border border-dashed px-3 py-1.5 text-xs font-medium ${
+                active ? "border-red-400 bg-red-50 text-red-700" : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
+              }`}
+            >
+              {t.label}
+              <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? "bg-red-600 text-white" : "bg-red-100 text-red-700"}`}>{t.count}</span>
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Search + CSV export — accounting uses this when reconciling refunds
@@ -211,8 +207,8 @@ export default async function AdminRefundsListPage({
         />
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+      {/* Table — PCS house-style (orange header · gridlines · scrollbar-visible) */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-x-auto scrollbar-x-visible">
         {rows.length === 0 ? (
           <div className="p-12 text-center space-y-2">
             <div className="text-4xl" aria-hidden>💸</div>
@@ -226,8 +222,8 @@ export default async function AdminRefundsListPage({
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+          <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+            <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
               <tr>
                 <th className="px-3 py-2">เลขที่</th>
                 <th className="px-3 py-2">ลูกค้า</th>

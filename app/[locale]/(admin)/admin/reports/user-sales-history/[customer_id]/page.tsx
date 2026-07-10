@@ -1,13 +1,9 @@
 /**
- * /admin/reports/user-sales-history/[customer_id] — drill-in
- * (Wave 23 P1 batch 2-B Tailwind rewrite · 2026-05-27 ค่ำ).
+ * /admin/reports/user-sales-history/[customer_id] — drill-in.
  *
- * **Wave 23 P1 batch 2-B (2026-05-27 ค่ำ):** UI rewrite only — the
- * underlying tb_users + 4-way UNION (tb_forwarder + tb_header_order +
- * tb_payment + tb_wallet_hs) timeline + tb_wallet balance reads stay
- * intact. Replaces the .pcs-legacy / Bootstrap-4 / admin-base.css chrome
- * (~476 LOC) with the Pacred Tailwind v4 reports template (mirrors
- * `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
+ * The underlying tb_users + 4-way UNION (tb_forwarder + tb_header_order +
+ * tb_payment + tb_wallet_hs) timeline + tb_wallet balance reads back the
+ * Pacred Tailwind v4 reports template.
  *
  * **Workflow preserved (per AGENTS §0a):** same logic, same data shape,
  * same status labels, same role gate (super + ops + accounting +
@@ -19,7 +15,7 @@
  *   `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-user-sales-history.php`
  *   — that legacy file serves a sales-rep commission payout flow
  *   (`tb_user_sales_admin_pay`). This Pacred slot is the V-G6 #4
- *   customer-cohort drill-in (replaces Wave 7.2 redirect to
+ *   customer-cohort drill-in (replaces the earlier redirect to
  *   /admin/customers/[id], which only showed 10 rows per table without
  *   wallet activity). The URL is reused; the legacy commission flow
  *   lives elsewhere.
@@ -427,8 +423,8 @@ export default async function UserSalesHistoryDrillIn({
             <p className="p-12 text-center text-sm text-muted">ไม่พบกิจกรรมของลูกค้ารายนี้</p>
           ) : (
             <div className="overflow-x-auto scrollbar-x-visible">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+              <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+                <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
                   <tr>
                     <th className="px-4 py-3">วันที่</th>
                     <th className="px-4 py-3">ประเภท</th>

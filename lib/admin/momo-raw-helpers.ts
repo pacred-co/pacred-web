@@ -127,6 +127,36 @@ export type MomoRawDisplay = {
 };
 
 /**
+ * Build the Pacred customer code (= tb_users.userID, e.g. "PR121") from MOMO's
+ * `user_group` + `user_code`.
+ *
+ * ⚠️ MOMO's API is unreliable about `user_group` ([[partner-apis-quirks]]).
+ * Before 2026-07 it sent a clean prefix — `{user_group:"PR", user_code:"121"}`
+ * → "PR121". In 2026-07 it started sending a MANGLED, DOUBLED group —
+ * `{user_group:"PR+PR", user_code:"9903"}` — which a naive `group+code` turned
+ * into the invalid "PR+PR9903" (ภูม flag · prod 2026-07-09). The commit schema's
+ * `^PR\d+$` guard then rejected it, so rows couldn't be committed / auto-matched.
+ *
+ * We normalise the group to its single repeated token so BOTH shapes are correct
+ * (zero regression on the clean "PR" case):
+ *   ("PR",      "121")  → "PR121"
+ *   ("PR+PR",   "9903") → "PR9903"
+ *   ("PR+PR+PR","5")    → "PR5"
+ */
+export function deriveMomoMemberCode(userGroup: unknown, userCode: unknown): string {
+  const code = String(userCode ?? "").trim();
+  const group = String(userGroup ?? "").trim();
+  // Split the group on any non-alphanumeric separator ("+", space, "-", …),
+  // drop empties, then collapse EXACT repeats (Set) preserving order. A clean
+  // "PR" stays "PR"; a doubled "PR+PR" collapses to "PR"; a (hypothetical)
+  // genuinely-different multi-token group keeps its distinct tokens.
+  const tokens = group.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const prefix = [...new Set(tokens)].join("");
+  if (prefix && code) return `${prefix}${code}`;
+  return code || prefix;
+}
+
+/**
  * Build a readable display view-model from a MOMO raw blob. Every field is
  * read defensively (missing / wrong-typed → empty/zero), so a partial or
  * malformed raw never throws. The MOMO internal `_id` is intentionally NOT
@@ -171,7 +201,7 @@ export function momoRawDisplay(raw: unknown): MomoRawDisplay {
   return {
     userCode,
     userGroup,
-    memberCode:   userGroup && userCode ? `${userGroup}${userCode}` : userCode || userGroup,
+    memberCode:   deriveMomoMemberCode(userGroup, userCode),
     statusCode:   typeof r.status === "number" ? r.status : (str(r.status) ? Number(str(r.status)) : null),
     // import_track: raw.tracking · container: raw.cid_code (the vessel container no)
     tracking:     str(r.tracking) || str(r.cid_code),
@@ -370,7 +400,7 @@ export function momoSpreadRow(raw: unknown): Array<[string, string]> {
   const flat = flattenMomoRaw(raw);
   const map = Object.fromEntries(flat);
   const hasUser = "user_group" in map || "user_code" in map;
-  const member = `${map["user_group"] ?? ""}${map["user_code"] ?? ""}`;
+  const member = deriveMomoMemberCode(map["user_group"], map["user_code"]);
   const out: Array<[string, string]> = [];
   let mergedDone = false;
   for (const [k, v] of flat) {

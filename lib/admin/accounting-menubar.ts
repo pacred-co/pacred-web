@@ -427,6 +427,32 @@ export const ACCOUNTING_HUB_CARDS = [
     href: "/admin/accounting/payment",
     badge: "live",
   },
+  // 2026-07-09 (§0d · faithful-look recon · ภูม#1) — the 4th "รายงานรับรู้รายได้
+  // Cargo" sibling (menu-acc.php L20). Was a faithful 1:1 port of acc-withdraw.php
+  // (ledger ถอนเงิน/โอนคืน · live tb_wallet_hs) but orphaned — reachable by URL
+  // only, no card next to shop/forwarder/payment. Wired here to close the group.
+  {
+    title: "ถอนเงิน โอนโดยตรง (รายงานบัญชี)",
+    desc: "Report 1:1 ของ acc-withdraw.php — ledger การถอน/โอนคืนเงินลูกค้าโดยตรง",
+    href: "/admin/accounting/withdraw",
+    badge: "live",
+  },
+  // 2026-07-09 (faithful-look build · ภูม#1) — the 2 remaining "รายงานรับรู้
+  // รายได้ Cargo" siblings (menu-acc.php L10 + L23): รายการเติมเงิน (acc-topup.php
+  // · tb_wallet_hs approved slips) + คืนเงินฝากสั่ง (acc-shop-refund.php ·
+  // tb_wallet_hs type=5 refund → order join). Read-only ledger reports.
+  {
+    title: "รายการเติมเงิน (รายงานบัญชี)",
+    desc: "Report 1:1 ของ acc-topup.php — รายการเติมเงินที่อนุมัติแล้ว (มีสลิป)",
+    href: "/admin/accounting/topup",
+    badge: "live",
+  },
+  {
+    title: "คืนเงินฝากสั่ง (รายงานบัญชี)",
+    desc: "Report 1:1 ของ acc-shop-refund.php — เงินคืนฝากสั่งเข้า Wallet",
+    href: "/admin/accounting/shop-refund",
+    badge: "live",
+  },
   {
     title: "ใบลด/ใบจ่าย (Disbursements)",
     desc: "ใบเบิกจ่าย + เบิกเงิน",

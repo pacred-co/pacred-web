@@ -403,8 +403,8 @@ export default async function CombineBillPage({
           </div>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-              <thead className="bg-surface-alt/60 text-left text-xs uppercase tracking-wide text-muted">
+            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+              <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
                 <tr>
                   <th className="px-4 py-3 whitespace-nowrap">billID</th>
                   <th className="px-4 py-3 whitespace-nowrap">เลขที่รวมบิล</th>

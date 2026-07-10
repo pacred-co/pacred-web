@@ -99,7 +99,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { commitMomoRowSystem } from "@/lib/admin/commit-momo-row-core";
-import { extractMetricsFromMomoRaw } from "@/lib/admin/momo-raw-helpers";
+import { extractMetricsFromMomoRaw, deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import {
   checkUserGroupMatchesCompany,
@@ -401,7 +401,7 @@ export async function autoCommitEligibleMomoRows(
         ? raw.user_code
         : (row.momo_user_code ?? null);
     const guessedUserId =
-      userGroup && userCode ? `${userGroup}${userCode}` : null;
+      userGroup && userCode ? deriveMomoMemberCode(userGroup, userCode) : null;
     const typeRaw =
       raw && typeof raw === "object" && typeof raw.type === "string"
         ? raw.type

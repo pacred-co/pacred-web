@@ -1369,7 +1369,7 @@ async function createBillingRunInvoiceImpl(
       const corpNumber = identity.taxId;
       const isJuristic = identity.isJuristic;
 
-      let buyerName = identity.name;
+      const buyerName = identity.name;
       let buyerAddress = "";
       const buyerBranch  = ""; // tb_corporate has no `corporatebranch` column
 
@@ -1649,14 +1649,14 @@ async function createBillingRunInvoiceImpl(
 
 export async function markBillingRunPaid(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   // F3 — capture UNEXPECTED throws, then re-throw; handled returns untouched.
   return withObservability("markBillingRunPaid", markBillingRunPaidImpl)(input);
 }
 
 async function markBillingRunPaidImpl(
   input: MarkBillingRunPaidInput,
-): Promise<AdminActionResult<{ invoiceId: number }>> {
+): Promise<AdminActionResult<{ invoiceId: number; receiptRid?: string; receiptWarning?: string }>> {
   const parsed = markBillingRunPaidSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -1763,6 +1763,17 @@ async function markBillingRunPaidImpl(
       // but FRG2606-00001 stuck). Link = tb_receipt_item (rid, fid) ↔ the invoice's
       // forwarders. Flips ONLY a receipt FULLY covered by this paid invoice. Best-effort
       // — never fails the invoice flip; only '3'→'1' (never touches cancelled/already-paid).
+      // ภูม 2026-07-09 — SURFACE the auto-receipt outcome to the admin. The receipt
+      // auto-issue below is BEST-EFFORT (a failure must never roll back the money-safe
+      // paid flip), but the old code swallowed a failure into a console.error → staff saw
+      // "✓ รับชำระแล้ว" while NO ใบเสร็จ was created + never knew (the exact PR086 /
+      // FRI2607-00015 symptom). Track the result so the UI can warn + prompt a manual issue.
+      let receiptRid: string | null = null;
+      let receiptWarning: string | null = null;
+      // Path A (below) may flip an EXISTING pending receipt '3'→'1' for a fully-covered rid.
+      // Track it so the already_issued branch can tell "a valid receipt now exists" (findable)
+      // apart from "an old receipt covers these fids but was NOT synced" (stuck '3'/'0' · invisible).
+      let receiptSyncedRid: string | null = null;
       try {
         const { data: invItems, error: invErr } = await admin
           .from("tb_forwarder_invoice_item")
@@ -1828,6 +1839,7 @@ async function markBillingRunPaidImpl(
             if (rcptErr) {
               console.error("[markBillingRunPaid receipt-sync]", { code: rcptErr.code, message: rcptErr.message, rid });
             } else {
+              receiptSyncedRid = rid;
               await logAdminAction(adminId, "billing_run.receipt_synced_paid", "tb_receipt", rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no,
               });
@@ -1871,16 +1883,43 @@ async function markBillingRunPaidImpl(
               recompAddressOverride: cur.buyer_address ?? undefined,
             });
             if (rcpt.ok) {
+              receiptRid = rcpt.data.rid;
               await logAdminAction(adminId, "billing_run.receipt_auto_created", "tb_receipt", rcpt.data.rid, {
                 invoice_id: v.invoiceId, doc_no: cur.doc_no, amount_thb: rcpt.data.rAmount,
               });
             } else if (!rcpt.alreadyIssued) {
+              // Real failure (no_matching_forwarder_rows / mint_failed / insert error /
+              // rid_duplicate). Money already moved → NEVER roll back the paid flip; instead
+              // SURFACE the miss so accounting issues the receipt manually (the PR086 /
+              // FRI2607-00015 case: bill = รับชำระแล้ว but no ใบเสร็จ, silently).
+              receiptWarning =
+                `ระบบออกใบเสร็จอัตโนมัติไม่สำเร็จ (${rcpt.error}) — กรุณากด "ออกใบเสร็จ" เอง หรือเช็ครายการใบเสร็จที่ค้าง`;
               console.error("[markBillingRunPaid auto-receipt] failed", { error: rcpt.error, invoiceId: v.invoiceId });
+            } else if (receiptSyncedRid) {
+              // alreadyIssued because Path A flipped a fully-covered '3'→'1' → a valid receipt
+              // now exists + is findable ("ออกแล้ว") → surface it as success, no warning.
+              receiptRid = receiptSyncedRid;
+            } else {
+              // alreadyIssued but Path A did NOT sync a covering receipt → an existing receipt
+              // covers these fids yet is NOT "ออกแล้ว" (a partially-covered '3'/'0' the sync-guard
+              // skipped, per the adversarial review 2026-07-09). It likely sits invisible on the
+              // "ออกแล้ว" tab, or outside the receipt search's default current-month window →
+              // tell staff WHERE to look instead of a silent "✓ รับชำระแล้ว" (the PR086 case).
+              receiptWarning =
+                'มีใบเสร็จเดิมของรายการนี้อยู่แล้ว แต่ยังไม่แสดงเป็น "ออกแล้ว" — ค้นหาใบเสร็จลูกค้ารายนี้แบบไม่กรองเดือน (แท็บ "ล่าสุด") หรือกดออก/sync ใบเสร็จ';
             }
+          } else {
+            receiptWarning =
+              "ใบวางบิลนี้ไม่มีรหัสลูกค้า (userid) — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาออกใบเสร็จเอง";
           }
+        } else {
+          receiptWarning =
+            "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้ — ระบบออกใบเสร็จอัตโนมัติไม่ได้ · กรุณาตรวจสอบใบวางบิล";
         }
       } catch (e) {
         console.error("[markBillingRunPaid receipt-sync] unexpected", { message: String(e), invoiceId: v.invoiceId });
+        receiptWarning =
+          "เกิดข้อผิดพลาดระหว่างออกใบเสร็จอัตโนมัติ — บันทึกการรับชำระแล้ว · กรุณาตรวจสอบใบเสร็จ/ออกเอง";
       }
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
@@ -1888,7 +1927,14 @@ async function markBillingRunPaidImpl(
       revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
       revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
-      return { ok: true, data: { invoiceId: v.invoiceId } };
+      return {
+        ok: true,
+        data: {
+          invoiceId: v.invoiceId,
+          ...(receiptRid ? { receiptRid } : {}),
+          ...(receiptWarning ? { receiptWarning } : {}),
+        },
+      };
     },
   );
 }

@@ -1,4 +1,5 @@
--- 0248_booking_pricing_catalog.sql — Booking pricing catalog store (ปอน 2026-07-10)
+-- 0250_booking_pricing_catalog.sql — Booking pricing catalog store (ปอน 2026-07-10)
+-- (renumbered 0248→0250 at integration: 0248 taken by cart_order_input_currency · 0249 doc_bot_hs_import)
 --
 -- Backs the /admin/workspace/booking/import/settings "ตั้งค่า" editor: Pricing sets the
 -- default line-item rate template per condition combo (Term × ขนส่ง × LCL/FCL) — sale +

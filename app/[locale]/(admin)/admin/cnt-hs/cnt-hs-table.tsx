@@ -202,8 +202,8 @@ export function CntHsTable({ rows }: { rows: CntHsRow[] }) {
         <span className="ml-1">⇆</span>
       </p>
       <div className="overflow-x-auto scrollbar-x-visible">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+        <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+          <thead className="bg-orange-500 text-left text-xs uppercase tracking-wide text-white">
             <tr>
               <SortableTh label="ID"           sortKey="ID"            activeKey={sortKey} onSort={handleSort} />
               <SortableTh label="วันที่"        sortKey="date"          activeKey={sortKey} onSort={handleSort} />

@@ -93,8 +93,8 @@ export function CntCostEditor({ cntId, rows, cntAmount }: { cntId: number; rows:
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
+        <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+          <thead className="bg-orange-500 text-[11px] uppercase text-white">
             <tr>
               <th className="px-3 py-2 text-left">F-no</th>
               <th className="px-3 py-2 text-left">ตู้</th>
