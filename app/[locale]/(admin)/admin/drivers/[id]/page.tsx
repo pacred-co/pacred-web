@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
@@ -437,6 +438,44 @@ export default async function AdminDriverBatchDetailPage({
     googleMapsHref ? `นำทางทุกจุด: ${googleMapsHref}` : "",
   ].filter((l) => l !== undefined && l !== null).join("\n");
 
+  // "ดูบิลใบเสร็จในรายการนี้" — consolidated grouped view (legacy addFromBill action=3 ·
+  // ภูม 2026-07-10). Reuses the already-loaded stops (no extra fetch).
+  const billGroups = stopsWithPhotos.map((stop) => {
+    const f = stop.forwarder;
+    const address = [
+      f.faddressno,
+      f.faddresssubdistrict ? `ตำบล/แขวง ${f.faddresssubdistrict}` : "",
+      f.faddressdistrict ? `อำเภอ/เขต ${f.faddressdistrict}` : "",
+      f.faddressprovince ? `จังหวัด ${f.faddressprovince}` : "",
+      f.faddresszipcode,
+    ].filter(Boolean).join(" ");
+    const phones = [f.faddresstel, f.faddresstel2]
+      .map((p) => (p ?? "").trim())
+      .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+    return {
+      key: stop.addressKey,
+      pr: f.userid ?? "—",
+      customerName: customerNameOf(f.userid),
+      carrier: shipByLabel(f.fshipby),
+      address,
+      phones,
+      items: stop.items.map(({ forwarder }, i) => ({
+        no: i + 1,
+        orderNo: forwarder.fidorco ?? `#${forwarder.id}`,
+        pr: forwarder.userid ?? "—",
+        customerName: customerNameOf(forwarder.userid),
+        tracking: forwarder.ftrackingchn ?? "—",
+        location: forwarder.fpallet ?? "",
+        boxes: Number(forwarder.famount ?? 0),
+        weight: Number(forwarder.fweight ?? 0),
+        cbm: Number(forwarder.fvolume ?? 0),
+      })),
+      totalBoxes: stop.totalBoxes,
+      totalWeight: stop.totalWeight,
+      totalCbm: stop.totalVolume,
+    };
+  });
+
   return (
     <main className="p-4 sm:p-6 lg:p-8 space-y-5">
       {/* Breadcrumb */}
@@ -571,6 +610,13 @@ export default async function AdminDriverBatchDetailPage({
             <Tag className="h-3.5 w-3.5" />
             พิมพ์สติกเกอร์ที่อยู่ (เรียงตามเส้นทาง)
           </Link>
+          {/* ดูบิลใบเสร็จในรายการนี้ (legacy #listBill → addFromBill action=3 · ภูม 2026-07-10):
+              modal รวมทุกจุดส่ง จัดกลุ่มตามลูกค้า + ปุ่มพิมพ์บิลจัดส่ง. */}
+          <DriverBillViewModal
+            groups={billGroups}
+            batchName={batch.fdname ?? `#${batch.id}`}
+            printHref={`/admin/drivers/${batch.id}/print`}
+          />
           {isOpsOverride && (
             <BatchManage
               batchId={batch.id}
