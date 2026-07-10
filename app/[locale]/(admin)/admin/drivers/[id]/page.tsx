@@ -493,7 +493,7 @@ export default async function AdminDriverBatchDetailPage({
                 <span className="text-[11px] text-muted">
                   ส่งของก่อนเวลา : {formatThaiDateTime(batch.endtime)}
                 </span>
-                <BatchCountdown endTimeIso={batch.endtime} />
+                <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} />
               </>
             )}
           </div>
