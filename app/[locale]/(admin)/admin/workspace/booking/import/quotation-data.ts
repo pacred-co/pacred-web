@@ -30,6 +30,7 @@ export type QuoteConditions = {
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
   special: string[]; // License / Manpower / Local Transport / Overtime
   productType: string; // ประเภทสินค้า: ทั่วไป / มอก. / อย. / ลิขสิทธิ์ ("ลิขสิทธิ์" → เรท licensed ในโปร)
+  docMode: string; // เอกสารที่ออกให้ลูกค้า (owner พี่ป๊อป 2026-07-10) · ตัวเลือกขึ้นกับ TERM (docModeOptions)
 };
 
 export type QuoteLine = {
@@ -54,8 +55,20 @@ export const TERM_OPTIONS = ["EXW", "FOB", "CIF", "DDP"];
 export const PORT_OPTIONS = ["PAT", "LCB", "BKK", "SUV"];
 export const CONTAINER_OPTIONS = ["1×20'", "1×40'HC", "2×40'", "Mixed"]; // ขนาดตู้ (เฉพาะ SEA FCL)
 export const ENTER_OPTIONS = ["Normal", "Change Status", "Document Amend", "Direct", "Indirect"];
-export const SPECIAL_OPTIONS = ["License", "Manpower", "Local Transport", "Overtime"];
+export const SPECIAL_OPTIONS = ["License", "Manpower", "Local Transport", "Overtime", "เปิดใบขน", "ใบขนพ่วง"]; // "เปิดใบขน"/"ใบขนพ่วง" = บริการแยกเปิดใบขน (owner พี่ป๊อป 2026-07-10)
 export const PRODUCT_TYPE_OPTIONS = ["ทั่วไป", "มอก.", "อย.", "ลิขสิทธิ์"]; // ประเภทสินค้า (fproductstype) · "ลิขสิทธิ์" = เรทพิเศษในโปร
+
+/**
+ * เอกสารที่ออกให้ลูกค้า — ตัวเลือกขึ้นกับ TERM (owner พี่ป๊อป 2026-07-10):
+ *   DDP = เหมาภาษี (นำเข้าในชื่อชิปปิ้ง) → ไม่มีใบกำกับเต็ม · เลือกได้แค่ "ไม่รับเอกสาร" หรือ "ใบขนชื่อลูกค้า"
+ *   EXW/FOB/CIF = นำเข้าในชื่อลูกค้า → ออกได้ครบ (ไม่รับเอกสาร / ใบขน / ใบกำกับเต็ม)
+ * (ฝากโอน/ฝากสั่ง เป็นบริการแยก · ชุดเดียวกับ freight = ครบ 3)
+ */
+export function docModeOptions(term: string): string[] {
+  return term === "DDP"
+    ? ["ไม่รับเอกสาร", "ใบขนชื่อลูกค้า"]
+    : ["ไม่รับเอกสาร", "ใบขน", "ใบกำกับเต็ม"];
+}
 
 /** ขนส่ง = หัวข้อหลัก (Trip-style tab) · id ตรงกับ service เดิม (SEA/AIR/TRUCK). */
 export const TRANSPORT_TABS: { id: string; label: string; icon: string }[] = [

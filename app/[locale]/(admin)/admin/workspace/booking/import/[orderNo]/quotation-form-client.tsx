@@ -10,12 +10,12 @@
  *   ราคาที่โชว์ = SELL · COST/PROFIT ไม่โชว์บนใบลูกค้า. ยัง prototype (client-state · ยังไม่ต่อ DB).
  */
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown, FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig, Search, Ship, Truck, Plane, Clock3, Check, Sparkles, ArrowRight, PackageCheck, ShieldCheck } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
+  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
   CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
@@ -24,6 +24,7 @@ import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
 import { CARGO_PROMO_PACKAGES, rateFor, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
 import { BookingDraftPreview } from "./booking-draft";
+import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, AGENT_HINT } from "./booking-hints";
 import styles from "./quotation-mockup.module.css";
 
 // ลำดับ stepper (ตัด "ยกเลิก" ออก — โชว์เป็น banner แยก)
@@ -48,7 +49,7 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     service,
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
-    loadType, container: "1×20'", carrier: "", weight: "", agent: "", productType: "ทั่วไป",
+    loadType, container: "1×20'", carrier: "", weight: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
     term, enter: "Normal", special: [],
   };
 }
@@ -104,11 +105,53 @@ export function QuotationFormClient({
   const [mode, setMode] = useState<"recommend" | "create">("recommend");
   const [searched, setSearched] = useState(false);
   const [bookingFull, setBookingFull] = useState(false); // ขยายใบ Booking เต็มความกว้าง (owner ปอน 2026-07-10)
+  const [compare, setCompare] = useState<string[]>([]); // แพ็กเกจที่ติ๊กเปรียบเทียบ (owner พี่ป๊อป 2026-07-10)
   function selectPackage(pkg: CargoPromoPackage) {
     // เลือกแพ็กเกจ → ไปหน้าสร้าง (เงื่อนไขเดิม) + จดชื่อแพ็กเกจใน "หมายเหตุ" ถ้ายังว่าง
     setDoc((d) => (d.remark.trim() === "" ? { ...d, remark: `แพ็กเกจ: ${pkg.name} (${pkg.group})` } : d));
     setMode("create");
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function toggleCompare(pkg: CargoPromoPackage) {
+    setCompare((prev) => (prev.includes(pkg.id) ? prev.filter((id) => id !== pkg.id) : [...prev, pkg.id]));
+  }
+  /** เปรียบเทียบใบเสนอราคา = สร้างเป็น "คนละใบ" (owner พี่ป๊อป: หน้าจะดีกว่า) — 1 แพ็กเกจ = 1 draft แยก. */
+  function createCompareQuotes() {
+    const pkgs = CARGO_PROMO_PACKAGES.filter((p) => compare.includes(p.id));
+    const mode: QuoteMode | null = cond.service === "TRUCK" ? "truck" : cond.service === "SEA" ? "ship" : null;
+    if (pkgs.length === 0 || !mode) return;
+    const licensed = cond.productType === "ลิขสิทธิ์";
+    const warehouse: WarehouseKey = /อี้อู|yiwu/i.test(cond.pol.port) ? "yiwu" : "guangzhou";
+    const weight = Number(cond.weight) || 0;
+    const now = new Date();
+    const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+    const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+    const svc = cond.service;
+    const drafts: Booking[] = pkgs.map((pkg, i) => {
+      const rate = rateFor(pkg, licensed, warehouse, mode);
+      const est = weight > 0 ? Math.max(rate.kg * weight, rate.cbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
+      const priceLabel = weight > 0 ? `≈ ${bahtFmt(Math.round(est))}` : `฿${rate.cbm.toLocaleString()}/CBM`;
+      return {
+        id: `draft-${now.getTime()}-${i}`,
+        orderNo: `${ymd}-C${String(now.getTime()).slice(-2)}${i + 1}`,
+        date: dateStr, status: "pending_pricing", company: "PACRED",
+        customerName: doc.billName || doc.consignee, product: doc.product, sales: salesName,
+        pricing: "WEB", term: `IM ${cond.term}`,
+        transport: /AIR/i.test(svc) ? "AIR" : /TRUCK/i.test(svc) ? "TRUCK" : "SEA",
+        fclLcl: cond.loadType,
+        size: usesContainer(cond.loadType) ? cond.container : "ตามขนาดสินค้า", warehouse: "",
+        pol: cond.pol.port, pod: cond.pod.port,
+        price: `เปรียบเทียบ · ${pkg.name} · ${priceLabel}`, hsCode: "", note: `เปรียบเทียบแพ็กเกจ: ${pkg.name} (${pkg.group})`,
+      };
+    });
+    try {
+      const raw = localStorage.getItem("pacred_booking_drafts_import");
+      const arr: Booking[] = raw ? JSON.parse(raw) : [];
+      const newNos = new Set(drafts.map((d) => d.orderNo));
+      const next = [...drafts, ...arr.filter((d) => !newNos.has(d?.orderNo))];
+      localStorage.setItem("pacred_booking_drafts_import", JSON.stringify(next));
+    } catch { /* ignore */ }
+    router.push("/admin/workspace/booking/import?tab=pending_pricing");
   }
   async function doLookup() {
     const code = doc.memberCode.trim();
@@ -202,6 +245,10 @@ export function QuotationFormClient({
       next = { ...next, pol: revalidatePort(next.pol, svc), pod: revalidatePort(next.pod, svc) };
       if (!carrierValidFor(next.carrier, svc)) next = { ...next, carrier: "" }; // สายเรือ/สายการบิน/สายรถ เปลี่ยนตามขนส่ง
     }
+    // เอกสารที่ออกได้ขึ้นกับ TERM (owner พี่ป๊อป) — เปลี่ยน TERM แล้ว docMode เดิมใช้ไม่ได้ → reset (เช่น "ใบกำกับเต็ม" ตอนสลับเป็น DDP)
+    if (k === "term" && !docModeOptions(next.term).includes(next.docMode)) {
+      next = { ...next, docMode: docModeOptions(next.term)[0] };
+    }
     setCond(next);
     // template ขึ้นกับ term + ขนส่ง + loadType → reload line + note เมื่อ combo เปลี่ยน
     if (k === "term" || k === "service" || k === "loadType") {
@@ -254,7 +301,7 @@ export function QuotationFormClient({
         </Link>
       </div>
 
-      {/* ── สลับโหมด (หัว booking เดียวกัน · owner ปอน 2026-07-10): แนะนำแพ็กเกจ ↔ สร้างใบเสนอราคา ── */}
+      {/* ── สลับโหมด (หัว booking เดียวกัน): แนะนำแพ็กเกจ ↔ สร้างใบเสนอราคา ── */}
       <div className="inline-flex w-full max-w-md gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:w-auto">
         <button type="button" onClick={() => setMode("recommend")}
           className={cx("flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-semibold transition-colors sm:flex-none",
@@ -282,6 +329,7 @@ export function QuotationFormClient({
             ) : <small>ฟอร์มฝั่งแอดมิน</small>}
           </div>
           <div className={styles.cardBody}>
+            <p className="mb-3 text-[12px] leading-snug text-[#6f7278]"><b className="text-[#1f2937]">กรอกเงื่อนไขการนำเข้า</b> — ระบบใช้แนะนำแพ็กเกจ + คำนวณราคาให้อัตโนมัติ · เอาเมาส์ชี้ <b className="text-[#1f2937]">ⓘ</b> ข้างชื่อฟิลด์เพื่อดูคำอธิบาย</p>
             {/* ขนส่ง — หัวข้อหลัก (Trip-style tab) · กดแล้วพอร์ทด้านในเปลี่ยนตาม */}
             <div className={styles.transportTabs}>
               {TRANSPORT_TABS.map((t) => (
@@ -291,44 +339,47 @@ export function QuotationFormClient({
                   <span className={styles.transportIcon}>{t.icon}</span> {t.label}
                 </button>
               ))}
+              <FieldHint content={TRANSPORT_HINT} />
             </div>
 
             {/* ข้อมูลบรรทัดเดียว (owner 2026-07-10): POL → POD · TERM · ENTER · ประเภท · ขนาดตู้ */}
             <div className={styles.condLine}>
-              <PortPicker label="ต้นทาง (POL)" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} />
+              <PortPicker label="ต้นทาง (POL)" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} hint={<FieldHint content={POL_HINT} />} />
               <div className={styles.routeArrow}>
                 <span className={styles.routeArrowIcon}>→</span>
                 <span className={styles.routeDir}>{directionOf(cond).label}</span>
               </div>
-              <PortPicker label="ปลายทาง (POD)" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} />
+              <PortPicker label="ปลายทาง (POD)" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} hint={<FieldHint content={POD_HINT} />} />
               {/* สินค้า (Commodity) + ประเภทสินค้า — owner ปอน 2026-07-10 · ประเภท "ลิขสิทธิ์" → เรทพิเศษในโปร */}
               <div className={styles.ddCell}>
-                <div className={styles.label}>สินค้า</div>
+                <div className={styles.label}>สินค้า<FieldHint content={COMMODITY_HINT} /></div>
                 <input className={styles.dropdown} type="text" value={doc.product} placeholder="เช่น เสื้อผ้า / อะไหล่"
                   onChange={(e) => setF("product")(e.target.value)} />
               </div>
-              <SelRow stack label="ประเภทสินค้า" options={PRODUCT_TYPE_OPTIONS} value={cond.productType} onPick={(v) => setC("productType", v)} />
-              <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} />
-              <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} />
+              <SelRow stack label="ประเภทสินค้า" options={PRODUCT_TYPE_OPTIONS} value={cond.productType} onPick={(v) => setC("productType", v)} hint={<FieldHint content={PRODUCT_HINT} />} />
+              <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} hint={<FieldHint content={TERM_HINT} align="center" />} />
+              <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} hint={<FieldHint content={ENTER_HINT} align="center" />} />
+              {/* เอกสารที่ออก (owner พี่ป๊อป 2026-07-10) — ตัวเลือกขึ้นกับ TERM: DDP เหมาภาษี ไม่มีใบกำกับเต็ม */}
+              <SelRow stack label="เอกสาร" options={docModeOptions(cond.term)} value={cond.docMode} onPick={(v) => setC("docMode", v)} hint={<FieldHint content={DOCMODE_HINT} align="center" />} />
               {usesLoadType(cond.service) && (
-                <LoadTypePicker loadType={cond.loadType} container={cond.container} onChange={setLoadType} />
+                <LoadTypePicker loadType={cond.loadType} container={cond.container} onChange={setLoadType} hint={<FieldHint content={LOADTYPE_HINT} align="right" />} />
               )}
               {/* สายเรือ/สายการบิน/สายรถ — ป้าย+ตัวเลือกเปลี่ยนตามขนส่ง */}
-              <SelRow stack label={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} options={CARRIER_CATALOG[cond.service] ?? []} value={cond.carrier} ph="— เลือก —" onPick={(v) => setC("carrier", v)} />
+              <SelRow stack label={CARRIER_LABEL[cond.service] ?? "สายขนส่ง"} options={CARRIER_CATALOG[cond.service] ?? []} value={cond.carrier} ph="— เลือก —" onPick={(v) => setC("carrier", v)} hint={<FieldHint content={CARRIER_HINT} align="right" />} />
               {/* น้ำหนัก — บอกว่าใช้รถอะไรไปรับ/ลากตู้ */}
               <div className={styles.ddCell}>
-                <div className={styles.label}>น้ำหนัก (กก.)</div>
+                <div className={styles.label}>น้ำหนัก (กก.)<FieldHint content={WEIGHT_HINT} align="right" /></div>
                 <input className={styles.dropdown} type="text" inputMode="decimal" value={cond.weight} placeholder="เช่น 5000"
                   onChange={(e) => setC("weight", e.target.value)} />
               </div>
               {/* เอเจนต์ */}
-              <SelRow stack label="เอเจนต์" options={AGENT_OPTIONS} value={cond.agent} ph="— เลือก —" onPick={(v) => setC("agent", v)} />
+              <SelRow stack label="เอเจนต์" options={AGENT_OPTIONS} value={cond.agent} ph="— เลือก —" onPick={(v) => setC("agent", v)} hint={<FieldHint content={AGENT_HINT} align="right" />} />
             </div>
 
             {/* SPECIAL (ชิป) + ค้นหา — แถวเดียวกัน (owner ปอน 2026-07-10): SPECIAL ซ้าย · ค้นหา ขวา */}
             <div style={{ marginTop: 14 }} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
               <div className="min-w-0 flex-1">
-                <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} />
+                <SelRow label="SPECIAL" options={SPECIAL_OPTIONS} multi values={cond.special} onPick={toggleSpecial} hint={<FieldHint content={SPECIAL_HINT} />} />
               </div>
               {/* ค้นหา — ผูกกับ booking: กดแล้วโปรแพ็กเกจ (TERM=DDP) ไหลมา · เฉพาะโหมดแนะนำ */}
               {mode === "recommend" && (
@@ -631,7 +682,7 @@ export function QuotationFormClient({
 
         {/* ── โหมด "แนะนำแพ็กเกจ" (Trip-style · owner ปอน 2026-07-10) — เงื่อนไขชุดเดียวกับหน้าสร้าง ── */}
         {mode === "recommend" && (
-          <RecommendPackages cond={cond} searched={searched} onSelect={selectPackage} />
+          <RecommendPackages cond={cond} searched={searched} onSelect={selectPackage} compare={compare} onCompareToggle={toggleCompare} onCreateCompare={createCompareQuotes} />
         )}
       </div>
     </div>
@@ -642,16 +693,16 @@ export function QuotationFormClient({
 // POL/POD picker — จิ้มเลือก ประเทศ + พอร์ท (ไม่พิมพ์ · Trip-style · owner 2026-07-10).
 // พอร์ทที่เลือกได้ขึ้นกับ "ขนส่ง" (transport) ที่เลือกด้านบน.
 function PortPicker({
-  label, placeholder, value, transport, onChange,
+  label, placeholder, value, transport, onChange, hint,
 }: {
-  label: string; placeholder: string; value: PortSel; transport: string; onChange: (v: PortSel) => void;
+  label: string; placeholder: string; value: PortSel; transport: string; onChange: (v: PortSel) => void; hint?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [activeCountry, setActiveCountry] = useState(value.country || PORT_COUNTRIES[0]);
   const ports = PORT_CATALOG[activeCountry]?.[transport] ?? [];
   return (
     <div className={styles.portField}>
-      <div className={styles.portLabel}>{label}</div>
+      <div className={styles.portLabel}>{label}{hint}</div>
       <button type="button" className={styles.portBtn}
         onClick={() => { setActiveCountry(value.country || PORT_COUNTRIES[0]); setOpen((o) => !o); }}>
         {value.port
@@ -687,15 +738,15 @@ function PortPicker({
 // ประเภท + ขนาดตู้ = picker เดียว (สไตล์เดียวกับ PortPicker · owner 2026-07-10).
 // ซ้าย = LCL / FCL · ขวา = ถ้า FCL → ขนาดตู้ให้จิ้มเลย · LCL = รวมตู้ (ไม่มีขนาด → เลือกแล้วปิด).
 function LoadTypePicker({
-  loadType, container, onChange,
+  loadType, container, onChange, hint,
 }: {
-  loadType: string; container: string; onChange: (v: { loadType: string; container: string }) => void;
+  loadType: string; container: string; onChange: (v: { loadType: string; container: string }) => void; hint?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [activeType, setActiveType] = useState(loadType || "LCL");
   return (
     <div className={styles.portField}>
-      <div className={styles.portLabel}>ประเภท / ขนาดตู้</div>
+      <div className={styles.portLabel}>ประเภท / ขนาดตู้{hint}</div>
       <button type="button" className={styles.portBtn}
         onClick={() => { setActiveType(loadType || "LCL"); setOpen((o) => !o); }}>
         <span className={styles.portVal}>
@@ -736,19 +787,21 @@ function LoadTypePicker({
 }
 
 function SelRow({
-  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack, ph,
+  label, options, value, values, multi, colorMap, disabledOpts, note, onPick, stack, ph, hint,
 }: {
   label: string; options: string[]; value?: string; values?: string[]; multi?: boolean; colorMap?: Record<string, string>; disabledOpts?: string[]; note?: string; onPick: (v: string) => void;
   /** stack = label above the control (top condition bar) · default = label beside (row). */
   stack?: boolean;
   /** placeholder option (dropdown เท่านั้น) — โชว์ "— เลือก —" ตอนค่ายังว่าง. */
   ph?: string;
+  /** ⓘ tooltip อธิบายฟิลด์ (owner ปอน 2026-07-10). */
+  hint?: ReactNode;
 }) {
   const isActive = (o: string) => (multi ? (values ?? []).includes(o) : value === o);
   const isDisabled = (o: string) => (disabledOpts ?? []).includes(o);
   return (
     <div className={stack ? styles.ddCell : styles.selrow}>
-      <div className={styles.label}>{label}</div>
+      <div className={styles.label}>{label}{hint}</div>
       <div>
         {multi ? (
           // เลือกหลายอย่าง → ชิป (ดร็อปดาวน์ multi ไม่สะดวก)
@@ -797,10 +850,137 @@ const PKG_HIGHLIGHT: Record<number, { label: string; cls: string }> = {
   3: { label: "ครบวงจร · ฝากสั่ง", cls: "bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
 };
 
+// แถบขวา (แบบ Trip): แบนเนอร์จริง + สรุปราคาที่ตรง Booking (draft · owner ปอน 2026-07-10).
+// แบนเนอร์ = placeholder รูปโปรจริงที่เรามี · เปลี่ยนได้ทีหลัง.
+function BookingSummaryAside({
+  cond, mode, warehouse, licensed, weight, modeLabel,
+}: {
+  cond: QuoteConditions; mode: QuoteMode; warehouse: WarehouseKey; licensed: boolean; weight: number; modeLabel: string;
+}) {
+  const rates = CARGO_PROMO_PACKAGES.map((p) => rateFor(p, licensed, warehouse, mode));
+  const cbm = rates.map((r) => r.cbm), kg = rates.map((r) => r.kg);
+  const minCbm = Math.min(...cbm), maxCbm = Math.max(...cbm);
+  const minKg = Math.min(...kg), maxKg = Math.max(...kg);
+  const estMin = weight > 0 ? Math.max(minKg * weight, minCbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
+  const estMax = weight > 0 ? Math.max(maxKg * weight, maxCbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
+  const range = (a: number, b: number) => `฿${a.toLocaleString()}${a !== b ? `–${b.toLocaleString()}` : ""}`;
+  return (
+    <aside className="space-y-3 lg:sticky lg:top-4">
+      <div className="overflow-hidden rounded-2xl border border-border shadow-sm">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/promotion/importlclchina.png" alt="โปรนำเข้า LCL จีน → ไทย" className="w-full" />
+      </div>
+      <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-foreground">สรุปราคา (ตาม Booking)</p>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">DRAFT</span>
+        </div>
+        <dl className="mt-3 space-y-1.5 text-[13px]">
+          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">เส้นทาง</dt><dd className="text-right font-medium text-foreground">{cond.pol.port} → {cond.pod.port}</dd></div>
+          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">ขนส่ง</dt><dd className="text-right font-medium text-foreground">{modeLabel} · DDP · {cond.loadType}</dd></div>
+          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">ประเภทสินค้า</dt><dd className="text-right font-medium text-foreground">{cond.productType}{licensed ? " 🔖" : ""}</dd></div>
+          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">น้ำหนัก</dt><dd className="text-right font-medium text-foreground">{weight > 0 ? `${weight.toLocaleString()} กก.` : "—"}</dd></div>
+        </dl>
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="text-xs text-muted">ช่วงราคา</div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-extrabold text-primary-600">{range(minCbm, maxCbm)}</span>
+            <span className="text-sm text-muted">/ CBM</span>
+          </div>
+          <div className="text-xs text-muted">{range(minKg, maxKg)} / กก.</div>
+          {weight > 0 && (
+            <div className="mt-2 rounded-lg bg-muted/40 px-2.5 py-2 text-xs text-foreground">
+              ประมาณ <b className="text-primary-600">{range(Math.round(estMin), Math.round(estMax))}</b> <span className="text-muted">· {weight.toLocaleString()} กก.</span>
+            </div>
+          )}
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-muted">* ราคาเริ่มต้นตามแพ็กเกจ · เลือกแพ็กเกจด้านซ้าย → ทำใบเสนอราคาเต็ม · <b>draft</b> (แบนเนอร์ placeholder เปลี่ยนได้)</p>
+      </div>
+    </aside>
+  );
+}
+
+// แถว/ช่องของตารางเปรียบเทียบ (compact).
+function Trow({ label, children }: { label: string; children: ReactNode }) {
+  return <tr><td className="border-t border-border py-2 pr-2 text-xs font-medium text-muted">{label}</td>{children}</tr>;
+}
+function Tcell({ children, best }: { children: ReactNode; best?: boolean }) {
+  return (
+    <td className={`border-t border-l border-border px-2 py-2 text-center ${best ? "bg-emerald-50 font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "text-foreground"}`}>
+      {best ? <span className="mr-0.5">🟢</span> : null}{children}
+    </td>
+  );
+}
+
+/**
+ * ตารางเปรียบเทียบแพ็กเกจ side-by-side (owner ปอน 2026-07-10 · "ทำให้ใช้ง่ายๆ") —
+ * ดูราคา/CBM · /กก. · ระยะเวลา · ประมาณการ เทียบกันเป็นคอลัมน์ + ไฮไลต์ถูกสุด → เลือก/สร้างแยก.
+ */
+function CompareModal({
+  pkgs, mode, warehouse, licensed, weight, onClose, onCreate, onSelectOne, onRemove,
+}: {
+  pkgs: CargoPromoPackage[]; mode: QuoteMode; warehouse: WarehouseKey; licensed: boolean; weight: number;
+  onClose: () => void; onCreate: () => void; onSelectOne: (pkg: CargoPromoPackage) => void; onRemove: (pkg: CargoPromoPackage) => void;
+}) {
+  const rows = pkgs.map((pkg) => {
+    const rate = rateFor(pkg, licensed, warehouse, mode);
+    const est = weight > 0 ? Math.max(rate.kg * weight, rate.cbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
+    return { pkg, rate, est };
+  });
+  const minCbm = Math.min(...rows.map((r) => r.rate.cbm));
+  const minEst = weight > 0 ? Math.min(...rows.map((r) => r.est)) : 0;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <header className="flex items-center justify-between border-b border-border bg-primary-600/5 px-4 py-3">
+          <p className="text-sm font-bold text-foreground">🆚 เปรียบเทียบแพ็กเกจ ({pkgs.length})</p>
+          <button type="button" onClick={onClose} aria-label="ปิด" className="rounded-lg px-2 py-0.5 text-lg leading-none text-muted transition-colors hover:bg-muted/50 hover:text-foreground">✕</button>
+        </header>
+        <div className="overflow-auto p-4">
+          <table className="w-full min-w-[420px] border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className="w-24 border-b border-border py-2 text-left"></th>
+                {rows.map(({ pkg }) => (
+                  <th key={pkg.id} className="border-b border-l border-border px-2 py-2 text-center align-top">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">แพ็ก {pkg.no}</span>
+                      <button type="button" onClick={() => onRemove(pkg)} aria-label="นำออก" className="text-[13px] leading-none text-muted transition-colors hover:text-primary-600">✕</button>
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-foreground">{pkg.name}</div>
+                    <div className="text-[11px] text-muted">{pkg.group}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <Trow label="ราคา / CBM">{rows.map(({ pkg, rate }) => <Tcell key={pkg.id} best={rate.cbm === minCbm}>฿{rate.cbm.toLocaleString()}</Tcell>)}</Trow>
+              <Trow label="ราคา / กก.">{rows.map(({ pkg, rate }) => <Tcell key={pkg.id}>฿{rate.kg.toLocaleString()}</Tcell>)}</Trow>
+              <Trow label="ระยะเวลา">{rows.map(({ pkg, rate }) => <Tcell key={pkg.id}>{rate.days}</Tcell>)}</Trow>
+              {weight > 0 && <Trow label={`ประมาณ (${weight.toLocaleString()} กก.)`}>{rows.map(({ pkg, est }) => <Tcell key={pkg.id} best={est === minEst}>฿{Math.round(est).toLocaleString()}</Tcell>)}</Trow>}
+              <Trow label="เลือก">{rows.map(({ pkg }) => (
+                <td key={pkg.id} className="border-t border-l border-border px-2 py-2 text-center">
+                  <button type="button" onClick={() => onSelectOne(pkg)} className="rounded-lg bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-primary-700">เลือกใบนี้</button>
+                </td>
+              ))}</Trow>
+            </tbody>
+          </table>
+          <p className="mt-2 text-[11px] text-muted">🟢 = ถูกสุดในกลุ่มที่เทียบ · เรทเบื้องต้น ยังไม่รวมค่าบริการเสริม/ภาษี</p>
+        </div>
+        <footer className="flex items-center justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
+          <button type="button" onClick={onClose} className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted/50">ปิด</button>
+          <button type="button" onClick={onCreate} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-700">สร้างใบเสนอราคาแยก {pkgs.length} ใบ <ArrowRight className="h-3.5 w-3.5" /></button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function RecommendPackages({
-  cond, searched, onSelect,
+  cond, searched, onSelect, compare, onCompareToggle, onCreateCompare,
 }: {
   cond: QuoteConditions; searched: boolean; onSelect: (pkg: CargoPromoPackage) => void;
+  compare: string[]; onCompareToggle: (pkg: CargoPromoPackage) => void; onCreateCompare: () => void;
 }) {
   const isDdp = cond.term === "DDP"; // โปร cargo (LCL) = TERM DDP เท่านั้น (owner ปอน 2026-07-10)
   const licensed = cond.productType === "ลิขสิทธิ์"; // ประเภทสินค้า ลิขสิทธิ์ → ใช้เรท licensed ในโปร
@@ -810,9 +990,20 @@ function RecommendPackages({
   const routeLabel = `${cond.pol.country} · ${cond.pol.port} → ${cond.pod.country} · ${cond.pod.port}`;
   const ModeIcon = mode === "truck" ? Truck : mode === "ship" ? Ship : Plane;
   const modeLabel = mode === "truck" ? "ทางรถ" : mode === "ship" ? "ทางเรือ" : "ทางอากาศ";
+  const [showCompare, setShowCompare] = useState(false); // เปิดตารางเปรียบเทียบ side-by-side (owner ปอน 2026-07-10)
 
   return (
     <div className="space-y-4">
+      {showCompare && mode && compare.length > 0 && (
+        <CompareModal
+          pkgs={CARGO_PROMO_PACKAGES.filter((p) => compare.includes(p.id))}
+          mode={mode} warehouse={warehouse} licensed={licensed} weight={weight}
+          onClose={() => setShowCompare(false)}
+          onCreate={() => { setShowCompare(false); onCreateCompare(); }}
+          onSelectOne={(pkg) => { setShowCompare(false); onSelect(pkg); }}
+          onRemove={onCompareToggle}
+        />
+      )}
       {!searched ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
           <Sparkles className="mb-3 h-9 w-9 text-primary-400" />
@@ -832,12 +1023,28 @@ function RecommendPackages({
           <p className="mt-1 text-sm text-amber-700 dark:text-amber-300/80">เลือก ทางรถ / ทางเรือ ที่เงื่อนไขงานด้านบน เพื่อดูแพ็กเกจ cargo</p>
         </div>
       ) : (
-        <>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+          <div className="min-w-0 space-y-3">
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-1 text-sm text-muted">
             <ModeIcon className="h-4 w-4 text-primary-600" />
             <b className="text-foreground">{CARGO_PROMO_PACKAGES.length} แพ็กเกจ</b> · <b className="text-foreground">{modeLabel} · DDP (LCL)</b> · {cond.productType}{licensed ? " 🔖" : ""} · {routeLabel}
             {warehouse === "yiwu" ? " · โกดังอี้อู" : ""}{weight > 0 ? ` · ${weight.toLocaleString()} กก.` : ""}
           </p>
+          {compare.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary-100 bg-primary-50/70 px-3 py-2 dark:border-primary-500/30 dark:bg-primary-500/10">
+              <span className="text-[13px] font-semibold text-foreground">🆚 เปรียบเทียบ {compare.length} แพ็กเกจ</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setShowCompare(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-background px-3 py-1.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10">
+                  📊 ดูตารางเทียบ
+                </button>
+                <button type="button" onClick={onCreateCompare}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-700">
+                  สร้างแยก {compare.length} ใบ <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-3">
             {CARGO_PROMO_PACKAGES.map((pkg) => {
               const rate = rateFor(pkg, licensed, warehouse, mode);
@@ -886,10 +1093,16 @@ function RecommendPackages({
                         </div>
                       )}
                     </div>
-                    <button type="button" onClick={() => onSelect(pkg)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700">
-                      เลือกแพ็กเกจนี้ <ArrowRight className="h-4 w-4" />
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button type="button" onClick={() => onSelect(pkg)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700">
+                        เลือกแพ็กเกจนี้ <ArrowRight className="h-4 w-4" />
+                      </button>
+                      <label className="flex cursor-pointer items-center justify-center gap-1.5 text-[11px] font-medium text-muted transition-colors hover:text-foreground">
+                        <input type="checkbox" checked={compare.includes(pkg.id)} onChange={() => onCompareToggle(pkg)} className="h-3.5 w-3.5 accent-primary-600" />
+                        เปรียบเทียบ (แยกใบ)
+                      </label>
+                    </div>
                   </div>
                 </article>
               );
@@ -898,7 +1111,10 @@ function RecommendPackages({
           <p className="px-1 pt-1 text-[11px] leading-relaxed text-muted">
             * เรทตั้งต้นจากโปรโมชัน LCL จีน→ไทย · 1 CBM ไม่เกิน {DEFAULT_COMPARISON} กก. (เกินคิดเป็นกิโล) · ขั้นต่ำ ฿{MIN_CHARGE}/shipment · เป็นประมาณการเบื้องต้น ยังไม่รวมค่าบริการเสริม/ภาษี — กด “เลือกแพ็กเกจนี้” เพื่อไปทำใบเสนอราคาเต็ม
           </p>
-        </>
+          </div>
+          {/* แถบขวา: สรุปราคาที่ตรง Booking + แบนเนอร์จริง (draft · owner ปอน 2026-07-10) */}
+          <BookingSummaryAside cond={cond} mode={mode} warehouse={warehouse} licensed={licensed} weight={weight} modeLabel={modeLabel} />
+        </div>
       )}
     </div>
   );

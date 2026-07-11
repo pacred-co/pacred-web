@@ -50,7 +50,16 @@ const SPECIAL_EXPLAIN: Record<string, string> = {
   Manpower: "จ้างแรงงานขน/แพ็คเพิ่ม",
   "Local Transport": "ค่าขนส่งในประเทศปลายทาง (ส่งถึงที่)",
   Overtime: "ทำงานนอกเวลา/เร่งด่วน",
+  "เปิดใบขน": "บริการเปิดใบขนสินค้าแยก (ออกใบขนอย่างเดียว)",
+  "ใบขนพ่วง": "เปิดใบขนพ่วง — พ่วงกับใบขนอีกใบ (นำเข้าในชื่อ/ใบอนุญาตของอีกเจ้า)",
 };
+
+/** คำอธิบายเอกสารที่เลือก (owner พี่ป๊อป 2026-07-10) — ขึ้นกับ docMode + term. */
+function docModeDesc(docMode: string, term: string): string {
+  if (/ใบกำกับ/.test(docMode)) return "ออกใบกำกับภาษีเต็มรูปแบบ (VAT 7%) — นำเข้าในชื่อลูกค้า";
+  if (/ใบขน/.test(docMode)) return "ออกใบขนสินค้าในชื่อลูกค้า";
+  return term === "DDP" ? "เหมาภาษี — นำเข้าในชื่อชิปปิ้ง · ลูกค้าไม่ได้เอกสาร (ราคารวมภาษีแล้ว)" : "ไม่ออกเอกสารให้ลูกค้า";
+}
 
 function serviceMeta(service: string) {
   if (service === "AIR") return { Icon: Plane, label: "ทางอากาศ", legOut: "เที่ยวบินออก", legCode: "FL" };
@@ -130,6 +139,7 @@ export function BookingDraftPreview({
     ...(usesLoadType(cond.service) ? [{ label: "ประเภทตู้", value: cond.loadType, desc: LOAD_EXPLAIN[cond.loadType] ?? "" }] : []),
     { label: "เทอม (Incoterm)", value: cond.term, desc: TERM_EXPLAIN[cond.term] ?? "" },
     { label: "ประเภทสินค้า", value: cond.productType, desc: PRODUCT_EXPLAIN[cond.productType] ?? "" },
+    { label: "เอกสาร", value: cond.docMode, desc: docModeDesc(cond.docMode, cond.term) },
     ...cond.special.map((s) => ({ label: "บริการเสริม", value: s, desc: SPECIAL_EXPLAIN[s] ?? "" })),
   ].filter((e) => e.desc);
 
@@ -157,6 +167,7 @@ export function BookingDraftPreview({
           <Row label="เส้นทาง"><span className="inline-flex items-center gap-1 font-medium text-foreground"><MapPin className="h-3.5 w-3.5 text-primary-500" />{cond.pol.port} <ArrowRight className="h-3 w-3 text-muted" /> {cond.pod.port}</span></Row>
           <Row label="ขนส่ง"><span className="inline-flex items-center gap-1 font-medium text-foreground"><Svc className="h-3.5 w-3.5 text-primary-500" />{svc.label}{usesLoadType(cond.service) ? ` · ${cond.loadType}` : ""}</span></Row>
           <Row label="เทอม">{cond.term}</Row>
+          <Row label="เอกสาร">{cond.docMode}</Row>
           <Row label="สินค้า"><span className="text-foreground">{commodity}</span>{cond.productType ? <span className={cx("ml-1 rounded px-1 text-[11px]", licensed ? "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" : "bg-muted text-muted")}>{cond.productType}{licensed ? " 🔖" : ""}</span> : null}</Row>
           <Row label="น้ำหนัก">{cond.weight ? `${cond.weight} กก.` : "—"}</Row>
           <Row label={carrierLabel}>{cond.carrier || "—"}</Row>
@@ -240,6 +251,7 @@ export function BookingDraftPreview({
           <Field label="ทิศทาง" value={`${dir.label} (${dir.code})`} />
           <Field label="ขนส่ง (TR)" value={svc.label} />
           <Field label="เทอม (Term)" value={cond.term} />
+          <Field label="เอกสาร" value={cond.docMode} />
           <Field label="ประเภท / ตู้" value={containerLabel} />
           <Field label={carrierLabel} value={cond.carrier || "—"} />
           <Field label="น้ำหนัก" value={cond.weight ? `${cond.weight} กก.` : "—"} />
