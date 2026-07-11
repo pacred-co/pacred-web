@@ -16,8 +16,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { ContactSales } from "@/components/sections/contact-sales";
 import { Footer } from "@/components/sections/footer";
-import { Link, redirect } from "@/i18n/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   breadcrumbSchema,
@@ -110,21 +109,11 @@ export default async function CustomsPortDetailPage({
   const port = findCustomsPortBySlug(portSlug);
   if (!port) notFound();
 
-  // Auth gate — the customs detail page is only available to signed-in members.
-  // Guests are routed through `/login?next=<this-page>` so they land back here
-  // after authenticating (same pattern as `/start-order`).
-  const supabase = await createClient();
-  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
-  if (dataErr) {
-    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
-  }
-  if (!user) {
-    redirect({
-      href: { pathname: "/login", query: { next: `${PARENT_PATH}/${port.slug}` } },
-      locale,
-    });
-  }
-
+  // PUBLIC page — anyone can view the per-port customs cost breakdown, no login
+  // (owner 2026-07-11 "แบบใครๆก็เข้าได้"). It is listed in sitemap.ts + carries SEO
+  // metadata/JSON-LD, so it must stay crawlable; the old auth gate here bounced
+  // guests AND Googlebot to /login → the pages could never rank. Prices that
+  // shouldn't be public are already masked per-line via maskPrice(), not by auth.
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const template = TEMPLATES[port.template];
   const t = await getTranslations("customsClearancePort");
@@ -232,14 +221,27 @@ export default async function CustomsPortDetailPage({
                         className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
                       >
                         <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
-                          {/* sec.icon is an emoji ("🚢"/"🚆") — render as text, NOT next/image
-                              (incident: "Failed to parse src '🚢' on next/image"). */}
-                          <span
-                            aria-hidden
-                            className="text-[18px] md:text-[20px] leading-none shrink-0"
-                          >
-                            {sec.icon}
-                          </span>
+                          {/* sec.icon is a MIX: image paths ("/images/…/ongkorn.png") AND
+                              emoji ("🚢"/"⚓"). Render a path as <Image>, an emoji as text —
+                              a path rendered as text showed the literal string ("ภาพหาย");
+                              an emoji fed to next/image throws "Failed to parse src". */}
+                          {sec.icon.startsWith("/") ? (
+                            <Image
+                              src={sec.icon}
+                              alt=""
+                              width={20}
+                              height={20}
+                              aria-hidden
+                              className="w-5 h-5 md:w-[22px] md:h-[22px] shrink-0 object-contain"
+                            />
+                          ) : (
+                            <span
+                              aria-hidden
+                              className="text-[18px] md:text-[20px] leading-none shrink-0"
+                            >
+                              {sec.icon}
+                            </span>
+                          )}
                           <span>{sec.heading}</span>
                         </div>
                         <ul className="divide-y divide-border/70">

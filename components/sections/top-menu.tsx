@@ -91,6 +91,7 @@ function buildMenu(t: Translator): Item[] {
         },
       ],
     },
+    { label: t("contact"), href: "/contact" },
   ];
 }
 
