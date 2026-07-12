@@ -43,6 +43,7 @@ import {
 } from "@/lib/billing/load-billing-run-document";
 import {
   calcForwarderGross,
+  calcForwarderOutstanding,
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
@@ -702,14 +703,17 @@ export async function resolveCabinetBillingTarget(
 
       // G4 (2026-07-08) — include the ตรวจตู้-done ARRIVAL rows (fstatus='4') alongside
       // รอชำระเงิน ('5') so the container 📄 ทำใบวางบิล shortcut lists fresh rows instead
-      // of a BLANK form. The already-billed exclusion + the 4→5 lift happen downstream
-      // (listEligibleForwarders admits only check-queued-4 · createBillingRunInvoice
-      // lifts 4→5 with the guarded flip). Billed 6/7/99 stay excluded.
+      // of a BLANK form. FIX E (2026-07-13) — ALSO include เตรียมส่ง ('6') so a CREDIT
+      // container (credit granted → fstatus='6') prefills instead of opening blank. This
+      // is PREFILL-ONLY: the real eligibility gate is downstream — listEligibleForwarders
+      // surfaces only billable rows (isBillingRunEligible: credit-unsettled 5/6 ·
+      // check-queued-4 · juristic) and drops already-billed + non-credit cash-6 rows, and
+      // createBillingRunInvoice re-guards (isBillableForwarder) + lifts 4→5. 7/99 excluded.
       const { data, error } = await admin
         .from("tb_forwarder")
         .select("id, userid")
         .in("fcabinetnumber", clean)
-        .in("fstatus", ["4", "5"])
+        .in("fstatus", ["4", "5", "6"])
         .limit(2000);
       if (error) {
         console.error("[resolveCabinetBillingTarget tb_forwarder] failed", {
@@ -1811,6 +1815,86 @@ async function markBillingRunPaidImpl(
             .neq("paydeposit", "1")
             .in("fstatus", ["2", "3", "4"]);
           if (advPaidErr) console.error("[markBillingRunPaid advance-paid]", { code: advPaidErr.code, message: advPaidErr.message });
+
+          // FIX D (2026-07-13 · owner "เครดิต→ใบแจ้งหนี้ · เงินไม่ซิงค์/สถานะไม่เดิน") —
+          // collecting a CREDIT customer's ใบแจ้งหนี้ here must ALSO SETTLE the credit,
+          // else the order stays fcredit='1' forever: AR-aging keeps counting it + the
+          // credit line never frees (billing-run is narrowed to the credit/นิติ cohort →
+          // this is its primary case · high impact). Mirror the canonical credit-settle
+          // (actions/credit.ts L381 · actions/admin/pay-user.ts path #2 · legacy
+          // pay-users.php L469): for THIS invoice's forwarder rows still on credit
+          // (fcredit='1'), clear fcredit ONLY — deliberately NO paydeposit='1': a
+          // settled-credit row at fstatus '6' with paydeposit='1' is EXCLUDED from the
+          // dispatch queue (lib/admin/pending-dispatch.ts · legacy forwarder-driver.php
+          // paydeposit gate), so stamping it here would make a quickly-paid credit
+          // order invisible to มอบงานคนขับ = a new stuck state. Re-collect is already
+          // blocked by fcredit no longer being '1' (isCreditUnsettledEligible checks
+          // fcredit='1' first). Amount via the SAME canonical calcForwarderOutstanding,
+          // then reduce tb_credit.creditvalue by the amount actually settled.
+          // TOCTOU-guarded .eq('fcredit','1'); best-effort — a failure NEVER rolls
+          // back the money-safe paid flip (exactly like the receipt-sync).
+          try {
+            const { data: creditRows, error: creditRowsErr } = await admin
+              .from("tb_forwarder")
+              .select(
+                "id, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+              )
+              .in("id", Array.from(invFids))
+              .eq("fcredit", "1");
+            if (creditRowsErr) {
+              console.error("[markBillingRunPaid credit-settle read]", { code: creditRowsErr.code, message: creditRowsErr.message, invoiceId: v.invoiceId });
+            } else if ((creditRows ?? []).length > 0) {
+              let settledSum = 0;
+              const settledIds: number[] = [];
+              for (const row of (creditRows ?? []) as Array<
+                Parameters<typeof calcForwarderOutstanding>[0] & { id: number }
+              >) {
+                const due = calcForwarderOutstanding(row);
+                // Clear fcredit — .eq('fcredit','1') guard makes it TOCTOU-safe
+                // (a concurrent settle = 0 rows matched = harmless no-op). Mirrors
+                // credit.ts exactly (fcredit + stamp only · no paydeposit ↑).
+                const { data: flipped, error: flipErr } = await admin
+                  .from("tb_forwarder")
+                  .update({ fcredit: "", fdateadminstatus: paidAtIso })
+                  .eq("id", row.id)
+                  .eq("fcredit", "1")
+                  .select("id");
+                if (flipErr) {
+                  console.error("[markBillingRunPaid credit-settle flip]", { code: flipErr.code, message: flipErr.message, fid: row.id });
+                  continue;
+                }
+                if ((flipped ?? []).length === 0) continue; // already settled → don't double-decrement
+                settledIds.push(row.id);
+                settledSum = Math.round((settledSum + due) * 100) / 100;
+              }
+              // Reduce the customer's running credit balance by exactly what we settled
+              // (clamp ≥0 · mirrors credit.ts L410). Only when a credit row actually flipped
+              // and a tb_credit row exists (best-effort · never create/insert here).
+              if (settledSum > 0 && cur.userid) {
+                const { data: creditRow, error: creditReadErr } = await admin
+                  .from("tb_credit")
+                  .select("creditvalue")
+                  .eq("userid", cur.userid)
+                  .maybeSingle<{ creditvalue: number | string | null }>();
+                if (creditReadErr) {
+                  console.error("[markBillingRunPaid credit-decrement read]", { code: creditReadErr.code, message: creditReadErr.message, userid: cur.userid });
+                } else if (creditRow) {
+                  const current = Number(creditRow.creditvalue ?? 0) || 0;
+                  const next = Math.max(0, Math.round((current - settledSum) * 100) / 100);
+                  const { error: creditUpdErr } = await admin
+                    .from("tb_credit")
+                    .update({ creditvalue: next })
+                    .eq("userid", cur.userid);
+                  if (creditUpdErr) console.error("[markBillingRunPaid credit-decrement]", { code: creditUpdErr.code, message: creditUpdErr.message, userid: cur.userid });
+                }
+                await logAdminAction(adminId, "billing_run.credit_settled", "forwarder_invoice", String(v.invoiceId), {
+                  doc_no: cur.doc_no, userid: cur.userid, settled_fids: settledIds, settled_amount: settledSum,
+                });
+              }
+            }
+          } catch (e) {
+            console.error("[markBillingRunPaid credit-settle] unexpected", { message: String(e), invoiceId: v.invoiceId });
+          }
 
           const { data: touch, error: touchErr } = await admin
             .from("tb_receipt_item")
