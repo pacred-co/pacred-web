@@ -402,10 +402,28 @@ export async function propagateMomoToForwarders(
         continue;
       }
 
-      const { error: updateErr } = await admin
+      // TOCTOU-safe forward-only guard. f.fstatus was read by the batch SELECT
+      // (line ~201) minutes ago; a warehouse scan (→'4') or billing (→'5') may
+      // have moved the row forward since. Because the forward-only decision above
+      // compares against that STALE f.fstatus, an unguarded UPDATE would DEMOTE a
+      // just-scanned row back to MOMO's older status — and, since the next cycle
+      // then reads the demoted value, it would never self-heal ("สถานะถอยหลัง").
+      // So when this UPDATE advances fstatus, re-assert in the WHERE that the row
+      // is STILL behind the target (text compare is exact for the '1'..'7'
+      // single-char codes; '99' > any target → excluded); a row that raced to
+      // target-or-beyond matches 0 rows and is left untouched. Mirrors the sibling
+      // advancers (propagate-live-status.ts:251 · advance-departed-containers.ts:135).
+      // Guard ONLY when fstatus is written, so pure cabinet/weight/date fills
+      // (fill-when-empty · forward-safe) still land on rows that raced ahead —
+      // those re-derive next cycle.
+      let updateQuery = admin
         .from("tb_forwarder")
         .update(updates)
         .eq("id", f.id);
+      if (updates.fstatus) {
+        updateQuery = updateQuery.lt("fstatus", updates.fstatus);
+      }
+      const { error: updateErr } = await updateQuery;
       if (updateErr) {
         console.error("[propagateMomoToForwarders] update failed", {
           forwarderId: f.id,
