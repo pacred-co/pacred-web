@@ -115,6 +115,10 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: "" }), true, "เหมาๆ '' → missing");
   assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: -5 }), true, "negative cost → missing");
   assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 100 }), false, "เหมาๆ ฿100 → filled");
+  // owner 2026-07-13: ปลายทาง/COD (paymethod '2') → ฿0 ถูกต้อง (เอกชนเก็บปลายทาง) → ไม่ missing / ไม่ lock
+  assert.equal(isThShippingCostRequired("2", "2"), false, "Flash + COD ปลายทาง → ฿0 ok, not required");
+  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "2" }), false, "COD ปลายทาง ฿0 → not missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "1" }), true, "ต้นทาง ฿0 → still missing");
   assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: "350.50" }), false, "Flash string cost → filled");
   // self-pickup is NEVER missing regardless of cost
   assert.equal(isThShippingCostMissing({ fshipby: "PCS", ftransportprice: 0 }), false, "self-pickup ฿0 → not missing (exempt)");

@@ -172,7 +172,7 @@ export type BillingRunInvoiceRow = {
 // allowance (lib/forwarder/outstanding.ts). fcredit/paydeposit are pulled for
 // the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
 const FWD_BILLING_SELECT =
-  "id, fshipby, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
+  "id, fshipby, paymethod, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
   "fcredit, paydeposit, fusercompany, advance_bill_confirmed, fcabinetnumber, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount";
@@ -182,6 +182,7 @@ type FwdBillingRaw = ForwarderPriceFields &
   ForwarderBillingEligibilityFields & {
     id: number;
     fshipby: string | null;        // for the เหมาๆ (PCSF) batch fee — computeForwarderDebitBatch
+    paymethod: string | null;      // '1' ต้นทาง · '2' ปลายทาง/COD — COD → ค่าส่งไทย ฿0 legit (gate exempt)
     ftrackingchn: string | null;
     fdate: string | null;
     famount: number | string | null;
@@ -657,7 +658,7 @@ export async function listEligibleForwarders(
         already_billed:  alreadyBilledIds.has(f.id),
         // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic leg applies but the
         // TH cost is still ฿0. Self-pickup rows (fshipby='PCS') are exempt.
-        th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice }),
+        th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod }),
         fshipby:         f.fshipby,
         ftransportprice: Number(f.ftransportprice ?? 0),
         check_queued:    checkQueuedIds.has(f.id),
@@ -1218,7 +1219,7 @@ async function createBillingRunInvoiceImpl(
       // the DB rows). NOTE: pure validation — this changes NO pricing math; the bill
       // amount is computed exactly as before. Self-pickup rows are exempt.
       const missingThShip = fwd.filter((f) =>
-        isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice }),
+        isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod }),
       );
       if (missingThShip.length > 0 && !v.allowMissingThShip) {
         return {

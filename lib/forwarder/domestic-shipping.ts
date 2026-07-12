@@ -198,9 +198,16 @@ export const SELF_PICKUP_CARRIER = "PCS" as const;
  * empty/unset fshipby also counts as "leg applies" — the carrier just isn't
  * decided yet, so the cost is still owed (and the warehouse/CS must resolve it).
  */
-export function isThShippingCostRequired(fshipby: string | null | undefined): boolean {
+export function isThShippingCostRequired(
+  fshipby: string | null | undefined,
+  payMethod?: string | null | undefined,
+): boolean {
   const s = (fshipby ?? "").trim().toUpperCase();
-  return s !== SELF_PICKUP_CARRIER;
+  if (s === SELF_PICKUP_CARRIER) return false; // รับเองที่โกดัง — ฿0 ถูกต้อง
+  // owner 2026-07-13: ปลายทาง/COD (paymethod '2') — เอกชนเก็บค่าส่งปลายทางกับลูกค้าเอง →
+  // Pacred ไม่เก็บค่าส่งไทย → ฿0 ถูกต้อง · ห้าม lock/บังคับกรอก.
+  if ((payMethod ?? "").toString().trim() === "2") return false;
+  return true;
 }
 
 /**
@@ -212,8 +219,10 @@ export function isThShippingCostRequired(fshipby: string | null | undefined): bo
 export function isThShippingCostMissing(args: {
   fshipby: string | null | undefined;
   ftransportprice: number | string | null | undefined;
+  /** '2' = ปลายทาง/COD → ฿0 ถูกต้อง (เอกชนเก็บปลายทาง) → ไม่ถือว่าขาด (owner 2026-07-13). */
+  payMethod?: string | null | undefined;
 }): boolean {
-  if (!isThShippingCostRequired(args.fshipby)) return false; // self-pickup — ฿0 ok
+  if (!isThShippingCostRequired(args.fshipby, args.payMethod)) return false; // self-pickup / COD — ฿0 ok
   const cost = Number(args.ftransportprice);
   return !Number.isFinite(cost) || cost <= 0;
 }
