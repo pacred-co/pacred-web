@@ -6,7 +6,6 @@ import {
   isThShippingCostMissing,
   resolveAutoThShippingFill,
   resolveThShippingAutoPrice,
-  TH_SHIPPING_MIN_FLOOR,
 } from "./domestic-shipping";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
 
@@ -149,18 +148,22 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     assert.equal(fill!.payMethod, "1", "เหมาๆ → ต้นทาง");
     assert.equal(fill!.zone, "maomao");
   }
-  // ── owner 2026-07-09: upcountry external courier now Flash-priced + margin · ต้นทาง ──
+  // ── owner 2026-07-13: upcountry external Flash-priced, but ONLY when fully measured ──
   {
-    const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, province: "เชียงใหม่" });
-    assert.ok(fill, "upcountry external ฿0 → auto-fills (Flash + margin)");
+    const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180, province: "เชียงใหม่" });
+    assert.ok(fill, "upcountry external ฿0 + measured (kg+dims) → auto-fills (Flash + margin)");
     assert.equal(fill!.carrier, "2", "upcountry external → Flash carrier '2'");
     assert.equal(fill!.payMethod, "1", "owner: DEFAULT ต้นทาง (COD is manual-only now)");
     assert.equal(fill!.zone, "upcountry");
-    // Flash ตจว 13kg = ฿155 · +15% margin = round(178.25) = ฿178 (> ฿50 floor)
-    assert.ok(fill!.cost > MAO_FLAT_FEE, "13kg upcountry Flash+margin > ฿100");
-    assert.equal(fill!.cost, resolveThShippingAutoPrice({ zip: "50000", kg: 13 }),
+    assert.ok(fill!.cost > MAO_FLAT_FEE, "13kg/180cm upcountry Flash+margin > ฿100");
+    assert.equal(fill!.cost, resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }),
       "fill cost == the Flash+margin helper");
   }
+  // owner 2026-07-13: weight-only (no dims measured) → NO fake fill — force measurement.
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, province: "เชียงใหม่" }),
+    null, "weight-only (no dims) → no auto-fill · force measure (owner: no fake ฿50)",
+  );
   // own-fleet เหมาๆ carrier (PRF/PCSF) upcountry → still flat ฿100 · ต้นทาง (never Flash-priced)
   {
     const fill = resolveAutoThShippingFill({ fshipby: "PRF", ftransportprice: 0, zip: "50000", weightKg: 20 });
@@ -174,19 +177,16 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     resolveAutoThShippingFill({ fshipby: "PCSE", ftransportprice: 0, zip: "50000", weightKg: 20 }),
     null, "PCSE express → no auto-fill (operator-set amount)",
   );
-  // over Flash's 50kg cap → ฿50 floor fallback (no crash, no 0)
-  {
-    const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 104 });
-    assert.ok(fill, "over-limit upcountry → still auto-fills (floor)");
-    assert.equal(fill!.cost, TH_SHIPPING_MIN_FLOOR, "Flash over 50kg → ฿50 floor");
-  }
-  // no address / no weight → ฿50 floor fallback (external default · editable)
-  {
-    const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: null, province: null });
-    assert.ok(fill, "no address external → auto-fills the floor (never 0)");
-    assert.equal(fill!.cost, TH_SHIPPING_MIN_FLOOR, "unresolvable → ฿50 floor");
-    assert.equal(fill!.payMethod, "1", "default ต้นทาง");
-  }
+  // over Flash's 50kg/280cm cap (even measured) → NO fake fill (freight/manual · owner 2026-07-13)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 104, sizeCm: 200 }),
+    null, "over 50kg → no auto-fill (manual · not a ฿50 parcel)",
+  );
+  // no address / no weight → NO fake fill (force manual · the ฿0 gate catches it)
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: null, province: null }),
+    null, "unresolvable external → no auto-fill (gate forces the real cost)",
+  );
   // in-zone auto-fill is weight-agnostic (เหมาๆ flat) — works even with no weight
   {
     const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "10250" });
@@ -195,22 +195,23 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   }
 }
 
-// ── resolveThShippingAutoPrice — Flash cost + margin (owner 2026-07-09) ──
+// ── resolveThShippingAutoPrice — REAL Flash cost + margin, or null (owner 2026-07-13) ──
 {
-  // ตจว 13kg = ฿155 · +15% = round(178.25) = 178
-  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13 }), Math.round(155 * 1.15), "ตจว 13kg Flash+margin");
-  // BKK column — 13kg = ฿155 too (same tier), 10120 in BKK_ZIPS
-  assert.equal(resolveThShippingAutoPrice({ zip: "10120", kg: 13 }), Math.round(155 * 1.15), "BKK column Flash+margin");
-  // over 50kg → floor
-  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 104 }), TH_SHIPPING_MIN_FLOOR, "over 50kg → floor");
-  // no kg + no size → floor (unresolvable)
-  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 0, sizeCm: 0 }), TH_SHIPPING_MIN_FLOOR, "no dims → floor");
-  // tiny parcel whose Flash cost + margin is under the floor → clamped to ฿50
-  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 1 }), TH_SHIPPING_MIN_FLOOR, "tiny 1kg (฿35+margin=40) → ฿50 floor");
-  // remote-area zip adds +50 before margin
+  // measured ตจว 13kg + 180cm girth: max(kg ฿155, size ฿290)=290 · +15% = round(333.5)=334
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }), Math.round(290 * 1.15), "measured ตจว Flash+margin");
+  // BKK column — same measured parcel (10120 in BKK_ZIPS)
+  assert.equal(resolveThShippingAutoPrice({ zip: "10120", kg: 13, sizeCm: 180 }), Math.round(290 * 1.15), "BKK column Flash+margin");
+  // NOT fully measured → null (no fake floor · force measure)
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13 }), null, "no dims → null");
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 0, sizeCm: 180 }), null, "no weight → null");
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 0, sizeCm: 0 }), null, "nothing measured → null");
+  // over Flash's cap → null (freight/manual)
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 104, sizeCm: 200 }), null, "over 50kg → null");
+  assert.equal(resolveThShippingAutoPrice({ zip: "10230", kg: 10, sizeCm: 310 }), null, "over 280cm → null");
+  // remote-area zip adds +50 before margin (both measured)
   {
-    const base = resolveThShippingAutoPrice({ zip: "50000", kg: 13 }); // ตจว, no surcharge
-    const remote = resolveThShippingAutoPrice({ zip: "20120", kg: 13 }); // remote-area zip (+50)
+    const base = resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 })!; // ตจว, no surcharge
+    const remote = resolveThShippingAutoPrice({ zip: "20120", kg: 13, sizeCm: 180 })!; // remote-area zip (+50)
     assert.ok(remote > base, "remote-area zip adds surcharge");
   }
 }

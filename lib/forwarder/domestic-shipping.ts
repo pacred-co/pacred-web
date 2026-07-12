@@ -255,37 +255,35 @@ export type AutoThShippingFill = {
 export const TH_SHIPPING_PROFIT_MARGIN = 15;
 
 /**
- * TH_SHIPPING_MIN_FLOOR — the ฿ fallback the auto-fill uses when Flash can't quote
- * (zone/weight unresolvable, or the parcel exceeds Flash's 50kg/280cm cap → price
- * 0). Never auto-fill ฿0 (guardrail: no crash, no 0); this editable floor keeps the
- * bill flowing and the operator adjusts it.
- */
-export const TH_SHIPPING_MIN_FLOOR = 50;
-
-/**
- * resolveThShippingAutoPrice — the REAL external-courier (Flash) cost + margin for
- * a zone/weight/size, as the auto-fill ftransportprice. Owner 2026-07-09.
+ * resolveThShippingAutoPrice — the REAL Flash cost + margin for a MEASURED parcel,
+ * or `null` when Flash can't be quoted for real. Owner 2026-07-13.
  *
- * Uses `calPriceFlash` for the destination zip (BKK column in-zone · ตจว column
- * upcountry · +50 remote/tourist surcharge) → cost → + TH_SHIPPING_PROFIT_MARGIN%.
- * Falls back to TH_SHIPPING_MIN_FLOOR when Flash returns 0 (over-limit) or the
- * inputs are unresolvable — never returns 0. Pure + testable.
+ * ⚠️ NO fake floor anymore. The old ฿50 floor (unmeasured / over-limit) produced a
+ * number that ISN'T the real Flash price — the owner checked flash's site (~฿300+)
+ * vs our ฿50/฿0. A real Flash quote needs the parcel FULLY MEASURED: both the girth
+ * SIZE (dims w+l+h) AND the weight — Flash charges max(kg, size), so a bulky-light
+ * parcel with only weight (no dims) under-quotes. So:
+ *   • dims OR weight missing (size≤0 or kg≤0)  → null  (force measure)
+ *   • over Flash's 50kg / 280cm cap (price 0)  → null  (freight/manual · not a ฿50 parcel)
+ *   • else → the real Flash price (zip column · +50 remote/tourist) + margin%.
+ * The caller must NOT auto-fill on null → the "ห้ามลืมค่าส่งไทย" ฿0 gate forces the
+ * operator to measure + enter the real cost. Pure + testable.
  */
 export function resolveThShippingAutoPrice(args: {
   zip?: string | null;
   kg?: number | null;
   sizeCm?: number | null;
-}): number {
+}): number | null {
   const zip = (args.zip ?? "").trim();
   const kg = Math.max(0, Number(args.kg) || 0);
   const size = Math.max(0, Number(args.sizeCm) || 0);
-  if (kg <= 0 && size <= 0) return TH_SHIPPING_MIN_FLOOR;
+  // Not fully measured → we cannot know the real Flash cost → don't invent one.
+  if (size <= 0 || kg <= 0) return null;
   // Feed the whole girth into one dim so `w+l+h === size` (calPriceFlash sums them).
   const f = calPriceFlash(1, "", zip, size, 0, 0, kg, 0, 1);
-  if (f.price <= 0) return TH_SHIPPING_MIN_FLOOR; // over 50kg / 280cm → floor
+  if (f.price <= 0) return null; // over 50kg / 280cm → Flash won't parcel-carry → manual
   const cost = f.price + (f.remoteArea ? 50 : 0) + (f.touristArea ? 50 : 0);
-  const withMargin = Math.round(cost * (1 + TH_SHIPPING_PROFIT_MARGIN / 100));
-  return Math.max(withMargin, TH_SHIPPING_MIN_FLOOR);
+  return Math.round(cost * (1 + TH_SHIPPING_PROFIT_MARGIN / 100));
 }
 
 /**
@@ -348,6 +346,10 @@ export function resolveAutoThShippingFill(args: {
     kg: args.weightKg,
     sizeCm,
   });
+  // Owner 2026-07-13: can't get a REAL Flash quote (not fully measured / oversize) →
+  // do NOT auto-fill a fake number. Return null → leave ฿0 → the "ห้ามลืมค่าส่งไทย"
+  // gate forces the operator to measure the parcel + enter the real Flash cost.
+  if (cost == null) return null;
   return {
     carrier: "2", // Flash Express (the auto-quoted external courier)
     cost,
