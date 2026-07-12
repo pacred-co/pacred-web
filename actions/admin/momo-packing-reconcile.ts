@@ -79,6 +79,13 @@ export type MomoPackingPreviewRow = {
   packingBoxes: number | null; // Σ parcelCount
   packingWeight: number | null; // Σ Total Weight
   packingCbm: number | null;   // Σ Total CBM
+  // box dims (cm · first sub) — owner 2026-07-13 "ขนาดกล่องไม่ซิงค์": the packing list
+  // carries w×l×h but the reconcile dropped it → fwidth/flength/fheight stayed 0 → the
+  // Flash domestic quote couldn't run. Sync it (display + domestic-quote input · NOT the
+  // SELL basis — fweight/fvolume stay authoritative for the import price).
+  packingWidth: number | null;
+  packingLength: number | null;
+  packingHeight: number | null;
   // container (meta — every row inherits it)
   container: string | null;
   transportMode: "1" | "2" | "3" | null; // derived from the container name
@@ -230,6 +237,9 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
       packingBoxes: a.parcelCount,
       packingWeight: a.totalWeight,
       packingCbm: a.totalCbm,
+      packingWidth: a.width,
+      packingLength: a.length,
+      packingHeight: a.height,
       container,
       transportMode: containerMode,
       matched,
@@ -335,6 +345,11 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       if (r.packingWeight != null) updates.fweight = r.packingWeight;
       if (r.packingCbm != null) updates.fvolume = r.packingCbm;
       if (r.packingBoxes != null) updates.famount = r.packingBoxes;
+      // owner 2026-07-13 — sync box dims too (was dropped → Flash quote couldn't run).
+      // Display + domestic-quote input only; the SELL price stays fweight/fvolume-based.
+      if (r.packingWidth != null)  updates.fwidth  = r.packingWidth;
+      if (r.packingLength != null) updates.flength = r.packingLength;
+      if (r.packingHeight != null) updates.fheight = r.packingHeight;
       if (r.container) updates.fcabinetnumber = r.container;
       if (transport) updates.ftransporttype = transport;
 
