@@ -495,6 +495,38 @@ export async function commitMomoRowCore(
 
   const nowIso = new Date().toISOString();
 
+  // ── 4a½. DEDUP vs an EXISTING tb_forwarder row (Fix F · 2026-07-13) ──
+  // 💰 The 4b claim below only guards THIS staging row against a double-commit;
+  // it cannot see a forwarder row for the SAME tracking that another path
+  // already created (manual /review click on an older staging row · quick-add
+  // api-forwarder-manual · แต้ม reconcile). The autocommit cron pre-checks this
+  // in a BATCH read (auto-commit-momo.ts step 4), but that check is read-at-load
+  // (TOCTOU vs a concurrent manual commit) and fails OPEN when its lookup
+  // errors — so re-assert at the single chokepoint EVERY commit path funnels
+  // through, right before the claim+INSERT. Same semantics as
+  // checkNotDuplicateTracking (auto-commit-momo-safety.ts): fstatus ''/'0' =
+  // cleared → recommit OK. EXACT match only — box-split siblings carry a
+  // suffixed "<base>-i/n" tracking + insert via split-box-rows.ts, never here.
+  const { data: dupRows, error: dupErr } = await admin
+    .from("tb_forwarder")
+    .select("id, fstatus")
+    .eq("ftrackingchn", trackingNo)
+    .limit(5);
+  if (dupErr) {
+    // Fail CLOSED — a billable INSERT must not proceed on an unverifiable dedup.
+    console.error(`[tb_forwarder dedup lookup] failed`, { code: dupErr.code, message: dupErr.message });
+    return { ok: false, error: `db_error:${dupErr.code ?? "unknown"}` };
+  }
+  const liveDup = ((dupRows ?? []) as Array<{ id: number; fstatus: string | null }>).find(
+    (r) => r.fstatus != null && r.fstatus !== "0" && r.fstatus !== "",
+  );
+  if (liveDup) {
+    return {
+      ok: false,
+      error: `tracking นี้มีในระบบแล้ว (tb_forwarder #${liveDup.id} · fstatus=${liveDup.fstatus}) — ไม่สร้างแถวซ้ำ`,
+    };
+  }
+
   // ── 4b. ATOMICALLY CLAIM the source row before the billable INSERT ──
   // 💰 TOCTOU fix (2026-06-14 forwarder-fidelity audit): the L225 committed_at
   // check is read-at-load, so two concurrent commits (double-click / stale
