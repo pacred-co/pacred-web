@@ -334,6 +334,11 @@ const saveItemSchema = z.object({
   cAmount:      z.coerce.number().int().nonnegative(),
   cPrice:       z.coerce.number().nonnegative(),
   cShippingCHN: z.coerce.number().nonnegative(),
+  // mig 0248 · owner P22353 — a foreign-currency order sends the ORIGINAL
+  // currency + $ amount alongside the ¥-equivalent cPrice; they are PRESERVED
+  // on tb_order (so order pages keep showing "$… USD"). Omitted for a ¥ order.
+  inputPrice:    z.coerce.number().nonnegative().max(99_999_999).optional(),
+  inputCurrency: z.string().trim().max(10).optional(),
 });
 
 const saveItemsAndQuoteSchema = z.object({
@@ -341,6 +346,11 @@ const saveItemsAndQuoteSchema = z.object({
   items:     z.array(saveItemSchema).min(1, "ต้องมีรายการสินค้าอย่างน้อย 1 รายการ").max(500),
   hRateCost: z.coerce.number().nonnegative().max(99_999),
   hCostAll:  z.coerce.number().nonnegative().max(99_999_999),
+  // mig 0248 · owner P22353 — foreign order → the effective ¥→฿ rate
+  // (= บาท/{cur} ÷ ¥perUnit · a normal ~5.1 magnitude even when บาท/USD > 20).
+  // Written to tb_header_order.hrate + used to recompute hTotalPriceUser.
+  // Omitted for a ¥ order → the stored header.hrate is used (byte-identical).
+  hRate:     z.coerce.number().positive().max(99_999).optional(),
 });
 export type AdminSaveShopOrderItemsAndQuoteInput = z.infer<typeof saveItemsAndQuoteSchema>;
 
@@ -449,16 +459,29 @@ export async function adminSaveShopOrderItemsAndQuote(
       if (it.cAmount <= 0) continue;
       const before = beforeById.get(it.id);
       const priceChanged = before !== undefined && Math.abs(before.cprice - it.cPrice) > 0.004;
-      const dropOriginal = before !== undefined && priceChanged && before.input_currency !== "";
+      // mig 0248 · owner P22353 — a foreign order re-save sends the currency + $
+      // amount → PRESERVE them (so the order pages keep showing "$… USD").
+      const hasCurrencyEdit =
+        typeof it.inputCurrency === "string" && it.inputCurrency.trim() !== "";
+      // Drop a STALE original ONLY when the admin overrode the ¥ price directly
+      // (a real ¥-price change) AND sent no currency (a plain ¥ edit). A legit
+      // currency edit must never trip this.
+      const dropOriginal =
+        before !== undefined && priceChanged && before.input_currency !== "" && !hasCurrencyEdit;
+      const currencyWrite = hasCurrencyEdit
+        ? { input_currency: it.inputCurrency!.trim().toUpperCase(), input_price: Number(it.inputPrice ?? 0) }
+        : dropOriginal
+          ? { input_currency: "", input_price: 0 }
+          : {};
       const { error: itemUpdErr } = await admin
         .from("tb_order")
         .update({
           camount:      it.cAmount,
           cprice:       it.cPrice,
           cshippingchn: it.cShippingCHN,
-          // Display-only columns — cleared so a hand-edited ¥ price can never be
-          // shown as a stale foreign amount. Never touched when the price is unchanged.
-          ...(dropOriginal ? { input_currency: "", input_price: 0 } : {}),
+          // Display-only currency columns — preserved on a foreign edit, cleared
+          // on a plain ¥ override, untouched otherwise.
+          ...currencyWrite,
         })
         .eq("id", it.id)
         .eq("hno", d.hNo); // belt-and-suspenders — scope to this order
@@ -481,7 +504,11 @@ export async function adminSaveShopOrderItemsAndQuote(
     }
 
     // 3. Recompute money + flip header to '2'.
-    const hRate            = Number(header.hrate ?? 0);
+    //    mig 0248 · owner P22353 — a foreign order sends the effective ¥→฿ rate
+    //    (= บาท/{cur} ÷ ¥perUnit) so the ฿ total tracks the USD rate the operator
+    //    set; a ¥ order sends none → the stored header.hrate is used (unchanged).
+    const rateProvided     = d.hRate !== undefined && d.hRate > 0;
+    const hRate            = rateProvided ? d.hRate! : Number(header.hrate ?? 0);
     const hShippingService = Number(header.hshippingservice ?? 0);
     const hCostAllTh       = roundUp(d.hCostAll * d.hRateCost, 2);
     // Legacy L978-979: hTotalPriceUser = round_up(((CHN+shipCHN)×rate)+svc, 2).
@@ -512,6 +539,9 @@ export async function adminSaveShopOrderItemsAndQuote(
         hdatepayment:    deadlineIso,
         htotalpriceuser: htotalpriceuser,
         adminidupdate:   legacyAdminId,
+        // mig 0248 · owner P22353 — persist the effective ¥→฿ rate on a foreign
+        // order (so the header total + rate stay consistent). ¥ order → untouched.
+        ...(rateProvided ? { hrate: d.hRate } : {}),
       })
       .eq("id", header.id);
     if (hdrErr) {
@@ -540,6 +570,8 @@ export async function adminSaveShopOrderItemsAndQuote(
         hcostall:        d.hCostAll,
         hcostallth:      hCostAllTh,
         htotalpriceuser: htotalpriceuser,
+        // mig 0248 — log the effective rate only when it was overridden (foreign order).
+        hrate:           rateProvided ? d.hRate : null,
         hdatepayment:    deadlineIso,
         before_status:   status,
         after_status:    "2",
