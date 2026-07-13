@@ -22,15 +22,23 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { PageHeader } from "@/components/admin/page-header";
 import {
   Truck,
-  Wand2,
-  Database,
+  PencilLine,
+  RefreshCw,
   BarChart3,
   CheckCircle2,
   Activity,
   AlertTriangle,
   XCircle,
   Search,
+  PackageSearch,
+  ShieldAlert,
+  Scale,
+  PackageOpen,
+  ReceiptText,
+  ArrowRight,
+  type LucideIcon,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -263,6 +271,105 @@ function freshnessTone(min: number | null): {
   };
 }
 
+// ─────────────────────────────────────────────────────────────
+// 2026-07-13 ภูม — จัดหน้า MOMO ใหม่เป็น 3 กลุ่ม + ใส่ "วิธีใช้" ทุก
+// เครื่องมือ เพื่อให้แอดมินเข้าใจ + ใช้งานถูก ไม่กดมั่ว.
+// LAYOUT-ONLY: ทุก href/ทางเข้าเดิมยังอยู่ครบ · ไม่แตะ data/logic/money.
+// ─────────────────────────────────────────────────────────────
+type Accent = "primary" | "emerald" | "amber" | "rose" | "sky" | "slate";
+
+const ACCENT: Record<
+  Accent,
+  { border: string; hoverBorder: string; bg: string; iconBg: string; iconFg: string; step: string }
+> = {
+  primary: { border: "border-primary-300", hoverBorder: "hover:border-primary-500", bg: "bg-white", iconBg: "bg-primary-50 group-hover:bg-primary-100", iconFg: "text-primary-600", step: "text-primary-700" },
+  emerald: { border: "border-emerald-400", hoverBorder: "hover:border-emerald-600", bg: "bg-emerald-50/30", iconBg: "bg-emerald-100 group-hover:bg-emerald-200", iconFg: "text-emerald-700", step: "text-emerald-700" },
+  amber:   { border: "border-amber-300", hoverBorder: "hover:border-amber-500", bg: "bg-amber-50/40", iconBg: "bg-amber-100 group-hover:bg-amber-200", iconFg: "text-amber-700", step: "text-amber-700" },
+  rose:    { border: "border-rose-300", hoverBorder: "hover:border-rose-500", bg: "bg-rose-50/40", iconBg: "bg-rose-100 group-hover:bg-rose-200", iconFg: "text-rose-700", step: "text-rose-700" },
+  sky:     { border: "border-sky-300", hoverBorder: "hover:border-sky-500", bg: "bg-sky-50/40", iconBg: "bg-sky-100 group-hover:bg-sky-200", iconFg: "text-sky-700", step: "text-sky-700" },
+  slate:   { border: "border-gray-300", hoverBorder: "hover:border-gray-500", bg: "bg-gray-50/60", iconBg: "bg-gray-100 group-hover:bg-gray-200", iconFg: "text-gray-600", step: "text-gray-700" },
+};
+
+/** A tool card carrying: title · step badge · what-it-does · numbered "วิธีใช้" · when-to-use · status pill. */
+function ToolCard({
+  href,
+  icon: Icon,
+  title,
+  step,
+  accent,
+  what,
+  steps,
+  when,
+  pill,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  step?: string;
+  accent: Accent;
+  what: string;
+  steps: string[];
+  when?: string;
+  pill: { text: string; cls: string };
+}) {
+  const a = ACCENT[accent];
+  return (
+    <Link
+      href={href}
+      className={`group flex flex-col rounded-2xl border-2 ${a.border} ${a.bg} p-4 shadow-sm ${a.hoverBorder} hover:shadow-md transition`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`shrink-0 rounded-xl p-3 ${a.iconBg} ${a.iconFg}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {step && <span className={`text-[11px] font-bold ${a.step}`}>{step}</span>}
+            <h3 className="text-base font-bold text-foreground leading-tight">{title}</h3>
+          </div>
+          <p className="mt-1 text-xs text-muted leading-snug">{what}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${pill.cls}`}>
+          {pill.text}
+        </span>
+      </div>
+      <div className="mt-3 rounded-lg border border-black/5 bg-white/70 p-2.5">
+        <p className="mb-1 text-[11px] font-semibold text-gray-500">วิธีใช้</p>
+        <ol className="list-inside list-decimal space-y-0.5 text-[11px] leading-snug text-gray-700">
+          {steps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+        {when && <p className="mt-1.5 text-[11px] text-gray-500">🕑 {when}</p>}
+      </div>
+    </Link>
+  );
+}
+
+/** A titled group of tool cards with a one-line "เมื่อไหร่ใช้กลุ่มนี้" hint. */
+function GroupSection({
+  badge,
+  label,
+  hint,
+  children,
+}: {
+  badge: string;
+  label: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="rounded-md bg-gray-900 px-2 py-0.5 text-[11px] font-bold text-white">{badge}</span>
+        <h2 className="text-base font-bold text-foreground">{label}</h2>
+        <p className="text-[11px] text-muted">{hint}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
 export default async function AdminApiForwarderMomoPage({
   searchParams,
 }: {
@@ -307,122 +414,180 @@ export default async function AdminApiForwarderMomoPage({
       <PageHeader
         eyebrow="ADMIN · ฝากนำเข้า · MOMO Integration"
         title="แดชบอร์ด Cargo Center · MOMO"
-        subtitle="เชื่อมข้อมูลรายการ MOMO เข้าระบบ PR — Wave 17 รองรับเฉพาะ “อัปเดตด้วยมือ”"
+        subtitle="ศูนย์รวมเครื่องมือเชื่อมข้อมูล MOMO เข้าระบบ — ดึงของ · ตรวจ+สร้างบิล · ตามเก็บของหาย · ปิดตู้/ลงต้นทุน"
       />
 
-      {/* §0d/§0g — compact nav strip (เลื่อนขึ้นบนสุด · 2026-06-29 ภูม):
-          เครื่องมือย่อยทั้งหมดของ MOMO รวมเป็นแถวปุ่มกระชับ ให้แอดมินกระโดด
-          ระหว่างเครื่องมือได้โดยไม่ต้องเลื่อนลงล่าง. แค่ navigation — ไม่แตะ
-          data/logic/money. */}
-      <nav
-        aria-label="เครื่องมือ MOMO"
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+      {/* 2026-07-13 ภูม — flow explainer: ให้เข้าใจ "ลูป" ของ MOMO ก่อน
+          แล้วค่อยลงมือ. ของถึงจีน → ดึงเข้าระบบ → ตรวจ+สร้างบิล → ปิดตู้. */}
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-bold text-gray-900">ภาพรวม — MOMO ทำงานยังไง</h2>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+          <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-gray-700">📦 ของถึงโกดังจีน (MOMO)</span>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+          <span className="rounded-lg bg-primary-50 px-3 py-1.5 text-primary-700">① ดึงเข้าระบบ</span>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+          <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-emerald-700">② ตรวจ + สร้างบิล</span>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+          <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-gray-700">💰 ออกบิล / ปิดตู้</span>
+        </div>
+        <p className="mt-3 text-[11px] leading-snug text-muted">
+          ปกติระบบ (cron) ทำขั้น ① ให้อัตโนมัติทุก 10 นาที — เครื่องมือด้านล่างไว้กดเองเวลาต้องการ
+          หรือไว้ <span className="font-semibold text-amber-700">ตามเก็บของที่ MOMO ส่งมาไม่ครบ</span>.
+          ทำตามลำดับกลุ่ม A → B → C จะไม่พลาด.
+        </p>
+      </section>
+
+      {/* กลุ่ม A · งานประจำวัน (ทำเรียงลำดับ 1 → 2) */}
+      <GroupSection
+        badge="กลุ่ม A"
+        label="งานประจำวัน — ทำเรียงลำดับ"
+        hint="ลูปหลักของ MOMO · ทำ ① ก่อนแล้วค่อย ② · ปกติ cron ทำ ① ให้อยู่แล้ว"
       >
-        {/* อัปเดตด้วยมือ */}
-        <Link
-          href="/admin/api-forwarder-momo/manual"
-          className="group rounded-2xl border-2 border-primary-300 bg-white p-3 shadow-sm hover:border-primary-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
-              <Wand2 className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-foreground">อัปเดตด้วยมือ</h3>
-              <p className="mt-0.5 text-[11px] text-muted leading-snug">
-                กรอกรายการ MOMO ทีละตัว
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                ✓ พร้อมใช้
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* Review & Commit */}
-        <Link
-          href="/admin/api-forwarder-momo/review"
-          className="group rounded-2xl border-2 border-emerald-400 bg-emerald-50/30 p-3 shadow-sm hover:border-emerald-600 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 group-hover:bg-emerald-200">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-foreground">Review &amp; Commit</h3>
-              <p className="mt-0.5 text-[11px] text-muted leading-snug">
-                ตรวจ row ที่ sync แล้ว → สร้างเข้า tb_forwarder
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                ✓ พร้อมใช้
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* ดึงสถานะ MOMO (Status Sync) */}
-        <Link
+        <ToolCard
           href="/admin/api-forwarder-momo/sync"
-          className="group rounded-2xl border-2 border-primary-300 bg-white p-3 shadow-sm hover:border-primary-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-primary-50 p-3 text-primary-600 group-hover:bg-primary-100">
-              <Database className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-foreground">ดึงสถานะ MOMO</h3>
-              <p className="mt-0.5 text-[11px] text-muted leading-snug">
-                ดึง Import/Container/Sack จาก MOMO API
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                ✓ พร้อมใช้
-              </span>
-            </div>
-          </div>
-        </Link>
+          icon={RefreshCw}
+          title="ดึงสถานะ MOMO"
+          step="ขั้นที่ ①"
+          accent="primary"
+          what="ดึงรายการของ (แทรกกิ้ง · น้ำหนัก · เลขตู้ · สถานะ) จาก MOMO เข้าระบบเรา"
+          steps={[
+            "เลือกช่วงวันที่ที่อยากดึง",
+            "กดปุ่ม “ดึงข้อมูล”",
+            "รอจนขึ้นสรุปว่าดึงมากี่รายการ",
+          ]}
+          when="ทุกเช้า หรือเมื่ออยากได้ข้อมูลล่าสุดเดี๋ยวนั้น"
+          pill={{ text: "✓ พร้อมใช้", cls: "bg-green-100 text-green-700" }}
+        />
+        <ToolCard
+          href="/admin/api-forwarder-momo/review"
+          icon={CheckCircle2}
+          title="Review & Commit"
+          step="ขั้นที่ ②"
+          accent="emerald"
+          what="ตรวจรายการที่ดึงมา แล้วกดสร้างเข้าระบบ → กลายเป็นรายการนำเข้าที่ออกบิลได้"
+          steps={[
+            "ดูรายการที่ยัง “ไม่ commit”",
+            "ตรวจ PR / ขนส่ง / น้ำหนัก ให้ถูก",
+            "กด “สร้าง” ทีละตัวหรือหลายตัว",
+          ]}
+          when="หลังดึงเสร็จ · ทำให้คิว “ยังไม่ commit” เหลือ 0"
+          pill={{ text: "✓ พร้อมใช้", cls: "bg-green-100 text-green-700" }}
+        />
+        <ToolCard
+          href="/admin/api-forwarder-momo/manual"
+          icon={PencilLine}
+          title="อัปเดตด้วยมือ"
+          accent="slate"
+          what="กรอกรายการเองทีละตัว — ใช้เฉพาะตอน MOMO ไม่มีข้อมูล หรือต้องแก้เอง"
+          steps={[
+            "กรอกแทรกกิ้ง / PR / น้ำหนัก / ขนส่ง",
+            "กดบันทึก",
+          ]}
+          when="กรณีพิเศษเท่านั้น · ปกติใช้ ① + ② พอ"
+          pill={{ text: "ทางเลือก", cls: "bg-gray-200 text-gray-700" }}
+        />
+      </GroupSection>
 
-        {/* พัสดุที่ขาด — gap-finder · distinct amber accent */}
-        <Link
+      {/* กลุ่ม B · ตามเก็บของหาย + ตรวจให้ตรง (ตัวอุดรู MOMO) */}
+      <GroupSection
+        badge="กลุ่ม B"
+        label="ตามเก็บของหาย + ตรวจให้ตรง"
+        hint="ไว้อุดรู MOMO · ของหลุด feed / เลขไม่ตรง เข้ามาที่นี่ · ตรวจไม่กี่วันครั้งก็ได้"
+      >
+        <ToolCard
           href="/admin/api-forwarder-momo/missing"
-          className="group rounded-2xl border-2 border-amber-300 bg-amber-50/40 p-3 shadow-sm hover:border-amber-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-100 p-3 text-amber-700 group-hover:bg-amber-200">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-foreground">พัสดุที่ขาด</h3>
-              <p className="mt-0.5 text-[11px] text-muted leading-snug">
-                พัสดุในตู้ MOMO ที่ยังไม่เข้าระบบ — ตามเก็บ
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                ⚠️ ตรวจ-เก็บ
-              </span>
-            </div>
-          </div>
-        </Link>
-
-        {/* ดูข้อมูล MOMO (Live) — read-only mirror · sky/cyan accent */}
-        <Link
+          icon={PackageSearch}
+          title="พัสดุที่ขาด"
+          accent="amber"
+          what="หาพัสดุที่อยู่ในตู้ MOMO แต่ยังไม่เข้าระบบเรา → ดึงกลับเข้ามา"
+          steps={[
+            "เปิดดูรายการที่ยังขาด",
+            "กดดึงเข้าระบบ",
+            "ไปที่ Review & Commit (②) เพื่อสร้างต่อ",
+          ]}
+          when="เมื่อสงสัยว่าของตกหล่น (MOMO API ทิ้งของที่เดินหน้าไปแล้ว)"
+          pill={{ text: "⚠️ ตรวจ-เก็บ", cls: "bg-amber-100 text-amber-700" }}
+        />
+        <ToolCard
+          href="/admin/api-forwarder-momo/drift"
+          icon={ShieldAlert}
+          title="จุดบอด (แต้ม vs ระบบ)"
+          accent="rose"
+          what="คิวกู้ของที่ MOMO API ทิ้งไป (~฿294,000) โดยเทียบกับ packing list ของแต้ม"
+          steps={[
+            "ดูรายการที่แต้มมี แต่ระบบไม่มี",
+            "ตรวจให้ชัวร์ว่าถูก",
+            "กด apply เพื่อเติมกลับ (มี audit)",
+          ]}
+          when="⚠️ กระทบเงิน — ตรวจก่อน apply เสมอ"
+          pill={{ text: "🚨 กู้เงิน", cls: "bg-rose-100 text-rose-700" }}
+        />
+        <ToolCard
+          href="/admin/api-forwarder-momo/warehouse-reconcile"
+          icon={Scale}
+          title="เทียบข้อมูลกับแต้ม"
+          accent="amber"
+          what="เอา packing list แต้มมาเทียบ ว่าน้ำหนัก / กล่อง / ตู้ตรงกับ MOMO ไหม (แต้มแม่นกว่า)"
+          steps={[
+            "วาง/อัปโหลดข้อมูลจากแต้ม",
+            "ดูรายการที่ไม่ตรง",
+            "กดอัปเดตให้ตรง",
+          ]}
+          when="เมื่อ MOMO ให้เลขน่าสงสัย (MOMO ชอบให้ตัวเลขมั่ว)"
+          pill={{ text: "🔄 เทียบ", cls: "bg-amber-100 text-amber-700" }}
+        />
+        <ToolCard
           href="/admin/api-forwarder-momo/live"
-          className="group rounded-2xl border-2 border-sky-300 bg-sky-50/40 p-3 shadow-sm hover:border-sky-500 hover:shadow-md transition"
-        >
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-sky-100 p-3 text-sky-700 group-hover:bg-sky-200">
-              <Search className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-foreground">🔍 ดูข้อมูล MOMO (Live)</h3>
-              <p className="mt-0.5 text-[11px] text-muted leading-snug">
-                กระจกรายการนำเข้าจากเว็บ MOMO — ดูอย่างเดียว
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                👁️ อ่านอย่างเดียว
-              </span>
-            </div>
-          </div>
-        </Link>
-      </nav>
+          icon={Search}
+          title="ดูข้อมูล MOMO (Live)"
+          accent="sky"
+          what="กระจกส่องเว็บ MOMO — ดูอย่างเดียว ไม่เขียนอะไรลงระบบ"
+          steps={[
+            "เปิดดูว่า MOMO ฝั่งเค้ามีอะไรบ้าง",
+            "เอาไว้เทียบเวลาสงสัยว่าของหาย/ไม่ตรง",
+          ]}
+          when="ใช้ตรวจสอบ · ปลอดภัย 100% (อ่านอย่างเดียว)"
+          pill={{ text: "👁️ อ่านอย่างเดียว", cls: "bg-sky-100 text-sky-700" }}
+        />
+      </GroupSection>
+
+      {/* กลุ่ม C · เงิน & ปิดตู้ */}
+      <GroupSection
+        badge="กลุ่ม C"
+        label="เงิน & ปิดตู้"
+        hint="ทำตอนตู้ปิด / ตอนลงต้นทุน"
+      >
+        <ToolCard
+          href="/admin/api-forwarder-momo/packing-upload"
+          icon={PackageOpen}
+          title="อัปโหลด packing list (ปิดตู้)"
+          accent="emerald"
+          what="ตอนปิดตู้ อัปไฟล์ packing list → อัปเดต CBM / น้ำหนัก / เลขตู้จริงเข้าทุกแทรกในตู้"
+          steps={[
+            "เลือกไฟล์ packing list",
+            "ตรวจ preview ว่าจับคู่แทรกถูก",
+            "กดยืนยัน (ปิดตู้)",
+          ]}
+          when="ตอนตู้ถูกปิดที่จีน · อัปเดตน้ำหนัก/ตู้จริงทีเดียวทั้งตู้"
+          pill={{ text: "📦 ปิดตู้", cls: "bg-emerald-100 text-emerald-700" }}
+        />
+        {canEditCost && (
+          <ToolCard
+            href="/admin/api-forwarder-momo/invoice-cost"
+            icon={ReceiptText}
+            title="ลงต้นทุนจากใบแจ้งหนี้"
+            accent="amber"
+            what="เอาต้นทุนจากใบแจ้งหนี้ MOMO มาลงว่าตู้นี้ต้นทุนเท่าไหร่ (ไว้คิดกำไร)"
+            steps={[
+              "วางข้อมูลจากใบแจ้งหนี้ MOMO",
+              "จับคู่แทรก",
+              "กด apply ลงต้นทุน",
+            ]}
+            when="เมื่อ MOMO วางบิลต้นทุนมา · เห็นเฉพาะฝ่ายบัญชี"
+            pill={{ text: "💰 ต้นทุน", cls: "bg-amber-100 text-amber-700" }}
+          />
+        )}
+      </GroupSection>
 
       {/*
         2026-06-05 ภูม flag — ยอดรวมคิวสะสม (สำหรับพี่ป๊อปดู).
@@ -491,32 +656,6 @@ export default async function AdminApiForwarderMomoPage({
             className="ml-auto rounded-md border border-primary-300 bg-white text-primary-700 px-3 py-1.5 text-xs font-medium hover:bg-primary-50 inline-flex items-center gap-1"
           >
             📊 ประวัติ (ตามลูกค้า)
-          </Link>
-          {canEditCost && (
-            <Link
-              href="/admin/api-forwarder-momo/invoice-cost"
-              className="rounded-md border border-amber-300 bg-white text-amber-700 px-3 py-1.5 text-xs font-medium hover:bg-amber-50 inline-flex items-center gap-1"
-            >
-              💰 ลงต้นทุนจากใบแจ้งหนี้
-            </Link>
-          )}
-          <Link
-            href="/admin/api-forwarder-momo/warehouse-reconcile"
-            className="rounded-md border border-sky-300 bg-white text-sky-700 px-3 py-1.5 text-xs font-medium hover:bg-sky-50 inline-flex items-center gap-1"
-          >
-            🔄 เทียบข้อมูลกับแต้ม
-          </Link>
-          <Link
-            href="/admin/api-forwarder-momo/packing-upload"
-            className="rounded-md border border-emerald-300 bg-white text-emerald-700 px-3 py-1.5 text-xs font-medium hover:bg-emerald-50 inline-flex items-center gap-1"
-          >
-            📦 อัปโหลด packing list (ปิดตู้)
-          </Link>
-          <Link
-            href="/admin/api-forwarder-momo/drift"
-            className="rounded-md border border-rose-300 bg-white text-rose-700 px-3 py-1.5 text-xs font-medium hover:bg-rose-50 inline-flex items-center gap-1"
-          >
-            🚨 จุดบอด (แต้ม vs ระบบ)
           </Link>
         </form>
 
