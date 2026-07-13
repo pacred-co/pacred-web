@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
+import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
@@ -46,11 +47,12 @@ export async function adminDeleteForwarder(
       // Load the row — confirm it exists + read the status guard fields.
       const { data: row, error: rowErr } = await admin
         .from("tb_forwarder")
-        .select("id, fstatus, userid, fidorco, reforder")
+        .select("id, fstatus, userid, fidorco, reforder, ftrackingchn")
         .eq("id", id)
         .maybeSingle<{
           id: number; fstatus: string | null;
           userid: string | null; fidorco: string | null; reforder: string | null;
+          ftrackingchn: string | null;
         }>();
       if (rowErr) return { ok: false, error: rowErr.message };
       if (!row) return { ok: false, error: "ไม่พบรายการนี้" };
@@ -80,6 +82,22 @@ export async function adminDeleteForwarder(
       // ภูม 2026-06-25 — ลบออเดอร์แล้วต้องเคลียร์สลิป pending ที่ค้างในคิว "ชำระเงิน"
       // (best-effort · money-safe: reject เฉพาะ status='1' = เงินยังไม่เข้า/ออก).
       await rejectPendingSlipsForCancelledOrder(admin, id, adminId);
+
+      // 🔗 STATUS-SYNC (owner 2026-07-13): ลบ forwarder แล้ว ออเดอร์ฝากสั่งซื้อที่
+      // ผูกไว้ต้อง "ถอยสถานะ" ตาม flow — ถ้า forwarder ตัวนี้เคยดันออเดอร์ขึ้น
+      // "ถึงโกดังจีน(40)" แล้วถูกลบ (เป็นตัวสุดท้ายที่ถึง) ออเดอร์ต้องกลับเป็น
+      // "รอร้านจีนส่ง(4)". advanceLinkedShopOrder RE-DERIVES จาก forwarder ที่
+      // เหลือ (pure deriveShopStatus · demote 40→4 ได้) · guard cur∈{5,6,99}=no-op
+      // (ออเดอร์ที่สำเร็จ/ยกเลิกแล้ว ไม่ถูก re-open). best-effort — ไม่ทำให้ลบ fail.
+      try {
+        await advanceLinkedShopOrder(
+          admin,
+          { reforder: row.reforder, ftrackingchn: row.ftrackingchn, fstatus: row.fstatus, fcabinetnumber: null },
+          new Date().toISOString(),
+        );
+      } catch (e) {
+        console.error("[forwarder.delete] re-derive linked shop-order failed (best-effort)", e);
+      }
 
       await logAdminAction(adminId, "forwarder.delete", "tb_forwarder", String(id), {
         fstatus:  row.fstatus,

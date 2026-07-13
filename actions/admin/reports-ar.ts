@@ -62,9 +62,12 @@ const MS_PER_DAY = 86_400_000;
 /** Default number of top debtors the page shows. */
 const DEFAULT_TOP_N = 50;
 
-/** Columns calcForwarderOutstanding needs + the AR keys (lowercase · 0081). */
+/** Columns calcForwarderOutstanding needs + the AR keys (lowercase · 0081).
+ *  D1 (2026-07-13) — pull `paymethod` so a COD (ปลายทาง) row's ftransportprice (the
+ *  at-door leg the courier collects) is EXCLUDED from the receivable, matching the
+ *  ใบวางบิล + customer self-pay collect (no double-count on the AR aging). */
 const SELECT_COLS =
-  "id,userid,fstatus,fcredit,paydeposit,fdate," +
+  "id,userid,fstatus,fcredit,paydeposit,fdate,paymethod," +
   "ftotalprice,ftransportprice,fpriceupdate,fshippingservice,pricecrate," +
   "ftransportpricechnthb,priceother,fdiscount,fusercompany";
 

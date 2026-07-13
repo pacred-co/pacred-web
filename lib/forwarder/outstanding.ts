@@ -36,6 +36,16 @@ export interface ForwarderPriceFields {
   priceother:            number | string | null;
   fdiscount:             number | string | null;
   fusercompany:          number | string | null;   // legacy varchar; '1' = juristic
+  /**
+   * D1 (2026-07-13 · MONEY) — '1'=ต้นทาง (prepaid) · '2'=ปลายทาง (COD, courier collects
+   * the domestic leg at the door). A COD row's ftransportprice is the AT-DOOR amount, so
+   * it must NOT be folded into the Pacred upfront bill/outstanding (else the domestic leg
+   * is double-billed: once on the ใบวางบิล + once by the courier). Mirrors the customer
+   * self-pay helper (forwarder-collect-total.ts). OPTIONAL: absent/undefined → treated as
+   * prepaid → the domestic leg is added as before (no regression for callers that don't
+   * SELECT paymethod).
+   */
+  paymethod?:            number | string | null;
 }
 
 function toNumber(v: number | string | null | undefined): number {
@@ -69,9 +79,15 @@ export function calcForwarderGross(row: ForwarderPriceFields): number {
 
 /** Σ 7 price columns − discount (the legacy `priceFull`, pre-allowance · raw). */
 function forwarderPriceFull(row: ForwarderPriceFields): number {
+  // D1 (2026-07-13 · MONEY) — the DOMESTIC leg (ftransportprice) is billed upfront ONLY
+  // for a prepaid (ต้นทาง) row. A COD (ปลายทาง · paymethod='2') row's ftransportprice is
+  // collected at the door by the courier, so it is NOT folded into the Pacred bill/
+  // outstanding (else double-charge). Absent paymethod ⇒ prepaid ⇒ unchanged. Mirrors
+  // forwarder-collect-total.ts (the customer self-pay path) so the two never drift.
+  const domesticLeg = toNumber(row.paymethod) === 2 ? 0 : toNumber(row.ftransportprice);
   return (
     toNumber(row.ftotalprice) +
-    toNumber(row.ftransportprice) +
+    domesticLeg +
     toNumber(row.fpriceupdate) +
     toNumber(row.fshippingservice) +
     toNumber(row.pricecrate) +

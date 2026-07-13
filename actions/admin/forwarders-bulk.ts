@@ -66,6 +66,7 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { maybeAutoCompleteDriverBatch } from "@/lib/admin/driver-batch-complete";
 import { TB_FORWARDER_STATUSES, type TbForwarderStatus } from "./forwarders-bulk-types";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -718,7 +719,7 @@ export async function bulkCancel(
       const ids = idEntries.map((e) => e.id);
       const { data: beforeRows, error: readErr } = await admin
         .from("tb_forwarder")
-        .select("id, fstatus, userid, fidorco")
+        .select("id, fstatus, fcredit, userid, fidorco")
         .in("id", ids);
       if (readErr) {
         console.error(`[forwarders-bulk bulkCancel] tb_forwarder lookup failed`, {
@@ -727,10 +728,10 @@ export async function bulkCancel(
         return { ok: false, error: `lookup failed: ${readErr.message}` };
       }
 
-      const byId = new Map<number, { id: number; fstatus: string; userid: string; fidorco: string | null }>(
+      const byId = new Map<number, { id: number; fstatus: string; fcredit: string | null; userid: string; fidorco: string | null }>(
         (beforeRows ?? []).map((r) => [
           (r as { id: number }).id,
-          r as { id: number; fstatus: string; userid: string; fidorco: string | null },
+          r as { id: number; fstatus: string; fcredit: string | null; userid: string; fidorco: string | null },
         ]),
       );
 
@@ -761,6 +762,16 @@ export async function bulkCancel(
         // operation that needs ATM-side reversal (the legacy refund flow).
         if (row.fstatus === "7") {
           failed.push({ fNo: raw, error: "รายการส่งสำเร็จแล้ว — ใช้ flow คืนเงินแทน" });
+          continue;
+        }
+
+        // 🔗 owner 2026-07-13 status-sync — REFUSE a credit-granted row. Cancelling
+        // it to '99' here would orphan the AR: fcredit stays '1' + the tb_credit
+        // outstanding debt (written by adminMarkForwarderCredit) is never reversed
+        // → the customer's วงเงิน stays consumed for an order that no longer exists.
+        // Must ถอนเครดิต/คืน AR first (the credit-withdraw flow reverses tb_credit).
+        if ((row.fcredit ?? "").trim() === "1") {
+          failed.push({ fNo: raw, error: "รายการเครดิต — ต้องถอนเครดิต/คืนวงเงิน (AR) ก่อนยกเลิก" });
           continue;
         }
 
@@ -803,6 +814,32 @@ export async function bulkCancel(
           code: updErr.code, message: updErr.message, ids: cancellableIds,
         });
         return { ok: false, error: `update failed: ${updErr.message}` };
+      }
+
+      // 🔗 owner 2026-07-13 status-sync — a cancelled (→99) forwarder that still
+      // has an OPEN driver stop (fdistatus ''/'1') would block its batch from
+      // auto-completing forever (the parcel will never be delivered). Remove those
+      // open stops + re-check each affected batch for auto-complete. Delivered
+      // stops (fdistatus='2') are NEVER touched (keep the delivery audit).
+      // Best-effort — never rolls back the committed cancel.
+      try {
+        const { data: openStops } = await admin
+          .from("tb_forwarder_driver_item")
+          .select("id, fdid")
+          .in("fid", cancellableIds)
+          .in("fdistatus", ["", "1"]);
+        const stops = (openStops ?? []) as Array<{ id: number; fdid: number }>;
+        if (stops.length > 0) {
+          await admin
+            .from("tb_forwarder_driver_item")
+            .delete()
+            .in("id", stops.map((s) => s.id))
+            .in("fdistatus", ["", "1"]); // guard: never delete a delivered stop
+          const batchIds = [...new Set(stops.map((s) => s.fdid).filter((n) => Number.isFinite(n) && n > 0))];
+          for (const bid of batchIds) await maybeAutoCompleteDriverBatch(admin, bid);
+        }
+      } catch (e) {
+        console.error("[forwarders-bulk bulkCancel] driver-stop unwind failed (best-effort)", e);
       }
 
       // ── Per-row side-effects ──────────────────────────────────────────────

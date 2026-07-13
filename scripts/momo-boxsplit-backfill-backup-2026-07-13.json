@@ -1,0 +1,110 @@
+{
+  "at": "2026-07-13",
+  "stage": "revalue+zero-rate",
+  "rows": [
+    {
+      "id": "52095",
+      "ftrackingchn": "1781515241",
+      "userid": "PR012",
+      "fstatus": "4",
+      "famountcount": "1",
+      "fweight": "554.00",
+      "fvolume": "2.036604",
+      "famount": 1,
+      "frefrate": "3000.00",
+      "frefprice": "2",
+      "ftotalprice": "6109.81",
+      "agg_kg": "971",
+      "agg_cbm": "4.343346",
+      "agg_qty": 3
+    },
+    {
+      "id": "52109",
+      "ftrackingchn": "1782110296",
+      "userid": "PR021",
+      "fstatus": "3",
+      "famountcount": "1",
+      "fweight": "12.50",
+      "fvolume": "0.047500",
+      "famount": 1,
+      "frefrate": "3700.00",
+      "frefprice": "2",
+      "ftotalprice": "175.75",
+      "agg_kg": "82.5",
+      "agg_cbm": "0.358124",
+      "agg_qty": 6
+    },
+    {
+      "id": "52111",
+      "ftrackingchn": "1782103385",
+      "userid": "PR102",
+      "fstatus": "3",
+      "famountcount": "1",
+      "fweight": "374.00",
+      "fvolume": "0.995500",
+      "famount": 1,
+      "frefrate": "12.00",
+      "frefprice": "1",
+      "ftotalprice": "4488.00",
+      "agg_kg": "2753",
+      "agg_cbm": "9.7719",
+      "agg_qty": 6
+    },
+    {
+      "id": "52115",
+      "ftrackingchn": "1782288609",
+      "userid": "PR009",
+      "fstatus": "3",
+      "famountcount": "1",
+      "fweight": "458.00",
+      "fvolume": "2.340600",
+      "famount": 1,
+      "frefrate": "3700.00",
+      "frefprice": "2",
+      "ftotalprice": "8660.22",
+      "agg_kg": "797",
+      "agg_cbm": "4.180656",
+      "agg_qty": 2
+    },
+    {
+      "id": "52128",
+      "ftrackingchn": "1782459481",
+      "userid": "PR10601",
+      "fstatus": "3",
+      "famountcount": "1",
+      "fweight": "48.00",
+      "fvolume": "0.108000",
+      "famount": 4,
+      "frefrate": "3700.00",
+      "frefprice": "2",
+      "ftotalprice": "399.60",
+      "agg_kg": "266",
+      "agg_cbm": "0.8545",
+      "agg_qty": 11
+    },
+    {
+      "id": "52305",
+      "ftrackingchn": "800206224068",
+      "userid": "PR079",
+      "fstatus": "4",
+      "famountcount": "1",
+      "fweight": "46.50",
+      "fvolume": "0.087480",
+      "famount": 3,
+      "frefrate": "5000.00",
+      "frefprice": "2",
+      "ftotalprice": "437.40",
+      "agg_kg": "249",
+      "agg_cbm": "0.426905",
+      "agg_qty": 13
+    }
+  ],
+  "paymethod_sibling": [
+    {
+      "id": "52577",
+      "ftrackingchn": "302162248998-2",
+      "paymethod": "1",
+      "fstatus": "3"
+    }
+  ]
+}

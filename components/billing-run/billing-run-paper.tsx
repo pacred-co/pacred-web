@@ -195,8 +195,9 @@ function BillingRunPage({
             {/* CUSTOMER */}
             <div>
               <InfoLine k="ลูกค้า :" v={p.buyerName || "-"} bold />
-              <InfoLine k="ที่อยู่ :" v={p.buyerAddress || "-"} pre />
-              {p.deliveryAddress && <InfoLine k="ที่อยู่จัดส่ง :" v={p.deliveryAddress} pre />}
+              {/* ONE address slot (owner 2026-07-13): a swapped delivery_address
+                  REPLACES the address here — never a second "ที่อยู่จัดส่ง" heading. */}
+              <InfoLine k="ที่อยู่ :" v={p.deliveryAddress || p.buyerAddress || "-"} pre />
               <InfoLine k="เลขที่ภาษี :" v={p.buyerTaxId || "-"} />
               <InfoLine k="ประเภท :" v={p.isJuristic ? "นิติบุคคล" : "บุคคลธรรมดา"} />
             </div>

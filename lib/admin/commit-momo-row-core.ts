@@ -381,14 +381,20 @@ export async function commitMomoRowCore(
 
   // ── 4. Derive cargo fields from MOMO source row ────────────
   const trackingNo  = srcRow.momo_tracking_no;
-  // ภูม flag 2026-05-30 (bug 2c): prefer the joined cabinet (cid from
-  // container_closed) over momo_container_no (MOMO routing batch ID).
-  // The legacy PHP writes the cabinet PCS staff/customers actually see
-  // (e.g. "GZS260525-2") — that's what `container_batch_no` holds.
-  // Falls back to momo_container_no ONLY when the propagation hasn't
-  // populated this row yet (sync.ts step 2.5 fires on container_closed
-  // and may lag one cycle behind import_track upsert).
-  const cabinetForDisplay = srcRow.container_batch_no ?? srcRow.momo_container_no ?? "";
+  // ภูม flag 2026-05-30 (bug 2c): use ONLY the joined REAL cabinet (cid from
+  // container_closed · e.g. "GZS260525-2"), what `container_batch_no` holds.
+  //
+  // A1 (2026-07-13 · logic): DROP the momo_container_no fallback. momo_container_no is
+  // MOMO's ROUTING BATCH ID (e.g. "PR20260712-EK01"), NOT a real PCS cabinet — propagate.ts
+  // explicitly REFUSES to write it (it links to no /admin/report-cnt/[cabinet] page + traps
+  // the column so the real cid can never be written later). Writing it here ALSO over-advanced
+  // fstatus to '3' (hasContainer) even when MOMO's status was TRUCK_CLOSED → '2', and the
+  // forward-only propagate can't demote it. With no fallback the row stays fstatus '2' with an
+  // EMPTY cabinet until MOMO's real cid arrives, then propagate fills the real cabinet + advances
+  // status from MOMO's real signal — no phantom cabinet, no over-advance. (containerNo below
+  // still keeps momo_container_no separately for the momo_container_no column; and transport-mode
+  // derivation already reads container_batch_no only, so no mode regression.)
+  const cabinetForDisplay = srcRow.container_batch_no ?? "";
   const containerNo = srcRow.momo_container_no ?? "";
   // ภูม 2026-07-13 (MONEY · ~5× under-bill fix) — value the row from the momo_import_tracks
   // AGGREGATE columns (weight_kg/cbm/quantity = Σ of all the shipment's boxes, set by the

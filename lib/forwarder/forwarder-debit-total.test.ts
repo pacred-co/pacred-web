@@ -287,6 +287,32 @@ console.log("computeForwarderDebitBatch — เหมาๆ anchored to base tra
   assertEq("fix-id = base row", b.pcsfTransportFixId, "1");
   assertClose("batch total = 400 (300 + one ฿100)", b.total_thb, 400);
 }
+// ── B1 (2026-07-13) N-box เหมาๆ = ฿100 ONCE ─────────────────────────────────
+// resolveAutoThShippingFill now auto-fills a เหมาๆ row as PRF · ftransportprice ฿0
+// (NOT ฿100). This test asserts the payoff: N such box-split PRF-zero rows of one
+// shipment are charged ฿100 exactly ONCE (the anchor), never N×฿100. Before B1 the
+// auto-fill stamped ฿100 into each row's ftransportprice → isPcsfZero(row) went false
+// (ftransportprice≠0) → the anchor stopped counting them AND each row's ฿100 folded
+// into otherCharges → an N-box เหมาๆ shipment billed N×฿100. ฿0 rows restore ฿100-once.
+console.log("computeForwarderDebitBatch — B1 N-box เหมาๆ (PRF-zero) = ฿100 once");
+{
+  const N = 6;
+  const boxes = Array.from({ length: N }, (_, i) =>
+    row({
+      id: 100 + i,
+      ftrackingchn: i === 0 ? "KY7788" : `KY7788-${i + 1}/${N}`, // base (suffix 0) + -N/M siblings
+      fshipby: i % 2 === 0 ? "PRF" : "PCSF",                     // legacy + rebrand both count
+      ftransportprice: 0,                                        // B1: auto-fill leaves ฿0
+      ftotalprice: 250,
+    }),
+  );
+  const b = computeForwarderDebitBatch(boxes, { userId: "PR200", isCorporate: false });
+  // 6 × 250 freight = 1500 · เหมาๆ ฿100 ONCE = 1600 (NOT 1500 + 6×100 = 2100)
+  assertClose("B1: 6-box เหมาๆ shipment = ฿100 once (1600, not 2100)", b.total_thb, 1600);
+  assertEq("B1: exactly one เหมาๆ anchor (the base row)", b.lines.filter((l) => l.isPcsfFirst).length, 1);
+  assertEq("B1: anchor is the base tracking row", b.pcsfTransportFixId, "100");
+  assertClose("B1: each non-anchor box = plain ฿250 (no per-row ฿100)", b.lines[1].price_thb, 250);
+}
 {
   // LINE-BY-LINE (the double-charge case): paying a -N sub-row ALONE → NO fee
   // (the base row carries it); paying the base row alone → fee once. Old logic

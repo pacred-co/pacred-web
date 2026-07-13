@@ -50,6 +50,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import type { MomoInternalAdminRecord, MomoShipmentStatus } from "./types";
 
 /**
@@ -461,6 +462,33 @@ export async function propagateMomoToForwarders(
           today,
         );
         if (advanced) result.shopOrdersAdvanced += 1;
+      }
+
+      // 5. A2 (2026-07-13 · MONEY) — RE-PRICE on post-close weight. If this cycle filled the
+      //    closed-container weigh-in (updates.fweight set = fweight/fvolume were 0 → now the
+      //    real shipment weight), the row was priced AT COMMIT on box-1/zero weight and its
+      //    SELL (ftotalprice) is now STALE (undercharge risk — the bill reads ftotalprice).
+      //    Re-run the SAME pricing engine so the SELL matches the real weight.
+      //    computeAndFillForwarderImportRate is money-isolated: writes ONLY the 3 rate cols,
+      //    NO-OPs on a manual rate (customrate='1'), and NEVER writes a silent ฿0 (leaves the
+      //    row untouched on rateMissing). Guardrail: skip billed/frozen rows (fstatus 5/6/7/99)
+      //    — re-price only forward-of-billing rows (< 5). Runs AFTER the UPDATE above so it
+      //    re-reads the just-written weight (not the stale pre-update value). Best-effort: a
+      //    re-price failure never fails the propagate batch.
+      if (updates.fweight !== undefined && fstatusRank(newFstatus) < fstatusRank("5")) {
+        try {
+          const rr = await computeAndFillForwarderImportRate(admin, f.id);
+          if (!rr.ok) {
+            console.warn("[propagateMomoToForwarders] re-price after weight fill not written", {
+              forwarderId: f.id, tracking, reason: rr.reason,
+            });
+          }
+        } catch (e) {
+          console.error("[propagateMomoToForwarders] re-price after weight fill threw", {
+            forwarderId: f.id, tracking,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
     }
   }

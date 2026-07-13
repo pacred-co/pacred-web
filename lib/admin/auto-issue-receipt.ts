@@ -144,6 +144,16 @@ export interface AutoIssueReceiptOpts {
   recompNameOverride?: string;
   recompNumberOverride?: string;
   recompAddressOverride?: string;
+  /**
+   * ที่อยู่จัดส่ง (owner 2026-07-13) — the DISPLAY-only ship-to snapshot the paid
+   * ใบวางบิล carries (tb_forwarder_invoice.delivery_address · mig 0247). Stamped onto
+   * tb_receipt.delivery_address (mig 0253) at issue so the receipt's "ที่อยู่" line
+   * matches the bill's (single-slot rule: delivery_address wins over recompaddress).
+   * Distinct from recompAddressOverride (the tax/billing identity · G8). Absent
+   * (direct-slip / wallet path · pre-0253 legacy bill) → null → the receipt renders
+   * recompaddress unchanged.
+   */
+  deliveryAddressOverride?: string;
 }
 
 export type AutoIssueReceiptResult =
@@ -560,6 +570,11 @@ export async function autoIssueReceiptOnPaymentLand(
     recompnumber:           recompNumber,
     recompname:             recompName,
     recompaddress:          recompAddress,
+    // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — DISPLAY-only ship-to snapshot from
+    // the paid ใบวางบิล (delivery_address). Distinct from recompaddress (tax identity).
+    // The receipt loader renders it via the single-slot rule (delivery wins). null when
+    // no bill snapshot (direct-slip / wallet · pre-0253) → recompaddress renders unchanged.
+    delivery_address:       opts.deliveryAddressOverride ?? null,
     rpopup:                 "0",
     // '1' or '2'. G1: when pinned to a paid bill, follow the BILL's frozen
     // is_juristic so the receipt paper's WHT-line visibility matches the pinned

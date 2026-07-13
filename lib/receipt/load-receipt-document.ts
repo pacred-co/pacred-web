@@ -49,6 +49,9 @@ type RawReceipt = {
   recompnumber:           string | null;
   recompname:             string | null;
   recompaddress:          string | null;
+  // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — DISPLAY-only ship-to snapshot mirroring
+  // the ใบวางบิล's delivery_address. Distinct from recompaddress (tax identity).
+  delivery_address:       string | null;
   documentissuer:         string | null;
   documentapprover:       string | null;
   // 50-ทวิ print gate (migration 0173 · ภูม 2026-06-10)
@@ -186,7 +189,7 @@ export async function loadReceiptDocument(
     .select(
       "id, rid, refid, rdate, rdatecreate, issuedate, ramount, totalbeforewithholding, mao_fee_thb, " +
         "rstatus, userid, adminid, statusprint, adminidprint, rdateprint, corporatetype, " +
-        "recompnumber, recompname, recompaddress, documentissuer, documentapprover, " +
+        "recompnumber, recompname, recompaddress, delivery_address, documentissuer, documentapprover, " +
         "wht_cert_status, wht_cert_path, wht_cert_no, wht_cert_uploaded_at",
     )
     .eq("id", receiptId)
@@ -300,10 +303,16 @@ export async function loadReceiptDocument(
 
   const customerTaxId = receipt.recompnumber || "-";
 
+  // ที่อยู่ = ONE slot (owner 2026-07-13 · same single-slot rule as the ใบวางบิล,
+  // billing-run-paper.tsx:200 `deliveryAddress || buyerAddress`): a swapped ship-to
+  // (tb_receipt.delivery_address · mig 0253) REPLACES the address shown — so the ใบเสร็จ
+  // and its ใบวางบิล display the SAME address. Falls back to recompaddress (tax identity ·
+  // legacy receipts where delivery_address IS NULL) → composed main address.
+  const deliveryAddress = (receipt.delivery_address ?? "").trim();
   const customerAddress =
-    (receipt.recompaddress && receipt.recompaddress.trim())
-      ? receipt.recompaddress.trim()
-      : composeMainAddress(mainAddressRow);
+    deliveryAddress
+      || (receipt.recompaddress && receipt.recompaddress.trim() ? receipt.recompaddress.trim() : "")
+      || composeMainAddress(mainAddressRow);
 
   // ── 7. Compute totals + WHT 1% (legacy printReceipt.php:357-399) ──
   const computedItems = receiptItems

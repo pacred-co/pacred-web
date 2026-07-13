@@ -280,6 +280,9 @@ const updateRateSchema = z.object({
   // values 4.93-5.0). Sub-zero / non-finite rejected — would zero/flip
   // the customer total.
   h_rate: z.coerce.number().positive("อัตราแลกเปลี่ยนต้องเป็นค่าบวก").max(20, "อัตราแลกเปลี่ยนเกินช่วงที่ยอมรับ (>20)"),
+  // mig 0252 — foreign order → the operator's TYPED บาท/{cur} rate (>20 OK),
+  // stored verbatim so it redisplays exactly. DISPLAY-only (money basis = h_rate).
+  husd_rate: z.coerce.number().positive().max(99_999).optional(),
 });
 export type AdminUpdateOrderRateInput = z.infer<typeof updateRateSchema>;
 
@@ -380,6 +383,8 @@ export async function adminUpdateOrderRate(
           hrate:           d.h_rate,
           htotalpriceuser: afterTotal,
           adminidupdate:   legacyAdminId,
+          // mig 0252 — store the TYPED บาท/{cur} rate verbatim (display SOT).
+          ...(d.husd_rate && d.husd_rate > 0 ? { husdrate: d.husd_rate } : {}),
         })
         .eq("id", header.id);
       if (updErr) {
