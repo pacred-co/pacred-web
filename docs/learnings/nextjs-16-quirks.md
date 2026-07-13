@@ -1212,3 +1212,20 @@ Building the cost-reveal provider I wrote `const r = useRef(x); r.current = x;` 
 **Fix:** (1) add `min-w-0` to the `flex-1` mega-menu so it shrinks first and the `shrink-0` right cluster is never pushed off; (2) push the least-important block (the "follow us" social icons, also in the footer) from `xl:` → `2xl:` to free ~230px in the 1280–1536 zone. Verified via `preview_eval` measuring the switcher's `getBoundingClientRect().right` vs `innerWidth` + `header.scrollWidth` at 1281/1368.
 
 **Why this matters next time:** ANY `flex-1` element holding nowrap content (nav menus, breadcrumb rows, tab strips) needs `min-w-0` or it refuses to yield and shoves its siblings off-screen. And when a customer reports "X is missing" but you see X fine — **suspect a responsive breakpoint at the customer's actual CSS width (scaling-aware), not deploy-lag** — measure at 1280–1450 before concluding. Cross-link: §0c verify-deep-flow (measure overflow at the real viewport), `AGENTS.md` §6 mobile-first.
+
+---
+
+## [2026-07-13] NEVER `rm -rf .next/dev/cache` while the dev server is running — corrupts Turbopack
+
+**Context:** After a multi-Edit reorg of `/admin/api-forwarder-momo/page.tsx`, an intermediate broken state got cached by Turbopack HMR (stale `Wand2 is not defined`). To force a fresh recompile I ran `rm -rf .next/dev/cache` **with the dev server still running**.
+
+**Symptom:** The whole web then "spun forever" — no page would load. Server logs filled with:
+`Persisting failed: Unable to write SST file` · `Compaction failed: Another write batch or compaction is already active` · `thread 'tokio-runtime-worker' panicked … Failed to restore task data (corrupted database or bug) … Unable to open static sorted file 00001951.sst … The system cannot find the path specified (os error 3)`.
+
+**Root cause:** Turbopack keeps a persistent on-disk task DB under `.next/dev/cache/turbopack/*.sst` and holds live references to those files in memory. Deleting them out from under the running process corrupts the DB → every compile panics → requests hang.
+
+**Fix:** (1) stop the dev server → (2) `rm -rf .next` (whole dir, while stopped) → (3) restart. Fresh boot ("Ready in ~500ms") rebuilds the cache clean.
+
+**Why this matters next time:** To force a recompile of one file, just **`touch` the file** (HMR recompiles from clean source) — that alone fixes a stale-compile. If you must clear the cache, **stop the server first**. Do NOT delete anything under `.next/` while `next dev` is running. And a stale HMR compile can come from doing an import-removal Edit *before* the usage-removal Edit — order edits so the file is never transiently broken (remove usages first, then the import), or expect one stale error that a `touch`+reload clears.
+
+**Cross-links:** `.claude/skills/branch-integrate-loop` (the "`rm -rf .next` when validator is stale" note) · AGENTS.md §11 (prod smoke) · §0c verify-deep-flow (the browser render caught this, the gate didn't).

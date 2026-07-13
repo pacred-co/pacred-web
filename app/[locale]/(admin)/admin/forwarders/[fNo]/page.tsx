@@ -745,6 +745,7 @@ async function tryRenderTbForwarder(
   // นิติ 1% gate on the BATCH total), so passing every sibling is correct.
   const collectSiblings = await fetchCountableForwarderSiblings(admin, {
     id: r.id, ftrackingchn: r.ftrackingchn, userid: r.userid, fweight: r.fweight,
+    famount: r.famount,
     fwidth: r.fwidth, flength: r.flength, fheight: r.fheight,
     fshipby: r.fshipby, ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
     fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice, pricecrate: r.pricecrate,
@@ -765,6 +766,13 @@ async function tryRenderTbForwarder(
   const advanceSiblingIds = collectSiblings.map((s) => s.id).filter((n): n is number => Number.isInteger(n) && n > 0);
   const advanceConfirmed = String(r.advance_bill_confirmed ?? "").trim() === "1";
   const advancePriced = collectSiblings.some((s) => (Number(s.ftotalprice) || 0) > 0);
+  // ภูม 2026-07-13 — the header "จำนวน" MUST show the WHOLE shipment's box total
+  // (every sibling box), the SAME set the รายการสินค้า table sums. Was showing the
+  // single anchor row's famount (e.g. 1) while the table summed all siblings (e.g. 2)
+  // → header/table clashed on the same page (52585 · MOMO box-split). Sum famount
+  // across siblings; fall back to the anchor's own famount if the fetch was empty.
+  const shipmentBoxCount =
+    collectSiblings.reduce((sum, s) => sum + (Number(s.famount) || 0), 0) || (r.famount ?? 0);
   // Collapse the per-line breakdowns into ONE shipment breakdown (same shape the
   // ยอดเก็บจริง panel renders); the total is the authoritative batch total.
   const collect =
@@ -1071,7 +1079,12 @@ async function tryRenderTbForwarder(
             <p className="text-foreground"><b className="font-semibold">โกดังประเทศจีน : </b>{chinaWarehouseDisplay}</p>
             <EditCabinetField fId={r.id} fcabinetnumber={r.fcabinetnumber} fcabinetLocked={r.fcabinet_locked === true} />
             <EditDateCloseField fId={r.id} fdatecontainerclose={r.fdatecontainerclose} fcabinetnumber={r.fcabinetnumber} />
-            <p className="text-foreground"><b className="font-semibold">จำนวน : </b>{r.famount ?? 0} กล่อง</p>
+            <p className="text-foreground">
+              <b className="font-semibold">จำนวน : </b>{shipmentBoxCount} กล่อง
+              {collectSiblings.length > 1 && (
+                <span className="text-[11px] text-muted"> (รวม {collectSiblings.length} แทรกกิ้งในชิปเมนต์นี้)</span>
+              )}
+            </p>
             <EditAmountCountField fId={r.id} famountcount={r.famountcount} famount={r.famount} />
             {/* ภูม 2026-07-13: ปุ่ม "แตกกล่อง MOMO" ถูกเอาออก — ตอนนี้ commit แยกกล่องให้
                 อัตโนมัติตั้งแต่ดึงเข้า (commit-momo-row-core split-at-commit) จึงไม่ต้องกดเอง. */}

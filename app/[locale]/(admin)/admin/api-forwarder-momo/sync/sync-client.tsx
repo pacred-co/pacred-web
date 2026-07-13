@@ -263,59 +263,95 @@ export function MomoSyncClient({ initialDbRows }: { initialDbRows: {
           </label>
         </div>
 
-        {/* พี่ป๊อป spec §4 — MOMO อัพเดตข้อมูล 3 รอบ (ยิ่งรอบท้าย ข้อมูล/สถานะยิ่งตรง). */}
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[11px] leading-relaxed text-sky-800">
-          <strong>MOMO อัพเดต 3 รอบ</strong> — ยิ่งรอบท้าย ข้อมูลยิ่งตรง ·
-          {" "}<b>รอบ 1 คร่าวๆ</b> (Import Track) → <b>รอบ 2 packing</b> (Sack) → <b>รอบ 3 ปิดตู้</b> (Container Closed).
-          {" "}ดึงซ้ำช่องเดิมได้เรื่อยๆ จนสถานะตรง.
+        {/* 2026-07-13 ภูม — ปุ่มเดียวจบ. ปุ่มนี้ = ดึง Import Track + Container
+            Closed + บันทึกเข้าระบบ ในคลิกเดียว (เรียก onSyncReal เดิม · ไม่แตะ
+            logic). 3 ปุ่มแยกรอบ + preview ถูกยุบไป "เครื่องมือขั้นสูง" ด้านล่าง
+            เพราะปกติไม่ต้องใช้. */}
+        <div className="rounded-xl border-2 border-primary-400 bg-primary-50/40 p-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex-1 min-w-[240px]">
+              <h3 className="text-sm font-bold text-primary-800">🔄 ดึงข้อมูล MOMO ทั้งหมด — คลิกเดียวจบ</h3>
+              <p className="mt-0.5 text-[11px] leading-snug text-primary-700">
+                ดึงของทุกสถานะ (เข้าโกดังจีน + ปิดตู้) จากช่วงวันที่ด้านบน แล้ว
+                <b> บันทึกเข้าระบบให้เลย</b> · เสร็จแล้วไปตรวจ + สร้างบิลที่หน้า
+                {" "}<b>Review &amp; Commit</b>
+                <br />
+                <span className="text-[11px] text-primary-600">
+                  💡 ปกติหุ่นยนต์ (cron) ดึงให้อัตโนมัติทุก 5 นาทีอยู่แล้ว — ปุ่มนี้ไว้กดเองตอนอยากได้เดี๋ยวนี้
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onSyncReal}
+              disabled={busy != null}
+              className="whitespace-nowrap rounded-lg border border-primary-600 bg-primary-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {busy === "sync" ? "⏳ กำลังดึง + บันทึก..." : "🔄 ดึงทั้งหมดเดี๋ยวนี้"}
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onFetchImportTrack}
-            disabled={busy != null}
-            title="รอบ 1 — ข้อมูลคร่าวๆ ตอนพัสดุเข้าโกดังจีน"
-            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {busy === "import-track" ? "กำลังดึง..." : "รอบ 1 · ดึง Import Track (คร่าวๆ)"}
-          </button>
-          <button
-            type="button"
-            onClick={onFetchSackInfo}
-            disabled={busy != null || !sackNo.trim()}
-            title="รอบ 2 — ตอนแพ็คลงกระสอบ (ต้องกรอก Sack No)"
-            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {busy === "sack-info" ? "กำลังดึง..." : "รอบ 2 · ค้นหา Sack Info (packing)"}
-          </button>
-          <button
-            type="button"
-            onClick={onFetchContainerClosed}
-            disabled={busy != null}
-            title="รอบ 3 — ตอนปิดตู้ (ข้อมูลตรงที่สุด)"
-            className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {busy === "container-closed" ? "กำลังดึง..." : "รอบ 3 · ดึง Container Closed (ปิดตู้)"}
-          </button>
-          <span className="border-l border-border mx-1 self-stretch" />
-          <button
-            type="button"
-            onClick={onSyncPreview}
-            disabled={busy != null}
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-          >
-            {busy === "preview" ? "กำลัง Preview..." : "Sync Preview (ไม่บันทึก)"}
-          </button>
-          <button
-            type="button"
-            onClick={onSyncReal}
-            disabled={busy != null}
-            className="rounded-lg border border-red-500 bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {busy === "sync" ? "กำลัง Sync..." : "Sync เข้าตาราง MOMO"}
-          </button>
-        </div>
+        {/* เครื่องมือขั้นสูง — แยกดึงทีละรอบ / ดูตัวอย่างก่อนบันทึก (ปกติไม่ต้องใช้). */}
+        <details className="rounded-lg border border-border bg-slate-50/60 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-semibold text-slate-600">
+            🔧 เครื่องมือขั้นสูง — แยกดึงทีละรอบ / ดูตัวอย่างก่อนบันทึก (ปกติไม่ต้องใช้)
+          </summary>
+          <div className="mt-2 space-y-2">
+            <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[11px] leading-relaxed text-sky-800">
+              <strong>MOMO อัพเดต 3 รอบ</strong> — ยิ่งรอบท้าย ข้อมูลยิ่งตรง ·
+              {" "}<b>รอบ 1 คร่าวๆ</b> (Import Track) → <b>รอบ 2 packing</b> (Sack) → <b>รอบ 3 ปิดตู้</b> (Container Closed).
+              {" "}ดึงซ้ำช่องเดิมได้เรื่อยๆ จนสถานะตรง. (ปุ่ม “ดึงทั้งหมดเดี๋ยวนี้” ด้านบนทำครบทุกรอบให้แล้ว)
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onFetchImportTrack}
+                disabled={busy != null}
+                title="รอบ 1 — ข้อมูลคร่าวๆ ตอนพัสดุเข้าโกดังจีน"
+                className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+              >
+                {busy === "import-track" ? "กำลังดึง..." : "รอบ 1 · ดึง Import Track (คร่าวๆ)"}
+              </button>
+              <button
+                type="button"
+                onClick={onFetchSackInfo}
+                disabled={busy != null || !sackNo.trim()}
+                title="รอบ 2 — ตอนแพ็คลงกระสอบ (ต้องกรอก Sack No)"
+                className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+              >
+                {busy === "sack-info" ? "กำลังดึง..." : "รอบ 2 · ค้นหา Sack Info (packing)"}
+              </button>
+              <button
+                type="button"
+                onClick={onFetchContainerClosed}
+                disabled={busy != null}
+                title="รอบ 3 — ตอนปิดตู้ (ข้อมูลตรงที่สุด)"
+                className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+              >
+                {busy === "container-closed" ? "กำลังดึง..." : "รอบ 3 · ดึง Container Closed (ปิดตู้)"}
+              </button>
+              <span className="border-l border-border mx-1 self-stretch" />
+              <button
+                type="button"
+                onClick={onSyncPreview}
+                disabled={busy != null}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {busy === "preview" ? "กำลัง Preview..." : "Sync Preview (ไม่บันทึก)"}
+              </button>
+              <button
+                type="button"
+                onClick={onSyncReal}
+                disabled={busy != null}
+                className="rounded-lg border border-red-500 bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {busy === "sync" ? "กำลัง Sync..." : "Sync เข้าตาราง MOMO"}
+              </button>
+            </div>
+          </div>
+        </details>
       </section>
 
       {/* ── Phase D · Debug · Tracking Lookup ───────────────────────── */}
