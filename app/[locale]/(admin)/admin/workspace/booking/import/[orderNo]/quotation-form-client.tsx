@@ -12,10 +12,10 @@
 
 import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown, FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig, Search, Ship, Truck, Plane, Clock3, Check, Sparkles, ArrowRight, PackageCheck, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown, FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig, Search, Ship, Truck, Plane, Clock3, Check, Sparkles, ArrowRight, PackageCheck, ShieldCheck, FileText, Maximize2 } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, firstPort, directionOf,
+  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, WAREHOUSE_CATALOG, firstPort, directionOf,
   CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
@@ -24,7 +24,7 @@ import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
 import { CARGO_PROMO_PACKAGES, rateFor, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
 import { BookingDraftPreview } from "./booking-draft";
-import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, AGENT_HINT } from "./booking-hints";
+import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, CBM_HINT, AGENT_HINT } from "./booking-hints";
 import styles from "./quotation-mockup.module.css";
 
 // ลำดับ stepper (ตัด "ยกเลิก" ออก — โชว์เป็น banner แยก)
@@ -49,7 +49,7 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     service,
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
-    loadType, container: "1×20'", carrier: "", weight: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
+    loadType, container: "1×20'", carrier: "", weight: "", cbm: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
     term, enter: "Normal", special: [],
   };
 }
@@ -233,9 +233,11 @@ export function QuotationFormClient({
   }
 
   function revalidatePort(p: PortSel, service: string): PortSel {
-    // สลับขนส่ง → พอร์ทที่มีเปลี่ยน · ถ้าพอร์ทเดิมไม่อยู่ในขนส่งใหม่ ให้เด้งไปพอร์ทแรก
+    // สลับขนส่ง → พอร์ทที่มีเปลี่ยน · ถ้าค่าเดิมไม่อยู่ในพอร์ทของขนส่งใหม่ "และไม่ใช่โกดัง" → เด้งไปพอร์ทแรก
+    // (โกดัง = cargo · ไม่ผูกกับขนส่ง เลยคงค่าไว้)
     const ports = PORT_CATALOG[p.country]?.[service] ?? [];
-    return ports.includes(p.port) ? p : { country: p.country, port: firstPort(p.country, service) };
+    const warehouses = WAREHOUSE_CATALOG[p.country] ?? [];
+    return ports.includes(p.port) || warehouses.includes(p.port) ? p : { country: p.country, port: firstPort(p.country, service) };
   }
   function setC<K extends keyof QuoteConditions>(k: K, v: QuoteConditions[K]) {
     let next = { ...cond, [k]: v } as QuoteConditions;
@@ -344,12 +346,12 @@ export function QuotationFormClient({
 
             {/* ข้อมูลบรรทัดเดียว (owner 2026-07-10): POL → POD · TERM · ENTER · ประเภท · ขนาดตู้ */}
             <div className={styles.condLine}>
-              <PortPicker label="ต้นทาง (POL)" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} hint={<FieldHint content={POL_HINT} />} />
+              <PortPicker label="ต้นทาง" placeholder="เลือกต้นทาง" value={cond.pol} transport={cond.service} onChange={setPol} hint={<FieldHint content={POL_HINT} />} />
               <div className={styles.routeArrow}>
                 <span className={styles.routeArrowIcon}>→</span>
                 <span className={styles.routeDir}>{directionOf(cond).label}</span>
               </div>
-              <PortPicker label="ปลายทาง (POD)" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} hint={<FieldHint content={POD_HINT} />} />
+              <PortPicker label="ปลายทาง" placeholder="เลือกปลายทาง" value={cond.pod} transport={cond.service} onChange={setPod} hint={<FieldHint content={POD_HINT} />} />
               {/* สินค้า (Commodity) + ประเภทสินค้า — owner ปอน 2026-07-10 · ประเภท "ลิขสิทธิ์" → เรทพิเศษในโปร */}
               <div className={styles.ddCell}>
                 <div className={styles.label}>สินค้า<FieldHint content={COMMODITY_HINT} /></div>
@@ -372,6 +374,12 @@ export function QuotationFormClient({
                 <input className={styles.dropdown} type="text" inputMode="decimal" value={cond.weight} placeholder="เช่น 5000"
                   onChange={(e) => setC("weight", e.target.value)} />
               </div>
+              {/* CBM (ปริมาตร/คิว) — คู่กับน้ำหนัก · ค่าระวางคิดจากค่าที่มากกว่า (owner ปอน 2026-07-13) */}
+              <div className={styles.ddCell}>
+                <div className={styles.label}>ปริมาตร (CBM)<FieldHint content={CBM_HINT} align="right" /></div>
+                <input className={styles.dropdown} type="text" inputMode="decimal" value={cond.cbm} placeholder="เช่น 12.5"
+                  onChange={(e) => setC("cbm", e.target.value)} />
+              </div>
               {/* เอเจนต์ */}
               <SelRow stack label="เอเจนต์" options={AGENT_OPTIONS} value={cond.agent} ph="— เลือก —" onPick={(v) => setC("agent", v)} hint={<FieldHint content={AGENT_HINT} align="right" />} />
             </div>
@@ -392,12 +400,15 @@ export function QuotationFormClient({
           </div>
         </div>
 
-        {/* ── โหมด "สร้างใบเสนอราคา": เอกสาร Peak + แถบขวา · owner ปอน 2026-07-10: กด "ดูเต็ม" = ใบ Booking เต็มความกว้าง ── */}
-        {mode === "create" && (bookingFull ? (
-          <BookingDraftPreview full cond={cond} doc={doc} docNo={docNo} salesName={salesName} attachedSummary={attachedSummary} onToggleFull={setBookingFull} />
-        ) : (
+        {/* ── โหมด "สร้างใบเสนอราคา": สลับตำแหน่ง (owner ปอน 2026-07-13) — กด "ดูเต็ม" Booking → Booking ไปคอลัมน์ซ้าย(ใหญ่) · ใบเสนอราคาย่อไปแถบขวา · แค่สลับที่ ทั้งคู่ยังโชว์ ── */}
+        {mode === "create" && (
         <div className={styles.grid}>
-          {/* ── เอกสาร Peak (ใบเสนอราคา) — คอลัมน์ซ้าย (หลัก) ── */}
+          {/* ── คอลัมน์ซ้าย (ใหญ่ · 2fr) — ใบ Booking เต็ม (ถ้า bookingFull) หรือ ใบเสนอราคา ── */}
+          {bookingFull ? (
+            <div className="min-w-0">
+              <BookingDraftPreview full cond={cond} doc={doc} docNo={docNo} salesName={salesName} attachedSummary={attachedSummary} onToggleFull={setBookingFull} />
+            </div>
+          ) : (
           <div className={styles.doc}>
             {/* docHeader (หัวจดหมาย) — บนสุดของใบ */}
             <div className={styles.docHeader}>
@@ -622,11 +633,15 @@ export function QuotationFormClient({
               <div className={styles.signBox}>ผู้รับเอกสาร<b>ลูกค้า / Customer</b></div>
             </div>
           </div>
+          )}
 
-          {/* ── แถบขวา: ย้าย Condition Builder มากองรวมกับ Booking Payload (owner: ซ้าย→ขวา) ── */}
+          {/* ── แถบขวา (1fr): ใบเสนอราคาย่อ (ตอน Booking เต็ม) หรือ ตัวอย่างใบ Booking ย่อ · + หมายเหตุ ── */}
           <div className={styles.rail}>
-          {/* ── ตัวอย่างใบ Booking (ย่อ) — กด "ดูเต็ม" ขยายเป็นใบ Booking เต็ม (owner ปอน 2026-07-10) ── */}
-          <BookingDraftPreview cond={cond} doc={doc} docNo={docNo} salesName={salesName} attachedSummary={attachedSummary} full={false} onToggleFull={setBookingFull} />
+          {bookingFull ? (
+            <QuotationCompactCard docNo={docNo} doc={doc} cond={cond} grand={totals.grand} status={status} onExpand={() => setBookingFull(false)} />
+          ) : (
+            <BookingDraftPreview cond={cond} doc={doc} docNo={docNo} salesName={salesName} attachedSummary={attachedSummary} full={false} onToggleFull={setBookingFull} />
+          )}
 
           {/* ── หมายเหตุ + บันทึก (ฟอร์มฝั่งแอดมิน) — ตัวเลือกบริการย้ายขึ้นบนแล้ว ── */}
           <div className={styles.card}>
@@ -678,13 +693,95 @@ export function QuotationFormClient({
           </div>
           </div>
         </div>
-        ))}
+        )}
 
         {/* ── โหมด "แนะนำแพ็กเกจ" (Trip-style · owner ปอน 2026-07-10) — เงื่อนไขชุดเดียวกับหน้าสร้าง ── */}
         {mode === "recommend" && (
           <RecommendPackages cond={cond} searched={searched} onSelect={selectPackage} compare={compare} onCompareToggle={toggleCompare} onCreateCompare={createCompareQuotes} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── ใบเสนอราคา (ย่อ) — การ์ดสรุปในแถบขวา ตอนสลับให้ Booking เต็ม (owner ปอน 2026-07-13) ──
+function QuotationCompactCard({
+  docNo, doc, cond, grand, status, onExpand,
+}: {
+  docNo: string;
+  doc: { billName: string; product: string; consignee: string };
+  cond: QuoteConditions;
+  grand: number;
+  status: BookingStatus;
+  onExpand: () => void;
+}) {
+  const meta = BOOKING_STATUS_META[status];
+  const activeIdx = STEPPER.indexOf(status);
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-start justify-between gap-2 border-b border-border bg-primary-600/5 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary-600">
+            <FileText className="h-3.5 w-3.5" /> ใบเสนอราคา (ย่อ)
+          </div>
+          <div className="mt-0.5 truncate text-xs text-muted">{docNo}</div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">DRAFT</span>
+          <button type="button" onClick={onExpand}
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted/50">
+            <Maximize2 className="h-3 w-3" /> ดูเต็ม
+          </button>
+        </div>
+      </div>
+      {/* สถานะ Booking (ย่อ) — stepper เดียวกับใบเต็ม · owner ปอน 2026-07-13 */}
+      <div className="border-b border-border px-3 py-3">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-foreground">สถานะ Booking</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.pill}`}>{formStatusLabel(status)}</span>
+        </div>
+        <ol className="flex items-start gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {STEPPER.map((s, i) => {
+            const state = i < activeIdx ? "done" : i === activeIdx ? "current" : "todo";
+            const Icon = STEP_ICONS[i];
+            return (
+              <li key={s} className="flex min-w-[48px] flex-1 flex-col items-center text-center">
+                <div className="flex w-full items-center">
+                  <span className={cx("h-0.5 flex-1", i === 0 ? "opacity-0" : state === "todo" ? "bg-border" : "bg-primary-500")} />
+                  <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all", state === "todo" ? "bg-muted/40 text-muted" : "bg-primary-600 text-white")}>
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                  </span>
+                  <span className={cx("h-0.5 flex-1", i === STEPPER.length - 1 ? "opacity-0" : i < activeIdx ? "bg-primary-500" : "bg-border")} />
+                </div>
+                <span className={cx("mt-1 text-[10px] leading-tight", state === "current" ? "font-semibold text-foreground" : "text-muted")}>{formStatusLabel(s)}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <dl className="divide-y divide-border text-[13px]">
+        <QRow label="ลูกค้า">{doc.billName || doc.consignee || "—"}</QRow>
+        <QRow label="สินค้า">{doc.product || "—"}</QRow>
+        <QRow label="เส้นทาง"><span className="inline-flex items-center gap-1 font-medium text-foreground">{cond.pol.port} <ArrowRight className="h-3 w-3 text-muted" /> {cond.pod.port}</span></QRow>
+        <QRow label="เทอม">{cond.term}</QRow>
+        <QRow label="เอกสาร">{cond.docMode}</QRow>
+      </dl>
+      <div className="border-t border-border bg-muted/20 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-muted">ยอดเสนอราคา</span>
+          <span className="text-base font-black text-primary-600">{bahtFmt(grand)}</span>
+        </div>
+        <button type="button" onClick={onExpand} className="mt-2 text-[11px] font-semibold text-primary-600 hover:text-primary-700">ดูใบเสนอราคาเต็ม →</button>
+      </div>
+    </section>
+  );
+}
+
+function QRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2">
+      <dt className="shrink-0 text-[11px] font-medium text-muted">{label}</dt>
+      <dd className="min-w-0 text-right text-foreground">{children}</dd>
     </div>
   );
 }
@@ -699,12 +796,25 @@ function PortPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [activeCountry, setActiveCountry] = useState(value.country || PORT_COUNTRIES[0]);
-  const ports = PORT_CATALOG[activeCountry]?.[transport] ?? [];
+  // โกดัง (cargo) ↔ พอร์ท — ลิสต์ข้างในต่างกัน (owner ปอน 2026-07-13)
+  // เดาโหมดจากค่าเดิม: เป็นพอร์ทของขนส่งนี้→พอร์ท · ไม่งั้นอยู่ในโกดัง→โกดัง · ไม่งั้น default พอร์ท
+  // (พอร์ทมาก่อน — กันชื่อซ้ำ เช่น "กวางโจว" เป็นทั้งพอร์ทเรือ + โกดัง)
+  const modeFor = (v: PortSel): "port" | "warehouse" =>
+    (PORT_CATALOG[v.country]?.[transport] ?? []).includes(v.port) ? "port"
+      : (WAREHOUSE_CATALOG[v.country] ?? []).includes(v.port) ? "warehouse" : "port";
+  const [pickMode, setPickMode] = useState<"port" | "warehouse">(() => modeFor(value));
+  const items = pickMode === "warehouse"
+    ? (WAREHOUSE_CATALOG[activeCountry] ?? [])
+    : (PORT_CATALOG[activeCountry]?.[transport] ?? []);
   return (
     <div className={styles.portField}>
       <div className={styles.portLabel}>{label}{hint}</div>
       <button type="button" className={styles.portBtn}
-        onClick={() => { setActiveCountry(value.country || PORT_COUNTRIES[0]); setOpen((o) => !o); }}>
+        onClick={() => {
+          setActiveCountry(value.country || PORT_COUNTRIES[0]);
+          setPickMode(modeFor(value));
+          setOpen((o) => !o);
+        }}>
         {value.port
           ? <span className={styles.portVal}><b>{value.country}</b><span className={styles.portSep}>·</span>{value.port}</span>
           : <span className={styles.portPlaceholder}>{placeholder}</span>}
@@ -722,11 +832,22 @@ function PortPicker({
               ))}
             </div>
             <div className={styles.portList}>
-              {ports.length ? ports.map((p) => (
+              {/* สลับ พอร์ท ↔ โกดัง (cargo) — ลิสต์ข้างในเปลี่ยนตาม */}
+              <div className="mb-1.5 flex gap-1 rounded-lg bg-[#f2f3f7] p-0.5">
+                <button type="button" onClick={() => setPickMode("port")}
+                  className={cx("flex-1 rounded-md px-2 py-1.5 text-[12px] font-bold transition-colors", pickMode === "port" ? "bg-white text-[#b11117] shadow-sm" : "text-[#6f7278] hover:text-[#374151]")}>
+                  พอร์ท
+                </button>
+                <button type="button" onClick={() => setPickMode("warehouse")}
+                  className={cx("flex-1 rounded-md px-2 py-1.5 text-[12px] font-bold transition-colors", pickMode === "warehouse" ? "bg-white text-[#b11117] shadow-sm" : "text-[#6f7278] hover:text-[#374151]")}>
+                  โกดัง
+                </button>
+              </div>
+              {items.length ? items.map((p) => (
                 <button key={p} type="button"
                   className={cx(styles.portItem, value.country === activeCountry && value.port === p && styles.portItemActive)}
                   onClick={() => { onChange({ country: activeCountry, port: p }); setOpen(false); }}>{p}</button>
-              )) : <div className={styles.portEmpty}>ยังไม่มีพอร์ทสำหรับขนส่งนี้</div>}
+              )) : <div className={styles.portEmpty}>{pickMode === "warehouse" ? "ยังไม่มีโกดังสำหรับประเทศนี้" : "ยังไม่มีพอร์ทสำหรับขนส่งนี้"}</div>}
             </div>
           </div>
         </>

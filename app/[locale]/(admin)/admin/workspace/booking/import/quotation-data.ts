@@ -25,6 +25,7 @@ export type QuoteConditions = {
   container: string; // ขนาดตู้ (เฉพาะ FCL): 1×20' / 1×40'HC / 2×40' / Mixed
   carrier: string; // สายเรือ / สายการบิน / สายรถ (เปลี่ยนตามขนส่ง)
   weight: string; // น้ำหนัก (กก.) — บอกว่าใช้รถอะไรไปรับ/ลากตู้
+  cbm: string; // ปริมาตร (CBM/คิว) — คู่กับน้ำหนัก · ใช้คิดค่าระวาง (chargeable = max ของ กก. vs คิว)
   agent: string; // เอเจนต์
   term: string; // EXW / FOB / CIF / DDP
   enter: string; // Normal / Change Status / Document Amend / Direct / Indirect
@@ -92,6 +93,13 @@ export const PORT_CATALOG: Record<string, Record<string, string[]>> = {
     TRUCK: ["กรุงเทพฯ", "เชียงของ", "นครพนม", "มุกดาหาร"],
     AIR: ["สุวรรณภูมิ (BKK)", "ดอนเมือง (DMK)"],
   },
+};
+
+/** โกดัง (cargo) ต่อประเทศ — เลือกโกดัง = งาน cargo (รับ/พักของที่โกดัง ไม่ใช่ท่าเรือ/สนามบิน).
+ *  starter dataset · owner ปรับเพิ่มภายหลัง (ซับโกดัง). ไม่ขึ้นกับขนส่ง (โกดัง = สถานที่). */
+export const WAREHOUSE_CATALOG: Record<string, string[]> = {
+  จีน: ["กวางโจว", "อี้อู"],
+  ไทย: ["โกดังเพชรเกษม 118"],
 };
 
 /** พอร์ทตัวแรกของ ประเทศ × ขนส่ง (ใช้ default + revalidate ตอนสลับขนส่ง). */

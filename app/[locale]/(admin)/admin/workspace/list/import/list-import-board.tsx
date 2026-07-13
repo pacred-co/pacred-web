@@ -18,7 +18,7 @@ import { LIST_STATUSES, statusPill, type ListItem } from "./list-data";
 type Filter = "all" | string;
 type SortKey = "date" | "pr" | "shipment" | "status" | "product" | "consignee" | "carrier" | "containerNo" | "cbm" | "etd" | "eta";
 type SortDir = "asc" | "desc";
-const COL_COUNT = 14;
+const COL_COUNT = 15;
 
 function transportIcon(t: string): LucideIcon {
   const u = (t || "").toUpperCase();
@@ -160,13 +160,14 @@ export function ListImportBoard({ initial }: { initial: ListItem[] }) {
               <th className="whitespace-nowrap px-2 py-2 text-left">POD</th>
               <th className="whitespace-nowrap px-2 py-2 text-left">ชิปปิ้ง</th>
               <th className="whitespace-nowrap px-2 py-2 text-left">เอกสาร (IV/RE)</th>
+              <th className="whitespace-nowrap px-2 py-2 text-center">จัดการ</th>
             </tr>
           </thead>
           <tbody>
             {/* summary band */}
             <tr className="border-y-2 border-border bg-white text-sm font-bold text-foreground dark:bg-surface">
               <td className="px-2 py-2 text-base font-bold" colSpan={2}>รวม ({q || filter !== "all" ? `${visible.length}/${rows.length}` : rows.length} รายการ)</td>
-              <td className="px-2 py-2 text-[11px] font-normal text-muted" colSpan={12}>
+              <td className="px-2 py-2 text-[11px] font-normal text-muted" colSpan={13}>
                 🚢 กำลังดำเนินการ {rows.length - counts.__done - counts.__cancel} · 🎉 สำเร็จ {counts.__done} · ❌ ยกเลิก {counts.__cancel}
               </td>
             </tr>
@@ -230,6 +231,16 @@ export function ListImportBoard({ initial }: { initial: ListItem[] }) {
                           {r.receiptNo && <span className="text-emerald-600 dark:text-emerald-400">{r.receiptNo}</span>}
                         </span>
                       ) : <span className="text-muted">—</span>}
+                    </td>
+                    {/* จัดการ — ดูข้อมูล → หน้ารายละเอียดนำเข้า (เหมือนหน้า booking) */}
+                    <td className="whitespace-nowrap px-2 py-2 text-center">
+                      <Link
+                        href={`/admin/workspace/list/import/${encodeURIComponent(r.shipment)}`}
+                        className="inline-block rounded border border-green-500 bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700 transition-colors hover:bg-green-100 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20"
+                        title="ดูข้อมูลชิปเม้นนี้"
+                      >
+                        ดูข้อมูล
+                      </Link>
                     </td>
                   </tr>
 

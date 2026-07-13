@@ -151,4 +151,5 @@ export const POD_HINT = <div><b className="text-[#1f2937]">ปลายทาง
 export const COMMODITY_HINT = <div><b className="text-[#1f2937]">สินค้า</b><p className="mt-0.5 text-[#6f7278]">ชื่อสินค้าที่นำเข้า — ใช้ทำเอกสาร + ระบุพิกัดศุลกากร (HS)</p></div>;
 export const CARRIER_HINT = <div><b className="text-[#1f2937]">สายขนส่ง</b><p className="mt-0.5 text-[#6f7278]">สายเรือ / สายการบิน / สายรถ ที่ใช้ขนส่ง (เปลี่ยนตามโหมดที่เลือก)</p></div>;
 export const WEIGHT_HINT = <div><b className="text-[#1f2937]">น้ำหนัก (กก.)</b><p className="mt-0.5 text-[#6f7278]">น้ำหนักรวมโดยประมาณ — ใช้ประเมินราคา + เลือกรถลาก/ขนาดตู้</p></div>;
+export const CBM_HINT = <div><b className="text-[#1f2937]">ปริมาตร (CBM/คิว)</b><p className="mt-0.5 text-[#6f7278]">ปริมาตรรวม (ลูกบาศก์เมตร) — คู่กับน้ำหนัก · ค่าระวางคิดจากค่าที่มากกว่า (กก. หรือ คิว)</p></div>;
 export const AGENT_HINT = <div><b className="text-[#1f2937]">เอเจนต์</b><p className="mt-0.5 text-[#6f7278]">ตัวแทน/พาร์ทเนอร์ที่ดำเนินการขนส่งให้ (เช่น Pacred, TTP)</p></div>;
