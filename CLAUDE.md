@@ -3,6 +3,20 @@
 
 ---
 
+# 🧾 2026-07-13 เย็น (เดฟ · resume ต่อจาก limit) — 🔴 SYSTEMIC status-rollback-on-cancel (5 gaps · workflow-audit) + USD เรท 35→35.006 (mig 0252) + integrate ภูม box-split + กู้ PR9468 → push dave-pacred ONLY · read FIRST
+
+> **🏁 CLOSE (owner: "ต่องานค้าง · เมลหลักติด limit · จบแล้ว push แค่ dave-pacred").** **dave-pacred = `8efb463a`** (main ไม่ promote — owner สั่ง push แค่ dave-pacred). ⚠️ `.env.local` SUPABASE_DB_PASSWORD STALE — prod `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`). **NEWEST mig 0252 (husdrate) applied prod+dev · NEXT FREE = 0253.** gate: `rm -f .next/dev/types/validator.ts` ก่อน · NODE_OPTIONS=8192 build (อ่าน BUILD_EXIT จริง · ⚠️ redirect log path พังเคยให้ exit-1 หลอก · re-run clean) · tsc 0 · commit heredoc `cat > f <<'EOF'`. ไม่มี admin login ของเว็บเรา → verify ผ่าน code audit + prod DB query + gate (live-test ไม่ได้). PCS PHP รัน local ([[pcs-legacy-local-run]]).
+>
+> **✅ งาน resume นี้ (push dave-pacred `16e9193f`→`8efb463a`):**
+> - **integrate ภูม MOMO box-split + COD** (`46021ac1` · money-safe · merge สะอาด) — งานค้างจริงตอนติด limit.
+> - **🔴 SYSTEMIC status-rollback-on-cancel** (owner: "สถานะขยับแล้วยกเลิก ต้องถอยตาม flow เส้นตรง · plain edit = live") — **Workflow audit 5 surface · 13 agent · adversarial-verify → 4 gap + billing (5 จุด):** billing cancel/void(unpaid)→forwarder `6→5` (`209181e3`) · delete-forwarder→`advanceLinkedShopOrder` re-derive shop `40→4` · bulkCancel **REFUSE credit row** (กัน orphan AR) + unwind open driver stops · reject type='8' slip ตอนยกเลิก (`8efb463a`). **guard: ไม่ re-open paid/completed** (advanceLinkedShopOrder no-op ที่ hstatus∈{5,6,99} · billing revert เฉพาะ paid_at null · credit=refuse). + **data-fix PR9468 5 แถวค้าง 6→5** (เปิดบิลใหม่ได้). learning [[status-rollback-on-cancel]].
+> - **USD เรทขาย 35→35.006** (`f056aeae` · mig 0252) — root: header เก็บแค่ hrate 2dp → re-derive เพี้ยน. Fix: `tb_header_order.husdrate` เก็บเรทที่พิมพ์ verbatim (display-only · hrate=money basis เดิม · ¥ order byte-identical). editor 2 ตัว (items rate + inline pencil). learning [[foreign-currency-order-rate]].
+> - **Bug 1+2 (คืนเงิน ¥×rate + ราคาสินค้าไม่อัพเดท)** — verify code = ถูกแล้วตั้งแต่ 2026-07-10 (`45842dee` · refund.ts ×orderHrate + recompute · P22343 ที่เห็น = ซากข้อมูลก่อน fix ไม่ใช่ live bug).
+>
+> **🔴 CARRYOVER (owner เคาะ):** (1) **credit-withdraw flow** — ตอนนี้ bulkCancel "ปฏิเสธ" รายการเครดิต (safe); ถ้าอยากยกเลิกได้เลย = ทำ flow ถอนวงเงิน AR (decrement tb_credit + fcredit='' + fstatus→5). (2) ภูม box-split **backfill ตู้เก่า under-bill** ([`docs/handoff-dave-2026-07-13-momo-boxsplit-cod-backfill.md`](docs/handoff-dave-2026-07-13-momo-boxsplit-cod-backfill.md) · re-value ขึ้นบิล · owner เคาะ Σ delta). (3) P22343 stale header/wallet (บัญชีตรวจ). (4) MOMO_CRON_AUTOCOMMIT flip (Vercel).
+
+---
+
 # 🧾 2026-07-13 บ่าย (เดฟ · resume ต่อจาก limit) — integrate ภูม MOMO box-split + COD gate เข้า dave-pacred (merge สะอาด · gate เขียว) → push dave-pacred · read FIRST
 
 > **🏁 CLOSE (owner: "ต่องานค้าง · เมลหลักติด limit · จบแล้ว push dave-pacred").** งานค้าง = **integrate `Poom-pacred` (ภูม MOMO box-split + COD) เข้า dave-pacred** (เดฟ main-session merge ค้างตอนติด limit). merge สะอาด 0 conflict → `46021ac1`. gate: tsc 0 · domestic-shipping COD test ผ่าน · momo-raw 180/0 · **build EXIT 0** (⚠️ รอบแรก redirect log พัง exit-1 หลอก · re-run clean = 0). push **dave-pacred** (+ ตามที่ owner สั่ง). **main ยังไม่ promote** (box-split เป็น money-going-forward · owner เคาะก่อนขึ้น prod ถ้าต้องการ).
