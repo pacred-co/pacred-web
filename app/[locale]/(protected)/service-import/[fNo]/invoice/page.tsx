@@ -124,6 +124,9 @@ type ReceiptRow = {
   recompnumber:           string | null;
   recompname:             string | null;
   recompaddress:          string | null;
+  // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — DISPLAY-only ship-to snapshot mirroring
+  // the ใบวางบิล's delivery_address. Wins over recompaddress (single-slot rule).
+  delivery_address:       string | null;
   corporatetype:          string | null;
 };
 
@@ -202,7 +205,7 @@ export default async function ServiceImportInvoicePage({
       .select(
         "id, rid, refid, rstatus, rdatecreate, rdate, issuedate, " +
         "ramount, totalbeforewithholding, mao_fee_thb, userid, recompnumber, recompname, " +
-        "recompaddress, corporatetype",
+        "recompaddress, delivery_address, corporatetype",
       )
       .eq("rid", itemLink.rid)
       .maybeSingle<ReceiptRow>();
@@ -318,6 +321,15 @@ export default async function ServiceImportInvoicePage({
       if (!custTaxId && corp.corporatenumber) custTaxId = corp.corporatenumber;
       if (!custAddr  && corp.corporateaddress) custAddr = corp.corporateaddress;
     }
+  }
+
+  // ที่อยู่ = ONE slot (owner 2026-07-13 · mig 0253) — a swapped ship-to
+  // (tb_receipt.delivery_address) REPLACES the address shown so this invoice view, the
+  // ใบวางบิล, and the shared ใบเสร็จ (load-receipt-document.ts) all display the SAME
+  // address. Wins over recompaddress / corporate (single-slot rule). Empty → unchanged.
+  {
+    const deliv = (receipt?.delivery_address ?? "").trim();
+    if (deliv) custAddr = deliv;
   }
 
   // ── 4. Sales rep fallback contact (only when no receipt yet) ────
