@@ -86,6 +86,7 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       bookingsPending,
       incidents,
       cntUnpaid,
+      momoPending,
     ] = await Promise.all([
       // ── Wallet ────────────────────────────────────────────────
       // status='1' = รออนุมัติ. Direction comes from `type`, NOT the amount sign
@@ -203,6 +204,12 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       // Columns renamed to camelCase in migration 0115.
       admin.from("tb_cnt").select("ID", { count: "exact", head: true })
         .eq("cntStatus", "1"),
+      // ── MOMO auto-commit queue (A3 · 2026-07-13) ────────────────────────
+      // momo_import_tracks rows synced but NOT yet committed to a billable
+      // tb_forwarder row (committed_at IS NULL). With MOMO_CRON_AUTOCOMMIT ON,
+      // this is the depth of what's still pending /review — 0 = caught up.
+      admin.from("momo_import_tracks").select("id", { count: "exact", head: true })
+        .is("committed_at", null),
     ]);
 
     const wt = walletTopupBadge; // already a number (computeTopupBadge · GOAL 1)
@@ -240,6 +247,7 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       refundsPending:    n(refundsPending),
       bookingsPending:   n(bookingsPending),
       incidents:         n(incidents),
+      momoPending:       n(momoPending),
     };
   } catch (e) {
     // Never let a count failure break the admin sidebar — degrade to

@@ -95,7 +95,8 @@ export type BadgeKey =
   | "contactMessages"    // ข้อความติดต่อ (lead funnel) ใหม่
   | "refundsPending"     // คืนเงิน รอดำเนินการ
   | "bookingsPending"    // การจอง รอยืนยัน
-  | "incidents";         // Incident triage — open
+  | "incidents"          // Incident triage — open
+  | "momoPending";       // A3 — MOMO tracks not yet committed (momo_import_tracks.committed_at IS NULL)
 
 /** Counts resolved server-side; absent key → 0. */
 export type BadgeCounts = Partial<Record<BadgeKey, number>>;
@@ -515,7 +516,11 @@ const blockApiForwarderUpdate: MenuItem = {
   labelKey: "apiForwarderUpdate.title",
   icon: "Wand2",
   children: [
-    { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
+    // A3 (2026-07-13) — momoPending badge = MOMO tracks synced but not yet committed to a
+    // billable tb_forwarder row (momo_import_tracks.committed_at IS NULL). Now that the
+    // owner turned MOMO_CRON_AUTOCOMMIT ON, this shows the depth of what's still pending
+    // /review so staff can see when the auto-commit is caught up (or has a backlog).
+    { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck", badge: "momoPending" },
     // ภูม 2026-06-30 — ทางลัด "MOMO (Live)" ใต้ MOMO เพื่อกดเข้าหน้าค้นข้อมูลสด
     // ได้เลย ไม่ต้องเข้า MOMO → กดการ์ดอีกที. (การ์ดในหน้า dashboard ยังอยู่.)
     { labelKey: "apiForwarderUpdate.momoLive", href: "/admin/api-forwarder-momo/live", icon: "Search" },
@@ -2515,4 +2520,5 @@ export const ALL_BADGE_KEYS: BadgeKey[] = [
   "yuanPending", "cntDrawMoney", "shopPayout", "salesPayout",
   "interpreterPayout", "withdrawalAll", "customerPending", "corporatePending",
   "contactMessages", "refundsPending", "bookingsPending", "incidents",
+  "momoPending",
 ];

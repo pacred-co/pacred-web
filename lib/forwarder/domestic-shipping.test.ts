@@ -104,18 +104,23 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   assert.equal(isThShippingCostRequired("PCS"), false, "PCS self-pickup → no TH cost required");
   assert.equal(isThShippingCostRequired("pcs"), false, "self-pickup case-insensitive");
   assert.equal(isThShippingCostRequired(" PCS "), false, "self-pickup trims");
-  assert.equal(isThShippingCostRequired("PRF"), true, "เหมาๆ → TH cost required");
+  // B1 (2026-07-13) — เหมาๆ (PRF/PCSF): the ฿100 is a per-shipment batch fee carried by
+  // the mao anchor (not this row's ftransportprice), so a เหมาๆ ฿0 row is LEGIT · not required.
+  assert.equal(isThShippingCostRequired("PRF"), false, "B1: เหมาๆ PRF → ฿0 legit (฿100 rides the anchor) · not required");
+  assert.equal(isThShippingCostRequired("PCSF"), false, "B1: เหมาๆ PCSF (legacy) → not required");
   assert.equal(isThShippingCostRequired("2"), true, "Flash → TH cost required");
   assert.equal(isThShippingCostRequired("24"), true, "J&T → TH cost required");
   assert.equal(isThShippingCostRequired(""), true, "unset carrier → TH cost still owed (leg applies)");
   assert.equal(isThShippingCostRequired(null), true, "null carrier → TH cost required");
 
   // missing predicate — required AND ฿0/empty
-  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 0 }), true, "เหมาๆ ฿0 → missing");
-  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: null }), true, "เหมาๆ null → missing");
-  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: "" }), true, "เหมาๆ '' → missing");
-  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: -5 }), true, "negative cost → missing");
-  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 100 }), false, "เหมาๆ ฿100 → filled");
+  // B1 (2026-07-13) — เหมาๆ ฿0 is NOT missing (the ฿100 rides the once-per-shipment anchor;
+  // requiring it here would double-bill + false-trip the "ห้ามลืมค่าส่งไทย" gate).
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 0 }), false, "B1: เหมาๆ ฿0 → not missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: null }), false, "B1: เหมาๆ null → not missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PCSF", ftransportprice: "" }), false, "B1: เหมาๆ PCSF '' → not missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: -5 }), true, "negative cost (Flash) → missing");
+  assert.equal(isThShippingCostMissing({ fshipby: "PRF", ftransportprice: 100 }), false, "เหมาๆ ฿100 → not missing");
   // owner 2026-07-13: ปลายทาง/COD (paymethod '2') → ฿0 ถูกต้อง (เอกชนเก็บปลายทาง) → ไม่ missing / ไม่ lock
   assert.equal(isThShippingCostRequired("2", "2"), false, "Flash + COD ปลายทาง → ฿0 ok, not required");
   assert.equal(isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "2" }), false, "COD ปลายทาง ฿0 → not missing");
@@ -179,12 +184,12 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     resolveAutoThShippingFill({ fshipby: "PCS", ftransportprice: 0, zip: "10110", weightKg: 13 }),
     null, "self-pickup → no auto-fill",
   );
-  // in-zone (maomao) + ฿0 → เหมาๆ ฿100 · ต้นทาง
+  // in-zone (maomao) + ฿0 → เหมาๆ PRF · ฿0 · ต้นทาง (B1: the ฿100 rides the anchor, NOT ftransportprice)
   {
     const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "10110", weightKg: 13 });
-    assert.ok(fill, "in-zone ฿0 → auto-fills");
+    assert.ok(fill, "in-zone ฿0 → auto-fills (a PRF-zero row)");
     assert.equal(fill!.carrier, MAO_CARRIER_CODE, "in-zone → เหมาๆ PRF");
-    assert.equal(fill!.cost, MAO_FLAT_FEE, "in-zone → ฿100");
+    assert.equal(fill!.cost, 0, "B1: in-zone เหมาๆ auto-fills ฿0 (฿100 rides the once-per-shipment anchor)");
     assert.equal(fill!.payMethod, "1", "เหมาๆ → ต้นทาง");
     assert.equal(fill!.zone, "maomao");
   }
@@ -204,12 +209,12 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, province: "เชียงใหม่" }),
     null, "weight-only (no dims) → no auto-fill · force measure (owner: no fake ฿50)",
   );
-  // own-fleet เหมาๆ carrier (PRF/PCSF) upcountry → still flat ฿100 · ต้นทาง (never Flash-priced)
+  // own-fleet เหมาๆ carrier (PRF/PCSF) upcountry → PRF · ฿0 · ต้นทาง (never Flash-priced · ฿100 on the anchor)
   {
     const fill = resolveAutoThShippingFill({ fshipby: "PRF", ftransportprice: 0, zip: "50000", weightKg: 20 });
-    assert.ok(fill, "own-fleet PRF upcountry → auto-fills");
-    assert.equal(fill!.carrier, MAO_CARRIER_CODE, "own-fleet → เหมาๆ PRF (flat)");
-    assert.equal(fill!.cost, MAO_FLAT_FEE, "own-fleet → ฿100 flat (not Flash)");
+    assert.ok(fill, "own-fleet PRF upcountry → auto-fills (a PRF-zero row)");
+    assert.equal(fill!.carrier, MAO_CARRIER_CODE, "own-fleet → เหมาๆ PRF");
+    assert.equal(fill!.cost, 0, "B1: own-fleet เหมาๆ → ฿0 (฿100 rides the anchor, not Flash)");
     assert.equal(fill!.payMethod, "1", "own-fleet → ต้นทาง");
   }
   // PCSE express → null (Pacred truck, operator sets the amount · gate stays backstop)
@@ -227,11 +232,11 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: null, province: null }),
     null, "unresolvable external → no auto-fill (gate forces the real cost)",
   );
-  // in-zone auto-fill is weight-agnostic (เหมาๆ flat) — works even with no weight
+  // in-zone auto-fill is weight-agnostic (เหมาๆ) — works even with no weight (PRF-zero row)
   {
     const fill = resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "10250" });
-    assert.ok(fill, "in-zone no weight → still auto-fills (เหมาๆ flat)");
-    assert.equal(fill!.cost, MAO_FLAT_FEE);
+    assert.ok(fill, "in-zone no weight → still auto-fills (เหมาๆ PRF)");
+    assert.equal(fill!.cost, 0, "B1: in-zone เหมาๆ → ฿0 (฿100 on the anchor)");
   }
 }
 

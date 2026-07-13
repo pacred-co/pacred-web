@@ -58,6 +58,27 @@ assertEq("fusercompany='0' is NOT juristic (no allowance)",
   calcForwarderOutstanding(row({ ftotalprice: 1000, fusercompany: "0" })), 1000);
 
 // ────────────────────────────────────────────────────────────────────────
+// D1 (2026-07-13) — COD (ปลายทาง · paymethod='2') EXCLUDES the domestic leg
+// (ftransportprice · collected at the door by the courier) from the bill/
+// outstanding. Prepaid (ต้นทาง '1' / absent) includes it as before.
+// ────────────────────────────────────────────────────────────────────────
+section("D1 COD domestic-leg exclusion");
+assertEq("absent paymethod → prepaid → domestic leg INCLUDED",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100 })), 1100);
+assertEq("paymethod='1' (ต้นทาง) → domestic leg INCLUDED",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100, paymethod: "1" })), 1100);
+assertEq("paymethod='2' (COD) → domestic leg EXCLUDED",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100, paymethod: "2" })), 1000);
+assertEq("paymethod=2 numeric (COD) → domestic leg EXCLUDED",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100, paymethod: 2 })), 1000);
+assertEq("COD excludes ONLY the domestic leg (chnthb/other legs untouched)",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100, ftransportpricechnthb: 50, priceother: 20, paymethod: "2" })), 1070);
+assertEq("calcForwarderGross COD → domestic leg EXCLUDED too (bill face agrees)",
+  calcForwarderGross(row({ ftotalprice: 1000, ftransportprice: 100, paymethod: "2" })), 1000);
+assertEq("juristic COD → 1% off the COD-excluded gross",
+  calcForwarderOutstanding(row({ ftotalprice: 1000, ftransportprice: 100, paymethod: "2", fusercompany: "1" })), 990); // (1000)−1%
+
+// ────────────────────────────────────────────────────────────────────────
 // calcForwarderGross — the GROSS composite (no 1% allowance · the ใบวางบิล face)
 // ────────────────────────────────────────────────────────────────────────
 section("calcForwarderGross");

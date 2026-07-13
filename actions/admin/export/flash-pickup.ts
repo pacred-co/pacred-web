@@ -14,13 +14,13 @@
  * ── MONEY / DATA SAFETY ──────────────────────────────────────────────────
  *   • EXPORT / READ-ONLY — SELECT tb_forwarder + tb_users + a best-effort
  *     admin_export_log audit insert. NO write to any tb_* money/status field.
- *   • COD column = computeForwarderCollectTotal for paymethod='2' (ปลายทาง) ONLY.
- *     A prepaid (ต้นทาง) parcel → BLANK COD (never a phantom COD on a parcel the
- *     customer already paid upfront). This is lockstep with the collect helper's
- *     own domestic-leg zeroing for COD rows.
- *   • The juristic 1% lever inside computeForwarderCollectTotal reads
- *     tb_users.userCompany (NOT the row's fusercompany — the BUG-2b rule), so we
- *     join tb_users for userCompany.
+ *   • COD column = the DOMESTIC leg (ftransportprice · the ค่าส่งไทย the courier collects
+ *     at the door) for paymethod='2' (ปลายทาง) ONLY (D2 · 2026-07-13). A prepaid (ต้นทาง)
+ *     parcel → BLANK COD (never a phantom COD on a parcel the customer already paid upfront),
+ *     and a COD row whose ftransportprice is still ฿0 → BLANK (never ask Flash to collect ฿0
+ *     — the ค่าส่งไทย gate should have caught it at bill time). Was: computeForwarderCollectTotal
+ *     (freight+fees, which EXCLUDES the domestic leg for COD) → told Flash to COD-collect the
+ *     already-paid freight AND omitted the actual door fee (unambiguously wrong).
  *   • CSV is formula-injection-safe (escapeCsvCell neutralises a leading =+-@\t\r)
  *     + UTF-8 BOM (Thai). Bounded EXPORT_CAP=500. Admin-gated.
  *
@@ -33,10 +33,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { escapeCsvCell } from "@/lib/csv/escape";
-import {
-  computeForwarderCollectTotal,
-  type ForwarderCollectRow,
-} from "@/lib/forwarder/forwarder-collect-total";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 /** Safety cap — the Express tab exports the currently-filtered rows, bounded. */
@@ -70,8 +66,6 @@ type FlashFwdRow = {
   priceother: number | string | null;
   fdiscount: number | string | null;
 };
-
-type UserCompanyRow = { userID: string; userCompany: number | string | null };
 
 /** Thai header labels — map 1:1 to the Flash Import "ข้อมูลผู้รับ" columns. */
 const FLASH_HEADERS = [
@@ -137,54 +131,21 @@ export async function exportFlashPickupCsv(input: {
   }
   const rows = (fwdData ?? []) as unknown as FlashFwdRow[];
 
-  // ── Join tb_users for userCompany (the juristic 1% lever · BUG-2b) ──
-  const userIds = Array.from(
-    new Set(rows.map((r) => (r.userid ?? "").trim()).filter(Boolean)),
-  );
-  const userCompanyById = new Map<string, string>();
-  if (userIds.length > 0) {
-    const { data: userData, error: userErr } = await admin
-      .from("tb_users")
-      .select("userID, userCompany")
-      .in("userID", userIds);
-    if (userErr) {
-      console.error("[exportFlashPickupCsv tb_users] failed", {
-        code: userErr.code,
-        message: userErr.message,
-      });
-    }
-    for (const u of (userData ?? []) as unknown as UserCompanyRow[]) {
-      userCompanyById.set(u.userID, String(u.userCompany ?? ""));
-    }
-  }
-
   // ── Build the data rows in the Flash recipient shape ──
   const dataLines: string[] = rows.map((r) => {
     const userId = (r.userid ?? "").trim();
     const isCod = toNum(r.paymethod) === 2;
 
-    // COD amount = the customer collect total, computed by the SINGLE-SOURCE
-    // helper, for paymethod='2' ONLY. Prepaid → blank (no phantom COD).
+    // D2 (2026-07-13 · MONEY) — COD amount = the DOMESTIC leg (ftransportprice · the
+    // ค่าส่งไทย the courier collects at the door) for paymethod='2' (ปลายทาง) ONLY. The
+    // freight + fees were paid upfront (row is fstatus≥6); Flash collects only the
+    // in-Thailand delivery fee. If ftransportprice is ฿0 (manual carrier's cost not
+    // entered — should be blocked at bill time by the ค่าส่งไทย gate) → BLANK, never
+    // 0/freight+fees. Prepaid (ต้นทาง) → blank (no phantom COD on an already-paid parcel).
     let cod = "";
     if (isCod) {
-      const collectRow: ForwarderCollectRow = {
-        fshipby: r.fshipby,
-        ftransportprice: r.ftransportprice,
-        paymethod: r.paymethod,
-        faddressdistrict: r.faddressdistrict,
-        ftotalprice: r.ftotalprice,
-        fpriceupdate: r.fpriceupdate,
-        fshippingservice: r.fshippingservice,
-        pricecrate: r.pricecrate,
-        ftransportpricechnthb: r.ftransportpricechnthb,
-        priceother: r.priceother,
-        fdiscount: r.fdiscount,
-      };
-      const { total } = computeForwarderCollectTotal([collectRow], {
-        userId,
-        userCompany: userCompanyById.get(userId) ?? "",
-      });
-      cod = String(Math.round(total));
+      const door = Math.round(toNum(r.ftransportprice));
+      cod = door > 0 ? String(door) : "";
     }
 
     const recipient = `${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim();

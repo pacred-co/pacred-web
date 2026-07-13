@@ -295,9 +295,11 @@ const mixedSet: ForwarderCollectRow[] = [
   const collectPrepaid = computeForwarderCollectTotal(prepaidSet, nonJuristic);
   assertClose("G2 bill gross == collect (all-prepaid, no extras)", billGrossPrepaid, collectPrepaid.total);
 
-  // (b) Add a COD row → the bill gross INCLUDES the ฿50 domestic leg
-  //     (calcForwarderGross has no COD guard) but the collect EXCLUDES it →
-  //     bill − collect == 50 (the single bill-level extra). bill ⊋ collect.
+  // (b) Add a COD row → D1 (2026-07-13): calcForwarderGross now reads paymethod, so a
+  //     COD (ปลายทาง) row's ftransportprice (the at-door leg the courier collects) is
+  //     EXCLUDED from the bill just as the collect excludes it. So bill gross == collect —
+  //     they AGREE (the domestic leg is no longer double-billed: once on the bill + once
+  //     by the courier). Was: bill INCLUDED it (no COD guard) → bill = collect + ฿50.
   const billGrossMixed =
     mixedSet.reduce((s, r) => s + calcForwarderGross({ ...r, fusercompany: null }), 0) +
     (mixedSet.some((r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice) === 0)
@@ -305,9 +307,9 @@ const mixedSet: ForwarderCollectRow[] = [
       : 0);
   const collectMixed = computeForwarderCollectTotal(mixedSet, nonJuristic); // non-juristic → no 1% noise
   assertClose(
-    "G2 bill gross == collect + the ฿50 COD leg (bill is the superset)",
+    "D1: bill gross == collect (both exclude the COD domestic leg — no double-bill)",
     billGrossMixed,
-    collectMixed.total + 50,
+    collectMixed.total,
   );
 }
 

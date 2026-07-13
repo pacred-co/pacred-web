@@ -241,6 +241,7 @@ type RawForwarderRow = {
   priceother: number | null;
   fdiscount: number | null;
   fusercompany: string | number | null;       // legacy varchar; '1' = juristic
+  paymethod: string | number | null;          // D1 — '2'=COD → exclude domestic leg from ยอดค้าง
   adminidkey: string | null;                   // admin who measured weight/CBM
   // Wave 18-B — 7-col fidelity backfill (legacy forwarder.php L575-580 + L595-609 + L651-653)
   printstatus1: string | null;        // "1" = พิมพ์แล้ว (badge #1)
@@ -1038,7 +1039,9 @@ export async function fetchForwarderList(
       "fdateadminstatus,adminid,paydeposit," +
       // Wave 15 P0-3 — extra cols required by calcForwarderOutstanding()
       // (port of legacy calPriceForwarderMain · shows ยอดค้างชำระ in the list)
-      "fpriceupdate,ftransportprice,fshippingservice,pricecrate," +
+      // D1 (2026-07-13) — paymethod: a COD (ปลายทาง) row's ftransportprice is the
+      // at-door leg the courier collects → EXCLUDE it from ยอดค้าง (no double-count).
+      "fpriceupdate,ftransportprice,fshippingservice,pricecrate,paymethod," +
       "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey," +
       // Wave 18-B — 7-col fidelity backfill (print badges · car on/off ·
       // ETA base date · pallet code · all from legacy forwarder.php L575-653).

@@ -59,6 +59,8 @@ import {
   computeForwarderCollectTotal,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
+import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog as appendStatusLogShared } from "@/lib/notifications/status-flip-helper";
@@ -79,6 +81,13 @@ const bulkBillSchema = z.object({
    *  set discount on the row before adding to the check queue. Kept for
    *  parity; null/undefined means "leave existing per-row fdiscount alone". */
   discount: z.number().nonnegative().optional(),
+  /** C2 (2026-07-13) ค่าส่งไทย "ห้ามลืม" ack — mirrors createBillingRunInvoice's
+   *  allowMissingThShip. When false (default) a row whose domestic delivery leg
+   *  applies (fshipby ≠ self-pickup/เหมาๆ/COD) but whose ค่าส่งไทย (ftransportprice)
+   *  is still ฿0 (auto-fill couldn't quote → unmeasured/oversize) is SKIPPED +
+   *  surfaced, never billed at a ฿0 domestic leg. Set true to bill anyway.
+   *  `.optional()` (no default) so an existing `{ fids }` caller stays valid. */
+  allowMissingThShip: z.boolean().optional(),
 });
 export type AdminCallPriceUserInput = z.infer<typeof bulkBillSchema>;
 
@@ -249,7 +258,7 @@ export async function adminCallPriceUser(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fids, discount } = parsed.data;
+  const { fids, discount, allowMissingThShip } = parsed.data;
 
   return withAdmin<BillResult>(
     ["super", "ops", "accounting"],
@@ -336,7 +345,25 @@ export async function adminCallPriceUser(
       // เหมาๆ ฿100 once + batch-1%, COD legs excluded — never a per-row net).
       const billedRowsByUser = new Map<string, ForwarderCollectRow[]>();
 
+      // C2 (2026-07-13) — SHIPMENT-level COD set (any candidate whose base-tracking is
+      // COD). Used to exempt box-split siblings that kept paymethod='1' from the ค่าส่งไทย
+      // gate below (same rule createBillingRunInvoice uses). Computed once over candidates.
+      const codBases = codBaseTrackings(candidates);
+
       for (const row of candidates) {
+        // C1 (2026-07-13 · MONEY · owner "เก็บเงินขาด") — ZERO-IMPORT-COST guard. A row
+        // whose import freight SELL (ค่านำเข้า · ftotalprice) is still ฿0 was never
+        // measured/priced (no rate card for its warehouse×transport×product tuple →
+        // computeAndFillForwarderImportRate wrote nothing). Flipping it 4→5 + SMS-
+        // collecting bills ฿0 = เก็บเงินขาด. This path has NO positive-override channel,
+        // so any ftotalprice<=0 is a genuine under-charge → skip + surface it (mirrors the
+        // createBillingRunInvoice zero-transport gate + report-cnt bill-to-customer guard).
+        if ((Number(row.ftotalprice) || 0) <= 0) {
+          result.failed++;
+          result.errors.push(`#${row.id}: ค่านำเข้า ฿0 (ยังไม่วัด/ตั้งราคา · อาจเก็บเงินขาด) — ข้าม กรุณาตั้งเรท/วัดขนาดที่โกดังก่อน`);
+          continue;
+        }
+
         // #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") — if a delivery leg
         // applies but ftransportprice is still ฿0, auto-fill the zone default so the
         // bulk-bill includes the TH cost (no manual detour). Best-effort · never
@@ -344,6 +371,31 @@ export async function adminCallPriceUser(
         const autoTh = await autoFillThShippingForForwarder(admin, row.id);
         const effectiveTransport = autoTh ? autoTh.cost : row.ftransportprice;
         if (autoTh) autoFilledThCount++;
+
+        // C2 (2026-07-13 · MONEY) — ค่าส่งไทย "ห้ามลืม" gate (mirrors createBillingRunInvoice
+        // a3). After the auto-fill, if a domestic leg still applies (effective fshipby ≠
+        // self-pickup/เหมาๆ/COD) but ค่าส่งไทย is STILL ฿0 (auto-fill couldn't quote — the
+        // parcel is unmeasured/oversize → resolveThShippingAutoPrice returned null → no
+        // write), billing 4→5 would collect ฿0 for the domestic leg = เก็บเงินขาด. Skip +
+        // surface unless the operator acked allowMissingThShip. เหมาๆ ฿0 rows are exempt
+        // (B1 isMaoCarrier) + COD rows/siblings are exempt (shipmentIsCod). No orphan write:
+        // if this fires, autoFillThShippingForForwarder returned null (nothing was written).
+        const effFshipby = autoTh?.carrier ?? row.fshipby;
+        const effPaymethod = autoTh?.payMethod ?? row.paymethod;
+        const shipmentIsCod = codBases.has(baseTracking(row.ftrackingchn ?? "") ?? "");
+        if (
+          !allowMissingThShip &&
+          isThShippingCostMissing({
+            fshipby: effFshipby,
+            ftransportprice: effectiveTransport,
+            payMethod: effPaymethod,
+            shipmentIsCod,
+          })
+        ) {
+          result.failed++;
+          result.errors.push(`#${row.id}: ยังไม่กรอกค่าส่งไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง) — ข้าม กรุณาให้โกดัง/CS กรอกค่าส่งไทยก่อน`);
+          continue;
+        }
 
         // 3a. UPDATE the forwarder row · re-guarded fstatus='4' to dodge a race
         //     where another operator billed it between our read + write.

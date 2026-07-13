@@ -200,10 +200,17 @@ export const SELF_PICKUP_CARRIER = "PCS" as const;
  */
 export function isThShippingCostRequired(
   fshipby: string | null | undefined,
-  payMethod?: string | null | undefined,
+  payMethod?: string | number | null | undefined,
 ): boolean {
   const s = (fshipby ?? "").trim().toUpperCase();
   if (s === SELF_PICKUP_CARRIER) return false; // รับเองที่โกดัง — ฿0 ถูกต้อง
+  // B1 (2026-07-13 · MONEY) — เหมาๆ (PCSF/PRF): the ฿100 flat fee is a per-SHIPMENT
+  // batch fee carried by the mao anchor line (computeForwarderDebitBatch /
+  // computeForwarderCollectTotal add it ONCE), NOT this row's ftransportprice. So a
+  // เหมาๆ row with ftransportprice ฿0 is LEGIT — the ฿100 rides the anchor. Requiring
+  // it would double-bill (฿100 on the anchor + a forced ฿100 in ftransportprice) and
+  // false-trip the "ห้ามลืมค่าส่งไทย" gate.
+  if (isMaoCarrier(s)) return false;
   // owner 2026-07-13: ปลายทาง/COD (paymethod '2') — เอกชนเก็บค่าส่งปลายทางกับลูกค้าเอง →
   // Pacred ไม่เก็บค่าส่งไทย → ฿0 ถูกต้อง · ห้าม lock/บังคับกรอก.
   if ((payMethod ?? "").toString().trim() === "2") return false;
@@ -220,7 +227,7 @@ export function isThShippingCostMissing(args: {
   fshipby: string | null | undefined;
   ftransportprice: number | string | null | undefined;
   /** '2' = ปลายทาง/COD → ฿0 ถูกต้อง (เอกชนเก็บปลายทาง) → ไม่ถือว่าขาด (owner 2026-07-13). */
-  payMethod?: string | null | undefined;
+  payMethod?: string | number | null | undefined;
   /**
    * SHIPMENT-level COD flag (ภูม 2026-07-13 · บั๊ก COD กดออกบิลไม่ได้). COD =
    * "เอกชนเก็บปลายทาง" is a property of the ONE physical delivery/courier — so if
@@ -246,7 +253,7 @@ export function isThShippingCostMissing(args: {
  * momo-bill-header `baseTracking`). Pure + testable.
  */
 export function codBaseTrackings(
-  rows: readonly { ftrackingchn: string | null | undefined; paymethod: string | null | undefined }[],
+  rows: readonly { ftrackingchn: string | null | undefined; paymethod: string | number | null | undefined }[],
 ): Set<string> {
   const out = new Set<string>();
   for (const r of rows) {
@@ -357,15 +364,21 @@ export function resolveAutoThShippingFill(args: {
 
   const zone = classifyDomesticZone({ addressID: null, zip: args.zip });
 
-  // เหมาๆ — in-zone (กทม.-ปริมณฑล) OR an own-fleet เหมาๆ carrier (PCSF/PRF) → flat
-  // ฿100, PREPAID ต้นทาง, collected by Pacred. Weight-agnostic · NEVER Flash-priced.
+  // เหมาๆ — in-zone (กทม.-ปริมณฑล) OR an own-fleet เหมาๆ carrier (PCSF/PRF) → make it a
+  // PRF-ZERO row (fshipby=PRF · ฿0), PREPAID ต้นทาง. Weight-agnostic · NEVER Flash-priced.
+  // B1 (2026-07-13 · MONEY): auto-fill ฿0 — NOT ฿100. The ฿100 flat fee is charged ONCE
+  // per shipment by the mao anchor (computeForwarderDebitBatch/computeForwarderCollectTotal
+  // count a PRF row with ftransportprice==0). Stamping ฿100 into ftransportprice here broke
+  // both mechanisms (the anchor stops counting a non-zero row) → an N-box เหมาๆ shipment was
+  // billed N×฿100 instead of ฿100. Emitting ฿0 restores the once-per-shipment fee, and
+  // isThShippingCostRequired exempts a เหมาๆ ฿0 row so the "ห้ามลืมค่าส่งไทย" gate never flags it.
   if (zone === "maomao" || isMaoCarrier(carrier)) {
     return {
       carrier: MAO_CARRIER_CODE, // PRF เหมาๆ
-      cost: MAO_FLAT_FEE,        // ฿100 flat
+      cost: 0,                   // ฿0 — the ฿100 rides the once-per-shipment mao anchor line
       payMethod: "1",            // ต้นทาง (prepaid)
       zone,
-      label: `เหมาๆ (กทม.-ปริมณฑล) · ฿${MAO_FLAT_FEE.toLocaleString("th-TH")}`,
+      label: "เหมาๆ (กทม.-ปริมณฑล) · เก็บ ฿100/ชิปเมนต์ (คิดครั้งเดียว)",
     };
   }
 

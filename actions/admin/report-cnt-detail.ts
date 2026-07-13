@@ -36,7 +36,12 @@ import { costBasisMode } from "@/lib/forwarder/resolve-cost";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
-import type { AutoThShippingFill } from "@/lib/forwarder/domestic-shipping";
+import {
+  isThShippingCostMissing,
+  codBaseTrackings,
+  type AutoThShippingFill,
+} from "@/lib/forwarder/domestic-shipping";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 
 // Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
 // cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
@@ -584,6 +589,11 @@ const billToCustomerSchema = z.object({
     (n) => Number.isFinite(n) && n > 0,
     { message: "fID ไม่ถูกต้อง" },
   ),
+  /** C2 (2026-07-13) ค่าส่งไทย "ห้ามลืม" ack — mirrors createBillingRunInvoice's
+   *  allowMissingThShip. When false/absent (default) a row whose domestic delivery leg
+   *  applies but whose ค่าส่งไทย (ftransportprice) is still ฿0 (auto-fill couldn't quote)
+   *  is refused, never billed at a ฿0 domestic leg. Set true to bill anyway. */
+  allowMissingThShip: z.boolean().optional(),
 });
 export type BillToCustomerInput = z.input<typeof billToCustomerSchema>;
 
@@ -622,12 +632,20 @@ export async function computeBillToCustomerAmounts(row: {
 
 export async function adminReportCntBillToCustomer(
   input: BillToCustomerInput,
+  /** C2 (2026-07-13) — SHIPMENT-level COD base-tracking set, passed IN-PROCESS by the
+   *  group action (adminReportCntBillGroupToCustomer) so a box-split sibling that kept
+   *  paymethod='1' is exempted from the ค่าส่งไทย gate when its base tracking is COD.
+   *  The standalone (client single-bill) call omits it → COD exemption falls back to the
+   *  row's OWN paymethod (isThShippingCostRequired handles paymethod='2'). Not a client
+   *  arg — a Set can't cross the server-action boundary; the group calls this directly. */
+  opts?: { codBases?: ReadonlySet<string> },
 ): Promise<AdminActionResult<{ fID: number; pricePay: number; alreadyBilled: boolean; autoThShipping?: AutoThShippingFill | null }>> {
   const parsed = billToCustomerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const fID = parsed.data.fID;
+  const allowMissingThShip = parsed.data.allowMissingThShip === true;
 
   return withAdmin<{ fID: number; pricePay: number; alreadyBilled: boolean; autoThShipping?: AutoThShippingFill | null }>(
     ["super", "ops", "accounting"],
@@ -638,7 +656,7 @@ export async function adminReportCntBillToCustomer(
       const { data: row, error: rowErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fstatus, userid, fidorco, ftrackingchn, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, fdiscount",
+          "id, fstatus, userid, fidorco, ftrackingchn, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, fdiscount",
         )
         .eq("id", fID)
         .maybeSingle<{
@@ -647,6 +665,8 @@ export async function adminReportCntBillToCustomer(
           userid: string | null;
           fidorco: string | null;
           ftrackingchn: string | null;
+          fshipby: string | null;       // C2 — carrier, for the ค่าส่งไทย gate
+          paymethod: string | null;     // C2 — '2'=COD → domestic leg exempt
           ftotalprice: number | null;
           ftransportprice: number | null;
           fpriceupdate: number | null;
@@ -714,6 +734,36 @@ export async function adminReportCntBillToCustomer(
       const rowForBill = autoThShipping
         ? { ...row, ftransportprice: autoThShipping.cost }
         : row;
+
+      // ── (a3) ค่าส่งไทย "ห้ามลืม" GATE (C2 · 2026-07-13 · MONEY) ──
+      // Mirror createBillingRunInvoice's a3 gate on this direct-bill path. After the
+      // auto-fill, if a domestic delivery leg still applies (effective fshipby ≠
+      // self-pickup/เหมาๆ/COD) but ค่าส่งไทย (ftransportprice) is STILL ฿0 (auto-fill
+      // couldn't quote — parcel unmeasured/oversize → resolveThShippingAutoPrice returned
+      // null → nothing written), flipping 4→5 + notifying "ยอดค้างชำระ" would collect ฿0
+      // for the domestic leg = เก็บเงินขาด. Refuse unless the operator acked
+      // allowMissingThShip. เหมาๆ ฿0 (B1 isMaoCarrier) + COD rows/siblings (shipmentIsCod)
+      // are exempt. NO orphan write: if this fires, autoFillThShippingForForwarder returned
+      // null (nothing was written). The group action passes opts.codBases so a box-split
+      // COD sibling (paymethod='1') is exempted like createBillingRunInvoice.
+      const effFshipby = autoThShipping?.carrier ?? row.fshipby;
+      const effPaymethod = autoThShipping?.payMethod ?? row.paymethod;
+      const shipmentIsCod = opts?.codBases?.has(baseTracking(row.ftrackingchn ?? "") ?? "") ?? false;
+      if (
+        !allowMissingThShip &&
+        isThShippingCostMissing({
+          fshipby: effFshipby,
+          ftransportprice: rowForBill.ftransportprice,
+          payMethod: effPaymethod,
+          shipmentIsCod,
+        })
+      ) {
+        return {
+          ok: false,
+          error:
+            "ยังไม่กรอกค่าส่งไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง) — กรุณาให้โกดัง/CS กรอกค่าส่งไทยก่อนแจ้งหนี้ลูกค้า",
+        };
+      }
 
       // ── (b) Recompute the promo discount (legacy L862-878) ──
       const { data: promoRow, error: promoErr } = await admin
@@ -876,11 +926,30 @@ export async function adminReportCntBillGroupToCustomer(
     let totalPricePay = 0;
     const errors: Array<{ fID: number; error: string }> = [];
 
+    // C2 (2026-07-13) — read the group members' {ftrackingchn, paymethod} once to build the
+    // SHIPMENT-level COD base-tracking set, so a box-split sibling that kept paymethod='1' is
+    // exempted from the per-row ค่าส่งไทย gate when its base tracking is COD (same rule
+    // createBillingRunInvoice uses over its selected set). Best-effort: a read error → empty
+    // set (each per-row then falls back to its own paymethod for the COD exemption).
+    const admin = createAdminClient();
+    const { data: groupRows, error: groupErr } = await admin
+      .from("tb_forwarder")
+      .select("ftrackingchn, paymethod")
+      .in("id", fIDs);
+    if (groupErr) {
+      console.error("[adminReportCntBillGroupToCustomer cod-set read] failed", {
+        code: groupErr.code, message: groupErr.message,
+      });
+    }
+    const codBases = codBaseTrackings(
+      (groupRows ?? []) as Array<{ ftrackingchn: string | null; paymethod: string | null }>,
+    );
+
     // Sequential (not Promise.all): each member is an independent 4→5 flip with
     // its own idempotency guard; serial keeps the writes ordered + avoids
     // hammering the DB with N concurrent updates for a large split.
     for (const fID of fIDs) {
-      const res = await adminReportCntBillToCustomer({ fID });
+      const res = await adminReportCntBillToCustomer({ fID }, { codBases });
       if (!res.ok) {
         failed += 1;
         errors.push({ fID, error: res.error });
