@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import {
   previewMomoPacking,
   applyMomoPacking,
   type MomoPackingPreview,
 } from "@/actions/admin/momo-packing-reconcile";
+import { recordMomoPackingUpload } from "@/actions/admin/momo-packing-history";
+import { PackingHistoryPanel } from "./packing-history-panel";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -47,6 +49,11 @@ export function MomoPackingUploadClient() {
   const [toCreate, setToCreate] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
+  // ประวัติ packing (ภูม 2026-07-14): record each uploaded file once, then bump
+  // the nonce so the history panel below reloads. Fire-and-forget — never blocks
+  // or breaks the preview/apply money path.
+  const recordedB64Ref = useRef<string | null>(null);
+  const [historyNonce, setHistoryNonce] = useState(0);
 
   async function handleFile(file: File) {
     setMsg(null);
@@ -69,10 +76,10 @@ export function MomoPackingUploadClient() {
     }
     setFileName(file.name);
     setFileB64(b64);
-    runPreview(b64);
+    runPreview(b64, file.name);
   }
 
-  function runPreview(b64: string) {
+  function runPreview(b64: string, name?: string) {
     setMsg(null);
     setPreview(null);
     setToCreate(new Set());
@@ -82,6 +89,14 @@ export function MomoPackingUploadClient() {
       setPreview(res.data);
       if (res.data.rows.length === 0) {
         setMsg({ kind: "err", text: res.data.warnings[0] ?? "อ่านไม่พบรายการพัสดุในไฟล์" });
+        return;
+      }
+      // record this upload into history once per distinct file (fire-and-forget)
+      if (recordedB64Ref.current !== b64) {
+        recordedB64Ref.current = b64;
+        void recordMomoPackingUpload({ fileBase64: b64, fileName: name }).then((rec) => {
+          if (rec.ok) setHistoryNonce((v) => v + 1);
+        });
       }
     });
   }
@@ -101,11 +116,6 @@ export function MomoPackingUploadClient() {
       return next;
     });
   }
-
-  const missingRows = useMemo(
-    () => (preview ? preview.rows.filter((r) => r.verdict === "missing") : []),
-    [preview],
-  );
 
   const hasWork =
     !!preview && (preview.summary.willUpdate > 0 || preview.summary.willAdvance > 0 || toCreate.size > 0);
@@ -346,6 +356,9 @@ export function MomoPackingUploadClient() {
           </div>
         </details>
       )}
+
+      {/* ── ประวัติ packing list ที่อัพ + พรีวิว + เช็ค API (ภูม 2026-07-14) ────────── */}
+      <PackingHistoryPanel nonce={historyNonce} />
     </div>
   );
 }
