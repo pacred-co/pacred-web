@@ -358,12 +358,13 @@ export default async function ServiceImportReceiptPrintPage({
     // from tb_receipt — fetch them (the receipt-level company override).
     const { data: reComp, error: reCompErr } = await admin
       .from("tb_receipt")
-      .select("recompnumber, recompname, recompaddress")
+      .select("recompnumber, recompname, recompaddress, delivery_address")
       .eq("rid", ID)
       .maybeSingle<{
         recompnumber: string | null;
         recompname: string | null;
         recompaddress: string | null;
+        delivery_address: string | null;
       }>();
     if (reCompErr) {
       console.error(`[tb_receipt list] failed`, { code: reCompErr.code, message: reCompErr.message });
@@ -371,6 +372,10 @@ export default async function ServiceImportReceiptPrintPage({
     rowMain.recompnumber = reComp?.recompnumber ?? "";
     rowMain.recompname = reComp?.recompname ?? "";
     rowMain.recompaddress = reComp?.recompaddress ?? "";
+    // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — captured for the single-slot override
+    // applied AFTER the legacy address resolution below, so this print surface shows the
+    // SAME swapped ship-to as the ใบวางบิล + the other ใบเสร็จ surfaces (no drift).
+    const receiptDeliveryAddress = (reComp?.delivery_address ?? "").trim();
 
     const dateCreate = fmtDate(rowMain.rdate);
 
@@ -442,6 +447,12 @@ export default async function ServiceImportReceiptPrintPage({
     } else {
       reCorporate = 1;
     }
+
+    // ที่อยู่ = ONE slot (owner 2026-07-13 · mig 0253) — a swapped ship-to
+    // (tb_receipt.delivery_address) REPLACES the resolved address so this printed ใบเสร็จ
+    // matches the ใบวางบิล + the other receipt surfaces (single-slot rule · wins over
+    // recomp/corporate/main). Empty (legacy · no swap) → the legacy resolution stands.
+    if (receiptDeliveryAddress) rowMain.corporateaddress = receiptDeliveryAddress;
 
     // printReceiptF.php L97-101 — a spacer <br> when the address is short.
     const addressBR = (rowMain.corporateaddress ?? "").length <= 230;

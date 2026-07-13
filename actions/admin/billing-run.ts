@@ -970,12 +970,66 @@ export async function adminSetBillingRunDeliveryAddress(
         return { ok: false, error: `บันทึกที่อยู่จัดส่งไม่สำเร็จ: ${updErr.message}` };
       }
 
+      // 4b. PROPAGATE to the linked ใบเสร็จ (owner 2026-07-13 · mig 0253) — the whole
+      //     complaint: "แก้ที่อยู่บนใบวางบิล แล้วใบเสร็จเป็นคนละที่อยู่". If a receipt
+      //     already covers this bill's forwarder rows, mirror the SAME ship-to snapshot
+      //     onto tb_receipt.delivery_address so both documents show ONE address — no
+      //     cancel+reissue needed. Address is DISPLAY-only (never amount/WHT/status · G1
+      //     invariant intact) → safe even on a PAID receipt, so NO status guard (a paid
+      //     receipt's ที่อยู่จัดส่ง legitimately follows a re-routed delivery). Best-effort:
+      //     the bill address is already saved; a receipt-sync miss never fails the action.
+      let syncedReceiptCount = 0;
+      try {
+        const { data: invItems, error: invItemsErr } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id")
+          .eq("invoice_id", invoiceId);
+        if (invItemsErr) {
+          console.error(`[adminSetBillingRunDeliveryAddress receipt-sync items]`, { code: invItemsErr.code, message: invItemsErr.message, invoiceId });
+        }
+        const fids = Array.from(
+          new Set(((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id)),
+        );
+        if (fids.length > 0) {
+          const { data: rcptItems, error: rcptItemsErr } = await admin
+            .from("tb_receipt_item")
+            .select("rid")
+            .in("fid", fids);
+          if (rcptItemsErr) {
+            console.error(`[adminSetBillingRunDeliveryAddress receipt-sync rids]`, { code: rcptItemsErr.code, message: rcptItemsErr.message, invoiceId });
+          }
+          const rids = Array.from(
+            new Set(((rcptItems ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x)),
+          );
+          if (rids.length > 0) {
+            // Update ACTIVE receipts only ('2' = ยกเลิก → leave the void's frozen record).
+            const { data: synced, error: syncErr } = await admin
+              .from("tb_receipt")
+              .update({ delivery_address: snapshot })
+              .in("rid", rids)
+              .neq("rstatus", "2")
+              .select("id, rid");
+            if (syncErr) {
+              console.error(`[adminSetBillingRunDeliveryAddress receipt-sync update]`, { code: syncErr.code, message: syncErr.message, invoiceId, rids });
+            } else {
+              syncedReceiptCount = (synced ?? []).length;
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[adminSetBillingRunDeliveryAddress receipt-sync] unexpected`, { message: String(e), invoiceId });
+      }
+
       await logAdminAction(adminId, "tb_forwarder_invoice.set_delivery_address", "tb_forwarder_invoice", String(invoiceId), {
-        addressId, userid: inv.userid, province: addr.addressprovince ?? "",
+        addressId, userid: inv.userid, province: addr.addressprovince ?? "", synced_receipts: syncedReceiptCount,
       });
 
       revalidatePath(`/admin/billing-run/${invoiceId}`);
       revalidatePath(`/admin/billing-run/${invoiceId}/print`);
+      // Receipt surfaces read tb_receipt.delivery_address → refresh them too so the
+      // synced ที่อยู่ shows on the ใบเสร็จ (admin reprint · public /r · service-import).
+      revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
+      revalidatePath("/[locale]/(protected)/service-import/[fNo]/invoice", "page");
       return { ok: true };
     },
   );
@@ -1691,9 +1745,9 @@ async function markBillingRunPaidImpl(
       // Guard: only flip 'issued' → 'paid'
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb, buyer_name, buyer_tax_id, buyer_address")
+        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb, buyer_name, buyer_tax_id, buyer_address, delivery_address")
         .eq("id", v.invoiceId)
-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null }>();
+        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null; delivery_address: string | null }>();
       if (curErr) {
         console.error("[markBillingRunPaid current] failed", {
           code: curErr.code, message: curErr.message,
@@ -1973,6 +2027,11 @@ async function markBillingRunPaidImpl(
               recompNameOverride:    cur.buyer_name ?? undefined,
               recompNumberOverride:  cur.buyer_tax_id ?? undefined,
               recompAddressOverride: cur.buyer_address ?? undefined,
+              // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — stamp the receipt's ship-to
+              // from THIS bill's delivery_address so the ใบเสร็จ's "ที่อยู่" == the ใบวางบิล's
+              // (single-slot rule). undefined (bill never had a swapped delivery address) →
+              // the receipt renders recompaddress unchanged.
+              deliveryAddressOverride: cur.delivery_address ?? undefined,
             });
             if (rcpt.ok) {
               receiptRid = rcpt.data.rid;
@@ -2091,12 +2150,13 @@ export async function ensureBillingRunReceipt(
       //    verified + settled), but re-assert server-side (never trust the client).
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, userid, total_thb, is_juristic, mao_fee_thb, paid_at, buyer_name, buyer_tax_id, buyer_address")
+        .select("id, doc_no, status, userid, total_thb, is_juristic, mao_fee_thb, paid_at, buyer_name, buyer_tax_id, buyer_address, delivery_address")
         .eq("id", invoiceId)
         .maybeSingle<{
           id: number; doc_no: string; status: string; userid: string | null;
           total_thb: number | string; is_juristic: boolean; mao_fee_thb: number | string | null;
           paid_at: string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null;
+          delivery_address: string | null;
         }>();
       if (curErr) {
         console.error("[ensureBillingRunReceipt current] failed", { code: curErr.code, message: curErr.message });
@@ -2146,6 +2206,9 @@ export async function ensureBillingRunReceipt(
         recompNameOverride: cur.buyer_name ?? undefined,
         recompNumberOverride: cur.buyer_tax_id ?? undefined,
         recompAddressOverride: cur.buyer_address ?? undefined,
+        // ที่อยู่จัดส่ง (owner 2026-07-13 · mig 0253) — same ship-to snapshot the bill
+        // carries → receipt "ที่อยู่" == ใบวางบิล by construction (single-slot rule).
+        deliveryAddressOverride: cur.delivery_address ?? undefined,
       });
       if (rcpt.ok) {
         await logAdminAction(adminId, "billing_run.receipt_issued_manual", "tb_receipt", rcpt.data.rid, {
