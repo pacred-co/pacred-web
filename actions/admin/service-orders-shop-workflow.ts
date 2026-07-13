@@ -351,6 +351,10 @@ const saveItemsAndQuoteSchema = z.object({
   // Written to tb_header_order.hrate + used to recompute hTotalPriceUser.
   // Omitted for a ¥ order → the stored header.hrate is used (byte-identical).
   hRate:     z.coerce.number().positive().max(99_999).optional(),
+  // mig 0252 · owner P22353 — the operator's TYPED บาท/{cur} sell-rate, stored
+  // verbatim so the editor shows exactly what was typed (re-deriving it from the
+  // 2dp hrate drifts, e.g. 35 → 35.006). DISPLAY-only (money basis = hRate above).
+  husdRate:  z.coerce.number().positive().max(99_999).optional(),
 });
 export type AdminSaveShopOrderItemsAndQuoteInput = z.infer<typeof saveItemsAndQuoteSchema>;
 
@@ -542,6 +546,9 @@ export async function adminSaveShopOrderItemsAndQuote(
         // mig 0248 · owner P22353 — persist the effective ¥→฿ rate on a foreign
         // order (so the header total + rate stay consistent). ¥ order → untouched.
         ...(rateProvided ? { hrate: d.hRate } : {}),
+        // mig 0252 — persist the operator's TYPED บาท/{cur} rate verbatim so the
+        // editor redisplays it exactly (no 2dp-hrate round-trip drift). DISPLAY-only.
+        ...(d.husdRate && d.husdRate > 0 ? { husdrate: d.husdRate } : {}),
       })
       .eq("id", header.id);
     if (hdrErr) {

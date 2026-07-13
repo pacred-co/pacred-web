@@ -105,6 +105,7 @@ type RowState = {
 export function ShopItemsEditor({
   hNo,
   hRate,
+  husdRate = 0,
   hShippingService,
   hRateCostDefault,
   hRateCostInit,
@@ -114,6 +115,8 @@ export function ShopItemsEditor({
 }: {
   hNo:              string;
   hRate:            number;
+  /** mig 0252 — the operator's TYPED บาท/{cur} rate (stored verbatim); 0 = derive. */
+  husdRate?:        number;
   hShippingService: number;
   hRateCostDefault: number;
   hRateCostInit:    number;
@@ -184,7 +187,11 @@ export function ShopItemsEditor({
   // Editable บาท/{cur} rate (foreign orders only · >20 allowed · default = the
   // order's opened rate). effRate feeds the ¥→฿ net calc + is saved as hrate.
   const [bahtPerCur, setBahtPerCur] = useState<string>(
-    orderCurInfo ? orderCurInfo.bahtPerUnit.toFixed(4) : "",
+    // mig 0252 — show the operator's TYPED rate verbatim when stored (no 2dp-hrate
+    // round-trip drift, e.g. 35 → 35.006); fall back to the derived value.
+    orderCurInfo
+      ? (husdRate > 0 ? String(husdRate) : orderCurInfo.bahtPerUnit.toFixed(4))
+      : "",
   );
   const effRate = orderCurInfo
     ? effRateFromForeignRate(Number(bahtPerCur) || 0, orderCurInfo.yuanPerUnit)
@@ -291,6 +298,8 @@ export function ShopItemsEditor({
         hCostAll:  orderCurInfo ? foreignToYuan(typedCostAll, orderCurInfo.yuanPerUnit) : typedCostAll,
         // Foreign order → save the effective ¥→฿ rate (= บาท/{cur} ÷ ¥perUnit).
         ...(orderCurInfo ? { hRate: effRate } : {}),
+        // mig 0252 — also persist the TYPED บาท/{cur} rate verbatim (display SOT).
+        ...(orderCurInfo && Number(bahtPerCur) > 0 ? { husdRate: Number(bahtPerCur) } : {}),
       });
       if (res.ok) {
         const dl = res.data?.hdatepayment

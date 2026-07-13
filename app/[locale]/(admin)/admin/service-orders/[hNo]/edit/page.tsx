@@ -185,6 +185,7 @@ type HRow = {
   id: number; hno: string; hstatus: string | null; htransporttype: string | null;
   htotalpricechn: number | null; htotalpriceuser: number | null; hpriceupdate: number | null;
   hshippingservice: number | null; hshippingchn: number | null; hrate: number | null;
+  husdrate: number | null;
   hratecost: number | null; hcostall: number | null;
   hshipby: string | null; hfreeshipping: string | null; userid: string;
   crate: string | null; pricecrate: number | null; paymethod: string | null;
@@ -228,7 +229,7 @@ export default async function AdminServiceOrderEditPage({
     .from("tb_header_order")
     .select(
       "id,hno,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hpriceupdate," +
-      "hshippingservice,hshippingchn,hrate,hratecost,hcostall,hshipby,hfreeshipping,userid," +
+      "hshippingservice,hshippingchn,hrate,husdrate,hratecost,hcostall,hshipby,hfreeshipping,userid," +
       "crate,pricecrate,paymethod,hdatepayment,hdate," +
       "haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict," +
       "haddressprovince,haddresszipcode,haddresstel,haddressnote",
@@ -777,7 +778,7 @@ export default async function AdminServiceOrderEditPage({
           {/* Foreign order → the rate row shows/edits บาท/{cur}; the component
               converts the typed value ÷ yuanPerUnit back to the stored ¥→฿ rate
               BEFORE calling the existing action (math unchanged). */}
-          <OrderRateInlineEdit hNo={r.hno} hRate={rate} cur={curInfo?.cur} yuanPerUnit={curInfo?.yuanPerUnit} />
+          <OrderRateInlineEdit hNo={r.hno} hRate={rate} husdRate={Number(r.husdrate ?? 0)} cur={curInfo?.cur} yuanPerUnit={curInfo?.yuanPerUnit} />
         </div>
       </section>
 
@@ -816,6 +817,7 @@ export default async function AdminServiceOrderEditPage({
         <ShopItemsEditor
           hNo={r.hno}
           hRate={rate}
+          husdRate={Number(r.husdrate ?? 0)}
           hShippingService={svc}
           hRateCostDefault={hRateCostDefault}
           hRateCostInit={rateCost}

@@ -341,11 +341,14 @@ export function OrderInlineEdits({
 export function OrderRateInlineEdit({
   hNo,
   hRate,
+  husdRate = 0,
   cur,
   yuanPerUnit,
 }: {
   hNo: string;
   hRate: number;
+  /** mig 0252 — the operator's TYPED บาท/{cur} rate (stored verbatim); 0 = derive. */
+  husdRate?: number;
   cur?: string;
   yuanPerUnit?: number;
 }) {
@@ -354,7 +357,9 @@ export function OrderRateInlineEdit({
   // Division guard: only treat as foreign when the FIXED ratio is usable.
   const foreign = !!cur && Number.isFinite(yuanPerUnit) && (yuanPerUnit ?? 0) > 0;
   const ypu = foreign ? (yuanPerUnit as number) : 0;
-  const displayRate = foreign ? hRate * ypu : hRate;
+  // mig 0252 — prefer the TYPED rate verbatim (no 2dp-hrate round-trip drift,
+  // e.g. 35 → 35.006); fall back to deriving hRate × ypu.
+  const displayRate = foreign ? (husdRate > 0 ? husdRate : hRate * ypu) : hRate;
   const unitLabel = foreign ? `บาท/${cur}` : "บาท/หยวน";
   const [rate, setRate] = useState(
     foreign ? String(Number(displayRate.toFixed(4))) : String(hRate),
@@ -406,7 +411,12 @@ export function OrderRateInlineEdit({
                   error: `เรทสูงเกินไป — สูงสุด ~${(20 * ypu).toFixed(2)} บาท/${cur}`,
                 };
               }
-              return adminUpdateOrderRate({ h_no: hNo, h_rate: sendRate });
+              return adminUpdateOrderRate({
+                h_no: hNo,
+                h_rate: sendRate,
+                // mig 0252 — persist the TYPED บาท/{cur} rate verbatim (display SOT).
+                ...(foreign && typed > 0 ? { husd_rate: typed } : {}),
+              });
             }, () => setEditing(false))
           }
         >
