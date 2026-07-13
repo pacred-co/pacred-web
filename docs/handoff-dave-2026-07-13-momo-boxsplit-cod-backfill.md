@@ -1,6 +1,14 @@
 # 🔴 Handoff → เดฟ (2026-07-13) — MOMO box-split + COD ค่าส่งไทย (code deployed) + EXISTING-data backfill (money · prod)
 
 ---
+## 📣 → ภูม (owner relay 2026-07-13): DB synced + "แก้ให้ครบ loop ไม่ใช่จุดเดียว"
+1. **✅ DB prod→dev sync แล้ว** (`scripts/sync-prod-data-to-dev-2026-07-13.mjs` + `-fix-`) — dev มีข้อมูล prod ครบ (forwarder/order/invoice/receipt/momo/wallet/rate-cards ตรงกัน) → **repro บัค prod บน dev ได้แล้ว**. dev-only rows ของภูมรอด · login lane แยก (auth/profiles/admins ไม่แตะ). ต้อง re-sync = รันซ้ำได้ (prod ไม่ถูกแตะ).
+2. **🔴 owner หลักการ (verbatim): "แก้ใบวางบิลให้ถูก พอเสร็จ ใบเสร็จก็เป็นอีกแล้ว · ข้อมูลไม่ลิงค์กัน · แก้ทีหลัง ข้อมูลในใบก็ต้องเปลี่ยนตาม · ทำไมต้องยกเลิกอีก · แก้ให้ครบ loop ไม่ใช่จุดเดียว".** = อย่า point-fix. แก้จุดนึงแล้วอีกจุด (บิล→ใบเสร็จ) drift ตาม. เดฟ กำลัง workflow แก้ทั้ง loop (edit → propagate ทั้งบิล+ใบเสร็จ · ไม่ต้องยกเลิก+ออกใหม่ · สองใบห้าม drift). **ภูม: งานไหนแตะเงิน/เอกสาร ให้ไล่ทั้ง loop เสมอ** (ตรวจตู้→บิล→จ่าย→ใบเสร็จ→จัดส่ง) [[combo-flow-carry-not-rederive]].
+3. **🔴 backfill ที่ฝากมา — เดฟ classify แล้ว SAFE แค่ 6/21** (ดูล่าง). blanket re-value = พัง 15 แถว. **ภูม: MOMO aggregate columns เชื่อไม่ได้เสมอ** (บาง row ว่าง/stale/เล็กกว่าจริง · staff วัดแก้แล้ว) → corroborate ด้วย Σ(momo_box_detail) ก่อนทุกครั้ง.
+---
+
+
+---
 ## ✅ เดฟ ปิดงาน backfill (2026-07-13 · owner เคาะ "apply 6 SAFE + paymethod")
 ตรวจงาน ภูม แล้ว: **โค้ด `9f329765` money-safe ผ่าน** (COD gate pure/testable · valuate จาก aggregate ถูก).
 **แต่ handoff SQL BUG-1 หาแบบเหมารวม 21 แถว = อันตราย** — classify แล้ว (`scripts/momo-boxsplit-backfill-classify-2026-07-13.mjs`) ปลอดภัยจริงแค่ 6/21:
