@@ -24,6 +24,70 @@
 /** Round to 2 decimals (money) — nudged for float safety. */
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
+/** round_up(x, 2) — CEIL to 2dp (matches legacy round_up + lib roundUp). Used
+ *  only to re-derive the ORIGINAL ¥ product subtotal exactly the way the
+ *  items editor / legacy formula sums it (Σ round_up(cprice × camount)). */
+function roundUp2(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  const eps = 1e-9 * Math.max(1, Math.abs(v * 100));
+  const r = Math.ceil(v * 100 - eps) / 100;
+  return r === 0 ? 0 : r;
+}
+
+/** The minimal row shape needed to derive the order's currency info —
+ *  matches the admin `EditorItem` (tb_order line) fields. */
+export type OrderCurrencyRowLike = {
+  crewallet: string | null;
+  camount: number;
+  cprice: number;
+  inputCurrency: string | null;
+  inputPrice: number;
+};
+
+export type OrderCurrencyInfo = {
+  /** The ONE foreign currency every priced line was opened in (e.g. "USD"). */
+  cur: string;
+  /** Σ original foreign amounts over the priced, non-refunded rows. */
+  foreignSubtotal: number;
+  /** The DEFAULT บาท/{cur} rate = (Σ original ¥ × hRate) ÷ Σ foreign — the rate
+   *  the order was effectively opened at (effRate at this default = hRate). */
+  bahtPerUnit: number;
+  /** The FIXED ¥ per 1 foreign unit (Σ original ¥ ÷ Σ original foreign). */
+  yuanPerUnit: number;
+};
+
+/**
+ * The order-level currency detection + FIXED ratio, shared by EVERY admin
+ * shop-order surface (items editor · /edit summary · read-only detail) so the
+ * ratio is derived exactly ONE way — never re-invented per surface (drift).
+ *
+ * Returns null (→ treat as a plain ¥ order, byte-identical rendering) unless:
+ *   - every priced (cprice > 0), non-refunded row shares ONE input_currency
+ *   - that currency is a real foreign one (not '' / CNY)
+ *   - Σ original foreign > 0 and Σ original ¥ > 0
+ */
+export function deriveOrderCurrencyInfo(
+  rows: OrderCurrencyRowLike[],
+  hRate: number,
+): OrderCurrencyInfo | null {
+  const priced = rows.filter((it) => it.crewallet !== "1" && (Number(it.cprice) || 0) > 0);
+  if (priced.length === 0) return null;
+  const curs = new Set(priced.map((it) => (it.inputCurrency ?? "").trim().toUpperCase()));
+  if (curs.size !== 1) return null;
+  const cur = [...curs][0]!;
+  if (cur === "" || cur === "CNY") return null;
+  const foreignSubtotal = priced.reduce((s, it) => s + (Number(it.inputPrice) || 0), 0);
+  if (foreignSubtotal <= 0) return null;
+  const originalYuan = priced.reduce(
+    (s, it) => s + roundUp2((Number(it.cprice) || 0) * (Number(it.camount) || 0)),
+    0,
+  );
+  const yuanPerUnit = deriveYuanPerUnit(originalYuan, foreignSubtotal);
+  if (yuanPerUnit === null) return null;
+  const bahtPerUnit = (originalYuan * (Number.isFinite(hRate) ? hRate : 0)) / foreignSubtotal;
+  return { cur, foreignSubtotal, bahtPerUnit, yuanPerUnit };
+}
+
 /**
  * The FIXED ¥-per-1-foreign-unit ratio, from the ORIGINAL rows.
  *   yuanPerUnit = Σ original ¥  ÷  Σ original foreign amount

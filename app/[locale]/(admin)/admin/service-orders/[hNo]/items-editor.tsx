@@ -36,7 +36,7 @@ import { ItemImageEditor } from "./item-image-editor";
 import { adminDeleteOrderItem } from "@/actions/admin/service-orders-governance";
 import { detectProviderFromUrl } from "@/lib/china-search/extract-product-id";
 import {
-  deriveYuanPerUnit,
+  deriveOrderCurrencyInfo,
   foreignToYuan,
   yuanToForeign,
   effRateFromForeignRate,
@@ -92,7 +92,15 @@ const PROVIDER_LABEL: Record<string, string> = {
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt disabled:text-muted";
 
-type RowState = { camount: string; cprice: string; cshippingchn: string; cpriceUsd: string };
+type RowState = {
+  camount: string;
+  cprice: string;
+  cshippingchn: string;
+  cpriceUsd: string;
+  /** Foreign orders — the editable {cur} view of ค่าขนส่งจีน (stored ¥ =
+   *  round2($ × yuanPerUnit), same pattern as cpriceUsd ↔ cprice). */
+  cshipUsd: string;
+};
 
 export function ShopItemsEditor({
   hNo,
@@ -124,23 +132,10 @@ export function ShopItemsEditor({
   // ¥/foreign ratio (yuanPerUnit) is FIXED from the ORIGINAL rows and never drifts
   // as staff edit the $ price or the บาท/{cur} rate; the ¥-equivalent `cprice`
   // stays exactly what pricing runs on.
-  const orderCurInfo = useMemo(() => {
-    const priced = items.filter((it) => it.crewallet !== "1" && (Number(it.cprice) || 0) > 0);
-    if (priced.length === 0) return null;
-    const curs = new Set(priced.map((it) => (it.inputCurrency ?? "").trim().toUpperCase()));
-    if (curs.size !== 1) return null;
-    const cur = [...curs][0]!;
-    if (cur === "" || cur === "CNY") return null;
-    const foreignSubtotal = priced.reduce((s, it) => s + (Number(it.inputPrice) || 0), 0);
-    if (foreignSubtotal <= 0) return null;
-    const originalYuan = priced.reduce((s, it) => s + roundUp2((Number(it.cprice) || 0) * (Number(it.camount) || 0)), 0);
-    const yuanPerUnit = deriveYuanPerUnit(originalYuan, foreignSubtotal);
-    if (yuanPerUnit === null) return null;
-    // The DEFAULT บาท/{cur} rate = (Σ original ¥ × hRate) ÷ Σ foreign = the rate the
-    // order was effectively opened at, so effRate at this default = hRate exactly.
-    const bahtPerUnit = (originalYuan * hRate) / foreignSubtotal;
-    return { cur, foreignSubtotal, bahtPerUnit, yuanPerUnit };
-  }, [items, hRate]);
+  // The detection + FIXED ratio live in the SHARED helper (usd-order-pricing)
+  // so every surface (this editor · /edit summary · read-only detail) derives
+  // the exact same yuanPerUnit — never re-invented per surface (drift).
+  const orderCurInfo = useMemo(() => deriveOrderCurrencyInfo(items, hRate), [items, hRate]);
   const fmtCur = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Per-row editable state — keyed by tb_order.id. Refunded rows (crewallet
@@ -151,23 +146,41 @@ export function ShopItemsEditor({
     const init: Record<number, RowState> = {};
     for (const it of items) {
       let cpriceUsd = "";
+      let cshipUsd = "";
       if (orderCurInfo) {
         const orig = Number(it.inputPrice) || 0;
         cpriceUsd = String(orig > 0 ? orig : yuanToForeign(Number(it.cprice) || 0, orderCurInfo.yuanPerUnit));
+        // ค่าขนส่งจีน entered in {cur} too (owner 2026-07-13 "ทุกช่องเป็นสกุลหลัก") —
+        // seed the view from the stored ¥ ÷ yuanPerUnit.
+        cshipUsd = String(yuanToForeign(Number(it.cshippingchn) || 0, orderCurInfo.yuanPerUnit));
       }
       init[it.id] = {
         camount:      String(it.crewallet === "1" ? 0 : it.camount),
         cprice:       String(it.cprice),
         cshippingchn: String(it.cshippingchn),
         cpriceUsd,
+        cshipUsd,
       };
     }
     return init;
   });
-  const [hRateCost, setHRateCost] = useState<string>(
-    String(hRateCostInit !== 0 ? hRateCostInit : hRateCostDefault),
-  );
-  const [hCostAll, setHCostAll] = useState<string>(String(hCostAllInit !== 0 ? hCostAllInit : ""));
+  // COST pair — foreign orders DISPLAY + EDIT in {cur} (rate = บาท/{cur} ·
+  // cost = {cur}); onSave converts back to the stored ¥-based hratecost
+  // (÷ yuanPerUnit) + hcostall ¥ (× yuanPerUnit) so storage semantics are
+  // unchanged. Note the THB previews/profit use the displayed PAIR product,
+  // which is identical either way: (¥rate×ypu) × (¥cost÷ypu) = ¥rate × ¥cost.
+  const [hRateCost, setHRateCost] = useState<string>(() => {
+    const baseYuanRate = hRateCostInit !== 0 ? hRateCostInit : hRateCostDefault;
+    return orderCurInfo
+      ? (baseYuanRate * orderCurInfo.yuanPerUnit).toFixed(4)
+      : String(baseYuanRate);
+  });
+  const [hCostAll, setHCostAll] = useState<string>(() => {
+    if (hCostAllInit === 0) return "";
+    return orderCurInfo
+      ? String(yuanToForeign(hCostAllInit, orderCurInfo.yuanPerUnit))
+      : String(hCostAllInit);
+  });
   // Editable บาท/{cur} rate (foreign orders only · >20 allowed · default = the
   // order's opened rate). effRate feeds the ¥→฿ net calc + is saved as hrate.
   const [bahtPerCur, setBahtPerCur] = useState<string>(
@@ -187,14 +200,23 @@ export function ShopItemsEditor({
     const yuan = orderCurInfo ? foreignToYuan(usd, orderCurInfo.yuanPerUnit) : usd;
     setRows((r) => ({ ...r, [id]: { ...r[id], cpriceUsd: usdStr, cprice: String(yuan) } }));
   }
+  // Foreign-order ค่าขนส่งจีน edit: typed in {cur} → store the ¥-equiv
+  // (round2($ × yuanPerUnit)) as the source of truth + keep the typed view.
+  function patchForeignShip(id: number, shipStr: string) {
+    const f = Number(shipStr) || 0;
+    const yuan = orderCurInfo ? foreignToYuan(f, orderCurInfo.yuanPerUnit) : f;
+    setRows((r) => ({ ...r, [id]: { ...r[id], cshipUsd: shipStr, cshippingchn: String(yuan) } }));
+  }
 
   // Live derived totals (mirror update1Script.php).
   const calc = useMemo(() => {
     let sumQty = 0;
-    let sumChn = 0;        // Σ round_up(cPrice × cAmount, 2)
-    let sumShip = 0;       // Σ cShippingCHN
-    let sumForeign = 0;    // Σ ($ / piece × qty) — foreign orders only
+    let sumChn = 0;         // Σ round_up(cPrice × cAmount, 2)
+    let sumShip = 0;        // Σ cShippingCHN
+    let sumForeign = 0;     // Σ ($ / piece × qty) — foreign orders only
+    let sumShipForeign = 0; // Σ ship ({cur}) — foreign orders only
     const lineTotals: Record<number, number> = {};
+    const lineTotalsForeign: Record<number, number> = {};
     for (const it of items) {
       const s = rows[it.id];
       const amount = Number(s?.camount ?? 0) || 0;
@@ -205,16 +227,30 @@ export function ShopItemsEditor({
       sumQty += amount;
       sumChn = roundUp2(sumChn + roundUp2(price * amount));
       sumShip = roundUp2(sumShip + ship);
-      if (orderCurInfo) sumForeign += (Number(s?.cpriceUsd ?? 0) || 0) * amount;
+      if (orderCurInfo) {
+        const usd = Number(s?.cpriceUsd ?? 0) || 0;
+        const shipUsd = Number(s?.cshipUsd ?? 0) || 0;
+        // Mirror the ¥ line formula (qty × price + ship) so the column footer Σ
+        // reconciles with the per-line cells.
+        lineTotalsForeign[it.id] = roundUp2(amount * usd + shipUsd);
+        sumForeign += usd * amount;
+        sumShipForeign += shipUsd;
+      }
     }
     // Foreign orders → net via effRate (= บาท/{cur} ÷ yuanPerUnit) so ฿ tracks the
     // operator's $ rate; ¥ orders → effRate === hRate (byte-identical to before).
     const netThb = roundUp2((sumChn + sumShip) * effRate + hShippingService);
+    // Foreign orders: rateCost/costAll are the DISPLAYED {cur} pair — the THB
+    // product is identical to the stored ¥ pair ((r×ypu)×(c÷ypu) = r×c), so the
+    // preview + profit math is unchanged either way.
     const rateCost = Number(hRateCost) || 0;
     const costAll  = Number(hCostAll) || 0;
     const costAllTh = roundUp2(costAll * rateCost);
     const profit = (sumChn + sumShip) * effRate - rateCost * costAll;
-    return { sumQty, sumChn, sumShip, sumForeign, netThb, lineTotals, costAll, costAllTh, profit };
+    return {
+      sumQty, sumChn, sumShip, sumForeign, sumShipForeign, netThb,
+      lineTotals, lineTotalsForeign, costAll, costAllTh, profit,
+    };
   }, [items, rows, effRate, orderCurInfo, hShippingService, hRateCost, hCostAll]);
 
   function onSave() {
@@ -240,12 +276,19 @@ export function ShopItemsEditor({
       setErr("กรอกจำนวนสินค้า (> 0) อย่างน้อย 1 รายการก่อนบันทึก");
       return;
     }
+    // Foreign order → the cost pair was typed in {cur} (rate = บาท/{cur} ·
+    // cost = {cur}); convert CLIENT-SIDE back to the stored ¥ semantics
+    // (hratecost = บาท/¥ = typed ÷ ypu · hcostall = ¥ = round2(typed × ypu))
+    // so the action's math + storage stay byte-identical. ypu > 0 is
+    // guaranteed whenever orderCurInfo is non-null (deriveYuanPerUnit guard).
+    const typedRateCost = Number(hRateCost) || 0;
+    const typedCostAll  = Number(hCostAll) || 0;
     startTransition(async () => {
       const res = await adminSaveShopOrderItemsAndQuote({
         hNo,
         items:     payloadItems,
-        hRateCost: Number(hRateCost) || 0,
-        hCostAll:  Number(hCostAll) || 0,
+        hRateCost: orderCurInfo ? typedRateCost / orderCurInfo.yuanPerUnit : typedRateCost,
+        hCostAll:  orderCurInfo ? foreignToYuan(typedCostAll, orderCurInfo.yuanPerUnit) : typedCostAll,
         // Foreign order → save the effective ¥→฿ rate (= บาท/{cur} ÷ ¥perUnit).
         ...(orderCurInfo ? { hRate: effRate } : {}),
       });
@@ -271,7 +314,12 @@ export function ShopItemsEditor({
     startTransition(async () => {
       const res = await adminDeleteOrderItem({ h_no: hNo, tb_order_id: id });
       if (res.ok) {
-        setMsg(`ลบรายการแล้ว · ราคาสินค้ารวมใหม่ ¥${cny(res.data?.new_htotalpricechn ?? 0)}`);
+        const newChn = res.data?.new_htotalpricechn ?? 0;
+        setMsg(
+          orderCurInfo
+            ? `ลบรายการแล้ว · ราคาสินค้ารวมใหม่ ${fmtCur(yuanToForeign(newChn, orderCurInfo.yuanPerUnit))} ${orderCurInfo.cur}`
+            : `ลบรายการแล้ว · ราคาสินค้ารวมใหม่ ¥${cny(newChn)}`,
+        );
         router.refresh();
       } else {
         setErr(res.error);
@@ -351,18 +399,20 @@ export function ShopItemsEditor({
           รายการสินค้า — ตั้งราคาต่อรายการ ({items.length})
         </h3>
         <span className="text-[11px] text-muted">
-          กรอกจำนวน · ¥ราคา/ชิ้น · ค่าขนส่งจีน — ราคารวมคำนวณสด
+          {orderCurInfo
+            ? `กรอกจำนวน · ${orderCurInfo.cur} ราคา/ชิ้น · ค่าขนส่งจีน (${orderCurInfo.cur}) — ราคารวมคำนวณสด`
+            : "กรอกจำนวน · ¥ราคา/ชิ้น · ค่าขนส่งจีน — ราคารวมคำนวณสด"}
         </span>
       </div>
 
-      {/* mig 0248 — order opened in a foreign currency → USD-primary banner. The ¥ column
-          stays editable in ¥ (ระบบคิดราคาเป็นหยวน); this tells staff the order's real
-          currency + the effective บาท/{cur} rate. */}
+      {/* mig 0248 · owner 2026-07-13 "โชว์แค่สกุลหลัก ไม่ต้องแปลงเป็นหยวน" —
+          order opened in a foreign currency → the WHOLE form works in that
+          currency (no ¥ shown anywhere). */}
       {orderCurInfo && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span>🇺🇸 ออเดอร์นี้เปิดราคาเป็น <strong>{orderCurInfo.cur}</strong> · ยอดสินค้า <strong>{fmtCur(calc.sumForeign)} {orderCurInfo.cur}</strong></span>
+          <span>🌐 ออเดอร์นี้เปิดราคาเป็น <strong>{orderCurInfo.cur}</strong> · ยอดสินค้า <strong>{fmtCur(calc.sumForeign)} {orderCurInfo.cur}</strong></span>
           <span className="text-sky-600">อัตรา <strong>{fmtCur(Number(bahtPerCur) || 0)}</strong> บาท/{orderCurInfo.cur} (แก้ได้)</span>
-          <span className="text-sky-500">(ช่อง “ราคา/ชิ้น” กรอกเป็น {orderCurInfo.cur} — ระบบเก็บ ¥ ให้อัตโนมัติ)</span>
+          <span className="text-sky-500">(ทุกช่องราคากรอกเป็น {orderCurInfo.cur})</span>
         </div>
       )}
 
@@ -383,9 +433,13 @@ export function ShopItemsEditor({
               <th className="px-2 py-2 text-right w-28">
                 {orderCurInfo ? `${orderCurInfo.cur} ราคา/ชิ้น` : "¥ ราคา/ชิ้น"}
               </th>
-              <th className="px-2 py-2 text-right w-28">ค่าขนส่งจีน</th>
+              <th className="px-2 py-2 text-right w-28">
+                {orderCurInfo ? `ค่าขนส่งจีน (${orderCurInfo.cur})` : "ค่าขนส่งจีน"}
+              </th>
               <th className="px-2 py-2 text-right w-20">เพิ่ม/ลด</th>
-              <th className="px-2 py-2 text-right w-28">ราคารวม (¥)</th>
+              <th className="px-2 py-2 text-right w-28">
+                {orderCurInfo ? `ราคารวม (${orderCurInfo.cur})` : "ราคารวม (¥)"}
+              </th>
               <th className="px-2 py-2 text-center w-24">จัดการ</th>
             </tr>
           </thead>
@@ -470,25 +524,23 @@ export function ShopItemsEditor({
                           <td className="px-2 py-2">
                             {/* mig 0248 · owner P22353 — a foreign order edits price/piece
                                 in its OWN currency ($); the ¥ source-of-truth `cprice` is
-                                stored as round2($ × yuanPerUnit) + shown below. A plain ¥
+                                stored silently as round2($ × yuanPerUnit). A plain ¥
                                 order keeps the ¥ input unchanged. */}
                             {orderCurInfo ? (
-                              <>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  inputMode="decimal"
-                                  disabled={refunded}
-                                  value={s?.cpriceUsd ?? ""}
-                                  onChange={(e) => patchForeignPrice(it.id, e.target.value)}
-                                  className={inputCls}
-                                  title={`ราคา/ชิ้น (${orderCurInfo.cur})`}
-                                />
-                                <div className="mt-0.5 text-right text-[11px] text-sky-600" title="¥-equivalent ที่ระบบใช้คิดราคา">
-                                  ≈ ¥{cny(Number(s?.cprice ?? 0) || 0)}
-                                </div>
-                              </>
+                              /* owner 2026-07-13 — NO ≈¥ sub-label: the foreign
+                                 order shows only its own currency (the ¥-equiv
+                                 `cprice` is still stored + priced silently). */
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={refunded}
+                                value={s?.cpriceUsd ?? ""}
+                                onChange={(e) => patchForeignPrice(it.id, e.target.value)}
+                                className={inputCls}
+                                title={`ราคา/ชิ้น (${orderCurInfo.cur})`}
+                              />
                             ) : (
                               <input
                                 type="number"
@@ -503,16 +555,33 @@ export function ShopItemsEditor({
                             )}
                           </td>
                           <td className="px-2 py-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              inputMode="decimal"
-                              disabled={refunded}
-                              value={s?.cshippingchn ?? ""}
-                              onChange={(e) => patch(it.id, "cshippingchn", e.target.value)}
-                              className={inputCls}
-                            />
+                            {orderCurInfo ? (
+                              /* Foreign order → ค่าขนส่งจีน typed in {cur}; the ¥
+                                 source of truth is stored as round2($ × ypu)
+                                 (same pattern as the price input above). */
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={refunded}
+                                value={s?.cshipUsd ?? ""}
+                                onChange={(e) => patchForeignShip(it.id, e.target.value)}
+                                className={inputCls}
+                                title={`ค่าขนส่งจีน (${orderCurInfo.cur})`}
+                              />
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={refunded}
+                                value={s?.cshippingchn ?? ""}
+                                onChange={(e) => patch(it.id, "cshippingchn", e.target.value)}
+                                className={inputCls}
+                              />
+                            )}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums">
                             {it.cpriceupdate > 0 ? (
@@ -524,7 +593,11 @@ export function ShopItemsEditor({
                             )}
                           </td>
                           <td className="px-2 py-2 text-right font-mono tabular-nums">
-                            {refunded ? "0.00" : cny(calc.lineTotals[it.id] ?? 0)}
+                            {refunded
+                              ? "0.00"
+                              : orderCurInfo
+                                ? fmtCur(calc.lineTotalsForeign[it.id] ?? 0)
+                                : cny(calc.lineTotals[it.id] ?? 0)}
                           </td>
                           <td className="px-2 py-2">
                             <div className="flex justify-center gap-1">
@@ -574,9 +647,17 @@ export function ShopItemsEditor({
               <td className="px-2 py-2 text-right">รวม</td>
               <td className="px-2 py-2 text-right font-mono tabular-nums">{calc.sumQty}</td>
               <td className="px-2 py-2 text-right text-muted">-</td>
-              <td className="px-2 py-2 text-right font-mono tabular-nums">¥{cny(calc.sumShip)}</td>
+              <td className="px-2 py-2 text-right font-mono tabular-nums">
+                {orderCurInfo
+                  ? `${fmtCur(calc.sumShipForeign)} ${orderCurInfo.cur}`
+                  : `¥${cny(calc.sumShip)}`}
+              </td>
               <td className="px-2 py-2 text-right text-muted">-</td>
-              <td className="px-2 py-2 text-right font-mono tabular-nums">¥{cny(calc.sumChn + calc.sumShip)}</td>
+              <td className="px-2 py-2 text-right font-mono tabular-nums">
+                {orderCurInfo
+                  ? `${fmtCur(calc.sumForeign + calc.sumShipForeign)} ${orderCurInfo.cur}`
+                  : `¥${cny(calc.sumChn + calc.sumShip)}`}
+              </td>
               <td className="px-2 py-2" />
             </tr>
           </tfoot>
@@ -591,31 +672,41 @@ export function ShopItemsEditor({
               system actually uses = บาท/{cur} ÷ ¥perUnit (effRate); ¥ pricing on
               cprice is unchanged. A plain ¥ order keeps the read-only ¥ rate. */}
           {orderCurInfo ? (
-            <>
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-muted">อัตราแลกเปลี่ยน (บาท/{orderCurInfo.cur})</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={bahtPerCur}
-                  onChange={(e) => setBahtPerCur(e.target.value)}
-                  className={`${inputCls} max-w-[140px]`}
-                  title={`อัตราแลกเปลี่ยน บาท/${orderCurInfo.cur} — แก้ได้ · เกิน 20 ได้`}
-                />
-              </label>
-              <p className="text-right text-[11px] text-muted">≈ ¥{cny(effRate)} บาท/หยวน (เรทที่ระบบคิด)</p>
-            </>
+            /* owner 2026-07-13 — NO "≈ ¥… บาท/หยวน" hint: the foreign order shows
+               only its own currency (effRate still feeds the ¥→฿ calc silently). */
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-muted">อัตราแลกเปลี่ยน (บาท/{orderCurInfo.cur})</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={bahtPerCur}
+                onChange={(e) => setBahtPerCur(e.target.value)}
+                className={`${inputCls} max-w-[140px]`}
+                title={`อัตราแลกเปลี่ยน บาท/${orderCurInfo.cur} — แก้ได้`}
+              />
+            </label>
           ) : (
             <Line label="อัตราแลกเปลี่ยน" value={`${cny(hRate)} บาท/หยวน`} />
           )}
-          <Line label="ค่าขนส่งจีน" value={`¥${cny(calc.sumShip)}`} />
-          {orderCurInfo && (
-            <Line label={`ราคาสินค้า (${orderCurInfo.cur})`} value={`${fmtCur(calc.sumForeign)} ${orderCurInfo.cur}`} />
+          <Line
+            label="ค่าขนส่งจีน"
+            value={orderCurInfo
+              ? `${fmtCur(calc.sumShipForeign)} ${orderCurInfo.cur}`
+              : `¥${cny(calc.sumShip)}`}
+          />
+          {orderCurInfo ? (
+            <>
+              <Line label={`ราคาสินค้า (${orderCurInfo.cur})`} value={`${fmtCur(calc.sumForeign)} ${orderCurInfo.cur}`} />
+              <Line label={`ราคารวม (${orderCurInfo.cur})`} value={`${fmtCur(calc.sumForeign + calc.sumShipForeign)} ${orderCurInfo.cur}`} />
+            </>
+          ) : (
+            <>
+              <Line label="ราคาสินค้า (¥)" value={`¥${cny(calc.sumChn)}`} />
+              <Line label="ราคารวมหยวนจีน" value={`¥${cny(calc.sumChn + calc.sumShip)}`} />
+            </>
           )}
-          <Line label="ราคาสินค้า (¥)" value={`¥${cny(calc.sumChn)}`} />
-          <Line label="ราคารวมหยวนจีน" value={`¥${cny(calc.sumChn + calc.sumShip)}`} />
           {hShippingService > 0 && (
             <Line label="ค่าบริการฝากสั่ง" value={`฿${thb(hShippingService)}`} />
           )}
@@ -628,7 +719,13 @@ export function ShopItemsEditor({
         <div className="space-y-2 text-sm">
           <label className="block space-y-1">
             <span className="text-xs font-medium">
-              อัตราแลกเปลี่ยนจริง (ต้นทุน) <span className="text-muted">· ตั้งต้น {cny(hRateCostDefault)}</span>
+              อัตราแลกเปลี่ยนจริง (ต้นทุน){orderCurInfo ? ` บาท/${orderCurInfo.cur}` : ""}{" "}
+              <span className="text-muted">
+                · ตั้งต้น{" "}
+                {orderCurInfo
+                  ? (hRateCostDefault * orderCurInfo.yuanPerUnit).toFixed(4)
+                  : cny(hRateCostDefault)}
+              </span>
             </span>
             <input
               type="number"
@@ -642,7 +739,9 @@ export function ShopItemsEditor({
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium">ราคาซื้อจริงทั้งหมด (หยวน)</span>
+            <span className="text-xs font-medium">
+              ราคาซื้อจริงทั้งหมด ({orderCurInfo ? orderCurInfo.cur : "หยวน"})
+            </span>
             <input
               type="number"
               min="0"

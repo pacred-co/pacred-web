@@ -50,6 +50,11 @@ import {
   adminUpdateCartItemShippingNumber,
   adminUpdateCartItemCTracking,
 } from "@/actions/admin/service-orders-line-edits";
+// mig 0248 · owner 2026-07-13 — a foreign-currency order (USD/…) renders its ¥
+// money displays in the ORDER's currency. Conversions come from the SAME shared
+// helper every admin shop-order surface uses (ONE fixed yuanPerUnit — threaded
+// from edit/page.tsx, never re-derived here). Pure + client-safe.
+import { yuanToForeign, foreignToYuan } from "@/lib/forwarder/usd-order-pricing";
 
 export type ShopFieldsItem = {
   id: number;
@@ -110,6 +115,8 @@ export function ShopFieldsBoard({
   totalCount,
   trackingGroups,
   hRate,
+  orderCur,
+  yuanPerUnit,
 }: {
   hNo: string;
   status: string;        // hstatus '1'..'5'
@@ -123,14 +130,31 @@ export function ShopFieldsBoard({
   // SUMMARY view (collapsible dropdowns). Optional · when ≥1 group the
   // "จัดกลุ่มตามแทรคกิ้ง" view sits above the per-shop edit cards.
   trackingGroups?: TrackingGroup[];
-  /** ฝากสั่ง rate (hrate · บาท/หยวน) — for the display-only THB est in the header. */
+  /** ฝากสั่ง rate (hrate · the STORED ¥→฿ rate) — for the display-only THB est
+   *  in the header. Stays valid on a foreign order too (¥ × hrate = foreign ×
+   *  บาท/{orderCur} exactly) so the ฿ estimate needs no conversion. */
   hRate?: number;
+  /** mig 0248 · owner 2026-07-13 — the ORDER's uniform foreign currency (from
+   *  the shared deriveOrderCurrencyInfo in edit/page.tsx) + its FIXED ¥/foreign
+   *  ratio. Both set (+ ratio > 0) → every ¥ money display converts to
+   *  {orderCur} (no ¥ anywhere) and the inline เพิ่ม/ลด editor accepts
+   *  {orderCur}, converting back to the stored ¥ BEFORE the save action
+   *  (storage/action math unchanged). Undefined → plain ¥ order,
+   *  byte-identical rendering (any other caller keeps working). */
+  orderCur?: string;
+  yuanPerUnit?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [hnotechn, setHnoteChn] = useState<string>("");
+
+  // mig 0248 — foreign-order display mode. Guarded: the ratio must be > 0 or we
+  // fall back to plain ¥ rendering (never divide by 0).
+  const orderForeign = !!orderCur && (yuanPerUnit ?? 0) > 0;
+  const oypu = yuanPerUnit ?? 0;
+  const moneyUnit = orderForeign ? (orderCur as string) : "¥";
 
   // Per-shop local state (keyed by cnameshop) — `cshippingnumber` and
   // `ctrackingnumber` so the admin can edit one or the other depending
@@ -342,6 +366,8 @@ export function ShopFieldsBoard({
                     expanded={expandedTracking.has(g.tracking)}
                     onToggle={() => toggleTracking(g.tracking)}
                     hRate={hRate}
+                    orderCur={orderCur}
+                    yuanPerUnit={yuanPerUnit}
                   />
                 ))}
               </div>
@@ -393,8 +419,12 @@ export function ShopFieldsBoard({
                     <span className="rounded bg-white/80 border border-border px-2 py-0.5 font-mono tabular-nums">
                       {shopItems.length} รายการ
                     </span>
+                    {/* mig 0248 — foreign order → the shop subtotal chip renders in
+                        {orderCur} (stored ¥ ÷ the FIXED ratio); ¥ order unchanged. */}
                     <span className="rounded bg-white/80 border border-border px-2 py-0.5 font-mono tabular-nums">
-                      ¥ {shopSubtotalCny.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {orderForeign
+                        ? `${orderCur} ${fmtCur(yuanToForeign(shopSubtotalCny, oypu))}`
+                        : `¥ ${fmtCny(shopSubtotalCny)}`}
                     </span>
                   </span>
                 </div>
@@ -510,7 +540,9 @@ export function ShopFieldsBoard({
                 {/* ── Items table (per-shop · legacy shops/update.php รายการสินค้า)
                     Columns mirror legacy: ข้อมูลสินค้า · จำนวน · ¥ราคาต่อชิ้น
                     · ค่าส่งจีน · เพิ่ม/ลด ¥ (inline editable at status 3/4)
-                    · รวม ¥. Hidden if items[] not provided. */}
+                    · รวม ¥. Hidden if items[] not provided.
+                    mig 0248 — on a foreign order every ¥ column renders in
+                    {orderCur} instead (stored ¥ ÷ the FIXED ratio). */}
                 {shopItems.length > 0 && (
                   <div className="overflow-x-auto scrollbar-x-visible">
                     <table className="w-full min-w-[640px] text-xs">
@@ -518,14 +550,14 @@ export function ShopFieldsBoard({
                         <tr>
                           <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
                           <th className="px-2 py-2 text-right w-14">จำนวน</th>
-                          <th className="px-2 py-2 text-right w-20">¥/ชิ้น</th>
+                          <th className="px-2 py-2 text-right w-20">{moneyUnit}/ชิ้น</th>
                           <th className="px-2 py-2 text-right w-20">ค่าส่งจีน</th>
                           <th className="px-2 py-2 text-right w-36">
                             <span className="inline-flex items-center gap-1">
-                              <Coins className="h-3 w-3" /> เพิ่ม/ลด ¥
+                              <Coins className="h-3 w-3" /> เพิ่ม/ลด {moneyUnit}
                             </span>
                           </th>
-                          <th className="px-2 py-2 text-right w-24">รวม ¥</th>
+                          <th className="px-2 py-2 text-right w-24">รวม {moneyUnit}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -576,20 +608,22 @@ export function ShopFieldsBoard({
                                 {refunded ? 0 : it.camount}
                               </td>
                               <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
-                                {it.cprice.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {orderForeign ? fmtCur(yuanToForeign(it.cprice, oypu)) : fmtCny(it.cprice)}
                               </td>
                               <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
-                                {shipping.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {orderForeign ? fmtCur(yuanToForeign(shipping, oypu)) : fmtCny(shipping)}
                               </td>
                               <td className="px-2 py-2 align-top">
                                 <InlinePriceUpdateCell
                                   item={it}
                                   editable={isStatus3 || isStatus4}
                                   onSaved={() => router.refresh()}
+                                  orderCur={orderCur}
+                                  yuanPerUnit={yuanPerUnit}
                                 />
                               </td>
                               <td className="px-2 py-2 text-right align-top font-mono tabular-nums font-semibold">
-                                {line.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {orderForeign ? fmtCur(yuanToForeign(line, oypu)) : fmtCny(line)}
                               </td>
                             </tr>
                           );
@@ -659,26 +693,44 @@ export function ShopFieldsBoard({
 function fmtCny(n: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// mig 0248 — foreign-currency amounts (USD/…) · en-US 2dp (matches fcur on the
+// /edit page + the items editor's fmtCur, so "USD 1,089.00" reads the same
+// everywhere).
+function fmtCur(n: number): string {
+  return (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 function TrackingGroupRow({
   group: g,
   expanded,
   onToggle,
   hRate,
+  orderCur,
+  yuanPerUnit,
 }: {
   group: TrackingGroup;
   expanded: boolean;
   onToggle: () => void;
   hRate?: number;
+  /** mig 0248 — foreign order: every ¥ money display converts to {orderCur}
+   *  (stored ¥ ÷ the FIXED ratio · guarded ÷). Undefined → plain ¥ rendering. */
+  orderCur?: string;
+  yuanPerUnit?: number;
 }) {
   // arrival pill — derive from the linked forwarder's fstatus via the SOT
   // (owner's 3-stage shows here per-tracking). fstatusBadge returns the
   // canonical label + soft chip; "" (no forwarder yet) → a "ยังไม่ส่ง" pill.
   const hasForwarder = g.fstatus !== "";
   const badge = hasForwarder ? fstatusBadge(g.fstatus) : null;
-  // Display-only THB est (spec §5 #5) — only when a rate is available.
+  // Display-only THB est (spec §5 #5) — only when a rate is available. Stays a
+  // ¥ × the stored ¥→฿ rate even on a foreign order (= foreign × บาท/{cur} —
+  // THB is what the customer pays, unchanged by the display currency).
   const rate = Number(hRate ?? 0);
   const thbEst = rate > 0 ? g.subtotalCny * rate : null;
+  // mig 0248 — foreign-order display mode (guarded ÷ · fall back to ¥).
+  const orderForeign = !!orderCur && (yuanPerUnit ?? 0) > 0;
+  const oypu = yuanPerUnit ?? 0;
+  const moneyUnit = orderForeign ? (orderCur as string) : "¥";
   const colCount = 5; // ข้อมูลสินค้า · จำนวน · ¥/ชิ้น · ค่าส่งจีน · รวม ¥
 
   return (
@@ -714,9 +766,12 @@ function TrackingGroupRow({
           <span className="rounded bg-surface-alt/60 border border-border px-2 py-0.5 font-mono tabular-nums">
             {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
           </span>
-          {/* 4. ¥รวม (+ 5. THB est · display-only) */}
+          {/* 4. รวม (¥ · หรือสกุลของออเดอร์เมื่อเปิดงานเป็น USD/… · mig 0248)
+              (+ 5. THB est · display-only · ฿ เสมอ) */}
           <span className="rounded bg-surface-alt/60 border border-border px-2 py-0.5 font-mono tabular-nums font-semibold">
-            ¥ {fmtCny(g.subtotalCny)}
+            {orderForeign
+              ? `${orderCur} ${fmtCur(yuanToForeign(g.subtotalCny, oypu))}`
+              : `¥ ${fmtCny(g.subtotalCny)}`}
             {thbEst != null && (
               <span className="ml-1 font-normal text-muted">≈ ฿{fmtCny(thbEst)}</span>
             )}
@@ -758,9 +813,9 @@ function TrackingGroupRow({
                 <tr>
                   <th className="px-2 py-2 text-left">ข้อมูลสินค้า</th>
                   <th className="px-2 py-2 text-right w-14">จำนวน</th>
-                  <th className="px-2 py-2 text-right w-20">¥/ชิ้น</th>
+                  <th className="px-2 py-2 text-right w-20">{moneyUnit}/ชิ้น</th>
                   <th className="px-2 py-2 text-right w-20">ค่าส่งจีน</th>
-                  <th className="px-2 py-2 text-right w-24">รวม ¥</th>
+                  <th className="px-2 py-2 text-right w-24">รวม {moneyUnit}</th>
                 </tr>
               </thead>
               <tbody>
@@ -805,10 +860,14 @@ function TrackingGroupRow({
                       <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
                         {refunded ? 0 : it.camount}
                       </td>
-                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">{fmtCny(it.cprice)}</td>
-                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">{fmtCny(shipping)}</td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                        {orderForeign ? fmtCur(yuanToForeign(it.cprice, oypu)) : fmtCny(it.cprice)}
+                      </td>
+                      <td className="px-2 py-2 text-right align-top font-mono tabular-nums">
+                        {orderForeign ? fmtCur(yuanToForeign(shipping, oypu)) : fmtCny(shipping)}
+                      </td>
                       <td className="px-2 py-2 text-right align-top font-mono tabular-nums font-semibold">
-                        {fmtCny(line)}
+                        {orderForeign ? fmtCur(yuanToForeign(line, oypu)) : fmtCny(line)}
                       </td>
                     </tr>
                   );
@@ -819,7 +878,11 @@ function TrackingGroupRow({
                   <td className="px-2 py-1.5" colSpan={colCount - 1}>
                     รวม {g.itemCount.toLocaleString()} รายการ · {g.totalQty.toLocaleString()} ชิ้น
                   </td>
-                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">¥ {fmtCny(g.subtotalCny)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {orderForeign
+                      ? `${orderCur} ${fmtCur(yuanToForeign(g.subtotalCny, oypu))}`
+                      : `¥ ${fmtCny(g.subtotalCny)}`}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -842,13 +905,26 @@ function InlinePriceUpdateCell({
   item,
   editable,
   onSaved,
+  orderCur,
+  yuanPerUnit,
 }: {
   item: ShopFieldsItem;
   editable: boolean;
   onSaved: () => void;
+  /** mig 0248 · owner 2026-07-13 — foreign order: the input shows/accepts
+   *  {orderCur}; the typed value converts × yuanPerUnit back to the STORED ¥
+   *  BEFORE the save action (action + stored cPriceUpdate stay ¥ — storage
+   *  math unchanged). Undefined → plain ¥ input, byte-identical behavior. */
+  orderCur?: string;
+  yuanPerUnit?: number;
 }) {
   const [pending, startTransition] = useTransition();
-  const [val, setVal] = useState(String(item.cpriceupdate ?? 0));
+  const foreign = !!orderCur && (yuanPerUnit ?? 0) > 0;
+  const ypu = yuanPerUnit ?? 0;
+  const unit = foreign ? (orderCur as string) : "¥";
+  // Pre-fill from the stored ¥ — shown in {orderCur} on a foreign order.
+  const storedYuan = Number(item.cpriceupdate ?? 0);
+  const [val, setVal] = useState(String(foreign ? yuanToForeign(storedYuan, ypu) : storedYuan));
   const [rowErr, setRowErr] = useState<string | null>(null);
   const refunded = item.crewallet === "1";
 
@@ -856,10 +932,15 @@ function InlinePriceUpdateCell({
     setRowErr(null);
     const n = Number(val);
     if (!Number.isFinite(n) || n < 0) { setRowErr("ตัวเลขไม่ถูกต้อง"); return; }
-    if (Math.abs(n - Number(item.cpriceupdate ?? 0)) < 0.005) { setRowErr("ไม่เปลี่ยน"); return; }
-    if (!(await confirm(`บันทึก ¥ เพิ่ม/ลด ของ "${item.ctitle || `#${item.id}`}" = ${n.toFixed(2)} ?`))) return;
+    // Change detection in DISPLAY space (foreign↔foreign · ¥↔¥) so the ¥⇄{cur}
+    // round-trip rounding can't false-positive an untouched value as a change.
+    const current = foreign ? yuanToForeign(storedYuan, ypu) : storedYuan;
+    if (Math.abs(n - current) < 0.005) { setRowErr("ไม่เปลี่ยน"); return; }
+    // Foreign input → the stored ¥ the action expects (round2 · guarded).
+    const yuanVal = foreign ? foreignToYuan(n, ypu) : n;
+    if (!(await confirm(`บันทึก ${unit} เพิ่ม/ลด ของ "${item.ctitle || `#${item.id}`}" = ${n.toFixed(2)} ?`))) return;
     startTransition(async () => {
-      const res = await adminUpdateCartItemPriceUpdate({ tb_order_id: item.id, c_price_update: n });
+      const res = await adminUpdateCartItemPriceUpdate({ tb_order_id: item.id, c_price_update: yuanVal });
       if (res.ok) onSaved();
       else setRowErr(res.error);
     });
@@ -886,7 +967,7 @@ function InlinePriceUpdateCell({
             onClick={save}
             disabled={pending}
             className="shrink-0 rounded border border-primary-300 text-primary-700 px-2 py-1 text-[11px] hover:bg-primary-50 disabled:opacity-50"
-            title="บันทึก ¥ เพิ่ม/ลด รายการนี้"
+            title={`บันทึก ${unit} เพิ่ม/ลด รายการนี้`}
           >
             บันทึก
           </button>

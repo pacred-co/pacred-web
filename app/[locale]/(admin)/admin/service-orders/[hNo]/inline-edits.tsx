@@ -331,17 +331,40 @@ export function OrderInlineEdits({
  * Right-column inline rate editor (legacy update.php L268-276). On save,
  * `adminUpdateOrderRate` recomputes htotalpriceuser too — so the displayed
  * net total moves with the rate. Blocked server-side for paid orders (3/4/5).
+ *
+ * mig 0248 · owner 2026-07-13 "ถ้าเปิดงานมาสกุลไหน ฟอร์มก็ต้องเป็นสกุลนั้น" —
+ * a foreign-currency order (cur + yuanPerUnit passed) shows/edits the rate as
+ * บาท/{cur}; the typed value is converted ÷ yuanPerUnit CLIENT-SIDE back to
+ * the stored ¥→฿ rate before calling the SAME action (server math unchanged).
+ * Props omitted → plain ¥ path, byte-identical to before.
  */
-export function OrderRateInlineEdit({ hNo, hRate }: { hNo: string; hRate: number }) {
+export function OrderRateInlineEdit({
+  hNo,
+  hRate,
+  cur,
+  yuanPerUnit,
+}: {
+  hNo: string;
+  hRate: number;
+  cur?: string;
+  yuanPerUnit?: number;
+}) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const [rate, setRate] = useState(String(hRate));
+  // Division guard: only treat as foreign when the FIXED ratio is usable.
+  const foreign = !!cur && Number.isFinite(yuanPerUnit) && (yuanPerUnit ?? 0) > 0;
+  const ypu = foreign ? (yuanPerUnit as number) : 0;
+  const displayRate = foreign ? hRate * ypu : hRate;
+  const unitLabel = foreign ? `บาท/${cur}` : "บาท/หยวน";
+  const [rate, setRate] = useState(
+    foreign ? String(Number(displayRate.toFixed(4))) : String(hRate),
+  );
 
   if (!editing) {
     return (
       <span className="inline-flex items-center gap-1">
-        <span className="font-mono tabular-nums">{hRate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-        <span className="text-muted">บาท/หยวน</span>
+        <span className="font-mono tabular-nums">{displayRate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+        <span className="text-muted">{unitLabel}</span>
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -362,6 +385,7 @@ export function OrderRateInlineEdit({ hNo, hRate }: { hNo: string; hRate: number
         inputMode="decimal"
         value={rate}
         onChange={(e) => setRate(e.target.value)}
+        title={`อัตราแลกเปลี่ยน (${unitLabel})`}
         className="w-28 rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50"
       />
       <span className="flex gap-2">
@@ -369,7 +393,22 @@ export function OrderRateInlineEdit({ hNo, hRate }: { hNo: string; hRate: number
           type="button"
           disabled={pending}
           className={btnSave}
-          onClick={() => run(() => adminUpdateOrderRate({ h_no: hNo, h_rate: Number(rate) }), () => setEditing(false))}
+          onClick={() =>
+            run(async () => {
+              const typed = Number(rate) || 0;
+              // Foreign → convert the typed บาท/{cur} to the stored ¥→฿ rate.
+              const sendRate = foreign ? typed / ypu : typed;
+              // Pre-check the server's ¥-rate cap (max 20) in {cur} terms so a
+              // fat-finger gets a message the operator can act on.
+              if (foreign && sendRate > 20) {
+                return {
+                  ok: false as const,
+                  error: `เรทสูงเกินไป — สูงสุด ~${(20 * ypu).toFixed(2)} บาท/${cur}`,
+                };
+              }
+              return adminUpdateOrderRate({ h_no: hNo, h_rate: sendRate });
+            }, () => setEditing(false))
+          }
         >
           บันทึก
         </button>

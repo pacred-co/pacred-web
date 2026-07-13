@@ -73,6 +73,9 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { HeartbeatLock } from "./heartbeat-lock";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+// mig 0248 · owner 2026-07-13 "โชว์แค่สกุลหลัก ไม่ต้องแปลงเป็นหยวน" — the ONE
+// shared order-currency detection + FIXED ¥/foreign ratio (no per-surface drift).
+import { deriveOrderCurrencyInfo, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +91,10 @@ function thb(n: number): string {
 }
 function cny(n: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Foreign-currency amounts (USD/…) — en-US 2dp (matches the items editor's fmtCur).
+function fcur(n: number): string {
+  return (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // 2026-06-29 (owner: "อยากให้ขึ้นรายละเอียด เหมือนหน้ารอชำระเงิน — มีราคาขายบอก
@@ -501,6 +508,14 @@ export default async function AdminServiceOrderEditPage({
   const profit   = (chn + shipChn) * rate - rateCost * costAll;
   const priceUpdate = Number(r.hpriceupdate ?? 0);
 
+  // mig 0248 · owner 2026-07-13 — a foreign-currency order (USD/…) renders its
+  // money rows in the ORDER's currency, no ¥ anywhere. Same shared derivation
+  // as the items editor (ONE fixed yuanPerUnit). null → plain ¥ order,
+  // byte-identical rendering. ypu > 0 guaranteed when curInfo is non-null.
+  const curInfo = deriveOrderCurrencyInfo(editorItems, rate);
+  const oCur = curInfo?.cur ?? "";
+  const ypu  = curInfo?.yuanPerUnit ?? 0;
+
   // Customer-detail derivation (mirrors legacy-view.tsx) — for the order-context
   // block shown at the tracking step so the admin sees "ของใคร / ที่อยู่ไหน".
   const addr = [
@@ -680,26 +695,56 @@ export default async function AdminServiceOrderEditPage({
           {/* RIGHT — price (sell) breakdown · legacy update.php L277-292 */}
           <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-2 text-sm">
             <p className="text-xs font-semibold text-muted">ราคาขาย (สรุป)</p>
+            {/* mig 0248 · owner 2026-07-13 — foreign order → every money row in the
+                ORDER's currency (stored ¥ ÷ yuanPerUnit · display-only); the ฿
+                ราคารวมสุทธิ stays (THB = what the customer pays). ¥ orders =
+                byte-identical to before. */}
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-muted text-xs" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
               <span className="text-right text-sm">
-                <span className="font-mono tabular-nums">{rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
-                <span className="text-muted"> บาท/หยวน</span>
+                {curInfo ? (
+                  <>
+                    <span className="font-mono tabular-nums">{fcur(rate * ypu)}</span>
+                    <span className="text-muted"> บาท/{oCur}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-mono tabular-nums">{rate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-muted"> บาท/หยวน</span>
+                  </>
+                )}
               </span>
             </div>
-            <KV label="ราคาสินค้า" value={`¥${cny(chn)}`} mono />
-            <KV label="ค่าขนส่งในจีน" value={`¥${cny(shipChn)}`} mono />
-            <KV label="ราคารวมหยวนจีน" value={`¥${cny(chn + shipChn)}`} mono />
+            <KV label="ราคาสินค้า" value={curInfo ? `${fcur(yuanToForeign(chn, ypu))} ${oCur}` : `¥${cny(chn)}`} mono />
+            <KV label="ค่าขนส่งในจีน" value={curInfo ? `${fcur(yuanToForeign(shipChn, ypu))} ${oCur}` : `¥${cny(shipChn)}`} mono />
+            <KV
+              label={curInfo ? `ราคารวม (${oCur})` : "ราคารวมหยวนจีน"}
+              value={curInfo ? `${fcur(yuanToForeign(chn + shipChn, ypu))} ${oCur}` : `¥${cny(chn + shipChn)}`}
+              mono
+            />
             {svc > 0 && <KV label="ค่าบริการฝากสั่ง" value={`฿${thb(svc)}`} mono />}
             <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
               <span>ราคารวมสุทธิ</span>
               <span className="font-mono text-primary-600 tabular-nums">฿{thb(netThb)}</span>
             </div>
-            <KV label="ชำระเงิน เพิ่ม/ลด" value={`¥${cny(priceUpdate)}`} mono />
+            {/* เพิ่ม/ลด can be NEGATIVE → direct ÷ (yuanToForeign clamps <0 to 0). */}
+            <KV
+              label="ชำระเงิน เพิ่ม/ลด"
+              value={curInfo ? `${fcur(ypu > 0 ? priceUpdate / ypu : 0)} ${oCur}` : `¥${cny(priceUpdate)}`}
+              mono
+            />
             {canSeeCost && (
               <div className="border-t border-border pt-2 space-y-1">
-                <KV label="อัตราแลกเปลี่ยนจริง" value={`${cny(rateCost)} บาท/หยวน`} mono />
-                <KV label="ราคาซื้อจริงทั้งหมด" value={`¥${cny(costAll)}`} mono />
+                <KV
+                  label="อัตราแลกเปลี่ยนจริง"
+                  value={curInfo ? `${fcur(rateCost * ypu)} บาท/${oCur}` : `${cny(rateCost)} บาท/หยวน`}
+                  mono
+                />
+                <KV
+                  label="ราคาซื้อจริงทั้งหมด"
+                  value={curInfo ? `${fcur(yuanToForeign(costAll, ypu))} ${oCur}` : `¥${cny(costAll)}`}
+                  mono
+                />
                 {costAll !== 0 && (
                   <div className="flex justify-between font-semibold">
                     <span>กำไรสุทธิ</span>
@@ -729,7 +774,10 @@ export default async function AdminServiceOrderEditPage({
         />
         <div className="border-t border-border pt-3 flex items-baseline justify-between gap-3 text-sm">
           <span className="text-xs font-medium text-muted" title="เรทฝากสั่งในวันสร้างออเดอร์">อัตราแลกเปลี่ยน</span>
-          <OrderRateInlineEdit hNo={r.hno} hRate={rate} />
+          {/* Foreign order → the rate row shows/edits บาท/{cur}; the component
+              converts the typed value ÷ yuanPerUnit back to the stored ¥→฿ rate
+              BEFORE calling the existing action (math unchanged). */}
+          <OrderRateInlineEdit hNo={r.hno} hRate={rate} cur={curInfo?.cur} yuanPerUnit={curInfo?.yuanPerUnit} />
         </div>
       </section>
 
@@ -752,6 +800,8 @@ export default async function AdminServiceOrderEditPage({
           hRateCost={rateCost}
           hCostAll={costAll}
           hRateCostDefault={hRateCostDefault}
+          cur={curInfo?.cur}
+          yuanPerUnit={curInfo?.yuanPerUnit}
         />
       )}
 
@@ -806,6 +856,11 @@ export default async function AdminServiceOrderEditPage({
           totalCount={shopsTotalCount}
           trackingGroups={trackingGroups}
           hRate={rate}
+          /* mig 0248 · owner 2026-07-13 — foreign order: the board renders every
+             ¥ money display in the ORDER's currency (same shared derivation +
+             ONE fixed yuanPerUnit as the rest of this page — never re-derived). */
+          orderCur={curInfo?.cur}
+          yuanPerUnit={curInfo?.yuanPerUnit}
         />
       )}
 

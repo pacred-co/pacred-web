@@ -22,6 +22,10 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Coins, Save, Pencil } from "lucide-react";
 import { adminUpdateOrderCost } from "@/actions/admin/service-orders-header-edits";
+// mig 0248 · owner 2026-07-13 — foreign-currency orders display + edit the cost
+// pair in the ORDER's currency; the stored ¥ semantics are converted back
+// client-side before the (unchanged) action call.
+import { foreignToYuan, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
 
 // round_up(x,2) — CEIL to 2dp (legacy round_up · satang-safe).
 function roundUp2(v: number): number {
@@ -33,6 +37,10 @@ function roundUp2(v: number): number {
 function thb(n: number): string {
   return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// Foreign-currency amounts — en-US 2dp (matches the items editor's fmtCur).
+function fcur(n: number): string {
+  return (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:bg-surface-alt disabled:text-muted";
@@ -42,11 +50,17 @@ export function CostInlineEdit({
   hRateCost,
   hCostAll,
   hRateCostDefault,
+  cur,
+  yuanPerUnit,
 }: {
   hNo: string;
   hRateCost: number;
   hCostAll: number;
   hRateCostDefault: number;
+  /** mig 0248 — the order's foreign currency (with `yuanPerUnit`) → the cost
+   *  pair displays/edits in {cur}; omitted → plain ¥ path (byte-identical). */
+  cur?: string;
+  yuanPerUnit?: number;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -54,11 +68,21 @@ export function CostInlineEdit({
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // Division guard: only treat as foreign when the FIXED ratio is usable.
+  const foreign = !!cur && Number.isFinite(yuanPerUnit) && (yuanPerUnit ?? 0) > 0;
+  const ypu = foreign ? (yuanPerUnit as number) : 0;
+
   // Seed rate from the order's saved cost rate, else the tb_settings default.
-  const [rateCost, setRateCost] = useState<string>(
-    String(hRateCost !== 0 ? hRateCost : hRateCostDefault),
-  );
-  const [costAll, setCostAll] = useState<string>(String(hCostAll !== 0 ? hCostAll : ""));
+  // Foreign order → display the pair in {cur} (rate = stored ¥-rate × ypu ·
+  // cost = stored ¥ ÷ ypu); the THB product is identical either way.
+  const [rateCost, setRateCost] = useState<string>(() => {
+    const baseYuanRate = hRateCost !== 0 ? hRateCost : hRateCostDefault;
+    return foreign ? (baseYuanRate * ypu).toFixed(4) : String(baseYuanRate);
+  });
+  const [costAll, setCostAll] = useState<string>(() => {
+    if (hCostAll === 0) return "";
+    return foreign ? String(yuanToForeign(hCostAll, ypu)) : String(hCostAll);
+  });
 
   const previewTh = useMemo(
     () => roundUp2((Number(costAll) || 0) * (Number(rateCost) || 0)),
@@ -71,14 +95,23 @@ export function CostInlineEdit({
     setErr(null);
     const rc = Number(rateCost) || 0;
     const ca = Number(costAll) || 0;
+    // Foreign → convert the typed {cur} pair back to the stored ¥ semantics
+    // (rate ÷ ypu · cost × ypu) BEFORE the action call — action math unchanged.
+    const rcSend = foreign ? rc / ypu : rc;
+    const caSend = foreign ? foreignToYuan(ca, ypu) : ca;
+    // Pre-check the server's ¥-rate cap (max 20) in {cur} terms.
+    if (foreign && rcSend > 20) {
+      setErr(`เรทต้นทุนสูงเกินไป — สูงสุด ~${(20 * ypu).toFixed(2)} บาท/${cur}`);
+      return;
+    }
     if (!confirm(
       `บันทึกต้นทุน (ไม่กระทบราคาขาย/ยอดที่ลูกค้าจ่าย)?\n\n` +
-      `เรทต้นทุน: ${rc}\n` +
-      `ราคาซื้อจริง: ¥${ca.toLocaleString("th-TH")}\n` +
+      `เรทต้นทุน: ${rc}${foreign ? ` บาท/${cur}` : ""}\n` +
+      `ราคาซื้อจริง: ${foreign ? `${ca.toLocaleString("th-TH")} ${cur}` : `¥${ca.toLocaleString("th-TH")}`}\n` +
       `= ฿${thb(previewTh)} (ต้นทุนบาท)`,
     )) return;
     startTransition(async () => {
-      const res = await adminUpdateOrderCost({ h_no: hNo, h_rate_cost: rc, h_cost_all: ca });
+      const res = await adminUpdateOrderCost({ h_no: hNo, h_rate_cost: rcSend, h_cost_all: caSend });
       if (res.ok) {
         setMsg(`✅ บันทึกต้นทุนแล้ว · ต้นทุน ฿${thb(res.data?.h_cost_all_th ?? 0)} (ราคาขายไม่เปลี่ยน)`);
         setEditing(false);
@@ -117,12 +150,16 @@ export function CostInlineEdit({
       {!editing ? (
         <div className="grid gap-2 sm:grid-cols-3 text-sm">
           <div className="flex justify-between gap-2 sm:block">
-            <span className="text-xs text-muted">เรทต้นทุน</span>
-            <span className="font-mono tabular-nums sm:block">{thb(hRateCost)}</span>
+            <span className="text-xs text-muted">เรทต้นทุน{foreign ? ` (บาท/${cur})` : ""}</span>
+            <span className="font-mono tabular-nums sm:block">
+              {foreign ? fcur(hRateCost * ypu) : thb(hRateCost)}
+            </span>
           </div>
           <div className="flex justify-between gap-2 sm:block">
             <span className="text-xs text-muted">ราคาซื้อจริง</span>
-            <span className="font-mono tabular-nums sm:block">¥{thb(hCostAll)}</span>
+            <span className="font-mono tabular-nums sm:block">
+              {foreign ? `${fcur(yuanToForeign(hCostAll, ypu))} ${cur}` : `¥${thb(hCostAll)}`}
+            </span>
           </div>
           <div className="flex justify-between gap-2 sm:block">
             <span className="text-xs text-muted">ต้นทุน (บาท)</span>
@@ -134,7 +171,10 @@ export function CostInlineEdit({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
               <span className="text-xs font-medium">
-                เรทต้นทุน <span className="text-muted">· ตั้งต้น {thb(hRateCostDefault)}</span>
+                เรทต้นทุน{foreign ? ` (บาท/${cur})` : ""}{" "}
+                <span className="text-muted">
+                  · ตั้งต้น {foreign ? (hRateCostDefault * ypu).toFixed(4) : thb(hRateCostDefault)}
+                </span>
               </span>
               <input
                 type="number" min="0" step="0.01" inputMode="decimal"
@@ -146,7 +186,7 @@ export function CostInlineEdit({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium">ราคาซื้อจริงทั้งหมด (หยวน)</span>
+              <span className="text-xs font-medium">ราคาซื้อจริงทั้งหมด ({foreign ? cur : "หยวน"})</span>
               <input
                 type="number" min="0" step="0.01" inputMode="decimal"
                 value={costAll}
